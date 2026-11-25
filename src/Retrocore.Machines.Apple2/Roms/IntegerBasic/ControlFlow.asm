@@ -1,416 +1,612 @@
-;; INTEGER BASIC: PRINTING NUMBERS, ASSIGNMENT AND RUNNING A PROGRAM ($E7C1-$E97F)
+; retrocore: style=strict ignore=unlinked-name:BASIC -- the language's name in prose
+;; Integer BASIC: printing numbers, assignment and running a program ($E7C1-$E97F)
 ;;
-;; PRINT of a number, AUTO, numeric assignment and the statement separators; then the run loop, which takes the
-;; program's lines in turn, and the statements that change its course: IF, GOTO, GOSUB, RETURN, END, FOR, TO and
-;; NEXT.
+;; `PRINT` of a number, `AUTO`, numeric assignment and the statement separators; then the run loop (<Lines>), which
+;; takes the program's lines in turn, and the statements that change its course: `IF`, `GOTO`, `GOSUB`, `RETURN`,
+;; `END`, `FOR`, `TO` and `NEXT`.
 ;;
-;; The run loop keeps PR at the line running and PX at its tokens. GOSUB keeps PX and PR on the GOSUB stack, and
-;; FOR keeps its variable, step, limit and the place to loop back to on the FOR stack, both in page 1 (STK_00 and
-;; STK_40); each holds 16 entries. A jump restarts the run loop, which resets the 6502's stack.
+;; The run loop keeps <CurrentLine> at the line running and <TokenPointer> at its tokens. `GOSUB` keeps both on the
+;; GOSUB stack, and `FOR` keeps its variable, step, limit and the place to loop back to on the FOR stack, both in
+;; page 1 (<GoSubTokenLow> and <ForVariableLow>); each holds 16 entries. A jump restarts the run loop, which resets
+;; the 6502's stack.
 ;;
 ;; Part of IntegerBasic.asm; it follows Arithmetic.asm, at $E7C1.
 
-;; PRINT's comma before a number (token $49): moves to the next tab stop, then prints the number.
-;; See: <NEXTTAB>, <PRINTNUM>
-COMMA_PRNUM:
-    jsr NEXTTAB                     ; $E7C1
+; Statements: printing numbers, AUTO, assignment and the statement separators.
+.scope Statements continued
 
-;; PRINT of a number (token $62), and the semicolon before one (token $46): prints the number in decimal.
-;;
-;; A negative number gets a minus sign and is printed as its negative. The line now owes a return (<CRFLAG>).
+;; `PRINT`'s comma before a number (token $49): moves to the next tab stop, then prints the number (falls into
+;; <Statements::PrintNumber>).
 ;; In: X = the noun stack, its top entry the number
-;; Out: X = the noun stack without the number; PRINTACC keeps X
+;; Also: COMMA_PRNUM (UNKN)
+.proc PrintNumberComma
+    jsr NextTabStop
+    ; Falls into PrintNumber.
+.endproc
+
+;; `PRINT` of a number (token $62), and the semicolon before one (token $46): prints the number in decimal.
+;;
+;; A negative number gets a minus sign and is printed as its negative. The line now owes a return
+;; (<ReturnPending>). Leading zeros print as <LeadingZero> says, which the prompt sets to 0.
+;; In: X = the noun stack, its top entry the number
+;; Out: X = the noun stack, one entry higher
 ;; Errors: >32767 for -32768, after the minus sign
-;; Uses: A, Y, ACC
-;; Entry: PRINTACC = prints the number in ACC
-PRINTNUM:
-    jsr GET16BIT                    ; $E7C4
+;; Uses: A, Y, Accumulator
+;; Entry:
+;;   FromAccumulator = prints the number in <Accumulator>, with Y = 0, keeping X
+;; Also: PRINTNUM (IBSM)
+.proc PrintNumber
+    jsr GetNumber
 
-PRINTACC:
-    lda ACC+1                       ; $E7C7
-    bpl PRINTNUM_1                  ; $E7C9
-    lda #'-'                        ; $E7CB
-    jsr COUT                        ; $E7CD
-    jsr NEGATEACC                   ; $E7D0
-    bvc PRINTNUM                    ; $E7D3 always: an overflow is an error
+;; Prints the number in <Accumulator>.
+;; In: Accumulator = the number, Y = 0
+;; Errors: >32767 for -32768, after the minus sign
+;; Keeps: X
+;; Also: PRINTACC (UNKN)
+FromAccumulator:
+    lda Accumulator+1
+    bpl NotNegative
+    lda #'-'
+    jsr CharacterOut
+    jsr Operators::Negate::FromAccumulator
+    bvc PrintNumber                 ; always: an overflow was the error
 
-;; Prints a number that is not negative, and sets <CRFLAG>.
-PRINTNUM_1:
-    dey                             ; $E7D5
-    sty CRFLAG                      ; $E7D6
-    stx ACC+1                       ; $E7D8 keep X
-    ldx ACC                         ; $E7DA
-    jsr PRDEC                       ; $E7DC
-    ldx ACC+1                       ; $E7DF
-    rts                             ; $E7E1
+    ; Not negative: the line owes a return (Y is 0, so $FF), and the number is printed, keeping X.
+NotNegative:
+    dey
+    sty ReturnPending
+    stx Accumulator+1
+    ldx Accumulator
+    jsr PrintDecimal
+    ldx Accumulator+1
+    rts
+.endproc
 
-;; AUTO (token $0D): starts AUTO mode at the line number given, counting by 10.
+;; `AUTO` (token $0D): starts `AUTO` mode at the line number given, counting by 10.
 ;; In: X = the noun stack, its top entry the first line number
-;; See: <COMMA_AUTO>, <WARM>, <AUTOFLAG>
-AUTO:
-    jsr GET16BIT                    ; $E7E2
-    lda ACC                         ; $E7E5
-    sta AUTOLN                      ; $E7E7
-    lda ACC+1                       ; $E7E9
-    sta AUTOLN+1                    ; $E7EB
-    dey                             ; $E7ED
-    sty AUTOFLAG                    ; $E7EE AUTOFLAG = $FF
-    iny                             ; $E7F0
-    lda #10                         ; $E7F1
+;; Out: X = the noun stack, one entry higher
+;; Uses: A, Y, Accumulator
+;; See: <Statements::AutoComma>, <WARM>, <AutoNumbering>
+;; Entry:
+;;   SetStep = sets the step between line numbers to A (low) and Y (high)
+;; Also: AUTO (IBSM)
+.proc Auto
+
+;; The step between line numbers unless `AUTO` gives one.
+DEFAULT_STEP = 10
+
+    jsr GetNumber
+    lda Accumulator
+    sta AutoLine
+    lda Accumulator+1
+    sta AutoLine+1
+
+    ; AutoNumbering = $FF, from Y = 0.
+    dey
+    sty AutoNumbering
+    iny
+    lda #DEFAULT_STEP
 
 ;; Sets the step between line numbers to A (low) and Y (high).
-SETAUTOINC:
-    sta AUTOINC                     ; $E7F3
-    sty AUTOINC+1                   ; $E7F5
-    rts                             ; $E7F7
+;; Keeps: X
+;; Also: SETAUTOINC (UNKN)
+SetStep:
+    sta AutoIncrement
+    sty AutoIncrement+1
+    rts
+.endproc
 
-;; The comma of AUTO (token $0E): AUTO n,m counts by m.
+;; The comma of `AUTO` (token $0E): `AUTO n,m` counts by m.
 ;; In: X = the noun stack, its top entry the step
-COMMA_AUTO:
-    jsr GET16BIT                    ; $E7F8
-    lda ACC                         ; $E7FB
-    ldy ACC+1                       ; $E7FD
-    bpl SETAUTOINC                  ; $E7FF always: a number is at most 32767
+;; Out: X = the noun stack, one entry higher
+;; Uses: A, Y, Accumulator
+;; Also: COMMA_AUTO (IBSM)
+.proc AutoComma
+    jsr GetNumber
+    lda Accumulator
+    ldy Accumulator+1
+    bpl Auto::SetStep               ; always: the syntax takes only a number, at most 32767
+.endproc
 
-;; Numeric assignment (token $71, and $56, the = of FOR): stores the number on top in the variable below it.
+;; Numeric assignment (token $71, and $56, the = of `FOR`): stores the number on top in the variable below it.
 ;;
-;; If the variable was marked with DSP, a running program shows its name and new value (<TRYSHOWNUM>).
+;; If the variable was marked with `DSP`, a running program then shows its name and new value (<LETNUMEND>).
 ;; In: X = the noun stack: the value above the variable's address
 ;; Out: X = the noun stack, both popped
-;; See: <LETNUMEND>, <DSP_NUM>
-ASSIGN_NUM:
-    jsr GET16BIT                    ; $E801
-    lda NOUNSTKL,x                  ; $E804
-    sta AUX                         ; $E806
-    lda NOUNSTKH,x                  ; $E808
-    sta AUX+1                       ; $E80A
-    lda ACC                         ; $E80C
-    sta (AUX),y                     ; $E80E
-    iny                             ; $E810
-    lda ACC+1                       ; $E811
-    jmp LETNUMEND                   ; $E813
+;; See: <DSP_NUM>
+;; Also: ASSIGN_NUM (UNKN)
+.proc AssignNumber
+    jsr GetNumber
+    lda NounStackLow,x
+    sta Auxiliary
+    lda NounStackHigh,x
+    sta Auxiliary+1
+    lda Accumulator
+    sta (Auxiliary),y
+    iny
+    lda Accumulator+1
+    jmp LETNUMEND
+.endproc
 
-;; LET (token $5E), and THEN before a statement (token $25): nothing to do.
-LET:
-    rts                             ; $E816
+;; `LET` (token $5E), and `THEN` before a statement (token $25): nothing to do.
+;; Keeps: A, X, Y
+;; Also: LET (IBSM)
+.proc Let
+    rts
+.endproc
 
 ;; Token 0, at the bottom of the waiting tokens: ends the line.
 ;;
 ;; It runs when the end-of-line token arrives, after all the others. Dropping the return to the interpreter's loop
-;; makes its RTS return from <EXECLINE>; first it falls into <COLON>, to print a return PRINT owes.
-BEGIN_LINE:
-    pla                             ; $E817
-    pla                             ; $E818
+;; makes the RTS return from <Interpreter::RunLine>; first it falls into <Statements::Colon>, to print a return that
+;; `PRINT` owes.
+;; Also: BEGIN_LINE (IBSM)
+.proc BeginLine
+    pla
+    pla
+    ; Falls into Colon.
+.endproc
 
-;; The colon between statements (token $03): prints the return that a PRINT without a final ; or , owes.
-;; See: <CRFLAG>
-COLON:
-    bit CRFLAG                      ; $E819
-    bpl COLON_1                     ; $E81B
+;; The colon between statements (token $03): prints the return that a `PRINT` without a final `;` or `,` owes.
+;; Keeps: X, Y
+;; See: <ReturnPending>
+;; Also: COLON (IBSM)
+.proc Colon
+    bit ReturnPending
+    bpl PrintSemicolonEnd::Done
+    ; Falls into Print.
+.endproc
 
-;; PRINT alone (token $63): prints a return.
-PRINT_CR:
-    jsr CROUT                       ; $E81D
+;; `PRINT` alone (token $63): prints a return.
+;; Keeps: X, Y
+;; Also: PRINT_CR (IBSM)
+.proc Print
+    jsr PrintReturn
+    ; Falls into PrintSemicolonEnd.
+.endproc
 
-;; PRINT's semicolon at the end of the statement (token $47): the line owes no return.
-SEMI_END:
-    lsr CRFLAG                      ; $E820
+;; `PRINT`'s semicolon at the end of the statement (token $47): the line owes no return.
+;; Keeps: A, X, Y
+;; Entry:
+;;   Done = returns
+;; Also: SEMI_END (UNKN)
+.proc PrintSemicolonEnd
+    lsr ReturnPending
+Done:
+    rts
+.endproc
 
-COLON_1:
-    rts                             ; $E822
+.endscope
 
-;; The left parenthesis tokens ($22, $34, $38, $3F and others): set <PRFLAG> to $FF, so nothing waiting before the
-;; parenthesis runs.
+; Operators: the parentheses.
+.scope Operators continued
+
+;; The left parenthesis tokens ($22, $34, $38 and $3F): set <VerbPriority> to <Interpreter::HOLD_PRIORITY>, so nothing
+;; waiting before the parenthesis runs.
 ;;
 ;; A left parenthesis runs when the right parenthesis arrives, after the operators inside it. Raising the arriving
-;; priority to $FF then stops the waiting tokens outside the parentheses from running yet.
-;; See: <RIGHT_PAREN>, <DOTOKEN>
-LEFT_PAREN:
-    ldy #$FF                        ; $E823
-    sty PRFLAG                      ; $E825
+;; priority then stops the waiting tokens outside the parentheses from running yet. The routines of other tokens that
+;; open a parenthesis end here too, such as SCRN('s (<HIBYTEPAREN>).
+;; Uses: Y
+;; Keeps: A, X
+;; See: <Operators::RightParenthesis>, <Interpreter::RunLine>
+;; Also: LEFT_PAREN (UNKN)
+.proc LeftParenthesis
+    ldy #Interpreter::HOLD_PRIORITY
+    sty VerbPriority
+    ; Falls into RightParenthesis.
+.endproc
 
 ;; The right parenthesis (token $72): nothing to do; its arrival made the parentheses' contents run.
-RIGHT_PAREN:
-    rts                             ; $E827
+;; Keeps: A, X, Y
+;; Also: RIGHT_PAREN (IBSM)
+.proc RightParenthesis
+    rts
+.endproc
 
-;; IF (token $60): when the condition is 0, sets <IFFLAG> so the rest of the statement is skipped.
+.endscope
+
+; Statements: IF.
+.scope Statements continued
+
+;; `IF` (token $60): when the condition is 0, sets <SkippingStatement> so the rest of the statement is skipped.
 ;;
-;; IF runs when THEN arrives. A false condition also changes the arriving token to $25, the THEN that comes before a
-;; statement, so that IF X THEN 100 does not jump; the skipping then passes over the line number.
+;; `IF` runs when `THEN` arrives. A false condition also changes the arriving token to <TOKEN_THEN_STATEMENT>, the
+;; `THEN` that comes before a statement, so that `IF X THEN 100` does not jump; the skipping then passes over the
+;; line number.
 ;; In: X = the noun stack, its top entry the condition
-;; See: <IFFLAG>, <EXECLINE_10>, <GOTO>
-IF:
-    jsr NOTTOP                      ; $E828
-    beq IF_1                        ; $E82B true: nothing to skip
-    lda #$25                        ; $E82D
-    sta VERBNOW                     ; $E82F
-    dey                             ; $E831
-    sty IFFLAG                      ; $E832
+;; Out: X = the noun stack, one entry higher
+;; Uses: A, Y, Accumulator
+;; See: <Interpreter::RunLine>, <Statements::GoTo>
+;; Also: IF (IBSM)
+.proc If
+    jsr NOTTOP
+    beq Pop                         ; true: nothing to skip
+    lda #TOKEN_THEN_STATEMENT
+    sta CurrentVerb
+    dey
+    sty SkippingStatement
 
-;; Pops the condition.
-IF_1:
-    inx                             ; $E834
-    rts                             ; $E835
+    ; Pops the condition.
+Pop:
+    inx
+    rts
+.endproc
+
+.endscope
+
+;; Running the program line by line: the run loop, and the places the statements that change its course send it.
+;;
+;; <CurrentLine> holds the line running and <TokenPointer> its tokens. Every line, and every jump, starts again at
+;; <Lines::RunFromToken>, which resets the 6502's stack, so a statement can leave by jumping here whatever it has
+;; pushed.
+.scope Lines
 
 ;; Runs the program from its first line, keeping the variables.
 ;;
-;; RUN comes here after CLR.
+;; At $E836, where DOS's `CHAIN` jumps (DOS's equates call it `IBCHN`). `RUN` comes here after `CLR`.
 ;; See: <RUN>
-RUNWARM:
-    lda PP                          ; $E836
-    ldy PP+1                        ; $E838
-    bne TRYLINE                     ; $E83A always: the program is not in page 0
+;; Also: RUNWARM (IBSM)
+.proc RunFromStart
+.assert * = $E836, "Lines::RunFromStart must stay at $E836, where DOS's CHAIN jumps."
+    lda ProgramStart
+    ldy ProgramStart+1
+    bne RunLoop::TryLine            ; always: the program is not in page 0
+.endproc
 
-;; GOSUB (token $5C): saves where the program is on the GOSUB stack, then goes to the line (<GOTO>).
+.endscope
+
+; Statements: GOSUB and GOTO.
+.scope Statements continued
+
+;; `GOSUB` (token $5C): saves where the program is on the GOSUB stack, then goes to the line (falls into
+;; <Statements::GoTo>).
 ;;
-;; The saved <PX> is the token after the line number, where <RETURN> picks up.
+;; The saved <TokenPointer> is at the token after the line number, where <Statements::Return> picks up.
 ;; In: X = the noun stack, its top entry the line number
-;; Errors: 16 GOSUBS if 16 are already active
-;; See: <RETURN>, <POP>
-GOSUB:
-    ldy #<ErrMsg08                  ; $E83C
-    lda GOSUBNDX                    ; $E83E
-    cmp #16                         ; $E840
-    bcs JmpERRMESS1                 ; $E842
-    tay                             ; $E844
-    inc GOSUBNDX                    ; $E845
-    lda PX                          ; $E847
-    sta STK_00,y                    ; $E849
-    lda PX+1                        ; $E84C
-    sta STK_10,y                    ; $E84E
-    lda PR                          ; $E851
-    sta STK_20,y                    ; $E853
-    lda PR+1                        ; $E856
-    sta STK_30,y                    ; $E858
+;; Errors: 16 GOSUBS if 16 are already active, BAD BRANCH if there is no such line
+;; See: <POP>
+;; Also: GOSUB (IBSM)
+.proc GoSub
+    ldy #<ErrMsg08
+    lda GoSubIndex
+    cmp #GOSUB_STACK_DEPTH
+    bcs Lines::RunLoop::ToReportError
+    tay
+    inc GoSubIndex
+    lda TokenPointer
+    sta GoSubTokenLow,y
+    lda TokenPointer+1
+    sta GoSubTokenHigh,y
+    lda CurrentLine
+    sta GoSubLineLow,y
+    lda CurrentLine+1
+    sta GoSubLineHigh,y
+    ; Falls into GoTo.
+.endproc
 
-;; GOTO (token $5F), and THEN before a line number (token $24): goes to the line.
+;; `GOTO` (token $5F), and `THEN` before a line number (token $24): goes to the line (falls into
+;; <Lines::RunFrom>).
 ;; In: X = the noun stack, its top entry the line number
 ;; Errors: BAD BRANCH if there is no such line
-;; See: <FINDLINE>, <GOLINE>
-GOTO:
-    jsr GET16BIT                    ; $E85B
-    jsr FINDLINE                    ; $E85E
-    bcc GOTO_1                      ; $E861
-    ldy #<ErrMsg07                  ; $E863
-    bne JmpERRMESS1                 ; $E865
+;; See: <FindLine>
+;; Also: GOTO (IBSM)
+.proc GoTo
+    jsr GetNumber
+    jsr FindLine
+    bcc Found
+    ldy #<ErrMsg07
+    bne Lines::RunLoop::ToReportError   ; always
 
-;; Runs the program from the line found, at <P2>.
-GOTO_1:
-    lda P2                          ; $E867
-    ldy P2+1                        ; $E869
+    ; Runs the program from the line found.
+Found:
+    lda Pointer2
+    ldy Pointer2+1
+    ; Falls into Lines::RunFrom.
+.endproc
 
-;; Runs the program from the line at A (low) and Y (high): the run loop.
+.endscope
+
+; Lines: the run loop.
+.scope Lines continued
+
+;; Runs the program from the line at A (low) and Y (high), from its first token (falls into
+;; <Lines::RunFromToken>).
+;; In: A/Y = the line
+;; Also: GOLINE (UNKN)
+.proc RunFrom
+    sta CurrentLine
+    sty CurrentLine+1
+    clc
+    adc #ProgramLine::TOKENS
+    bcc RunFromToken
+    iny
+    ; Falls into RunFromToken.
+.endproc
+
+;; Runs from the token at A (low) and Y (high) in the line at <CurrentLine>, with a fresh 6502 stack (falls into
+;; <Lines::RunLoop>).
 ;;
-;; A line's tokens start 3 bytes in, after its length and number. Running a line ends when <EXECLINE> returns; then the
-;; loop steps to the next line by its length, until it reaches <HIMEM>.
-;; In: A/Y = the line's address
+;; It marks the program as running (<Running>), and checks for Control-C and prints the line number in `TRACE` mode
+;; (<CHKBREAK>). Each line of a running program starts here.
+;; In: A/Y = the token, CurrentLine = its line
+;; See: <Statements::Return>, <Statements::Next>, <CON>
+;; Also: GETNEXT (IBSM)
+.proc RunFromToken
+    ; $FF is both the top of the 6502's stack and a run flag with bit 7 set.
+    ldx #$FF
+    stx Running
+    txs
+    sta TokenPointer
+    sty TokenPointer+1
+    jsr CHKBREAK
+    ldy #0
+    ; Falls into RunLoop.
+.endproc
+
+;; Runs the line from the token at <TokenPointer>, then the lines after it, until a statement stops the program.
+;;
+;; A typed line without a number runs from here too, with <Running> clear, so it ends after that line. When
+;; TokenPointer is at a statement's first token, that statement starts here; after `RETURN` or `NEXT` it is at the
+;; colon or the end of the line instead, and the statement after it starts at <Interpreter::RunLine::Wait>. The
+;; debugger's BASIC thread takes a line's first statement from here.
+;; In: TokenPointer = the token, CurrentLine = its line
 ;; Errors: NO END if the program runs past its last line
-GOLINE:
-    sta PR                          ; $E86B
-    sty PR+1                        ; $E86D
-    clc                             ; $E86F
-    adc #$03                        ; $E870
-    bcc GETNEXT                     ; $E872
-    iny                             ; $E874
+;; Entry:
+;;   TryLine = runs the line at A (low) and Y (high), unless it is the end of the program
+;;   RanOff = the program has run past its last line
+;;   ToReportError = reports the error whose message is at offset Y
+;; Also: RUNLOOP (UNKN)
+.proc RunLoop
+    jsr Interpreter::RunLine
 
-;; Runs from the token at A (low) and Y (high) in the line at <PR>, with a fresh 6502 stack.
-;;
-;; Before each line it checks for Control-C and prints the line number in TRACE mode (<CHKBREAK>).
-;; See: <RETURN>, <NEXT>, <CON>
-GETNEXT:
-    ldx #$FF                        ; $E875
-    stx RUNFLAG                     ; $E877
-    txs                             ; $E879
-    sta PX                          ; $E87A
-    sty PX+1                        ; $E87C
-    jsr CHKBREAK                    ; $E87E
-    ldy #$00                        ; $E881
+    ; Not running: a typed line, which ends here.
+    bit Running
+    bpl Statements::End
 
-;; Runs the line from the token at <PX>, then the lines after it, until a statement stops the program.
-;;
-;; A typed line without a number runs from here too, with <RUNFLAG> clear. When <PX> is at a statement's first
-;; token, that statement starts here; after RETURN or NEXT it is at the colon or the end of the line instead, and
-;; the statement after it starts at <WAITTOKEN>.
-;; See: <GETNEXT>, <EXECLINE>
-RUNLOOP:
-    jsr EXECLINE                    ; $E883 run the line
-    bit RUNFLAG                     ; $E886
-    bpl END                         ; $E888 a statement stopped the program
-    clc                             ; $E88A
-    ldy #$00                        ; $E88B
-    lda PR                          ; $E88D the next line: PR + its length
-    adc (PR),y                      ; $E88F
-    ldy PR+1                        ; $E891
-    bcc TRYLINE                     ; $E893
-    iny                             ; $E895
+    ; The next line: CurrentLine + its length.
+    clc
+    ldy #ProgramLine::LENGTH
+    lda CurrentLine
+    adc (CurrentLine),y
+    ldy CurrentLine+1
+    bcc TryLine
+    iny
 
-;; Runs the line at A/Y unless it is <HIMEM>, the end of the program.
-TRYLINE:
-    cmp HIMEM                       ; $E896
-    bne GOLINE                      ; $E898
-    cpy HIMEM+1                     ; $E89A
-    bne GOLINE                      ; $E89C
-    ldy #<ErrMsg06                  ; $E89E
+;; Runs the line at A (low) and Y (high), unless it is <HighMemory>, the end of the program.
+;; Also: TRYLINE (UNKN)
+TryLine:
+    cmp HighMemory
+    bne RunFrom
+    cpy HighMemory+1
+    bne RunFrom
+    ldy #<ErrMsg06
 
-TRYLINE_END:
-    lsr RUNFLAG                     ; $E8A0 no longer running
+;; The program has run past its last line: no longer running, it reports NO END.
+;; Also: TRYLINE_END (UNKN)
+RanOff:
+    lsr Running
 
-JmpERRMESS1:
-    jmp ERRMESS                     ; $E8A2
+;; Reports the error whose message is at offset Y (<ERRMESS>).
+;; Also: JmpERRMESS1 (IBSM)
+ToReportError:
+    jmp ERRMESS
+.endproc
 
-;; RETURN (token $5B): goes back to the token after the last GOSUB.
+.endscope
+
+; Statements: RETURN.
+.scope Statements continued
+
+;; `RETURN` (token $5B): goes back to the token after the last `GOSUB`.
 ;; Errors: BAD RETURN if no GOSUB is active
-;; See: <GOSUB>, <POP>
-RETURN:
-    ldy #<ErrMsg09                  ; $E8A5
-    lda GOSUBNDX                    ; $E8A7
-    beq JmpERRMESS1                 ; $E8A9
-    dec GOSUBNDX                    ; $E8AB
-    tay                             ; $E8AD
-    lda STK_20-1,y                  ; $E8AE
-    sta PR                          ; $E8B1
-    lda STK_30-1,y                  ; $E8B3
-    sta PR+1                        ; $E8B6
-    ldx a:STK_00-1,y                ; $E8B8 X = the token address, low byte (absolute: $00FF,Y)
-    lda STK_10-1,y                  ; $E8BB
+;; See: <Statements::GoSub>, <POP>
+;; Entry:
+;;   ContinueAt = runs from the token at X (low) and A (high), in the line at <CurrentLine>
+;; Also: RETURN (IBSM)
+.proc Return
+    ldy #<ErrMsg09
+    lda GoSubIndex
+    beq Lines::RunLoop::ToReportError
+    dec GoSubIndex
+    tay
+    lda GoSubLineLow-1,y
+    sta CurrentLine
+    lda GoSubLineHigh-1,y
+    sta CurrentLine+1
+    ldx a:GoSubTokenLow-1,y         ; absolute: page zero,Y would wrap within page zero
+    lda GoSubTokenHigh-1,y
 
-;; Runs from the token at X (low) and A (high), in the line at <PR>.
-GETNEXTXA:
-    tay                             ; $E8BE
-    txa                             ; $E8BF
-    jmp GETNEXT                     ; $E8C0
+;; Runs from the token at X (low) and A (high), in the line at <CurrentLine>.
+;; Also: GETNEXTXA (UNKN)
+ContinueAt:
+    tay
+    txa
+    jmp Lines::RunFromToken
+.endproc
 
-;; Stops the program: prints STOPPED AT and the number of the line at <PR>, then ends.
+.endscope
+
+; Lines: stopping the program.
+.scope Lines continued
+
+;; Stops the program: prints STOPPED AT and the number of the line at <CurrentLine>, then ends (falls into
+;; <Statements::End>).
 ;;
 ;; Control-C and errors in a running program come here.
 ;; See: <CHKBREAK>, <RUNERROR>
-STOPPED_AT:
-    ldy #<ErrMsg12                  ; $E8C3
-    jsr ERRORMESS                   ; $E8C5
-    ldy #$01                        ; $E8C8
-    lda (PR),y                      ; $E8CA
-    tax                             ; $E8CC
-    iny                             ; $E8CD
-    lda (PR),y                      ; $E8CE
-    jsr PRDEC                       ; $E8D0
+;; Also: STOPPED_AT (IBSM)
+.proc Stop
+    ldy #<ErrMsg12
+    jsr ERRORMESS
+    ldy #ProgramLine::NUMBER
+    lda (CurrentLine),y
+    tax
+    iny
+    lda (CurrentLine),y
+    jsr PrintDecimal
+    ; Falls into Statements::End.
+.endproc
 
-;; END (token $51): stops the program and returns to the prompt.
-END:
-    jmp WARM                        ; $E8D3
+.endscope
 
-;; Drops the innermost FOR loop, whose variable is not NEXT's.
-NEXT_1:
-    dec FORNDX                      ; $E8D6
+; Statements: END, then NEXT, FOR and TO.
+.scope Statements continued
 
-;; NEXT (token $59, and $5A after a comma): adds the step to the loop's variable and loops back, unless it has passed
+;; `END` (token $51): stops the program and returns to the prompt.
+;; Also: END (IBSM)
+.proc End
+    jmp WARM
+.endproc
+
+;; Drops the innermost `FOR` loop, whose variable is not `NEXT`'s, then looks again (falls into
+;; <Statements::Next>).
+.proc DropInnerLoop
+    dec ForIndex
+    ; Falls into Next.
+.endproc
+
+;; `NEXT` (token $59, and $5A after a comma): adds the step to the loop's variable and loops back, unless it has passed
 ;; the limit.
 ;;
-;; The FOR stack is searched from the innermost loop for the variable; loops inside it are dropped. The loop goes on
-;; while the variable equals the limit or the sign of variable - limit is not the step's sign.
+;; The FOR stack is searched from the innermost loop for the variable; the loops inside it are dropped
+;; (<Statements::DropInnerLoop>). The loop goes on while the variable equals the limit or the sign of variable -
+;; limit is not the step's sign. That difference is a subtraction (<Operators::Subtract>), so by the code a variable
+;; and limit more than 32767 apart (`FOR I = -20000 TO 20000`) stop the loop with the >32767 error.
 ;; In: X = the noun stack, its top entry the variable
-;; Errors: BAD NEXT if no FOR loop has the variable
-;; See: <FOR>, <STK_40>
-NEXT:
-    ldy #<ErrMsg11                  ; $E8D8
-    lda FORNDX                      ; $E8DA
+;; Out: X = the noun stack, one entry higher, when the loop is done
+;; Errors: BAD NEXT if no FOR loop has the variable, >32767 if the variable passes 32767 or is too far from the limit
+;; See: <Statements::For>, <ForVariableLow>
+;; Entry:
+;;   ErrorIfZero = reports the error whose message is at offset Y when zero is set
+;; Also: NEXT (IBSM)
+.proc Next
+    ldy #<ErrMsg11
+    lda ForIndex
 
-;; An error, when Z is set: no loops left (BAD NEXT), or 16 FOR loops already (16 FORS).
-JmpERRMESS2:
-    beq JmpERRMESS1                 ; $E8DC
-    tay                             ; $E8DE
-    lda NOUNSTKL,x                  ; $E8DF
-    cmp STK_40-1,y                  ; $E8E1
-    bne NEXT_1                      ; $E8E4
-    lda NOUNSTKH,x                  ; $E8E6
-    cmp STK_50-1,y                  ; $E8E8
-    bne NEXT_1                      ; $E8EB
-    lda STK_60-1,y                  ; $E8ED
-    sta AUX                         ; $E8F0
-    lda STK_70-1,y                  ; $E8F2
-    sta AUX+1                       ; $E8F5
-    jsr GET16BIT                    ; $E8F7 the variable's value
-    dex                             ; $E8FA push the variable back
-    jsr ADDAUX                      ; $E8FB push value + step
-    jsr ASSIGN_NUM                  ; $E8FE store it
-    dex                             ; $E901 push the variable back again, then the limit
-    ldy FORNDX                      ; $E902
-    lda STK_D0-1,y                  ; $E904
-    sta NOUNSTKC-1,x                ; $E907
-    lda STK_C0-1,y                  ; $E909
-    ldy #$00                        ; $E90C
-    jsr PUSHNOUN                    ; $E90E
-    jsr SUBTRACT                    ; $E911 the sign of variable - limit
-    jsr SGN                         ; $E914
-    jsr GET16BIT                    ; $E917
-    ldy FORNDX                      ; $E91A
-    lda ACC                         ; $E91C
-    beq NEXT_2                      ; $E91E equal to the limit: once more
-    eor STK_70-1,y                  ; $E920 the sign differs from the step's: once more
-    bpl NEXT_3                      ; $E923
+;; Reports the error whose message is at offset Y when zero is set: no loops left (BAD NEXT), or
+;; <FOR_STACK_DEPTH> loops already (16 FORS).
+;; Also: JmpERRMESS2 (IBSM)
+ErrorIfZero:
+    beq Lines::RunLoop::ToReportError
 
-;; Loops back: runs from the token after the FOR statement.
-NEXT_2:
-    lda STK_80-1,y                  ; $E925
-    sta PR                          ; $E928
-    lda STK_90-1,y                  ; $E92A
-    sta PR+1                        ; $E92D
-    ldx STK_A0-1,y                  ; $E92F
-    lda STK_B0-1,y                  ; $E932
-    bne GETNEXTXA                   ; $E935 always: the address is not in page 0
+    ; The innermost loop must be this variable's.
+    tay
+    lda NounStackLow,x
+    cmp ForVariableLow-1,y
+    bne DropInnerLoop
+    lda NounStackHigh,x
+    cmp ForVariableHigh-1,y
+    bne DropInnerLoop
 
-;; The loop is done: drops it.
-NEXT_3:
-    dec FORNDX                      ; $E937
-    rts                             ; $E939
+    ; Stores the variable's value + the step in the variable.
+    lda ForStepLow-1,y
+    sta Auxiliary
+    lda ForStepHigh-1,y
+    sta Auxiliary+1
+    jsr GetNumber
+    dex                             ; the variable again, below its new value
+    jsr Operators::Add::AddAuxiliary
+    jsr AssignNumber
 
-;; FOR (token $55): starts a FOR loop for the variable, which = then assigns.
+    ; The sign of the variable - the limit: pushes the variable again, then the limit.
+    dex
+    ldy ForIndex
+    lda ForLimitHigh-1,y
+    sta NounStackNumberHigh-1,x
+    lda ForLimitLow-1,y
+    ldy #0
+    jsr PushNoun
+    jsr Operators::Subtract
+    jsr Functions::Sgn
+    jsr GetNumber
+
+    ; Equal to the limit: once more. A sign that differs from the step's: once more.
+    ldy ForIndex
+    lda Accumulator
+    beq LoopBack
+    eor ForStepHigh-1,y
+    bpl Done
+
+    ; Loops back: runs from the token after the FOR statement.
+LoopBack:
+    lda ForLineLow-1,y
+    sta CurrentLine
+    lda ForLineHigh-1,y
+    sta CurrentLine+1
+    ldx ForTokenLow-1,y
+    lda ForTokenHigh-1,y
+    bne Return::ContinueAt          ; always: the address is not in page 0
+
+    ; The loop is done: drops it.
+Done:
+    dec ForIndex
+    rts
+.endproc
+
+;; `FOR` (token $55): starts a FOR loop for the variable, which `=` then assigns.
 ;;
-;; The variable stays on the noun stack for the = (<ASSIGN_NUM>). TO and STEP fill in the rest of the entry. A FOR loop
-;; already active for the same variable is removed (<FORDROPOLD>).
+;; The variable stays on the noun stack for the `=` (<Statements::AssignNumber>). `TO` and `STEP` fill in the rest of
+;; the entry. A FOR loop already active for the same variable is removed (<FORDROPOLD>); the ROMs' removal moves the
+;; loops above it down with one column wrong, which the FORFIX build corrects.
 ;; In: X = the noun stack, its top entry the variable
 ;; Errors: 16 FORS if 16 loops are active
-;; See: <TO>, <STEP>, <NEXT>
-FOR:
-    ldy #<ErrMsg10                  ; $E93A
-    lda FORNDX                      ; $E93C
-    cmp #16                         ; $E93E
-    beq JmpERRMESS2                 ; $E940
-    inc FORNDX                      ; $E942
-    tay                             ; $E944
-    lda NOUNSTKL,x                  ; $E945
-    sta STK_40,y                    ; $E947
-    lda NOUNSTKH,x                  ; $E94A
-    jmp FORDROPOLD                  ; $E94C
-    .byte $60                       ; $E94F an unused byte (an RTS)
+;; See: <Statements::To>, <STEP>, <Statements::Next>
+;; Also: FOR (IBSM)
+.proc For
+    ldy #<ErrMsg10
+    lda ForIndex
+    cmp #FOR_STACK_DEPTH
+    beq Next::ErrorIfZero
+    inc ForIndex
+    tay
+    lda NounStackLow,x
+    sta ForVariableLow,y
+    lda NounStackHigh,x
+    jmp FORDROPOLD
+    .byte $60                       ; an unused byte (an RTS)
+.endproc
 
-;; TO (token $57): sets the loop's limit and a step of 1, and the place to loop back to.
+;; `TO` (token $57): sets the loop's limit and a step of 1, and the place to loop back to.
 ;;
-;; The place is the line at <PR> and the token at <PX>, which is the token after the statement, or STEP: STEP runs
-;; later, and sets it again.
+;; The place is the line at <CurrentLine> and the token at <TokenPointer>, which is the token after the statement,
+;; or `STEP`: `STEP` runs later, and sets it again.
 ;; In: X = the noun stack, its top entry the limit
-;; See: <FOR>, <STEP>
-;; Entry: SETFORPLACE = stores the step's high byte from A, then the place
-TO:
-    jsr GET16BIT                    ; $E950
-    ldy FORNDX                      ; $E953
-    lda ACC                         ; $E955
-    sta STK_C0-1,y                  ; $E957
-    lda ACC+1                       ; $E95A
-    sta STK_D0-1,y                  ; $E95C
-    lda #$01                        ; $E95F
-    sta STK_60-1,y                  ; $E961
-    lda #$00                        ; $E964
+;; Out: X = the noun stack, one entry higher
+;; Uses: A, Y, Accumulator
+;; See: <Statements::For>, <STEP>
+;; Entry:
+;;   SetPlace = stores A as the step's high byte, then the place to loop back to
+;; Also: TO (IBSM)
+.proc To
+    jsr GetNumber
+    ldy ForIndex
+    lda Accumulator
+    sta ForLimitLow-1,y
+    lda Accumulator+1
+    sta ForLimitHigh-1,y
 
-SETFORPLACE:
-    sta STK_70-1,y                  ; $E966
-    lda PR                          ; $E969
-    sta STK_80-1,y                  ; $E96B
-    lda PR+1                        ; $E96E
-    sta STK_90-1,y                  ; $E970
-    lda PX                          ; $E973
-    sta STK_A0-1,y                  ; $E975
-    lda PX+1                        ; $E978
-    sta STK_B0-1,y                  ; $E97A
-    rts                             ; $E97D
-    .byte $20                       ; $E97E unused bytes
-    .byte $15                       ; $E97F
+    ; A step of 1.
+    lda #1
+    sta ForStepLow-1,y
+    lda #0
+
+;; Stores A as the step's high byte, then the place to loop back to.
+;; In: A = the step's high byte, Y = <ForIndex>
+;; Keeps: X, Y
+;; Also: SETFORPLACE (UNKN)
+SetPlace:
+    sta ForStepHigh-1,y
+    lda CurrentLine
+    sta ForLineLow-1,y
+    lda CurrentLine+1
+    sta ForLineHigh-1,y
+    lda TokenPointer
+    sta ForTokenLow-1,y
+    lda TokenPointer+1
+    sta ForTokenHigh-1,y
+    rts
+    .byte $20, $15                  ; unused bytes
+.endproc
+
+.endscope

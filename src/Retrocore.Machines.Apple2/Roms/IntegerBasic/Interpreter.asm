@@ -241,10 +241,10 @@ HOLD_PRIORITY = $FF
 ;; The 6502's stack holds the tokens waiting to run, starting with token 0, and X the noun stack. When the line's
 ;; end arrives, every waiting token runs, and token 0's routine, <Statements::BeginLine>, returns from here.
 ;;
-;; While a false `IF`'s statement is skipped (<SkippingStatement>), each constant or string steps X down a second
-;; time, so it takes two entries, and nothing takes entries off until the next line starts again with an empty
-;; stack. By the code, a skipped statement whose operands fill more than the stack's 32 entries stops with the noun
-;; stack's error (<PushNoun>), where running it would not.
+;; While a false `IF`'s statement is skipped (<SkippingStatement>), its operands are pushed but nothing takes them
+;; off, and each constant or string steps X down a second time, so it takes two entries. They stay for the rest of
+;; the line; the next line starts with an empty stack. By the code, skipped operands that fill the stack's 32 entries
+;; are the noun stack's error (<PushNoun>).
 ;; In: TokenPointer = the first token
 ;; Uses: all
 ;; See: <TABLE1>, <VERBADRL>

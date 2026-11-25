@@ -39,8 +39,8 @@ internal sealed partial class SourceAnalysis
     // Definitions found only in the text, such as in a branch the assembly skipped.
     private readonly HashSet<SymbolSite> _textOnly = [];
 
-    // Built once under the lock: requests and the publishing of diagnostics run on different threads, and a hover
-    // matches the set a link resolved to against this one by reference, so every caller must get the same instance.
+    // Built once under the lock, as requests run in parallel with each other and with the publishing of diagnostics,
+    // and the resolver, the lint and a hover's link compare sets by reference: every caller gets the same instance.
     private DocumentationSet? _documentation;
     private object? _documentationLock;
 

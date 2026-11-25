@@ -262,7 +262,7 @@ Built 2026-11-12, pinned by `Apple3EmulationTests` and `Apple3BusTests.ClearingT
 ## Later
 
 - The Apple III Plus (interlaced video, its keyboard, 256K standard), once the III is solid.
-- Business BASIC debugging, like AppleSoft's: built, awaiting review ([BusinessBasic.md](BusinessBasic.md)).
+- Business BASIC: 1.1 and 1.3 builds, invokable modules and DEF FN in the debugger ([BusinessBasic.md](BusinessBasic.md)).
 - Apple III Pascal: booting, code files and the Pascal thread are built ([Apple Pascal](ApplePascal.md)); line
   breakpoints from listings are next.
 - SOS volumes in the media library, through CiderPress2's ProDOS support ([media](Media.md)).

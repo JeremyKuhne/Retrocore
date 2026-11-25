@@ -23,7 +23,7 @@
 
 DEVICES_COLOR_REGISTERS = 5         ;; SETCOLOR's registers, 0-4: COLOR0 to COLOR4
 DEVICES_SOUND_VOICES = 4            ;; SOUND's voices, 0-3: POKEY's four channels
-DEVICES_SKCTL_KEYBOARD = %00000011  ;; SKCTL with the keyboard scanned and debounced, two-tone mode and the serial off
+DEVICES_SKCTL_KEYBOARD = %00000011  ;; SKCTL with the keyboard scanned and debounced; two-tone and serial off
 DEVICES_GRAPHICS_OPTIONS = $F0      ;; GRAPHICS' options in its number: 16 for no text window, 32 not to clear
 DEVICES_RUN = $FF                   ;; LOAD_PROGRAM's flag to go on running, for RUN with a file name
 
@@ -33,6 +33,8 @@ DEVICES_RUN = $FF                   ;; LOAD_PROGRAM's flag to go on running, for
 
 ; Each entry adds 1 to ERROR_NUMBER, which is 0 until an error, and falls into the next, so that the entry that a
 ; routine calls leaves the error's number in ERROR_NUMBER when the chain reaches HANDLE_ERROR. A routine raises an
+; error by calling its entry, and never comes back.
+
 ;; Raises error 21, LOAD file error: the file LOAD read is not a saved program.
 ;; Errors: 21 (ERR_LOAD_FILE)
 LOAD_FILE_ERROR:
@@ -147,7 +149,7 @@ HANDLE_ERROR:
     jmp GO_TO_LINE                  ; go to TRAP's line
 HANDLE_ERROR_REPORT:
     jsr PRINT_EOL                   ; a new line
-    lda #TOKEN_ERROR                ; "ERROR- ", ERROR's name
+    lda #TOKEN_ERROR                ; "ERROR-" and its spaces, ERROR's name
     jsr LIST_STATEMENT_NAME
     lda ERROR_NUMBER
     sta FR0
@@ -346,7 +348,7 @@ STATEMENT_DRAWTO:
 ;; screen's memory uncleared. They become ICAX2 = the number and ICAX1 = reading and writing, with the text window
 ;; unless 16 is set, and 32 as it is.
 ;; In: TOKEN_OFFSET = the expression's token
-;; Errors: 7 (ERR_NUMBER_TOO_BIG) when aexp is from 32768, and CIO's status when the screen reports one (such as
+;; Errors: 3 (ERR_VALUE) when aexp is negative or beyond 65535, and CIO's status when the screen reports one (such as
 ;;   147, not enough memory for the mode)
 ;; See: <OPEN_DEVICE>
 STATEMENT_GRAPHICS:

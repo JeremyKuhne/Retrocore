@@ -183,7 +183,7 @@ LIST_SET_NAME_POINTER:
 ;; Prints the name or message at NAME_POINTER, which ends with a character that has bit 7 set.
 ;;
 ;; Each character is printed with bit 7 cleared, except EOL, which is printed as it is and ends the name (the end of
-;; a line's name in the operator name table). A last character of $80 alone is not printed, so an empty name prints
+;; a line's name in the operator name table). A character of $00 or $80 is not printed, so an empty name prints
 ;; nothing.
 ;; In: NAME_POINTER = the name, OUTPUT_IOCB = the IOCB to write
 ;; Out: A = the name's last character, bit 7 set

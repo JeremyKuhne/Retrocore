@@ -342,9 +342,9 @@ READ_LINE_NUMBER_STORE:
 ;; SYNTAX_RETURN, which fails the rule and so the code that called it, in the caller.
 ;;
 ;; A relative code from $80 calls the rule at its own address plus the code less SYNTAX_BIAS. Codes $05-$0C ($05-$0D
-;; in rev. A) and SYNTAX_EXPRESSION call the expression's rule, <RULE_EXPRESSION>. A syntax routine returns carry clear when it
-;; matched; <SYNTAX_END_STATEMENT> and <SYNTAX_REST_OF_LINE> end the statement themselves, leaving the checker by
-;; resetting the 6502 stack.
+;; in rev. A) and SYNTAX_EXPRESSION call the expression's rule, <RULE_EXPRESSION>. A syntax routine returns carry
+;; clear when it matched; <SYNTAX_END_STATEMENT> and <SYNTAX_REST_OF_LINE> end the statement themselves, leaving the
+;; checker by resetting the 6502 stack.
 ;; In: NAME_POINTER = the statement's entry in the statement name table, whose first word is its rule's address less
 ;;   1, CIX = the statement's first character after its name, TOKEN_INDEX = the place for its next token
 ;; Out: carry = clear when the statement matched, CIX = after it, TOKEN_INDEX = after its tokens

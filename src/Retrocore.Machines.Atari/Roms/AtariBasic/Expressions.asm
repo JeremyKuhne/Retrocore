@@ -661,8 +661,8 @@ OPERATOR_DIM_ARRAY_PAREN:
 ;;
 ;; The subscripts count from 0 to the sizes DIM gave. The element's address is STARP, plus the array's offset, plus
 ;; six times the sum of the first subscript times the second size and the second subscript (the sizes are kept one
-;; more than DIM's). When ASSIGN_FLAGS bit 7 says the element is an assignment's target, the value to assign is above the
-;; subscripts on the argument stack: the routine stores it there and pushes nothing. For DIM, it stops with the
+;; more than DIM's). When ASSIGN_FLAGS bit 7 says the element is an assignment's target, the value to assign is above
+;; the subscripts on the argument stack: the routine stores it there and pushes nothing. For DIM, it stops with the
 ;; sizes read.
 ;; In:
 ;;   ARGUMENT_INDEX = at the top, the array, its first subscript, its second when COMMA_COUNT is 1, then the value

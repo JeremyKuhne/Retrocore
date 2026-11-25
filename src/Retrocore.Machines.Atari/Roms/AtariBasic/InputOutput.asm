@@ -9,8 +9,8 @@
 ;;   variable.
 ;; - <SILENCE_CLOSE_ALL> and <DEFAULT_IOCBS>, for the warm start and the end of a program; <PRINT_READY> and
 ;;   <PRINT_EOL>; <PATCH_STRING_EOL> and <RESTORE_STRING_EOL>, which end a string with an EOL for the OS to read.
-;; - <STATEMENT_RETURN>, with <RETURN_TO_ENTRY>, which NEXT shares; <PROMPT_INPUT_LINE> and <READ_INPUT_LINE>, which
-;;   read a line for INPUT and the line editor; and + (<OPERATOR_ADD>).
+;; - <STATEMENT_RETURN> (rev. A's is in Control.asm), with <RETURN_TO_ENTRY>, which NEXT shares;
+;;   <PROMPT_INPUT_LINE> and <READ_INPUT_LINE>, which read a line for INPUT and the line editor; and + (<OPERATOR_ADD>).
 ;; - BASIC's own trigonometry and square root, which the floating point package lacks: <SINE> and <COSINE> with
 ;;   <SIN_COEFFICIENTS>, <ARCTANGENT> and <SQUARE_ROOT>.
 ;; - The cartridge's header, <CARTRIDGE_HEADER>, at CARTCS.
@@ -236,8 +236,8 @@ SET_VARIABLE_INTEGER:
 
 ;; Silences the sound and closes IOCBs 1 to 7, for the warm start and when a program ends.
 ;;
-;; The loop clears POKEY's audio registers from AUDC1 to AUDC4 but stops short of AUDF1, which AUDC1's volume of 0
-;; leaves silent anyway.
+;; The loop clears every one of POKEY's audio registers from AUDC1 to AUDC4 but stops short of AUDF1, which AUDC1's
+;; volume of 0 leaves silent anyway.
 ;; Out: IOCB_NUMBER = 0
 ;; Uses: A, X, Y
 SILENCE_CLOSE_ALL:
@@ -590,8 +590,8 @@ TRIG_ONE:
 ;; Gives the arctangent of FR0, in radians, or in degrees when DEGFLG says so, for ATN.
 ;;
 ;; Below 1 in size, the arctangent is x times the floating point package's polynomial (ATN_COEFFICIENTS) in x
-;; squared. From 1, it is pi/4 plus the arctangent of (|x| - 1) / (|x| + 1), with x's sign. The add's carry is not
-;; checked.
+;; squared. From 1, it is pi/4 plus the arctangent of (|x| - c) / (|x| + c), with x's sign, where c is the
+;; polynomial's last coefficient, 0.9999999999, standing in for 1. The add's carry is not checked.
 ;; In: FR0 = x, DEGFLG = 0 for radians, 6 for degrees
 ;; Out: FR0 = its arctangent
 ;; Uses: A, X, Y, FR1, FCHRFLG, DIGRT, FPSCR (PLYEVL's and FP_DIFFERENCE_OVER_SUM's too)
@@ -612,7 +612,7 @@ ARCTANGENT:
     lda #FP_SIGN ^ $FF
     and FR0
     sta FR0
-    ldx #<(ATN_COEFFICIENTS + (ATN_COEFFICIENT_COUNT - 1) * FP_SIZE) ; the last coefficient, 1.0
+    ldx #<(ATN_COEFFICIENTS + (ATN_COEFFICIENT_COUNT - 1) * FP_SIZE) ; the last coefficient, 0.9999999999
     ldy #>(ATN_COEFFICIENTS + (ATN_COEFFICIENT_COUNT - 1) * FP_SIZE)
     jsr FP_DIFFERENCE_OVER_SUM      ; (x - 1) / (x + 1)
 ARCTANGENT_POLYNOMIAL:

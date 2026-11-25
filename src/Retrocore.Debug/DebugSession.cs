@@ -192,8 +192,9 @@ internal sealed partial class DebugSession
         transport.On("retro/memory/variable", args => Reply(() => MemoryVariable(args)));
         transport.On("configurationDone", args => Reply(() =>
         {
-            // It starts the launch it configures. Before the first launch it waits for that launch; after a launch that
-            // failed there is no launched machine to start, and once the launch has started, nothing is left to configure.
+            // It starts the launch it configures. Before the first launch it waits for that launch; after a launch
+            // that failed there is no launched machine to start, and once the launch has started, nothing is left to
+            // configure.
             if (!_launchAttempted) { _configured = true; }
             else if (_launchReady) { Start(); }
             return [];
@@ -1081,8 +1082,8 @@ internal sealed partial class DebugSession
         _launchReady = true;
 
         // A configurationDone that came before the launch starts the machine once the launch has returned. A launch
-        // after this one waits for a configurationDone of its own, and a launch that replaces the machine before the
-        // start runs, or the session ending, cancels that start.
+        // after this one waits for a configurationDone of its own, and a launch that comes before the start runs,
+        // even one that fails, or the session ending, cancels that start.
         if (configured)
         {
             IDebugTarget launched = Target;
@@ -1090,7 +1091,7 @@ internal sealed partial class DebugSession
             {
                 lock (_gate)
                 {
-                    if (!_ended && ReferenceEquals(_target, launched)) { Start(); }
+                    if (_launchReady && !_ended && ReferenceEquals(_target, launched)) { Start(); }
                 }
             });
         }

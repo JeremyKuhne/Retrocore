@@ -73,7 +73,7 @@ public sealed class DebugRelaunchTests
     }
 
     /// <summary>
-    ///  A configurationDone sent before the launch starts the machine once the launch is answered, and is used up
+    ///  A configurationDone sent before the launch starts the machine once the launch has returned, and is used up
     ///  by that launch: the next launch waits for its own.
     /// </summary>
     [TestMethod]

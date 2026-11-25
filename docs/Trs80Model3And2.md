@@ -126,11 +126,11 @@ TRSDOS-II and the Model I's NEWDOS/80 are not there.
 
 ## Typed and pasted text
 
-Text typed or pasted through the debugger (the display panel's paste and the debug protocol's key requests, which
-call `Trs80Keyboard.Type`) is pressed as the running ROM reads the keys, so it comes out as written, except that a
-lowercase letter comes out in uppercase while caps lock is on. On the Model III, 4 and 4P an uppercase letter is typed
-as its key with shift and a lowercase letter as its key alone, as MAME types them; ` is shift and @. That is how their
-Level II ROM and their DOSes read the keys:
+Text typed or pasted through the debugger (the display panel's paste and the debug protocol's key requests) is
+pressed as the running ROM reads the keys. On the Model I, III, 4 and 4P that is `Trs80Keyboard.Type`'s work. Under
+Level II on the Model III and 4, and their DOSes, text comes out as written except that a lowercase letter comes out in
+uppercase while caps lock is on. There an uppercase letter is typed as its key with shift and a lowercase letter as its
+key alone, as MAME types them; ` is shift and @. That is how their Level II ROM and their DOSes read the keys:
 
 | Running | Caps lock at start | Letter alone | Shift and letter |
 | --- | --- | --- | --- |
@@ -243,9 +243,10 @@ What the comparison has to allow for:
   `$FF` and the ROM starts BASIC. The DOS tests turn the switch on. The BASIC tests run without the controller here.
   With the switch on and drive 0 empty, MAME's ROM waits at `Diskette?`, as this one does.
 - **Images.** MAME 0.264 does not read the TRSDOS 1.3 and 6.0 DMK images, so those tests use their IMD copies.
-- **Keys.** MAME types an uppercase letter with shift and a lowercase one without, as `Trs80Keyboard.Type` does on
-  the Model III family ([Typed and pasted text](#typed-and-pasted-text)), so both press the same keys. Where they
-  differed, TRSDOS 6.0, which starts with caps lock off, echoed `dir` here and `DIR` in MAME.
+- **Keys.** MAME types an uppercase letter with shift and a lowercase one without, as `Trs80Keyboard.Type` does for
+  Level II on the Model III and 4 and their DOSes ([Typed and pasted text](#typed-and-pasted-text)), so both press
+  the same keys. Where they differed, TRSDOS 6.0, which starts with caps lock off, echoed `dir` here and `DIR` in
+  MAME.
 - **The cursor.** A DOS blinks its cursor, so one cell may differ, where one side shows a space.
 - **The Model II's boot ROM** is chosen by MAME's BIOS name: `c8ff`, `2bff`, `2119` and `9733` for versions 1, 2, 3
   and 5.

@@ -9,16 +9,17 @@ Two sources:
 - `src/Retrocore.Machines.Apple2/Roms/Disk35.rom.asm`: the emulator's own 256-byte slot ROM, which carries each call
   to the C# card. One build, checked by `Apple2Disk35Tests.SlotRomMatchesItsDigest`, added before the conversion.
 
-Documents cited by the converted names: UNKN only. The EPROM's labels are the SDK's own, given as it was decoded; no Apple listing of the
-card's firmware is known. The Monitor's and IIe's names it uses keep the Monitor's citations (A2RM78, A2RM79,
-IIEROM82, IIETRM85) through `Inherit:` or the shared IIeEquates.asm and MonitorEntries.asm.
+Documents cited by the converted names: IIGSFR87 (the Apple IIGS Firmware Reference) and UNKN. The EPROM's labels are
+the SDK's own, given as it was decoded; no Apple listing of the card's firmware is known. The Monitor's and IIe's
+names it uses keep the Monitor's citations (A2RM78, A2RM79, IIEROM82, IIETRM85) through `Inherit:` or the shared
+IIeEquates.asm and MonitorEntries.asm.
 
 ## Cross-cutting decisions
 
 - C1. The EPROM's and the slot ROM's names are the SDK's (Dos.md X12): they are renamed to the style with no `Also:`.
   `Also:` holds only names an Apple document or source gives: the ISM's registers as Apple's Macintosh sources
-  (SonyEqu.a) name them (wData ... rHandshake), SmartPort's error codes (BADCMD ... OFFLINE, BUSERR), and the IIgs's
-  registers (SHADOW, CYAREG, STATEREG, HORIZCNT), all UNKN, since no such document is in the bibliography. The IWM
+  (SonyEqu.a) name them (wData ... rHandshake), UNKN, since Apple never published those sources; SmartPort's error codes
+  (BADCMD ... OFFLINE, BUSERR) and the IIgs's registers (SHADOW, CYAREG, STATEREG, HORIZCNT), IIGSFR87 (Q3). The IWM
   switches, which the SDK named PH0L ... Q7H, take the Disk II's names (Dos.md X9) and no `Also:`.
 - C2. The Monitor's entries come from IIeEquates.asm and MonitorEntries.asm where they have them (the host code
   includes both); the rest are defined with `Inherit:` and the Monitor's `Also:` (NextSlot, SetText, LOC1,
@@ -61,21 +62,25 @@ IIEROM82, IIETRM85) through `Inherit:` or the shared IIeEquates.asm and MonitorE
   `SetError`'s RTS returns through. READSPAN's skip pause tests a byte it has just cleared.
 - `WriteMfmDataField` always returns carry clear; control $0C stores the list's fifth byte, not its third; $0C and $13
   keep the old address after a wrong-length list; $0F takes any length; $11 copies 256 bytes too many for a list a
-  multiple of 256 bytes; `FormatOptions::Set` (SETFORMAT) stores the kind before refusing a bad interleave; an MFM data-mark failure sets no
-  `DiskErrors` bit.
+  multiple of 256 bytes; `FormatOptions::Set` (SETFORMAT) stores the kind before refusing a bad interleave; an MFM
+  data-mark failure sets no `DiskErrors` bit.
 - The bus's receive error $8A can never happen; commands $0A-$0C read `Bus::CommandTable` past its end (asserted);
   `Bus::Initialize` marks units X to 3 empty, not 4; a failed FORMAT ejects the disk.
 - Comments fixed against the code: `ClearCache`'s slot values, `WaitReady`'s time (0.74 s), `SelectHead` reads `Side`
   itself, `IdentifyMedia`'s carry and A, `Release` turns the motor line on, `BlockMap::Gcr400`'s groups are 16 blocks,
   `DelayMillisecondPairs` does not keep A, `Bus::Enable`'s phases, the 2-byte write lengths' count.
 
-## Open questions for the owner
+## Settled by the owner
 
-- Q1. The READ-as-write finding above: `Apple2Disk35Card` says it follows Apple's READ, and
-  docs/backlog/Disk35Hardware.md describes READ's copy from $0E00 as if the read ran. Is the decoded dispatch right, or
-  does Apple's host change the command first? The bytes are certain; the reading of them is the question.
-- Q2. Names worked out from the code alone where a document would settle them: the ISM's mode bits ($08 action, $10
-  write, $80 motor), `MediaMode`'s values ($11, $32, $52 ...) left as numbers, and `FormatOptionList`'s fields
-  (`SHOWN`, `LINK`, `CURRENT`).
-- Q3. Should Apple's IIgs Firmware Reference (SmartPort's error names) and the SWIM documents get bibliography keys,
-  so the UNKN citations can name them? They were not in hand for this conversion.
+These were the conversion's open questions, settled after it merged.
+
+- Q1. SmartPort READ ($08) taking the write path is a bug in Apple's firmware, as decoded: the host passes READ to the
+  card as $08, and `ReadWriteTagged` reads only for command 1. The emulated card (`Apple2Disk35Card`) keeps doing a
+  correct tagged READ rather than copy the bug. Running the EPROM, once the hardware mode of
+  docs/backlog/Disk35Hardware.md exists, can confirm it.
+- Q2. The names worked out from the code alone stand: the ISM's mode bits (`ISM_MODE_ACTION` $08, `ISM_MODE_WRITE`
+  $10, `ISM_MODE_MOTOR` $80), `MediaMode`'s values as commented numbers, and `FormatOptionList`'s fields (`SHOWN`,
+  `LINK`, `CURRENT`).
+- Q3. The Apple IIGS Firmware Reference (1987) is in the bibliography as IIGSFR87, checked against its Internet Archive
+  OCR text: SmartPort's error names (Table 7-6) and SHADOW, CYAREG, STATEREG and HORIZCNT (Appendix E) cite it. The
+  ISM's register names stay UNKN, and so do ZIDBYTE and IDROUTINE, which the check did not reach.

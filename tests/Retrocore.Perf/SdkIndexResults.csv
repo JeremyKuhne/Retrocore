@@ -31,3 +31,7 @@ b2,83190f75,Style checks read in place,Index,All,885.13,17.586,25.777,15000.0000
 b2,83190f75,Style checks read in place,Assemble,All,626.37,10.533,9.853,15000.0000,11000.0000,4000.0000,655.14,Default,artifacts/sdk-index-benchmarks/b2/results/Retrocore.Perf.SdkIndexBenchmarks-report.csv
 b2,83190f75,Style checks read in place,Index,AppleSoft,32.71,0.651,0.869,875.0000,812.5000,250.0000,34.74,Default,artifacts/sdk-index-benchmarks/b2/results/Retrocore.Perf.SdkIndexBenchmarks-report.csv
 b2,83190f75,Style checks read in place,Assemble,AppleSoft,21.13,0.160,0.133,593.7500,562.5000,218.7500,27.5,Default,artifacts/sdk-index-benchmarks/b2/results/Retrocore.Perf.SdkIndexBenchmarks-report.csv
+a1,e886a86e,Also: names read once per source,Index,All,847.17,16.246,23.300,14000.0000,13000.0000,0.0000,737.35,Default,artifacts/sdk-index-benchmarks/a1/results/Retrocore.Perf.SdkIndexBenchmarks-report.csv
+a1,e886a86e,Also: names read once per source,Assemble,All,575.45,10.852,11.611,14000.0000,12000.0000,4000.0000,582.73,Default,artifacts/sdk-index-benchmarks/a1/results/Retrocore.Perf.SdkIndexBenchmarks-report.csv
+a1,e886a86e,Also: names read once per source,Index,AppleSoft,28.08,0.292,0.259,687.5000,656.2500,281.2500,29.67,Default,artifacts/sdk-index-benchmarks/a1/results/Retrocore.Perf.SdkIndexBenchmarks-report.csv
+a1,e886a86e,Also: names read once per source,Assemble,AppleSoft,19.65,0.387,0.397,531.2500,468.7500,187.5000,22.44,Default,artifacts/sdk-index-benchmarks/a1/results/Retrocore.Perf.SdkIndexBenchmarks-report.csv

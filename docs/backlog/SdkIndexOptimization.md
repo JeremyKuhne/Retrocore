@@ -39,8 +39,9 @@ Indexing every SDK root:
 | 5 | d255b05c | Each file split into lines once | 894 ms | 938 MB | −23% | −32% |
 | 6 (`b1`) | f33ce65d | The parser reads each line in place | 874 ms | 834 MB | −25% | −40% |
 | 7 (`b2`) | 83190f75 | The style checks read lines in place | 885 ms | 810 MB | −24% | −42% |
+| 8 (`a1`) | e886a86e | Each source's `Also:` names read once | 847 ms | 737 MB | −27% | −47% |
 
-AppleSoft's root alone: 50.1 ms and 67.7 MB at the baseline, 32.7 ms and 34.7 MB after step 7.
+AppleSoft's root alone: 50.1 ms and 67.7 MB at the baseline, 28.1 ms and 29.7 MB after step 8.
 
 ### 1. Each source path made full once
 
@@ -101,6 +102,15 @@ on the stack. Comment bodies and sections tell indentation and blank lines witho
 the time, 11 ms more, is within the run's noise, as `Assemble`, which these checks barely touch, moved as much. The
 SDK's sources are clean, so the dump has none of these warnings: `StyleLintTests` covers them.
 
+### 8. Each source's `Also:` names read once
+
+After step 7 the assembler's `Also:` pass made 20.6% of the allocations, in two equal halves: the preprocessor read
+each source's `Also:` sections when it first processed it, so conditionals see historical names, and the compiler
+read every source's again, each a full documentation parse. Every root repeated both for the files it shares. Now an
+`AssemblySource` reads its names once and keeps them, `AssemblyAlsoNames.Collect` builds each assembly's names (and
+its state for macro expansions) from them, and `SourceFileCache` gives every assembly in an index build the same
+source for a path. This helps every assembly, not only the index. Allocations fell by 72 MB.
+
 ## Where the time and memory go now
 
 From the ETW trace before steps 3 and 4, and the allocation trace after step 5:
@@ -115,8 +125,10 @@ From the ETW trace before steps 3 and 4, and the allocation trace after step 5:
 ## Candidates
 
 - **Reading definitions** (B3, next): `Define` and `LabelKind`, for each documented definition.
-- **A lighter `Also:` pass.** The assembler's parse is about a fifth of all allocations, though it needs only the
-  comments with `Also:` sections. Finding exactly the same comments with less work needs care.
+- **A lighter `Also:` pass.** Now one parse per file per build, it still builds every comment whole (summary,
+  remarks, every section and its entries, label kinds, usings) though it reads only six things and the `Also:`
+  names. A reader for the assembler could skip the rest; about three quarters of the SDK's documented definitions
+  have an `Also:` section, so skipping comments without one is not enough by itself.
 - Spans have been enough so far, as the parser keeps only strings; Touki's `StringSegment` would pay where slices of a
   line are kept.
 - **The documentation parsed twice.** The assembler's `Also:` pass parses without style checks and without the

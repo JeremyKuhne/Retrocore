@@ -111,14 +111,11 @@ JoinStrings:
 ;; A digit or a period starts a constant, which is read as a long integer when <ValueType> asks for one (or for a
 ;; string, which gives a type mismatch later), and as a real otherwise.
 ;; In: TextPointer = the character before the operand, ValueType = the type the formula wants
-;; Out: Fac = the value, ValueType = its type, TextPointer = the operand's last character
+;; Out: Fac = the value, ValueType = its type, TextPointer = the first character after the operand
 ;; Errors: <ERROR_SYNTAX> = a constant with no digits, or what can't start an operand
 ;; See: <EvaluateExpression>, <EvaluateVariable>, <CallFunction>
 ;; Also: EVAL (BB13)
 .proc EvaluateOperand
-;; The first byte of a two-byte token: a function, `FN` or `NOT`, with the token's own byte after it.
-ESCAPE = $FF
-
     jsr GetNextCharacter
     bcs NotDigit
 
@@ -145,7 +142,7 @@ ReadReal:
 ;; a string literal, a minus or an opening parenthesis.
 ;; Also: EVAL1 (BB13)
 NotDigit:
-    cmp #ESCAPE                             ; a function, `FN` or `NOT`
+    cmp #TOKEN_ESCAPE                             ; a function, `FN` or `NOT`
     beq EvaluateEscapeToken
     cmp #TOKEN_END                          ; a reserved word
     bcs EvaluateReservedWord
@@ -520,7 +517,7 @@ AfterOpen:
     jmp ReportError
 .endproc
 
-;; Ends the statement with SYNTAX <ReportError>.
+;; Ends the statement with SYNTAX ERROR.
 ;; Errors: <ERROR_SYNTAX>
 ;; Also: SNERR (BB13)
 .proc SyntaxError

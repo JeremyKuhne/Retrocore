@@ -235,7 +235,7 @@ RunSelected:
     jmp Statements::Run
 .if RUNTIME
 
-;; The selector named no program: the run-time version reports FILE NOT FOUND.
+;; The selector named no program: the run-time version reports `FILE NOT FOUND`.
 ;; Also: nopgm (BB13)
 NoProgramName:
     lda #SOS_ERROR_FILE_NOT_FOUND
@@ -290,7 +290,7 @@ Found:
 ; ---------------------------------------------------------------------------------------------------------------------
 
 ;; The console: its parameter lists for SOS, its setup and sign-on, its codes, reading a key, and the events of
-;; the any-key and CONTROL-C (attention) keys.
+;; the any-key and `CONTROL-C` (attention) keys.
 .scope Console
 
 ; The console's control codes, which BASIC writes to it as characters.
@@ -341,7 +341,7 @@ RETURN = $0D
 LINE_FEED = $0A
 
 ;; Opens .CONSOLE and sets it up: copies its reference number and device number into BASIC's console parameter
-;; lists, resets it, turns on the CONTROL-C attention event, makes reads end at a carriage return, and prints the
+;; lists, resets it, turns on the `CONTROL-C` attention event, makes reads end at a carriage return, and prints the
 ;; sign-on.
 ;;
 ;; Invokable modules can call it through <ModuleRoutines>.
@@ -967,7 +967,7 @@ Done:
     rts
 .endproc
 
-;; Ends with STACK OVERFLOW.
+;; Ends with `STACK` OVERFLOW.
 ;; See: <ReportError>
 ;; Also: OSERR (BB13)
 .proc StackOverflowError

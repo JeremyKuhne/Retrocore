@@ -18,7 +18,7 @@
 ;;   length
 ;; Out: A = the type, negative = set for a literal or string field, Y = the character's index in <FormatCharacters>,
 ;;   SpecCharacter = the character, RepeatCount = the count
-;; Errors: ILLEGAL QUANTITY for a count of 0 or over 255; SYNTAX <ReportError> for a character that isn't a format
+;; Errors: ILLEGAL QUANTITY for a count of 0 or over 255; SYNTAX ERROR for a character that isn't a format
 ;;   character, or a run that takes the count past 255
 ;; See: <ScanSpec>, <ReadNonSpace>
 ;; Also: UGETDL (BB13)
@@ -778,7 +778,7 @@ Digits:
 ; Digits, signs and rounding
 ; ---------------------------------------------------------------------------------------------------------------------
 
-;; Returns the number's digit for a power of ten, in ASCII.
+;; Returns the number's digit for a power of ten, in `ASCII`.
 ;;
 ;; Indexes up to 21 are read, two past the 20 digits from <DIGITS_START>, as the index from the first digit is
 ;; compared with <DIGITS_END>, an index from the start of <UsingDigits>. So the furthest places come from
@@ -819,7 +819,7 @@ Read:
     rts
 .endproc
 
-;; Returns the number's next digit, counting from the first with <DigitCounter>, in ASCII.
+;; Returns the number's next digit, counting from the first with <DigitCounter>, in `ASCII`.
 ;; Out: A = the digit, or `0` past the digits
 ;; Uses: DigitCounter, DigitPower
 ;; Keeps: X, Y

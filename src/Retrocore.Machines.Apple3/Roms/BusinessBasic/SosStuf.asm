@@ -18,7 +18,7 @@
 ;; `CREATE`'s parameter count.
 CREATE_COUNT = 3
 
-;; DESTROY's parameter count.
+;; `DESTROY`'s parameter count.
 DESTROY_COUNT = 1
 
 ;; `RENAME`'s parameter count.
@@ -27,7 +27,7 @@ RENAME_COUNT = 2
 ;; GET_FILE_INFO's and SET_FILE_INFO's parameter count.
 FILE_INFO_COUNT = 3
 
-;; OPEN's parameter count.
+;; `OPEN`'s parameter count.
 OPEN_COUNT = 4
 
 ;; NEWLINE's parameter count.
@@ -36,13 +36,13 @@ NEWLINE_COUNT = 3
 ;; `READ`'s parameter count.
 READ_COUNT = 4
 
-;; WRITE's parameter count.
+;; `WRITE`'s parameter count.
 WRITE_COUNT = 3
 
-;; CLOSE's parameter count.
+;; `CLOSE`'s parameter count.
 CLOSE_COUNT = 1
 
-;; FLUSH's parameter count.
+;; `FLUSH`'s parameter count.
 FLUSH_COUNT = 1
 
 ;; SET_MARK's and SET_EOF's parameter count.
@@ -51,10 +51,10 @@ SET_MARK_COUNT = 3
 ;; GET_MARK's parameter count.
 GET_MARK_COUNT = 2
 
-;; RELEASE_SEG's parameter count.
+;; `RELEASE_SEG`'s parameter count.
 RELEASE_SEG_COUNT = 1
 
-;; FIND_SEG's parameter count.
+;; `FIND_SEG`'s parameter count.
 FIND_SEG_COUNT = 6
 
 ;; The joystick call's parameter count.
@@ -75,16 +75,16 @@ GET_PREFIX_COUNT = 2
 ;; The joystick call's number, which BASIC's table of file calls gives as a number.
 SOS_JOYSTICK = $64
 
-;; OPEN's parameters.
+;; `OPEN`'s parameters.
 .struct OpenList
     COUNT .byte                             ;; <SosCalls::OPEN_COUNT>
     PATHNAME .word                          ;; the pathname's address, its length first
-    REFERENCE .byte                         ;; the reference number OPEN returns
+    REFERENCE .byte                         ;; the reference number `OPEN` returns
     OPTIONS .word                           ;; the option list's address
     OPTIONS_LENGTH .byte                    ;; the option list's length
 .endstruct
 
-;; WRITE's parameters.
+;; `WRITE`'s parameters.
 .struct WriteList
     COUNT .byte                             ;; <SosCalls::WRITE_COUNT>
     REFERENCE .byte                         ;; the file's reference number
@@ -92,7 +92,7 @@ SOS_JOYSTICK = $64
     LENGTH .word                            ;; the count of bytes to write
 .endstruct
 
-;; `READ`'s parameters; WRITE takes the first four too.
+;; `READ`'s parameters; `WRITE` takes the first four too.
 .struct ReadList
     COUNT .byte                             ;; <SosCalls::READ_COUNT>
     REFERENCE .byte                         ;; the file's reference number
@@ -109,7 +109,7 @@ SOS_JOYSTICK = $64
     CHARACTER .byte                         ;; the character that ends a read
 .endstruct
 
-;; FLUSH's parameters.
+;; `FLUSH`'s parameters.
 .struct FlushList
     COUNT .byte                             ;; <SosCalls::FLUSH_COUNT>
     REFERENCE .byte                         ;; the file's reference number, or 0 for every file
@@ -185,7 +185,7 @@ SOS_JOYSTICK = $64
     MARK .dword                             ;; the mark the call returns
 .endstruct
 
-;; FIND_SEG's parameters.
+;; `FIND_SEG`'s parameters.
 .struct FindSegmentList
     COUNT .byte                             ;; <SosCalls::FIND_SEG_COUNT>
     SEARCH_MODE .byte                       ;; the search mode
@@ -196,7 +196,7 @@ SOS_JOYSTICK = $64
     SEGMENT .byte                           ;; the segment's number, which the call returns
 .endstruct
 
-;; RELEASE_SEG's parameters.
+;; `RELEASE_SEG`'s parameters.
 .struct ReleaseSegmentList
     COUNT .byte                             ;; <SosCalls::RELEASE_SEG_COUNT>
     SEGMENT .byte                           ;; the segment's number
@@ -276,10 +276,10 @@ ECHO_ON = $80
 ;; The bit of <PendingEvents> the any-key event sets.
 KEY_SEEN = $80
 
-;; The bit of <PendingEvents> the attention event sets, for CONTROL-C.
+;; The bit of <PendingEvents> the attention event sets, for `CONTROL-C`.
 CONTROL_C_SEEN = $40
 
-;; OPEN's parameter list for .CONSOLE: the name <Console::Name>, the reference number back in <Console::Reference>,
+;; `OPEN`'s parameter list for .CONSOLE: the name <Console::Name>, the reference number back in <Console::Reference>,
 ;; and no option list.
 ;; See: <Console::Initialize>
 ;; Also: OPNCNST (BB13)
@@ -287,7 +287,7 @@ OpenParameters:
     .byte SosCalls::OPEN_COUNT
     .word Name
 
-;; The console's reference number, from OPEN; <Console::Initialize> copies it into the console's other lists.
+;; The console's reference number, from `OPEN`; <Console::Initialize> copies it into the console's other lists.
 ;; Also: CONSRFN (BB13)
 Reference:
     .byte 0
@@ -300,7 +300,7 @@ Name:
     .byte .strlen(".CONSOLE")
     .byte ".CONSOLE"
 
-;; WRITE's parameter list for text to the console, first the sign-on: the console's reference number, the text at
+;; `WRITE`'s parameter list for text to the console, first the sign-on: the console's reference number, the text at
 ;; <Console::SignOn> and its length.
 ;;
 ;; Text output writes strings through it too, putting a file's reference number in for the call.
@@ -342,8 +342,8 @@ KeyReference:
     .byte 0
     .word LastKey
 
-;; FLUSH's parameter list: one parameter, reference number 0, which flushes every open file. Its two bytes are also
-;; the request of <Console::KeyParameters>, one byte. Nothing sets it, so <ReadyForCommand>'s FLUSH is always of
+;; `FLUSH`'s parameter list: one parameter, reference number 0, which flushes every open file. Its two bytes are also
+;; the request of <Console::KeyParameters>, one byte. Nothing sets it, so <ReadyForCommand>'s `FLUSH` is always of
 ;; every file.
 ;; Also: RFLUSH (BB13)
 FlushAllParameters:
@@ -354,7 +354,7 @@ FlushAllParameters:
 KeyTransferred:
     .word 0
 
-;; WRITE's parameter list for one character, <Console::Character>, to the console.
+;; `WRITE`'s parameter list for one character, <Console::Character>, to the console.
 ;;
 ;; Its count is set when it is used; `READ`'s count of bytes read follows, for a `READ` through it.
 ;; Also: SCHRTB (BB13)
@@ -447,7 +447,7 @@ AttentionDevice:
     .word AttentionEvent
 
 ;; The attention event: its priority (0 turns it off), its ID, the handler <Console::AttentionHandler>, its bank
-;; <Console::AttentionBank>, and the attention key, CONTROL-C.
+;; <Console::AttentionBank>, and the attention key, `CONTROL-C`.
 ;; See: <Console::AttentionOff>, <Console::AttentionOn>
 ;; Also: DCCPRI (BB13)
 AttentionEvent:
@@ -535,7 +535,7 @@ CursorLine:
 ; Keys and CONTROL-C
 ; ---------------------------------------------------------------------------------------------------------------------
 
-;; Turns the attention event off, so CONTROL-C reads as a key, then arms it with <Console::AttentionOn>'s call.
+;; Turns the attention event off, so `CONTROL-C` reads as a key, then arms it with <Console::AttentionOn>'s call.
 ;; See: <Console::AttentionOn>, <Console::AttentionEvent>
 ;; Also: CTCOFF (BB13)
 .proc AttentionOff
@@ -567,8 +567,8 @@ CursorLine:
     ; Falls into Console::AttentionHandler.
 .endproc
 
-;; The attention event's handler: sets <Console::CONTROL_C_SEEN> in <PendingEvents> for CONTROL-C and reads the key from
-;; the console.
+;; The attention event's handler: sets <Console::CONTROL_C_SEEN> in <PendingEvents> for `CONTROL-C` and reads the key
+;; from the console.
 ;; See: <Console::AnyKeyHandler>, <Console::ReadKey>
 ;; Also: CTCEVNT (BB13)
 .proc AttentionHandler
@@ -580,7 +580,7 @@ CursorLine:
     ; Falls into Console::ReadKey.
 .endproc
 
-;; Reads one key into <LastKey> with echo and CONTROL-C off, from <Console::KeyReference>'s file.
+;; Reads one key into <LastKey> with echo and `CONTROL-C` off, from <Console::KeyReference>'s file.
 ;;
 ;; When the read fails while `EXEC` is reading, the `EXEC` file is closed and the key is read from the console instead;
 ;; when it fails in `GET#`, the error goes to the end-of-file handling in <Files::ReadTextLine::ReadFailed>.
@@ -681,7 +681,7 @@ Reference = Parameters + ReadList::REFERENCE
 ;; Also: NWLNB (BB13)
 NewlineEnabled = Parameters + NewlineList::ENABLED
 
-;; `READ`'s and WRITE's buffer address.
+;; `READ`'s and `WRITE`'s buffer address.
 ;; Also: SBFPTR (BB13)
 Buffer = Parameters + ReadList::BUFFER
 
@@ -693,15 +693,15 @@ MarkBase = Parameters + MarkList::BASE
 ;; Also: OUTMRK (BB13)
 Mark = Parameters + MarkResultList::MARK
 
-;; FIND_SEG's search mode.
+;; `FIND_SEG`'s search mode.
 ;; Also: ISRCHMD (BB13)
 SearchMode = Parameters + FindSegmentList::SEARCH_MODE
 
-;; FIND_SEG's segment ID.
+;; `FIND_SEG`'s segment ID.
 ;; Also: ISEGID (BB13)
 SegmentId = Parameters + FindSegmentList::SEGMENT_ID
 
-;; RELEASE_SEG's segment number.
+;; `RELEASE_SEG`'s segment number.
 ;; Also: SEGNUM (BB13)
 ReleasedSegment = Parameters + ReleaseSegmentList::SEGMENT
 
@@ -722,11 +722,11 @@ NewPathname = Parameters + RenameList::NEW_PATHNAME
 ;; Also: FLSTPTR (BB13)
 InformationAddress = Parameters + FileInfoList::INFORMATION
 
-;; The reference number OPEN returns.
+;; The reference number `OPEN` returns.
 ;; Also: REFOUT (BB13)
 OpenedReference = Parameters + OpenList::REFERENCE
 
-;; OPEN's option list's address.
+;; `OPEN`'s option list's address.
 ;; Also: OPNLST (BB13)
 OpenOptions = Parameters + OpenList::OPTIONS
 
@@ -742,7 +742,7 @@ Request = Parameters + ReadList::REQUEST
 ;; Also: DSPLMNT (BB13)
 Displacement = Parameters + MarkList::DISPLACEMENT
 
-;; FIND_SEG's page count.
+;; `FIND_SEG`'s page count.
 ;; Also: IOPGCN (BB13)
 PageCount = Parameters + FindSegmentList::PAGE_COUNT
 
@@ -751,7 +751,7 @@ PageCount = Parameters + FindSegmentList::PAGE_COUNT
 CreateOptionsLength:
     .byte 0
 
-;; OPEN's option list's length.
+;; `OPEN`'s option list's length.
 ;; Also: OPNLNGTH (BB13)
 OpenOptionsLength:
     .byte 0
@@ -760,12 +760,12 @@ OpenOptionsLength:
 ;; Also: OUTBYTES (BB13)
 Transferred = Parameters + ReadList::TRANSFERRED
 
-;; FIND_SEG's base bank and page.
+;; `FIND_SEG`'s base bank and page.
 ;; Also: BSBNKP (BB13)
 SegmentBase = Parameters + FindSegmentList::BASE
     .word 0                                 ; FIND_SEG's limit bank and page
 
-;; FIND_SEG's segment number.
+;; `FIND_SEG`'s segment number.
 ;; Also: OSEGNM (BB13)
 SegmentNumber:
     .byte 0
@@ -852,7 +852,7 @@ FileBlocks:
 .assert FileEnd = FileAccess + FileInformation::EOF, "FileEnd is the information's end of file."
 .assert FileBlocks = FileAccess + FileInformation::BLOCKS, "FileBlocks is the information's count of blocks."
 
-;; OPEN's option list: the access requested, 1 to read, from `LOAD`, or 2 to read and write, from `SAVE`.
+;; `OPEN`'s option list: the access requested, 1 to read, from `LOAD`, or 2 to read and write, from `SAVE`.
 ;; Also: INREQ (BB13)
 OpenAccess:
     .byte 0
@@ -924,7 +924,7 @@ Done:
 ;; Also: CRT (BB13)
 CALL_CREATE = 0
 
-;; DESTROY's index.
+;; `DESTROY`'s index.
 ;; Also: DST (BB13)
 CALL_DESTROY = CALL_CREATE+1
 
@@ -940,7 +940,7 @@ CALL_SET_FILE_INFO = CALL_RENAME+1
 ;; Also: GFI (BB13)
 CALL_GET_FILE_INFO = CALL_SET_FILE_INFO+1
 
-;; OPEN's index.
+;; `OPEN`'s index.
 ;; Also: OPN (BB13)
 CALL_OPEN = CALL_GET_FILE_INFO+1
 
@@ -952,11 +952,11 @@ CALL_NEWLINE = CALL_OPEN+1
 ;; Also: RED (BB13)
 CALL_READ = CALL_NEWLINE+1
 
-;; WRITE's index.
+;; `WRITE`'s index.
 ;; Also: WRT (BB13)
 CALL_WRITE = CALL_READ+1
 
-;; CLOSE's index.
+;; `CLOSE`'s index.
 ;; Also: CLS (BB13)
 CALL_CLOSE = CALL_WRITE+1
 
@@ -968,11 +968,11 @@ CALL_SET_MARK = CALL_CLOSE+1
 ;; Also: GTM (BB13)
 CALL_GET_MARK = CALL_SET_MARK+1
 
-;; RELEASE_SEG's index.
+;; `RELEASE_SEG`'s index.
 ;; Also: RLS (BB13)
 CALL_RELEASE_SEG = CALL_GET_MARK+1
 
-;; FIND_SEG's index.
+;; `FIND_SEG`'s index.
 ;; Also: FND (BB13)
 CALL_FIND_SEG = CALL_RELEASE_SEG+1
 

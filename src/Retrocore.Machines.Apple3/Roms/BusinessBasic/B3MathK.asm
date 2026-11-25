@@ -249,7 +249,8 @@ ShiftBytes:
 .endproc
 
 ;; Adds the mantissas, the rounding bits too, then takes a carry out of the top into the exponent.
-;; In: A = the shifted operand's rounding bits, carry = clear
+;; In: A = the shifted operand's rounding bits, carry = clear after a shift; set when the exponents were equal
+;;   (<AlignAndAdd>'s comparison leaves it so), which adds 1 to the rounding byte
 ;; See: <Float::NormalizeBits>
 ;; Also: FADD2 (BB13)
 .proc AddMantissas
@@ -447,7 +448,7 @@ Done:
     adc #8
     bmi ShiftRightByte
     beq ShiftRightByte
-    sbc #8                                  ; the carry is set here: A is restored
+    sbc #8                                  ; A restored when the carry is set; one less, one bit more, when clear
     tay
     lda FacExtension
     bcs Done                                ; no bits left

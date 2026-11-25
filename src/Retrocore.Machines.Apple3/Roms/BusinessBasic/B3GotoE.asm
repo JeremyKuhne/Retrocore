@@ -182,7 +182,7 @@ RestoreCaller:
 .endscope
 
 ;; Moves <TextPointer> to the end of the statement: a colon or the line's zero, outside quotes.
-;; Out: A = the terminator
+;; Out: TextPointer = the terminator
 ;; See: <FindStatementEnd>, <AdvanceTextPointer>
 ;; Also: DATA (BB13)
 .proc SkipStatement
@@ -386,13 +386,13 @@ ToOnKeyboard:
 ;; Reads a line number, 0 to 63999, from the text into <LineNumber>; with no digit there, <LineNumber> is 0.
 ;;
 ;; A number of 64000 or more is a syntax error through <Statements::On::RequireGoto>, which compares A, the high byte
-;; so far, with `GOTO`'s token: when that byte is $BA, as for a number whose first five digits are 47616 to 47871, the
+;; so far, with `GOTO`'s token: when that byte is $BA, as for a number from 47616 to 47871, the
 ;; error is missed, and the code goes on in `ON`'s loop, counting down <FacMantissa4> and pulling a byte `ON` never
 ;; pushed.
 ;; In: A = the character at TextPointer, carry = clear for a digit, as <GetCurrentCharacter> leaves them
 ;; Out: LineNumber = the number, TextPointer = the character after it, A = that character, flags as <GetNextCharacter>
 ;;   sets them
-;; Errors: SYNTAX <ReportError> for 64000 or more
+;; Errors: SYNTAX ERROR for 64000 or more
 ;; Uses: X, Delimiter, Pointer1
 ;; Also: LINGET (BB13)
 .proc ReadLineNumber
@@ -930,12 +930,12 @@ One:
 .scope Output continued
 ; Writing a string.
 
-;; Prints X characters from <Pointer1>, to the console or the output file, with one SOS WRITE through
+;; Prints X characters from <Pointer1>, to the console or the output file, with one SOS `WRITE` through
 ;; <Console::WriteParameters>.
 ;;
 ;; <Console::WriteParameters>'s reference number is the console's; for a file, the file's goes in for the call and the
-;; console's comes back. The WRITE's buffer address is <Pointer1> itself, a zero-page pointer, which SOS reads with its
-;; X-byte.
+;; console's comes back. The `WRITE`'s buffer address is <Pointer1> itself, a zero-page pointer, which SOS reads with
+;; its X-byte.
 ;; In: X = the length, Pointer1 = the string, with its X-byte, ValueType = negative for a string to free afterwards
 ;; Also: STRPR3 (BB13)
 .proc WriteString
@@ -955,7 +955,7 @@ One:
     sta Console::WriteParameters+1
     pla
 
-;; Counts the characters into <TerminalPosition> and makes the WRITE.
+;; Counts the characters into <TerminalPosition> and makes the `WRITE`.
 ;; Also: GOOUT (BB13)
 Write:
     clc
@@ -998,12 +998,12 @@ Finish:
 
 ;; Prints the character in A, to the console or the output file, and counts it in <TerminalPosition>.
 ;;
-;; A file's character goes out with a one-byte SOS WRITE through <Console::CharacterParameters>, with the file's
+;; A file's character goes out with a one-byte SOS `WRITE` through <Console::CharacterParameters>, with the file's
 ;; reference number put in for the call.
 ;; In: A = the character, OutputFileNumber = the output file, negative for the console
 ;; Out: A = the character
 ;; Entry:
-;;   WriteError = ends the statement with the WRITE's error; <Output::WriteString> branches here
+;;   WriteError = ends the statement with the `WRITE`'s error; <Output::WriteString> branches here
 ;; See: <WriteConsoleCharacter>
 ;; Also: OUTDO (BB13)
 .proc PrintCharacter
@@ -1036,7 +1036,7 @@ Finish:
     lda Console::Character
     rts
 
-;; Ends the statement with the WRITE's error.
+;; Ends the statement with the `WRITE`'s error.
 ;; Also: OTDOER (BB13)
 WriteError:
     jmp ReportSosError
@@ -1046,7 +1046,7 @@ WriteError:
 Send:
     jmp WriteConsoleCharacter
 
-;; The count of SOS WRITE's parameters, the first byte of its parameter list.
+;; The count of SOS `WRITE`'s parameters, the first byte of its parameter list.
 WRITE_PARAMETER_COUNT = 3
 .endproc
 
@@ -1151,7 +1151,7 @@ Count:
 ;; A wrapped line goes on after spaces to the column in <MoveDistance>+1, where the listed line's text started.
 ;; <OutputRecordLength> 0 turns the wrap off.
 ;; In: A = the character, MoveDistance+1 = the margin
-;; Errors: RANGE <ReportError> when the margin leaves no room in the width
+;; Errors: RANGE ERROR when the margin leaves no room in the width
 ;; See: <Statements::List>, <PrintCharacter>
 ;; Also: ROUTDO (BB13)
 .proc WrapCharacter

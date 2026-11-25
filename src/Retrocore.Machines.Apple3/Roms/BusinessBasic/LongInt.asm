@@ -101,7 +101,8 @@ NextCharacter:
     jsr GetNextCharacter
     bcc TakeDigit
 
-;; Rounds by the fraction after a period, if any: up from a first digit above 5, or of 5 with any other digit after it.
+;; Rounds by the fraction after a period, if any: up from a first digit above 5, or of 5 with any nonzero digit after
+;; it.
 ;; Also: LTRYDOT (BB13)
 CheckFraction:
     cmp #'.'
@@ -726,7 +727,12 @@ MoveLoop:
 ;; compared with it and shifted left <KeptY> + 1 times, the divisor subtracted whenever it fits, and each step's
 ;; quotient bit shifted into <Result1>. <Result1>-1 has bit 7 set from the first subtraction on; <Result1> is not
 ;; shifted before it, as its bits are all zero.
-;; Out: Result1 = the quotient's magnitude, Arg = the remainder shifted left <KeptY> + 1 bits,
+;;
+;; A divisor of -(2^63) is the exception: its magnitude, $80 00 ..., already has bit 63 set, so <NormalizeFac> shifts
+;; it right once and leaves <KeptY> -1. The step count is then 0, the branch to Step is not taken, and the dividend is
+;; shifted once before the first comparison, giving a quotient and remainder off by that shift.
+;; Out: Result1 = the quotient's magnitude, Arg = the remainder shifted left <KeptY> + 1 bits (1 for a divisor of
+;;   -(2^63)),
 ;;   carry = set when twice the remainder is at least the divisor, InputMode = bit 7 set for a negative result
 ;; Errors: <ERROR_DIVISION_BY_ZERO> = <Fac> is zero
 ;; Uses: SavedY, LongOperand1Pointer, LongOperand2Pointer, LongResultPointer
@@ -742,7 +748,7 @@ MoveLoop:
     lda #<(Arg)
     sta LongResultPointer                   ; differences go to Arg
     inc SavedY                              ; KeptY + 1 steps
-    bne Step                                ; always
+    bne Step                                ; always, but for a divisor of -(2^63) (see above)
 
 ;; Shifts the quotient bit in the carry into <Result1>, once a subtraction has been made, and the dividend left.
 ;; Also: LDECYSAV (BB13)
@@ -908,7 +914,7 @@ Done:
     ldy #0
     lda #<(Arg)
 
-;; Shifts the remainder back right <KeptY> + 1 bits.
+;; Shifts the remainder back right <KeptY> + 1 bits: once when <KeptY> is -1, for a divisor of -(2^63).
 ;; Also: LREM2 (BB13)
 ShiftBack:
     jsr ShiftRight

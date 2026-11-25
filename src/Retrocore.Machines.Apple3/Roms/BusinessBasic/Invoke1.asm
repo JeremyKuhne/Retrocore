@@ -180,7 +180,7 @@ X_BYTE_ON = $80
 ;; Finds the largest free segment for BASIC's program and data, anywhere in memory, and sets <SegmentStart> and
 ;; <MemoryTop> from it.
 ;;
-;; The first FIND_SEG asks for $FFFF pages, which fails, and SOS leaves the most it can give in the count; the second
+;; The first `FIND_SEG` asks for $FFFF pages, which fails, and SOS leaves the most it can give in the count; the second
 ;; asks for that. The call is made until it works.
 ;; Out: SegmentStart = the segment's start plus 1, MemoryTop = the page after its end
 ;; See: <Segments::FindBasicList>, <ColdStart>
@@ -222,13 +222,13 @@ X_BYTE_ON = $80
 ; The SOS memory calls' parameter lists
 ; ---------------------------------------------------------------------------------------------------------------------
 
-;; The parameter list of SOS's RELEASE_SEG call.
+;; The parameter list of SOS's `RELEASE_SEG` call.
 .struct ReleaseParameters
     COUNT .byte                             ;; the parameters' count, <RELEASE_COUNT>
     SEGMENT .byte                           ;; the segment's number
 .endstruct
 
-;; The parameter list of SOS's FIND_SEG call.
+;; The parameter list of SOS's `FIND_SEG` call.
 .struct FindParameters
     COUNT .byte                             ;; the parameters' count, <FIND_COUNT>
     MODE .byte                              ;; the search mode, a FIND_MODE_ value
@@ -256,10 +256,10 @@ X_BYTE_ON = $80
     SEGMENT .byte                           ;; the segment's number, from SOS
 .endstruct
 
-;; RELEASE_SEG's count of parameters.
+;; `RELEASE_SEG`'s count of parameters.
 RELEASE_COUNT = 1
 
-;; FIND_SEG's count of parameters.
+;; `FIND_SEG`'s count of parameters.
 FIND_COUNT = 6
 
 ;; CHANGE_SEG's count of parameters.
@@ -268,10 +268,10 @@ CHANGE_COUNT = 3
 ;; REQUEST_SEG's count of parameters.
 REQUEST_COUNT = 4
 
-;; FIND_SEG's search mode that keeps the segment within one bank.
+;; `FIND_SEG`'s search mode that keeps the segment within one bank.
 FIND_MODE_ONE_BANK = 0
 
-;; FIND_SEG's search mode that lets the segment cross banks.
+;; `FIND_SEG`'s search mode that lets the segment cross banks.
 FIND_MODE_ANY = 2
 
 ;; CHANGE_SEG's mode that moves the base up, giving pages back from the bottom.
@@ -292,7 +292,7 @@ ID_MODULES = $12
 ;; The segment ID of the reserved pages $2000-$21FF of bank 0.
 ID_RESERVED = $13
 
-;; RELEASE_SEG's parameter list for the invoked modules' segment.
+;; `RELEASE_SEG`'s parameter list for the invoked modules' segment.
 ;; See: <Statements::Invoke>
 ;; Also: SEGTAB1 (BB13)
 ReleaseModulesList:
@@ -303,7 +303,7 @@ ReleaseModulesList:
 ModulesSegment:
     .byte 0
 
-;; FIND_SEG's parameter list for the invoked modules: within one bank, the modules' ID and <Segments::ModulesPages>
+;; `FIND_SEG`'s parameter list for the invoked modules: within one bank, the modules' ID and <Segments::ModulesPages>
 ;; pages; SOS returns the base, the limit and the segment number.
 ;; Also: SEGTAB2 (BB13)
 FindModulesList:
@@ -326,7 +326,7 @@ ModulesBase:
 ModulesLimit:
     .word 0
 
-;; The modules' segment number, from FIND_SEG.
+;; The modules' segment number, from `FIND_SEG`.
 ;; Also: SEGNUM2 (BB13)
 FoundModulesSegment:
     .byte 0
@@ -396,7 +396,7 @@ GrowBasicSegment:
 GrowBasicPages:
     .word 0
 
-;; FIND_SEG's parameter list for BASIC's program and data: across banks, BASIC's ID and $FFFF pages, which fails and
+;; `FIND_SEG`'s parameter list for BASIC's program and data: across banks, BASIC's ID and $FFFF pages, which fails and
 ;; leaves the largest count SOS can give.
 ;; See: <Segments::FindForBasic>
 ;; Also: SEGTAB7 (BB13)
@@ -417,7 +417,7 @@ BasicBase:
 BasicLimit:
     .word 0
 
-;; BASIC's segment number, from FIND_SEG.
+;; BASIC's segment number, from `FIND_SEG`.
 ;; Also: SEGNUM7 (BB13)
 FoundBasicSegment:
     .byte 0
@@ -451,7 +451,7 @@ FoundBasicSegment:
     LENGTH .byte                            ;; the room there
 .endstruct
 
-;; The parameter list of SOS's GET_TIME call.
+;; The parameter list of SOS's `GET_TIME` call.
 .struct GetTimeParameters
     COUNT .byte                             ;; the parameters' count, 1
     TIME .addr                              ;; where SOS puts the date and time, 18 characters
@@ -465,7 +465,7 @@ PrefixList:
     .word CatalogBuffer+1
     .byte <(InputBuffer-CatalogBuffer-4)
 
-;; GET_TIME's parameter list, into <CatalogBuffer>+2, for `DATE$` and `TIME$`.
+;; `GET_TIME`'s parameter list, into <CatalogBuffer>+2, for `DATE$` and `TIME$`.
 ;; See: <Functions::Date>, <Functions::Time>
 ;; Also: DATETAB (BB13)
 TimeList:

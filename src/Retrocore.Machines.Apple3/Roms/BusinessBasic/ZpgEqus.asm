@@ -141,7 +141,7 @@ CHARACTER_BELL = 7
 ;; A line feed.
 CHARACTER_LINE_FEED = 10
 
-;; `A RETURN`.
+;; A return.
 CHARACTER_RETURN = 13
 
 ;; Control-O, the console's code that turns the screen back on.
@@ -630,8 +630,9 @@ ExponentSign = SourceStart + 1
 
 ;; The floating-point accumulator: the exponent, four bytes of mantissa, and the sign.
 ;;
-;; Expressions are worked out here; the second operand is in <ArgExponent>. An integer or long integer uses the same
-;; bytes.
+;; Expressions are worked out here. A real operation takes its left operand in <Arg> and its right here, and leaves
+;; the result here; the long-integer operations take the left operand here and the right in <Arg>. An integer or long
+;; integer uses the same bytes.
 ;; Also: FAC (BB13)
 Fac:
 
@@ -898,9 +899,9 @@ ModuleLoadPointer:
 PointerParameterCount:
     .byte 0
 
-;; `PERFORM`'s count of parameter bytes; it must survive the expression evaluator.
+;; `PERFORM`'s count of parameter words (two bytes each); it must survive the expression evaluator.
 ;; Also: NPARAMS (BB13)
-ParameterByteCount:
+ParameterWordCount:
     .byte 0
 
 ;; What kind of routine `INVOKE` or `PERFORM` is looking for; it must survive the expression evaluator.
@@ -1033,8 +1034,8 @@ ReferencePointers:
 ; ---------------------------------------------------------------------------------------------------------------------
 ; Page $1E
 ;
-; The page below BASIC's stack, which BASIC takes for its own work space. The stack is page $01 of its zero page,
-; from STACK_END down.
+; Page $1E, above BASIC's stack, which BASIC takes for its own work space. The stack is page $1B, the page after its
+; zero page ($1A), from STACK_END down.
 ; ---------------------------------------------------------------------------------------------------------------------
 
     .dum 255

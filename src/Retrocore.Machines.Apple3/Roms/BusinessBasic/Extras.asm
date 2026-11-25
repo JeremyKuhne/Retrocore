@@ -241,7 +241,7 @@ Done:
 ; Two-byte tokens
 ; ---------------------------------------------------------------------------------------------------------------------
 
-;; Tests whether the program has a two-byte token, <TWO_BYTE_TOKEN> and A, at <TextPointer>, and steps over the first
+;; Tests whether the program has a two-byte token, <TOKEN_ESCAPE> and A, at <TextPointer>, and steps over the first
 ;; byte if so.
 ;; In: A = the token's second byte
 ;; Out: zero = set when found, with <TextPointer> at the second byte, A = the character at <TextPointer>
@@ -255,9 +255,9 @@ Done:
     bne Reread
     dey
     lda (TextPointer),Y
-    cmp #TWO_BYTE_TOKEN
+    cmp #TOKEN_ESCAPE
     bne Reread
-    jsr GetNextCharacter                    ; Step over the TWO_BYTE_TOKEN
+    jsr GetNextCharacter                    ; Step over the TOKEN_ESCAPE
     lda #$00                                ; Found
 
 ;; Reads the character at <TextPointer> again, keeping the flags.
@@ -270,14 +270,14 @@ Reread:
     rts
 .endproc
 
-;; Requires the two-byte token <TWO_BYTE_TOKEN> and A next, and steps past it.
+;; Requires the two-byte token <TOKEN_ESCAPE> and A next, and steps past it.
 ;; In: A = the token's second byte
 ;; Errors: SYNTAX when it is not there
 ;; See: <MatchTwoByteToken>, <CheckCharacter>
 ;; Also: MSTESC (BB13)
 .proc RequireTwoByteToken
     pha
-    lda #TWO_BYTE_TOKEN
+    lda #TOKEN_ESCAPE
     jsr CheckCharacter
     pla
     jmp CheckCharacter
@@ -516,7 +516,7 @@ NoHandler:
 .endproc
 
 .endscope
-.assert END_OF_FILE_HANDLERS_SIZE = 3 * Handlers::KEYBOARD, "The keyboard's handler must be the last in EOFPTRS."
+.assert END_OF_FILE_HANDLERS_SIZE = 3 * Handlers::KEYBOARD, "The keyboard's handler is the last in EndOfFileHandlers."
 
 ; ---------------------------------------------------------------------------------------------------------------------
 ; DEL

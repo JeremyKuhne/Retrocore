@@ -77,7 +77,7 @@ CheckRange:
 OutOfRange:
     jsr Float::ExponentOutOfRange
 
-;; Splits y into its integer part (<Int>), the scale, and its fraction, and raises 2 to the fraction.
+;; Splits y into its integer part (`INT`), the scale, and its fraction, and raises 2 to the fraction.
 ;; Also: EXP1 (BB13)
 Reduce:
     jsr Int

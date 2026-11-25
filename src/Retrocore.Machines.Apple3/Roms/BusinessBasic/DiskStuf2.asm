@@ -423,7 +423,7 @@ Done:
 
 ;; Sets a text file's mark to its end (`SET_MARK` from the end of file, by 0), then goes on as <CopyName>.
 ;;
-;; The base is SOS's 1, a distance back from the end of file (SOS's ADJMARK).
+;; The base is SOS's 1, a distance back from the end of file (SOS's `ADJMARK`).
 ;; Also: TXTEXT (BB13)
 TextAtEnd:
     ldy #POSITION_SIZE

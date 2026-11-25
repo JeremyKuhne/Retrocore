@@ -23,7 +23,7 @@ INPUT_MODE_GET = $40
 ;; <InputMode> for `READ`: bit 7 set.
 INPUT_MODE_READ = $98
 
-;; CONTROL-C, as the console reads it: a CONTROL-C at the start of `INPUT`'s line stops the program.
+;; `CONTROL-C`, as the console reads it: a `CONTROL-C` at the start of `INPUT`'s line stops the program.
 CONTROL_C = $03
 
 ;; The error number a bad answer to `INPUT` gives `ON ERR`, in <ErrorCode>.
@@ -33,7 +33,7 @@ ERROR_REENTER = 254
 ERROR_EXTRA_IGNORED = 253
 
 ;; Handles a data item that does not end in a comma or the end: `INPUT` asks again, `READ` and `GET` end with SYNTAX
-;; <ReportError>.
+;; ERROR.
 ;;
 ;; `READ`'s error names the `DATA` statement's line, from <DataLine>.
 ;; Entry:
@@ -61,7 +61,7 @@ ToSyntaxError:
     ; Falls into RetryInput.
 .endproc
 
-;; Asks again for `INPUT`'s line: `INPUT#` from a file ends with TYPE MISMATCH, and with `ON ERR` the program goes to
+;; Asks again for `INPUT`'s line: `INPUT#` from a file ends with `TYPE MISMATCH`, and with `ON ERR` the program goes to
 ;; its line with error <ERROR_REENTER>.
 ;; Entry:
 ;;   PrintReenter = prints ?REENTER and runs the `INPUT` statement again from its start
@@ -115,7 +115,7 @@ Done:
 .scope Statements continued
 ; GET and INPUT.
 
-;; The `GET` statement: reads one key, without echo, into each variable of its list, from the console, the <Exec> file
+;; The `GET` statement: reads one key, without echo, into each variable of its list, from the console, the `EXEC` file
 ;; while `EXEC` runs, or a file after `#n;`.
 ;;
 ;; A numeric variable takes the key's value as `VAL` would give it.
@@ -157,7 +157,7 @@ StartLoop:
 ;; items to the variables of the list.
 ;;
 ;; The prompt is the string given, or `?`. Items are separated by commas; the last variable, when a string, takes the
-;; rest of the line, commas and all. When the line runs out, `??` asks for more. CONTROL-C at the start of the line
+;; rest of the line, commas and all. When the line runs out, `??` asks for more. `CONTROL-C` at the start of the line
 ;; stops the program, where `CONT` runs the `INPUT` again.
 ;; In: A = the character after `INPUT`, flags as <GetCurrentCharacter> sets them
 ;; Errors: ILLEGAL DIRECT in a direct line
@@ -237,7 +237,7 @@ ReadInputLine:
 ;; The `READ` statement: assigns the items of the program's `DATA` statements to the variables of the list, from
 ;; <DataPointer> on; `READ#` reads from a file instead.
 ;; In: A = the character after `READ`, flags as <GetCurrentCharacter> sets them
-;; Errors: OUT OF DATA when the `DATA` statements run out, SYNTAX <ReportError> for a bad item (on the `DATA`'s line)
+;; Errors: OUT OF DATA when the `DATA` statements run out, SYNTAX ERROR for a bad item (on the `DATA`'s line)
 ;; See: <AssignVariableList::SearchData>, <ReadFile>, <Statements::Restore>
 ;; Also: READ (BB13)
 .proc Read
@@ -800,8 +800,8 @@ EndLoop:
     ; Falls into RequireNumber.
 .endproc
 
-;; Checks that the value is a number: a string or a long integer is a TYPE MISMATCH.
-;; Errors: TYPE MISMATCH for a string or a long integer
+;; Checks that the value is a number: a string or a long integer is a `TYPE MISMATCH`.
+;; Errors: `TYPE MISMATCH` for a string or a long integer
 ;; Keeps: A, X, Y
 ;; See: <RequireString>
 ;; Also: CHKNUM (BB13)
@@ -811,11 +811,11 @@ EndLoop:
     ; Falls into RequireString, past its SEC.
 .endproc
 
-;; Checks that the value is a string: anything else is a TYPE MISMATCH.
-;; Errors: TYPE MISMATCH for anything but a string
+;; Checks that the value is a string: anything else is a `TYPE MISMATCH`.
+;; Errors: `TYPE MISMATCH` for anything but a string
 ;; Keeps: A, X, Y
 ;; Entry:
-;;   Mismatch = ends the statement with TYPE MISMATCH
+;;   Mismatch = ends the statement with `TYPE MISMATCH`
 ;; See: <RequireNumber>
 ;; Also: CHKSTR (BB13)
 .proc RequireString
@@ -836,7 +836,7 @@ Done:
 IsString:
     bcs Done
 
-;; Ends the statement with TYPE MISMATCH.
+;; Ends the statement with `TYPE MISMATCH`.
 ;; Also: CHKERR (BB13)
 Mismatch:
     ldx #ERROR_TYPE_MISMATCH
@@ -861,8 +861,8 @@ Mismatch:
 ;; off the verb stack and comes back to <EvaluateExpression::WithOperator>.
 ;; In: TextPointer = the formula's first character, ValueType = the type wanted (<VALUE_TYPE_ANY> for any)
 ;; Out: the Fac = the value, ValueType = its type, TextPointer = the character after the formula
-;; Errors: TYPE MISMATCH when the result is not the type wanted, FORMULA TOO COMPLEX past 15 pending operators,
-;;   SYNTAX <ReportError> for a relational operator given twice
+;; Errors: TYPE MISMATCH when the result is not the type wanted, FORMULA TOO COMPLEX at the 15th pending operator,
+;;   SYNTAX ERROR for a relational operator given twice
 ;; Entry:
 ;;   KeepingStacks = keeps both stacks as they are, so a formula in parentheses (from <EvaluateSubexpression>) stacks on
 ;;   the one outside it
@@ -902,7 +902,7 @@ OperandReturn = * - 1
     ldx #OPERATOR_COUNT
     cmp #FIRST_TOKEN
     bcc FindOperator                        ; a character
-    cmp #ESCAPE_TOKEN
+    cmp #TOKEN_ESCAPE
     bne NoOperator                          ; another token: not an operator
     iny
     lda (TextPointer),y                     ; the escape token's second byte
@@ -1078,7 +1078,7 @@ PullArgByte:
     eor Temporary
     beq TakeOperator
 
-;; Ends the statement with TYPE MISMATCH.
+;; Ends the statement with `TYPE MISMATCH`.
 ;; Also: CANTFIX (BB13)
 ToTypeMismatch:
     jmp RequireString::Mismatch

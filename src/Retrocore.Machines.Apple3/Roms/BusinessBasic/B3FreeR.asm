@@ -271,7 +271,7 @@ Done:
 ;; `IF`s it passes so that a nested `IF`'s `ELSE` is skipped; with no `ELSE`, the next line runs. A line number after
 ;; `ELSE` is a `GOTO`.
 ;; In: TextPointer = past the `IF` token
-;; Errors: <ERROR_TYPE_MISMATCH> = a string condition, <ERROR_SYNTAX> = neither `THEN` nor <GoTo>
+;; Errors: <ERROR_TYPE_MISMATCH> = a string condition, <ERROR_SYNTAX> = neither `THEN` nor `GOTO`
 ;; See: <Statements::IfTrue>
 ;; Also: IF (BB13)
 .proc If
@@ -344,7 +344,7 @@ NestedIf:
 .endproc
 
 ;; Runs what follows `THEN` or `GOTO`: a line number goes to that line; anything else runs as statements.
-;; In: TextPointer = the `THEN` or <GoTo> token
+;; In: TextPointer = the `THEN` or `GOTO` token
 ;; Entry:
 ;;   ToGoTo = goes to the line number at <TextPointer>; <Statements::If> goes here for a line number after `ELSE`
 ;;   ToExecuteStatement = runs the statement at <TextPointer>; <Statements::If> goes here for statements after `ELSE`
@@ -406,7 +406,7 @@ MOVE_TO_LINE = 25
     lda #TOKEN_TO                           ; TO, an escape token
     jsr RequireTwoByteToken
     jsr EvaluateByte
-    stx WindowRight                         ; the right column, despite the name
+    stx WindowRight                         ; the right column
     cpx WindowLeft
     bcs SortLines
     lda WindowLeft                          ; the larger column on the right

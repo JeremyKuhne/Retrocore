@@ -11,7 +11,7 @@
 ; Errors
 ; ---------------------------------------------------------------------------------------------------------------------
 
-;; Ends with OUT OF MEMORY.
+;; Ends with `OUT OF MEMORY`.
 ;; See: <ReportError>
 ;; Also: OMERR (BB13)
 .proc ReportOutOfMemory
@@ -35,8 +35,8 @@
 ;;
 ;; The number is the message's place in <ErrorMessages>, from 1 (<ERROR_NEXT_WITHOUT_FOR>). A SOS error with no number
 ;; of BASIC's own comes through <ReportSosError> as SOS CALL (<ERROR_SOS_CALL>), with SOS's code in <SosError>.
-;; `INPUT`'s errors 253 (extra ignored) and 254 (bad input) come here only when `ON ERR` can take them, and CONTROL-C's
-;; 255 goes to <TrapError> from <HandleBreak>.
+;; `INPUT`'s errors 253 (extra ignored) and 254 (bad input) come here only when `ON ERR` can take them, and
+;; `CONTROL-C`'s 255 goes to <TrapError> from <HandleBreak>.
 ;;
 ;; In 1.3, before a program has reached the prompt (<StartupDone> clear), it first prints the name of the program the
 ;; selector started.
@@ -183,11 +183,11 @@ Direct:
 .endproc
 
 ;; Goes back to the prompt after a program ends or stops, or after an error: writes out all files' buffers with
-;; FLUSH (<Console::FlushAllParameters>, whose reference number zero means every file), then falls into
+;; `FLUSH` (<Console::FlushAllParameters>, whose reference number zero means every file), then falls into
 ;; <CommandLoop>.
 ;;
 ;; The run-time version has no prompt: after an error it asks for the space bar, then, as when a program ends,
-;; starts SOS again through <Statements::Bye::CloseAndRestart>.
+;; leaves BASIC through <Statements::Bye::CloseAndTerminate>.
 ;; See: <ReportMessage>, <CommandLoop>
 ;; Also: READY (BB13)
 .proc ReadyForCommand
@@ -213,7 +213,7 @@ WaitForSpace:
 ;; Starts SOS again.
 ;; Also: READYGO (BB13)
 Restart:
-    jmp Statements::Bye::CloseAndRestart
+    jmp Statements::Bye::CloseAndTerminate
 .else
     brk
     .byte SOS_FLUSH
@@ -397,9 +397,6 @@ Terminate:
 ; Tokenizing
 ; ---------------------------------------------------------------------------------------------------------------------
 
-;; The first byte of a two-byte token: the token, from the second keyword list, follows it.
-TWO_BYTE_TOKEN = $FF
-
 ;; The tokenizer's helpers: <Tokenize> is at the top level.
 .scope Tokenizer
 
@@ -415,7 +412,7 @@ TWO_BYTE_TOKEN = $FF
 ;; run it.
 ;;
 ;; Keywords from <ReservedWords> become one-byte tokens, $80 to <TOKEN_NEW>; those of the second list, from
-;; <ExtendedReservedWords>, become two bytes, <TWO_BYTE_TOKEN> and the token. A word is a keyword only with a separator
+;; <ExtendedReservedWords>, become two bytes, <TOKEN_ESCAPE> and the token. A word is a keyword only with a separator
 ;; (anything but a letter, digit or period) before and after it, or when it ends in one, as `TAB(` does, so long
 ;; variable names can hold keywords. Letters may be in either case, and spaces inside a keyword are skipped. Spaces
 ;; outside quotes are dropped, `?` becomes `PRINT` and `!` becomes `REM`. Quoted text, and everything after `REM`, is
@@ -587,16 +584,16 @@ CheckBefore:
     bcs ToNextKeyword
     dex                                     ; Back to the keyword's last character
     lda Counter+1
-    bmi StoreToken                          ; Two bytes: TWO_BYTE_TOKEN first
+    bmi StoreToken                          ; Two bytes: TOKEN_ESCAPE first
     lda Counter
 
-;; Stores A in the tokens, with the token after <TWO_BYTE_TOKEN> for a two-byte token.
+;; Stores A in the tokens, with the token after <TOKEN_ESCAPE> for a two-byte token.
 ;; Also: STUFIT (BB13)
 StoreToken:
     ldy TokenizePointer
     sta InputBuffer-3,Y
     iny
-    cmp #TWO_BYTE_TOKEN
+    cmp #TOKEN_ESCAPE
     bne KeepIndex
     lda Counter
     sta InputBuffer-3,Y
@@ -648,7 +645,7 @@ CheckDiskCommand:
 ;; Also: ITDIR15 (BB13)
 CopyToColon:
     sec
-    .byte $2C                               ; BIT abs, which skips the Directory::FileLine
+    .byte $2C                               ; BIT abs, which skips the CMP
 
 ;; Copies up to the next comma or colon after a disk command (bit 6 clear), or up to the colon after `IMAGE` and
 ;; `CAT` (bit 6 set).
@@ -720,7 +717,7 @@ NextToken:
     inx
     cpx #TOKEN_NEW+1                        ; Past the statements?
     bne CheckListEnd
-    ldx #TWO_BYTE_TOKEN                     ; The second list: two-byte tokens from FIRST_TOKEN
+    ldx #TOKEN_ESCAPE                     ; The second list: two-byte tokens from FIRST_TOKEN
     stx Counter+1
     ldx #FIRST_TOKEN
 

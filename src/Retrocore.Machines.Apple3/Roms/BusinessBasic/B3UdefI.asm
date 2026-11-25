@@ -139,7 +139,7 @@ CheckEnd:
 ;;   <VariablePointer>'s low byte, Y = its page
 ;; Errors: <ERROR_BAD_SUBSCRIPT> = a subscript not below its size, <ERROR_OUT_OF_MEMORY> = an offset of 64K or more
 ;; Entry:
-;;   ToOutOfMemoryError = ends with OUT OF MEMORY; <Variables::MultiplyUnsigned> branches here
+;;   ToOutOfMemoryError = ends with `OUT OF MEMORY`; <Variables::MultiplyUnsigned> branches here
 ;;   SetArrayFlags = sets <VariablePointerXByte> from A, and <ArrayElementFound>, and finishes;
 ;;   <Variables::ArrayNotFound> goes here
 ;;   ToSetIntegerFlag = finishes as <FindVariable::SetIntegerFlag> does; <Variables::InitializeArray> branches here
@@ -176,7 +176,7 @@ NextSubscript:
 ToBadSubscriptError:
     jmp BadSubscriptError
 
-;; Ends the statement with OUT OF MEMORY, for <Variables::MultiplyUnsigned>.
+;; Ends the statement with `OUT OF MEMORY`, for <Variables::MultiplyUnsigned>.
 ;; Also: OMERR1 (BB13)
 ToOutOfMemoryError:
     jmp ReportOutOfMemory
@@ -372,7 +372,7 @@ Done:
     jsr ReadCursorPosition
     ldy Console::CursorColumn
 
-;; Adds 1, to count from 1 as `TAB` and `HTAB` do, and gives Y as a real.
+;; Adds 1, to count from 1 as `TAB` and `HPOS` do, and gives Y as a real.
 ;; Also: VPOS2 (BB13)
 CountFromOne:
     iny

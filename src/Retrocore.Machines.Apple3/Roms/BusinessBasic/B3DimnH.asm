@@ -149,7 +149,7 @@ KeepDimensionFlag:
     jsr IsLetter
     bcs ValidFirst
 
-;; Ends the statement with SYNTAX <ReportError>, for a variable name that is not one.
+;; Ends the statement with SYNTAX ERROR, for a variable name that is not one.
 ;; Also: WRDERR (BB13)
 ToSyntaxError:
     jmp SyntaxError
@@ -888,7 +888,7 @@ DropSubscript:
 ;;
 ;; Each dimension's size is its subscript plus 1 in `DIM`, or 11 otherwise; the size of the whole entry is the element
 ;; size times every dimension's size, plus the head: the length, the name, the type, the count and the sizes. More
-;; than 64K is OUT OF MEMORY. The sizes stay on the stack; <Variables::InitializeArray> writes the entry.
+;; than 64K is `OUT OF MEMORY`. The sizes stay on the stack; <Variables::InitializeArray> writes the entry.
 ;; In: SourceStart = <VariablesStart>, Counter = the count of subscripts, on the stack
 ;; Errors: <ERROR_OUT_OF_MEMORY> = 64K or more, or no room
 ;; See: <Variables::MultiplyUnsigned>, <MoveRangeUp>

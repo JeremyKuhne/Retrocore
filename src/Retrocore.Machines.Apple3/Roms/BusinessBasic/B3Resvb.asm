@@ -756,7 +756,7 @@ ErrorMessages:
     ErrorMessage ERROR_DIRECTORY_FULL, "DIRECTORY FULL"
     ErrorMessage ERROR_DUPLICATE_VOLUME, "DUPLICATE VOLUME"
 
-;; " <ReportError>" and a bell, which follow every error message, ending in a zero.
+;; " ERROR" and a bell, which follow every error message, ending in a zero.
 ;; Also: ERR (BB13)
 ErrorSuffix:
     .byte " ERROR"

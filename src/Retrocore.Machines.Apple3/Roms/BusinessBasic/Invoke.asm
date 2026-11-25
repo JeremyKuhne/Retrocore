@@ -796,8 +796,8 @@ Done:
 ;;   then the next two bytes: two words.
 ;; - A string is a type mismatch.
 ;;
-;; The name is up to 8 letters and digits, upper-cased into <NameBuffer>; a name not found is an undefined-function
-;; error.
+;; The name is letters and digits, upper-cased into <NameBuffer>, of which the first 8 count; a name not found is an
+;; undefined-function error.
 ;; Errors: <ERROR_SYNTAX> = no name, <ERROR_TYPE_MISMATCH> = the wrong count of words or a string,
 ;;   <ERROR_UNDEFINED_FUNCTION> = the name not found
 ;; See: <Modules::CallByName>, <Modules::FindRecord>, <Modules::CallModule>
@@ -818,7 +818,7 @@ Done:
 ;;
 ;; The caller's return address is set aside in <PerformSavedReturn>, so the arguments lie right under the routine's own
 ;; return address; <CallModule> returns to the caller from <PerformSavedReturn>. For a .FUNC, four placeholder bytes are
-;; pushed after the arguments, as Pascal does. <ParameterByteCount>, <PointerParameterCount>, <ProcedureKind> and
+;; pushed after the arguments, as Pascal does. <ParameterWordCount>, <PointerParameterCount>, <ProcedureKind> and
 ;; <PerformSavedReturn> are single copies, so an `EXFN.` in another call's arguments overwrites the outer call's.
 ;; In: A = the name's offset in <NameBuffer> (8 for each `EXFN.` nested in another's arguments), ProcedureKind =
 ;;   <RECORD_PROC> for a .PROC or <RECORD_FUNC> for a .FUNC, TextPointer = the name's first character
@@ -833,7 +833,7 @@ Done:
     pla
     sta PerformSavedReturn+1
     lda #0
-    sta ParameterByteCount
+    sta ParameterWordCount
     sta PointerParameterCount
     lda #' '                                ; fill the name with spaces
     ldx ExfnNameOffset
@@ -977,14 +977,14 @@ AddressArgument:
     inc PointerParameterCount
     lda #1
 
-;; Adds the argument's words to <ParameterByteCount>, then reads the next argument after a comma, or ends at the closing
+;; Adds the argument's words to <ParameterWordCount>, then reads the next argument after a comma, or ends at the closing
 ;; parenthesis.
 ;; In: A = the argument's count of words
 ;; Also: PERVAL2 (BB13)
 CountWords:
     clc
-    adc ParameterByteCount
-    sta ParameterByteCount
+    adc ParameterWordCount
+    sta ParameterWordCount
     jsr GetCurrentCharacter
     cmp #')'
     beq SkipEnd
@@ -1014,7 +1014,7 @@ Find:
     beq ToUndefinedFunctionError
     ldy #LinkerRecord::COUNT
     lda (WalkPointer),Y                     ; the count of parameter words
-    cmp ParameterByteCount
+    cmp ParameterWordCount
     beq CallFound
     jmp TypeMismatchError
 

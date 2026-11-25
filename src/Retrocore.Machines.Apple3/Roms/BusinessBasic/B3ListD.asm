@@ -43,7 +43,7 @@
     TEXT_HIGH .byte ;; The text offset's high byte.
     TEXT_LOW .byte ;; The text offset's low byte.
 .endstruct
-.assert .sizeof(ForEntry) = FOR_FRAME_SIZE, "A FOR entry is FORSIZ bytes."
+.assert .sizeof(ForEntry) = FOR_FRAME_SIZE, "A FOR entry is FOR_FRAME_SIZE bytes."
 
 ;; A `GOSUB` entry on the stack, from its top (the lowest address) down, as <PushGoSubEntry> builds it.
 .struct GoSubEntry
@@ -55,9 +55,6 @@
     TEXT_HIGH .byte ;; The text offset's high byte.
     TEXT_LOW .byte ;; The text offset's low byte.
 .endstruct
-
-;; The first byte of an escape token, which a second byte, from <TOKEN_TAB> on, follows.
-ESCAPE_TOKEN = $FF
 
 ;; The lowest token, which the first word of <ReservedWords> or <ExtendedReservedWords> stands for.
 FIRST_TOKEN = $80
@@ -77,7 +74,7 @@ StackTop = $0101
 ;; The range is `LIST`, `LIST n`, `LIST n-`, `LIST -m` or `LIST n-m`, where a comma or `TO` may stand for the dash.
 ;; Each line is printed as a space, its number, <ListIndent> spaces times one more than the `FOR`s open, and its text;
 ;; text wraps at <OutputRecordLength> to the column the text started in. A `FOR` adds a level for the lines after it and
-;; each variable of a `NEXT` takes one away. CONTROL-C stops the listing with BREAK.
+;; each variable of a `NEXT` takes one away. `CONTROL-C` stops the listing with BREAK.
 ;; In: A = the character after `LIST`, flags as <GetCurrentCharacter> sets them
 ;; Uses: A, X, Y, LineNumber, SourceStart, VariableSizes, MoveDistance, Fac, AssignedVariable, InputMode
 ;; See: <Lister::WrapCharacter>, <Statements::List::CheckToken>, <FindLine>
@@ -189,7 +186,7 @@ IndentSpace:
 ;; Notes the column the text starts in, as the margin for wrapped text.
 ;;
 ;; A still holds what the output left, which <Statements::List::CheckQuote> prints: a space after the indentation, or,
-;; with no indentation, the 0 that SOS's WRITE left after the line number.
+;; with no indentation, the 0 that SOS's `WRITE` left after the line number.
 ;; Also: PLOOP3 (BB13)
 SetMargin:
     ldy TerminalPosition                    ; the margin for Lister::WrapCharacter's wrap
@@ -274,7 +271,7 @@ QuotedString:
 
 ;; Prints a character, or a token as its reserved word.
 ;;
-;; A token is one byte, $80-$FE, for a word of <ReservedWords>, or <ESCAPE_TOKEN> and a second byte for a word of
+;; A token is one byte, $80-$FE, for a word of <ReservedWords>, or <TOKEN_ESCAPE> and a second byte for a word of
 ;; <ExtendedReservedWords>. A space goes before the word unless it starts the line or follows a token or a colon (or,
 ;; for an escape token, unless it is a function); a space goes after a word that ends in a letter when a token, a
 ;; letter, a digit or a period follows. `FOR` and `NEXT` change the indentation of the lines after them in
@@ -335,7 +332,7 @@ PointAtWords:
     tax
     inx                                     ; InputMode = 0 for an escape token, negative for another
     stx InputMode
-    cmp #ESCAPE_TOKEN
+    cmp #TOKEN_ESCAPE
     bne CountWords
     iny
     lda (VariableSizes),y                   ; the escape token's second byte
@@ -630,12 +627,12 @@ PushStep:
 ;; <GetNextCharacter> reads the text's first byte. When the page reaches <POINTER_PAGE_LIMIT>, <TextPointerXByte> goes
 ;; up by one and the page down by a bank's $80 pages. The line number's high byte is $FF while a direct line runs.
 ;;
-;; CONTROL-C (bit 6 of <PendingEvents>) stops the program, and a key with `ON KBD` (bit 7) goes to its line, before the
-;; next statement.
+;; `CONTROL-C` (bit 6 of <PendingEvents>) stops the program, and a key with `ON KBD` (bit 7) goes to its line, before
+;; the next statement.
 ;; Entry:
 ;;   SavePlace = keeps <TextPointer> for `CONT` without checking for a terminator; `RETURN`, `CONT`, `INPUT`'s retry and
 ;;     `IF` come here
-;;   CheckEvents = takes a pending CONTROL-C or key, then moves to the next statement; the `ON ERR` handler,
+;;   CheckEvents = takes a pending `CONTROL-C` or key, then moves to the next statement; the `ON ERR` handler,
 ;;     <TrapError>, comes here
 ;; See: <ExecuteStatement>, <DispatchStatement>
 ;; Also: NEWSTT (BB13)
@@ -665,7 +662,7 @@ SavePlace:
     lda TextPointerXByte
     sta StoppedTextXByte
 
-;; Takes a pending CONTROL-C or key, then moves to the next statement, or the next line's at the end of a line.
+;; Takes a pending `CONTROL-C` or key, then moves to the next statement, or the next line's at the end of a line.
 ;; Also: DIRCON (BB13)
 CheckEvents:
     bit PendingEvents
@@ -746,7 +743,7 @@ ToSyntaxError:
 ToKeyHandler:
     jmp Handlers::KeyPressed
 
-;; Stops the program for CONTROL-C, through <HandleBreak>, which does not come back.
+;; Stops the program for `CONTROL-C`, through <HandleBreak>, which does not come back.
 ;; Also: ISCTRLC (BB13)
 ToBreak:
     jsr HandleBreak
@@ -833,18 +830,18 @@ Done:
 
 .endscope
 
-;; Stops the program for CONTROL-C, with BREAK, or goes to `ON ERR`'s line with error <ERROR_BREAK>.
+;; Stops the program for `CONTROL-C`, with BREAK, or goes to `ON ERR`'s line with error <ERROR_BREAK>.
 ;;
 ;; When the any-key flag is set too, or in a direct line, `ON ERR` is passed over.
 ;; Entry:
-;;   WithFlags = takes <PendingEvents>'s flags in A; `INPUT` comes here with <CONTROL_C> for a CONTROL-C typed at its
+;;   WithFlags = takes <PendingEvents>'s flags in A; `INPUT` comes here with <CONTROL_C> for a `CONTROL-C` typed at its
 ;;     prompt, which is stored in <PendingEvents> as it is
 ;; See: <Statements::StopOrEnd>, <TrapError>
 ;; Also: ISCNTC (BB13)
 .proc HandleBreak
     lda PendingEvents
 
-;; Takes the flags in A; `INPUT` comes here with <CONTROL_C> for a CONTROL-C typed at its prompt.
+;; Takes the flags in A; `INPUT` comes here with <CONTROL_C> for a `CONTROL-C` typed at its prompt.
 ;; In: A = <PendingEvents>'s flags
 ;; Also: ISCNTC2 (BB13)
 WithFlags:
@@ -873,7 +870,7 @@ Stop:
     bcs Statements::StopOrEnd               ; always
 .endproc
 
-;; <PendingEvents>'s bit for a CONTROL-C waiting.
+;; <PendingEvents>'s bit for a `CONTROL-C` waiting.
 KEY_CONTROL_C = $40
 
 ;; <PendingEvents>'s bit for a key waiting for `ON KBD`.
@@ -904,7 +901,7 @@ ERROR_BREAK = $FF
 ;; Stops the program: keeps <TextPointer> and <CurrentLine> in <StoppedText> and <StoppedLine> for `CONT` (not for a
 ;; direct line), then goes to <ReadyForCommand>, with BREAK and its line first when carry is set.
 ;;
-;; The debugger stops here for `STOP`, `END` and CONTROL-C.
+;; The debugger stops here for `STOP`, `END` and `CONTROL-C`.
 ;; In: carry = set to print BREAK
 ;; Entry:
 ;;   Finish = goes to <ReadyForCommand>, through BREAK's message when carry is set; the end of the program comes here,
@@ -954,7 +951,7 @@ ToReady:
     jmp ReadyForCommand
 .endproc
 
-;; The `CONT` statement: goes on from where `STOP`, `END`, CONTROL-C or an error stopped the program.
+;; The `CONT` statement: goes on from where `STOP`, `END`, `CONTROL-C` or an error stopped the program.
 ;;
 ;; It runs only in a direct line (in a program it does nothing). It clears <PendingEvents>, sets the any-key event
 ;; again, and goes on at <StoppedText> on line <StoppedLine>. A zero <StoppedTextXByte> means there is nothing to go on
@@ -999,21 +996,22 @@ Done:
     rts
 .endproc
 
-;; The `BYE` statement: closes the files and restarts the Apple III through SOS's COLD_START.
+;; The `BYE` statement: closes the files and leaves BASIC through SOS's <SOS_TERMINATE> call ($65, which Apple's
+;; listing calls `COLD.START`), which doesn't return.
 ;;
-;; Each call's parameter list is the call itself, starting at its BRK, a zero: no parameters. COLD_START takes none;
-;; CLOSE wants one, so SOS refuses that call, which matters little, as <Files::CloseAll> has closed BASIC's files.
+;; Each call's parameter list is the call itself, starting at its BRK, a zero: no parameters. `TERMINATE` takes none;
+;; `CLOSE` wants one, so SOS refuses that call, which matters little, as <Files::CloseAll> has closed BASIC's files.
 ;; Entry:
-;;   CloseAndRestart = closes the files and restarts, with nothing to check
+;;   CloseAndTerminate = closes the files and terminates, with nothing to check
 ;; Also: COLD (BB13)
 .proc Bye
     jsr GetCurrentCharacter
-    beq CloseAndRestart
+    beq CloseAndTerminate
     jmp SyntaxError
 
-;; Closes the files and restarts.
+;; Closes the files and terminates.
 ;; Also: COLD1 (BB13)
-CloseAndRestart:
+CloseAndTerminate:
     jsr Files::CloseAll
     brk
     .byte SOS_CLOSE

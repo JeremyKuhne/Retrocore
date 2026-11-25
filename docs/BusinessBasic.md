@@ -22,10 +22,10 @@ section, so Apple's names still assemble, link and resolve in the debugger: a br
 | `B3Resvb.asm` | The reserved words, their tokens, and the error messages. |
 | `Initial.asm`, `B3MainC.asm`, `Extras.asm` | The cold start, the error handler, the prompt and the line editor, and small statements. |
 | `SosStuf.asm` | The console's parameter lists and events, and the parameter list every file call shares. |
-| `B3ListD.asm`, `B3GotoE.asm`, `B3InpuF.asm` | LIST, the statement fetcher, RUN, GOTO, GOSUB and the other control statements, and INPUT. |
-| `B3EvalG.asm`, `StrUtils.asm` | The expression evaluator, and string utilities. |
+| `B3ListD.asm`, `B3GotoE.asm`, `B3InpuF.asm` | LIST, the statement loop, RUN, GOTO, GOSUB and the other control statements, PRINT, INPUT, and the expression evaluator's first half. |
+| `B3EvalG.asm`, `StrUtils.asm` | The expression evaluator's second half, and string space with the garbage collector. |
 | `B3MathK.asm`, `B3MathL.asm`, `B3FinpM.asm`, `B3Expon.asm`, `B3DmpyT.asm`, `LongInt.asm` | Arithmetic: reals, integers and long integers, number input and output, and the functions. |
-| `B3FreeR.asm`, `B3DimnH.asm`, `B3UdefI.asm`, `StrngStuf.asm` | Memory and garbage collection, variables and arrays, user-defined functions, and the string functions. |
+| `B3FreeR.asm`, `B3DimnH.asm`, `B3UdefI.asm`, `StrngStuf.asm` | Freeing strings, banked-pointer arithmetic, IF and WINDOW; variables and arrays; user-defined functions; and the string functions. |
 | `Invoke.asm`, `Invoke1.asm` | INVOKE and PERFORM: loading and calling invokable modules. |
 | `B3Pru1.asm`, `B3Pru2.asm` | PRINT and PRINT USING. |
 | `DiskStuf1.asm`, `DiskStuf2.asm`, `DisCmds.asm`, `FileStuf.asm`, `Catalog.asm` | Files: OPEN, READ#, WRITE#, LOAD, SAVE, the file commands and CATALOG. |

@@ -377,9 +377,9 @@ Ten:
 .endproc
 
 ;; Divides <Arg> by <Fac>, into the <Fac>, a bit of the quotient at a time; a zero <Fac> ends the statement with
-;; DIVISION BY <ZeroValue>.
+;; DIVISION BY ZERO.
 ;; In: A = <FacExponent>, zero = set for a zero <Fac>, ResultSign = the quotient's sign
-;; Errors: DIVISION BY <ZeroValue> = the <Fac> is zero, OVERFLOW = the quotient is too large
+;; Errors: DIVISION BY ZERO = the <Fac> is zero, OVERFLOW = the quotient is too large
 ;; See: <Float::CombineExponents>, <Float::NormalizeResult>
 ;; Also: FDIVT (BB13)
 .proc DivideArg
@@ -485,7 +485,7 @@ Finish:
     plp
     jmp NormalizeResult
 
-;; Ends the statement with DIVISION BY <ZeroValue>, through <ReportError>.
+;; Ends the statement with DIVISION BY ZERO, through <ReportError>.
 ;; Also: DV0ERR (BB13)
 DivisionByZero:
     ldx #ERROR_DIVISION_BY_ZERO

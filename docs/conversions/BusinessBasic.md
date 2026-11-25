@@ -393,7 +393,7 @@ three 1.3 builds), **AppleSoft name** the converted AppleSoft or Microsoft name 
 | STRFLG | StringFlag | location | all |  | A string flag: <FRMEVL> clears it, and nothing reads it. |
 | INVPNT | ModuleLoadPointer | location | all |  | Where `INVOKE` loads the next module, with its X-byte at <ModuleLoadPointerXByte>. |
 | NPOINTS | PointerParameterCount | location | all |  | `INVOKE`'s and `PERFORM`'s count of pointer parameters; it must survive the expression evaluator. |
-| NPARAMS | ParameterByteCount | location | all |  | `PERFORM`'s count of parameter bytes; it must survive the expression evaluator. |
+| NPARAMS | ParameterWordCount | location | all |  | `PERFORM`'s count of parameter words; it must survive the expression evaluator. |
 | PROCFLG | ProcedureKind | location | all |  | What kind of routine `INVOKE` or `PERFORM` is looking for; it must survive the expression evaluator. |
 | IOFLG | FileAccessMode | alias | all |  | Whether a file statement reads or writes. |
 | KEYSTROK | PendingEvents | location | all |  | Bit 7 set when a key was pressed, bit 6 when Control-C was; the handlers set them and the statement loop checks |
@@ -981,8 +981,8 @@ three 1.3 builds), **AppleSoft name** the converted AppleSoft or Microsoft name 
 | GORDY | Statements::StopOrEnd::ToReady | local | all | Statements::StopOrEnd::ToReady | Goes to <READY>. |
 | CONT | Statements::Cont | routine | all | Statements::Cont | The `CONT` statement: goes on from where `STOP`, `END`, CONTROL-C or an error stopped the program. |
 | CONTRT | Statements::Cont::Done | entry | all | Statements::Cont::Done | Returns, for the statements' checks. |
-| COLD | Statements::Bye | routine | all |  | The `BYE` statement: closes the files and restarts the Apple III through SOS's COLD_START. |
-| COLD1 | Statements::Bye::CloseAndRestart | entry | all |  | Closes the files and restarts. |
+| COLD | Statements::Bye | routine | all |  | The `BYE` statement: closes the files and leaves BASIC through SOS's TERMINATE call. |
+| COLD1 | Statements::Bye::CloseAndTerminate | entry | all |  | Closes the files and terminates. |
 | RUN | Statements::Run | routine | all | Statements::Run | The `RUN` statement: runs the program from its start, from a line (`RUN n` or `RUN ,n`), or loads a program first. |
 | RUNL2 | Statements::Run::AfterComma | local | all |  | Runs from the line after the comma. |
 | RUNL | Statements::Run::FromLine | local | all |  | Clears the variables and the stack (<CLEARC> resets it, taking <NextStatement>'s return address), then goes to the |

@@ -284,7 +284,7 @@ ROUND_UP_DIGIT = 5
 ;; when the expressions run out, the literals up to the next number or string spec are printed, and a spec left over
 ;; is a type mismatch. A semicolon at the end leaves the line open.
 ;; In: TextPointer = `USING`
-;; Errors: SYNTAX <ReportError>, UNDEF'D STATEMENT for a line that is not an `IMAGE`, TYPE MISMATCH, ILLEGAL QUANTITY
+;; Errors: SYNTAX ERROR, UNDEF'D STATEMENT for a line that is not an `IMAGE`, TYPE MISMATCH, ILLEGAL QUANTITY
 ;; See: <ScanSpec>, <FormatNumber>
 ;; Also: PRUSING (BB13)
 .proc Statement
@@ -920,7 +920,7 @@ Done:
 ;; Returns an upper-case letter with overflow set and carry set.
 ;; Also: UGETVS (BB13)
 Letter:
-    bit Compare+1                           ; the $40 of the Directory::FileLine sets overflow
+    bit Compare+1                           ; the $40 of the CMP sets overflow
 Compare:
     cmp #$40
     rts

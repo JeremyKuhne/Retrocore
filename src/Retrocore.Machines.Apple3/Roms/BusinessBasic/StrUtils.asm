@@ -23,8 +23,8 @@
 ;;
 ;; When the room would reach <VariablesEnd>, or the strings would take more than 64K below <MemoryTop>, the garbage
 ;; collector packs them and this tries again; when that is not enough, it asks SOS for more memory with <Segments::Grow>
-;; before collecting again, until <Segments::Grow> ends the statement with OUT OF MEMORY. An empty string takes no room,
-;; and returns at once.
+;; before collecting again, until <Segments::Grow> ends the statement with `OUT OF MEMORY`. An empty string takes no
+;; room, and returns at once.
 ;; In: A = the length
 ;; Out: X, Y = the room's address, <NewString>, <NewString>+1, NewStringXByte = the room, DestinationEnd = its
 ;;   information bytes,
@@ -108,7 +108,7 @@ Done:
 
 ;; Packs the strings and tries again; the second time round, first asks SOS for more memory.
 ;;
-;; The LDX of OUT OF MEMORY is never used: <Segments::Grow> reports the error itself.
+;; The LDX of `OUT OF MEMORY` is never used: <Segments::Grow> reports the error itself.
 ;; Also: GARBAG (BB13)
 Collect:
     ldx #ERROR_OUT_OF_MEMORY
@@ -135,17 +135,37 @@ CollectAndRetry:
 ;;
 ;; It walks string space down from <MemoryTop>, a string at a time by its information bytes. Each run of strings in use
 ;; moves up with <MoveRangeUp::Unchecked> over the free space found above it; <CollectorDistance> counts the free bytes
-;; so far, and each string's descriptor has its distance below <MemoryTop> reduced by that count.
+;; so far, and each string's descriptor has its distance below <MemoryTop> reduced by that count. It borrows the
+;; number reader's and `INPUT`'s bytes for its own state, under the names <CollectGarbage::ScanPointer>,
+;; <CollectGarbage::FreeLength>, <CollectGarbage::FreeRunEnds> and <CollectGarbage::LastInUse>.
 ;; Uses: A, X, Y, Temporary, DigitsLeft, InputMode, CollectorDistance, StringInformationPointer, DigitCount,
 ;;   DigitsSeen, DestinationEnd, SourceEnd, SourceStart
 ;; Errors: <ERROR_VARIABLE> = a temporary string that no temporary descriptor points to
 ;; See: <Strings::ReserveSpace>
 ;; Also: GARBA2 (BB13)
 .proc CollectGarbage
+
+; The number reader's and INPUT's bytes, which the collector borrows while it runs.
+
+;; The string being looked at: a pointer to its information bytes, walking down string space.
+ScanPointer = DigitCount
+
+;; <ScanPointer>'s X-byte.
+ScanPointerXByte = DigitCountXByte
+
+;; The free string's length, read with its information bytes.
+FreeLength = DigitsSeen
+
+;; Set when a run of free space ends at the string just taken.
+FreeRunEnds = DigitsLeft
+
+;; Whether the last string taken was in use.
+LastInUse = InputMode
+
     lda #0
     sta Temporary
-    sta DigitsLeft
-    sta InputMode                           ; whether the last string was in use
+    sta FreeRunEnds
+    sta LastInUse                           ; whether the last string was in use
     sta CollectorDistance                   ; the free bytes found so far
     sta CollectorDistance+1
     lda MemoryTop
@@ -156,27 +176,27 @@ CollectAndRetry:
     sty DestinationEnd+1
     jmp CheckBottom                         ; always
 
-;; Takes the string whose information bytes <DigitCount> points to: one in use has its descriptor adjusted, a free one
+;; Takes the string whose information bytes <ScanPointer> points to: one in use has its descriptor adjusted, a free one
 ;; adds its length to <CollectorDistance>.
 ;; Also: GMOVPTR (BB13)
 TakeString:
     ldy #0
-    lda (DigitCount),Y                      ; the type
+    lda (ScanPointer),Y                      ; the type
     sta Temporary
     iny
-    lda (DigitCount),Y
+    lda (ScanPointer),Y
     sta StringInformationPointer            ; where the descriptor is
     iny
-    lda (DigitCount),Y
+    lda (ScanPointer),Y
     sta StringInformationPointer+1
-    sta DigitsSeen                          ; the length, for free space
+    sta FreeLength                          ; the length, for free space
     lda Temporary
     beq AddFree                             ; free
-    eor InputMode
+    eor LastInUse
     and #1
-    sta DigitsLeft                          ; set when free space ends here
+    sta FreeRunEnds                          ; set when free space ends here
     lda #1
-    sta InputMode
+    sta LastInUse
     lda Temporary
     cmp #STRING_TYPE_TEMPORARY
     bne NotTemporary
@@ -222,7 +242,7 @@ FindDescriptor:
     sta StringInformationPointerXByte
     ldy #0
     lda (StringInformationPointer),Y        ; the string's length
-    sta DigitsSeen
+    sta FreeLength
 
 ;; Moves the string's descriptor up by <CollectorDistance> bytes, closer to <MemoryTop>.
 ;; Also: GRBCMP2 (BB13)
@@ -244,7 +264,7 @@ AddFree:
     lda CollectorDistance
     ldy CollectorDistance+1
     clc
-    adc DigitsSeen
+    adc FreeLength
     bcc AddInformation
     iny
 AddInformation:
@@ -255,30 +275,30 @@ AddInformation:
 KeepCount:
     sta CollectorDistance
     sty CollectorDistance+1
-    lda InputMode
+    lda LastInUse
     ora Temporary
-    sta DigitsLeft                          ; set when strings in use end here
+    sta FreeRunEnds                          ; set when strings in use end here
     lda #0
-    sta InputMode
+    sta LastInUse
 
-;; Steps <DigitCount> down past the string's characters.
+;; Steps <ScanPointer> down past the string's characters.
 ;; Also: SUBYS2 (BB13)
 StepPastText:
-    lda DigitCount
-    ldy DigitCount+1
-    ldx DigitCountXByte
+    lda ScanPointer
+    ldy ScanPointer+1
+    ldx ScanPointerXByte
     sec
-    sbc DigitsSeen
+    sbc FreeLength
     bcs CheckBoundary
     jsr Memory::PreviousPage
-    stx DigitCountXByte
-    sty DigitCount+1
+    stx ScanPointerXByte
+    sty ScanPointer+1
 
 ;; Where free space and strings in use meet, marks the top of the run of strings to move, or moves the run.
 ;; Also: GSUBINF (BB13)
 CheckBoundary:
     pha
-    lda DigitsLeft
+    lda FreeRunEnds
     beq NextString                          ; no change here
     lda Temporary
     beq MoveRun                             ; free space starts here
@@ -334,7 +354,7 @@ CheckBottom:
     sty SourceStart+1
     jmp MoveLastRun
 
-;; Points <DigitCount> at the next string's information bytes.
+;; Points <ScanPointer> at the next string's information bytes.
 ;; Also: GMOVCHK (BB13)
 PointAtInformation:
     sec
@@ -342,12 +362,12 @@ PointAtInformation:
     bcs SetPointer
     jsr Memory::PreviousPage
 
-;; Sets <DigitCount> and takes the next string.
+;; Sets <ScanPointer> and takes the next string.
 ;; Also: GSUBIN4 (BB13)
 SetPointer:
-    stx DigitCountXByte
-    sty DigitCount+1
-    sta DigitCount
+    stx ScanPointerXByte
+    sty ScanPointer+1
+    sta ScanPointer
     jmp TakeString
 
 ;; Moves the last run of strings in use up.
@@ -385,7 +405,7 @@ CheckTemporary:
     ldy #0
     lda (StringInformationPointer),Y        ; the length
     beq NextTemporaryDescriptor             ; empty
-    sta DigitsSeen
+    sta FreeLength
     iny
     iny
     lda (StringInformationPointer),Y        ; the distance below MemoryTop: the high byte
@@ -402,7 +422,7 @@ CheckTemporary:
     sty SourceStartXByte
     lda SourceStart
     clc
-    adc DigitsSeen                          ; the string's end
+    adc FreeLength                          ; the string's end
     sta SourceStart
     ldy SourceStart+1
     ldx SourceStartXByte
@@ -410,11 +430,11 @@ CheckTemporary:
     iny
     jsr Memory::WrapPage
 CompareEnd:
-    cpx DigitCountXByte
+    cpx ScanPointerXByte
     bne NextTemporaryDescriptor
-    cpy DigitCount+1
+    cpy ScanPointer+1
     bne NextTemporaryDescriptor
-    cmp DigitCount
+    cmp ScanPointer
     bne NextTemporaryDescriptor
     jmp MoveDescriptor                      ; this one
 

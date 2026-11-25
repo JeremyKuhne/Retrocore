@@ -131,7 +131,7 @@ TRANSFER_READ = 1
 ;; The four-byte count of the program's bytes still to move, low byte first; its top byte is always 0.
 LengthLeft = UsingDigits+2
 
-;; The base `SET_MARK` and `SET_EOF` count the displacement forward from the mark with (SOS's ADJMARK).
+;; The base `SET_MARK` and `SET_EOF` count the displacement forward from the mark with (SOS's `ADJMARK`).
 BASE_FORWARD_FROM_MARK = 2
 
 ;; The most bytes one `READ` or `WRITE` of the program moves, $7FFF, as four bytes for <SubtractPart>'s 32-bit

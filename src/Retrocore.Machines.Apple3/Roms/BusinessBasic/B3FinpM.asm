@@ -171,7 +171,7 @@ CheckPoint:
 ;; Notes a negative exponent.
 ;; Also: FINEC1 (BB13)
 NegativeExponent:
-    ror ExponentSign                        ; the carry from the Directory::FileLine: set
+    ror ExponentSign                        ; the carry from the CMP: set
 
 ;; Takes the exponent's next character.
 ;; Also: FINEC (BB13)

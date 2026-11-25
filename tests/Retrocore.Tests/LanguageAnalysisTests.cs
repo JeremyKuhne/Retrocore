@@ -440,7 +440,7 @@ public sealed partial class LanguageAnalysisTests
             string text = """
                 ;; Stored value.
                 ZSTORDO=1
-                ;; Uses <ZSTORDO>, <Outer::ZSTORDO>, <Outer::zstordo> and <::Outer::ZSTORDO>.
+                ;; Uses <ZSTORDO>, <Outer::ZSTORDO>, <Outer::zstordo>, <outer::zstordo> and <::Outer::ZSTORDO>.
                 SOME:: NOP
                 """.ReplaceLineEndings("\n");
 
@@ -454,13 +454,165 @@ public sealed partial class LanguageAnalysisTests
             await workspace.IdleAsync(path, CancellationToken.None);
             HoverHandler handler = new(workspace, new BasicDocuments(client));
             DocumentUri uri = DocumentUri.FromFileSystemPath(include);
-            foreach (string link in (string[])["<ZSTORDO>", "<Outer::ZSTORDO>", "<Outer::zstordo>", "<::Outer::ZSTORDO>"])
+            foreach (string link in (string[])["<ZSTORDO>", "<Outer::ZSTORDO>", "<Outer::zstordo>", "<outer::zstordo>", "<::Outer::ZSTORDO>"])
             {
                 int column = text.Split('\n')[2].IndexOf(link, StringComparison.Ordinal) + 1;
                 Hover? hover = await handler.Handle(Request(uri, 2, column));
                 hover.Should().NotBeNull(link);
                 hover?.Contents.Value.Should().Contain("Outer::ZSTORD = $01").And.Contain("Stored value.");
             }
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    /// <summary>
+    ///  A comment at the top of an include sees the CPU inherited from its include site.
+    /// </summary>
+    /// <returns>The test.</returns>
+    [TestMethod]
+    public async Task CommentLinkHoverUsesCpuInheritedByInclude()
+    {
+        string directory = Directory.CreateTempSubdirectory("retrocore-hover").FullName;
+        try
+        {
+            string path = Path.Join(directory, "root.asm");
+            string include = Path.Join(directory, "include.asm");
+            string root = ".cpu Z80\n.org $6000\n.include \"include.asm\"\n";
+            string text = ";; Uses <LDIR>.\n.cpu Mos6502\nStart:\n    rts\n";
+            File.WriteAllText(path, root);
+            File.WriteAllText(include, text);
+            RecordingLanguageClient client = new();
+            LanguageWorkspace workspace = new(client);
+            workspace.Update(path, root);
+            (await workspace.AnalysisOfAsync(path, CancellationToken.None)).Should().NotBeNull();
+            workspace.Update(include, text);
+            await workspace.IdleAsync(path, CancellationToken.None);
+            HoverHandler handler = new(workspace, new BasicDocuments(client));
+            int column = text.IndexOf("<LDIR>", StringComparison.Ordinal) + 1;
+            Hover? hover = await handler.Handle(Request(DocumentUri.FromFileSystemPath(include), 0, column));
+            hover.Should().NotBeNull();
+            hover?.Contents.Value.Should().Contain("Repeats LDI until BC is zero.");
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    /// <summary>
+    ///  An include also inherits its CPU when its first statement is in a nested include.
+    /// </summary>
+    /// <returns>The test.</returns>
+    [TestMethod]
+    public async Task CommentLinkHoverUsesCpuInheritedByNestedInclude()
+    {
+        string directory = Directory.CreateTempSubdirectory("retrocore-hover").FullName;
+        try
+        {
+            string path = Path.Join(directory, "root.asm");
+            string include = Path.Join(directory, "include.asm");
+            string nested = Path.Join(directory, "nested.asm");
+            string root = ".cpu Z80\n.org $6000\n.include \"include.asm\"\n";
+            string text = ";; Uses <LDIR>.\n.include \"nested.asm\" ; During <LDIR>.\n;; After <LDIR>.\n";
+            File.WriteAllText(path, root);
+            File.WriteAllText(include, text);
+            File.WriteAllText(nested, ".cpu Mos6502\nStart:\n    rts\n");
+            RecordingLanguageClient client = new();
+            LanguageWorkspace workspace = new(client);
+            workspace.Update(path, root);
+            (await workspace.AnalysisOfAsync(path, CancellationToken.None)).Should().NotBeNull();
+            workspace.Update(include, text);
+            await workspace.IdleAsync(path, CancellationToken.None);
+            HoverHandler handler = new(workspace, new BasicDocuments(client));
+            int column = text.IndexOf("<LDIR>", StringComparison.Ordinal) + 1;
+            Hover? hover = await handler.Handle(Request(DocumentUri.FromFileSystemPath(include), 0, column));
+            hover.Should().NotBeNull();
+            hover?.Contents.Value.Should().Contain("Repeats LDI until BC is zero.");
+            string[] lines = text.Split('\n');
+            Hover? during = await handler.Handle(Request(DocumentUri.FromFileSystemPath(include), 1,
+                lines[1].IndexOf("<LDIR>", StringComparison.Ordinal) + 1));
+
+            during.Should().NotBeNull();
+            Hover? after = await handler.Handle(Request(DocumentUri.FromFileSystemPath(include), 2,
+                lines[2].IndexOf("<LDIR>", StringComparison.Ordinal) + 1));
+
+            after.Should().BeNull();
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    /// <summary>
+    ///  A comment-only include still inherits the CPU at its include site.
+    /// </summary>
+    /// <returns>The test.</returns>
+    [TestMethod]
+    public async Task CommentLinkHoverUsesCpuInheritedByCommentOnlyInclude()
+    {
+        string directory = Directory.CreateTempSubdirectory("retrocore-hover").FullName;
+        try
+        {
+            string path = Path.Join(directory, "root.asm");
+            string include = Path.Join(directory, "include.asm");
+            string root = ".cpu Z80\n.include \"include.asm\"\n.cpu Mos6502\n.org $6000\n.byte 0\n";
+            string text = ";; Uses <LDIR>.\n";
+            File.WriteAllText(path, root);
+            File.WriteAllText(include, text);
+            RecordingLanguageClient client = new();
+            LanguageWorkspace workspace = new(client);
+            workspace.Update(path, root);
+            (await workspace.AnalysisOfAsync(path, CancellationToken.None)).Should().NotBeNull();
+            workspace.Update(include, text);
+            await workspace.IdleAsync(path, CancellationToken.None);
+            HoverHandler handler = new(workspace, new BasicDocuments(client));
+            Hover? hover = await handler.Handle(Request(DocumentUri.FromFileSystemPath(include), 0, ";; Uses <".Length));
+            hover.Should().NotBeNull();
+            hover?.Contents.Value.Should().Contain("Repeats LDI until BC is zero.");
+            workspace.Update(path, ".cpu Z80\n.include \"include.asm\"\n.cpu Mos6502\n.include \"include.asm\"\n.org $6000\n.byte 0\n");
+            await workspace.IdleAsync(path, CancellationToken.None);
+            hover = await handler.Handle(Request(DocumentUri.FromFileSystemPath(include), 0, ";; Uses <".Length));
+            hover.Should().BeNull();
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    /// <summary>
+    ///  A leading instruction link is ambiguous when an include starts under different CPUs.
+    /// </summary>
+    /// <returns>The test.</returns>
+    [TestMethod]
+    public async Task CommentLinkHoverDoesNotChooseBetweenIncludeCpus()
+    {
+        string directory = Directory.CreateTempSubdirectory("retrocore-hover").FullName;
+        try
+        {
+            string path = Path.Join(directory, "root.asm");
+            string include = Path.Join(directory, "include.asm");
+            string root = ".cpu Z80\n.org $6000\n.include \"include.asm\"\n.cpu Mos6502\n.include \"include.asm\"\n";
+            string text = ";; Before <LDIR>.\n.byte 0\n.cpu Z80\n;; After <LDIR>.\n.byte 0\n";
+            File.WriteAllText(path, root);
+            File.WriteAllText(include, text);
+            RecordingLanguageClient client = new();
+            LanguageWorkspace workspace = new(client);
+            workspace.Update(path, root);
+            (await workspace.AnalysisOfAsync(path, CancellationToken.None)).Should().NotBeNull();
+            workspace.Update(include, text);
+            await workspace.IdleAsync(path, CancellationToken.None);
+            HoverHandler handler = new(workspace, new BasicDocuments(client));
+            DocumentUri uri = DocumentUri.FromFileSystemPath(include);
+            Hover? before = await handler.Handle(Request(uri, 0, ";; Before <".Length));
+            Hover? after = await handler.Handle(Request(uri, 3, ";; After <".Length));
+            before.Should().BeNull();
+            after.Should().NotBeNull();
+            after?.Contents.Value.Should().Contain("Repeats LDI until BC is zero.");
         }
         finally
         {

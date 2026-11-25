@@ -19,6 +19,8 @@ internal sealed partial class SourceAnalysis
 
     private readonly Dictionary<string, List<SymbolSite>> _definitions = [with(StringComparer.OrdinalIgnoreCase)];
     private readonly List<(AssemblyLocation? Location, InstructionSet Cpu)> _cpuDirectives = [];
+    private readonly Dictionary<string, Dictionary<AssemblyLocation, List<(int Line, InstructionSet Cpu)>>> _includeCpus =
+        [with(StringComparer.OrdinalIgnoreCase)];
     private readonly Dictionary<string, AssemblyDialect> _dialects = [with(StringComparer.OrdinalIgnoreCase)];
     private readonly Dictionary<string, string[]> _lines = [with(StringComparer.OrdinalIgnoreCase)];
     private readonly Func<string, string?> _text;
@@ -53,6 +55,47 @@ internal sealed partial class SourceAnalysis
                 && CpuCatalog.InstructionSets.TryGetValue(statement.Operand.Text.Trim(), out InstructionSet? cpu))
             {
                 _cpuDirectives.Add((statement.Location, cpu));
+            }
+        }
+
+        // Each include occurrence can enter under a different CPU; its nested switches take effect after the include line.
+        InstructionSet? current = _cpuDirectives.FirstOrDefault().Cpu;
+        HashSet<string> entered = [with(StringComparer.OrdinalIgnoreCase)];
+        foreach (AssemblyStatement statement in project.Statements)
+        {
+            for (AssemblyLocation? location = statement.Location; current is not null && location is not null; location = location.ExpandedFrom)
+            {
+                if (location is { Path.Length: > 0, ExpandedFrom: { } from, IsMacroExpansion: false })
+                {
+                    string path = Path.GetFullPath(location.Path);
+                    if (!_includeCpus.TryGetValue(path, out Dictionary<AssemblyLocation, List<(int Line, InstructionSet Cpu)>>? contexts))
+                    {
+                        _includeCpus[path] = contexts = [];
+                    }
+
+                    if (!contexts.ContainsKey(from)) { contexts.Add(from, [(0, current)]); }
+                    if (entered.Add(path) && location.Line > 0)
+                    {
+                        _cpuDirectives.Add((new AssemblyLocation(path, 0), current));
+                    }
+                }
+            }
+
+            if (statement.Kind == AssemblyStatementKind.Cpu
+                && statement.Label is null
+                && CpuCatalog.InstructionSets.TryGetValue(statement.Operand.Text.Trim(), out InstructionSet? cpu))
+            {
+                current = cpu;
+                for (AssemblyLocation? location = statement.Location; location is not null; location = location.ExpandedFrom)
+                {
+                    if (location is { Path.Length: > 0, ExpandedFrom: { } from, IsMacroExpansion: false }
+                        && _includeCpus.TryGetValue(Path.GetFullPath(location.Path), out var contexts)
+                        && contexts.TryGetValue(from, out var runs))
+                    {
+                        int line = ReferenceEquals(location, statement.Location) ? location.Line : location.Line + 1;
+                        runs.Add((line, cpu));
+                    }
+                }
             }
         }
 
@@ -318,6 +361,69 @@ internal sealed partial class SourceAnalysis
     /// <param name="path">The full path.</param>
     /// <returns>The lines, or none for a file this analysis did not read.</returns>
     internal string[] LinesOf(string path) => _lines.TryGetValue(path, out string[]? lines) ? lines : [];
+
+    /// <summary>
+    ///  Gets an included line's CPU across all its inclusion contexts.
+    /// </summary>
+    /// <param name="path">The full path.</param>
+    /// <param name="line">The zero-based line.</param>
+    /// <param name="ambiguous">Whether the contexts use different CPUs.</param>
+    /// <returns>The CPU, or null when it cannot be determined.</returns>
+    internal InstructionSet? InstructionSetAt(string path, int line, out bool ambiguous) =>
+        InstructionSetAt(path, line, depth: 0, out ambiguous);
+
+    private InstructionSet? InstructionSetAt(string path, int line, int depth, out bool ambiguous)
+    {
+        ambiguous = false;
+        if (!_includeCpus.TryGetValue(path, out var contexts))
+        {
+            if (_includedFrom.TryGetValue(path, out List<(string Path, int Line)>? sites))
+            {
+                if (depth >= 32)
+                {
+                    ambiguous = true;
+                    return null;
+                }
+
+                InstructionSet? inherited = null;
+                foreach ((string parent, int at) in sites)
+                {
+                    InstructionSet? cpu = InstructionSetAt(parent, at, depth + 1, out bool uncertain);
+                    if (uncertain || cpu is null || (inherited is not null && inherited != cpu))
+                    {
+                        ambiguous = true;
+                        return null;
+                    }
+
+                    inherited = cpu;
+                }
+
+                return inherited;
+            }
+
+            return Documentation.InstructionSetAt(path, line);
+        }
+
+        InstructionSet? result = null;
+        foreach (List<(int Line, InstructionSet Cpu)> runs in contexts.Values)
+        {
+            InstructionSet cpu = runs[0].Cpu;
+            foreach ((int at, InstructionSet set) in runs)
+            {
+                if (at <= line) { cpu = set; }
+            }
+
+            if (result is not null && result != cpu)
+            {
+                ambiguous = true;
+                return null;
+            }
+
+            result = cpu;
+        }
+
+        return result;
+    }
 
     /// <summary>
     ///  Finds where a name is defined, trying the spellings the reference's dialect allows.

@@ -4,6 +4,7 @@
 
 using Retrocore.Assembler;
 using Retrocore.Documentation;
+using Retrocore.Isa;
 
 namespace Retrocore.Debug.Language;
 
@@ -172,8 +173,8 @@ internal sealed class HoverHandler
         }
         else if (target.Kind == DocumentationTargetKind.Instruction)
         {
-            description = InstructionDocs.Describe(target.Name,
-                analysis.Documentation.InstructionSetAt(path, line) ?? SourceText.InstructionSetOf(lines, line));
+            InstructionSet? cpu = analysis.InstructionSetAt(path, line, out bool ambiguous);
+            description = ambiguous ? null : InstructionDocs.Describe(target.Name, cpu ?? SourceText.InstructionSetOf(lines, line));
         }
         else if (target.Kind is DocumentationTargetKind.Document or DocumentationTargetKind.Url)
         {
@@ -253,9 +254,15 @@ internal sealed class HoverHandler
         {
             string last = components[^1];
             string significant = target[..^last.Length] + last[..Math.Min(last.Length, 6)].ToUpperInvariant();
-            if (analysis.Bound(significant, path, absolute ? DocumentationScopes.Root : scopes, exact: true) is { } found)
+            DocumentationScopes lookup = absolute ? DocumentationScopes.Root : scopes;
+            List<SymbolSite>? found = analysis.Bound(significant, path, lookup, exact: true)
+                ?? analysis.Bound(significant, path, lookup, exact: false);
+
+            if (found is not null)
             {
-                List<SymbolSite> bound = [.. found.Where(site => site.Kind != SymbolSiteKind.Macro)];
+                List<SymbolSite> bound = [.. found.Where(site => site.Kind != SymbolSiteKind.Macro
+                    && site.Name[(site.Name.LastIndexOf(':') + 1)..] == significant[(significant.LastIndexOf(':') + 1)..])];
+
                 if (bound.Count > 1) { return new(DocumentationTargetKind.Ambiguous, name); }
                 if (bound.Count == 1)
                 {

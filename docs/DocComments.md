@@ -227,7 +227,9 @@ such as `NZ`, which say the same as `zero` with its meaning turned around. The w
 instruction-set description (the `flag` lines of `OpcodeTables.txt` and `Z80Isa.txt`), with what each flag
 means. Comment hovers are shown only for explicit links, not for bare symbol or flag names. Hovering anywhere
 inside a link shows its target's documentation, including on its display text or module qualifier. A
-new CPU names its flags with the same words, adding one only for a flag no CPU has had.
+new CPU names its flags with the same words, adding one only for a flag no CPU has had. Instruction-link
+hovers use the CPU at the include site; when the same line is included under different CPUs, no instruction
+hover is shown until their CPUs agree.
 
 ### 2.3 Text formatting
 

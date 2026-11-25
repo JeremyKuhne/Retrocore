@@ -282,6 +282,9 @@ public sealed class DocumentationBuildTests
 
         Resolve(Build(Body, model: 1), "Reader", "First").Topic?.Name.Should().Be("First");
         Resolve(Build(Body, model: 2), "Reader", "First").OnlyInOtherBuilds.Should().BeTrue();
+
+        // The macro's own documentation is held to the same rule as any other comment.
+        Resolve(Build(Body, model: 2), "Table", "First").OnlyInOtherBuilds.Should().BeTrue();
     }
 
     /// <summary>

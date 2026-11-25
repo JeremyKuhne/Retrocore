@@ -91,4 +91,24 @@ public sealed class DebugRelaunchTests
         client.Request("configurationDone", []);
         client.Event("stopped").String("description").Should().Be(PowerOn);
     }
+
+    /// <summary>
+    ///  A configurationDone after a launch that failed configures nothing: the next launch waits for its own.
+    /// </summary>
+    [TestMethod]
+    public void ConfigurationDoneAfterFailedLaunchIsNotKept()
+    {
+        using DapTestClient client = new();
+        client.Request("initialize", []);
+        client.Request("setExceptionBreakpoints", new JsonObject { ["filters"] = new JsonArray("machineReset") });
+        JsonObject failing = IIPlus();
+        failing["model"] = "no-such-model";
+        client.Fails("launch", failing).Should().NotBeEmpty();
+        client.Request("configurationDone", []);
+
+        client.Request("launch", IIPlus());
+        client.NoStop(TimeSpan.FromMilliseconds(500), "the launch waits for its own configurationDone");
+        client.Request("configurationDone", []);
+        client.Event("stopped").String("description").Should().Be(PowerOn);
+    }
 }

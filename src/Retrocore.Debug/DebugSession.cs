@@ -96,6 +96,7 @@ internal sealed partial class DebugSession
     // before any launch is kept here for the next launch; a launch takes it, so a later launch on the same connection
     // waits for its own.
     private bool _configured;
+    private bool _launched;
     private bool _started;
 
     // What the launch powers on to: the reset handler, a loaded program's entry, or (null) a BASIC launch already
@@ -187,10 +188,10 @@ internal sealed partial class DebugSession
         transport.On("retro/memory/variable", args => Reply(() => MemoryVariable(args)));
         transport.On("configurationDone", args => Reply(() =>
         {
-            // It starts the launch it configures. With no launch it waits for the next one; once the launch has
-            // started, there is nothing left to configure.
-            if (_target is null) { _configured = true; }
-            else { Start(); }
+            // It starts the launch it configures. Before the first launch it waits for that launch; after a launch that
+            // failed, or once the launch has started, there is nothing to configure.
+            if (!_launched) { _configured = true; }
+            else if (_target is not null) { Start(); }
             return [];
         }));
 
@@ -849,6 +850,7 @@ internal sealed partial class DebugSession
 
     private JsonObject Launch(JsonObject args)
     {
+        _launched = true;
         _run?.Cancel();
         args = LaunchMedia.WithSaved(args, args["machineState"]);
         string machine = DebugMachines.Require(args.String("machine"));
@@ -1069,13 +1071,18 @@ internal sealed partial class DebugSession
         Notify("initialized", []);
 
         // A configurationDone that came before the launch starts the machine once this response is on its way. The
-        // launch takes it: a launch after this one waits for a configurationDone of its own.
+        // launch takes it: a launch after this one waits for a configurationDone of its own, and one that comes
+        // before the start runs replaces the machine it would have started.
         if (_configured)
         {
             _configured = false;
+            IDebugTarget launched = Target;
             _ = Task.Run(() =>
             {
-                lock (_gate) { Start(); }
+                lock (_gate)
+                {
+                    if (ReferenceEquals(_target, launched)) { Start(); }
+                }
             });
         }
 

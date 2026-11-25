@@ -55,6 +55,26 @@ internal sealed class DapTestClient : DisposableBase
     /// <returns>The response's body, or an empty object when it has none.</returns>
     internal JsonObject Request(string command, JsonObject arguments)
     {
+        JsonObject response = Send(command, arguments);
+        response.Bool("success").Should().BeTrue($"{command} failed: {response.String("message")}");
+        return response["body"] as JsonObject ?? [];
+    }
+
+    /// <summary>
+    ///  Sends a request that must fail, and waits for its response.
+    /// </summary>
+    /// <param name="command">The request's command, such as <c>launch</c>.</param>
+    /// <param name="arguments">Its arguments.</param>
+    /// <returns>The response's message.</returns>
+    internal string Fails(string command, JsonObject arguments)
+    {
+        JsonObject response = Send(command, arguments);
+        response.Bool("success").Should().BeFalse($"{command} should fail");
+        return response.String("message") ?? "";
+    }
+
+    private JsonObject Send(string command, JsonObject arguments)
+    {
         int seq = ++_sequence;
         byte[] json = Encoding.UTF8.GetBytes(new JsonObject
         {
@@ -72,8 +92,7 @@ internal sealed class DapTestClient : DisposableBase
         }
 
         response.Int("request_seq").Should().Be(seq);
-        response.Bool("success").Should().BeTrue($"{command} failed: {response.String("message")}");
-        return response["body"] as JsonObject ?? [];
+        return response;
     }
 
     /// <summary>

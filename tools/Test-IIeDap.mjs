@@ -228,7 +228,7 @@ try {
     } finally {
         unlinkSync(disk35);
     }
-    events.splice(0, events.length); // these launches' own events, such as their stops on entry
+    events.splice(0, events.length); // the events of the launches above
 
     // The same sample assembled in place by retrocore's ca65 front end debugs by line without ca65, ld65 or a .dbg file.
     await request("launch", {

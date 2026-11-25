@@ -168,7 +168,7 @@ public sealed partial class DebugModuleTests
         DebugPosition? entry = debug.Position(new Apple2TestMemory(bus), 0xC700);
         entry.Should().NotBeNull();
         entry?.Chain[0].Path.Should().Be(Path.GetFullPath(source));
-        debug.Resolve("DriverEntry").Should().BeInRange(0xC700, 0xC7FF);
+        debug.Resolve("Driver").Should().BeInRange(0xC700, 0xC7FF);
 
         bus.Write(0xC007, 0);
         debug.Position(new Apple2TestMemory(bus), 0xC700).Should().BeNull();

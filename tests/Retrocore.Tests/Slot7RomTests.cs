@@ -36,7 +36,7 @@ public class Slot7RomTests
         Allocations.During(Read).Should().Be(0);
         length.Should().Be(256);
         Convert.ToHexString(SHA256.HashData(bytes)).Should().Be("992DD39BA83D9DFDDDD2FBE0B824294D764C76FD6128C1475C3C26E42E4D059E");
-        Slot7Rom.DriverEntry.Should().Be(0xC740);
+        Slot7Rom.Driver.Should().Be(0xC740);
         Slot7Rom.DeviceInfo.Should().Be(0xC7FE);
         typeof(Slot7Rom).TypeInitializer.Should().BeNull();
     }
@@ -66,8 +66,8 @@ public class Slot7RomTests
         };
 
         machine.Bus.SetRam(auxiliary: false, address: 0x2000, value: 0x20);
-        machine.Bus.SetRam(auxiliary: false, address: 0x2001, value: (byte)(Slot7Rom.DriverEntry & 255));
-        machine.Bus.SetRam(auxiliary: false, address: 0x2002, value: (byte)(Slot7Rom.DriverEntry >> 8));
+        machine.Bus.SetRam(auxiliary: false, address: 0x2001, value: (byte)(Slot7Rom.Driver & 255));
+        machine.Bus.SetRam(auxiliary: false, address: 0x2002, value: (byte)(Slot7Rom.Driver >> 8));
         machine.Bus.SetRam(auxiliary: false, address: 0x42, command);
         machine.Bus.SetRam(auxiliary: false, address: 0x45, value: 8);
         machine.Bus.SetRam(auxiliary: false, address: 0x46, value: 1);

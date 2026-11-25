@@ -1294,7 +1294,7 @@ public sealed class Apple2Bus : IProcessorBus
     ///  Gets whether the slot 7 ROM says its device writes, as it said when the machine last started or reset.
     /// </summary>
     internal bool BlockWritesAnnounced =>
-        (_slot7[Slot7Rom.DeviceInfo - Slot7Rom.Origin] & Slot7Rom.WriteCapabilityMask) != 0;
+        (_slot7[Slot7Rom.DeviceInfo - Slot7Rom.Origin] & Slot7Rom.CAPABILITY_WRITE) != 0;
 
     /// <summary>
     ///  Builds the slot 7 ROM again for the device as it is now, as power-on builds it.
@@ -1368,7 +1368,7 @@ public sealed class Apple2Bus : IProcessorBus
         Slot7Rom.Bytes.CopyTo(_slot7);
         if (_disk is { IsReadOnly: false })
         {
-            _slot7[Slot7Rom.DeviceInfo - Slot7Rom.Origin] |= (byte)Slot7Rom.WriteCapabilityMask;
+            _slot7[Slot7Rom.DeviceInfo - Slot7Rom.Origin] |= (byte)Slot7Rom.CAPABILITY_WRITE;
         }
     }
 }

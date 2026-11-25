@@ -45,6 +45,10 @@ M1 = $F9
 ;; See: <SWAP>, <FMUL>, <FDIV>
 E = $FC
 
+;; Where the floating-point routines jump on overflow: a JMP the program using them stores in page 3.
+;; See: <OVFL>
+OVLOC = $03F5
+
 ;; Adds the mantissas: <M1> = <M1> + <M2>.
 ;; Out:   carry = the carry out of the high bytes, overflow = their signed overflow
 ;; Uses: A, X

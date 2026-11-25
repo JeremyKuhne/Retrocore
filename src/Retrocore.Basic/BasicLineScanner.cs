@@ -650,7 +650,7 @@ internal sealed class BasicLineScanner
                 }
 
                 int first = index;
-                index = Mnemonic(index, out _assembly, out string? unknown);
+                index = Mnemonic(index, out _assembly, out string? unknown, out int warned);
                 if (unknown is not null)
                 {
                     diagnostics.Add(new(
@@ -658,7 +658,7 @@ internal sealed class BasicLineScanner
                         BasicSeverity.Warning,
                         $"BBC BASIC's assembler has no {unknown}: it stops with Syntax error.",
                         Column(first),
-                        End(index)));
+                        End(warned)));
                 }
 
                 return true;
@@ -694,26 +694,33 @@ internal sealed class BasicLineScanner
     // after it, as EQUB does. AND, EOR and OR are tokens, OR with the A after it. Returns the mnemonic's last byte, and
     // what follows it: the operand, or, after an implied instruction, which ASSEMBLE_INSTRUCTION_FOUND stores as it is,
     // nothing the assembler reads.
-    private int Mnemonic(int index, out BbcAssemblyPart next, out string? unknown)
+    private int Mnemonic(int index, out BbcAssemblyPart next, out string? unknown, out int warned)
     {
         next = BbcAssemblyPart.Operand;
         unknown = null;
-        if (_bytes[index] >= 0x80)
-        {
-            // ASSEMBLE_INSTRUCTION_TOKEN: AND, EOR, or OR with a capital A after it; any other token is no mnemonic.
-            string? word = _dialect.Word(_bytes[index]);
-            if (word == "OR" && index + 1 < _bytes.Length && _bytes[index + 1] == 'A') { return index + 1; }
-            if (word is not ("AND" or "EOR")) { unknown = Source(index, index); }
-            return index;
-        }
 
-        // Up to three characters, ended early by a space or a token, as ASSEMBLE_INSTRUCTION_LETTER packs them. It packs
-        // a colon like any other character, so LD: is no mnemonic; the scan stops before the colon, which still ends
-        // the statement, and LD is no mnemonic either.
+        // Up to three characters, ended early by a space, as ASSEMBLE_INSTRUCTION_LETTER packs them. A token at any of
+        // the three is the mnemonic, the characters before it dropped, as the tokeniser leaves AND after a symbol, a
+        // number or a colon: #AND #1 and A:AND #1 are AND #1.
         int last = index;
-        while (last - index < 2 && last + 1 < _bytes.Length && _bytes[last + 1] is not ((byte)' ' or (byte)':') and < 0x80)
+        while (_bytes[last] < 0x80 && last - index < 2 && last + 1 < _bytes.Length && _bytes[last + 1] != ' ')
         {
             last++;
+        }
+
+        // Otherwise a colon is packed like any other character, so LD: is no mnemonic; the scan stops before it, as it
+        // still ends the statement, and LD is no mnemonic either.
+        int colon = _bytes[last] < 0x80 ? Array.IndexOf(_bytes, (byte)':', index, last - index + 1) : -1;
+        if (colon > index) { last = colon - 1; }
+
+        warned = last;
+        if (_bytes[last] >= 0x80)
+        {
+            // ASSEMBLE_INSTRUCTION_TOKEN: AND, EOR, or OR with a capital A after it; any other token is no mnemonic.
+            string? word = _dialect.Word(_bytes[last]);
+            if (word == "OR" && last + 1 < _bytes.Length && _bytes[last + 1] == 'A') { return last + 1; }
+            if (word is not ("AND" or "EOR")) { unknown = Source(index, last); }
+            return last;
         }
 
         string letters = new([.. _bytes[index..(last + 1)].Select(value => (char)('@' + (value & 0x1F)))]);
@@ -740,7 +747,8 @@ internal sealed class BasicLineScanner
             }
             else
             {
-                unknown = Source(index, following is (byte)' ' or (byte)':' ? last : last + 1);
+                warned = following is (byte)' ' or (byte)':' ? last : last + 1;
+                unknown = Source(index, warned);
             }
         }
 

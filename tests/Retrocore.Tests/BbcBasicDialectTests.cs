@@ -378,13 +378,16 @@ public sealed class BbcBasicDialectTests
         [
             .. mnemonics.Where(mnemonic => mnemonic != "EQU").Select(mnemonic => $"{mnemonic} &70"),
             .. mnemonics.Where(mnemonic => mnemonic != "EQU").Select(mnemonic => $"{mnemonic.ToLowerInvariant()} &70"),
-            "EQUB &70", "EQUW &70", "EQUD &70", "EQUS \"A\"", "AND #1", "EOR #1", "ORA #1", "LDAdest", "RTSx", ".loop NOP"
+            "EQUB &70", "EQUW &70", "EQUD &70", "EQUS \"A\"", "AND #1", "EOR #1", "ORA #1",
+
+            // A token after a symbol or a colon is the mnemonic, what comes before it dropped; and LDAdest is LDA dest.
+            "#AND #1", "A:AND #1", "LDAdest", "RTSx", ".loop NOP"
         ];
 
         (string Statement, string Word)[] invalid =
         [
             ("LDZ #1", "LDZ"), ("sat &70", "sat"), ("LD", "LD"), ("EQUX 1", "EQUX"), ("EQUb 1", "EQUb"), ("EQU 1", "EQU"),
-            ("PRINT", "PRINT"), ("OR #1", "OR")
+            ("PRINT", "PRINT"), ("#PRINT", "#PRINT"), ("OR #1", "OR")
         ];
 
         string[] lines = ["10 [OPT 0", .. valid.Concat(invalid.Select(entry => entry.Statement)).Select((statement, index) => $"{index + 2}0 {statement}"), "9990 ]"];
@@ -393,11 +396,15 @@ public sealed class BbcBasicDialectTests
             .Should().Equal(invalid.Select((entry, index) =>
                 $"{valid.Length + index + 1}: BBC BASIC's assembler has no {entry.Word}: it stops with Syntax error."));
 
+        // Each warning covers the text it names, EQUX's X too.
+        source.Diagnostics.Where(diagnostic => diagnostic.Severity == BasicSeverity.Warning)
+            .Select(diagnostic => diagnostic.End - diagnostic.Start).Should().Equal(invalid.Select(entry => entry.Word.Length));
+
         // BASIC II stops on each with Syntax error, and assembles the forms that look odd but are valid.
         BbcMachine machine = Boot();
         BbcMachineTests.Type(machine, "dest=&70:x=0\r");
         BbcMachineTests.RunToPrompt(machine);
-        foreach (string statement in invalid.Select(entry => entry.Statement).Append("LDAdest:RTSx:lda #1:EQUB 1"))
+        foreach (string statement in invalid.Select(entry => entry.Statement).Append("LDAdest:RTSx:lda #1:#AND #1:A:AND #1:EQUB 1"))
         {
             BbcMachineTests.Type(machine, $"CLS:P%=&3000:[OPT 2:{statement}\r");
             string screen = string.Join("\n", BbcMachineTests.RunToPrompt(machine));

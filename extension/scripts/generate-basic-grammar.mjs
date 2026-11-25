@@ -156,7 +156,8 @@ function grammar(dialect, name, words, { names = "[A-Za-z][0-9]*[$%!#]?", ignore
     const assemblyStart = "(?:^\\s*(\\d+)\\s*|^\\s*|(?<=[\\[:])\\s*)";
     // A statement's start, then a label if it has one: captures 1 to 3 are the line number, the label's . and its name.
     // FIND_VARIABLE_A skips spaces before the name, so . loop is a label too.
-    const labelled = `${assemblyStart}(?:(\\.)\\s*(${names})\\s*)?`;
+    // The name is read whole, as FIND_VARIABLE reads it, so .restart is no label re before STA.
+    const labelled = `${assemblyStart}(?:(\\.)\\s*(?>(${names}))\\s*)?`;
     // A keyword that starts with A, such as ABS or its AB., is a token, which the shifts do not take for the accumulator.
     const notKeyword = `(?!${reserved.filter(word => word.startsWith("A"))
         .flatMap(word => [word, ...(abbreviated.get(word) ?? []).map(prefix => `${prefix}.`)]).map(escape).join("|") || "$^"})`;

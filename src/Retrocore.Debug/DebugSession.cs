@@ -92,9 +92,16 @@ internal sealed partial class DebugSession
     private ulong _measureCycles;
     private double _measured = double.NaN;
 
-    // VS Code sends breakpoints and configurationDone in answer to the initialized event, which the server sends
-    // right after initialize, so they can arrive before launch has loaded the modules they bind to.
+    // Each launch sends the initialized event and waits for its own configurationDone, so the breakpoints and
+    // exception filters sent in answer to it are in place before the machine starts. A configurationDone that came
+    // before any launch is kept here for the next launch; a launch takes it, so a later launch on the same connection
+    // waits for its own.
     private bool _configured;
+
+    // Whether a launch has been asked for on this connection, and whether the last one finished, so that its
+    // configurationDone has a machine to start.
+    private bool _launchAttempted;
+    private bool _launchReady;
     private bool _started;
 
     // What the launch powers on to: the reset handler, a loaded program's entry, or (null) a BASIC launch already
@@ -200,8 +207,11 @@ internal sealed partial class DebugSession
         transport.On("retro/memory/variable", args => Reply(() => MemoryVariable(args)));
         transport.On("configurationDone", args => Reply(() =>
         {
-            _configured = true;
-            if (_target is not null) { Start(); }
+            // It starts the launch it configures. Before the first launch it waits for that launch; after a launch
+            // that failed there is no launched machine to start, and once the launch has started, nothing is left to
+            // configure.
+            if (!_launchAttempted) { _configured = true; }
+            else if (_launchReady) { Start(); }
             return [];
         }));
 
@@ -927,6 +937,11 @@ internal sealed partial class DebugSession
 
     private JsonObject Launch(JsonObject args)
     {
+        // The launch takes a configurationDone that came before it, even if it fails.
+        bool configured = _configured;
+        _configured = false;
+        _launchAttempted = true;
+        _launchReady = false;
         _run?.Cancel();
         args = LaunchMedia.WithSaved(args, args["machineState"]);
         string machine = DebugMachines.Require(args.String("machine"));
@@ -1146,12 +1161,20 @@ internal sealed partial class DebugSession
 
         Notify("initialized", []);
 
-        // A configurationDone that came first starts the machine once this response is on its way.
-        if (_configured)
+        _launchReady = true;
+
+        // A configurationDone that came before the launch starts the machine once the launch has returned. A launch
+        // after this one waits for a configurationDone of its own, and a launch that comes before the start runs,
+        // even one that fails, or the session ending, cancels that start.
+        if (configured)
         {
+            IDebugTarget launched = Target;
             _ = Task.Run(() =>
             {
-                lock (_gate) { Start(); }
+                lock (_gate)
+                {
+                    if (_launchReady && !_ended && ReferenceEquals(_target, launched)) { Start(); }
+                }
             });
         }
 

@@ -1350,8 +1350,8 @@ statement that called it; it shows **BASIC: ready** at the prompt.
   the heap and BASIC's stack. STOP is an error, and there is no CONT. Watches read memory
   with `?`, `!` and `$` as BASIC does. Between `[` and `]`, the assembler's mnemonics,
   registers, comments and the text it skips are highlighted and are not variables, while its
-  labels are; and
-  another BASIC's word, such as `HOME`, is warned of only as a statement of its own.
+  labels are, and an unknown mnemonic is warned of; another BASIC's word, such as `HOME`, is
+  warned of only as a statement of its own.
 
 ### BASIC files
 

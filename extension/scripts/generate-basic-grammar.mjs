@@ -156,16 +156,17 @@ function grammar(dialect, name, words, { names = "[A-Za-z][0-9]*[$%!#]?", ignore
     const assemblyStart = "(?:^\\s*(\\d+)\\s*|^\\s*|(?<=[\\[:])\\s*)";
     // A statement's start, then a label if it has one: captures 1 to 3 are the line number, the label's . and its name.
     // FIND_VARIABLE_A skips spaces before the name, so . loop is a label too.
-    const labelled = `${assemblyStart}(?:(\\.)\\s*(${names})\\s*)?`;
+    // The name is read whole, as FIND_VARIABLE reads it, so .restart is no label re before STA.
+    const labelled = `${assemblyStart}(?:(\\.)\\s*(?>(${names}))\\s*)?`;
     // A keyword that starts with A, such as ABS or its AB., is a token, which the shifts do not take for the accumulator.
     const notKeyword = `(?!${reserved.filter(word => word.startsWith("A"))
         .flatMap(word => [word, ...(abbreviated.get(word) ?? []).map(prefix => `${prefix}.`)]).map(escape).join("|") || "$^"})`;
-    const word = "(?![A-Za-z0-9_`])";
-    // The letter after EQU is compared in capitals only, while the mnemonics' letters are packed by their low five bits.
+    // The assembler packs a mnemonic's first three letters by their low five bits, whatever follows them, so
+    // LDAdest is LDA dest; the letter after EQU is compared in capitals only.
     const mnemonic = mnemonics === null ? null
-        : `(?:(?i:EQU)[BWDS]|(?i:${mnemonics.filter(word => word !== "EQU").join("|")}))${word}`;
+        : `(?:(?i:EQU)[BWDS]|(?i:${mnemonics.filter(word => word !== "EQU").join("|")}))`;
     // The implied instructions, which come before BCC in the table.
-    const implied = mnemonics === null ? null : `(?i:${mnemonics.slice(0, mnemonics.indexOf("BCC")).join("|")})${word}`;
+    const implied = mnemonics === null ? null : `(?i:${mnemonics.slice(0, mnemonics.indexOf("BCC")).join("|")})`;
     const lineNumber = { name: `entity.name.label.line-number.${scope}` };
     const mnemonicName = { name: `keyword.other.mnemonic.${scope}` };
     const register = { name: `variable.language.register.${scope}` };
@@ -185,7 +186,7 @@ function grammar(dialect, name, words, { names = "[A-Za-z][0-9]*[$%!#]?", ignore
             // LDX, LDY, STX and STY compare their index register by its low five bits, so x and y are registers too;
             // after a register, as after any operand, the assembler skips the rest of the statement.
             {
-                begin: `${labelled}((?i:LDX|LDY|STX|STY)${word})`,
+                begin: `${labelled}((?i:LDX|LDY|STX|STY))`,
                 beginCaptures: { ...label, "4": mnemonicName },
                 end: "(?=:|$)",
                 patterns: [{ match: "(?<=,)\\s*([XYxy])([^:]*)", captures: { "1": register, "2": skipped } }, { include: "#assemblerOperand" }]

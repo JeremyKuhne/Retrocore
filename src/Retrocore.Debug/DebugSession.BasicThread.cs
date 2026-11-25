@@ -417,6 +417,13 @@ internal sealed partial class DebugSession
     {
         if (_basicStatement is not { } statement || Target.Basic is not { } dialect) { return null; }
         IBasicMemory text = TextMemory;
+        if (dialect is AtariBasicDialect)
+        {
+            // An Atari BASIC statement is its offset byte, then the statement's token, which numbers its word.
+            int code = text.Read(statement.Address + 1);
+            return code < dialect.Keywords.Count ? dialect.Keywords[code] : null;
+        }
+
         int at = statement.Address;
         while (text.Read(at) == ' ' && at < statement.Address + 8) { at++; }
         ReadOnlySpan<byte> token = [text.Read(at), text.Read(at + 1)];

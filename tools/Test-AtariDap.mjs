@@ -12,7 +12,7 @@
 
 import { startDap } from "./DapClient.mjs";
 import { resolve, join } from "node:path";
-import { readFileSync, writeFileSync, unlinkSync, mkdirSync } from "node:fs";
+import { readFileSync, writeFileSync, rmSync, mkdirSync } from "node:fs";
 import assert from "node:assert/strict";
 
 const root = resolve(import.meta.dirname, "..");
@@ -91,6 +91,10 @@ writeFileSync(xex, Buffer.from([
 const right = join(folder, `right-${process.pid}.rom`);
 writeFileSync(right, Buffer.alloc(0x2000, 0xEA));
 
+// Where the tape and the .xex's boot disk are saved.
+const savedCas = join(folder, `saved-${process.pid}.cas`);
+const savedAtr = join(folder, `saved-${process.pid}.atr`);
+
 // A disk whose boot sector, loaded at $0700, runs the same program from $0706.
 const atr = join(folder, `hi-${process.pid}.atr`);
 const sectors = 720;
@@ -134,6 +138,11 @@ try {
     assert.deepEqual([values.A, values.B, values.I], ["1", "2", "1"]);
     const loops = (await request("variables", { variablesReference: scopes.Loops })).variables;
     assert.equal(loops[0].name, "I");
+    const memory = Object.fromEntries((await request("variables", { variablesReference: scopes.Program })).variables.map(item => [item.name, item.value]));
+    for (const name of ["Variable names", "Variable values", "Program", "Strings, arrays", "Run-time stack", "Free"]) {
+        assert.match(memory[name] ?? "", /^\$[0-9A-F]{4}-\$[0-9A-F]{4} \(\d+ bytes\)$/, `${name}: ${JSON.stringify(memory)}`);
+    }
+    assert.match(memory["DATA line"] ?? "", /^\d+$/, JSON.stringify(memory));
     const evaluate = async expression => (await request("evaluate", { expression, frameId: inside[0].id, context: "watch" })).result;
     assert.equal(await evaluate("A*10+B/4"), "10.5");
     await request("setVariable", { variablesReference: scopes.Variables, name: "B", value: "7" });
@@ -164,6 +173,13 @@ try {
     assert.match(error.description, /ERROR- 12: line not found/);
     assert.equal((await frames(2))[0].name, "10: GOTO 999");
 
+    // STOP stops the program, and is reported as STOP rather than the BREAK key.
+    await request("setExceptionBreakpoints", { filters: ["basicStop"] });
+    assert.equal((await request("retro/basic/write", { text: "10 STOP\n" })).success, true);
+    await request("continue", { threadId: 1 });
+    await type("RUN\r");
+    assert.equal((await stopped("exception")).description, "STOP in 10.");
+
     // A breakpoint in BASIC's cartridge, at the statement dispatch, and one in the OS's screen editor, stop as BASIC
     // runs a typed line.
     await request("setExceptionBreakpoints", { filters: [] });
@@ -184,7 +200,7 @@ try {
     assert.equal((await frames(1))[0].source.path.toLowerCase(), osSource.toLowerCase());
     await request("setBreakpoints", { source: { path: osSource }, breakpoints: [] });
 
-    // An .xex boots from drive 1 and runs, with a raw ROM in the right slot and a tape that can be locked.
+    // An .xex boots from drive 1 and runs, with a raw ROM in the right slot and a tape in the recorder, PLAY down.
     await request("launch", {
         machine: "atari800", sdkRoms, executable: xex, basicCartridge: "none", rightCartridge: right, cassette: xex,
         stopOnEntry: false, speed: "max"
@@ -193,8 +209,23 @@ try {
     await screen(text => text.startsWith("HI"), "the .xex's HI");
     const regions = (await request("retro/memory/map", { memoryReference: "0x0000" })).regions;
     assert.equal(regions.find(region => region.start === 0x8000)?.name, "Right cartridge", JSON.stringify(regions));
+    const device = async id => (await request("retro/devices")).devices.find(candidate => candidate.id === id);
+    assert.equal((await device("cassette")).transport.mode, "playing");
+
+    // The recorder's keys, and RECORD onto the tape in it; the tape and the boot disk save as images.
+    for (const action of ["stop", "rewind", "play", "stop"]) await request("retro/device", { id: "cassette", action });
+    await request("retro/device", { id: "cassette", action: "record", supportsRetrocoreMedia: true });
+    assert.equal((await device("cassette")).transport.mode, "recording");
+    await request("retro/device", { id: "cassette", action: "stop" });
+    const tapeSaved = await request("retro/device", { id: "cassette", action: "save", path: savedCas, supportsRetrocoreMedia: true });
+    assert.equal(tapeSaved.outcome, "saved", JSON.stringify(tapeSaved));
+    const diskSaved = await request("retro/device", { id: "d1", action: "save", path: savedAtr, supportsRetrocoreMedia: true });
+    assert.equal(diskSaved.outcome, "saved", JSON.stringify(diskSaved));
+    assert.deepEqual([...readFileSync(savedAtr).subarray(0, 2)], [0x96, 0x02]);
+
+    // The tape locks.
     await request("retro/device", { id: "cassette", action: "writeProtect", writeProtected: true });
-    const cassette = (await request("retro/devices")).devices.find(candidate => candidate.id === "cassette");
+    const cassette = await device("cassette");
     assert.equal(cassette.media.writeProtected, true, JSON.stringify(cassette));
 
     // A disk boots through the 810 and runs its boot sector.
@@ -207,13 +238,13 @@ try {
     await request("configurationDone");
     await screen(text => text.includes("HELLO FROM THE 6502"), "the sample's line");
 
-    console.log("Atari DAP passed: an Atari BASIC file stops on entry, steps, stops in a GOSUB with its caller below, shows its variables and FOR loop, reads and writes its program and stops on an error; breakpoints in AtariBasic/Execution.asm and Os/Editor.asm stop; and the machine runs an .xex with a raw ROM in the right slot and a locked tape, boots a disk through the 810 and runs the 6502 sample, all from the SDK's sources.");
+    console.log("Atari DAP passed: an Atari BASIC file stops on entry, steps, stops in a GOSUB with its caller below, shows its variables, FOR loop and memory, reads and writes its program and stops on an error and at STOP; breakpoints in AtariBasic/Execution.asm and Os/Editor.asm stop; and the machine runs an .xex with a raw ROM in the right slot, works the recorder's keys, saves its tape and disk, boots a disk through the 810 and runs the 6502 sample, all from the SDK's sources.");
 } catch (error) {
     fail(error);
 } finally {
     clearTimeout(timeout);
     close();
-    for (const path of [file, xex, right, atr]) unlinkSync(path);
+    for (const path of [file, xex, right, atr, savedCas, savedAtr]) rmSync(path, { force: true });
 }
 
 if (failure()) {

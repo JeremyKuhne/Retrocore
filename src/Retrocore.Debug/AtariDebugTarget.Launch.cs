@@ -166,6 +166,7 @@ internal sealed partial class AtariDebugTarget
         AtariDebugTarget target = new(machine)
         {
             FastCassette = args.Bool("fastCassette") ?? true,
+            GraphicsChip = chip,
             SdkRoms = built
         };
 
@@ -202,8 +203,22 @@ internal sealed partial class AtariDebugTarget
             case (Atari410, "insert"):
                 InsertTape(path ?? throw new ArgumentException("path is required."));
                 break;
+            case (Atari410 cassette, "record") when path is not null:
+                RecordTape(cassette, path);
+                break;
             case (Atari410 cassette, "record"):
-                RecordTape(cassette, path ?? throw new ArgumentException("path is required, for saving the recording."));
+                // RECORD over the tape in it at the head, or a blank one put in for it.
+                if (cassette.Tape is null) { cassette.Insert(new AtariTape([], "Blank tape"), "Blank tape"); }
+                cassette.Record();
+                break;
+            case (Atari410 cassette, "play"):
+                cassette.Play();
+                break;
+            case (Atari410 cassette, "stop"):
+                cassette.Stop();
+                break;
+            case (Atari410 cassette, "rewind"):
+                cassette.Rewind();
                 break;
             case (Atari410 cassette, "eject"):
                 cassette.Eject();
@@ -295,9 +310,18 @@ internal sealed partial class AtariDebugTarget
             throw new ArgumentException("device must be cassette or disk, with action insert or eject, or record for a cassette.");
         }
 
-        // A changed tape or disk is held back, as from retro/device, so an older client cannot lose it.
-        if (MediaActions.Device(target, action, args) is { } answer) { return answer; }
-        DeviceAction(target, action, args);
+        // A changed tape or disk is held back, as from retro/device, so an older client cannot lose it. One let go of is
+        // ejected or replaced through the host, which keeps it for Undo.
+        JsonObject? answer = MediaActions.Device(target, action, args, (what, with) => DeviceAction(target, what, with));
+        if (answer is null)
+        {
+            DeviceAction(target, action, args);
+        }
+        else if (answer.String("outcome") != "discarded")
+        {
+            return answer;
+        }
+
         return MediaState();
     }
 
@@ -312,6 +336,8 @@ internal sealed partial class AtariDebugTarget
         _machine.Cassette.Eject();
         if (cas) { MediaActions.Register(tape, full, new AtariTapeCodec(), bytes); }
         _machine.Cassette.Insert(tape, full, cas ? "CAS" : "XEX");
+        // PLAY down, so the tape moves when the OS runs the motor.
+        _machine.Cassette.Play();
     }
 
     // A blank tape whose image is the path, written at once so that saving the recording replaces it, with RECORD and

@@ -98,6 +98,11 @@ internal sealed partial class AtariDebugTarget : IDebugTarget
     internal bool FastCassette { get; set; } = true;
 
     /// <summary>
+    ///  Gets the chip that draws the picture: GTIA, or the earlier CTIA.
+    /// </summary>
+    internal AtariGraphicsChip GraphicsChip { get; init; } = AtariGraphicsChip.Gtia;
+
+    /// <summary>
     ///  Gets or sets whether the ROMs were built from the SDK's sources rather than loaded from dumps.
     /// </summary>
     internal bool SdkRoms { get; set; }
@@ -450,7 +455,11 @@ internal sealed partial class AtariDebugTarget : IDebugTarget
             new("cpu", "Processor", pal ? "6502 at 1.77 MHz" : "6502 at 1.79 MHz", "ANTIC takes cycles for its display DMA."),
             new("rom", "ROMs", RomText(), "The dumps in romDirectory or RETROCORE_ATARI_ROMS; without them, built from the SDK's sources."),
             new("memory", "Memory", $"{_machine.Bus.RamSize / 1024} KB", "The launch's ramKilobytes option: 8 to 48 KB."),
-            new("video", "Video", pal ? "ANTIC and GTIA, PAL" : "ANTIC and GTIA, NTSC", "The launch's video option: ntsc or pal."),
+            new(
+                "video",
+                "Video",
+                $"ANTIC and {(GraphicsChip == AtariGraphicsChip.Ctia ? "CTIA" : "GTIA")}, {(pal ? "PAL" : "NTSC")}",
+                "The launch's video option, ntsc or pal, and chip, gtia or ctia."),
             new("sound", "Sound", "POKEY", "Four channels, through the TV."),
             new("cassette", "Cassette", "410 Program Recorder", "The serial bus's cassette, at 600 baud.", [_machine.Cassette.Id]),
             new(

@@ -89,6 +89,17 @@ public sealed class AtariFloatingPointSourceTests
     }
 
     /// <summary>
+    ///  Each of <c>FloatingPointEntries.asm</c>'s equates, which the sources that call the package include, has the
+    ///  address of the package's label of the same name.
+    /// </summary>
+    [TestMethod]
+    public void EntriesMatchTheSource()
+    {
+        string entries = Path.Join(Path.GetDirectoryName(SourcePath()), "FloatingPointEntries.asm");
+        AtariOsSourceTests.EntryMismatches(entries, Assemble().Symbols).Should().BeEmpty();
+    }
+
+    /// <summary>
     ///  Assembles the floating point package from the SDK's source.
     /// </summary>
     /// <returns>The assembly, its one section the chip's 2K.</returns>

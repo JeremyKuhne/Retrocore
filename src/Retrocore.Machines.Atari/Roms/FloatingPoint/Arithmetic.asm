@@ -68,7 +68,7 @@ FP_SET_INBUFF_LBUFF:
     sta INBUFF
     rts
 
-;; Doubles the 16-bit number in ZTEMP4, high byte first, for FPI.
+;; Doubles the 16-bit number in ZTEMP4, stored high byte first, for FPI.
 ;; In: ZTEMP4 = the high byte, ZTEMP4+1 = the low byte
 ;; Out: ZTEMP4 = doubled, carry = set when it overflowed
 ;; Keeps: A, X, Y

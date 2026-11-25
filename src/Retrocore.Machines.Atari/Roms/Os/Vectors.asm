@@ -110,7 +110,7 @@ CIOV:
 SIOV:
     jmp SIO_MAIN
 
-;; Sets a system timer, or the vertical blank vectors, safely during a vertical blank.
+;; Sets a system timer, or the vertical blank vectors, so that no vertical blank sees half of the value.
 ;; See: <SET_VBLANK_VECTOR>
 SETVBV:
     jmp SET_VBLANK_VECTOR

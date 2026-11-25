@@ -2,9 +2,9 @@
 ;;
 ;; The OS's 128 characters of 8x8 dots, in ANTIC's internal order rather than ATASCII's: $00-$1F are ATASCII's
 ;; $20-$3F (space, punctuation and digits), $20-$3F are $40-$5F (capitals), $40-$5F are $00-$1F (the graphics
-;; characters) and $60-$7F are lower case. Each character is eight bytes from its top row, bit 7 at the left. CHBAS
-;; holds this page, $E0, at power-up. Characters $80-$FF are these shown in inverse video. Every revision has the
-;; same characters.
+;; characters) and $60-$7F are lower case, with a diamond before it and five symbols after it. Each character is
+;; eight bytes from its top row, bit 7 at the left. CHBAS holds this page, $E0, at power-up. Characters $80-$FF are
+;; these shown in inverse video. Every revision has the same characters.
 
 ;; Starts a character: checks that it lands at its place in the set.
 ;;
@@ -994,7 +994,7 @@ DISPLAY_CHARACTER_SET:
     ROW "........"
     ROW "........"
 
-; Lower case: ATASCII $60-$7F.
+; Lower case and five symbols: ATASCII $60-$7F.
 
     GLYPH $60    ; $60 diamond
     ROW "........"

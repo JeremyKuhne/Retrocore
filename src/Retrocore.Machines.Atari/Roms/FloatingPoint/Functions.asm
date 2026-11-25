@@ -181,8 +181,10 @@ EXP:
 ;; approximates 10^(F/2); 10^I is a number made with I/2 as its power of 100 and a mantissa of 1 or 10. A negative X
 ;; then takes the reciprocal. It also uses whatever the arithmetic routines use.
 ;;
-;; |X| of 255.5 or more overflows. A tiny result, from X below about -98, is reported as an
-;; overflow too, since the reciprocal is taken last.
+;; A result too large for the format, from X about 98 up, is reported as an overflow, and so is X from about -128
+;; down, whose power of 100 overflows. A result too small, from X about -99 to -127, comes back as 0 without an
+;; error, since the reciprocal is taken last. FPI's failure isn't checked: from 65536 up, a negative X can come back
+;; as a wrong, tiny number without an error (-65536 and -100000 do).
 ;; In: FR0 = the power, X
 ;; Out: FR0 = 10^X, carry = set on overflow
 ;; Uses: A, X, Y, FR1, DIGRT, FCHRFLG, ESIGN, FPTR2, FLPTR, PLYARG, FPSCR
@@ -204,7 +206,7 @@ EXP10:
     ldx #<FPSCR
     ldy #>FPSCR
     jsr FST0R                       ; keep |X|
-    jsr FPI                         ; I, rounded; its carry is not checked, but a failure leaves FR0+1 nonzero
+    jsr FPI                         ; I, rounded; its carry is not checked, and a failure can leave FR0+1 zero
     lda FR0
     sta DIGRT
     lda FR0+1

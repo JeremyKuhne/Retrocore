@@ -10,7 +10,7 @@
 ;; - The bytes go out and come in through POKEY's serial interrupts: <SIO_OUTPUT_NEEDED> (VSEROR),
 ;;   <SIO_OUTPUT_FINISHED> (VSEROC) and <SIO_INPUT_READY> (VSERIN). The caller waits for their flags, with system
 ;;   timer 1 as the timeout (<SIO_START_TIMER>, <SIO_TIMEOUT>) and BREAK as the way out (<SIO_BREAK>).
-;; - For the cassette (DDEVIC = $60, CASFLG set), <SIO_CASSETTE> runs the motor, writes or skips the leader, and sends
+;; - For the cassette (DDEVIC = $60), <SIO_CASSETTE> runs the motor, writes or skips the leader, and sends
 ;;   or receives one record with no command, acknowledgement or retry. Before receiving it measures the tape's baud
 ;;   rate from the record's two $55 bytes (<SIO_MEASURE_BAUD>), with TIMER1, TIMER2 and VCOUNT.
 ;; - While SOUNDR is nonzero, POKEY's channels play the serial traffic: channel 4 for the bus, and the two tones as
@@ -213,7 +213,7 @@ SIO_MAIN_DONE:
 ;; Receives the device's one-byte answer to a frame or a command into TEMP, and judges it.
 ;;
 ;; ACK and COMPLETE are success. ERROR sets STATUS to DERROR and anything else to DNACK; those, and a bad byte, set
-;; ERRFLG. A timeout leaves ERRFLG as it was.
+;; ERRFLG. A timeout leaves ERRFLG clear.
 ;; In: CDTMV1 = the time allowed, running
 ;; Out: Y = $FF when a byte came, 0 when it timed out, STATUS = the status, TSTAT = the status
 ;; Uses: A, X, ERRFLG, TEMP
@@ -880,11 +880,11 @@ SIO_BREAK:
 ;; Starts system timer 1 for SIO's timeout: TIMFLG is set now, and <SIO_TIMEOUT> clears it when the time is up.
 ;;
 ;; Rev. B sets TIMFLG after SETVBV has set the timer; rev. A set it first, so a timer 1 still running from before,
-;; reaching zero just then, could clear the new flag and end the wait at once.
+;; reaching zero just then, could clear the new flag and end the wait at once. Rev. B keeps Y; rev. A's SETVBV
+;; returns Y = $3D after a missed vertical blank (<SET_VBLANK_VECTOR>).
 ;; In: X = the time in vertical blanks, high byte, Y = its low byte
 ;; Out: TIMFLG = 1
-;; Uses: A, X, CDTMA1, CDTMV1
-;; Keeps: Y
+;; Uses: A, X, Y, CDTMA1, CDTMV1
 ;; See: <SIO_TIMEOUT>, <SETVBV>
 SIO_START_TIMER:
     lda #<SIO_TIMEOUT

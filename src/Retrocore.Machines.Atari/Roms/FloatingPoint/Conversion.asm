@@ -171,8 +171,8 @@ AFP_DONE:
 ;;
 ;; Numbers from 0.01 up to 10^10 are written plainly (123.45, 0.05); others in E notation with a sign and two
 ;; exponent digits (1.5E+12, 2.5E-05). Trailing zeros after the point, and the point when nothing follows it, are
-;; left out. A negative number starts with a minus sign, and zero is a single 0. The text can start just before
-;; LBUFF, at LBPR1 or LBPR2.
+;; left out, except that E notation writes a one-digit number with its point and a zero (1.0E-05). A negative
+;; number starts with a minus sign, and zero is a single 0. The text can start just before LBUFF, at LBPR1 or LBPR2.
 ;; In: FR0 = the number
 ;; Out: INBUFF = the text's first character, its last character having bit 7 set (no end of line follows)
 ;; Uses: A, X, Y, CIX, EEXP, ZTEMP4, LBPR1, LBPR2, LBUFF
@@ -189,7 +189,7 @@ FASC:
     bcc FASC_E_NOTATION
     cmp #FP_EXPONENT_BIAS + 5
     bcs FASC_E_NOTATION
-    sec                             ; the point goes after the mantissa's first A-1 bytes
+    sec                             ; the point goes after the mantissa's first (exponent - 63) bytes
     sbc #FP_EXPONENT_BIAS - 1
     jsr FP_WRITE_DIGITS
     jsr FP_FIND_LAST_DIGIT

@@ -15,7 +15,7 @@ SCREEN_LOGMAP_BIT = 120             ;; the number of LOGMAP's first bit, row 0, 
 SCREEN_PIXEL_MODE = 3               ;; GRAPHICS 3, the first mode whose screen holds pixels rather than characters
 SCREEN_WIDE_MODE = 8                ;; GRAPHICS 8, the first mode whose columns can need two bytes
 
-;; Reserves two bytes below ADRESS, for the display list's last address, which is written later.
+;; Reserves two bytes below ADRESS, for the display list's JVB and its address's low byte, which are written later.
 ;; Out: ADRESS = two bytes lower
 ;; Uses: A, SUBTMP
 ;; Keeps: X, Y

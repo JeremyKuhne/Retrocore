@@ -42,7 +42,7 @@ PRINTER_BUFFER_ADDRESS:
 ;; The command's auxiliary byte is also 'S'. PBUFSZ is left at 4 until the next put or close sets it from the mode.
 ;; Out: Y = the status, negative = set on an error, DVSTAT = the printer's status
 ;; Uses: A, X, PBUFSZ, DDEVIC..DAUX1
-;; Errors: Y = SIO's status, from TIMOUT to DERROR
+;; Errors: Y = SIO's status: BRKABT, or TIMOUT to DERROR
 ;; Entry: PRINTER_STATUS_DONE = returns at once, for GET and SPECIAL, which the printer lacks: Y is CIO's FNCNOT
 ;; See: <PRINTER_SAVE_TIMEOUT>
 PRINTER_STATUS:
@@ -63,9 +63,9 @@ PRINTER_STATUS_DONE:
 ;; The printer's OPEN: reads the printer's status, for its timeout, and empties the line buffer.
 ;;
 ;; The printer's mode is read from ICAX2Z on each put and close, so the open doesn't look at it.
-;; Out: Y = the status, negative = set on an error
+;; Out: Y = the status; the flags don't follow it
 ;; Uses: A, X, PBPNT, PBUFSZ, DDEVIC..DAUX1
-;; Errors: Y = SIO's status, from TIMOUT to DERROR
+;; Errors: Y = SIO's status: BRKABT, or TIMOUT to DERROR
 ;; See: <PRINTER_STATUS>
 PRINTER_OPEN:
     jsr PRINTER_STATUS
@@ -80,7 +80,7 @@ PRINTER_OPEN:
 ;; In: A = the byte, ICAX2Z = the mode
 ;; Out: Y = SUCCES, or the status when a line was printed, negative = set on an error
 ;; Uses: A, X, PTEMP, PBPNT, PBUFSZ, DDEVIC..DAUX1
-;; Errors: Y = SIO's status, from TIMOUT to DERROR
+;; Errors: Y = SIO's status: BRKABT, or TIMOUT to DERROR
 ;; Entry: PRINTER_PUT_PAD = pads the line from X with blanks and prints it, for <PRINTER_CLOSE>
 ;; See: <PRINTER_SET_MODE>
 PRINTER_PUT:
@@ -117,7 +117,7 @@ PRINTER_PUT_LINE:
 ;; In: ICAX2Z = the mode
 ;; Out: Y = SUCCES, or the status when a line was printed, negative = set on an error
 ;; Uses: A, X, PBPNT, PBUFSZ, DDEVIC..DAUX1
-;; Errors: Y = SIO's status, from TIMOUT to DERROR
+;; Errors: Y = SIO's status: BRKABT, or TIMOUT to DERROR
 ;; See: <PRINTER_PUT>
 PRINTER_CLOSE:
     jsr PRINTER_SET_MODE

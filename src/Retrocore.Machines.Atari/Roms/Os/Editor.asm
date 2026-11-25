@@ -30,7 +30,7 @@ DISPLAY_GTIA_BITS = $C0             ;; PRIOR's GTIA mode bits
 DISPLAY_LINE_BYTES = 40             ;; a text line's bytes, and the unit MODE_MEMORY_SIZES counts the screen memory in
 DISPLAY_LINES = 24                  ;; the text lines of a full screen, BOTSCR's value
 DISPLAY_WINDOW_LINES = 4            ;; the text lines of a split screen's window, BOTSCR's value
-DISPLAY_BOUNDARY_PAD = 16           ;; the bytes below modes 8-11's screen that put a line's start on the 4K boundary
+DISPLAY_BOUNDARY_PAD = 16           ;; unused bytes above modes 8-11's screen, so a line starts on the 4K boundary
 DISPLAY_UPPER_LINES = 93            ;; modes 8-11's lines between the first LMS line and the one at the 4K boundary
 DISPLAY_WAIT_VCOUNT = $7A           ;; VCOUNT at scan line 244, below the screen, where the open waits
 DISPLAY_TAB_STOPS = $01             ;; each TABMAP byte at power-up: a stop at the last of its eight columns
@@ -427,7 +427,7 @@ DISPLAY_SHOW_CURSOR:
 
 ;; Returns the display handler's status and resets it: the end of each handler call, and the close of E:, S: and K:.
 ;; Out: Y = the status, A = ATACHR, DSTAT = SUCCES
-;; Entry: DISPLAY_IGNORE = only returns: the status and special calls of E: and K:
+;; Entry: DISPLAY_IGNORE = only returns: the SPECIAL of E: and K:, and K:'s PUT BYTE
 ;; Keeps: X
 DISPLAY_RETURN:
     ldy DSTAT

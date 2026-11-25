@@ -6,7 +6,9 @@ using Retrocore.Assembler;
 using Retrocore.Debug.Language;
 using Retrocore.Documentation;
 using Retrocore.Machines.Atari;
+using System.Globalization;
 using System.Security.Cryptography;
+using System.Text.RegularExpressions;
 
 namespace Retrocore.Tests;
 
@@ -22,7 +24,7 @@ namespace Retrocore.Tests;
 ///  </para>
 /// </remarks>
 [TestClass]
-public sealed class AtariOsSourceTests
+public sealed partial class AtariOsSourceTests
 {
     private const int Origin = 0xE000;
     private const int Size = 0x2000;
@@ -101,6 +103,61 @@ public sealed class AtariOsSourceTests
 
         problems.Should().BeEmpty($"the lint found:{Environment.NewLine}{string.Join(Environment.NewLine, problems)}");
     }
+
+    /// <summary>
+    ///  Each of <c>OsEntries.asm</c>'s equates, which the sources that call the OS include, has the address of the
+    ///  OS's label of the same name, in every build.
+    /// </summary>
+    /// <param name="version">The build's <c>VERSION</c>.</param>
+    [TestMethod]
+    [DataRow(VersionB)]
+    [DataRow(VersionA)]
+    [DataRow(VersionPal)]
+    public void EntriesMatchTheSource(int version)
+    {
+        string entries = Path.Join(Path.GetDirectoryName(SourcePath()), "OsEntries.asm");
+        EntryMismatches(entries, Assemble(version).Symbols).Should().BeEmpty();
+    }
+
+    /// <summary>
+    ///  Finds the equates in an entry file whose value is not the assembly's symbol of the same name.
+    /// </summary>
+    /// <param name="path">The entry file.</param>
+    /// <param name="symbols">The assembly's symbols.</param>
+    /// <returns>A line for each mismatch or missing symbol; empty when the file has no equates.</returns>
+    internal static List<string> EntryMismatches(string path, IReadOnlyDictionary<string, long> symbols)
+    {
+        List<string> mismatches = [];
+        int equates = 0;
+        foreach (string line in File.ReadLines(path))
+        {
+            Match match = EquateLine().Match(line);
+            if (!match.Success) { continue; }
+
+            equates++;
+            string name = match.Groups["name"].Value;
+            string text = match.Groups["value"].Value;
+            long value = text.StartsWith('$')
+                ? long.Parse(text.AsSpan(1), NumberStyles.HexNumber, CultureInfo.InvariantCulture)
+                : long.Parse(text, CultureInfo.InvariantCulture);
+
+            if (!symbols.TryGetValue(name, out long actual))
+            {
+                mismatches.Add($"{name} is not in the source");
+            }
+            else if (actual != value)
+            {
+                mismatches.Add($"{name} = ${value:X4}, but the source has ${actual:X4}");
+            }
+        }
+
+        if (equates == 0) { mismatches.Add($"{Path.GetFileName(path)} has no equates"); }
+
+        return mismatches;
+    }
+
+    [GeneratedRegex(@"^(?<name>[A-Za-z_][A-Za-z0-9_]*) = (?<value>\$[0-9A-Fa-f]+|[0-9]+)\b")]
+    private static partial Regex EquateLine();
 
     /// <summary>
     ///  Assembles the OS from the SDK's source.

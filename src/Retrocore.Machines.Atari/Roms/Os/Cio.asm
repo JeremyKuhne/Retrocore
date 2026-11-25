@@ -323,7 +323,7 @@ CIO_FIND_ROUTINE_DONE:
     rts
 
 ;; Counts one byte off the zero-page IOCB's buffer length.
-;; Out: A = the length's low byte, zero = set when the length is now 0
+;; Out: A = the length's two bytes ORed, zero = set when the length is now 0
 CIO_COUNT_DOWN:
     dec ICBLLZ
     lda ICBLLZ

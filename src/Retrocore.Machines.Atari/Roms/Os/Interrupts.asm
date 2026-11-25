@@ -332,7 +332,7 @@ NMI_HANDLER_VBLANK:
 ;; and system timer 1 counts down, calling through CDTMA1 at zero. Stage 2 is skipped, straight to <EXIT_VBLANK>,
 ;; during a critical section (CRITIC nonzero) or when the interrupted code had IRQs masked. It reads the light pen,
 ;; writes the display list, DMA, priority, colour (with attract mode), character set and character control shadows
-;; to the hardware, re-enables IRQs, counts system timer 2 (calling through CDTMA2) and timers 3-5 (clearing their
+;; to the hardware, counts system timer 2 (calling through CDTMA2) and timers 3-5 (clearing their
 ;; flags), counts down the keyboard's debounce, auto-repeats a held key into CH, and reads the joysticks, the paddles
 ;; and their triggers into their shadows. It ends through VVBLKD, whose default is <EXIT_VBLANK>.
 ;;

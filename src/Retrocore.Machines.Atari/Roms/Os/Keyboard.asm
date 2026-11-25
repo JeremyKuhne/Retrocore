@@ -75,7 +75,7 @@ KEYBOARD_GET_EOF:
     lda #EOFERR
 KEYBOARD_GET_ERROR:
     sta DSTAT
-    sta BRKKEY                      ; BREAK seen; for CTRL+3 just nonzero
+    sta BRKKEY                      ; nonzero again: BREAK is taken; for CTRL+3 just nonzero
 KEYBOARD_GET_RETURN:
     lda #EOL
     bne KEYBOARD_GET_STORE          ; always

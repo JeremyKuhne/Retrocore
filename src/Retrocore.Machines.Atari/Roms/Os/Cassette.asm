@@ -56,7 +56,7 @@ CASSETTE_SPECIAL:
 ;; the motor. An open mode that is neither reading nor writing returns with CIO's FNCNOT, where the OS User's Manual
 ;; says NVALID.
 ;; In: ICAX1Z = the open mode, OREAD or OWRIT, ICAX2Z = the gaps' type
-;; Out: Y = the status, negative = set on an error
+;; Out: Y = the status; the flags don't follow it
 ;; Uses: A, X, FTYPE, WMODE, FEOF, BPTR, BLIM, FREQ, PACTL, CDTMV3, CDTMF3, AUDF3, AUDF4, DDEVIC, SSKCTL, SKCTL, POKMSK
 ;; Errors: Y = BRKABT for BREAK, or the keyboard's status
 ;; See: <CASSETTE_OPEN_READ>, <CASSETTE_OPEN_WRITE>
@@ -76,7 +76,7 @@ CASSETTE_OPEN:
 ;;
 ;; The buffer is left empty, so the first get reads a record. BREAK isn't tested during the wait.
 ;; In: FTYPE = the gaps' type
-;; Out: Y = the status, negative = set on an error
+;; Out: Y = the status; the flags don't follow it
 ;; Uses: A, X, WMODE, FEOF, BPTR, BLIM, FREQ, CDTMV3, CDTMF3, PACTL
 ;; Errors: Y = the keyboard's status: BRKABT for BREAK
 ;; Entry: CASSETTE_OPEN_BREAK = ends an open for BREAK, with Y = BRKABT and BRKKEY set again,
@@ -114,9 +114,9 @@ CASSETTE_OPEN_FAILED:
 ;; Opens the tape for writing: beeps twice, waits for a key, then starts the motor and writes about 20 seconds of
 ;; leader.
 ;;
-;; SENDEV puts POKEY in two-tone mode, so the leader is the mark tone, at the baud rate set in AUDF3/AUDF4.
+;; SENDEV puts POKEY in two-tone mode, so the leader is the steady mark tone, channel 1's.
 ;; In: FTYPE = the gaps' type
-;; Out: Y = the status, negative = set on an error
+;; Out: Y = the status; the flags don't follow it
 ;; Uses: A, X, WMODE, BPTR, FREQ, PACTL, AUDF3, AUDF4, DDEVIC, CDTMV3, CDTMF3, SSKCTL, SKCTL, POKMSK (SENDEV)
 ;; Errors: Y = BRKABT for BREAK, or the keyboard's status
 ;; Entry: CASSETTE_OPEN_DONE = ends an open that succeeded, with Y = SUCCES
@@ -206,7 +206,7 @@ CASSETTE_READ_BLOCK_EOF:
 
 ;; The cassette's PUT: adds a byte to the record in CASBUF, writing it as a full record when it holds 128 bytes.
 ;; In: A = the byte
-;; Out: Y = SUCCES, or the status when a record was written, negative = set on an error
+;; Out: Y = SUCCES, or the status when a record was written; the flags don't follow it
 ;; Uses: A, X, BPTR, DDEVIC..DAUX2
 ;; Errors: Y = SIO's status
 ;; See: <CASSETTE_WRITE_RECORD>
@@ -237,7 +237,7 @@ CASSETTE_STATUS:
 ;;
 ;; A partial record's unused bytes are whatever the buffer held. An error writing it skips the end-of-file record.
 ;; In: WMODE = negative when writing
-;; Out: Y = the status, negative = set on an error
+;; Out: Y = the status; the flags don't follow it
 ;; Uses: A, X, CASBUF, DDEVIC..DAUX2
 ;; Errors: Y = SIO's status
 ;; See: <CASSETTE_WRITE_RECORD>
@@ -317,9 +317,9 @@ CASSETTE_BEEP_KEY:
 ;; Out: A = the key, Y = the status: BRKABT for BREAK
 ;; See: <KEYBDV>
 CASSETTE_WAIT_KEY:
-    lda KEYBDV+5                        ; the GET vector, less 1
+    lda KEYBDV+HANDLER_GET+1            ; the GET vector, less 1
     pha
-    lda KEYBDV+4
+    lda KEYBDV+HANDLER_GET
     pha
     rts
 

@@ -11,9 +11,9 @@ KEY_REPEAT_DELAY = $30              ;; SRTIMR's count, 48 vertical blanks, befor
 
 ;; The keyboard interrupt's handler: puts the new key's code in CH for <KEYBOARD_GET>, or toggles SSFLAG for CTRL+1.
 ;;
-;; The same key again before the vertical blank has counted KEYDEL down is a bounce, and ignored. A key ends attract
-;; mode. Every key, a bounce included, restarts the auto-repeat delay, which the vertical blank counts. It ends with
-;; PLA and RTI, the IRQ handler having pushed A before jumping through VKEYBD.
+;; The same key again before the vertical blank has counted KEYDEL down is a bounce, and ignored. A key other than
+;; CTRL+1 ends attract mode. Every key, a bounce included, restarts the auto-repeat delay, which the vertical blank
+;; counts. It ends with PLA and RTI, the IRQ handler having pushed A before jumping through VKEYBD.
 ;; Uses: CH, CH1, KEYDEL, ATRACT, SSFLAG, SRTIMR
 ;; Keeps: X, Y
 ;; See: <VKEYBD>, <IRQ_ENTRY>

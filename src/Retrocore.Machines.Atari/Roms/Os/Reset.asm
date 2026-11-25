@@ -13,8 +13,8 @@ RESET_MEMLO = $0700                 ;; MEMLO's start-up value, the bottom of fre
 RESET_MESSAGE_LENGTH = $FF          ;; the longest message the start-up prints; each ends sooner, at its end of line
 CONSOL_START = $01                  ;; START's bit in CONSOL, 0 while held
 MEMORY_TEST_STEP = $10              ;; the memory test's step, in pages: it tests the first byte of each 4K block
-RIGHT_SLOT_RAM = $90                ;; a RAMSIZ at or above this: RAM fills the right cartridge's slot, so no cartridge
-LEFT_SLOT_RAM = $B0                 ;; a RAMSIZ at or above this: RAM fills the left cartridge's slot, so no cartridge
+RIGHT_SLOT_RAM = $90                ;; a RAMSIZ at or above this: RAM reaches into the right slot, so no cartridge
+LEFT_SLOT_RAM = $B0                 ;; a RAMSIZ at or above this: RAM reaches into the left slot, so no cartridge
 
 ; BOOTQ's bits.
 
@@ -263,9 +263,9 @@ MEMO_PAD_LOOP:
 ;; Out: A = the byte, Y = the status
 ;; See: <EDITRV>
 CALL_EDITOR_GET:
-    lda EDITRV+5                    ; the vector, less 1, is pushed for RTS
+    lda EDITRV+HANDLER_GET+1        ; the vector, less 1, is pushed for RTS
     pha
-    lda EDITRV+4
+    lda EDITRV+HANDLER_GET
     pha
     rts
 
@@ -393,11 +393,11 @@ INIT_OS:
     sta MEMLO
     lda #>RESET_MEMLO
     sta MEMLO+1
-    jsr EDITRV+12                   ; each handler's initialization, the JMP at the end of its vectors
-    jsr SCRENV+12
-    jsr KEYBDV+12
-    jsr PRINTV+12
-    jsr CASETV+12
+    jsr EDITRV+HANDLER_INIT         ; each handler's initialization, the JMP at the end of its vectors
+    jsr SCRENV+HANDLER_INIT
+    jsr KEYBDV+HANDLER_INIT
+    jsr PRINTV+HANDLER_INIT
+    jsr CASETV+HANDLER_INIT
     jsr CIOINV
     jsr SIOINV
     jsr INTINV
@@ -410,9 +410,10 @@ INIT_OS_DONE:
 
 ;; Boots the disk at power-up, or calls the disk-booted program's initialization after SYSTEM RESET.
 ;;
-;; When drive 1 answers a status command, the boot reads sector 1 into $0400 and goes on in <BOOT_LOAD>. A read or
-;; initialization error prints "BOOT ERROR" and starts the boot again from sector 1, for as long as it fails. After
-;; SYSTEM RESET, it calls DOSINI if a disk boot succeeded.
+;; When drive 1 answers a status command, the boot reads sector 1 into $0400 and goes on in <BOOT_LOAD>. An error
+;; reading sector 1, or from the initialization, prints "BOOT ERROR" and starts again from sector 1; one reading a
+;; later sector prints it and reads that sector again, for as long as it fails. After SYSTEM RESET, it calls DOSINI
+;; if a disk boot succeeded.
 ;; Uses: A, X, Y
 ;; See: <BOOT_LOAD>, <BOOTQ>, <DOSINI>
 DISK_BOOT:
@@ -577,8 +578,8 @@ READ_BOOT_BLOCK_DISK:
 ;; Boots the cassette at power-up when START was held, or calls the cassette-booted program's initialization after
 ;; SYSTEM RESET.
 ;;
-;; The boot opens the cassette for reading with short gaps between records and loads through <BOOT_LOAD>. On
-;; success BOOTQ's bit 0 moves to bit 1, and the booted program's DOSINI becomes CASINI.
+;; The boot opens the cassette for reading with short gaps between records and loads through <BOOT_LOAD>. Then,
+;; whether or not it succeeded, BOOTQ's bit 0 moves to bit 1 and DOSINI is copied to CASINI; a failure leaves BOOTQ 0.
 ;; Uses: A, X, Y
 ;; See: <BOOT_LOAD>, <CKEY>, <CASINI>, <BOOTQ>
 CASSETTE_BOOT:

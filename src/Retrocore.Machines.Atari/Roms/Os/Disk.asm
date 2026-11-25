@@ -37,7 +37,7 @@ DISK_INIT:
 ;; In: DUNIT = the drive (1-4), DCOMND = the command, DBUFLO/DBUFHI = the buffer, DAUX1/DAUX2 = the sector
 ;; Out: Y = the status, also in DSTATS, negative = set on an error
 ;; Uses: A, X, DDEVIC, DTIMLO, DBYTLO/DBYTHI, BUFADR, DVSTAT (status)
-;; Errors: Y = SIO's status, from TIMOUT to DERROR
+;; Errors: Y = SIO's status: BRKABT, or TIMOUT to DERROR
 ;; See: <DISK_INIT>, <DSKINV>, <SIOV>
 DISK_HANDLER:
     lda #DISK_ID

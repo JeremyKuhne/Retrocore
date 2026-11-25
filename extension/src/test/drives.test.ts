@@ -101,9 +101,9 @@ test("a changed disk says when the recovery journal kept it, and warns when the 
     assert.equal(mark(failing), "behind");
     assert.equal(summary(failing), "work.woz · track 17 sector 4 · recovery behind · writing");
     assert.match(tooltipLines(failing, now).join("\n"),
-        /Recovery behind: the journal could not be written: There is not enough space on the disk\. Changes up to .*10:52.* today are kept/);
+        /Recovery behind: the journal could not be written: There is not enough space on the disk\. Changes up to .*10:52.* today are kept; later ones would be lost if Retrocore stopped unexpectedly/);
     assert.match(tooltipLines(withRecovery({ lastCheckpoint: null, behind: true }), now).join("\n"),
-        /Recovery behind: checkpoints are late\. None of the changes are kept/);
+        /Recovery behind: checkpoints are late\. The changes would be lost if Retrocore stopped unexpectedly/);
 
     // A conflict still marks as one, and an unchanged disk says nothing of recovery.
     assert.equal(mark({ ...failing, media: { ...failing.media!, source: { ...failing.media!.source!, stale: true } } }), "conflict");

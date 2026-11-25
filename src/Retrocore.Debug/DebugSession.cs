@@ -141,9 +141,13 @@ internal sealed partial class DebugSession
     private readonly Lock _checkpointing = new();
 
     // Whether a checkpoint is asked for, as the timer or the machine's own eject asks, until one starts after it; and
-    // the journal's failure the console last said.
+    // whether the console last said the journal cannot be written.
     private int _checkpointWanted;
-    private string? _journalFailure;
+    private bool _journalFailing;
+
+    // The run whose worker is running the machine now, under the lock: a stop the worker makes itself, at a
+    // breakpoint or an exception, ends it without cancelling the run.
+    private CancellationToken _running;
     private bool _stopOnContracts;
     private ushort _instructionStart;
 
@@ -637,6 +641,7 @@ internal sealed partial class DebugSession
     // disks into it from then on. A journal that cannot be kept is said in the console; the machine runs without one.
     private void OpenJournal(JsonObject args)
     {
+        _journalFailing = false;
         if (args.String("recoveryId") is not { } id) { return; }
         List<string> problems = [];
         try
@@ -703,7 +708,7 @@ internal sealed partial class DebugSession
                     journal = _journal;
                     if (journal is not null && _target is not null && !_ended)
                     {
-                        bool running = _run is { IsCancellationRequested: false };
+                        bool running = _running is { CanBeCanceled: true, IsCancellationRequested: false };
                         disks = MediaActions.Journal(_target.Devices, journal, idle: running && Environment.TickCount64 < deadline);
                     }
 
@@ -742,21 +747,22 @@ internal sealed partial class DebugSession
     }
 
     // After a commit, tells the client how its drives are kept, and says in the console once that the journal cannot
-    // be written, and once that it can again.
+    // be written, and once that it can again. A checkpoint of a journal closed meanwhile says nothing.
     private void Kept(RecoveryJournal journal)
     {
         try
         {
             Reply(() =>
             {
+                if (!ReferenceEquals(journal, _journal)) { return []; }
                 string? failure = journal.Failure;
-                if (failure != _journalFailure)
+                if ((failure is not null) != _journalFailing)
                 {
                     Say(failure is null
                         ? "The recovery journal can be written again."
                         : $"The recovery journal could not be written: {failure}");
 
-                    _journalFailure = failure;
+                    _journalFailing = failure is not null;
                 }
 
                 if (_target is not null && !_ended) { NotifyDevices(); }
@@ -790,6 +796,7 @@ internal sealed partial class DebugSession
         _checkpoints = null;
         if (_journal is not { } journal) { return; }
         _journal = null;
+        _journalFailing = false;
         try
         {
             // Every changed disk whole: a checkpoint still being written may drop a snapshot this one would reuse.
@@ -1871,6 +1878,7 @@ internal sealed partial class DebugSession
                 Target.TakeAudio();
                 paceCycles = Target.CycleCount;
                 StartMeasuring();
+                _running = token;
             }
 
             bool ahead = false;
@@ -1983,6 +1991,14 @@ internal sealed partial class DebugSession
             catch (IOException exception)
             {
                 ExecutionFailed(exception, token);
+            }
+            finally
+            {
+                // However the worker ends, the machine it ran is not running; a later run's worker is its own.
+                lock (_gate)
+                {
+                    if (_running == token) { _running = default; }
+                }
             }
         }, token);
     }

@@ -592,6 +592,27 @@ public sealed class RecoveryJournalTests
         disk.MarkChanged();
     }
 
+    /// <summary>
+    ///  Slot 7's disk, which only a launch can put in its drive, is not kept, so its row says nothing of recovery
+    ///  rather than that the journal keeps it.
+    /// </summary>
+    [TestMethod]
+    public void ADiskOnlyTheLaunchPutsInItsDriveSaysNothingOfRecovery()
+    {
+        byte[] bytes = new byte[280 * 512];
+        string path = Path.Join(s_root, $"slot7-{Guid.NewGuid():N}.po");
+        File.WriteAllBytes(path, bytes);
+        Apple2Machine machine = Apple2Loader.Load(Apple2Model.IIeEnhanced, s_roms.Value, path);
+        Apple2BlockStorage storage = machine.BlockStorage ?? throw new InvalidOperationException("Slot 7 is empty.");
+        IMedium disk = storage.Medium ?? throw new InvalidOperationException("Slot 7 is empty.");
+        MediaActions.Register(disk, path, BlockImageCodec.For(".po"), bytes);
+        disk.MarkChanged();
+        RecoveryJournal journal = Open(Id());
+        journal.Commit(MediaActions.Journal([storage], journal));
+        Recovery(storage, journal).Should().BeNull();
+        Stop(journal, storage);
+    }
+
     // How the journal keeps a drive's disk, as its row in retro/devices says.
     private static JsonNode? Recovery(IDevice drive, RecoveryJournal journal)
     {

@@ -338,7 +338,8 @@ internal sealed partial class RecoveryJournal
             }
             else
             {
-                // A snapshot an earlier commit wrote, as of when that commit kept it.
+                // A snapshot an earlier commit wrote: as of when that commit kept it, or now, when that commit failed
+                // and this one is the first to name it.
                 kept = _committed.TryGetValue(disk.Medium, out JournalKept? before) && before.Version == written.Version
                     ? before
                     : new(written.Version, now, written.MidWrite);

@@ -194,7 +194,8 @@ function recoveryLine(media: Media, now: Date): string | undefined {
     const midWrite = recovery.midWrite ? ", caught while the drive was writing" : "";
     if (recovery.behind) {
         const why = recovery.problem === undefined ? "checkpoints are late" : `the journal could not be written: ${recovery.problem.replace(/\.$/, "")}`;
-        return `Recovery behind: ${why}. ${kept === undefined ? "None of the changes are kept" : `Changes up to ${kept} are kept${midWrite}`}, should Retrocore stop unexpectedly`;
+        const lost = "would be lost if Retrocore stopped unexpectedly";
+        return `Recovery behind: ${why}. ${kept === undefined ? `The changes ${lost}` : `Changes up to ${kept} are kept${midWrite}; later ones ${lost}`}`;
     }
     return kept === undefined ? undefined : `Kept for recovery at ${kept}${midWrite}`;
 }

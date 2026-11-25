@@ -122,7 +122,7 @@ internal static partial class MediaActions
     }
 
     /// <summary>
-    ///  Says in each changed disk's <c>media</c> how the recovery journal keeps it: <c>recovery</c>, with
+    ///  Says in the <c>media</c> of each changed disk a checkpoint keeps how the recovery journal keeps it: <c>recovery</c>, with
     ///  <c>lastCheckpoint</c>, when the journal last kept it (null when it holds none of it yet), <c>midWrite</c> when
     ///  that snapshot was caught while its drive was writing, and <c>behind</c>, with the <c>problem</c> when there is
     ///  one, when the journal does not hold its changes and checkpoints are failing or late.
@@ -137,9 +137,13 @@ internal static partial class MediaActions
         bool late = DateTime.UtcNow - journal.LastCommitted > interval * 2;
         foreach (JsonObject row in written.OfType<JsonObject>())
         {
+            // Only the disks a checkpoint keeps: not one only the launch can put in its drive, as slot 7's.
             IDevice? device = devices.FirstOrDefault(candidate => candidate.Id == row.String("id"));
             IMedium? disk = (device as IMediumSlot)?.Medium;
-            if (row["media"] is not JsonObject media || disk is not { IsDirty: true } || Source(disk) is not { } source)
+            if (row["media"] is not JsonObject media
+                || disk is not { IsDirty: true }
+                || device?.Info.Operations.HasFlag(MediaOperations.Insert) != true
+                || Source(disk) is not { } source)
             {
                 continue;
             }

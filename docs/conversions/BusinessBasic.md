@@ -143,7 +143,7 @@ the work.
 ## Verification
 
 - **Bytes:** every build after every step, by script, compared with the unconverted source's whole output; and the
-  four digest tests. With the disk absent, `InterpreterMatchesTheDisk` is skipped, which is not a pass.
+  four digest tests.
 - **Lint:** `; retrocore: style=strict` on all 33 files; `InterpreterDocumentationIsClean`, which lints the default
   build, passes, and it was also run with the root's defaults set to each of the three 1.3 builds, clean in each
   (the lint reads one build, so links in 1.3-only code were checked that way);
@@ -151,10 +151,18 @@ the work.
 - **Names:** Business BASIC joins `ConvertedSourcesUseCurrentNames`, which passes: code in the converted files uses
   current names. The debug host and `BusinessBasicDialectTests` look names up through `SymbolsWithHistoricalNames`;
   the DAP script, the C# comments and the docs name the current definitions.
-- **Contracts:** not run in the debugger. The run needs Apple's Business BASIC 1.23 disk, which the environment of
-  this conversion didn't have, so no `Keeps:` here has been checked on a running machine; each was worked out from
-  the code and everything it calls, and a group left one out when in doubt. A debugger run with contract checking (a
-  program with arithmetic, strings, files and an invokable module) is the first thing to do with the disk.
+- **Contracts:** one debugger run of Business BASIC 1.23 (from apple3.org's disk image, kept out of the repository)
+  with contract checking on, on the final code. A program typed at the prompt exercised arithmetic and the
+  transcendental functions, long integers (`*`, `DIV`, `MOD`, `CONV$`), the string functions and `SUB$`, `HEX$`,
+  `PRINT USING`, a text file (`CREATE`, `PRINT#`, `INPUT#`), a data file (`WRITE#`, `READ#`), `UNLOCK` and `DELETE`,
+  `FRE`, and the disk's `VOLUMES.INV` module (`INVOKE`, `PERFORM`). A false `Keeps: X` added to `FindVariable` in a
+  copy of the source, as a control, was reported every time it returned (164 times), and nothing else was: none of
+  the source's 94 `Keeps:` contracts was broken on the paths the run took. Not exercised: the 1.3, run-time and
+  debugger builds (no binary or disk exists for them), `CHAIN`, `EXEC`, `OUTPUT#`, `CATALOG`'s other stages, events
+  (`ON KBD`, `ON EOF#`), `ON ERR`, the module routine table's entries, and every error path but the ones the run hit.
+- **With the disk:** `InterpreterMatchesTheDisk` passes (the 1.23 build is byte for byte the disk's `SOS.INTERP`),
+  and `tools/Test-Apple3Dap.mjs` (a breakpoint on `ExecuteStatement` as `HELLO` runs) and
+  `tools/Test-BusinessBasicDap.mjs` pass. The tests that also need MAME's Apple III ROM set were skipped.
 
 ## Open questions
 

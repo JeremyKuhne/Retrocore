@@ -140,7 +140,7 @@ UNIT_SLOT_7_DRIVE_1 = $70
 
 ; Memory the boot uses.
 
-;; Three bytes below the boot buffer where the boot writes a JMP to <Driver>: a trampoline into the driver in RAM for
+;; Three bytes below the boot buffer where the boot writes a JMP to <Driver>: a jump in RAM to the ROM's driver for
 ;; the disk's bootstrap.
 BootTrampoline = $07FD
 

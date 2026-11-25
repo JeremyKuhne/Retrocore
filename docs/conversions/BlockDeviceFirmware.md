@@ -38,10 +38,10 @@ none. `Apple2ProFileTests.FirmwareBytesAreUnchanged` (added before the conversio
 
 ## Found in the conversion and documented
 
-- The ProFile `Driver`'s `Out:` gives each register its own entry (X is the block count's low byte for status, the
-  slot times 16 otherwise) in place of the pre-conversion `Uses: A, X, Y`, which named the registers but not what they hold. The
-  driver also keeps the mailbox (`BufferHigh` is stepped and restored), which its `Keeps:` now says.
-- With no ProFile, every command, format included, returns `ERROR_NO_DEVICE`.
+- The ProFile `Driver`'s `Out:` said X/Y are the block count for status, which is false with no ProFile: then every
+  command, status included, returns `ERROR_NO_DEVICE` with X = the slot times 16 and Y unchanged. It now gives each
+  register its own entry, with that case, and `Uses: Y` for read and write. The driver also keeps the mailbox
+  (`BufferHigh` is stepped and restored), which its `Keeps:` now says.
 - Slot 7's status reads `CommandPort` twice, once through the read and write path; kept, as before.
 
 ## Renames

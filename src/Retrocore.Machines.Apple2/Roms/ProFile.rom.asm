@@ -300,6 +300,7 @@ SIGNATURE_07 = $3C
 ;; Out:   A = 0 or a ProDOS error code, carry = clear on success, set on error,
 ;;          X = the block count's low byte for status with a ProFile; otherwise the slot times 16,
 ;;          Y = the block count's high byte for status with a ProFile
+;; Uses:  Y (for a read or write)
 ;; Keeps: Command, UnitNumber, Buffer, BufferHigh, Block, BlockHigh
 .proc Driver
     ; The card's ports, through X; with no ProFile, no device.
@@ -319,10 +320,10 @@ SIGNATURE_07 = $3C
     tax
     bcc Succeed                     ; carry is clear from the status
 
-    ; A read or a write starts with a handshake for the command.
+    ; A format or above succeeds; a read or a write starts with a handshake for the command.
 Transfer:
     cmp #COMMAND_FORMAT
-    bcs Succeed
+    bcs Succeed                     ; format, which a ProFile needs none of
     ldy #RESPONSE_READY_FOR_COMMAND
     bne Handshake
 .endproc

@@ -41,8 +41,9 @@ Indexing every SDK root:
 | 7 (`b2`) | 83190f75 | The style checks read lines in place | 885 ms | 810 MB | −24% | −42% |
 | 8 (`a1`) | e886a86e | Each source's `Also:` names read once | 847 ms | 737 MB | −27% | −47% |
 | 9 (`m1`) | baf631e6 | Macro names looked up by their text | 819 ms | 705 MB | −30% | −49% |
+| 10 (`u1`) | c578ae00 | Each path upper-cased once | 798 ms | 682 MB | −31% | −51% |
 
-AppleSoft's root alone: 50.1 ms and 67.7 MB at the baseline, 27.9 ms and 28.6 MB after step 9.
+AppleSoft's root alone: 50.1 ms and 67.7 MB at the baseline, 27.2 ms and 27.9 MB after step 10.
 
 ### 1. Each source path made full once
 
@@ -122,6 +123,13 @@ dictionaries' span lookup (`GetAlternateLookup<ReadOnlySpan<char>>`, .NET 9 and 
 when a name in it is replaced. The source generator compiles this for netstandard2.0, where it still copies each name
 to look it up. Allocations fell by 32 MB.
 
+### 10. Each path upper-cased once
+
+The analysis keys the `.using` order and the lines the assembler defined names on by the upper-cased full path, as
+those compare paths without case, and upper-cased the path again for every statement, every symbol and every line it
+checked for definitions in the text: about 3% of the allocations, in `ToUpperInvariant`. Each path is now upper-cased
+once per analysis, as step 1 makes each full once. Allocations fell by 23 MB.
+
 ## Where the time and memory go now
 
 From the ETW trace before steps 3 and 4, and the allocation trace after step 5:
@@ -144,7 +152,13 @@ From the ETW trace before steps 3 and 4, and the allocation trace after step 5:
   line are kept.
 - **The documentation parsed twice.** The assembler's `Also:` pass parses without style checks and without the
   assembly's knowledge; the editor's with both. Sharing more than the lines needs care.
-- **The ca65 path's copies** (M2, next): `PrepareCa65` copies a line it expands, its operation and an upper-cased
+- **CRLF replaced before splitting lines** (next): `Lines` copies each file with `Replace("\r\n", "\n")` first,
+  about 2.5% of the allocations on a Windows checkout. Splitting at `\n` and dropping one `\r` before it gives the
+  same lines.
+- **Regular expressions in the analysis**: `TextDefinition` and `MacroDefinition` match every line and read groups,
+  about 1.8%; a quick test before matching would skip most lines.
+- **Growing lists and dictionaries**: statement lists and name maps grow by resizing.
+- **The ca65 path's copies** (M2): `PrepareCa65` copies a line it expands, its operation and an upper-cased
   copy of that; `ExpandCa65Functions` copies every `.`-token.
 - **The rest of macro expansion**: each invocation's argument list, parameter dictionary and a location for every
   body line, and `Emit`.

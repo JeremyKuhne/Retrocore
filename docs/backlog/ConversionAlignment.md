@@ -205,7 +205,7 @@ Exit for each B6 PR:
 
 ## Phase C: bring the BASIC branch's techniques to the method
 
-- [ ] **C1. Add to `ConvertingSources.md`**, once B3 has landed, so the examples exist on main:
+- [x] **C1. Add to `ConvertingSources.md`**, once B3 has landed, so the examples exist on main:
   - Routine tests: load the assembled bytes, prepare memory and registers, run one routine, and assert its
     documented `Out:` and `Keeps:`, error exits included. Use them for routines whose contracts a boot doesn't
     exercise. (`BasicSharedLineSearchTests` is the starting point; it checks `Out:` only.)

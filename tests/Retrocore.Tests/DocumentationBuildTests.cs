@@ -321,21 +321,15 @@ public sealed class DocumentationBuildTests
     }
 
     /// <summary>
-    ///  A scope only a branch the build leaves out opens is only in other builds, and one the build continues elsewhere
-    ///  is in it.
+    ///  A scope or structure only a branch the build leaves out defines is only in other builds, its members with it.
     /// </summary>
     [TestMethod]
     public void AScopeOnlyAnotherBuildOpensIsOnlyInOtherBuilds()
     {
         const string Scopes = """
-            ;; Uses <Tools>, <Shared> and <Block>.
+            ;; Uses <Tools> and <Block>.
             Caller:
                 rts
-
-            .scope Shared
-            Last:
-                rts
-            .endscope
 
             .if MODEL = 1
             ;; Model 1's tools.
@@ -349,12 +343,6 @@ public sealed class DocumentationBuildTests
             ;; Its first byte.
             First   .byte
             .endstruct
-
-            ;; The models' shared routines, documented in model 1's branch.
-            .scope Shared continued
-            First:
-                rts
-            .endscope
             .endif
             """;
 
@@ -364,7 +352,6 @@ public sealed class DocumentationBuildTests
         Resolve(Build(Scopes, model: 2), "Caller", "Block::First").OnlyInOtherBuilds.Should().BeTrue();
         Links(Build(Scopes, model: 1)).Should().BeEmpty();
         Links(Build(Scopes, model: 2)).Select(problem => problem.Name).Should().BeEquivalentTo(["Tools", "Block"]);
-        Required(Resolve(Build(Scopes, model: 2), "Caller", "Shared").Topic).Name.Should().Be("Shared");
     }
 
     /// <summary>
@@ -394,13 +381,16 @@ public sealed class DocumentationBuildTests
     [TestMethod]
     public void DocumentationOfAFailedAssemblyResolvesEveryBranch()
     {
-        string broken = Source + "\n    jmp Nowhere\n";
+        string broken = Source + "\n.if MODEL = 1\n;; Model 1's tools.\n.scope Tools\nHelper:\n    rts\n.endscope\n.endif\n    jmp Nowhere\n";
         AssemblyResult result = Assemble(broken, model: 2);
         result.Success.Should().BeFalse();
         DocumentationSet set = DocumentationSet.Create([DocumentationParser.Parse(broken, "test.asm")], result);
-        DocumentationTarget target = new DocumentationResolver(set).Resolve(Required(set.Find("Shared")), "OnlyOne");
-        target.OnlyInOtherBuilds.Should().BeFalse();
-        Required(target.Topic).Name.Should().Be("OnlyOne");
+        DocumentationTopic shared = Required(set.Find("Shared"));
+        DocumentationResolver resolver = new(set);
+        Required(resolver.Resolve(shared, "OnlyOne").Topic).Name.Should().Be("OnlyOne");
+
+        // A scope only model 1 opens: the failed assembly's symbols, which needn't be complete, don't decide it.
+        Required(resolver.Resolve(shared, "Tools").Topic).Name.Should().Be("Tools");
     }
 
     /// <summary>

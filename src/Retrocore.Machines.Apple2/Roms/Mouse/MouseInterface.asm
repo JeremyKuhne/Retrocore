@@ -22,7 +22,7 @@
 ;;   4  <BasicBank>: BASIC's `IN#` and `PR#`: the hooks, turning the mouse on or off, and reading it for INPUT.
 ;;   5  <LineBank>: writes BASIC's "X,Y,B" line into the input buffer.
 ;;   6  <ByteBank>: sends or receives one byte, and <ReadMouse>'s five.
-;;   7  <ParameterBank>: sends a command with its parameters: <PositionMouse>, <ClampMouse>, <SetInterruptRate>
+;;   7  <ParameterBank>: sends a command with its parameters: <PositionMouse>, <ClampMouse>, <SetInterruptRate>,
 ;;      <SetVblCounts> and the factory's other $9x commands.
 ;;
 ;; Every bank holds the same four instructions at $Cn70 (each bank's `Switch`): they put the bank in <NextBank> on
@@ -45,10 +45,10 @@
 ;; NAMES
 ;;
 ;; The routines' old names are the calls Apple's documents give programs: its Mouse Technical Notes (MOUSETN), the
-;; IIc Technical Reference's second edition (IICTRM89) and the IIGS Firmware Reference (IIGSFR87), which document
-;; the calls for the AppleMouse card as well as their own machines. The screen holes' (MOUXL ...) are names no
-;; document in hand gives, so they cite UNKN. Every other name in this file is the SDK's own: the source was rebuilt
-;; from the EPROM, with no listing.
+;; IIc Technical Reference's second edition (IICTRM89) and the IIGS Firmware Reference (IIGSFR87), which give
+;; them as the calls for the mouse on every Apple II, the AppleMouse card included. The screen holes' (MOUXL ...)
+;; are names no document in hand gives, so they cite UNKN. Every other name in this file is the SDK's own: the source
+;; was rebuilt from the EPROM, with no listing.
 
 .cpu Mos6502
 

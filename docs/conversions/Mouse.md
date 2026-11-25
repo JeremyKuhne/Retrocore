@@ -10,8 +10,9 @@ Firmware Reference), IIEROM82 and the Monitor's own keys (through the equates bo
 
 - **MOUSETN**, **IICTRM89** and **IIGSFR87** give the routines' names (see the bibliography for how each was
   checked). The notes cover the AppleMouse card itself: TimeData at $Cn1C, GetClamp at $Cn1A, ServeMouse's 6805 bug.
-  The IIc reference's second edition says (Appendix D) that its calls drive the card in a IIe, and the IIGS Firmware
-  Reference lists its entries, $Cn1A-$Cn1F and BASIC's included, as compatible with the AppleMouse card. The 1985
+  The IIc reference's second edition says (Appendix D) that its calls drive the card in a IIe; the IIGS Firmware
+  Reference gives its calls as the ones compatible with the mouse in every Apple II, and lists $Cn1A-$Cn1F as entries
+  compatible with the AppleMouse card. The 1985
   first edition gives the names for the IIc's own firmware only, and is not cited. Two other Apple documents read in
   full give none: the Tech Info Library's "Apple II: Mouse Memory Locations" (article 8720, 1991) and the French
   AppleMouse user's manual (1983). The AppleMouse II User's Manual was not found.
@@ -21,7 +22,7 @@ Firmware Reference), IIEROM82 and the Monitor's own keys (through the equates bo
 - M1. **The routines cite the documents that give each name**: SETMOUSE, SERVEMOUSE, READMOUSE, CLEARMOUSE, POSMOUSE,
   CLAMPMOUSE and INITMOUSE all three, HOMEMOUSE IICTRM89 and IIGSFR87. Apple's notes and the IIc reference write them in
   mixed case (SetMouse, PosMouse); they are cited upper case, as code writes Apple's names. Mouse.rom.asm's routines
-  cite the same, for the same calls. The entries the drafts called the factory's take Apple's names: $Cn1A
+  cite the same, for the same calls. The entries that had no name but the factory's take Apple's names: $Cn1A
   `ReadClampByte` (GETCLAMP, MOUSETN; DIAGMOUSE, IIGSFR87), $Cn1B `ShowCopyright` (COPYRIGHT), $Cn1C `SetInterruptRate`
   (TIMEDATA, MOUSETN and IIGSFR87), $Cn1D `SetVblCounts` (SETVBLCNTS), $Cn1E `SetMouseOptions` (OPTMOUSE) and $Cn1F
   `StartTimer` (STARTTIMER), the last four IIGSFR87's alone, which gives no more than the names; and BASIC's entries

@@ -58,8 +58,8 @@
 ;; NAMES
 ;;
 ;; The routines' old names are the calls Apple's documents give programs: its Mouse Technical Notes (MOUSETN), the
-;; IIc Technical Reference's second edition (IICTRM89) and the IIGS Firmware Reference (IIGSFR87), which document
-;; the calls for the AppleMouse card as well as their own machines. Every other name is the SDK's own.
+;; IIc Technical Reference's second edition (IICTRM89) and the IIGS Firmware Reference (IIGSFR87), which give
+;; them as the calls for the mouse on every Apple II, the AppleMouse card included. Every other name is the SDK's own.
 
 .rom Retrocore.Machines.Apple2.MouseRom, $C400, $100
 .cpu Mos6502

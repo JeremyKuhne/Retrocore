@@ -136,7 +136,7 @@ ROM and their DOSes read the keys:
 | Level II on the Model III and 4 ([`KBTAB`](../src/Retrocore.Machines.Trs80/Roms/Model3.asm)), TRSDOS 1.3, LDOS 5.1.3 | on | uppercase | uppercase |
 | TRSDOS 6.0 and 6.2, LS-DOS 6.3 (4 and 4P) | off | lowercase | uppercase |
 
-Turning caps lock off (shift and 0; the Model 4's CAPS) makes the letter alone lowercase; turning it on makes it
+Turning caps lock off (shift and 0, or the Model 4's CAPS) makes the letter alone lowercase; turning it on makes it
 uppercase. Shift and a letter is uppercase in every case, so an uppercase letter always comes out as written. A
 lowercase letter comes out in uppercase while caps lock is on, since no key then gives lowercase: Level II's table
 has uppercase in both its shift lock quarters, and the Model 4's shift cancels shift lock to reach its uppercase

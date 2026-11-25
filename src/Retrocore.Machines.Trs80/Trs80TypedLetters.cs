@@ -15,8 +15,8 @@ internal enum Trs80TypedLetters : byte
     ShiftForLowercase,
 
     /// <summary>
-    ///  Level II on the Model III, 4 and 4P, and their DOSes: an uppercase letter with shift, a lowercase one alone,
-    ///  and ` as shift and @.
+    ///  Level II on the Model III and 4, and the Model III's, 4's and 4P's DOSes: an uppercase letter with shift, a
+    ///  lowercase one alone, and ` as shift and @.
     /// </summary>
     ShiftForUppercase,
 

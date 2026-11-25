@@ -92,9 +92,9 @@ public class Trs80Model3Tests
     }
 
     /// <summary>
-    ///  Level II on the Model III, 4 and 4P, and their DOSes, read shift and a letter as uppercase and the letter alone
-    ///  as lowercase while caps lock is off, so an uppercase letter is typed with shift and a lowercase one without,
-    ///  and ` as shift and @.
+    ///  Level II on the Model III and 4, and the DOSes of the Model III, 4 and 4P, read shift and a letter as
+    ///  uppercase and the letter alone as lowercase while caps lock is off, so an uppercase letter is typed with shift
+    ///  and a lowercase one without, and ` as shift and @.
     /// </summary>
     /// <param name="variant">The model.</param>
     [TestMethod]

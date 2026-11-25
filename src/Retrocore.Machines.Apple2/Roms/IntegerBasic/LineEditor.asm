@@ -309,7 +309,7 @@ PrintMessageCharacter:
 ;; In: Y = the message's offset from <Messages::GreaterThan32767>
 ;; Out: Y = the offset of its last character
 ;; Keeps: X
-;; See: <PrintErrorMessage>
+;; See: <Messages::PrintError>
 ;; Also: ERRORMESS (IBSM)
 .proc PrintMessage
     lda Messages::GreaterThan32767,y
@@ -360,10 +360,10 @@ PrintMessageCharacter:
 ;; In: Y = the message's offset from <Messages::GreaterThan32767>
 ;; Entry:
 ;;   LeaveLine = leaves for the prompt, or for <Messages::StopOrRetype> while a program runs
-;; See: <PrintErrorMessage>
+;; See: <Messages::PrintError>
 ;; Also: ERRMESS (IBSM)
 .proc ReportError
-    jsr PrintErrorMessage
+    jsr Messages::PrintError
     bit Running
 
 ;; Leaves for the prompt, or for <Messages::StopOrRetype> while a program runs.

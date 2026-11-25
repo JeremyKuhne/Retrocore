@@ -9,46 +9,51 @@
 ;; but for ADD and POP, which Integer BASIC's floating point and POP statement use: Sweet16's old names for those two
 ;; are the SDK's ADD16 and POP16. Part of IntegerBasic.asm; it follows MiniAssembler.asm, at $F669.
 
-; Two register routines, which nothing in the ROM calls.
+;; Two routines that save and restore the 6502's registers in page zero, which nothing in the ROM calls.
+;;
+;; <Registers::Stash> also returns the low nibble of its caller's page, times 16: for a call from a card's ROM at
+;; $Cn00, its slot times 16, the way such a ROM finds which slot it is in.
+.scope Registers
 
-;; Where <StashRegisters> keeps A.
+;; Where <Registers::Stash> keeps A.
 ;;
 ;; The four bytes, $56 to $59, are in Integer BASIC's noun and syntax stacks (<NounStackLow>, <SyntaxStackHigh>).
 ;; Also: SAV_A (UNKN)
 StashedA = $56
 
-;; Where <StashRegisters> keeps X.
+;; Where <Registers::Stash> keeps X.
 ;; Also: SAV_X (UNKN)
 StashedX = $57
 
-;; Where <StashRegisters> keeps Y.
+;; Where <Registers::Stash> keeps Y.
 ;; Also: SAV_Y (UNKN)
 StashedY = $58
 
-;; Where <StashRegisters> keeps the status.
+;; Where <Registers::Stash> keeps the status.
 ;; Also: SAV_P (UNKN)
 StashedStatus = $59
 
-;; Saves A, X, Y and the status in <StashedA> to <StashedStatus>, and returns a nibble from the stack.
+;; Saves A, X, Y and the status in <Registers::StashedA> to <Registers::StashedStatus>, and returns a nibble from the
+;; stack.
 ;;
 ;; The nibble is the low nibble of the stack byte two above the stack pointer, which is the high byte of the return
 ;; address when this is called with JSR, shifted into A's high nibble.
 ;; Out: A = the nibble, in bits 4-7
 ;; Uses: X
 ;; Keeps: Y
-;; See: <RecoverRegisters>
+;; See: <Registers::Recover>
 ;; Also: Save_Registers (UNKN)
-.proc StashRegisters
+.proc Stash
 
 ;; The 6502's stack page.
 Stack = $0100
 
-    sty StashedY
-    stx StashedX
-    sta StashedA
+    sty Registers::StashedY
+    stx Registers::StashedX
+    sta Registers::StashedA
     php
     pla
-    sta StashedStatus
+    sta Registers::StashedStatus
 
     ; The return address's high byte, past the stack pointer and the low byte.
     tsx
@@ -62,19 +67,21 @@ Stack = $0100
     rts
 .endproc
 
-;; Restores A, X, Y and the status from <StashedA> to <StashedStatus>.
-;; Out: A = <StashedA>, X = <StashedX>, Y = <StashedY>, P = <StashedStatus>
-;; See: <StashRegisters>
+;; Restores A, X, Y and the status from <Registers::StashedA> to <Registers::StashedStatus>.
+;; Out: A = <Registers::StashedA>, X = <Registers::StashedX>, Y = <Registers::StashedY>, P = <Registers::StashedStatus>
+;; See: <Registers::Stash>
 ;; Also: Restore_Registers (UNKN)
-.proc RecoverRegisters
-    ldy StashedY
-    ldx StashedX
-    lda StashedStatus
+.proc Recover
+    ldy Registers::StashedY
+    ldx Registers::StashedX
+    lda Registers::StashedStatus
     pha
-    lda StashedA
+    lda Registers::StashedA
     plp
     rts
 .endproc
+
+.endscope
 
 ;; Steve Wozniak's SWEET16: an interpreter for a 16-bit machine of his own design, which 6502 programs call to run
 ;; compact 16-bit code in place.

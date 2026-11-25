@@ -63,7 +63,7 @@ RULE_NUMBER = $1F
     ; Falls into GotKeyword.
 .endproc
 
-;; A keyword matched: works out its token and hands it to <WriteKeywordToken>.
+;; A keyword matched: works out its token and hands it to <Tokenizer::WriteKeywordToken>.
 ;;
 ;; The token is the number of keywords from this one to the top of the page, plus the page's first byte: $50 for the
 ;; page at $EC00, 0 for the page at $ED00. A walks up the page with the next byte's bits: after LSR and EOR, bit 6 is
@@ -94,7 +94,7 @@ NextPlace:
     pla
     tay
     txa
-    jmp WriteKeywordToken
+    jmp Tokenizer::WriteKeywordToken
 .endproc
 
 ;; Writes A as the next token in <InputBuffer>, after the line's text.

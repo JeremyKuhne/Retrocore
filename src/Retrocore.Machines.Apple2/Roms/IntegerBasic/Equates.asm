@@ -582,7 +582,8 @@ VerbPriority = $D7
 ;; Also: XSAVE (IBSM)
 SavedX = $D8
 
-;; The run flag: bit 7 is set while a program runs, clear for an immediate statement.
+;; The run flag: bit 7 is set while a program runs, clear for an immediate statement (but for a bug: `INPUT` of a
+;; number leaves it set, <Statements::InputNumber>).
 ;;
 ;; <Lines::RunFromToken> sets it for each line of a running program; the run loop (<Lines::RunLoop>), errors
 ;; (<ReportError>) and the display of `DSP` variables check it.

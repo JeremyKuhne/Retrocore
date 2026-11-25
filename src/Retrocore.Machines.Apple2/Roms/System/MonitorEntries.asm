@@ -46,7 +46,7 @@ InitDisplay = $FB2F
 ModelId = $FBB3
 
 ;; Inherit: <Monitor:CursorUp>
-;; Also: UP (A2RM78, A2RM79, IIEROM82, IIETRM85)
+;; Also: UP (A2RM78, A2RM79, IIEROM82, IIETRM85), CURSUP (A2RM78)
 CursorUp = $FC1A
 
 ;; Inherit: <Monitor:VerticalTab>

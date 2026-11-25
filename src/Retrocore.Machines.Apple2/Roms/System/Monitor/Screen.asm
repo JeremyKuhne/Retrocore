@@ -169,7 +169,7 @@ Done:
 ;; Moves the cursor up a line unless it is on the window's top line.
 ;;
 ;; At $FC1A.
-;; Also: UP (A2RM78, A2RM79, IIEROM82, IIETRM85)
+;; Also: UP (A2RM78, A2RM79, IIEROM82, IIETRM85), CURSUP (A2RM78)
 .proc CursorUp
 .assert * = $FC1A, "CursorUp must stay at $FC1A."
     lda WindowTop

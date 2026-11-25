@@ -329,12 +329,15 @@ RangeErrorIfCarry:
 
 .endscope
 
+; Messages: printing an error message.
+.scope Messages continued
+
 ;; Prints an error: ***, the message at offset Y and ERR, then sounds the bell.
 ;; In: Y = the message's offset from <Messages::GreaterThan32767>
 ;; Uses: A, X, Y
 ;; See: <ReportError>
 ;; Also: PRINTERR (IBSM)
-.proc PrintErrorMessage
+.proc PrintError
     tya
     tax
     ldy #<Messages::ErrorStart
@@ -343,8 +346,10 @@ RangeErrorIfCarry:
     tay
     jsr PrintMessage
     ldy #<Messages::ErrorEnd
-    jmp PrintMessageThenBeep
+    jmp Messages::PrintThenBeep
 .endproc
+
+.endscope
 
 ;; Takes an array index from the noun stack and turns it into a size in bytes: (index + 1) x 2.
 ;;
@@ -696,6 +701,9 @@ TopOnly:
 
 .endscope
 
+; Strings: the end of a substring's checks.
+.scope Strings continued
+
 ;; The end of a substring's checks: carry clear if A is at most the string's end, for
 ;; <Operators::Substring::CheckRange>.
 ;; In: A = the substring's end, X = the noun stack, NounStackHigh,X = the string's end
@@ -711,6 +719,8 @@ TopOnly:
 ToCheckRange:
     jmp Operators::Substring::CheckRange
 .endproc
+
+.endscope
 
 ; RUN.
 .scope Statements continued
@@ -735,6 +745,9 @@ ToCheckRange:
 
 .endscope
 
+; Lister: the blank before a listed keyword.
+.scope Lister continued
+
 ;; For the lister: before a keyword, skips the blank its text starts with, if any, then prints a blank if the keyword
 ;; starts with a letter (<Lister::BlankAfterLetter>).
 ;; In: X = the keyword's first table byte, Y = its index in the syntax table's page
@@ -751,3 +764,5 @@ ToCheckRange:
 ToBlankIfLetter:
     jmp Lister::BlankAfterLetter
 .endproc
+
+.endscope

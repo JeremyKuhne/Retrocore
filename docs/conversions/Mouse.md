@@ -3,26 +3,31 @@
 `src/Retrocore.Machines.Apple2/Roms/Mouse.rom.asm`, the emulator's own 256-byte mouse firmware (the SDK's, which
 carries each call to C#'s `Apple2MouseCard`), and `src/Retrocore.Machines.Apple2/Roms/Mouse/MouseInterface.asm`,
 Apple's 341-0270-C EPROM rebuilt from its bytes, which the emulator does not run. Each is one build. Documents cited:
-MOUSETN (Apple's Mouse Technical Notes), IICTRM89 (the IIc Technical Reference, second edition), IIEROM82 and the
-Monitor's own keys (through the equates both files inherit), UNKN.
+MOUSETN (Apple's Mouse Technical Notes), IICTRM89 (the IIc Technical Reference, second edition), IIGSFR87 (the IIGS
+Firmware Reference), IIEROM82 and the Monitor's own keys (through the equates both files inherit), UNKN.
 
 ## Sources
 
-- **MOUSETN** and **IICTRM89** give the routines' names (see the bibliography for how each was checked). The notes
-  cover the AppleMouse card itself: TimeData at $Cn1C, GetClamp at $Cn1A, ServeMouse's 6805 bug. The second
-  edition's Appendix D says the IIc's calls drive the card in a IIe. The 1985 first edition and IIGSFR87 give the
-  same names only for the IIc's and the IIgs's own firmware, and are not cited. Two other Apple documents read in
+- **MOUSETN**, **IICTRM89** and **IIGSFR87** give the routines' names (see the bibliography for how each was
+  checked). The notes cover the AppleMouse card itself: TimeData at $Cn1C, GetClamp at $Cn1A, ServeMouse's 6805 bug.
+  The IIc reference's second edition says (Appendix D) that its calls drive the card in a IIe, and the IIGS Firmware
+  Reference lists its entries, $Cn1A-$Cn1F and BASIC's included, as compatible with the AppleMouse card. The 1985
+  first edition gives the names for the IIc's own firmware only, and is not cited. Two other Apple documents read in
   full give none: the Tech Info Library's "Apple II: Mouse Memory Locations" (article 8720, 1991) and the French
   AppleMouse user's manual (1983). The AppleMouse II User's Manual was not found.
 - **The EPROM dump** (`342-0270-C.bin`, of the 341-0270-C chip, from the Apple II Documentation Project's mirror)
   matches the SHA-1 in the source's header, and `MouseInterfaceSourceTests.SourceMatchesTheDump` passes against it
   (with `RETROCORE_MOUSE_ROMS` pointing at it).
-- M1. **The routines cite MOUSETN and IICTRM89** for the names each gives: SETMOUSE, SERVEMOUSE, READMOUSE,
-  CLEARMOUSE, POSMOUSE, CLAMPMOUSE and INITMOUSE both, HOMEMOUSE IICTRM89 only. Apple's documents write them in mixed
-  case (SetMouse, PosMouse); they are cited upper case, as code writes Apple's names. Mouse.rom.asm's routines cite
-  the same, for the same calls. $Cn1C is `SetInterruptRate` (TIMEDATA, MOUSETN) and $Cn1A `ReadClampByte`
-  (GETCLAMP, MOUSETN), no longer factory entries. The screen holes' names (MOUXL, MOUXH, MOUYL, MOUYH, MOUSTAT,
-  MOUMODE) are in none of the documents and keep UNKN.
+- M1. **The routines cite the documents that give each name**: SETMOUSE, SERVEMOUSE, READMOUSE, CLEARMOUSE, POSMOUSE,
+  CLAMPMOUSE and INITMOUSE all three, HOMEMOUSE IICTRM89 and IIGSFR87. Apple's notes and the IIc reference write them in
+  mixed case (SetMouse, PosMouse); they are cited upper case, as code writes Apple's names. Mouse.rom.asm's routines
+  cite the same, for the same calls. The entries the drafts called the factory's take Apple's names: $Cn1A
+  `ReadClampByte` (GETCLAMP, MOUSETN; DIAGMOUSE, IIGSFR87), $Cn1B `ShowCopyright` (COPYRIGHT), $Cn1C `SetInterruptRate`
+  (TIMEDATA, MOUSETN and IIGSFR87), $Cn1D `SetVblCounts` (SETVBLCNTS), $Cn1E `SetMouseOptions` (OPTMOUSE) and $Cn1F
+  `StartTimer` (STARTTIMER), the last four IIGSFR87's alone, which gives no more than the names; and BASIC's entries
+  BINITENTRY, BASICINPUT and BASICOUTPUT (IIGSFR87). The emulator's card has none of $Cn1A-$Cn1F, so their names are on
+  Apple's firmware only, and its stand-in is `UnsupportedEntry`. The screen holes' names (MOUXL, MOUXH, MOUYL, MOUYH,
+  MOUSTAT, MOUMODE) are in none of the documents and keep UNKN.
 - M2. **Every other old name is the SDK's own** and is dropped with no `Also:`: both files say so in their file
   comment. MouseInterface.asm's labels were the disassembly's (BANK3_SWITCH, SENDBANK_1, MCUREQUEST1_5, PARAMBANK
   ...), with no listing behind them; Mouse.rom.asm's were its author's (BASICIN_ENTRY, Common_Slot, NOTHING ...).
@@ -67,6 +72,6 @@ Monitor's own keys (through the equates both files inherit), UNKN.
 - Apple's BASIC input returns the line's length in X and Y; the old `Keeps: X, Y` on its BASIC entry was false for
   input. Its comment now says output keeps A, X and Y.
 - Each bank's last byte ($C2, $C1, $C3, $C8, $CD, $C1, $CE) is never read by the firmware; its purpose is not known.
-- The emulator's card answers $Cn1A-$Cn1F with carry set, where Apple's returns carry clear from all six (TimeData's
-  as Mouse Technical Note #2 documents, the others by their code); `FactoryEntry`'s comment says so. Changing that is
-  a behavior change, outside a conversion.
+- The emulator's card answers $Cn1A-$Cn1F with carry set, where Apple's returns carry clear from all six (TimeData's as
+  Mouse Technical Note #2 documents, the others by their code); `UnsupportedEntry`'s comment says so. Changing that is a
+  behavior change, outside a conversion.

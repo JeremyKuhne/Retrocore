@@ -33,9 +33,9 @@
 ;; BASIC reads the card after `IN#n`: the card writes the line "X,Y,B" into the input buffer and returns a RETURN, so
 ;; INPUT takes three numbers and nothing is echoed. It turns the mouse on or off after `PR#n` as the low bit of each
 ;; character printed says, as CHR$(1) and CHR$(0) do. As on Apple's card, the Pascal 1.1 entries at $Cn0D-$Cn10
-;; answer error 3. Of the entries at $Cn1A-$Cn1F, Apple documents two of its card's, reading a clamping bound's byte
-;; ($Cn1A) and setting the interrupt rate ($Cn1C); this card has neither, and every one returns carry set
-;; (<FactoryEntry>).
+;; answer error 3. Apple's card has six more entries at $Cn1A-$Cn1F, among them reading a clamping bound's byte
+;; ($Cn1A) and setting the interrupt rate ($Cn1C); this card has none of them, and every one returns carry set
+;; (<UnsupportedEntry>).
 ;;
 ;; HOW A CALL CROSSES INTO C#
 ;;
@@ -57,9 +57,9 @@
 ;;
 ;; NAMES
 ;;
-;; The mouse routines' old names are the calls Apple's documents give programs: its Mouse Technical Notes (MOUSETN)
-;; and the IIc Technical Reference's second edition (IICTRM89), which documents the calls for the AppleMouse card as
-;; well as the IIc. Every other name is the SDK's own.
+;; The routines' old names are the calls Apple's documents give programs: its Mouse Technical Notes (MOUSETN), the
+;; IIc Technical Reference's second edition (IICTRM89) and the IIGS Firmware Reference (IIGSFR87), which document
+;; the calls for the AppleMouse card as well as their own machines. Every other name is the SDK's own.
 
 .rom Retrocore.Machines.Apple2.MouseRom, $C400, $100
 .cpu Mos6502
@@ -172,6 +172,7 @@ COMMAND_BASIC_OUTPUT = 11 | FIND_SLOT_FROM_MONITOR
 ;; In:    A = the character to print, or the character under the cursor for input
 ;; Out:   A = the character printed, or RETURN for input, with the line in the input buffer and X = its length
 ;; Keeps: Y
+;; Also: BINITENTRY (IIGSFR87)
 .proc BasicEntry
     EnterCommand COMMAND_BASIC
 .endproc
@@ -183,6 +184,7 @@ COMMAND_BASIC_OUTPUT = 11 | FIND_SLOT_FROM_MONITOR
 ;; In:    A = the character under the cursor
 ;; Out:   A = RETURN, X = the line's length, $11
 ;; Keeps: Y
+;; Also: BASICINPUT (IIGSFR87)
 .proc BasicInput
 .assert * = $C405, "BasicInput must stay at $Cn05."
     sec
@@ -198,6 +200,7 @@ COMMAND_BASIC_OUTPUT = 11 | FIND_SLOT_FROM_MONITOR
 ;; In:    A = the character to print
 ;; Out:   A = the character printed
 ;; Keeps: X, Y
+;; Also: BASICOUTPUT (IIGSFR87)
 BasicOutput = BasicInput + 2
 
     .byte 0                         ; unused
@@ -211,7 +214,9 @@ BasicOutput = BasicInput + 2
 .assert * = $C412, "The mouse routines' offsets must start at $Cn12."
     .byte <SetMouse, <ServeMouse, <ReadMouse, <ClearMouse
     .byte <PositionMouse, <ClampMouse, <HomeMouse, <InitializeMouse
-    .byte <FactoryEntry, <FactoryEntry, <FactoryEntry, <FactoryEntry, <FactoryEntry, <FactoryEntry ; $Cn1A-$Cn1F
+    ; $Cn1A-$Cn1F: none of Apple's card's six.
+    .byte <UnsupportedEntry, <UnsupportedEntry, <UnsupportedEntry
+    .byte <UnsupportedEntry, <UnsupportedEntry, <UnsupportedEntry
 
 ;; Writes BASIC's line from the card, for <BasicInput>.
 ;; In:    A = the character under the cursor
@@ -234,7 +239,7 @@ BasicOutput = BasicInput + 2
 ;; In:    A = the mode, X = $Cn, Y = $n0
 ;; Out:   carry = set if the mode is above $0F
 ;; Keeps: Y
-;; Also: SETMOUSE (MOUSETN, IICTRM89)
+;; Also: SETMOUSE (MOUSETN, IICTRM89, IIGSFR87)
 .proc SetMouse
     EnterCommand COMMAND_SET_MOUSE
 .endproc
@@ -242,7 +247,7 @@ BasicOutput = BasicInput + 2
 ;; Called from an interrupt handler: tells whether the mouse interrupted, and why, in the status hole's bits 1-3.
 ;; Out:   carry = clear if the interrupt was the mouse's
 ;; Keeps: Y
-;; Also: SERVEMOUSE (MOUSETN, IICTRM89)
+;; Also: SERVEMOUSE (MOUSETN, IICTRM89, IIGSFR87)
 .proc ServeMouse
     EnterCommand COMMAND_SERVE_MOUSE
 .endproc
@@ -252,7 +257,7 @@ BasicOutput = BasicInput + 2
 ;; In:    X = $Cn, Y = $n0
 ;; Out:   carry = clear
 ;; Keeps: Y
-;; Also: READMOUSE (MOUSETN, IICTRM89)
+;; Also: READMOUSE (MOUSETN, IICTRM89, IIGSFR87)
 .proc ReadMouse
     EnterCommand COMMAND_READ_MOUSE
 .endproc
@@ -261,7 +266,7 @@ BasicOutput = BasicInput + 2
 ;; In:    X = $Cn, Y = $n0
 ;; Out:   carry = clear
 ;; Keeps: Y
-;; Also: CLEARMOUSE (MOUSETN, IICTRM89)
+;; Also: CLEARMOUSE (MOUSETN, IICTRM89, IIGSFR87)
 .proc ClearMouse
     EnterCommand COMMAND_CLEAR_MOUSE
 .endproc
@@ -270,7 +275,7 @@ BasicOutput = BasicInput + 2
 ;; In:    X = $Cn, Y = $n0
 ;; Out:   carry = clear
 ;; Keeps: Y
-;; Also: POSMOUSE (MOUSETN, IICTRM89)
+;; Also: POSMOUSE (MOUSETN, IICTRM89, IIGSFR87)
 .proc PositionMouse
     EnterCommand COMMAND_POSITION_MOUSE
 .endproc
@@ -279,7 +284,7 @@ BasicOutput = BasicInput + 2
 ;; In:    A = 0 for X, 1 for Y, X = $Cn, Y = $n0
 ;; Out:   carry = clear
 ;; Keeps: Y
-;; Also: CLAMPMOUSE (MOUSETN, IICTRM89)
+;; Also: CLAMPMOUSE (MOUSETN, IICTRM89, IIGSFR87)
 .proc ClampMouse
     EnterCommand COMMAND_CLAMP_MOUSE
 .endproc
@@ -288,7 +293,7 @@ BasicOutput = BasicInput + 2
 ;; In:    X = $Cn, Y = $n0
 ;; Out:   carry = clear
 ;; Keeps: Y
-;; Also: HOMEMOUSE (IICTRM89)
+;; Also: HOMEMOUSE (IICTRM89, IIGSFR87)
 .proc HomeMouse
     EnterCommand COMMAND_HOME_MOUSE
 .endproc
@@ -297,7 +302,7 @@ BasicOutput = BasicInput + 2
 ;; In:    X = $Cn, Y = $n0
 ;; Out:   carry = clear
 ;; Keeps: Y
-;; Also: INITMOUSE (MOUSETN, IICTRM89)
+;; Also: INITMOUSE (MOUSETN, IICTRM89, IIGSFR87)
 .proc InitializeMouse
     EnterCommand COMMAND_INITIALIZE_MOUSE
 .endproc
@@ -306,16 +311,18 @@ BasicOutput = BasicInput + 2
 ;; Out:   X = 3, carry = set
 .proc PascalEntry
     ldx #PASCAL_ERROR
-    ; Falls into FactoryEntry.
+    ; Falls into UnsupportedEntry.
 .endproc
 
 ;; The entries at $Cn1A-$Cn1F, which this card does not have.
 ;;
-;; On Apple's card every one of them returns carry clear: TimeData at $Cn1C, as Mouse Technical Note #2 documents,
-;; and GetClamp at $Cn1A and the factory's own, as the card's EPROM does. On this card all six return carry set.
+;; Apple's card has six here, which the IIGS Firmware Reference names DIAGMOUSE, COPYRIGHT, TIMEDATA, SETVBLCNTS,
+;; OPTMOUSE and STARTTIMER (MouseInterface.asm's `ReadClampByte` ... `StartTimer`). Every one of them returns carry
+;; clear there: TimeData, as Mouse Technical Note #2 documents, and the others, as the card's EPROM does. On this card
+;; all six return carry set.
 ;; Out:   carry = set
 ;; Keeps: X, Y
-.proc FactoryEntry
+.proc UnsupportedEntry
     sec
     rts
 .endproc

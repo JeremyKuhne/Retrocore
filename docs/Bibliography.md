@@ -92,9 +92,13 @@ where the check found that the document gives that name for that thing:
 
 - **MOUSETN:** the text of the 12-page PDF (notes #1-#7), searched in full. It gives SetMouse, ServeMouse,
   ReadMouse, ClearMouse, PosMouse, ClampMouse and InitMouse, TimeData for the AppleMouse card's $Cn1C (#2) and the
-  card's GetClamp entry at $Cn1A (#7); not HomeMouse, and no screen-hole names.
+  card's GetClamp entry at $Cn1A (#7: the name is on the sample's comment for the entry, "Mouse Card firmware GetClamp
+  entry"); not HomeMouse. Its MinXL ... MaxYH are the IIc's clamp holes in auxiliary memory, not the card's.
 - **IICTRM89:** read from the Internet Archive's OCR text. Table 9-3 gives all eight routines at $Cn12-$Cn19, and
   Appendix D says the same calls drive the AppleMouse card in an Apple IIe. Its MouX1 and MouY1 are the IIc's soft
-  switches, not screen holes. The first edition (1985) and IIGSFR87 give the same routine names for the IIc's and
-  the IIgs's own firmware only, so the mouse card's sources don't cite them
-  ([`docs/conversions/Mouse.md`](conversions/Mouse.md), M1).
+  switches, not screen holes. The first edition (1985) gives the same routine names for the IIc's own firmware only,
+  so the mouse card's sources don't cite it ([`docs/conversions/Mouse.md`](conversions/Mouse.md), M1).
+- **IIGSFR87** for the mouse: Chapter 10's summary of the mouse firmware calls (page 209) gives SETMOUSE ...
+  INITMOUSE at $C412-$C419, BINITENTRY, BASICINPUT and BASICOUTPUT at $C400, $C405 and $C407, and, as "entry points
+  compatible with AppleMouse card", DIAGMOUSE, COPYRIGHT, TIMEDATA, SETVBLCNTS, OPTMOUSE and STARTTIMER at
+  $C41A-$C41F.

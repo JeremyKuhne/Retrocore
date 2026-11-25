@@ -17,13 +17,13 @@
 ;;   0  Identification, the entry points, and the dispatch every call starts and ends in (top level).
 ;;   1  <CopyrightBank>: the copyright message ($Cn1B), and reading a clamping bound's byte ($Cn1A).
 ;;   2  <InitializeBank>: <InitializeMouse>, which resets the microcontroller and times it to vertical blanking.
-;;   3  <CommandBank>: sends one command byte: <SetMouse>, <ClearMouse>, <HomeMouse>, the factory's $Bx and $C0,
+;;   3  <CommandBank>: sends one command byte: <SetMouse>, <ClearMouse>, <HomeMouse>, <SetMouseOptions>, <StartTimer>,
 ;;      and <ServeMouse>, which reads one back.
 ;;   4  <BasicBank>: BASIC's `IN#` and `PR#`: the hooks, turning the mouse on or off, and reading it for INPUT.
 ;;   5  <LineBank>: writes BASIC's "X,Y,B" line into the input buffer.
 ;;   6  <ByteBank>: sends or receives one byte, and <ReadMouse>'s five.
 ;;   7  <ParameterBank>: sends a command with its parameters: <PositionMouse>, <ClampMouse>, <SetInterruptRate>
-;;      and the factory's other $9x commands and $A0.
+;;      <SetVblCounts> and the factory's other $9x commands.
 ;;
 ;; Every bank holds the same four instructions at $Cn70 (each bank's `Switch`): they put the bank in <NextBank> on
 ;; port B, which switches the EPROM under the 6502 as it runs, so the next instruction, at $Cn7B, is the new bank's.
@@ -39,15 +39,16 @@
 ;; which an interrupt handler may call with the language card's RAM over the Monitor, finds the slot itself, with an
 ;; RTS it writes at $06 rather than the Monitor's <SaveRegisters::Return>. BASIC's entries find it with
 ;; <SaveRegisters::Return> and leave <ExpansionRomSlot> = $Cn. The Pascal entries, <PascalEntry>, all answer error 3.
-;; Of $Cn1A-$Cn1F, Apple documents <ReadClampByte> ($Cn1A) and <SetInterruptRate> ($Cn1C); <ShowCopyright> ($Cn1B)
-;; and the rest are the factory's own.
+;; $Cn1A-$Cn1F are the card's own: the IIGS Firmware Reference names all six, and Apple's Mouse Technical Notes
+;; document two, <ReadClampByte> ($Cn1A) and <SetInterruptRate> ($Cn1C).
 ;;
 ;; NAMES
 ;;
-;; The routines' old names are the calls Apple's documents give programs: its Mouse Technical Notes (MOUSETN) and
-;; the IIc Technical Reference's second edition (IICTRM89), which documents the calls for the AppleMouse card as
-;; well as the IIc. The screen holes' (MOUXL ...) are names no document in hand gives, so they cite UNKN. Every
-;; other name in this file is the SDK's own: the source was rebuilt from the EPROM, with no listing.
+;; The routines' old names are the calls Apple's documents give programs: its Mouse Technical Notes (MOUSETN), the
+;; IIc Technical Reference's second edition (IICTRM89) and the IIGS Firmware Reference (IIGSFR87), which document
+;; the calls for the AppleMouse card as well as their own machines. The screen holes' (MOUXL ...) are names no
+;; document in hand gives, so they cite UNKN. Every other name in this file is the SDK's own: the source was rebuilt
+;; from the EPROM, with no listing.
 
 .cpu Mos6502
 
@@ -289,14 +290,14 @@ COMMAND_BASIC_ON = $80
 ;; add none to three parameters, as bits 2 and 3 say.
 COMMAND_INTERRUPT_RATE = $90
 
-;; The factory's $A0, with the caller's A.
-COMMAND_FACTORY_A = $A0
+;; For <SetVblCounts>, with the caller's A.
+COMMAND_VBL_COUNTS = $A0
 
-;; The factory's $B0-$BF, sent alone.
-COMMAND_FACTORY_B = $B0
+;; For <SetMouseOptions>: $B0-$BF, sent alone.
+COMMAND_OPTIONS = $B0
 
-;; The factory's $C0.
-COMMAND_FACTORY_C = $C0
+;; For <StartTimer>.
+COMMAND_START_TIMER = $C0
 
 ;; $F0: read a byte of the clamping bounds, for <ReadClampByte>; $F1, which Apple does not document, sends a
 ;; byte instead.
@@ -305,10 +306,10 @@ COMMAND_CLAMP_BYTE = $F0
 ;; The bit of <COMMAND_CLAMP_BYTE> that sends slot 0's <MouseXHigh>; clear, it reads a byte back into it.
 FACTORY_SEND_HIGH = $01
 
-;; A factory command's low nibble, from the caller's A.
+;; A command's low nibble, from the caller's A.
 LOW_NIBBLE = $0F
 
-;; The bits of a factory command that say how many parameters follow.
+;; The bits of a $9x command that say how many parameters follow.
 FACTORY_PARAMETERS = $0C
 
 ;; How many bytes <COMMAND_READ> answers: X low and high, Y low and high, and the status, in the order they come.
@@ -387,12 +388,14 @@ SYNC_TIMEOUT = $01
 ;; Output keeps A, X and Y; input returns the line's length in both X and Y.
 ;; In:    A = the character to print, or the character under the cursor
 ;; Out:   A = RETURN for input, with the line in <InputBuffer> and X = Y = $11, its length
+;; Also: BINITENTRY (IIGSFR87)
 .proc BasicEntry
     bit SaveRegisters::Return       ; an RTS, $60: overflow set
     bvs EnterBasic
 .endproc
 
 ;; BASIC's input entry ($Cn05), with carry set. Its BCC's offset, $18, is <BasicOutput>'s CLC.
+;; Also: BASICINPUT (IIGSFR87)
 .proc BasicInput
 .assert * = $C405, "BasicInput must stay at $Cn05."
     sec
@@ -400,6 +403,7 @@ SYNC_TIMEOUT = $01
 .endproc
 
 ;; BASIC's output entry ($Cn07), with carry clear.
+;; Also: BASICOUTPUT (IIGSFR87)
 .proc BasicOutput
 .assert * = $C407, "BasicOutput must stay at $Cn07."
     clc
@@ -416,7 +420,7 @@ SYNC_TIMEOUT = $01
 .assert * = $C412, "The mouse routines' offsets must start at $Cn12."
     .byte <SetMouse, <ServeMouse, <ReadMouse, <ClearMouse
     .byte <PositionMouse, <ClampMouse, <HomeMouse, <InitializeMouse
-    .byte <ReadClampByte, <ShowCopyright, <SetInterruptRate, <FactoryCommandA, <FactoryCommandB, <FactoryCommandC
+    .byte <ReadClampByte, <ShowCopyright, <SetInterruptRate, <SetVblCounts, <SetMouseOptions, <StartTimer
 
 ;; Finds the slot for BASIC's entries, keeps the registers, sets <ExpansionRomSlot> to $Cn, and goes to <BasicBank>
 ;; as overflow and carry say.
@@ -463,7 +467,7 @@ SYNC_TIMEOUT = $01
 ;; <MouseXHigh> too and reads nothing back, which Apple does not document.
 ;; In:    A = 0, X = $Cn, Y = $n0
 ;; Out:   MouseXHigh = the byte (slot 0's), carry = clear
-;; Also: GETCLAMP (MOUSETN)
+;; Also: GETCLAMP (MOUSETN), DIAGMOUSE (IIGSFR87)
 .proc ReadClampByte
     and #FACTORY_SEND_HIGH
     ora #COMMAND_CLAMP_BYTE
@@ -479,7 +483,7 @@ SYNC_TIMEOUT = $01
 ;; parameters as bits 2 and 3 say.
 ;; In:    A = 0 for 60 Hz, 1 for 50 Hz, X = $Cn, Y = $n0
 ;; Out:   carry = clear
-;; Also: TIMEDATA (MOUSETN)
+;; Also: TIMEDATA (MOUSETN, IIGSFR87)
 .proc SetInterruptRate
     and #LOW_NIBBLE
     ora #COMMAND_INTERRUPT_RATE
@@ -537,7 +541,7 @@ Return:
 ;; Bounds X (A = 0) or Y (A = 1) to slot 0's <ClampMinimum> and <ClampMaximum>.
 ;; In:    A = the axis, X = $Cn, Y = $n0
 ;; Out:   carry = clear
-;; Also: CLAMPMOUSE (MOUSETN, IICTRM89)
+;; Also: CLAMPMOUSE (MOUSETN, IICTRM89, IIGSFR87)
 .proc ClampMouse
     and #CLAMP_Y
     ora #COMMAND_CLAMP
@@ -567,7 +571,7 @@ PushCode:
 ;; Copies the status and position into the screen holes, if the mouse is on, through <ByteBank>.
 ;; In:    X = $Cn, Y = $n0
 ;; Out:   carry = clear
-;; Also: READMOUSE (MOUSETN, IICTRM89)
+;; Also: READMOUSE (MOUSETN, IICTRM89, IIGSFR87)
 .proc ReadMouse
     lda #BANK_BYTE * 2
     ; Falls into EnterBankThird.
@@ -584,7 +588,7 @@ PushCode:
 ;; Sets the position to 0, 0, and the holes with it.
 ;; In:    X = $Cn, Y = $n0
 ;; Out:   carry = clear
-;; Also: CLEARMOUSE (MOUSETN, IICTRM89)
+;; Also: CLEARMOUSE (MOUSETN, IICTRM89, IIGSFR87)
 .proc ClearMouse
     lda #COMMAND_CLEAR
     ; Falls into SendCommand.
@@ -610,7 +614,7 @@ PushCode:
 ;; Sets the mode: bit 0 on, bits 1, 2 and 3 interrupt on movement, the button and vertical blanking.
 ;; In:    A = the mode, X = $Cn, Y = $n0
 ;; Out:   carry = set if the mode is above $0F
-;; Also: SETMOUSE (MOUSETN, IICTRM89)
+;; Also: SETMOUSE (MOUSETN, IICTRM89, IIGSFR87)
 .proc SetMouse
     cmp #MODE_LIMIT
     bcs SwitchBank::Return
@@ -622,7 +626,7 @@ PushCode:
 ;; <InitializeBank>'s.
 ;; In:    X = $Cn, Y = $n0
 ;; Out:   carry = clear
-;; Also: INITMOUSE (MOUSETN, IICTRM89)
+;; Also: INITMOUSE (MOUSETN, IICTRM89, IIGSFR87)
 .proc InitializeMouse
     lda #BANK_INITIALIZE * 2
     bne EnterBank
@@ -631,7 +635,7 @@ PushCode:
 ;; Sets the position from the slot's holes.
 ;; In:    X = $Cn, Y = $n0
 ;; Out:   carry = clear
-;; Also: POSMOUSE (MOUSETN, IICTRM89)
+;; Also: POSMOUSE (MOUSETN, IICTRM89, IIGSFR87)
 .proc PositionMouse
     lda #COMMAND_POSITION
     bne SendWithParameters
@@ -640,7 +644,7 @@ PushCode:
 ;; Called from an interrupt handler: finds the slot without the Monitor, which the language card may hide, and puts
 ;; the interrupt's cause in <MouseStatus>'s bits 1-3.
 ;; Out:   carry = clear if the mouse interrupted, X = $Cn, Y = $n0
-;; Also: SERVEMOUSE (MOUSETN, IICTRM89)
+;; Also: SERVEMOUSE (MOUSETN, IICTRM89, IIGSFR87)
 .proc ServeMouse
     ldy Pointer
     lda #OPCODE_RTS
@@ -662,37 +666,52 @@ PushCode:
 ;; Moves the position to the bounds' minimums.
 ;; In:    X = $Cn, Y = $n0
 ;; Out:   carry = clear
-;; Also: HOMEMOUSE (IICTRM89)
+;; Also: HOMEMOUSE (IICTRM89, IIGSFR87)
 .proc HomeMouse
     lda #COMMAND_HOME
     bne SendCommand
 .endproc
 
-;; $Cn1D, the factory's: sends command $A0 with A.
+;; $Cn1D: sends command $A0 with A.
+;;
+;; The IIGS Firmware Reference names it among the entries compatible with the AppleMouse card, which do nothing on
+;; the IIgs; what the microcontroller does with the count is not documented.
 ;; In:    A = the parameter, X = $Cn, Y = $n0
-.proc FactoryCommandA
+;; Out:   carry = clear
+;; Also: SETVBLCNTS (IIGSFR87)
+.proc SetVblCounts
     pha
-    lda #COMMAND_FACTORY_A
+    lda #COMMAND_VBL_COUNTS
     bne SendWithParameters
 .endproc
 
-;; $Cn1E, the factory's: sends command $B0-$BF.
+;; $Cn1E: sends command $B0-$BF.
+;;
+;; The IIGS Firmware Reference names it, as it does <SetVblCounts>; what the options are is not documented.
 ;; In:    A = the low nibble, X = $Cn, Y = $n0
-.proc FactoryCommandB
+;; Out:   carry = clear
+;; Also: OPTMOUSE (IIGSFR87)
+.proc SetMouseOptions
     and #LOW_NIBBLE
-    ora #COMMAND_FACTORY_B
+    ora #COMMAND_OPTIONS
     bne SendCommand
 .endproc
 
-;; $Cn1F, the factory's: sends command $C0.
+;; $Cn1F: sends command $C0.
+;;
+;; The IIGS Firmware Reference names it, as it does <SetVblCounts>; what the timer is for is not documented.
 ;; In:    X = $Cn, Y = $n0
-.proc FactoryCommandC
-    lda #COMMAND_FACTORY_C
+;; Out:   carry = clear
+;; Also: STARTTIMER (IIGSFR87)
+.proc StartTimer
+    lda #COMMAND_START_TIMER
     bne SendCommand
 .endproc
 
 ;; $Cn1B: clears the screen and prints the copyright message, through <CopyrightBank>.
 ;; In:    X = $Cn, Y = $n0
+;; Out:   carry = clear
+;; Also: COPYRIGHT (IIGSFR87)
 .proc ShowCopyright
     lda #BANK_COPYRIGHT * 2
     bne EnterBank
@@ -1732,7 +1751,7 @@ Finished:
 
 ;; Sends <Argument>'s command and its parameters: for <COMMAND_POSITION> the slot's <MouseX>, <MouseXHigh>,
 ;; <MouseY> and <MouseYHigh>; for <COMMAND_CLAMP> slot 0's <ClampMinimum>, <ClampMaximum>, <ClampMinimumHigh> and
-;; <ClampMaximumHigh>; for <COMMAND_FACTORY_A> the caller's A; for <COMMAND_INTERRUPT_RATE>'s $9x, as bits 2 and 3
+;; <ClampMaximumHigh>; for <COMMAND_VBL_COUNTS> the caller's A; for <COMMAND_INTERRUPT_RATE>'s $9x, as bits 2 and 3
 ;; say, none, slot 0's <MouseXHigh>, its <MouseX> and <MouseY>, or all three.
 ;; In:    Argument = the command, X = $Cn, Y = $n0
 .proc Send
@@ -1743,7 +1762,7 @@ Finished:
     beq Clamp
     cmp #COMMAND_CLAMP | CLAMP_Y
     beq Clamp
-    cmp #COMMAND_FACTORY_A
+    cmp #COMMAND_VBL_COUNTS
     bne OtherCommand
 
     ; The command, and the caller's A below it.

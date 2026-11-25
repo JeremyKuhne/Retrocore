@@ -438,7 +438,7 @@ internal sealed partial class SourceAnalysis
     /// <param name="exact">Whether names match case.</param>
     /// <returns>The definitions, or null.</returns>
     internal List<SymbolSite>? Bound(string name, string path, DocumentationScopes scopes, bool exact) =>
-        Own(name, scopes, exact) ?? Used(name, path, scopes, exact);
+        Own(name, scopes, exact) ?? (name.Contains("::", StringComparison.Ordinal) ? null : Used(name, path, scopes, exact));
 
     // What a plain name binds to in the code's own scopes, innermost first, or at the root.
     private List<SymbolSite>? Own(string name, DocumentationScopes scopes, bool exact)

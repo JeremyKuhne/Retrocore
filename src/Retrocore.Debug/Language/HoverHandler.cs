@@ -247,14 +247,13 @@ internal sealed class HoverHandler
         bool absolute = name.StartsWith("::", StringComparison.Ordinal);
         string target = absolute ? name[2..] : name;
         string path = context?.Path ?? from.Path;
-        if (!absolute
-            && target.Length != 0
-            && target[0] is not ('.' or '$')
-            && target.All(character => char.IsAsciiLetterOrDigit(character) || character == '_')
-            && analysis.UsesMacro10(path))
+        string[] components = target.Split("::");
+        bool names = components.All(part => part.Length != 0 && part.All(character => char.IsAsciiLetterOrDigit(character) || character == '_'));
+        if (names && analysis.UsesMacro10(path))
         {
-            string significant = target[..Math.Min(target.Length, 6)].ToUpperInvariant();
-            if (analysis.Bound(significant, path, scopes, exact: true) is { } found)
+            string last = components[^1];
+            string significant = target[..^last.Length] + last[..Math.Min(last.Length, 6)].ToUpperInvariant();
+            if (analysis.Bound(significant, path, absolute ? DocumentationScopes.Root : scopes, exact: true) is { } found)
             {
                 List<SymbolSite> bound = [.. found.Where(site => site.Kind != SymbolSiteKind.Macro)];
                 if (bound.Count > 1) { return new(DocumentationTargetKind.Ambiguous, name); }

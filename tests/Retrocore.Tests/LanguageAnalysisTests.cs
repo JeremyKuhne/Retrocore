@@ -440,7 +440,7 @@ public sealed partial class LanguageAnalysisTests
             string text = """
                 ;; Stored value.
                 ZSTORDO=1
-                ;; Uses <ZSTORDO>.
+                ;; Uses <ZSTORDO>, <Outer::ZSTORDO>, <Outer::zstordo> and <::Outer::ZSTORDO>.
                 SOME:: NOP
                 """.ReplaceLineEndings("\n");
 
@@ -454,10 +454,13 @@ public sealed partial class LanguageAnalysisTests
             await workspace.IdleAsync(path, CancellationToken.None);
             HoverHandler handler = new(workspace, new BasicDocuments(client));
             DocumentUri uri = DocumentUri.FromFileSystemPath(include);
-            int column = text.Split('\n')[2].IndexOf("<ZSTORDO>", StringComparison.Ordinal) + 1;
-            Hover? hover = await handler.Handle(Request(uri, 2, column));
-            hover.Should().NotBeNull();
-            hover?.Contents.Value.Should().Contain("Outer::ZSTORD = $01").And.Contain("Stored value.");
+            foreach (string link in (string[])["<ZSTORDO>", "<Outer::ZSTORDO>", "<Outer::zstordo>", "<::Outer::ZSTORDO>"])
+            {
+                int column = text.Split('\n')[2].IndexOf(link, StringComparison.Ordinal) + 1;
+                Hover? hover = await handler.Handle(Request(uri, 2, column));
+                hover.Should().NotBeNull(link);
+                hover?.Contents.Value.Should().Contain("Outer::ZSTORD = $01").And.Contain("Stored value.");
+            }
         }
         finally
         {

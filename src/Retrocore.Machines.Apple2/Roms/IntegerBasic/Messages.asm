@@ -183,8 +183,10 @@ Retype:
 ;; <InputNumber::ReadLine>; Control-C in the line goes back to BASIC's prompt (<ReadNumberLine>).
 ;;
 ;; The tokenizing leaves <Running> at $FF, as a running program has it, whatever it was before. A bug: in a line typed
-;; without a number, which reaches `INPUT` through `IF ... THEN`, the run loop (<Lines::RunLoop>) then takes the typed
-;; line for a program line, and BASIC stops answering the keyboard until a reset (IntegerBasicQuirkTests pins this).
+;; without a line number, which reaches `INPUT` through `IF ... THEN`, the run loop (<Lines::RunLoop>) then goes on as
+;; if a program were running, from the line after <CurrentLine>, the last line a program ran: the typed line never
+;; becomes <CurrentLine>. After a program that stopped at line 10, line 20 runs; on a fresh machine, where it
+;; is 0, it runs page zero as a line and hangs (IntegerBasicQuirkTests pins the first).
 ;; In: X = the noun stack, its top entry the first variable's address
 ;; Out: X = the noun stack, the variable popped
 ;; Uses: A, Y, Accumulator, Auxiliary, TextIndex, TokenIndex

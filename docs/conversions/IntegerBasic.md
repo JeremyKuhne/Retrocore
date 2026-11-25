@@ -48,8 +48,8 @@ The root asserts that `FORFIX` is 0 or 1. `FORFIX` is the SDK's switch, which C#
   `Tokenizer`, `Interpreter` (`Interpreter::RunLine`, EXECLINE, with the priority loop as its locals, since the
   variable lookup branches back into it), `Variables`, `Lines` (the run loop), `Verbs` (the priority and routine
   tables), `Messages`, `Syntax`, `Memory`, `Display` (TRACE and DSP output), `Break` (Control-C and CON's saved
-  place), `Cassette`, `Float`, `MiniAssembler` and `Sweet16`. Top level: the entries and helpers several subjects use
-  (`ColdEntry`, `WarmEntry`, `ColdStart`, `WarmStart`, `PrintDecimal`, `FindLine`, `PushNoun`, `GetNumber`,
+  place), `Cassette`, `Float`, `MiniAssembler`, `Sweet16` and `Registers` (I13). Top level: the entries and helpers
+  several subjects use (`ColdEntry`, `WarmEntry`, `ColdStart`, `WarmStart`, `PrintDecimal`, `FindLine`, `PushNoun`, `GetNumber`,
   `GetByte`, `ReportError`, `MemoryFullError`, `RangeError` ...).
 - I4. Integer BASIC's own page zero: `LowMemory` and `HighMemory` (LOMEM and HIMEM, the names BASIC programmers know
   from LOMEM: and HIMEM:), `ProgramStart` (PP), `VariablesEnd` (PV), `Accumulator` (ACC), `Auxiliary` (AUX),
@@ -98,9 +98,11 @@ Documented in the code, not changed (the bytes stay):
 - `HIMEM:` raised with a program in memory loses the program (the copy loop's test is reversed); the unused
   `SetHighMemory` draws a `VLIN` for a value below LOMEM instead of the RANGE error; `HLIN`'s and `VLIN`'s ends are not
   checked against the screen; Control-C's check covers one character when X is $81 or more.
-- After `INPUT` of numbers, `Running` is $FF whatever it was; in immediate mode (`IF ... THEN INPUT A`) the run loop
-  takes the typed line for a program line, and BASIC stops answering the keyboard until a reset. Confirmed on the
-  emulated II with the SDK's ROMs, and pinned by `IntegerBasicQuirkTests` (I16).
+- After `INPUT` of numbers, `Running` is $FF whatever it was; in a line typed without a line number (`IF ... THEN
+  INPUT A`) the run loop then goes on as if a program were running, from the line after `CurrentLine`, the last line a
+  program ran, since the typed line never becomes `CurrentLine`. After a program stopped at line 10's `END`, line 20
+  runs; on a fresh machine, where `CurrentLine` is 0, BASIC runs page zero as a line and stops answering the keyboard.
+  Confirmed on the emulated II with the SDK's ROMs; `IntegerBasicQuirkTests` pins the first (I16).
 - `NextTabStop` loops forever for a cursor column of $F8 or more, which a normal window never gives.
 - The floating point's FIX rounds a negative number toward 0 only when the fraction's top 8 bits are nonzero; a Return
   alone at the Mini-Assembler's `!` prompt is an error.
@@ -125,7 +127,7 @@ The conversion left six questions; the owner settled each as recommended.
   output, which Integer BASIC itself relies on (`PrintDecimal` counts in X across `CharacterOut`), and the debugger's
   run found them kept. Whether the Monitor's `ScreenOut` keeps X in every build, to document it there, is a separate
   task.
-- I16 (was Q5). `INPUT` in immediate mode leaving BASIC in the run loop is a bug of the ROM, documented on
-  `Statements::InputNumber` and pinned by a test, so the bytes are never "fixed".
+- I16 (was Q5). `INPUT` in immediate mode leaving BASIC running from the last line run is a bug of the ROM,
+  documented on `Statements::InputNumber` and pinned by a test, so the bytes are never "fixed".
 - I17 (was Q6). CURSUP, the Red Book's Mini-Assembler listing's name for $FC1A, joins the Monitor's `CursorUp`
   (`Also: CURSUP (A2RM78)`, in Monitor/Screen.asm and MonitorEntries.asm), as DOS's INSDS2 joined the Monitor's entry.

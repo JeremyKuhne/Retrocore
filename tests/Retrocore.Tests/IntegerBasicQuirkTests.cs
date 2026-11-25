@@ -18,12 +18,13 @@ public class IntegerBasicQuirkTests
     private static readonly string s_inputs = Path.Join(AppContext.BaseDirectory, "Inputs");
 
     /// <summary>
-    ///  <c>INPUT</c> of a number leaves the run flag set whatever it was, so in a line typed without a number (reached
-    ///  through <c>IF ... THEN</c>) the run loop takes the typed line for a program line: the program in memory does
-    ///  not run, and BASIC stops answering the keyboard (Statements::InputNumber in Messages.asm).
+    ///  <c>INPUT</c> of a number leaves the run flag set whatever it was, so after it in a line typed without a line
+    ///  number (reached through <c>IF ... THEN</c>), the run loop goes on as if a program were running, from the line
+    ///  after the last one a program ran (Statements::InputNumber in Messages.asm): here line 20 runs after line 10's
+    ///  <c>END</c>, and the program runs off its end.
     /// </summary>
     [TestMethod]
-    public void ImmediateInputOfANumberLeavesBasicInTheRunLoop()
+    public void ImmediateInputOfANumberGoesOnFromTheLastLineRun()
     {
         AssemblyResult basic = SdkModules.AssembleIntegerBasic(SdkModules.IntegerBasicPath(s_inputs));
         ushort running = (ushort)basic.SymbolsWithHistoricalNames["RUNFLAG"];
@@ -31,16 +32,13 @@ public class IntegerBasicQuirkTests
         machine.Run(cycles: 2_000_000);
         Screen(machine).Should().Contain(">");
 
-        Type(machine, "10 PRINT 111*3\r");
-        machine.Bus.Peek(running).Should().Be(0, "BASIC is at its prompt, not running a program");
-        Type(machine, "PRINT 6*7\r");
-        Screen(machine).Should().Contain("42", "BASIC answers a typed line before the INPUT");
+        Type(machine, "10 END\r20 PRINT 111*3\rRUN\r");
+        Screen(machine).Should().NotContain("333", "RUN stops at line 10's END");
+        (machine.Bus.Peek(running) & 0x80).Should().Be(0, "BASIC is at its prompt, not running a program");
+
         Type(machine, "IF 1 THEN INPUT A\r");
         Type(machine, "5\r");
-        machine.Bus.Peek(running).Should().Be(0xFF, "INPUT leaves the run flag set");
-
-        Type(machine, "PRINT 5*9\r");
-        Screen(machine).Should().NotContain("333", "the program does not run").And.NotContain("PRINT 5*9", "keys go unanswered");
+        Screen(machine).Should().Contain("333", "line 20 runs").And.Contain("*** NO END ERR", "the program runs off its end");
     }
 
     private static void Type(Apple2Machine machine, string keys)

@@ -382,8 +382,9 @@ RULE_NAME_REST = $1C
 ;; Rule 29: a character of a name after the first: a letter or a digit, unless a reserved word starts there.
 ;;
 ;; A reserved word matches with a token of $85 or above, which the tokenizer treats as a failure
-;; (<Tokenizer::WriteKeywordToken>). > THEN ($85) | TO ($86) | STEP ($87) | AND ($88) | OR ($89) | MOD ($8A) | AT ($8B),
-;; which fail > LETTER
+;; (<Tokenizer::WriteKeywordToken>).
+;; > THEN ($85) | TO ($86) | STEP ($87) | AND ($88) | OR ($89) | MOD ($8A) | AT ($8B), which fail
+;; > LETTER
 ;; > digit
 ;; Also: SNAMECH (UNKN)
 RULE_NAME_CHARACTER = $1D

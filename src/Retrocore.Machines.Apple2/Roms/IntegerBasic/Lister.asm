@@ -333,7 +333,7 @@ KeywordStart:
     bne CountKeywords               ; not this keyword yet
     bit Pointer2
     bmi PrintKeyword                ; a blank came last: no other before the keyword
-    jsr Lister::BlankBeforeKeyword                    ; a blank before a keyword starting with a letter
+    jsr Lister::BlankBeforeKeyword  ; a blank before a keyword starting with a letter
 
     ; Print the keyword's characters, down the page, through the one with bit 6 set.
 PrintKeyword:

@@ -81,18 +81,8 @@ BANKMAILBOX = 0                     ;; the card's page zero, and this code at $C
 BANKSAVE = 2                        ;; the busy flag and saved page zero
 
 ; The card's commands.
-CMDBOOT = $0C                       ;; reads the boot block into the window
-CMDDIAGNOSTICS = $3D                ;; loads the diagnostics' code at $CC00
-CMDNOTIIGS = $7E                    ;; the host is not a IIgs
-CMDIIGS = $7F                       ;; the host is a IIgs
 
 ; SmartPort's errors that the host names.
-BADCMD = $01
-BADPCNT = $04
-NODRIVE = $28
-NOWRITE = $2B
-IOERROR = $27
-OFFLINE = $2F
 NEVERREADY = $30                    ;; the card did not answer: not a SmartPort error, only the boot's
 
 DIAGENTRY = $CC00                   ;; the diagnostics' code, once the card has put it in place of this
@@ -256,7 +246,7 @@ CALL_Bank:
     cmp #$0C
     bcc CALL_Dispatch
 CALL_BadCommand:
-    lda #BADCMD
+    lda #ERROR_BAD_COMMAND
     bne CALL_Return                 ; always
     lda #$11                        ; no code reaches this
     bne CALL_Return
@@ -348,12 +338,12 @@ IDENTIFY_Toggle:
     sec
     jsr IDROUTINE
     bcs IDENTIFY_NotIIgs
-    lda #CMDIIGS
+    lda #COMMAND_IIGS
     bne IDENTIFY_Tell               ; always
 IDENTIFY_Not:
     pla
 IDENTIFY_NotIIgs:
-    lda #CMDNOTIIGS
+    lda #COMMAND_NOT_IIGS
 IDENTIFY_Tell:
     bit MBSTATE
     bpl IDENTIFY_Tell
@@ -514,7 +504,7 @@ BOOT_Read:
     sta MBUNIT
     lda #$81                        ; a ProDOS read, so errors are ProDOS's
     sta SPCOMMAND
-    lda #CMDBOOT
+    lda #COMMAND_BOOT
     sta MBSTATE
     lda #>$0800
     sta SPBUFFER+1
@@ -558,18 +548,18 @@ MAPERROR:
     bpl MAPERROR_Done
     cmp #0
     beq MAPERROR_Done
-    cmp #NOWRITE
+    cmp #ERROR_WRITE_PROTECTED
     beq MAPERROR_Done
-    cmp #NODRIVE
+    cmp #ERROR_NO_DRIVE
     beq MAPERROR_Done
-    cmp #OFFLINE
+    cmp #ERROR_OFFLINE
     beq MAPERROR_Done
     cmp #$11
     bne MAPERROR_IO
-    lda #NODRIVE
+    lda #ERROR_NO_DRIVE
     rts
 MAPERROR_IO:
-    lda #IOERROR
+    lda #ERROR_IO
 MAPERROR_Done:
     rts
 
@@ -579,10 +569,10 @@ MAPERROR_Done:
 PRODOSERROR:
     cpy #$10
     beq PRODOSERROR_Done
-    lda #NOWRITE
+    lda #ERROR_WRITE_PROTECTED
     cpy #$14
     beq PRODOSERROR_Set
-    lda #OFFLINE
+    lda #ERROR_OFFLINE
 PRODOSERROR_Set:
     sta MBERROR
 PRODOSERROR_Done:
@@ -592,7 +582,7 @@ PRODOSERROR_Done:
 
 ;; Gives a call the wrong parameter count's error.
 BADCOUNT:
-    lda #BADPCNT
+    lda #ERROR_BAD_PARAMETER_COUNT
     sta SPRESULT
     rts
 
@@ -1182,7 +1172,7 @@ ASKDIAG:
 ASKDIAG_Wait:
     bit MBSTATE
     bpl ASKDIAG_Wait
-    lda #CMDDIAGNOSTICS
+    lda #COMMAND_DIAGNOSTICS
     sta MBSTATE
     lda #0
     rts

@@ -1,4 +1,4 @@
-;; THE CARD'S SELF-TESTS ($8F00-$99FF): THE START-UP TEST AND THE DIAGNOSTICS' CARD SIDE
+;; THE CARD'S SELF-TESTS ($8F00-$99FF): THE START-UP TEST AND THE DIAGNOSTICS' CARD Side
 ;;
 ;; TestStartUp ($9649) runs at every reset, from the main firmware's reset at $D11D:
 ;;   1. copies the slot page's first 35 bytes ($Cn00-$Cn22) from the EPROM, so the host sees the SmartPort
@@ -11,7 +11,7 @@
 ;; Then it turns the LED off and goes on to the main firmware's start-up at $D129. On a failure it makes every entry
 ;; of the slot page jump to the Monitor, clears the SmartPort signature and blinks the LED for ever.
 ;;
-;; TestDiagnostics ($8F00) runs when the host sends command $3D (CMDDIAGNOSTICS). It tests page zero, puts the
+;; TestDiagnostics ($8F00) runs when the host sends command $3D (COMMAND_DIAGNOSTICS). It tests page zero, puts the
 ;; diagnostics' page zero and host code in place, sends the host to DiagStart and reports to it, through $0002,
 ;; each of: the slot page ("Card pseudoROM"), the EPROM's CRCs, its checksum, the SWIM and the RAM. Then it leaves a
 ;; sum of its RAM for the host to check ("Host/Card shared data"), finds its units, and, only with Apple's factory
@@ -74,12 +74,12 @@ TEST_DiagZeroPage = DiagnosticsImage+$0600 ;; the card's page zero for the diagn
 .assert TEST_DiagZeroPage == $8E00
 
 ; The slot page's bytes the tests change.
-TEST_SlotSignature = SHARED_SLOTPAGE+5 ;; $Cn05, the SmartPort signature's $03
-TEST_BootWait = SHARED_SLOTPAGE+<BOOTWAIT+1 ;; BOOTWAIT's offset ($7B0C)
-TEST_DiagWait = SHARED_SLOTPAGE+<DIAGWAIT_Loop+1 ;; DIAGWAIT's offset ($7B18)
-TEST_CallWait = SHARED_SLOTPAGE+<CALLWAIT_Loop+1 ;; CALLWAIT's offset ($7B22)
-TEST_SlotDiag = SHARED_SLOTPAGE+<DIAG ;; $Cn0D, where a released BOOTWAIT goes
-TEST_SlotCall = SHARED_SLOTPAGE+<CALL ;; $Cn23, where a released CALLWAIT goes
+TEST_SlotSignature = SharedSlotPage+5 ;; $Cn05, the SmartPort signature's $03
+TEST_BootWait = SharedSlotPage+<BOOTWAIT+1 ;; BOOTWAIT's offset ($7B0C)
+TEST_DiagWait = SharedSlotPage+<DIAGWAIT_Loop+1 ;; DIAGWAIT's offset ($7B18)
+TEST_CallWait = SharedSlotPage+<CALLWAIT_Loop+1 ;; CALLWAIT's offset ($7B22)
+TEST_SlotDiag = SharedSlotPage+<DIAG ;; $Cn0D, where a released BOOTWAIT goes
+TEST_SlotCall = SharedSlotPage+<CALL ;; $Cn23, where a released CALLWAIT goes
 .assert TEST_BootWait == $7B0C && TEST_DiagWait == $7B18 && TEST_CallWait == $7B22
 
 TEST_WAITING = $FE                  ;; a branch offset that waits on itself
@@ -264,13 +264,13 @@ TestDiagnostics_SwimOk:
 TestCardRam:
     TestFirstPattern
 TestCardRam_Word:
-    lda #>IWM_PH0L
+    lda #>Iwm::Phase0Off
     cmp TEST_RamPointer+1
     bne TestCardRam_NotIo
-    lda #>IWM_PH0L+1
+    lda #>Iwm::Phase0Off+1
     sta TEST_RamPointer+1
 TestCardRam_NotIo:
-    lda #>SHARED_SLOTPAGE
+    lda #>SharedSlotPage
     cmp TEST_RamPointer+1
     beq TestCardRam_Check
     lda TEST_Pattern
@@ -286,13 +286,13 @@ TestCardRam_Step:
 TestCardRam_Check:
     TestFirstPattern
 TestCardRam_CheckWord:
-    lda #>IWM_PH0L
+    lda #>Iwm::Phase0Off
     cmp TEST_RamPointer+1
     bne TestCardRam_CheckNotIo
-    lda #>IWM_PH0L+1
+    lda #>Iwm::Phase0Off+1
     sta TEST_RamPointer+1
 TestCardRam_CheckNotIo:
-    lda #>SHARED_SLOTPAGE
+    lda #>SharedSlotPage
     cmp TEST_RamPointer+1
     beq TestCardRam_Inverse
     lda TEST_Pattern
@@ -314,13 +314,13 @@ TestCardRam_CheckStep:
 TestCardRam_Inverse:
     TestFirstPattern
 TestCardRam_InverseWord:
-    lda #>IWM_PH0L
+    lda #>Iwm::Phase0Off
     cmp TEST_RamPointer+1
     bne TestCardRam_InverseNotIo
-    lda #>IWM_PH0L+1
+    lda #>Iwm::Phase0Off+1
     sta TEST_RamPointer+1
 TestCardRam_InverseNotIo:
-    lda #>SHARED_SLOTPAGE
+    lda #>SharedSlotPage
     cmp TEST_RamPointer+1
     beq TestCardRam_CheckInverse
     lda TEST_Pattern
@@ -338,13 +338,13 @@ TestCardRam_InverseStep:
 TestCardRam_CheckInverse:
     TestFirstPattern
 TestCardRam_CheckInverseWord:
-    lda #>IWM_PH0L
+    lda #>Iwm::Phase0Off
     cmp TEST_RamPointer+1
     bne TestCardRam_CheckInverseNotIo
-    lda #>IWM_PH0L+1
+    lda #>Iwm::Phase0Off+1
     sta TEST_RamPointer+1
 TestCardRam_CheckInverseNotIo:
-    lda #>SHARED_SLOTPAGE
+    lda #>SharedSlotPage
     cmp TEST_RamPointer+1
     beq TestSharedData
     lda TEST_Pattern
@@ -410,7 +410,7 @@ TestSharedData_AddBanks:
     ldx #$40
     cpx TEST_SumPointer+1
     bne TestSharedData_AddBanks
-    ldx #>SHARED_EXPANSION
+    ldx #>SharedExpansion
     stx TEST_SumPointer+1
 TestSharedData_AddExpansion:
     clc
@@ -435,7 +435,7 @@ TestSharedData_AddPageB:
     adc (TEST_SumPointer),y
     iny
     bne TestSharedData_AddPageB
-    ldx #>SHARED_SLOTPAGE
+    ldx #>SharedSlotPage
     stx TEST_SumPointer+1
 TestSharedData_AddSlot:
     clc
@@ -513,7 +513,7 @@ TestUnit:
     bcs TestUnit_Failed
     jsr TestReadBlock
     stz TEST_Signal                 ; done
-    lda IWM_MTROFF
+    lda Iwm::MotorOff
     jsr TestAwaitHost
     rts
 TestUnit_Failed:
@@ -523,7 +523,7 @@ TestUnit_Failed:
     sta TEST_FailedBlock+1
     lda #TEST_RWFAILED
     sta TEST_Signal
-    lda IWM_MTROFF
+    lda Iwm::MotorOff
     jmp TestIdle
 
 ;; Writes the block the host's byte chooses (twice the byte, plus its bit 0: 0-511) from the last buffer, and keeps
@@ -661,7 +661,7 @@ TestIdle:
     sty TEST_RamPointer
     sty TEST_RamPointer+1
 TestIdle_Byte:
-    lda #>IWM_PH0L
+    lda #>Iwm::Phase0Off
     cmp TEST_RamPointer+1
     bne TestIdle_Read
     tya
@@ -684,7 +684,7 @@ TestIdle_Next:
 TestRestart:
     lda #0
     sta TEST_Signal
-    sta LEDON
+    sta LedOn
     nop
     nop
     nop
@@ -722,85 +722,85 @@ TestReportPass_Wait:
 ;; walking one and a walking zero. Then as the IWM again.
 ;; Out: carry = set on a failure
 TestSwim:
-    bit IWM_Q7L
-    bit IWM_Q6L
-    bit IWM_PH0L
-    bit IWM_PH1L
-    bit IWM_PH2L
-    bit IWM_PH3L
-    bit IWM_MTROFF
-    lda IWM_Q7L                     ; Q6 and Q7 low: the data register
+    bit Iwm::ReadMode
+    bit Iwm::DataLatch
+    bit Iwm::Phase0Off
+    bit Iwm::Phase1Off
+    bit Iwm::Phase2Off
+    bit Iwm::Phase3Off
+    bit Iwm::MotorOff
+    lda Iwm::ReadMode                     ; Q6 and Q7 low: the data register
     cmp #$FF
     beq TestSwim_DataOk
     sec
     rts
 TestSwim_DataOk:
     lda #$1F
-    bit IWM_Q6H
-    sta IWM_Q7H                     ; Q6 and Q7 high: writes the mode
-    eor IWM_Q7L                     ; Q6 high: reads the status, the mode in its low five bits
+    bit Iwm::LoadLatch
+    sta Iwm::WriteMode                     ; Q6 and Q7 high: writes the mode
+    eor Iwm::ReadMode                     ; Q6 high: reads the status, the mode in its low five bits
     and #$1F
     beq TestSwim_Mode1F
     sec
     rts
 TestSwim_Mode1F:
     lda #$00
-    sta IWM_Q7H
-    eor IWM_Q7L
+    sta Iwm::WriteMode
+    eor Iwm::ReadMode
     and #$1F
     beq TestSwim_Mode00
     sec
     rts
 TestSwim_Mode00:
     lda #$0F
-    bit IWM_Q6H
-    sta IWM_Q7H
-    eor IWM_Q7L
+    bit Iwm::LoadLatch
+    sta Iwm::WriteMode
+    eor Iwm::ReadMode
     and #$1F
     beq TestSwim_Mode0F
     sec
     rts
 TestSwim_Mode0F:
     lda #$4F                        ; bit 6 written 1, 0, 1, 1: the ISM
-    bit IWM_Q6H
-    sta IWM_Q7H
+    bit Iwm::LoadLatch
+    sta Iwm::WriteMode
     eor #$40
-    sta IWM_Q7H
+    sta Iwm::WriteMode
     eor #$40
-    sta IWM_Q7H
-    sta IWM_Q7H
+    sta Iwm::WriteMode
+    sta Iwm::WriteMode
     lda #5
 TestSwim_Settle:
     dec a
     bne TestSwim_Settle
-    lda ISM_rPhase
+    lda Ism::ReadPhase
     cmp #$F0
     bne TestSwim_Failed
-    lda ISM_rStatus
+    lda Ism::ReadMode
     and #$C0
     cmp #$40
     bne TestSwim_Failed
-    stz ISM_wZeroes                 ; clears nothing, but starts the parameters again
+    stz Ism::ClearMode                 ; clears nothing, but starts the parameters again
     lda #$01
 TestSwim_WriteOne:
-    sta ISM_wParams
+    sta Ism::WriteParameter
     asl a
     bcc TestSwim_WriteOne
     lda #$FE
 TestSwim_WriteZero:
-    sta ISM_wParams
+    sta Ism::WriteParameter
     rol a
     bcs TestSwim_WriteZero
-    stz ISM_wZeroes
+    stz Ism::ClearMode
     lda #$01
 TestSwim_ReadOne:
-    cmp ISM_rParams
+    cmp Ism::ReadParameter
     bne TestSwim_Failed
     asl a
     bcc TestSwim_ReadOne
     lda #$FE
 TestSwim_ReadZero:
-    cmp ISM_rParams
+    cmp Ism::ReadParameter
     bne TestSwim_Failed
     sec
     rol a
@@ -811,41 +811,41 @@ TestSwim_Failed:
     rts
 TestSwim_Iwm:
     lda #$F8                        ; clears bit 6: the IWM again
-    sta ISM_wZeroes
-    bit IWM_Q7L
-    bit IWM_Q6L
-    bit IWM_PH0L
-    bit IWM_PH1L
-    bit IWM_PH2L
-    bit IWM_PH3L
-    bit IWM_MTROFF
-    lda IWM_Q7L
+    sta Ism::ClearMode
+    bit Iwm::ReadMode
+    bit Iwm::DataLatch
+    bit Iwm::Phase0Off
+    bit Iwm::Phase1Off
+    bit Iwm::Phase2Off
+    bit Iwm::Phase3Off
+    bit Iwm::MotorOff
+    lda Iwm::ReadMode
     cmp #$FF
     beq TestSwim_AgainDataOk
     sec
     rts
 TestSwim_AgainDataOk:
     lda #$1F
-    bit IWM_Q6H
-    sta IWM_Q7H
-    eor IWM_Q7L
+    bit Iwm::LoadLatch
+    sta Iwm::WriteMode
+    eor Iwm::ReadMode
     and #$1F
     beq TestSwim_AgainMode1F
     sec
     rts
 TestSwim_AgainMode1F:
     lda #$00
-    sta IWM_Q7H
-    eor IWM_Q7L
+    sta Iwm::WriteMode
+    eor Iwm::ReadMode
     and #$1F
     beq TestSwim_AgainMode00
     sec
     rts
 TestSwim_AgainMode00:
     lda #$0F
-    bit IWM_Q6H
-    sta IWM_Q7H
-    eor IWM_Q7L
+    bit Iwm::LoadLatch
+    sta Iwm::WriteMode
+    eor Iwm::ReadMode
     and #$1F
     bne TestSwim_AgainFailed
     clc
@@ -979,7 +979,7 @@ TestVerifySlotPage_Byte:
 TestVerifySlotPage_Image:
     lda SlotPageImage,x
 TestVerifySlotPage_Compare:
-    cmp SHARED_SLOTPAGE,x
+    cmp SharedSlotPage,x
     bne TestVerifySlotPage_Failed
     dex
     bne TestVerifySlotPage_Byte
@@ -995,22 +995,22 @@ TestCopyExpansion:
     ldx #0
 TestCopyExpansion_Page0:
     lda TEST_DiagExpansion,x
-    sta SHARED_EXPANSION,x
+    sta SharedExpansion,x
     dex
     bne TestCopyExpansion_Page0
 TestCopyExpansion_Page1:
     lda TEST_DiagExpansion+$0100,x
-    sta SHARED_EXPANSION+$0100,x
+    sta SharedExpansion+$0100,x
     dex
     bne TestCopyExpansion_Page1
 TestCopyExpansion_Page2:
     lda TEST_DiagExpansion+$0200,x
-    sta SHARED_EXPANSION+$0200,x
+    sta SharedExpansion+$0200,x
     dex
     bne TestCopyExpansion_Page2
 TestCopyExpansion_Page3:
     lda TEST_DiagExpansion+$0300,x
-    sta SHARED_EXPANSION+$0300,x
+    sta SharedExpansion+$0300,x
     dex
     bne TestCopyExpansion_Page3
     rts
@@ -1021,25 +1021,25 @@ TestVerifyExpansion:
     ldx #0
 TestVerifyExpansion_Page0:
     lda TEST_DiagExpansion,x
-    cmp SHARED_EXPANSION,x
+    cmp SharedExpansion,x
     bne TestVerifyExpansion_Failed
     dex
     bne TestVerifyExpansion_Page0
 TestVerifyExpansion_Page1:
     lda TEST_DiagExpansion+$0100,x
-    cmp SHARED_EXPANSION+$0100,x
+    cmp SharedExpansion+$0100,x
     bne TestVerifyExpansion_Failed
     dex
     bne TestVerifyExpansion_Page1
 TestVerifyExpansion_Page2:
     lda TEST_DiagExpansion+$0200,x
-    cmp SHARED_EXPANSION+$0200,x
+    cmp SharedExpansion+$0200,x
     bne TestVerifyExpansion_Failed
     dex
     bne TestVerifyExpansion_Page2
 TestVerifyExpansion_Page3:
     lda TEST_DiagExpansion+$0300,x
-    cmp SHARED_EXPANSION+$0300,x
+    cmp SharedExpansion+$0300,x
     bne TestVerifyExpansion_Failed
     dex
     bne TestVerifyExpansion_Page3
@@ -1082,7 +1082,7 @@ TestDiagnosticsFailed:
     lda #TEST_FAILED
     sta TEST_CardStatus
 TestDiagnosticsFailed_Blink:
-    sta LEDOFF
+    sta LedOff
     ldx #0                          ; off about 0.39 s (65536 times 12 cycles)
 TestDiagnosticsFailed_Off:
     lda #0
@@ -1094,7 +1094,7 @@ TestDiagnosticsFailed_OffWait:
     bne TestDiagnosticsFailed_OffWait
     dex
     bne TestDiagnosticsFailed_Off
-    sta LEDON
+    sta LedOn
     ldx #0                          ; on about 0.82 s (65536 times 25 cycles)
 TestDiagnosticsFailed_On:
     lda #0
@@ -1110,15 +1110,15 @@ TestDiagnosticsFailed_OnWait:
     bne TestDiagnosticsFailed_OnWait
     dex
     bne TestDiagnosticsFailed_On
-    sta LEDOFF
+    sta LedOff
     TestDelay $FF                   ; off about 0.26 s
-    sta LEDON
+    sta LedOn
     TestDelay $96                   ; on about 0.15 s
-    sta LEDOFF
+    sta LedOff
     TestDelay $FF
-    sta LEDON
+    sta LedOn
     TestDelay $96
-    sta LEDOFF
+    sta LedOff
     lda TEST_Signal
     cmp #TEST_EXIT
     bne TestDiagnosticsFailed_Blink
@@ -1133,7 +1133,7 @@ TestStartUp:
     ldy #<CALLWAIT_Loop+1           ; through CALLWAIT's offset
 TestStartUp_Slot:
     lda SlotPageImage,y
-    sta SHARED_SLOTPAGE,y
+    sta SharedSlotPage,y
     dey
     bpl TestStartUp_Slot
     stz TEST_RomPointer
@@ -1184,81 +1184,81 @@ TestStartUp_SumOk:
     beq TestStartUp_Swim
     jmp TestStartUpFailed
 TestStartUp_Swim:
-    bit IWM_Q7L
-    bit IWM_Q6L
-    bit IWM_PH0L
-    bit IWM_PH1L
-    bit IWM_PH2L
-    bit IWM_PH3L
-    bit IWM_MTROFF
-    lda IWM_Q7L
+    bit Iwm::ReadMode
+    bit Iwm::DataLatch
+    bit Iwm::Phase0Off
+    bit Iwm::Phase1Off
+    bit Iwm::Phase2Off
+    bit Iwm::Phase3Off
+    bit Iwm::MotorOff
+    lda Iwm::ReadMode
     cmp #$FF
     beq TestStartUp_DataOk
     jmp TestStartUpFailed
 TestStartUp_DataOk:
     lda #$1F
-    bit IWM_Q6H
-    sta IWM_Q7H
-    eor IWM_Q7L
+    bit Iwm::LoadLatch
+    sta Iwm::WriteMode
+    eor Iwm::ReadMode
     and #$1F
     beq TestStartUp_Mode1F
     jmp TestStartUpFailed
 TestStartUp_Mode1F:
     lda #$00
-    sta IWM_Q7H
-    eor IWM_Q7L
+    sta Iwm::WriteMode
+    eor Iwm::ReadMode
     and #$1F
     beq TestStartUp_Mode00
     jmp TestStartUpFailed
 TestStartUp_Mode00:
     lda #$0F
-    bit IWM_Q6H
-    sta IWM_Q7H
-    eor IWM_Q7L
+    bit Iwm::LoadLatch
+    sta Iwm::WriteMode
+    eor Iwm::ReadMode
     and #$1F
     beq TestStartUp_Mode0F
     jmp TestStartUpFailed
 TestStartUp_Mode0F:
     lda #$4F                        ; bit 6 written 1, 0, 1, 1: the ISM
-    bit IWM_Q6H
-    sta IWM_Q7H
+    bit Iwm::LoadLatch
+    sta Iwm::WriteMode
     eor #$40
-    sta IWM_Q7H
+    sta Iwm::WriteMode
     eor #$40
-    sta IWM_Q7H
-    sta IWM_Q7H
+    sta Iwm::WriteMode
+    sta Iwm::WriteMode
     lda #5
 TestStartUp_Settle:
     dec a
     bne TestStartUp_Settle
-    lda ISM_rPhase
+    lda Ism::ReadPhase
     cmp #$F0
     bne TestStartUp_SwimFailed
-    lda ISM_rStatus
+    lda Ism::ReadMode
     and #$C0
     cmp #$40
     bne TestStartUp_SwimFailed
-    stz ISM_wZeroes
+    stz Ism::ClearMode
     lda #$01
 TestStartUp_WriteOne:
-    sta ISM_wParams
+    sta Ism::WriteParameter
     asl a
     bcc TestStartUp_WriteOne
     lda #$FE
 TestStartUp_WriteZero:
-    sta ISM_wParams
+    sta Ism::WriteParameter
     rol a
     bcs TestStartUp_WriteZero
-    stz ISM_wZeroes
+    stz Ism::ClearMode
     lda #$01
 TestStartUp_ReadOne:
-    cmp ISM_rParams
+    cmp Ism::ReadParameter
     bne TestStartUp_SwimFailed
     asl a
     bcc TestStartUp_ReadOne
     lda #$FE
 TestStartUp_ReadZero:
-    cmp ISM_rParams
+    cmp Ism::ReadParameter
     bne TestStartUp_SwimFailed
     sec
     rol a
@@ -1268,38 +1268,38 @@ TestStartUp_SwimFailed:
     jmp TestStartUpFailed
 TestStartUp_Iwm:
     lda #$F8                        ; clears bit 6: the IWM again
-    sta ISM_wZeroes
-    bit IWM_Q7L
-    bit IWM_Q6L
-    bit IWM_PH0L
-    bit IWM_PH1L
-    bit IWM_PH2L
-    bit IWM_PH3L
-    bit IWM_MTROFF
-    lda IWM_Q7L
+    sta Ism::ClearMode
+    bit Iwm::ReadMode
+    bit Iwm::DataLatch
+    bit Iwm::Phase0Off
+    bit Iwm::Phase1Off
+    bit Iwm::Phase2Off
+    bit Iwm::Phase3Off
+    bit Iwm::MotorOff
+    lda Iwm::ReadMode
     cmp #$FF
     beq TestStartUp_AgainDataOk
     jmp TestStartUpFailed
 TestStartUp_AgainDataOk:
     lda #$1F
-    bit IWM_Q6H
-    sta IWM_Q7H
-    eor IWM_Q7L
+    bit Iwm::LoadLatch
+    sta Iwm::WriteMode
+    eor Iwm::ReadMode
     and #$1F
     beq TestStartUp_AgainMode1F
     jmp TestStartUpFailed
 TestStartUp_AgainMode1F:
     lda #$00
-    sta IWM_Q7H
-    eor IWM_Q7L
+    sta Iwm::WriteMode
+    eor Iwm::ReadMode
     and #$1F
     beq TestStartUp_AgainMode00
     jmp TestStartUpFailed
 TestStartUp_AgainMode00:
     lda #$0F
-    bit IWM_Q6H
-    sta IWM_Q7H
-    eor IWM_Q7L
+    bit Iwm::LoadLatch
+    sta Iwm::WriteMode
+    eor Iwm::ReadMode
     and #$1F
     beq TestStartUp_Ram
     jmp TestStartUpFailed
@@ -1436,7 +1436,7 @@ TestStartUp_Recheck4000:
     asl a
     cmp TEST_AddressCells+$4000
     bne TestStartUpFailed
-    sta LEDOFF
+    sta LedOff
     jmp TEST_CardStartUp
 
 ;; A failure of the start-up test: makes the slot page's start, its DIAG entry and its call jump to the host's
@@ -1445,26 +1445,26 @@ TestStartUp_Recheck4000:
 TestStartUpFailed:
     stz TEST_SlotSignature
     lda #$4C                        ; JMP
-    sta SHARED_SLOTPAGE
+    sta SharedSlotPage
     sta TEST_SlotDiag
     sta TEST_SlotCall
     lda #<TEST_OLDRST
-    sta SHARED_SLOTPAGE+1
+    sta SharedSlotPage+1
     sta TEST_SlotDiag+1
     sta TEST_SlotCall+1
     lda #>TEST_OLDRST
-    sta SHARED_SLOTPAGE+2
+    sta SharedSlotPage+2
     sta TEST_SlotDiag+2
     sta TEST_SlotCall+2
     stz TEST_BootWait
     stz TEST_CallWait
     ldx #<CALL+3
 TestStartUpFailed_Clear:
-    stz SHARED_SLOTPAGE,x
+    stz SharedSlotPage,x
     inx
     bne TestStartUpFailed_Clear
 TestStartUpFailed_Blink:
-    sta LEDOFF
+    sta LedOff
     ldx #0                          ; off about 0.39 s
 TestStartUpFailed_Off:
     lda #0
@@ -1476,7 +1476,7 @@ TestStartUpFailed_OffWait:
     bne TestStartUpFailed_OffWait
     dex
     bne TestStartUpFailed_Off
-    sta LEDON
+    sta LedOn
     ldx #0                          ; on about 0.82 s
 TestStartUpFailed_On:
     lda #0
@@ -1492,11 +1492,11 @@ TestStartUpFailed_OnWait:
     bne TestStartUpFailed_OnWait
     dex
     bne TestStartUpFailed_On
-    sta LEDOFF
+    sta LedOff
     TestDelay $FF                   ; off about 0.26 s
-    sta LEDON
+    sta LedOn
     TestDelay $96                   ; on about 0.15 s
-    sta LEDOFF
+    sta LedOff
     jmp TestStartUpFailed_Blink
 
 ;; TestDiagnostics's patterns for page zero's first six bytes, and their complements.

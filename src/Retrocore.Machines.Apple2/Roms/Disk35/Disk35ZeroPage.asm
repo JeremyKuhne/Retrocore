@@ -5,233 +5,442 @@
 ;; at $72-$8C are JMP instructions that the control calls can repoint and put back.
 
 .logicalorg $0000
-CARDSTATE:                        ;; bit 7 = the card waits for a command; the host writes the command here
+
+;; Bit 7 = the card waits for a command; the host writes the command here.
+CardState:
     .byte $FF
-CARDDATA:                         ;; the host writes $FF; the card's bit 7 = busy, 0 = done (no data), else bank*2+half of the data
+
+;; The host writes $FF; the card's bit 7 = busy, 0 = done (no data), else bank*2+half of the data.
+CardData:
     .byte $FF
-CARDCOMMAND:                      ;; the host's command byte: bit 7 = a ProDOS call, bit 6 = an extended call
+
+;; The host's command byte: bit 7 = a ProDOS call, bit 6 = an extended call.
+CardCommand:
     .byte $00
-CARDUNIT:                         ;; the unit number (0 = the controller)
+
+;; The unit number (0 = the controller).
+CardUnit:
     .byte $FF
-CARDPROGRESS:                     ;; the host's copy of a block being written, on a IIgs: $C0, $C1, $D0 done
+
+;; The host's copy of a block being written, on a IIgs: $C0, $C1, $D0 done.
+WriteProgress:
     .byte $00
-PARAMLO:                          ;; the status or control code, or the block number's low byte
+
+;; The status or control code, or the block number's low byte.
+ParameterLow:
     .byte $FF
-PARAMMID:                         ;; the block number's middle byte
+
+;; The block number's middle byte.
+ParameterMiddle:
     .byte $FF
-PARAMHI:                          ;; the block number's high byte
+
+;; The block number's high byte.
+ParameterHigh:
     .byte $00
-PARAM3:                           ;; the next parameter
+
+;; The next parameter.
+Parameter3:
     .byte $00
-PARAM4:                           ;; commands $0D/$0E: the extra blocks, low byte
+
+;; Commands $0D/$0E: the extra blocks, low byte.
+Parameter4:
     .byte $00
-PARAM5:                           ;; commands $0D/$0E: the extra blocks, high byte
+
+;; Commands $0D/$0E: the extra blocks, high byte.
+Parameter5:
     .byte $00
-COUNTLO:                          ;; the byte count of the list or data, both ways
+
+;; The byte count of the list or data, both ways.
+Count:
     .byte $00
-COUNTHI:
+
+CountHigh:
     .byte $00
-CURTRACK:                         ;; each drive's head position ($FF unknown; bit 6 = the second side's track, from a header)
+
+;; Each drive's head position ($FF unknown; bit 6 = the second side's track, from a header).
+CurrentTrack:
     .byte $FF, $FF
-SIDES:                            ;; each drive's disk: bit 7 = two sides
+
+;; Each drive's disk: bit 7 = two sides.
+DiskSides:
     .byte $80, $80
-FORMATBYTE:                       ;; each drive's last address field's format byte
+
+;; Each drive's last address field's format byte.
+LastFormatByte:
     .byte $00, $00
-SAVEDRIVE:                        ;; a drive or count kept across calls
+
+;; A drive or count kept across calls.
+SavedDrive:
     .byte $00
-TRACK:                            ;; the track to reach
+
+;; The track to reach.
+Track:
     .byte $FF
-SECTOR:                           ;; the sector to read
+
+;; The sector to read.
+Sector:
     .byte $FF
-SIDE:                             ;; the side: 0, or $20 for the second
+
+;; The side: 0, or $20 for the second.
+Side:
     .byte $FF
-HIGHBYTE:                         ;; the bus packet's high bits
+
+;; The bus packet's high bits.
+PacketHighBits:
     .byte $FF
-HIGHGROUP:                        ;; a 7-byte group's high bits, or the groups left
+
+;; A 7-byte group's high bits, or the groups left.
+GroupHighBits:
     .byte $FF
-PACKETTYPE:                       ;; the bus packet's type: $80 command, $82 data
+
+;; The bus packet's type: $80 command, $82 data.
+PacketType:
     .byte $FF
-SECTORS:                          ;; the sectors in the track
+
+;; The sectors in the track.
+SectorsPerTrack:
     .byte $00
-CYLINDER:                         ;; the track times 2, plus the side
+
+;; The track times 2, plus the side.
+Cylinder:
     .byte $FF
-SECTORCOUNT:                      ;; sectors left to read or write
+
+;; Sectors left to read or write.
+SectorCount:
     .byte $FF, $00
-HEADERSUM:                        ;; an address field's or packet's checksum
+
+;; An address field's or packet's checksum.
+HeaderChecksum:
     .byte $FF
-CHECKSUM0:                        ;; the GCR data checksums
+
+;; The GCR data checksums.
+Checksum0:
     .byte $00
-CHECKSUM1:
+
+Checksum1:
     .byte $00
-CHECKSUM2:
+
+Checksum2:
     .byte $00
-CHECKSUMNIB:                      ;; the checksums' high bits, packed
+
+;; The checksums' high bits, packed.
+ChecksumHighBits:
     .byte $00
-WORK0:                            ;; scratch
+
+;; Scratch.
+Work0:
     .byte $00
-WORK1:                            ;; scratch
+
+;; Scratch.
+Work1:
     .byte $00, $00, $00
-HDRCHECK:                         ;; the address field read: checksum
+
+;; The address field read: checksum.
+AddressChecksum:
     .byte $00
-HDRFORMAT:                        ;; format byte
+
+;; Format byte.
+AddressFormat:
     .byte $00
-HDRSIDE:                          ;; side bits
+
+;; Side bits.
+AddressSide:
     .byte $00
-HDRSECTOR:                        ;; sector
+
+;; Sector.
+AddressSector:
     .byte $00
-HDRTRACK:                         ;; track
+
+;; Track.
+AddressTrack:
     .byte $00
-SCRATCH:                          ;; scratch
+
+;; Scratch.
+Scratch:
     .byte $00
-BUFFERCODE:                       ;; the current buffer's code: its card address / $200
+
+;; The current buffer's code: its card address / $200.
+BufferCode:
     .byte $00
-CACHESLOT:                        ;; the current cache slot (0 = none)
+
+;; The current cache slot (0 = none).
+CacheSlot:
     .byte $00
-DRIVE:                            ;; the unit less one: 0-1 the 3.5 drives, more a bus device, $FF the controller
+
+;; The unit less one: 0-1 the 3.5 drives, more a bus device, $FF the controller.
+Drive:
     .byte $00
-WAITCOUNT:                        ;; WAITREADY's counter
+
+;; WAITREADY's counter.
+WaitCount:
     .byte $00, $00
-FIRSTBUSUNIT:                     ;; the first SmartPort bus device's unit, or 0
+
+;; The first SmartPort bus device's unit, or 0.
+FirstBusUnit:
     .byte $00
-UNITCOUNT:                        ;; the units, 3.5 drives and bus devices
+
+;; The units, 3.5 drives and bus devices.
+UnitCount:
     .byte $00
-DEVICEKIND:                       ;; each unit's device: 1 Apple 3.5, 3 FDHD, $80 a bus device, 0 none
+
+;; Each unit's device: 1 Apple 3.5, 3 FDHD, $80 a bus device, 0 none.
+DeviceKinds:
     .byte $00, $00, $00, $00
-SPANFIRST:                        ;; READSPAN's first sector
+
+;; READSPAN's first sector.
+SpanFirst:
     .byte $00
-SPANCYLINDER:                     ;; READSPAN's cylinder
+
+;; READSPAN's cylinder.
+SpanCylinder:
     .byte $00
-MEDIAMODE:                        ;; each drive's disk: $11 GCR, $32 MFM 720K, $52 MFM 1440K; bits 5-6 = MFM
+
+;; Each drive's disk: $11 GCR, $32 MFM 720K, $52 MFM 1440K; bits 5-6 = MFM.
+MediaMode:
     .byte $00, $00, $00, $00, $00
-OLDSENSE:                         ;; the sense lines before the last READSENSE
+
+;; The sense lines before the last READSENSE.
+PreviousSense:
     .byte $00
-MEDIAKIND:                        ;; each drive's disk: 0 unknown, 2 400K, 4 800K, 6 800K (2:1), 8 720K, $0A 1440K
+
+;; Each drive's disk: 0 unknown, 2 400K, 4 800K, 6 800K (2:1), 8 720K, $0A 1440K.
+MediaKind:
     .byte $00, $00
-BLOCKSLO:                         ;; each drive's block count, low bytes
+
+;; Each drive's block count, low bytes.
+BlockCount:
     .byte $00, $00
-BLOCKSHI:                         ;; and high bytes
+
+;; And high bytes.
+BlockCountHigh:
     .byte $00, $00
-SENSE:                            ;; each drive's sense lines: 7 switched, 6 no disk, 5 protected, 4 one side only, 0 motor has had its full start
+
+;; Each drive's sense lines: 7 switched, 6 no disk, 5 protected, 4 one side only, 0 motor has had its full start.
+Sense:
     .byte $00, $00
-FORMATKIND:                       ;; each drive's format for the next FORMAT (0 = the default)
+
+;; Each drive's format for the next FORMAT (0 = the default).
+FormatKind:
     .byte $00, $00
-FORMATSKEW:                       ;; each drive's interleave for the next FORMAT
+
+;; Each drive's interleave for the next FORMAT.
+FormatInterleave:
     .byte $00, $00
-PACKET:                           ;; the bus command packet: command, parameter count, parameters
+
+;; The bus command packet: command, parameter count, parameters.
+CommandPacket:
     .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
-ERRORCODE:                        ;; the result the host reads
+
+;; The result the host reads.
+ErrorCode:
     .byte $00
-DISKERRORS:                       ;; what went wrong on the disk or the bus
+
+;; What went wrong on the disk or the bus.
+DiskErrors:
     .byte $00
-RETRIES:                          ;; retries left; CTLPEEK's byte
+
+;; Retries left; CTLPEEK's byte.
+Retries:
     .byte $00
-RESULTA:                          ;; CTLEXECUTE's A; also counts errors
+
+;; CTLEXECUTE's A; also counts errors.
+ResultA:
     .byte $00
-RESULTX:                          ;; CTLEXECUTE's X; also counts errors
+
+;; CTLEXECUTE's X; also counts errors.
+ResultX:
     .byte $00
-RESULTY:                          ;; CTLEXECUTE's Y; also a retry count
+
+;; CTLEXECUTE's Y; also a retry count.
+ResultY:
     .byte $00
-RESULTP:                          ;; CTLEXECUTE's P; also a seek count
+
+;; CTLEXECUTE's P; also a seek count.
+ResultStatus:
     .byte $00
-SECTORTRIES:                      ;; address fields left to look at
+
+;; Address fields left to look at.
+SectorTries:
     .byte $00
-TAGERROR:                         ;; $21 when a tagged call meets an MFM disk
+
+;; $21 when a tagged call meets an MFM disk.
+TagError:
     .byte $00
-CACHEOPTION:                      ;; control $0F's bit 7
+
+;; Control $0F's bit 7.
+CacheOption:
     .byte $00
-READOPTION:                       ;; a read's state: 7 the cache full, 6 the block handed over
+
+;; A read's state: 7 the cache full, 6 the block handed over.
+ReadState:
     .byte $00
-TAGCALL:                          ;; negative during READWRITE
+
+;; Negative during READWRITE.
+TagCall:
     .byte $00
-SKEW:                             ;; the interleave for FORMAT
+
+;; The interleave for FORMAT.
+Interleave:
     .byte $04
-TWOSIDED:                         ;; bit 7 = FORMAT writes both sides
+
+;; Bit 7 = FORMAT writes both sides.
+TwoSided:
     .byte $80
-USERPOINTER:                      ;; the address for the control calls
+
+;; The address for the control calls.
+UserPointer:
     .byte $00, $05
-NIBBLEHIGH:                       ;; a GCR write's high bits
+
+;; A GCR write's high bits.
+NibbleHighBits:
     .byte $00
-NIBBLE0:                          ;; the bytes being nibblized
+
+;; The bytes being nibblized.
+Nibble0:
     .byte $00
-NIBBLE1:
+
+Nibble1:
     .byte $00
-NIBBLE2:
+
+Nibble2:
     .byte $00
-SETUPCOPY:                        ;; the ISM setup register's value
+
+;; The ISM setup register's value.
+SetupCopy:
     .byte $00
-READING:                          ;; $80 while a read is in progress
+
+;; $80 while a read is in progress.
+Reading:
     .byte $00
-BUSCOUNT:                         ;; a bus packet's byte count
+
+;; A bus packet's byte count.
+BusCount:
     .byte $00, $00
-NIBBLESTART:                      ;; where PREPAREDATA starts
+
+;; Where PREPAREDATA starts.
+NibbleStart:
     .byte $00
-EJECTDRIVE:                       ;; the drive being ejected; bit 7 = none
+
+;; The drive being ejected; bit 7 = none.
+EjectDrive:
     .byte $80
-VECTORLENGTH:                     ;; the vectors' length, for CTLRESETVECTORS
+
+;; The vectors' length, for CTLRESETVECTORS.
+VectorLength:
     .byte $1B, $00
 ;; the vectors, JMP instructions the control calls can change
-VECTORS:
-VECREADADDRESS:
-    jmp READADDRESSGCR
-VECREADDATA:
-    jmp READDATAGCR
-VECWRITEDATA:
-    jmp WRITEDATAGCR
-VECSEEK:
-    jmp SEEKTRACK
-VECFORMAT:
-    jmp FORMATDISK
-VECWRITETRACK:
-    jmp WRITETRACKGCR
-VECVERIFY:
-    jmp VERIFYTRACKGCR
-VECCOMMAND:
-    jmp DOCOMMAND
-VECINIT:
-    jmp INITCARD
-MARKS:                            ;; the GCR marks and sync bytes
+Vectors:
+ReadAddressVector:
+    jmp ReadGcrAddressField
+
+ReadDataVector:
+    jmp ReadGcrDataField
+
+WriteDataVector:
+    jmp WriteGcrDataField
+
+SeekVector:
+    jmp SeekTrack
+
+FormatVector:
+    jmp FormatDisk
+
+WriteTrackVector:
+    jmp WriteGcrTrack
+
+VerifyVector:
+    jmp VerifyGcrTrack
+
+CommandVector:
+    jmp RunCommand
+
+InitializeVector:
+    jmp InitializeCard
+
+;; The GCR marks and sync bytes.
+Marks:
     .byte $FF
-DATAMARK:                         ;; the data field's mark, last byte first: D5 AA AD
+
+;; The data field's mark, last byte first: D5 AA AD.
+DataMark:
     .byte $AD, $AA, $D5, $FF
-SYNCBYTES:                        ;; a self-sync group, last byte first
+
+;; A self-sync group, last byte first.
+SyncBytes:
     .byte $FC, $F3, $CF, $3F, $FF
-EPILOGUE:                         ;; the fields' end, last byte first: DE AA
+
+;; The fields' end, last byte first: DE AA.
+Epilogue:
     .byte $FF, $AA, $DE, $FF, $FF, $FF, $FF, $FF
-ADDRESSMARK:                      ;; the address field's mark, last byte first: D5 AA 96
+
+;; The address field's mark, last byte first: D5 AA 96.
+AddressMark:
     .byte $96, $AA, $D5, $FF
-PACKETIN:                         ;; a received bus packet's header
+
+;; A received bus packet's header.
+PacketHeader:
     .byte $00
-GROUPS:                           ;; a bus packet's 7-byte groups
+
+;; A bus packet's 7-byte groups.
+Groups:
     .byte $00
-ODDBYTES:                         ;; and its other bytes
+
+;; And its other bytes.
+OddBytes:
     .byte $00
-BUSRESULT:                        ;; the bus device's result
+
+;; The bus device's result.
+BusResult:
     .byte $00, $00, $00, $00, $00
-BUFPTR:                           ;; the first half of the buffer
+
+;; The first half of the buffer.
+BufferPointer:
     .byte $00, $00
-WORKPTR:                          ;; a pointer, or a timer
+
+;; A pointer, or a timer.
+WorkPointer:
     .byte $00, $00
-BUFPTR2:                          ;; the second half of the buffer
+
+;; The second half of the buffer.
+SecondBufferPointer:
     .byte $00, $00
-SPANLOW:                          ;; the sectors wanted: first
+
+;; The sectors wanted: first.
+SpanStart:
     .byte $00
-SPANHIGH:                         ;; and past the last
+
+;; And past the last.
+SpanEnd:
     .byte $00, $00
-SWIMSTATE:                        ;; bit 7 = the disk is MFM, bit 6 = the SWIM is in ISM mode
+
+;; Bit 7 = the disk is MFM, bit 6 = the SWIM is in ISM mode.
+SwimState:
     .byte $00
-UNITHIGHBIT:                      ;; the unit with bit 7, for an extended unit-0-style status
+
+;; The unit with bit 7, for an extended unit-0-style status.
+UnitWithHighBit:
     .byte $00
-MFMGAP:                           ;; the MFM format's gap length
+
+;; The MFM format's gap length.
+MfmGap:
     .byte $00, $00, $00
-TESTCALL:                         ;; negative when the self-test calls a command
+
+;; Negative when the self-test calls a command.
+TestCall:
     .byte $00
-FORMATHOOK:                       ;; a routine FORMAT calls for an Apple 3.5 drive
+
+;; A routine FORMAT calls for an Apple 3.5 drive.
+FormatHook:
     .byte $00, $00
-SIGNATURE:                        ;; the warm-start signature
+
+;; The warm-start signature.
+WarmSignature:
     .byte $4A, $CF, $41, $55, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
     .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
     .byte $00, $00, $00, $00
-LASTCOMMAND:                      ;; the last command: CARDSTATE, CARDCOMMAND, CARDUNIT, PARAMLO, PARAMMID
+
+;; The last command: CardState, CardCommand, CardUnit, ParameterLow, ParameterMiddle.
+LastCommand:
     .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
     .byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
 .logicalorg

@@ -1,6 +1,6 @@
-;; THE BUILT-IN DIAGNOSTICS: THE HOST'S SIDE ($8800-$8DFF) AND THE CARD'S PAGE ZERO FOR THEM ($8E00-$8EFF)
+;; THE BUILT-IN DIAGNOSTICS: THE HOST'S Side ($8800-$8DFF) AND THE CARD'S PAGE ZERO FOR THEM ($8E00-$8EFF)
 ;;
-;; The diagnostics start when the host sends the card command $3D (CMDDIAGNOSTICS): Cn0DG from the Monitor, or three
+;; The diagnostics start when the host sends the card command $3D (COMMAND_DIAGNOSTICS): Cn0DG from the Monitor, or three
 ;; Control-Ds while the card boots. The card then runs TestDiagnostics ($8F00), which copies $8A00-$8DFF over the
 ;; host's usual code at its $7C00-$7FFF, zeroes the slot page's DIAGWAIT branch, and so sends the host to $CC00
 ;; (DiagStart). Later it copies $8800-$89FF to its $0200-$03FF, which the host sees at $CA00-$CBFF with bank 0

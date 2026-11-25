@@ -92,7 +92,9 @@ Convert a routine or two at a time, assembling and comparing every build after e
 - **Lint**: `; retrocore: style=strict` on each converted file, and the editor's lint clean
   (`SdkDocumentationTests`).
 - **Contracts**: run the machine in the debugger with contract checking on and exercise the code (each model),
-  so a wrong `Keeps:` is caught; byte identity proves nothing about a comment.
+  so a wrong `Keeps:` is caught; byte identity proves nothing about a comment. Routine tests cover what the run
+  doesn't reach ([Checks that make a conversion safe](#checks-that-make-a-conversion-safe)).
+- **Names and comments**: the module comparisons, the rename gate and the scripted checks, in the same section.
 - **Everything else**: the full test suite, and every source that includes or names the converted one.
 
 ## Naming rules learned so far
@@ -143,21 +145,132 @@ These held across the Monitor, IIeEquates, the IIe firmware and DOS; the logs sa
   Everything else is in a family scope, even a routine programs call by address (`LowRes::Plot`).
 - **A family spread through a ROM is one scope in pieces**: `.scope X`, then `.scope X continued` for each later
   piece, with a plain `;` comment saying which part.
-- **Builds that differ mid-routine** keep one routine with `.if`s inside it, so the source shows how each version
-  changed the one before; repeating the unchanged lines in a `.proc` per build hides that. A routine that differs
-  throughout is a `.proc` per build, each with its own contract. A routine with `.if`s inside it states the
-  contract that holds in every build, and its prose says what a build does differently
-  ([the alignment plan](backlog/ConversionAlignment.md), D5).
+- **Builds that differ mid-routine** keep one routine with `.if`s inside it, on a named switch (`ENHANCED`,
+  `MONITOR = MONITOR_IIE`, a macro's `bitwiseNot`), so the source shows how each version changed the one before;
+  repeating the unchanged lines in a `.proc` per build hides that. Where the switch alone doesn't say which builds
+  take which branch, a comment names them. A routine that differs throughout is a `.proc` per build, each with its
+  own contract: the Monitor's ClearLineFrom, DOS's `Rwts`. A mid-routine `.if` can't give each branch its own
+  `Keeps:`, so **a contract holds in every build, or says which build differs** (the owner's D5, as narrowed on the
+  Monitor's PR; [Basic.md](conversions/Basic.md), S11). `Operators::Not` in
+  [MsBasic.OperandEvaluation.asm](../src/Retrocore.Basic/Roms/Microsoft6502Basic/MsBasic.OperandEvaluation.asm)
+  does both:
+
+  ```asm
+      ;; Applies `NOT` to <Fac>.
+      ;;
+      ;; Where `bitwiseNot` is 1 (the PET), the result is the signed 16-bit complement of the integer; where it is 0
+      ;; (AppleSoft), it is 1 for zero and 0 otherwise.
+      ;; In: Fac = the operand
+      ;; Out: Fac = numeric result
+      ;; Errors: ILLEGAL QUANTITY where `bitwiseNot` is 1 and the operand is outside -32768 to 32767
+      ;; Also: NOTOP (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+      .proc Not
+      .if bitwiseNot
+  ```
+
+- **A label other routines enter in the middle of a routine** is an entry of the routine it sits in: a local,
+  listed in the routine's `Entry:` section, with its old name in `Also:` (Basic.md, X2). Split off a separate
+  `.proc` only where the code before the label is another routine, or a table needs the label's address. In
+  [MsBasic.LineSearch.asm](../src/Retrocore.Basic/Roms/Microsoft6502Basic/MsBasic.LineSearch.asm), Microsoft's
+  FLNRTS is `FindLine::Done`:
+
+  ```asm
+  ;; Entry:
+  ;;   FromAddress = searches from the line at A (low) and X (high)
+  ;;   Done = returns; <Statements::New> and List's range parsing branch here for a syntax error return
+  ;; Also: FNDLIN (M6502, ASTIL, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+  .proc FindLine
+  ```
+
+  An `Entry:` item must exist in every build that assembles the routine, so a label only some builds define is
+  described in the routine's prose instead (Basic.md, S1).
 - **A routine that descends through the builds is one lineage**: each of its definitions cites, in `Also:`, every
   document whose listing names it, in any build, so a name from any version finds it in all of them (ClearLineFrom
   carries the Apple II's CLEOLZ and the IIe's CLREOLZ). A document whose builds lack the routine is not cited.
-  This is for one vendor's builds; which builds a vendor's name resolves in, in code several vendors share, is the
-  alignment plan's D3.
+  The lineage stays within one vendor's builds; code several vendors share follows
+  [Code several sources share](#code-several-sources-share).
 - **A routine split over two files** (as Apple split RWTS for size) may be one `.proc` spanning the include.
 - **Numbers shared between sources** (the firmware's function numbers, the mode bits) go in one shared file the
   sources include, with `.assert`s tying them to the tables that use them.
 - **Fall-through** between routines is written as separate `.proc`s with a "Falls into X" comment; each keeps
-  its own contract.
+  its own contract. **Where moving code would silently change behavior, an `.assert` goes beside the comment**, so
+  the assembly fails instead: a fall-through into a routine in another file or macro, which a change in the order
+  of the includes would separate, and a byte two routines share. Not on every fall-through: where the next
+  routine is the next lines of the same file, the comment is enough. `Functions::Log` falls into a routine in
+  another module
+  ([MsBasic.Logarithm.asm](../src/Retrocore.Basic/Roms/Microsoft6502Basic/MsBasic.Logarithm.asm)):
+
+  ```asm
+      .assert * = Float::MultiplyPacked, "LOG must fall through to FMULT."
+      ; Falls into Float::MultiplyPacked.
+      .endproc
+  ```
+
+  and READ's mode is the operand that a skipped `lda #` takes from the next routine's first opcode
+  ([MsBasic.VariableInput.asm](../src/Retrocore.Basic/Roms/Microsoft6502Basic/MsBasic.VariableInput.asm)):
+
+  ```asm
+          .assert INPUT_MODE_READ = $98, "READ's mode must be the TYA opcode its LDA immediate takes."
+          .byte $A9                   ; LDA immediate takes AssignInputList's TYA opcode as INPUT_MODE_READ
+  ```
+
+## Code several sources share
+
+Microsoft's 6502 BASIC is the first source whose code several vendors inherited: AppleSoft and PET BASIC 1, 2 and
+4 are built from the shared modules in
+[Microsoft6502Basic](../src/Retrocore.Basic/Roms/Microsoft6502Basic) and each vendor's own files. A source with a
+common ancestor follows these rules (the alignment plan's D1 and D3).
+
+- **One module for the ancestor's code**, each difference a named switch or macro parameter with a one-line reason
+  (the shared folder's [README](../src/Retrocore.Basic/Roms/Microsoft6502Basic/README.md) lists them). The cost is
+  coupling: a change made for one vendor can move another vendor's bytes, so every build's digest tests and module
+  comparisons run on any change to a shared module.
+- **A shared definition gives only the ancestor's names**, each citing every document that gives that name for it
+  (`FindLine`'s FNDLIN cites Microsoft's source and the vendors' documents). A name only a vendor's
+  documents give goes in the vendor's own historical-names file, as an alias that inherits the definition's
+  documentation, so it resolves only in that vendor's builds
+  ([Commodore.HistoricalNames.asm](../src/Retrocore.Machines.Commodore/Roms/Basic/Commodore.HistoricalNames.asm)):
+
+  ```asm
+  .scope Commodore
+
+  ;; Inherit: <Float::SquareRootOfHalf>
+  ;; Also: SQR05 (CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+  SquareRootOfHalf = Float::SquareRootOfHalf
+  ```
+
+  Tests hold both halves: `BasicAttribution.AssertSharedNamesAreMicrosofts`, and
+  `VendorOldNamesResolveOnlyInTheirVendorsBuilds` in
+  [BasicWorkspaceConversionTests](../tests/Retrocore.Tests/BasicWorkspaceConversionTests.cs).
+- **On a definition only one vendor's builds assemble, the lineage stays within that vendor's line.** A routine
+  every PET build has, even in two versions, cites the whole PET line, but not Apple's documents: BASIC 4's string
+  allocator doesn't cite AppleSoft's ASTIL for GETSPA. Two routines that are different code under the same names
+  (BASIC's two string collectors) each cite only the documents of the builds that have them (Basic.md, E4 and
+  E8a).
+- **A name that exists in only some builds can't be named in a comment the other builds assemble too**: not as a
+  link, an `Entry:` item or an `Inherit:` target. Write it in backticks or describe it ("BASIC 4's error-channel
+  read"), or move the comment under the `.if` with its code. A shared comment that names a build describes it with
+  its root's default switches, and says "by default" where a switch could change it.
+
+## Builds and their switches
+
+- **Each root asserts the switch values its digest tests check**, so a build no test covers fails to assemble
+  rather than giving bytes nobody checked. [Monitor.asm](../src/Retrocore.Machines.Apple2/Roms/System/Monitor.asm):
+
+  ```asm
+  ; Only the four builds the digest tests check (SystemSourceTests and Apple2SourceTests): the Apple II and Autostart
+  ; Monitors, and the original and Enhanced IIe's.
+  .assert MONITOR >= MONITOR_II && MONITOR <= MONITOR_IIE, "MONITOR is MONITOR_II, MONITOR_AUTOSTART or MONITOR_IIE."
+  .assert ENHANCED = 0 || ENHANCED = 1, "ENHANCED is 1 for the Enhanced IIe or 0 for the original."
+  ```
+
+  The firmware roots assert their `ENHANCED`, `Dos33.asm` its `MASTER` and `YEAR`, and `Dos32.asm` its `MASTER`
+  alone, since `YEAR` selects nothing in DOS 3.2. A switch that is renamed has its old name rejected, since an
+  `.ifndef` default isn't reached through `Also:` and a stale predefinition would silently get the default
+  (`AppleSoft.asm`: `.assert .not .defined(BUFPAG), ...`).
+- **Each source has a table of its builds and switches**: per build, its root and switch values; per switch or
+  macro parameter, what it selects. [Basic.md](conversions/Basic.md) opens with the eight BASIC builds, and the
+  shared folder's README gives each module's choices.
 
 ## Comments
 
@@ -166,6 +279,113 @@ These held across the Monitor, IIeEquates, the IIe firmware and DOS; the logs sa
 - **Bugs in the original are documented, not fixed**: the bytes stay, and the comment says what happens.
 - **Explain for a newcomer**, linking the concept docs; keep the original's insight, rewritten in plain words.
 - **Contracts are worked out from the code and everything it calls**, never copied from an old comment.
+
+## Checks that make a conversion safe
+
+Byte identity proves the code is unchanged; it proves nothing about a name, a comment or a contract. These checks
+cover the rest. Each began as something reviewers did by hand, and a kind of check made by hand twice becomes a
+test.
+
+### Routine tests
+
+Load the assembled bytes, prepare memory and registers as the routine's `In:` says, run that one routine until it
+returns or reaches an error exit, and assert its documented `Out:` and `Keeps:`, error exits included. Use them for
+routines whose contract a boot doesn't exercise: a debugger run checks only the paths it takes. From
+[BasicExpressionRoutineTests](../tests/Retrocore.Tests/BasicExpressionRoutineTests.cs), run in AppleSoft and PET
+BASIC 4:
+
+```csharp
+BasicMathMachine machine = new(apple);
+SetWord(machine, "LinearIndex", multiplicand);
+machine.Memory[machine.Address("Addend")] = (byte)multiplier;
+int error = machine.Address("Variables::ElementAddress::ToOutOfMemoryError");
+
+int reached = machine.CallUntil("Variables::MultiplyUnsigned", [error], a: multiplier >> 8);
+```
+
+The test then expects the error exit for a product past 16 bits, and otherwise the product in X, A and Y and
+`LinearIndex` zero, as the `Out:` says.
+
+- **`Keeps:`**: pass distinctive values in (`$5A` in X, `$A5` in Y) and check them after, as
+  [BasicStatementRoutineTests](../tests/Retrocore.Tests/BasicStatementRoutineTests.cs) does for `IsLetter`.
+- **Every claim**, flags included: the character reader's carry for a digit and zero for a null or colon.
+- **A documented quirk is pinned** by a test, so it isn't "fixed" later: `ReadLineNumberSendsAGotoTokenHighByteIntoOn`.
+- **Names are looked up rename-proof** (below), so the test survives the next conversion step.
+
+The BASIC routine tests are `Basic*RoutineTests`, on the machines in
+[BasicMathMachine](../tests/Retrocore.Tests/BasicMathMachine.cs) and `PetRoutineMachine`. They don't replace the
+debugger run of step 5; for that, add a false `Keeps:` as a control and see it reported, so a clean run means the
+check was live.
+
+### Per-module byte comparison against an independent oracle
+
+The digest tests say that a build changed, not where. Where an independent second source of the same bytes
+exists, compare each module against it. BASIC's MACRO-10 overlays (`applesoft.mac`, `Basic1.mac`, `Basic2.mac`,
+`Basic4.mac`, on Microsoft's `m6502.asm`) build every BASIC a second way, and stay as that oracle (D6). Each
+`Basic*ConversionTests` assembles both, and checks in every build that each old name the converted files give has
+the overlay's value for that name, and that each definition the files make reaches the overlay by its name or an
+old name ([BasicMathConversionTests](../tests/Retrocore.Tests/BasicMathConversionTests.cs)):
+
+```csharp
+AssemblyResult native = AssembleAppleSoft(model);
+AssemblyResult legacy = SdkModules.AssembleAppleSoft(Path.Join(AppleFolder, "applesoft.mac"), model);
+BasicWorkspaceConversionTests.CheckAgainstOverlay(
+    native, legacy, [.. Shared, AppleNames], minimum: 240, Exempt(native, AppleNames), scoped: true);
+```
+
+The comparison is keyed by historical name (`BasicNames.TryGetCounterpart` finds a definition in the other build
+by its name or any of its `Also:` names), so it survives the rename it checks. `minimum` keeps it from passing with
+nothing compared, and the exemptions are the SDK's own names, which no overlay gives. The same tests check the
+citations: each key is in the bibliography, and each vendor's names cite only its own documents, Microsoft's or
+UNKN.
+
+### Rename-proof lookups and the rename gate
+
+A test that looks a label up by its old name breaks when the conversion renames it, so look names up as a
+definition or as a historical name. The BASIC tests go through [BasicNames](../tests/Retrocore.Tests/BasicNames.cs)
+(`result.Symbol("FNDLIN")` reaches `FindLine` through its `Also:`), and the debug hosts through
+`AssemblyResult.SymbolsWithHistoricalNames`. [BasicRenameGateTests](../tests/Retrocore.Tests/BasicRenameGateTests.cs)
+proves it: it renames labels in a copy of the sources, each keeping its old name in `Also:`, and runs every BASIC
+test class against the copy, which must keep every ROM's bytes and pass unchanged. A new test class that assembles
+BASIC joins its list, or the list of those it leaves out, with a reason. Before converting a source whose tests look
+names up, move them to such a lookup first (the alignment plan's B4).
+
+### The scripted checks
+
+Before the first review, and after every fix, script what reviewers used to check by hand:
+
+- **Historical names in prose**: scan the comments for any name that is a definition's `Also:` name, written as
+  prose rather than the current name or a link; keep it only where it is history ("Apple's listing calls it
+  SET80COL").
+- **Each comment's build condition**: list every changed comment with the builds that assemble it (the `.if`
+  branches around it), so each is read against those builds. A comment true of only one build is the finding
+  reviews meet most.
+- **Links per build**: a link in a comment must name a definition in every build that assembles the comment. A
+  check that resolves a conditional source's links against all its builds at once can accept a definition some
+  builds lack, so check each build; [BasicBuildLinkTests](../tests/Retrocore.Tests/BasicBuildLinkTests.cs) does
+  for the eight BASIC builds.
+- **Citations**: every key in the bibliography, every name in the document it cites, and each lineage complete
+  (`FirmwareLineagesCiteBothListings` and `DosLineagesCiteBothVersions` in
+  [ConvertedSourceTests](../tests/Retrocore.Tests/ConvertedSourceTests.cs), and the conversion tests above).
+- **Old names left behind**: code in a converted file uses the current names (`ConvertedSourcesUseCurrentNames`, for
+  the Apple II's sources), and nothing else still uses an old one: other sources, `Software/`, C#, docs and the
+  rename table.
+
+## Review
+
+A conversion reaches main through the owner's self-review cycle, set out in
+[the alignment plan's process](backlog/ConversionAlignment.md#order-and-ownership): the scripted checks; a first
+pass by several models in parallel on the whole diff; a delta review of each fix; a closing pass by Opus alone,
+split by area for a large diff; and the PR once a closing pass finds no must-fix or should-fix. What it has taught:
+
+- The findings that recur are comments true of only one build, and stack and register contracts. Hand reviewers
+  the list of comments with their build conditions, and ask them to check each comment against each build.
+- Reviewers get the diff and the brief, not the author's conclusions. Each finding is verified before it is
+  fixed, and the false ones counted; nits are fixed in passing and never cause another round.
+- A check a reviewer made by hand twice is scripted: the per-build link test came from nine findings in the
+  closing reviews of BASIC's interpreter files.
+- The logs record decisions, not progress: what was decided and why, with an ID, and what was found in the code
+  and documented. Review rounds, commands and their results go in the PR.
 
 ## For agents
 

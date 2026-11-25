@@ -3,24 +3,30 @@
 `src/Retrocore.Machines.Apple2/Roms/Mouse.rom.asm`, the emulator's own 256-byte mouse firmware (the SDK's, which
 carries each call to C#'s `Apple2MouseCard`), and `src/Retrocore.Machines.Apple2/Roms/Mouse/MouseInterface.asm`,
 Apple's 341-0270-C EPROM rebuilt from its bytes, which the emulator does not run. Each is one build. Documents cited:
-IIEROM82 and the Monitor's own keys (through the equates both files inherit), UNKN.
+MOUSETN (Apple's Mouse Technical Notes), IICTRM89 (the IIc Technical Reference, second edition), IIEROM82 and the
+Monitor's own keys (through the equates both files inherit), UNKN.
 
 ## Sources
 
-- **No document in hand gives the firmware's names.** Apple's AppleMouse II User's Manual and the IIc Technical
-  Reference, which give SETMOUSE ... INITMOUSE, were not reachable. Two Apple documents that were read in full give
-  none of them: the Tech Info Library's "Apple II: Mouse Memory Locations" (article 8720, 1991: slot 4's position
-  bytes only) and the French AppleMouse user's manual (1983: BASIC's `IN#` and `PR#` only). No bibliography key was
-  added.
-- M1. **The eight routine names and the screen holes' names cite UNKN**: SETMOUSE, SERVEMOUSE, READMOUSE,
-  CLEARMOUSE, POSMOUSE, CLAMPMOUSE, HOMEMOUSE, INITMOUSE, and MOUXL, MOUXH, MOUYL, MOUYH, MOUSTAT, MOUMODE. They are
-  the names mouse programs use, so they stay reachable; a key replaces UNKN once a document that gives them is in
-  hand. In Mouse.rom.asm the routines cite the same names, for the same calls.
+- **MOUSETN** and **IICTRM89** give the routines' names (see the bibliography for how each was checked). The notes
+  cover the AppleMouse card itself: TimeData at $Cn1C, GetClamp at $Cn1A, ServeMouse's 6805 bug. The second
+  edition's Appendix D says the IIc's calls drive the card in a IIe. The 1985 first edition and IIGSFR87 give the
+  same names only for the IIc's and the IIgs's own firmware, and are not cited. Two other Apple documents read in
+  full give none: the Tech Info Library's "Apple II: Mouse Memory Locations" (article 8720, 1991) and the French
+  AppleMouse user's manual (1983). The AppleMouse II User's Manual was not found.
+- **The EPROM dump** (342-0270-C, from the Apple II Documentation Project's mirror) matches the SHA-1 in the source's
+  header, and `MouseInterfaceSourceTests.SourceMatchesTheDump` passes against it.
+- M1. **The routines cite MOUSETN and IICTRM89** for the names each gives: SETMOUSE, SERVEMOUSE, READMOUSE,
+  CLEARMOUSE, POSMOUSE, CLAMPMOUSE and INITMOUSE both, HOMEMOUSE IICTRM89 only. Apple's documents write them in mixed
+  case (SetMouse, PosMouse); they are cited upper case, as code writes Apple's names. Mouse.rom.asm's routines cite
+  the same, for the same calls. $Cn1C is `SetInterruptRate` (TIMEDATA, MOUSETN) and $Cn1A `ReadClampByte`
+  (GETCLAMP, MOUSETN), no longer factory entries. The screen holes' names (MOUXL, MOUXH, MOUYL, MOUYH, MOUSTAT,
+  MOUMODE) are in none of the documents and keep UNKN.
 - M2. **Every other old name is the SDK's own** and is dropped with no `Also:`: both files say so in their file
   comment. MouseInterface.asm's labels were the disassembly's (BANK3_SWITCH, SENDBANK_1, MCUREQUEST1_5, PARAMBANK
   ...), with no listing behind them; Mouse.rom.asm's were its author's (BASICIN_ENTRY, Common_Slot, NOTHING ...).
-  Open question for the owner: whether MOUBANK, MOUARG, MOUPTR and BASICCALL, which read like Apple's, should
-  keep UNKN too.
+  MOUBANK, MOUARG, MOUPTR and BASICCALL, which read like Apple's, are in none of the documents searched, so they stay
+  dropped.
 
 ## Decisions
 
@@ -60,3 +66,5 @@ IIEROM82 and the Monitor's own keys (through the equates both files inherit), UN
 - Apple's BASIC input returns the line's length in X and Y; the old `Keeps: X, Y` on its BASIC entry was false for
   input. Its comment now says output keeps A, X and Y.
 - Each bank's last byte ($C2, $C1, $C3, $C8, $CD, $C1, $CE) is never read by the firmware; its purpose is not known.
+- The emulator's card answers $Cn1A and $Cn1C with carry set, where Apple's answers GetClamp and TimeData with carry
+  clear; `FactoryEntry`'s comment says so. Changing that is a behavior change, outside a conversion.

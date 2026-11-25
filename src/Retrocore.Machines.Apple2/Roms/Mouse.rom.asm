@@ -33,7 +33,8 @@
 ;; BASIC reads the card after `IN#n`: the card writes the line "X,Y,B" into the input buffer and returns a RETURN, so
 ;; INPUT takes three numbers and nothing is echoed. It turns the mouse on or off after `PR#n` as the low bit of each
 ;; character printed says, as CHR$(1) and CHR$(0) do. As on Apple's card, the Pascal 1.1 entries at $Cn0D-$Cn10
-;; answer error 3, and the factory's own entries at $Cn1A-$Cn1F do nothing.
+;; answer error 3. Of the entries at $Cn1A-$Cn1F, Apple's card documents two, reading a clamping bound's byte ($Cn1A)
+;; and setting the interrupt rate ($Cn1C); this card has neither, and every one returns carry set (<FactoryEntry>).
 ;;
 ;; HOW A CALL CROSSES INTO C#
 ;;
@@ -55,8 +56,9 @@
 ;;
 ;; NAMES
 ;;
-;; The mouse routines' names follow the calls Apple's AppleMouse II documentation gives programs (SETMOUSE ...).
-;; That documentation is not in hand, so the old names cite UNKN; every other name is the SDK's own.
+;; The mouse routines' old names are the calls Apple's documents give programs: its Mouse Technical Notes (MOUSETN)
+;; and the IIc Technical Reference's second edition (IICTRM89), which documents the calls for the AppleMouse card as
+;; well as the IIc. Every other name is the SDK's own.
 
 .rom Retrocore.Machines.Apple2.MouseRom, $C400, $100
 .cpu Mos6502
@@ -231,7 +233,7 @@ BasicOutput = BasicInput + 2
 ;; In:    A = the mode, X = $Cn, Y = $n0
 ;; Out:   carry = set if the mode is above $0F
 ;; Keeps: Y
-;; Also: SETMOUSE (UNKN)
+;; Also: SETMOUSE (MOUSETN, IICTRM89)
 .proc SetMouse
     EnterCommand COMMAND_SET_MOUSE
 .endproc
@@ -239,7 +241,7 @@ BasicOutput = BasicInput + 2
 ;; Called from an interrupt handler: tells whether the mouse interrupted, and why, in the status hole's bits 1-3.
 ;; Out:   carry = clear if the interrupt was the mouse's
 ;; Keeps: Y
-;; Also: SERVEMOUSE (UNKN)
+;; Also: SERVEMOUSE (MOUSETN, IICTRM89)
 .proc ServeMouse
     EnterCommand COMMAND_SERVE_MOUSE
 .endproc
@@ -249,7 +251,7 @@ BasicOutput = BasicInput + 2
 ;; In:    X = $Cn, Y = $n0
 ;; Out:   carry = clear
 ;; Keeps: Y
-;; Also: READMOUSE (UNKN)
+;; Also: READMOUSE (MOUSETN, IICTRM89)
 .proc ReadMouse
     EnterCommand COMMAND_READ_MOUSE
 .endproc
@@ -258,7 +260,7 @@ BasicOutput = BasicInput + 2
 ;; In:    X = $Cn, Y = $n0
 ;; Out:   carry = clear
 ;; Keeps: Y
-;; Also: CLEARMOUSE (UNKN)
+;; Also: CLEARMOUSE (MOUSETN, IICTRM89)
 .proc ClearMouse
     EnterCommand COMMAND_CLEAR_MOUSE
 .endproc
@@ -267,7 +269,7 @@ BasicOutput = BasicInput + 2
 ;; In:    X = $Cn, Y = $n0
 ;; Out:   carry = clear
 ;; Keeps: Y
-;; Also: POSMOUSE (UNKN)
+;; Also: POSMOUSE (MOUSETN, IICTRM89)
 .proc PositionMouse
     EnterCommand COMMAND_POSITION_MOUSE
 .endproc
@@ -276,7 +278,7 @@ BasicOutput = BasicInput + 2
 ;; In:    A = 0 for X, 1 for Y, X = $Cn, Y = $n0
 ;; Out:   carry = clear
 ;; Keeps: Y
-;; Also: CLAMPMOUSE (UNKN)
+;; Also: CLAMPMOUSE (MOUSETN, IICTRM89)
 .proc ClampMouse
     EnterCommand COMMAND_CLAMP_MOUSE
 .endproc
@@ -285,7 +287,7 @@ BasicOutput = BasicInput + 2
 ;; In:    X = $Cn, Y = $n0
 ;; Out:   carry = clear
 ;; Keeps: Y
-;; Also: HOMEMOUSE (UNKN)
+;; Also: HOMEMOUSE (IICTRM89)
 .proc HomeMouse
     EnterCommand COMMAND_HOME_MOUSE
 .endproc
@@ -294,7 +296,7 @@ BasicOutput = BasicInput + 2
 ;; In:    X = $Cn, Y = $n0
 ;; Out:   carry = clear
 ;; Keeps: Y
-;; Also: INITMOUSE (UNKN)
+;; Also: INITMOUSE (MOUSETN, IICTRM89)
 .proc InitializeMouse
     EnterCommand COMMAND_INITIALIZE_MOUSE
 .endproc
@@ -306,7 +308,10 @@ BasicOutput = BasicInput + 2
     ; Falls into FactoryEntry.
 .endproc
 
-;; The factory's entries at $Cn1A-$Cn1F, which this card does not have.
+;; The entries at $Cn1A-$Cn1F, which this card does not have.
+;;
+;; Apple's card answers GetClamp at $Cn1A and TimeData at $Cn1C with carry clear (its Mouse Technical Notes #7 and
+;; #2); here they return carry set, as the factory's own entries do.
 ;; Out:   carry = set
 ;; Keeps: X, Y
 .proc FactoryEntry

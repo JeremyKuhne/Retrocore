@@ -10,7 +10,7 @@
 ;;   speaker's two positions, and so the tone's color. The manual recommends 32, which keeps every note in tune.
 ;;
 ;; Each cycle toggles the speaker after <Music::FirstHalfCount> loops, then after <Music::SecondHalfCount> loops, both
-;; from the note's entry in <Music::NotePeriods>; the paths through the loops all take the same time, so the pitch
+;; from the note's entry in <Music::NotePeriods>; the paths through the loops take nearly the same time, so the pitch
 ;; holds whatever the duty cycle.
 ;;
 ;; The listing's names are those of Apple's listing in the Programmer's Aid #1 manual (1978,
@@ -64,8 +64,8 @@ Pitch = $02FF
 ;;
 ;; The paths through a loop take nearly the same time: where <NoteLength>'s low byte does not carry, a NOP and a JMP
 ;; stand for the INC of its high byte, and the JMPs to the next line stand for a taken branch; the carry, once in 256
-;; loops, takes 2 cycles more. Apple's listing calls the
-;; second half DOWN, which here would clash with <HiResGraphics::Step::Down>'s.
+;; loops, takes 2 cycles more. Apple's listing calls the second half DOWN, which here would clash with
+;; <HiResGraphics::Step::Down>'s.
 ;; In: FirstHalfCount = the loops of the first half, SecondHalfCount = of the second, NoteLength = the length, as a
 ;;   negative count
 ;; Keeps: X

@@ -229,7 +229,7 @@ public class AtariDiskTests
     /// <summary>
     ///  The host puts a kept disk or tape back through each slot's Mount and takes one out through Unmount: Unmount
     ///  gives back what was in, a medium of another kind is refused with the slot as it was, and the recorder plays
-    ///  what goes in, as the other machines' do.
+    ///  what goes in, as the BBC Micro's does.
     /// </summary>
     /// <param name="kind">The drive.</param>
     [TestMethod]

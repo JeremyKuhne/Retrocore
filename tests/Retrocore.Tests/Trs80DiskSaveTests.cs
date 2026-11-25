@@ -216,6 +216,11 @@ public sealed class Trs80DiskSaveTests
         (changed[^1] - changed[0]).Should().BeLessThan(1 + 256 + 2, "only the mark, data and CRC change");
         Describe(DmkFormat.Read(written)).Should().Equal(Describe(disk));
 
+        // Formatting cylinder 1 again with the same sectors writes them in place: its ID field with no data stays.
+        byte[] cylinder1 = image.AsSpan(16 + length, length).ToArray();
+        disk.Format(1, 0, [.. disk.Track(1, 0).Select(Copy)]);
+        DmkFormat.Encode(disk, layout).Bytes.AsSpan(16 + length, length).SequenceEqual(cylinder1).Should().BeTrue();
+
         // Formatting cylinder 1 lays it out again; cylinder 0 keeps its bytes. Cylinder 3 is past the image's tracks.
         disk.Format(1, 0, [Sector(1, 0, 9, 256, doubleDensity: true)]);
         disk.Format(3, 0, [Sector(3, 0, 1, 256, doubleDensity: true)]);
@@ -351,8 +356,8 @@ public sealed class Trs80DiskSaveTests
 
     /// <summary>
     ///  Each DOS image saves back when nothing changed it: a DMK or IMD image byte for byte, and a JV3 image to the
-    ///  same sectors. The images are in <c>trs80-disks</c> under <see cref="ExternalTestData.Root"/>; the test is inconclusive
-    ///  without one.
+    ///  same sectors. The images are in <c>trs80-disks</c> under <see cref="ExternalTestData.Root"/>; the test is
+    ///  inconclusive without one.
     /// </summary>
     /// <param name="image">The image's file name.</param>
     [TestMethod]
@@ -478,6 +483,9 @@ public sealed class Trs80DiskSaveTests
         new Random((track * 1000) + (side * 100) + sector).NextBytes(data);
         return new((byte)track, (byte)side, (byte)sector, data, doubleDensity, mark);
     }
+
+    private static FloppySector Copy(FloppySector sector) =>
+        new(sector.Track, sector.Side, sector.Sector, sector.Data, sector.DoubleDensity, sector.DataAddressMark);
 
     private static byte[] Filled(int size, byte value)
     {

@@ -723,7 +723,7 @@ try {
     const sdkRoms = join(root, "src", "Retrocore.Machines.Apple2", "Roms");
     const firstLine = (file, label) => {
         const lines = readFileSync(file, "utf8").split(/\r?\n/);
-        let next = lines.indexOf(`${label}:`) + 1;
+        let next = Math.max(lines.indexOf(`${label}:`), lines.indexOf(`.proc ${label}`)) + 1;
         assert.ok(next > 0, `${label} is in ${file}`);
         while (/^\s*(;.*)?$/.test(lines[next])) next++;
         return next + 1;

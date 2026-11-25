@@ -50,6 +50,10 @@ public class Trs80TapeContentsTests
         // A block at $5500 starts with the $55 a SYSTEM tape's header does, but no data block follows a name.
         byte[] high = [.. s_leader, 0xA5, 0x55, 0x00, 0x55, 0x08, 1, 2, 3, 4, 5, 6, 7, 8, 0xDC];
         CassetteFormat.Detect(high).Should().Be(CassetteContents.Level1);
+
+        // Nor is one whose fourth byte is $3C, when its first six are not a printable name.
+        byte[] block = [.. s_leader, 0xA5, 0x55, 0x00, 0x55, 0x08, 1, 2, 3, 0x3C, 5, 6, 7, 8, 0xA5];
+        CassetteFormat.Detect(block).Should().Be(CassetteContents.Level1);
     }
 
     /// <summary>

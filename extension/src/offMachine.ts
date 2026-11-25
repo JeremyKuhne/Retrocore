@@ -322,7 +322,7 @@ export class OffMachine {
         }
         if (target.source.kind === "setup") return refusal(machine, target.source.setup, option, value);
         // A launch that runs a BASIC file needs Level II's BASIC.
-        if (typeof target.configuration.basic === "string" && isLevel1(withSetting(target.configuration, choice, value))) {
+        if (option === "rom" && typeof target.configuration.basic === "string" && isLevel1(withSetting(target.configuration, choice, value))) {
             return `${this.name ?? "The machine"} runs a BASIC file, which Level I cannot load.`;
         }
         return undefined;
@@ -335,7 +335,7 @@ export class OffMachine {
         const target = this.target;
         const machine = this.machine;
         const choice = machine?.choices.find(candidate => candidate.option === option);
-        if (target === undefined || machine === undefined || choice === undefined) throw new Error(refused);
+        if (target === undefined || machine === undefined || choice === undefined) throw new Error(`${this.name ?? "The machine"} has no setting ${option}.`);
 
         let next: OffTarget;
         if (target.source.kind === "setup") {

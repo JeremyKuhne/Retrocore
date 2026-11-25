@@ -11,8 +11,11 @@ namespace Retrocore.Media.Trs80;
 ///  <para>
 ///   Every TRS-80 ROM writes a leader of zero bytes and the <c>$A5</c> sync byte; what follows differs. Level II's
 ///   <c>CSAVE</c> writes three <c>$D3</c> bytes and a one-character name (<c>ST_CSAVE</c> in Level2.asm), and its
-///   <c>SYSTEM</c> tapes open with <c>$55</c>, a six-character name and a <c>$3C</c> data block (or the <c>$78</c> entry address). Level I writes the block's start and end
-///   addresses, high bytes first, then the bytes between and a checksum (<c>TAPE_WRITE_BLOCK</c> in Level1.asm).
+///   <c>SYSTEM</c> tapes open with <c>$55</c>, a six-character name and a <c>$3C</c> data block (or the <c>$78</c>
+///   entry address). Level I writes the block's start and end addresses, high bytes first, then the bytes between and
+///   a checksum (<c>TAPE_WRITE_BLOCK</c> in Level1.asm). The headers can coincide, so this is a likely reading, not a
+///   certain one: a Level I block at <c>$55xx</c> whose first bytes are printable and whose fourth is <c>$3C</c> or
+///   <c>$78</c> reads as a <c>SYSTEM</c> tape.
 ///  </para>
 /// </remarks>
 public static class CassetteFormat
@@ -44,10 +47,9 @@ public static class CassetteFormat
 
         if (Repeats(bytes, index, BasicHeader, 3)) { return CassetteContents.Level2Basic; }
 
-        // A SYSTEM tape's $55 and six-character name are followed by its first data block or its entry address, so a
-        // Level I block that starts at $55xx is not taken for one.
-        int first = index + 1 + SystemNameLength;
-        if (first < bytes.Count && bytes[index] == SystemHeader && bytes[first] is SystemData or SystemEntry)
+        // A SYSTEM tape's $55 and printable six-character name are followed by its first data block or its entry
+        // address, which tells most Level I blocks that start at $55xx from one.
+        if (IsSystemHeader(bytes, index))
         {
             return CassetteContents.Level2System;
         }
@@ -59,6 +61,25 @@ public static class CassetteFormat
         return start >= Level1RamStart && end > start && index + 4 + (end - start) <= bytes.Count
             ? CassetteContents.Level1
             : CassetteContents.Unknown;
+    }
+
+    // Whether a SYSTEM tape's header starts at index: $55, the name, then a data block or the entry address.
+    private static bool IsSystemHeader(IReadOnlyList<byte> bytes, int index)
+    {
+        int first = index + 1 + SystemNameLength;
+        if (first >= bytes.Count || bytes[index] != SystemHeader) { return false; }
+        return bytes[first] is SystemData or SystemEntry && Printable(bytes, index + 1, SystemNameLength);
+    }
+
+    // Whether count bytes from index are all printable ASCII.
+    private static bool Printable(IReadOnlyList<byte> bytes, int index, int count)
+    {
+        for (int i = index; i < index + count; i++)
+        {
+            if (bytes[i] is < 0x20 or > 0x7E) { return false; }
+        }
+
+        return true;
     }
 
     // Whether count bytes from index are all value.

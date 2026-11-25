@@ -80,7 +80,7 @@ internal sealed partial class DebugSession
     private string? _devices;
 
     // The media warning the console last gave for each device, such as a tape for the other Level's ROM, by the
-    // media's label: said once while that media stays in, and again once the device has been seen empty.
+    // media's label: said once while that media stays in, and again once the device has been seen without it.
     private readonly Dictionary<string, string> _mediaWarnings = [];
 
     // Whether running keeps to the machine's real speed, rather than running as fast as it can.

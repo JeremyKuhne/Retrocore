@@ -320,7 +320,7 @@ NextField:
     dec SectorTries
     beq IoError
 
-    ; A bad field: recalibrate once half the tries counted (bits 0-5) equal the track's sectors; otherwise read on,
+    ; A bad field: recalibrate once half the tries left (bits 0-5) equal the track's sectors; otherwise read on,
     ; or seek again while bit 3 of half the tries left is set.
     lda SectorTries
     and #$3F
@@ -574,7 +574,7 @@ NextField:
     dec SectorTries
     beq IoError
 
-    ; A bad field: recalibrate once half the tries counted (bits 0-5) equal the track's sectors; otherwise read on,
+    ; A bad field: recalibrate once half the tries left (bits 0-5) equal the track's sectors; otherwise read on,
     ; or seek again while bit 3 of half the tries left is set.
     lda SectorTries
     and #$3F

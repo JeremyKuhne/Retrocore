@@ -135,7 +135,8 @@ FailedBlockHigh = CardPageZero + 8
 ;; The card's <UnitCount>: the number of units it found.
 CardUnitCount = CardPageZero + UnitCount
 
-;; The card's <DeviceKinds>, a byte for each unit from 1: what kind of drive (the KIND_ values).
+;; The card's <DeviceKinds>, a byte for each unit from 1: what kind of drive (<DEVICE_DRIVE>, with
+;; <DEVICE_FDHD> for an FDHD, or <DEVICE_BUS>).
 CardDeviceKinds = CardPageZero + DeviceKinds
 
 ;; The card's <MediaKind>, a byte for each unit from 1: what kind of disk (the MEDIA_ values).

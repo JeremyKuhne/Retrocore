@@ -473,8 +473,8 @@ CopyResult:
     bra Done
 
     ; Codes 0 and 3: the status byte. Bits 7, 6, 5 and 3: a block device that can be written, read and formatted;
-    ; bit 4, a disk is in; bit 2, it is write protected; bit 0, for an extended call, the disk was switched (or
-    ; put in since the last look).
+    ; bit 4, a disk is in; bit 2, it is write protected; bit 0, for an extended call, the drive's switched latch
+    ; is set (a disk taken out or put in), or a disk is in that was not at the last look.
 DriveStatus:
     ldx Drive
     jsr Drives::ReadStatus

@@ -359,11 +359,11 @@ Group800Starts:
 
 ;; <Locate> for a 1440K MFM disk: 18 sectors a side, a cylinder's sides in turn.
 ;; Out: as <Locate>, carry = clear; <Work0> and Work1 = the block's offset in its run of 10 cylinders
-;;      (from the run before, for a block at a run's start)
+;;      (from the run before, for a block at a later run's start)
 .proc Mfm1440
 
-    ; The run of 10 cylinders (180 blocks) the block is in: the last whose start is below it, so a block at a run's
-    ; start is taken as the previous run's, 180 blocks in, which gives the same cylinder.
+    ; The run of 10 cylinders (180 blocks) the block is in: the last whose start is below it, so a block at a
+    ; later run's start is taken as the previous run's, 180 blocks in, which gives the same cylinder.
     ldx #$FE
 FindRun:
     inx
@@ -440,11 +440,11 @@ Cylinders1440:
 
 ;; <Locate> for a 720K MFM disk: 9 sectors a side, a cylinder's sides in turn.
 ;; Out: as <Locate>, carry = clear; <Work0> and Work1 = the block's offset in its run of 10 cylinders
-;;      (from the run before, for a block at a run's start)
+;;      (from the run before, for a block at a later run's start)
 .proc Mfm720
 
-    ; The run of 10 cylinders (90 blocks) the block is in: the last whose start is below it, so a block at a run's
-    ; start is taken as the previous run's, 90 blocks in, which gives the same cylinder.
+    ; The run of 10 cylinders (90 blocks) the block is in: the last whose start is below it, so a block at a
+    ; later run's start is taken as the previous run's, 90 blocks in, which gives the same cylinder.
     ldx #$FE
 FindRun:
     inx

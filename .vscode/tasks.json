@@ -31,7 +31,7 @@
             "command": "dotnet",
             "args": [
                 "build",
-                ".\\src\\Retrocore.Debug\\Retrocore.Debug.csproj",
+                "src/Retrocore.Debug/Retrocore.Debug.csproj",
                 "-c",
                 "Release",
                 "-warnaserror"

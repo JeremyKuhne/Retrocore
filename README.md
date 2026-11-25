@@ -280,7 +280,7 @@ launch are invisible to Explorer, VS Code, and normal terminals.
 | `RETROCORE_ZEXDOC` | Set to any value to run ZEXDOC in addition to ZEXALL. Skipped by default because ZEXALL runs the same instructions and checks all flags; ZEXDOC only isolates whether a ZEXALL failure is in undocumented flags. |
 | `RETROCORE_CC65`, `RETROCORE_CA65_CORPUS`, `RETROCORE_CA65_ASMINC` | Directory containing `ca65` and `ld65`, optional `rom4x` ca65 source corpus, and `cc65`'s `asminc` header directory for the ca65 differential and SDK tests. |
 | `RETROCORE_MERLIN32`, `RETROCORE_MERLIN_CORPUS` | Merlin 32 executable and approved source corpus for the Merlin differential tests. |
-| `RETROCORE_VSCODE` | VS Code executable (`Code.exe`) override for the extension's editor tests. |
+| `RETROCORE_VSCODE` | VS Code executable (`Code.exe` on Windows) for the extension's editor tests; unset, they download a pinned VS Code. |
 
 `tools\Fetch-M1Dependencies.ps1` populates `<cache>\m1-dependencies` with `cc65` (compiled locally with Visual
 Studio's C++ tools), ProDOS 2.4.3, Microsoft's 6502 BASIC source and `msbasic` reference binaries, and pinned
@@ -319,8 +319,8 @@ node tools/Test-ProDosBasicDap.mjs    # needs the ProDOS 2.4.3 image from Fetch-
 npm --prefix extension ci
 npm --prefix extension run compile
 npm --prefix extension run test:grammar   # needs nothing external
-npm --prefix extension run test:language  # needs VS Code
-npm --prefix extension test               # full editor + debugger suite: needs VS Code and iie-sample
+npm --prefix extension run test:language  # needs the Release build; downloads a pinned VS Code
+npm --prefix extension test               # full editor + debugger suite: needs the Release build and iie-sample; downloads a pinned VS Code
 ```
 
 Without `cc65`, you can also build `artifacts\iie-sample\main.bin` and `main.dbg` with `Retrocore.Debug` itself:

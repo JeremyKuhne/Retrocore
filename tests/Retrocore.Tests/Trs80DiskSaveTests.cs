@@ -259,8 +259,8 @@ public sealed class Trs80DiskSaveTests
     }
 
     /// <summary>
-    ///  A field the end of a track cuts short stays out of the disk when a longer track grows the image: the kept track,
-    ///  padded to the new length, would complete it, so it is laid out again.
+    ///  A field the end of a track cuts short stays out of the disk when a longer track grows the image: the kept
+    ///  track, padded to the new length, would complete it, so it is laid out again.
     /// </summary>
     [TestMethod]
     public void DmkKeepsAFieldCutShortWhenTheImageGrows()

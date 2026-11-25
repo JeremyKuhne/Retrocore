@@ -872,8 +872,9 @@ After the reviews:
      as `retro/device`'s does. Tests: `FloppyMediaSaveTests`, where Disk BASIC's SAVE is saved as JVC and as DMK,
      pinned by digest, and loads and runs again in a new machine, and `Test-CocoDap.mjs`, which saves a disk through
      the protocol; `Trs80DiskSaveTests`, where each format round-trips, a Model I's write sector reaches each saved
-     image, and the DMK and IMD DOS images save back byte for byte and the JV3 ones to the same sectors; and `Trs80Model3RomTests.DosSavesAFile`, where the Model III's
-     and 4's DOSes write a file that the saved image boots with and lists.
+     image, and the DMK and IMD DOS images save back byte for byte and the JV3 ones to the same sectors; and
+     `Trs80Model3RomTests.DosSavesAFile`, where the Model III's and 4's DOSes write a file that the saved image boots
+     with and lists.
 3. **The UI.** The badged icons, the states, the prompts, Revert with Undo, the eject prompt, host-side watching, and
    the off machine's saves. Done when every row of [saving in each state](#saving-in-each-state) works in the
    self-hosted extension. It lands in two parts:

@@ -60,8 +60,8 @@ public class PokeyTests
     }
 
     /// <summary>
-    ///  Verifies timers on the 64 kHz and 15 kHz clocks fire (N+1)*28 or (N+1)*114 cycles apart, with the first period-0
-    ///  firing 24 or 83 cycles after the SKCTL write that ends initialization mode.
+    ///  Verifies timers on the 64 kHz and 15 kHz clocks fire (N+1)*28 or (N+1)*114 cycles apart, with the first
+    ///  period-0 firing 24 or 83 cycles after the SKCTL write that ends initialization mode.
     /// </summary>
     /// <param name="audctl">The AUDCTL value: 0 for 64 kHz, 1 for 15 kHz.</param>
     /// <param name="audf">The AUDF1 value.</param>
@@ -664,8 +664,8 @@ public class PokeyTests
         HighPassLevels(audctl, tone, filter, filterAudf: 2).Should().Equal(0f, 15f);
     }
 
-    // The distinct output levels a pure tone clocked at 64 kHz (AUDF 1, volume 15) takes with its filter channel at filterAudf
-    // (silent itself), after the first periods have passed.
+    // The distinct output levels a pure tone clocked at 64 kHz (AUDF 1, volume 15) takes with its filter channel at
+    // filterAudf (silent itself), after the first periods have passed.
     private static List<float> HighPassLevels(int audctl, int tone, int filter, int filterAudf)
     {
         Pokey pokey = Started();
@@ -744,7 +744,7 @@ public class PokeyTests
 
     /// <summary>
     ///  Asynchronous receive at 600 baud, as the cassette handler sets it up (channels 3+4 linked at 1.79 MHz, $05CC,
-    ///  SKCTL $13): the start bit's low level starts the timers, each bit is sampled near its middle, SKSTAT bit 1
+    ///  SKCTL $13): the start bit's leading edge starts the timers, each bit is sampled near its middle, SKSTAT bit 1
     ///  shows busy from the start bit's sample to the stop bit's, SERIN takes the byte with IRQST bit 5, and a stop
     ///  bit sampled low is a framing error until SKRES.
     /// </summary>
@@ -793,17 +793,21 @@ public class PokeyTests
     }
 
     /// <summary>
-    ///  Verifies asynchronous receive starts a frame only on a start bit's leading edge: a line held low after a low
-    ///  stop bit (a break) receives nothing more until it goes high and low again.
+    ///  Verifies receive starts a frame only on a start bit's leading edge: a line held low after a low stop bit (a
+    ///  break) receives nothing more until it goes high and low again, in asynchronous mode and in synchronous mode
+    ///  clocked by channel 4.
     /// </summary>
+    /// <param name="skctl">The SKCTL value: $13 asynchronous, $23 synchronous.</param>
     [TestMethod]
-    public void HeldLowLineStartsNoFrame()
+    [DataRow(0x13)]
+    [DataRow(0x23)]
+    public void HeldLowLineStartsNoFrame(int skctl)
     {
         Pokey pokey = Started();
         pokey.Write(Audctl, 0x28);
         pokey.Write(Audf3, 0xCC);
         pokey.Write(Audf4, 0x05);
-        pokey.Write(Skctl, 0x13);
+        pokey.Write(Skctl, (byte)skctl);
         pokey.Write(Irqen, Pokey.SerialInputReadyInterrupt);
         const int bitCycles = 2_983;
         pokey.SerialInputLevel = false;

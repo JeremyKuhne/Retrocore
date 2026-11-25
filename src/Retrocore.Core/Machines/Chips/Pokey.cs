@@ -41,9 +41,10 @@ namespace Retrocore.Machines.Chips;
 ///   channel 4) for SIO transmission and $13 (asynchronous input on channels 3+4, external output clock) for
 ///   reception. The external and bidirectional clock lines are not modeled, so modes with an external output clock
 ///   never shift. Reception is bit level from <see cref="SerialInputLevel"/>, clocked by channel 4 (modes 010 and
-///   110) or, in asynchronous mode (SKCTL bit 4), by channels 3+4 held in reset until a start bit's leading edge
-///   (the input reading low on the cycle after it read high), so a line held low starts no frame. The start bit is
-///   sampled one timer period after its edge, mid-bit, and each bit after it two periods on; SKSTAT bit 1 shows busy
+///   110) or, in asynchronous mode (SKCTL bit 4), by channels 3+4 held in reset until a start bit's leading edge.
+///   In either a frame starts on that edge (the input reading low on the cycle after it read high), so a line held
+///   low starts no frame. The start bit is sampled on the first timer 4 period after its edge (in asynchronous mode
+///   one full period, mid-bit), and each bit after it two periods on; SKSTAT bit 1 shows busy
 ///   from the start bit's sample to the stop bit's, and a stop bit sampled low is a framing error (SKSTAT bit 7).
 ///   <see cref="ReceiveByte"/> also delivers a whole byte at once, for devices that work a byte at a time.
 ///  </para>

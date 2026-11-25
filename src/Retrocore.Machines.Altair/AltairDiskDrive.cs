@@ -89,9 +89,11 @@ public sealed partial class AltairDiskDrive
     /// </summary>
     /// <param name="cycle">The cycle count now.</param>
     /// <param name="inward">Whether to step in, toward the higher tracks.</param>
-    internal void Step(ulong cycle, bool inward)
+    /// <returns>True when the head moved to another track.</returns>
+    internal bool Step(ulong cycle, bool inward)
     {
         _trackZeroBefore = AtTrackZero(cycle);
+        int track = Track;
         if (inward)
         {
             if (Track < AltairDisk.Tracks - 1) { Track++; }
@@ -104,6 +106,7 @@ public sealed partial class AltairDiskDrive
         _stepAt = cycle;
         _stepped = true;
         _settleAt = cycle + AltairDiskTiming.HeadLoadCycles;
+        return Track != track;
     }
 
     /// <summary>

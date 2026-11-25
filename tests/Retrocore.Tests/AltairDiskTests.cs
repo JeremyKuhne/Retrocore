@@ -335,6 +335,47 @@ public sealed class AltairDiskTests
     }
 
     /// <summary>
+    ///  A head loaded mid-sector reads from the next byte to be assembled: NRDA waits for it.
+    /// </summary>
+    [TestMethod]
+    public void AHeadLoadedMidSectorWaitsForTheNextByte()
+    {
+        AltairMachine machine = Machine();
+        machine.Bus.Out(Status, 0);
+        ulong start = NextSector(machine.Processor.CycleCount + AltairDiskTiming.HeadLoadCycles);
+        int sector = (int)(start / AltairDiskTiming.SectorCycles % AltairDisk.SectorsPerTrack);
+        ulong fifth = start + AltairDiskTiming.FirstByteCycles + (5 * AltairDiskTiming.ByteCycles);
+        RunTo(machine, fifth + 10);
+        machine.Bus.Out(Control, 0x04);
+        (machine.Bus.In(Status) & 0x80).Should().Be(0x80, "nothing has been assembled since the load");
+        RunTo(machine, fifth + AltairDiskTiming.ByteCycles);
+        (machine.Bus.In(Status) & 0x80).Should().Be(0);
+        machine.Bus.In(Data).Should().Be(SectorBytes(0, sector)[6]);
+    }
+
+    /// <summary>
+    ///  A step mid-sector keeps a byte waiting to be read, with NRDA, and the new track's bytes come from the next;
+    ///  a step out at track 0, which cannot move the head, changes nothing.
+    /// </summary>
+    [TestMethod]
+    public void AStepKeepsAWaitingByte()
+    {
+        AltairMachine machine = LoadedOnTrack0();
+        ulong start = NextSector(machine.Processor.CycleCount);
+        int sector = (int)(start / AltairDiskTiming.SectorCycles % AltairDisk.SectorsPerTrack);
+        ulong fifth = start + AltairDiskTiming.FirstByteCycles + (5 * AltairDiskTiming.ByteCycles);
+        RunTo(machine, fifth + 10);
+        machine.Bus.Out(Control, 0x02);
+        (machine.Bus.In(Status) & 0x80).Should().Be(0, "a step out at track 0 leaves byte 5 waiting");
+        machine.Bus.Out(Control, 0x01);
+        (machine.Bus.In(Status) & 0x80).Should().Be(0, "the step in leaves byte 5 waiting");
+        machine.Bus.In(Data).Should().Be(SectorBytes(0, sector)[5]);
+        (machine.Bus.In(Status) & 0x80).Should().Be(0x80);
+        RunTo(machine, fifth + AltairDiskTiming.ByteCycles);
+        machine.Bus.In(Data).Should().Be(SectorBytes(1, sector)[6], "the next byte is track 1's");
+    }
+
+    /// <summary>
     ///  A blank sector has no one bit to assemble bytes from, so it never gives one.
     /// </summary>
     [TestMethod]
@@ -347,6 +388,8 @@ public sealed class AltairDiskTests
             RunTo(machine, start + offset);
             (machine.Bus.In(Status) & 0x80).Should().Be(0x80, "no byte at {0} cycles", offset);
         }
+
+        machine.Bus.In(Data).Should().Be(0, "the register keeps the byte it had at power-on");
     }
 
     /// <summary>

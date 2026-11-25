@@ -87,8 +87,8 @@ CodeStart = Pointer1
 CodeStartXByte = CodeStart+X_BYTE_OFFSET
 
 ;; A second pointer, which each routine that uses it names for its job: <RelocateProcedure::DictionaryEntry>,
-;; <ResolveProcedures::Dictionary>, <LinkReferences::ReferenceRecord>, <CompactRecords::KeptRecordsEnd> and
-;; <FindRecord::SoughtName>.
+;; <ResolveProcedures::Dictionary>, <LinkReferences::ReferenceRecord> and <LinkReferences::LabelOffset>,
+;; <CompactRecords::KeptRecordsEnd> and <FindRecord::SoughtName>.
 ;; Also: POINT2 (BB13)
 OtherPointer = Pointer2
 
@@ -262,7 +262,7 @@ RoundUpToBlock:
 ;; Also: DOAPROC (BB13)
 .proc RelocateProcedure
 
-;; The procedure's dictionary entry, which gets its entry point's address.
+;; The procedure's dictionary entry, which gets its entry point's address; then the next procedure's place.
 DictionaryEntry = OtherPointer
 
 ;; <DictionaryEntry>'s X-byte.
@@ -425,8 +425,11 @@ Advance:
 ;; Also: DOPAS2 (BB13)
 .proc LinkReferences
 
-;; The .REF record being linked; for a while, the label's offset.
+;; The .REF record being linked, whose name, at its start, <FindRecord> takes as its <FindRecord::SoughtName>.
 ReferenceRecord = OtherPointer
+
+;; From <AddOffset> on, the label's offset, which <AddToWord> adds to each referring word.
+LabelOffset = OtherPointer
 
     lda ModuleLoadPointer
     sta WalkPointer
@@ -466,6 +469,7 @@ Skip:
 ;;
 ;; With exactly 248 references, the step past the list's padding also adds a page to WalkPointer.
 ;; In: WalkPointer = the .DEF record, ReferenceRecord = the .REF record
+;; Out: LabelOffset = the label's offset in the code
 ;; Also: DOPA25 (BB13)
 AddOffset:
     ldy #LinkerRecord::VALUE
@@ -486,10 +490,10 @@ AddOffset:
     pla
     sbc CodeStart+1
     ldy ReferenceRecord+1
-    sta ReferenceRecord+1
+    sta LabelOffset+1
     sty WalkPointer+1
-    lda ReferenceRecord                     ; WalkPointer back to the .REF, and ReferenceRecord the label's offset
-    stx ReferenceRecord
+    lda ReferenceRecord                     ; WalkPointer back to the .REF, and LabelOffset the label's offset
+    stx LabelOffset
     sta WalkPointer
     ldy #LinkerRecord::COUNT
     lda (WalkPointer),Y                     ; the count of references
@@ -512,11 +516,11 @@ AddToWord:
     sta Target+1
     clc
     dey
-    lda ReferenceRecord
+    lda LabelOffset
     adc (Target),Y
     sta (Target),Y
     iny
-    lda ReferenceRecord+1
+    lda LabelOffset+1
     adc (Target),Y
     sta (Target),Y
     lda #2

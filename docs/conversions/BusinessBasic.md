@@ -27,8 +27,9 @@ Microsoft modules' take the same current names, and what could later be shared i
   them into one listing (1997), from apple3.org. The SDK's source was typed from it, so its names were Apple's. Checked
   by script against the PDF's text: of the 2,313 names the source defined, every one but the SDK's `VERSION` is defined
   at column 0 of the listing (a label, with or without a colon, or an `EQU`), and in the same file. Every renamed
-  definition cites BB13 for its old name, all but SIZE, which nothing uses and is named in prose (BD14). 23 of them are
-  1.3-only names (the program selector's), which the 1.23 build doesn't assemble; they cite BB13 where they are defined.
+  definition cites BB13 for its old name, all but SIZE, which nothing uses and is named in prose (BD14). 23 of the names
+  are 1.3-only names (the program selector's), which the 1.23 build doesn't assemble; they cite BB13 where they are
+  defined.
 - The listing's text stays out of the repository (ConvertingSources.md, step 2); only names and facts came from it.
 - No Microsoft or AppleSoft document is cited: Business BASIC's code reached Apple through AppleSoft, but the names
   were checked only against Apple's own listing. Where a routine has a Microsoft lineage, the same current name is the
@@ -179,21 +180,21 @@ The conversion left seven questions (BBQ1-BBQ7), each settled by the rule or pre
   `ONERR` (AppleSoft.AppleCommands.asm), so one statement has one name in both BASICs.
 - BD13 (was BBQ2). `PROGPREFIX$`'s routines stay `Statements::ProgPrefix` and `Functions::ProgPrefix`, by the keyword,
   as AppleSoft's `HIMEM:` and `LOMEM:` are `HiMem` and `LoMem`; the scope of 1.3's prefix routines is `ProgramPrefix`.
-- BD14 (was BBQ3). OLDOV keeps AppleSoft's `FunctionJumpHigh`, the last of `FunctionJump`'s address bytes (a location's
-  second byte is `NameHigh`), and the float code names its own use of the byte `Float::UnshiftedExtension`, as the
-  shared modules do. Apple's SIZE, `CollectorOffset` in AppleSoft, is used nowhere in Business BASIC, so it is left out
-  and named in prose on `FunctionJump`, as DOS's unused MULT is (ConvertingSources.md). Two constants this conversion
-  had named `SIZE` and `BITS`, Apple's names for other things, are now `LongInteger::BYTE_COUNT`,
-  `LongInteger::BIT_COUNT` and `Variables::MultiplyUnsigned::BIT_COUNT`, so no current name is another definition's
-  old one.
-- BD15 (was BBQ4). `STKEND` stays `STACK_END`, AppleSoft's name for the same job: the value BASIC resets the stack
-  pointer to.
+- BD14 (was BBQ3). OLDOV keeps AppleSoft's `FunctionJumpHigh`, the high byte of the address in `FunctionJump`'s JMP, and
+  the float code names its own use of the byte `Float::UnshiftedExtension`, as the shared modules do. Apple's SIZE,
+  `CollectorOffset` in AppleSoft, is used nowhere in Business BASIC, so it is left out and named in prose on
+  `FunctionJump`, as DOS's unused MULT is (ConvertingSources.md). Two constants this conversion had named `SIZE` and
+  `BITS`, Apple's names for other things, are now `LongInteger::BYTE_COUNT`, `LongInteger::BIT_COUNT` and
+  `Variables::MultiplyUnsigned::BIT_COUNT`, so no current name is another definition's old one.
+- BD15 (was BBQ4). `STKEND` stays `STACK_END`, AppleSoft's name for the same job: what BASIC resets the stack pointer
+  to. AppleSoft's is the address $01FB, whose low byte it loads; Business BASIC's is the value $FE.
 - BD16 (was BBQ5). `CHARACTER_SCREEN_ON` (15) is checked: the SOS console driver's source
   (Sos/Drivers/Console/ConsFctn.asm) gives control code $0F as turning the video on.
 - BD17 (was BBQ6). `Modules::OtherPointer` (POINT2) keeps its general name, and each routine that uses it names it for
   its job with a scoped alias (ConvertingSources.md, shared bytes): `RelocateProcedure::DictionaryEntry`,
   `ResolveProcedures::Dictionary`, `LinkReferences::ReferenceRecord`, `CompactRecords::KeptRecordsEnd` and
-  `FindRecord::SoughtName`, which `CallByName` sets.
+  `FindRecord::SoughtName`, which `CallByName` sets, and which `LinkReferences` gives the .REF record's name through
+  `ReferenceRecord`; there the byte later holds the label's offset, `LinkReferences::LabelOffset`.
 - BD18 (was BBQ7). The long-integer arithmetic stays in `LongInteger` (`LongInteger::Add` ... `LongInteger::Compare`),
   as the real arithmetic is in `Float` (`Float::AddArg`, `Float::MultiplyArg`), not `Operators`; `Operators` holds the
   routines the operator dispatch shares across types.
@@ -1939,12 +1940,12 @@ three 1.3 builds), **AppleSoft name** the converted AppleSoft or Microsoft name 
 | DOPA20 | Modules::LinkReferences::TakeRecord | local | all |  | Takes the record at <WalkPointer> in the second pass. |
 | DOPA22 | Modules::LinkReferences::CheckType | local | all |  | Takes a record of type A. |
 | DOPA29 | Modules::LinkReferences::Skip | local | all |  | Moves on to the next record in the second pass. |
-| DOPA25 | Modules::LinkReferences::AddOffset | local | all |  | Adds the .DEF's offset in the code to each word the .REF record at OtherPointer lists, then moves past the list. |
+| DOPA25 | Modules::LinkReferences::AddOffset | local | all |  | Adds the .DEF's offset in the code to each word the .REF record at ReferenceRecord lists, then moves past the list. |
 | DOPA27 | Modules::LinkReferences::AddToWord | local | all |  | Adds the label's offset to the next referring word. |
 | DOPAS3 | Modules::CompactRecords | routine | all |  | Compacts the module's records in place, keeping only its .PROC and .FUNC records, then loads the next module, with |
 | DOPA31 | Modules::CompactRecords::CheckRecord | local | all |  | Keeps the record at <WalkPointer> if it is a .PROC or .FUNC. |
 | DOPA32 | Modules::CompactRecords::Skip | local | all |  | Moves on to the next record, or at the end loads the next module. |
-| DOPA37 | Modules::CompactRecords::KeepRecord | local | all |  | Copies the 16-byte record at <WalkPointer> down to <OtherPointer>, and moves <OtherPointer> past it. |
+| DOPA37 | Modules::CompactRecords::KeepRecord | local | all |  | Copies the 16-byte record at <WalkPointer> down to <KeptRecordsEnd>, and moves <KeptRecordsEnd> past it. |
 | DOPA38 | Modules::CompactRecords::CopyByte | local | all |  | Copies the next byte, from the last. |
 | DOCRNCH | Modules::MoveRecordsUp | routine | all |  | Moves the records kept, from <INVTAB> to <INVPNT>, up against the lowest module's code, so the free memory left is |
 | DEC2PROC | Modules::StepBack | routine | all |  | Moves <Modules::WalkPointer> down two bytes, to the next word of a dictionary or attribute table. |
@@ -1979,7 +1980,7 @@ three 1.3 builds), **AppleSoft name** the converted AppleSoft or Microsoft name 
 | EXFN | Functions::ExFn | routine | all |  | The `EXFN.` function: calls a .FUNC and takes the real it leaves on the stack, in the order a real argument is |
 | RESTNAM | Modules::FinishFunction | routine | all |  | Finishes a function call: checks the stack, frees the name's place in <NAMBUF>, and backs <TXTPTR> up one character |
 | PERFERR | Modules::ToUndefinedFunctionError | routine | all |  | Ends the statement with an undefined-function error. |
-| PERFIND | Modules::FindRecord | routine | all |  | Finds the linker record of type <PROCFLG> whose 8-character name matches the one at <Modules::OtherPointer>, |
+| PERFIND | Modules::FindRecord | routine | all |  | Finds the linker record of type <ProcedureKind> whose 8-character name matches the one at <SoughtName>, |
 | PERFI01 | Modules::FindRecord::CheckRecord | local | all |  | Takes the record of type A. |
 | PERFI02 | Modules::FindRecord::CheckType | local | all |  | Compares the name when the type is <PROCFLG>. |
 | PERFI06 | Modules::FindRecord::CompareName | local | all |  | Compares the name, from its last character. |

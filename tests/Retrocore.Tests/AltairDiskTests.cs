@@ -269,8 +269,33 @@ public sealed class AltairDiskTests
         (machine.Bus.In(Status) & 0x80).Should().Be(0x80, "reading the port cleared NRDA");
         machine.Bus.Out(Control, 0x04);
         (machine.Bus.In(Status) & 0x80).Should().Be(0x80, "the head load gives nothing back");
+        machine.Bus.Out(Control, 0x01);
+        (machine.Bus.In(Status) & 0x80).Should().Be(0x80, "nor does a step");
         RunTo(machine, start + AltairDiskTiming.FirstByteCycles + AltairDiskTiming.ByteCycles);
         (machine.Bus.In(Status) & 0x80).Should().Be(0, "the next byte has come");
+    }
+
+    /// <summary>
+    ///  The data register holds the last byte to arrive whether or not anything reads it: before a sector's first byte
+    ///  it still has the last of the sector before, and a peek at the port changes nothing.
+    /// </summary>
+    [TestMethod]
+    public void TheDataRegisterFollowsTheDiskAlone()
+    {
+        AltairMachine machine = LoadedOnTrack0();
+        ulong start = NextSector(machine.Processor.CycleCount);
+        int sector = (int)(start / AltairDiskTiming.SectorCycles % AltairDisk.SectorsPerTrack);
+        RunTo(machine, start + AltairDiskTiming.FirstByteCycles);
+        machine.Bus.In(Data).Should().Be(SectorBytes(0, sector)[0]);
+        RunTo(machine, start + AltairDiskTiming.FirstByteCycles + (60 * AltairDiskTiming.ByteCycles));
+        machine.Bus.PeekPort((byte)Data).Should().Be(SectorBytes(0, sector)[60], "a peek sees the byte arriving");
+        RunTo(machine, start + AltairDiskTiming.SectorCycles + 100);
+        machine.Bus.PeekPort((byte)Data).Should().Be(SectorBytes(0, sector)[136], "the last of the sector before");
+        machine.Bus.In(Data).Should().Be(SectorBytes(0, sector)[136], "the peeks changed nothing");
+
+        machine.Bus.Out(Control, 0x08);
+        RunTo(machine, start + (2 * AltairDiskTiming.SectorCycles) + AltairDiskTiming.FirstByteCycles);
+        machine.Bus.In(Data).Should().Be(SectorBytes(0, sector)[136], "an unloaded head keeps the byte it had");
     }
 
     /// <summary>

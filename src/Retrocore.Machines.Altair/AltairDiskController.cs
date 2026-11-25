@@ -69,8 +69,12 @@ public sealed class AltairDiskController
     private long _readSector = -1;
     private int _readTrack = -1;
 
-    // The byte the data register holds: the last one a sector gave it.
+    // The byte the data register keeps while the head is not reading, and the last byte of the sectors before the
+    // current one, for the sector and track it was found for.
     private byte _held;
+    private byte _previous;
+    private long _previousSector = -1;
+    private int _previousTrack = -1;
     private int _readTaken = -1;
 
     // How many cycles after the first byte's time the sector's bytes come, as the controller assembles them from the
@@ -156,7 +160,7 @@ public sealed class AltairDiskController
     }
 
     /// <summary>
-    ///  Reads a port without side effects.
+    ///  Reads a port without changing what the machine sees: NRDA, ENWD and the data register stay as they were.
     /// </summary>
     /// <param name="port">The port, $08-$0A.</param>
     /// <returns>The value a read would return.</returns>
@@ -252,7 +256,9 @@ public sealed class AltairDiskController
     }
 
     // The byte in the data register, and its index in the sector, or -1 while none of this sector's is arriving.
-    // The register keeps the last byte it was given until another comes.
+    // While the head reads, the register holds the last byte that has arrived, this sector's or, before its first,
+    // the last of the sector before; that depends only on where the disk is, not on what has looked at the port.
+    // When reading stops, it keeps the byte it held then (see Latch).
     private byte Data(out int index)
     {
         index = -1;
@@ -263,35 +269,67 @@ public sealed class AltairDiskController
 
         long sector = CurrentSector;
         int offset = CurrentOffset;
-        if (offset < AltairDiskTiming.FirstByteCycles)
+        if (offset >= AltairDiskTiming.FirstByteCycles)
         {
-            return _held;
+            Load(sector, drive, disk);
+            if (LastArrived(_readDelay, offset) is int last)
+            {
+                // An image holds no bytes past a sector's 137, so the last stays the one arriving until the sector
+                // ends, which deasserts NRDA, and then the register keeps it with nothing new to read.
+                if (offset < AltairDiskTiming.EndOfSectorCycles) { index = last; }
+                return _sector[last];
+            }
         }
 
-        if (sector != _readSector || drive.Track != _readTrack)
-        {
-            disk.ReadSector(drive.Track, Sector, _sector);
-            int bit = Align(_sector);
-            _readDelay = bit < 0 ? -1 : bit * AltairDiskTiming.BitCycles;
-            if (sector != _readSector) { _readTaken = -1; }
-            _readSector = sector;
-            _readTrack = drive.Track;
-        }
+        return PreviousLast(sector, drive, disk);
+    }
 
+    // Holds the register's byte as reading stops: a head unloaded, a drive deselected or a write begun.
+    private void Latch() => _held = Data(out _);
+
+    // Reads this sector's bytes as the controller assembles them, once for each sector and track.
+    private void Load(long sector, AltairDiskDrive drive, AltairDisk disk)
+    {
+        if (sector == _readSector && drive.Track == _readTrack) { return; }
+        disk.ReadSector(drive.Track, (int)(sector % AltairDisk.SectorsPerTrack), _sector);
+        int bit = Align(_sector);
+        _readDelay = bit < 0 ? -1 : bit * AltairDiskTiming.BitCycles;
+        if (sector != _readSector) { _readTaken = -1; }
+        _readSector = sector;
+        _readTrack = drive.Track;
+    }
+
+    // The index of the last byte of a sector to have arrived at an offset into it, or null before the first.
+    private static int? LastArrived(int delay, int offset)
+    {
         int end = Math.Min(offset, AltairDiskTiming.EndOfSectorCycles - 1);
-        if (_readDelay < 0 || end < AltairDiskTiming.FirstByteCycles + _readDelay)
+        if (delay < 0 || end < AltairDiskTiming.FirstByteCycles + delay) { return null; }
+        int arrived = (end - AltairDiskTiming.FirstByteCycles - delay) / AltairDiskTiming.ByteCycles;
+        return Math.Min(arrived, AltairDisk.SectorBytes - 1);
+    }
+
+    // The last byte the sectors before this one on the track gave: the nearest with a one bit to read from, or 0 on a
+    // track with none.
+    private byte PreviousLast(long sector, AltairDiskDrive drive, AltairDisk disk)
+    {
+        if (sector == _previousSector && drive.Track == _previousTrack) { return _previous; }
+        Span<byte> bytes = stackalloc byte[AltairDisk.SectorBytes];
+        _previous = 0;
+        for (int back = 1; back <= AltairDisk.SectorsPerTrack; back++)
         {
-            return _held;
+            int earlier = (int)((sector - back) % AltairDisk.SectorsPerTrack + AltairDisk.SectorsPerTrack) % AltairDisk.SectorsPerTrack;
+            disk.ReadSector(drive.Track, earlier, bytes);
+            int bit = Align(bytes);
+            if (LastArrived(bit < 0 ? -1 : bit * AltairDiskTiming.BitCycles, AltairDiskTiming.EndOfSectorCycles) is int last)
+            {
+                _previous = bytes[last];
+                break;
+            }
         }
 
-        int arrived = (end - AltairDiskTiming.FirstByteCycles - _readDelay) / AltairDiskTiming.ByteCycles;
-        int last = Math.Min(arrived, AltairDisk.SectorBytes - 1);
-        _held = _sector[last];
-
-        // An image holds no bytes past a sector's 137, so the last stays the one arriving until the sector ends, and
-        // then the register keeps it with nothing new to read.
-        if (offset < AltairDiskTiming.EndOfSectorCycles) { index = last; }
-        return _held;
+        _previousSector = sector;
+        _previousTrack = drive.Track;
+        return _previous;
     }
 
     // The controller assembles bytes from the first one bit it sees, so a sector whose first byte lacks bit 7 reads
@@ -340,6 +378,7 @@ public sealed class AltairDiskController
 
     private void Deselect()
     {
+        Latch();
         if (Writing) { FinishWrite(); }
         _writePending = false;
         _writeReady = false;
@@ -371,6 +410,7 @@ public sealed class AltairDiskController
             else if ((value & 0x08) != 0)
             {
                 // During a write the status shows the head unloaded at once; the write still ends with its sector.
+                Latch();
                 drive.Unload();
             }
         }
@@ -394,6 +434,7 @@ public sealed class AltairDiskController
 
     private void StartWrite()
     {
+        Latch();
         _writePending = false;
         if (_selected is null) { return; }
         _writeSector = CurrentSector;

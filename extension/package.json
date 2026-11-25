@@ -1517,7 +1517,7 @@
                   ]
                 },
                 "uniqueItems": true,
-                "description": "Altair 8800: the boot PROMs fitted, both from the SDK's sources; DBL by default with the 88-DCDD, none without it."
+                "description": "Altair 8800: the boot PROMs fitted, assembled from the SDK's sources or sdkRoms; DBL by default with the 88-DCDD, none without it."
               },
               "cassetteInterface": {
                 "type": "boolean",
@@ -2120,7 +2120,7 @@
               },
               "sdkRoms": {
                 "type": "string",
-                "description": "Directory of the SDK's ROM sources to debug instead of the copy beside the debug host, so breakpoints set in those files bind: the Apple II's Roms directory (Slot7.rom.asm, AppleSoft, Microsoft6502Basic, System, IntegerBasic, DiskII, Dos), the TRS-80's (Level2.asm, Level1.asm, CharacterGenerator.asm, Model3.asm, Model4PBoot.asm, Model2Boot.asm and their character generators), the Color Computer's (ColorBasic.asm, ExtendedBasic.asm, DiskBasic.asm and Coco3.asm), the PET's (Basic/Basic1.asm, Basic2.asm and Basic4.asm, Basic1/Editor1.asm and Kernal1.asm, Basic2/Editor2.asm and Kernal2.asm, Basic4/Editor4.asm and Kernal4.asm, CharacterGenerator.asm and PetEquates.asm, with Microsoft6502Basic beside it as in the SDK), the Kaypro II's (Kaypro2.asm, Kaypro2CharacterGenerator.asm and MBASIC's modules in Mbasic), or the BBC Micro's (Mos.asm, BbcBasic.asm, Dnfs.asm and Saa5050.asm, with their Mos, Basic and Dnfs folders)."
+                "description": "Directory of the SDK's ROM sources to debug instead of the copy beside the debug host, so breakpoints set in those files bind: the Apple II's Roms directory (Slot7.rom.asm, AppleSoft, Microsoft6502Basic, System, IntegerBasic, DiskII, Dos), the TRS-80's (Level2.asm, Level1.asm, CharacterGenerator.asm, Model3.asm, Model4PBoot.asm, Model2Boot.asm and their character generators), the Color Computer's (ColorBasic.asm, ExtendedBasic.asm, DiskBasic.asm and Coco3.asm), the PET's (Basic/Basic1.asm, Basic2.asm and Basic4.asm, Basic1/Editor1.asm and Kernal1.asm, Basic2/Editor2.asm and Kernal2.asm, Basic4/Editor4.asm and Kernal4.asm, CharacterGenerator.asm and PetEquates.asm, with Microsoft6502Basic beside it as in the SDK), the Kaypro II's (Kaypro2.asm, Kaypro2CharacterGenerator.asm and MBASIC's modules in Mbasic), the Altair 8800's (Dbl.asm and Mbl.asm, which the PROMs are also built from), or the BBC Micro's (Mos.asm, BbcBasic.asm, Dnfs.asm and Saa5050.asm, with their Mos, Basic and Dnfs folders)."
               },
               "breakpoints": {
                 "type": "array",

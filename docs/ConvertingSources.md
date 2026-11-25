@@ -348,9 +348,9 @@ definition or as a historical name. The BASIC tests go through [BasicNames](../t
 (`result.Symbol("FNDLIN")` reaches `FindLine` through its `Also:`), and the debug hosts through
 `AssemblyResult.SymbolsWithHistoricalNames`. [BasicRenameGateTests](../tests/Retrocore.Tests/BasicRenameGateTests.cs)
 proves it: it renames labels in a copy of the sources, each keeping its old name in `Also:`, and runs the BASIC
-test classes it lists against the copy, which must keep every ROM's bytes and pass unchanged. A new test class that assembles
-BASIC joins its list, or the list of those it leaves out, with a reason. Before converting a source whose tests look
-names up, move them to such a lookup first (the alignment plan's B4).
+test classes it lists against the copy, which must keep every ROM's bytes and pass unchanged. A new test class
+that assembles BASIC joins its list, or the list of those it leaves out, with a reason. Before converting a source
+whose tests look names up, move them to such a lookup first (the alignment plan's B4).
 
 ### The scripted checks
 

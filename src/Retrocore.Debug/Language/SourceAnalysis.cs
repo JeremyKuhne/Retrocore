@@ -27,6 +27,9 @@ internal sealed partial class SourceAnalysis
 
     // Full paths by the path as the assembly gave it, filled while the constructor runs.
     private readonly Dictionary<string, string> _fullPaths = [with(StringComparer.Ordinal)];
+
+    // Full paths upper-cased for the keys of _usingOrder and the assembled lines, filled while the constructor runs.
+    private readonly Dictionary<string, string> _upperPaths = [with(StringComparer.Ordinal)];
     private readonly Func<string, string?> _text;
 
     // Filled lazily, and language requests run in parallel: a cache entry is computed whole and then published.
@@ -170,7 +173,7 @@ internal sealed partial class SourceAnalysis
                 if (statement.Kind == AssemblyStatementKind.Using && AssemblyNameResolver.ReadUsingNames(statement, out _) is not null)
                 {
                     usingLines.Add(location.Line);
-                    _usingOrder.TryAdd((path.ToUpperInvariant(), location.Line), index);
+                    _usingOrder.TryAdd((UpperPath(path), location.Line), index);
                 }
             }
             else if (statement.Kind == AssemblyStatementKind.Using && AssemblyNameResolver.ReadUsingNames(statement, out _) is { } names)
@@ -240,13 +243,14 @@ internal sealed partial class SourceAnalysis
             }
 
             Add(new(name, path, location.Line, column, kind, symbol.Value, sourceLength));
-            assembled.Add((path.ToUpperInvariant(), location.Line));
+            assembled.Add((UpperPath(path), location.Line));
         }
 
         // Macros and .defines are expanded before assembly, so find their definitions in the text; so are the
         // definitions of a source that does not assemble yet, which the assembler reports none of.
         foreach ((string path, string[] lines) in _lines)
         {
+            string upperPath = UpperPath(path);
             for (int line = 0; line < lines.Length; line++)
             {
                 Match match = MacroDefinition().Match(lines[line]);
@@ -263,7 +267,7 @@ internal sealed partial class SourceAnalysis
                 bool bare = match.Success && !match.Groups["colon"].Success && !match.Groups["equate"].Success;
                 bool instruction = bare && InstructionDocs.IsMnemonic(match.Groups["name"].Value);
                 // A line the assembler defined a name on has it already, qualified by its scope.
-                if (!match.Success || instruction || assembled.Contains((path.ToUpperInvariant(), line))) { continue; }
+                if (!match.Success || instruction || assembled.Contains((upperPath, line))) { continue; }
 
                 // One it did not assemble (a branch of conditional assembly not taken, or a source with errors) is
                 // qualified by the scopes around it as the assembler would qualify it, so a name in a scope is not
@@ -751,7 +755,7 @@ internal sealed partial class SourceAnalysis
 
         if (!lines.TryGetValue(invocation.Line, out List<string[]>? list)) { lines[invocation.Line] = list = []; }
         list.Add(names);
-        _usingOrder.TryAdd((path.ToUpperInvariant(), invocation.Line), index);
+        _usingOrder.TryAdd((UpperPath(path), invocation.Line), index);
     }
 
     // Records where each scope is first opened in the assembled statements, so a .using operand binds, as the
@@ -790,6 +794,14 @@ internal sealed partial class SourceAnalysis
     {
         if (!_fullPaths.TryGetValue(path, out string? full)) { _fullPaths[path] = full = Path.GetFullPath(path); }
         return full;
+    }
+
+    // A full path upper-cased, as the keys that compare paths without case hold it, once per path; only the
+    // constructor calls this, so the cache needs no lock.
+    private string UpperPath(string path)
+    {
+        if (!_upperPaths.TryGetValue(path, out string? upper)) { _upperPaths[path] = upper = path.ToUpperInvariant(); }
+        return upper;
     }
 
     private static string Qualify(string scope, string name) => name.Length == 0 ? scope : $"{scope}::{name}";

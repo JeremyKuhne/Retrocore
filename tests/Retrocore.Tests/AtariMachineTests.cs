@@ -148,7 +148,7 @@ public class AtariMachineTests
 
     /// <summary>
     ///  Each of BASIC's graphics modes draws: a full-screen line in colour 1 shows that colour register's colour, on
-    ///  the background, and GTIA modes 9 to 11 show their 16 shades or hues.
+    ///  the background, and GTIA modes 9 to 11 show their shades, colours or hues.
     /// </summary>
     /// <param name="mode">The <c>GRAPHICS</c> mode.</param>
     [TestMethod]
@@ -268,6 +268,21 @@ public class AtariMachineTests
         Type(machine, "? PEEK(53279);\",\";STICK(0);\",\";STRIG(0)\r");
         string[] screen = machine.ReadTextScreen();
         screen.Should().Contain(line => line.Trim() == "6,7,0", Text(screen));
+    }
+
+    /// <summary>
+    ///  Power-on resets the PIA, so the cassette motor and the command line it drove are released.
+    /// </summary>
+    [TestMethod]
+    public void PowerOnResetsThePia()
+    {
+        AtariMachine machine = Machine();
+        machine.Run(TimeSpan.FromSeconds(1));
+        machine.Bus.Write(0xD302, 0x34);
+        machine.Bus.Write(0xD303, 0x34);
+        machine.PowerOn();
+        machine.Bus.Pia.ControlA.Should().Be(0);
+        machine.Bus.Pia.ControlB.Should().Be(0);
     }
 
     /// <summary>

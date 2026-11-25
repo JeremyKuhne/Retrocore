@@ -69,6 +69,10 @@ public sealed class Antic
     private bool _refreshPending;
     private long _wsyncFrom = -1;
     private bool _nmiRequested;
+    private bool _nmiLate;
+    private bool _nmiForced;
+    private byte _nmiCandidates;
+    private byte _nmiEnableAtSeven;
     private bool _nmiEdge;
     private bool _resetHeld;
 
@@ -282,13 +286,24 @@ public sealed class Antic
                 if (cycle == 7) { RaiseNmis(); }
                 break;
             case 8:
+                // NMIEN must be written by cycle 7 to enable an interrupt (Altirra 4.8): this runs before cycle 8's
+                // write, so it sees cycle 7's. One enabled on cycle 7 itself comes a cycle late.
+                _nmiRequested = _nmiForced || (_nmiCandidates & NmiEnable) != 0;
+                _nmiLate = !_nmiForced && (_nmiCandidates & _nmiEnableAtSeven) == 0;
                 if (display) { SetUpPlayfield(); }
                 break;
+            case 9:
+                // ... and by cycle 8 to disable it.
+                if (!_nmiForced && (_nmiCandidates & NmiEnable) == 0) { _nmiRequested = false; }
+                _nmiCandidates = 0;
+                _nmiForced = false;
+                break;
             case 10:
+            case 11:
                 // ANTIC pulls NMI on cycle 8; the 6502 takes two cycles to see it, so the interrupt sequence
-                // starts on cycle 10 at the earliest (Altirra 4.8). This 6502 takes a latched NMI at its next
-                // instruction boundary, so the edge reaches it from cycle 10.
-                if (_nmiRequested)
+                // starts on cycle 10 at the earliest, or 11 for an interrupt enabled on cycle 7 (Altirra 4.8). This
+                // 6502 takes a latched NMI at its next instruction boundary, so the edge reaches it from then.
+                if (_nmiRequested && _nmiLate == (cycle == 11))
                 {
                     _nmiRequested = false;
                     _nmiEdge = true;
@@ -338,7 +353,6 @@ public sealed class Antic
     {
         NmiEnable = 0;
         DmaControl = 0;
-        _wsyncFrom = -1;
     }
 
     private ushort PlayerMissileAddress(int twoLineOffset, int oneLineOffset)
@@ -395,16 +409,18 @@ public sealed class Antic
         return fetched;
     }
 
-    // Cycles 6 and 7: the address of an LMS or a jump, on the mode line's first scan line.
+    // Cycles 6 and 7: the address of an LMS or a jump, on the mode line's first scan line; a jump that vertical
+    // scrolling stretches over more scan lines fetches it again on each (Altirra 4.x, "Mode lines with unusual
+    // height").
     private bool FetchAddress(int cycle)
     {
-        if (!_firstLine || _waitForVerticalBlank || (DmaControl & 0x20) == 0) { return false; }
+        if (_waitForVerticalBlank || (DmaControl & 0x20) == 0) { return false; }
         bool jump = _mode == 1;
         bool lms = _mode >= 2 && (_instruction & 0x40) != 0;
         if (!jump && !lms) { return false; }
 
         // A fetched instruction is already in the register; JVB's address is fetched once.
-        if (Line != _dmaStartLine) { return false; }
+        if (!jump && (!_firstLine || Line != _dmaStartLine)) { return false; }
 
         byte value = _bus.DmaRead(_displayList);
         _displayList = NextDisplayListAddress(_displayList);
@@ -428,21 +444,21 @@ public sealed class Antic
         return true;
     }
 
-    // Cycle 7: NMIST changes, and the NMI follows on cycle 8.
+    // Cycle 7: NMIST changes, and the NMI follows on cycle 8 if NMIEN allows it then (and still on cycle 9).
     private void RaiseNmis()
     {
+        _nmiEnableAtSeven = NmiEnable;
         int line = Line;
         if (line == AtariTiming.VerticalBlankLine)
         {
             NmiStatus = (byte)((NmiStatus & 0x20) | 0x40);
-            bool nmi = (NmiEnable & 0x40) != 0;
+            _nmiCandidates = 0x40;
             if (_resetHeld)
             {
                 NmiStatus |= 0x20;
-                nmi = true;
+                _nmiForced = true;
             }
 
-            if (nmi) { _nmiRequested = true; }
             return;
         }
 
@@ -450,7 +466,7 @@ public sealed class Antic
         if (display && (_instruction & 0x80) != 0 && _row == _endRow)
         {
             NmiStatus = (byte)((NmiStatus & 0x20) | 0x80);
-            if ((NmiEnable & 0x80) != 0) { _nmiRequested = true; }
+            _nmiCandidates = 0x80;
         }
     }
 

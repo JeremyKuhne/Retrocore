@@ -3,6 +3,7 @@
 // See LICENSE file in the project root for full license information
 
 using Retrocore.Machines.Atari;
+using Retrocore.Machines.Devices;
 using Retrocore.Media.Atari;
 
 namespace Retrocore.Tests;
@@ -191,6 +192,8 @@ public class AtariDiskTests
         AtariMachine machine = new(new AtariRoms(new byte[AtariRoms.Size]), diskDrives: 1, driveKind: AtariDiskDriveKind.CommandLevel);
         AtariSioDiskDrive drive = (AtariSioDiskDrive)machine.Drives[0];
         IAtariSioDevice device = drive;
+        drive.Head.Motor.Should().BeFalse("the drive hasn't been used");
+        drive.Activity.Should().Be(DeviceActivity.Idle);
 
         drive.Insert(AtariDisk.Create());
         device.Accept(0x57, 700).Should().Be(128);

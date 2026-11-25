@@ -120,12 +120,13 @@ public sealed class AtariMachine : IMachine, IVideoSource
     public ProcessorCycle LastCycle => Processor.LastCycle;
 
     /// <summary>
-    ///  Powers the machine off and on: the CPU resets and ANTIC clears <c>NMIEN</c> and <c>DMACTL</c>; RAM keeps
-    ///  what it held.
+    ///  Powers the machine off and on: the CPU and the PIA reset and ANTIC clears <c>NMIEN</c> and <c>DMACTL</c>; RAM
+    ///  keeps what it held.
     /// </summary>
     public void PowerOn()
     {
         Bus.Antic.PowerOn();
+        Bus.Pia.Reset();
         Bus.ResetCartridges();
         Processor.Signals = ProcessorSignals.None;
         _irq = false;

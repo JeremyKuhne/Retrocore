@@ -10,8 +10,8 @@ public sealed partial class WesternDigitalFloppyDiskController
 {
     private const int MaximumCylinder = 79;
 
-    // Step rates in milliseconds, by the command's low two bits.
-    private static readonly int[] s_stepRates1771 = [6, 6, 10, 20];
+    // Step rates in milliseconds at a 1 MHz clock, by the command's low two bits (FD1771 manual, Table 1).
+    private static readonly int[] s_stepRates1771 = [12, 12, 20, 40];
     private static readonly int[] s_stepRates1791 = [6, 12, 20, 30];
 
     private int _direction = 1;
@@ -68,9 +68,11 @@ public sealed partial class WesternDigitalFloppyDiskController
             return;
         }
 
-        // The E bit adds the 15 ms head-load delay.
-        _wait = (value & 0x04) != 0 ? _settleCycles : 1;
+        // The E bit adds the 15 ms head-load delay. Write track asks for its first byte at once, delay or not; writing
+        // starts at the index pulse once it's there.
+        _wait = (value & 0x04) != 0 ? SettleCycles : 1;
         _phase = Phase.Delaying;
+        if ((value & 0xF0) == 0xF0) { _request = true; }
     }
 
     private void StartStep()
@@ -79,10 +81,10 @@ public sealed partial class WesternDigitalFloppyDiskController
         switch (_command >> 4)
         {
             case 0:
-                // Restore steps out to track 0.
+                // Restore steps out to track 0; with no track 0 sensor it gives up after 255 steps.
                 _direction = -1;
-                _steps = cylinder;
-                Track = 0;
+                _steps = _sensorsWired ? cylinder : 255;
+                if (_sensorsWired) { Track = 0; }
                 break;
             case 1:
                 _direction = Data > Track ? 1 : -1;
@@ -129,11 +131,19 @@ public sealed partial class WesternDigitalFloppyDiskController
                     }
                 }
 
+                // A Restore that never found track 0 ends with Seek Error, unverified.
+                if ((_command >> 4) == 0 && !_sensorsWired)
+                {
+                    _status |= SeekError;
+                    Finish();
+                    return;
+                }
+
                 // The V bit verifies the track; h and V load the head.
                 if ((_command & 0x0C) != 0) { _status |= HeadLoaded; }
                 if ((_command & 0x04) != 0)
                 {
-                    _wait = _settleCycles;
+                    _wait = SettleCycles;
                     _phase = Phase.Verifying;
                     return;
                 }
@@ -147,9 +157,6 @@ public sealed partial class WesternDigitalFloppyDiskController
             case Phase.Delaying:
                 _indexPulses = 0;
                 _phase = (_command & 0xF0) is 0xE0 or 0xF0 ? Phase.AwaitingIndex : Phase.Searching;
-
-                // Write track asks for its first byte at once; writing starts at the index pulse once it's there.
-                if ((_command & 0xF0) == 0xF0) { _request = true; }
                 return;
             case Phase.Searching:
                 Search();

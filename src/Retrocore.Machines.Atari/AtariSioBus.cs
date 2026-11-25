@@ -20,17 +20,18 @@ namespace Retrocore.Machines.Atari;
 ///   read's data frame straight after it.
 ///  </para>
 ///  <para>
-///   The device's bytes reach POKEY whole, one each 932 cycles (19,200 baud with a start and a stop bit), as
-///   <see cref="Pokey.ReceiveByte"/> takes them.
+///   The device's bytes reach POKEY whole, one each 932 cycles of the NTSC clock (19,200 baud with a start and a stop
+///   bit), as <see cref="Pokey.ReceiveByte"/> takes them. The times scale to the PAL machine's clock, as the devices'
+///   clocks are their own.
 ///  </para>
 /// </remarks>
 public sealed class AtariSioBus
 {
-    // One byte at 19,200 baud: ten bits.
-    private const int ByteCycles = 932;
-    private const int AckCycles = 1_100;
-    private const int DataAckCycles = 1_800;
-    private const int CompleteCycles = 500;
+    // In NTSC cycles: one byte at 19,200 baud (ten bits), and the device's delays.
+    private const int NtscByteCycles = 932;
+    private const int NtscAckCycles = 1_100;
+    private const int NtscDataAckCycles = 1_800;
+    private const int NtscCompleteCycles = 500;
 
     private readonly Pokey _pokey;
     private readonly AtariBus _bus;
@@ -46,6 +47,14 @@ public sealed class AtariSioBus
     private ushort _aux;
     private int _dataLength;
     private long _nextFree;
+
+    private long ByteCycles => _bus.FromNtscCycles(NtscByteCycles);
+
+    private long AckCycles => _bus.FromNtscCycles(NtscAckCycles);
+
+    private long DataAckCycles => _bus.FromNtscCycles(NtscDataAckCycles);
+
+    private long CompleteCycles => _bus.FromNtscCycles(NtscCompleteCycles);
 
     /// <summary>
     ///  Constructs the bus.

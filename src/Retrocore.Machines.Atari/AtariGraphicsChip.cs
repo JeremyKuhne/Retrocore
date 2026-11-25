@@ -10,7 +10,7 @@ namespace Retrocore.Machines.Atari;
 public enum AtariGraphicsChip
 {
     /// <summary>
-    ///  The GTIA, in all but the earliest machines: the CTIA plus three 16-colour modes (BASIC's <c>GRAPHICS 9</c>-<c>11</c>).
+    ///  The GTIA, in all but the earliest machines: the CTIA plus three modes of up to 16 colours (BASIC's <c>GRAPHICS 9</c>-<c>11</c>).
     /// </summary>
     Gtia,
 

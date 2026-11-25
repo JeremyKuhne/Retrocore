@@ -50,7 +50,6 @@ public sealed partial class WesternDigitalFloppyDiskController
     private readonly int _cyclesPerMillisecond;
     private readonly int _rotationCycles;
     private readonly int _indexPulseCycles;
-    private readonly int _settleCycles;
     private readonly bool _sensorsWired;
     private bool _externalIndex;
     private bool _motorHeld;
@@ -111,7 +110,6 @@ public sealed partial class WesternDigitalFloppyDiskController
         int usual = eightInch ? clockHertz / 6 : 200 * _cyclesPerMillisecond;
         _rotationCycles = rotationsPerMinute == 0 ? usual : (int)((long)clockHertz * 60 / rotationsPerMinute);
         _indexPulseCycles = 4 * _cyclesPerMillisecond;
-        _settleCycles = 15 * _cyclesPerMillisecond;
     }
 
     /// <summary>
@@ -358,6 +356,10 @@ public sealed partial class WesternDigitalFloppyDiskController
     // Whether the chip reading now behaves as a WD179x: always for an FD179x or WD179x, and with a doubler's WD1791
     // selected beside an FD1771.
     private bool Is179x => _wd179x || _doubleDensity;
+
+    // The head-load delay: the FD1771's 10 ms at 2 MHz is 20 ms at the usual 1 MHz (FD1771 manual; Altirra 10.8,
+    // Table 58); the FD179x's 15 ms.
+    private int SettleCycles => Is179x ? 15 * _cyclesPerMillisecond : 20 * _cyclesPerMillisecond / (_eightInch ? 2 : 1);
 
     private byte Status()
     {

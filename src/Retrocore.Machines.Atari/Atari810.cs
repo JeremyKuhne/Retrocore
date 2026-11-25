@@ -46,7 +46,9 @@ public sealed class Atari810 : AtariDiskDrive
 
     private const int RotationsPerMinute = 288;
     private const int LastTrack = 41;
-    private const int WarmUpCycles = ClockHertz;
+    // Long enough for the firmware's start-up: the head stepped out and in, then the motor's run-on of two Restores,
+    // each 255 steps at 12 ms, before it parks.
+    private const int WarmUpCycles = 8 * ClockHertz;
 
     private readonly byte[] _rom;
     private readonly byte[] _ram = new byte[128];
@@ -150,8 +152,8 @@ public sealed class Atari810 : AtariDiskDrive
     internal Action? InstructionStarting { get; set; }
 
     /// <summary>
-    ///  Switches the drive off and on: the 6507, the RIOT and the FD1771 reset and the RAM clears; the head stays where
-    ///  it is.
+    ///  Switches the drive off and on: the 6507 and the RIOT reset, the FD1771 stops what it was doing (its registers
+    ///  keep their values) and the RAM clears; the head stays where it is.
     /// </summary>
     public void PowerOn()
     {

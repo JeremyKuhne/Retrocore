@@ -106,7 +106,8 @@ public class Atari810Tests
         drive.Motor.Should().BeFalse();
 
         AtariMachineTests.RunUntil(machine, line => line.Contains("SELECT ITEM", StringComparison.Ordinal), seconds: 30);
-        machine.Run(TimeSpan.FromSeconds(5));
+        // The motor runs on for two Restores, each 255 steps at 12 ms, about six seconds.
+        machine.Run(TimeSpan.FromSeconds(10));
         drive.Motor.Should().BeFalse();
         drive.Track.Should().Be(39);
         drive.Head.Motor.Should().BeFalse();

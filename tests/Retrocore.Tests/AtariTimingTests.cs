@@ -144,6 +144,45 @@ public class AtariTimingTests
     }
 
     /// <summary>
+    ///  <c>NMIEN</c> must be written by cycle 7 to enable the vertical blank interrupt and by cycle 8 to disable it
+    ///  (Altirra 4.8).
+    /// </summary>
+    /// <param name="before">NMIEN before the write.</param>
+    /// <param name="after">The value written.</param>
+    /// <param name="cycle">The cycle of line 248 the write is on.</param>
+    /// <param name="fires">Whether the interrupt comes.</param>
+    [TestMethod]
+    [DataRow(0x00, 0x40, 7, true)]
+    [DataRow(0x00, 0x40, 8, false)]
+    [DataRow(0x40, 0x00, 8, false)]
+    [DataRow(0x40, 0x00, 9, true)]
+    public void NmiEnableWindow(int before, int after, int cycle, bool fires)
+    {
+        byte[] code = new byte[0x1000];
+        Array.Fill(code, (byte)0xEA);
+        code[0xFFD] = 0x4C;
+        code[0xFFE] = 0x00;
+        code[0xFFF] = 0x20;
+        AtariMachine machine = Run(code);
+        machine.Bus.Write(0xD40E, (byte)before);
+        while (!(machine.Antic.Line == AtariTiming.VerticalBlankLine && machine.Antic.Cycle == cycle + 1))
+        {
+            machine.Run(1);
+        }
+
+        machine.Bus.Write(0xD40E, (byte)after);
+        bool pushed = false;
+        for (int i = 0; i < 30 && !pushed; i++)
+        {
+            machine.StepCycle();
+            ProcessorCycle step = machine.LastCycle;
+            pushed = step.Operation == BusOperation.Write && step.Address >> 8 == 1;
+        }
+
+        pushed.Should().Be(fires, $"NMIEN went from ${before:X2} to ${after:X2} on cycle {cycle}");
+    }
+
+    /// <summary>
     ///  <c>VCOUNT</c> is half the scan line, and shows the next line's from cycle 111.
     /// </summary>
     [TestMethod]
@@ -222,26 +261,32 @@ public class AtariTimingTests
     ///  <c>HSCROL</c> 0; each colour clock of <c>HSCROL</c> moves the picture right by one (Altirra 4.7).
     /// </summary>
     /// <param name="scroll">The <c>HSCROL</c> value.</param>
-    /// <param name="shown">The screen byte whose character starts at the playfield's left edge.</param>
     [TestMethod]
-    [DataRow(0, 4)]
-    [DataRow(4, 3)]
-    [DataRow(8, 2)]
-    public void HorizontalScrollShiftsThePlayfield(int scroll, int shown)
+    [DataRow(0)]
+    [DataRow(1)]
+    [DataRow(2)]
+    [DataRow(3)]
+    [DataRow(5)]
+    [DataRow(8)]
+    public void HorizontalScrollShiftsThePlayfield(int scroll)
     {
-        // Mode 2 with LMS and horizontal scrolling; byte `shown` holds an inverse space, a solid block.
+        // Mode 2 with LMS and horizontal scrolling; byte 4, at the left edge with HSCROL 0, holds an inverse space,
+        // a solid block four colour clocks wide.
         AtariMachine machine = Display(0x22, 0x52);
-        machine.Bus.Poke((ushort)(0x4000 + shown), 0x80);
+        machine.Bus.Poke(0x4004, 0x80);
         machine.Bus.Write(0xD401, 0x02);
         machine.Bus.Write(0xD404, (byte)scroll);
         machine.RunFrame();
         machine.RunFrame();
 
-        // The mode line is lines 32-39; the block's top row is solid PF1 luminance on PF2's hue.
+        // The mode line is lines 32-39; every row of the block is PF1 luminance on PF2's hue.
         uint block = machine.Gtia.Rgba(0x9E);
         uint playfield = machine.Gtia.Rgba(0x94);
-        Pixel(machine, 33, 0x30).Should().Be(block, "the block starts at the left edge");
-        Pixel(machine, 33, 0x30 + 8).Should().Be(playfield, "the next character is a space");
+        int start = 0x30 + scroll;
+        Pixel(machine, 33, start).Should().Be(block, $"HSCROL {scroll} moves the block right by {scroll}");
+        Pixel(machine, 33, start + 3).Should().Be(block, "the block is four clocks wide");
+        Pixel(machine, 33, start + 4).Should().Be(playfield, "the character after it is a space");
+        if (scroll > 0) { Pixel(machine, 33, start - 1).Should().Be(playfield, "the character before it is a space"); }
     }
 
     /// <summary>

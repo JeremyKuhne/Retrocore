@@ -92,11 +92,27 @@ internal sealed class Atari810Disk
     /// </summary>
     public void Sync()
     {
-        if (Floppy.IsWriteProtected != Image.IsWriteProtected) { Floppy.IsWriteProtected = Image.IsWriteProtected; }
-        if (Floppy.Version == _synced) { return; }
-        _synced = Floppy.Version;
-        if (Image.SectorSize != SectorSize || Image.IsWriteProtected) { return; }
+        bool protect = Image.IsWriteProtected;
+        if (Floppy.Version != _synced && Image.SectorSize == SectorSize)
+        {
+            // A write the controller took before the image was protected is on the disk: it still goes to the image.
+            Image.IsWriteProtected = false;
+            try
+            {
+                CopyBack();
+            }
+            finally
+            {
+                Image.IsWriteProtected = protect;
+            }
+        }
 
+        _synced = Floppy.Version;
+        if (Floppy.IsWriteProtected != protect) { Floppy.IsWriteProtected = protect; }
+    }
+
+    private void CopyBack()
+    {
         Span<byte> written = stackalloc byte[SectorSize];
         Span<byte> current = stackalloc byte[SectorSize];
         int sectors = Math.Min(Image.SectorCount, Tracks * SectorsPerTrack);

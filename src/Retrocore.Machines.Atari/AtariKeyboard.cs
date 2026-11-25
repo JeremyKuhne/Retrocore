@@ -7,7 +7,7 @@ using Retrocore.Machines.Chips;
 namespace Retrocore.Machines.Atari;
 
 /// <summary>
-///  The Atari 400 and 800's keyboard: 57 keys POKEY scans, SHIFT, CONTROL and BREAK on their own lines, the START,
+///  The Atari 400 and 800's keyboard: 53 keys POKEY scans, SHIFT, CONTROL and BREAK on their own lines, the START,
 ///  SELECT and OPTION keys GTIA reads, and SYSTEM RESET, which goes to ANTIC.
 /// </summary>
 /// <remarks>

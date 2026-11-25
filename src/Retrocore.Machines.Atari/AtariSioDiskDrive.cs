@@ -20,17 +20,27 @@ namespace Retrocore.Machines.Atari;
 /// </remarks>
 public sealed class AtariSioDiskDrive : AtariDiskDrive, IAtariSioDevice
 {
-    private const int StatusCycles = 3_600;
-    private const int SectorCycles = 14_000;
-    private const int FormatCycles = 450_000;
-    private const int MotorCycles = 3 * 1_789_773;
+    // In NTSC cycles; the drive's clock is its own, so they scale to a PAL machine's.
+    private const int NtscStatusCycles = 3_600;
+    private const int NtscSectorCycles = 14_000;
+    private const int NtscFormatCycles = 450_000;
+    private const int NtscMotorCycles = 3 * 1_789_773;
 
     private readonly AtariBus _bus;
     private byte _driveStatus;
     private byte _controllerStatus = 0xFF;
-    private long _lastAccess = long.MinValue;
+    // Far enough back to be idle, and near enough that the subtraction from the clock can't wrap.
+    private long _lastAccess = long.MinValue / 2;
     private int _lastSector = 1;
     private bool _lastWrite;
+
+    private int StatusCycles => (int)_bus.FromNtscCycles(NtscStatusCycles);
+
+    private int SectorCycles => (int)_bus.FromNtscCycles(NtscSectorCycles);
+
+    private int FormatCycles => (int)_bus.FromNtscCycles(NtscFormatCycles);
+
+    private long MotorCycles => _bus.FromNtscCycles(NtscMotorCycles);
 
     /// <summary>
     ///  Constructs a drive.

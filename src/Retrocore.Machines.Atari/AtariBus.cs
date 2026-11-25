@@ -37,6 +37,19 @@ public sealed class AtariBus : IProcessorBus
     private int _driveClock;
 
     /// <summary>
+    ///  Gets the CPU's clock in hertz, by the video standard.
+    /// </summary>
+    internal int CpuHertz => _cpuHertz;
+
+    /// <summary>
+    ///  Converts a time given in cycles of the NTSC clock to cycles of this machine's, for the devices on the serial
+    ///  bus, whose own clocks don't follow the computer's.
+    /// </summary>
+    /// <param name="ntscCycles">The time in NTSC cycles.</param>
+    /// <returns>The time in this machine's cycles.</returns>
+    internal long FromNtscCycles(long ntscCycles) => ntscCycles * _cpuHertz / AtariTiming.CpuHertz(AtariVideoStandard.Ntsc);
+
+    /// <summary>
     ///  Constructs the bus at power-on.
     /// </summary>
     /// <param name="roms">The OS ROM.</param>

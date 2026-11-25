@@ -173,7 +173,13 @@ public class AtariCartridgeTests
         file = [.. file, 0x00, 0x40, 0x57, 0x42, .. pattern];
 
         AtariMachineTests.Machine();
-        AtariMachine machine = new(AtariRoms.LoadFromDirectory(AtariMachineTests.RomDirectory), diskDrives: 1);
+        AtariRoms roms = AtariRoms.LoadFromDirectory(AtariMachineTests.RomDirectory);
+        if (roms.DiskDrive.IsEmpty)
+        {
+            Assert.Inconclusive("The 810's firmware (MAME's atari810 set) isn't beside the OS ROMs.");
+        }
+
+        AtariMachine machine = new(roms, diskDrives: 1);
         machine.Drives[0].Insert(AtariExecutable.BootDisk(file), "test.xex", "XEX");
         for (int second = 0; second < 30 && machine.Bus.Peek(0x02C8) != 0x46; second++)
         {

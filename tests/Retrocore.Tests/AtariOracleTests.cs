@@ -135,11 +135,14 @@ public class AtariOracleTests
             ?? Path.Join(ExternalTestData.Root, "mame", "mame.exe");
 
         string roms = Path.Join(Path.GetDirectoryName(Path.GetDirectoryName(AtariMachineTests.RomDirectory)), "mame");
-        AtariRoms atariRoms = AtariRoms.LoadFromDirectory(AtariMachineTests.RomDirectory);
-        if (!File.Exists(mame) || !File.Exists(Path.Join(roms, "atari810.zip")) || atariRoms.DiskDrive.IsEmpty)
+        string chip = Path.Join(AtariMachineTests.RomDirectory, "co12399b.rom");
+        if (!File.Exists(mame) || !File.Exists(Path.Join(roms, "atari810.zip")) || !File.Exists(chip))
         {
             Assert.Inconclusive("MAME or the Atari and 810 ROM sets are missing.");
         }
+
+        AtariRoms atariRoms = AtariRoms.LoadFromDirectory(AtariMachineTests.RomDirectory);
+        if (atariRoms.DiskDrive.IsEmpty) { Assert.Inconclusive("The 810's firmware isn't beside the OS ROMs."); }
 
         const int Seconds = 1;
         List<Row> mameRows = RunMame(mame, roms, Seconds, cartridge: null, sio: "a810", cpu: ":sio:a810:fdcpu");
@@ -473,8 +476,11 @@ public class AtariOracleTests
             if (cpu is not null) { start.Environment["RETRO_CPU"] = cpu; }
             using (Process process = Process.Start(start) ?? throw new InvalidOperationException("MAME did not start."))
             {
+                // Both pipes drain at once, so a full one can't stall MAME.
+                Task<string> errors = process.StandardError.ReadToEndAsync();
                 process.StandardOutput.ReadToEnd();
                 process.WaitForExit(600_000).Should().BeTrue("MAME finishes");
+                errors.Wait();
             }
 
             File.Exists(output).Should().BeTrue("the Lua script traces");

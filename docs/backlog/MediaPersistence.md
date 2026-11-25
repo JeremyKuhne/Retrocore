@@ -951,11 +951,23 @@ After the reviews:
      session the language server offers, its disk shows changed on the machine while off and saves there, a second
      crash's disk is discarded, and of two hosts launching one machine only the first keeps its journal.
      `RETROCORE_CHECKPOINT_SECONDS` shortens the checkpoint for such tests.
-   - **Left for the next parts.** Checkpoints are taken at a request's boundary, not yet at each controller's idle
-     moment, and the machine's own eject is kept at the next checkpoint rather than as it happens. A kept disk whose launch image is gone cannot yet be shown or saved while off, as the machine is not built without it. Injected write
-     failures (a full disk, access denied) are not yet tested. Then built disks (kept in the history once it is
-     built, with a notice), recordings as changed tapes, slot 7's device (which cannot be mounted again in a running
-     machine), Retrocore Desktop's journal, and the source-aware default lock.
+   - **Idle moments, the machine's eject and falling behind (built).** A checkpoint waits for a drive that is
+     writing, by the drive's own activity (the Disk II in its write mode, a floppy controller in a write command, a
+     recorder recording, a block device just after a block), for up to five seconds while the machine runs, and then
+     takes the disk as it is, marked `midWrite`; the disks that can be kept meanwhile are committed without waiting.
+     The 3.5 drive says when the machine ejected a disk (`IEjectingSlot.HasEjected`), and the debug host checkpoints
+     at once, after the slice or stop that saw it. The journal keeps, per disk, when its last commit kept it and
+     whether mid-write, and why the last commit failed; `retro/devices` gives each changed disk's
+     `media.recovery`, behind when its changes are not kept and commits fail or are two intervals late, and the
+     Drives view marks it with a warning and says what is kept. Tests: `RecoveryJournalTests` (a Disk II in its write
+     mode waits and is then taken mid-write; a commit whose journal cannot be written leaves the last one standing
+     and is behind until one goes through; a disk put back keeps when it was kept; the 3.5 drive's ejected disk),
+     the extension's recovery lines and mark, and `Test-RecoveryDap.mjs` reading a running drive's `recovery`.
+   - **Left for the next parts.** The machine's own eject is not yet tested through a running machine, as no test
+     program ejects a 3.5 disk. A kept disk whose launch image is gone cannot yet be shown or saved while off, as the
+     machine is not built without it. Then built disks (kept in the history once it is built, with a notice),
+     recordings as changed tapes with the recorder's buffered bits, slot 7's device (which cannot be mounted again in
+     a running machine), Retrocore Desktop's journal, and the source-aware default lock.
 5. **The history.** The chunk store with its lock and grace window, thinning to a target, the History rows, Compare,
    the clocks and gears. Done when the *History* tests pass and a disk restores to any version, running or off.
 6. **Machine files.** The `Unsaved\` mirror and machine ids, with [machine files](MachineFiles.md#phases)' fourth

@@ -11,6 +11,11 @@ namespace Retrocore.Media;
 public interface IEjectingSlot : IMediumSlot
 {
     /// <summary>
+    ///  Gets whether the machine ejected a medium the host has not taken yet, so a host can keep it at once.
+    /// </summary>
+    bool HasEjected { get; }
+
+    /// <summary>
     ///  Takes the media the machine ejected since the last call, oldest first.
     /// </summary>
     /// <returns>The media, empty when none were ejected.</returns>

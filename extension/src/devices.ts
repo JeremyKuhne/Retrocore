@@ -513,6 +513,8 @@ class DriveDecorations implements vscode.FileDecorationProvider {
                 return { badge: "⚠", tooltip: "Its image changed on disk", color: new vscode.ThemeColor("list.warningForeground") };
             case "conflict":
                 return { badge: "⚠", tooltip: "Changed, and its image changed on disk too", color: new vscode.ThemeColor("list.warningForeground") };
+            case "behind":
+                return { badge: "⚠", tooltip: "Changed, and its recovery copy is behind", color: new vscode.ThemeColor("list.warningForeground") };
             default:
                 return undefined;
         }

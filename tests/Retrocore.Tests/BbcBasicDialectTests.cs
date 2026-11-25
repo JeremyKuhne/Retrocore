@@ -270,6 +270,7 @@ public sealed class BbcBasicDialectTests
     /// <summary>
     ///  Between [ and ], over several lines, the assembler's mnemonics, registers and comments are not variables, while
     ///  its labels and the names in its operands are: renaming loop renames .loop and BNE loop, and LDA is no variable.
+    ///  Nothing after an implied instruction is read, and LDX, LDY, STX and STY take their register in either case.
     /// </summary>
     [TestMethod]
     public void AssemblerMnemonicsAreNotVariables()
@@ -281,6 +282,7 @@ public sealed class BbcBasicDialectTests
             40 .loop LDA dest,X:STA &71,Y \ copy X: INX
             50 lda (dest),Y:ASL A:ROR count:ORA #1:AND mask:EOR #&FF:JMP (dest)
             60 EQUB 1:EQUW start:BNE loop ; back to Y
+            65 RTS back to caller:LDX dest,y:STY count,x then more:CLC
             70 ]:NEXT:X=1
             80 PRINT X
 
@@ -295,8 +297,9 @@ public sealed class BbcBasicDialectTests
             "loop@3", "dest@3",
             "dest@4", "count@4", "mask@4", "dest@4",
             "start@5", "loop@5",
-            "X@6",
-            "X@7");
+            "dest@6", "count@6",
+            "X@7",
+            "X@8");
 
         // The program assembles, and BASIC makes exactly those variables, the resident P% aside: none for LDA or X's
         // register, though it makes the variable X later.

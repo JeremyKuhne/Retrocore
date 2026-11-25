@@ -443,6 +443,13 @@ internal sealed class BasicLineScanner
     private static readonly HashSet<string> s_bbcValues =
         ["FALSE", "TRUE", "PI", "PAGE", "TIME", "LOMEM", "HIMEM", "TOP", "COUNT", "ERL", "ERR", "POS", "VPOS", "RND", "GET", "GET$"];
 
+    // BBC BASIC's implied instructions, the mnemonics before BCC in Assembler.asm's table, which take no operand.
+    private static readonly HashSet<string> s_impliedMnemonics =
+    [
+        "BRK", "CLC", "CLD", "CLI", "CLV", "DEX", "DEY", "INX", "INY", "NOP", "PHA", "PHP", "PLA", "PLP", "RTI", "RTS",
+        "SEC", "SED", "SEI", "TAX", "TAY", "TSX", "TXA", "TXS", "TYA"
+    ];
+
     // Whether a number is only the start of an expression, as in Integer BASIC's GOTO 1000+K*10, which has no
     // ON GOTO: a line is a number that ends the statement or comes before a comma.
     private bool Computed(int last)
@@ -585,7 +592,8 @@ internal sealed class BasicLineScanner
 
     // Whether what follows a BBC name where a statement starts makes it an assignment's target: =, an array's
     // subscripts, or an indirection, as in A=1, A(1)=1 and A?1=1. FIND_VARIABLE reads the (, ? or ! straight after the
-    // name, so only = may come after spaces: HOME ?0=1 stops with Mistake.
+    // name, so only = may come after spaces: HOME ?0=1 stops with Mistake. An indirection works only on a variable that
+    // already exists, which the scanner cannot know, so HOME?0=1 is taken as an assignment either way.
     private bool Assigned(int index)
     {
         if (index < _bytes.Length && _bytes[index] is (byte)'(' or (byte)'?' or (byte)'!') { return true; }
@@ -628,8 +636,7 @@ internal sealed class BasicLineScanner
                     return true;
                 }
 
-                index = Mnemonic(index, out bool shift);
-                _assembly = shift ? BbcAssemblyPart.ShiftOperand : BbcAssemblyPart.Operand;
+                index = Mnemonic(index, out _assembly);
                 return true;
             default:
                 if (value == ':')
@@ -638,8 +645,11 @@ internal sealed class BasicLineScanner
                     return true;
                 }
 
-                // A comment after the operand: the assembler skips whatever follows it, so ; works as \ does.
-                bool register = _assembly == BbcAssemblyPart.Register && value is (byte)'X' or (byte)'Y';
+                // The assembler skips whatever follows an operand, so a \ or ; after one starts a comment, and an
+                // index register or the shifts' accumulator ends it.
+                bool register = (_assembly == BbcAssemblyPart.Register && value is (byte)'X' or (byte)'Y')
+                    || (_assembly == BbcAssemblyPart.IndexRegister && value is (byte)'X' or (byte)'Y' or (byte)'x' or (byte)'y');
+
                 bool accumulator = _assembly == BbcAssemblyPart.ShiftOperand && value == 'A';
                 if (value is (byte)'\\' or (byte)';' || register || accumulator)
                 {
@@ -647,16 +657,22 @@ internal sealed class BasicLineScanner
                     return true;
                 }
 
-                _assembly = value == ',' ? BbcAssemblyPart.Register : BbcAssemblyPart.Operand;
+                bool indexed = _assembly is BbcAssemblyPart.IndexOperand or BbcAssemblyPart.IndexRegister;
+                _assembly = value == ','
+                    ? (indexed ? BbcAssemblyPart.IndexRegister : BbcAssemblyPart.Register)
+                    : (indexed ? BbcAssemblyPart.IndexOperand : BbcAssemblyPart.Operand);
+
                 return value == ',';
         }
     }
 
-    // A mnemonic: up to three characters, packed by their low five bits, so lda is LDA; EQU takes the letter after it,
-    // as EQUB does. AND, EOR and OR are tokens, OR with the A after it. Returns the mnemonic's last byte.
-    private int Mnemonic(int index, out bool shift)
+    // A mnemonic: up to three characters, packed by their low five bits, so lda is LDA; EQU takes the B, W, D or S
+    // after it, as EQUB does. AND, EOR and OR are tokens, OR with the A after it. Returns the mnemonic's last byte, and
+    // what follows it: the operand, or, after an implied instruction, which ASSEMBLE_INSTRUCTION_FOUND stores as it is,
+    // nothing the assembler reads.
+    private int Mnemonic(int index, out BbcAssemblyPart next)
     {
-        shift = false;
+        next = BbcAssemblyPart.Operand;
         if (_bytes[index] >= 0x80)
         {
             bool or = _dialect.Word(_bytes[index]) == "OR";
@@ -670,8 +686,19 @@ internal sealed class BasicLineScanner
         }
 
         string letters = new([.. _bytes[index..(last + 1)].Select(value => (char)('@' + (value & 0x1F)))]);
-        shift = letters is "ASL" or "LSR" or "ROL" or "ROR";
-        if (letters == "EQU" && last + 1 < _bytes.Length && char.IsAsciiLetter((char)_bytes[last + 1])) { last++; }
+        next = letters switch
+        {
+            "ASL" or "LSR" or "ROL" or "ROR" => BbcAssemblyPart.ShiftOperand,
+            "LDX" or "LDY" or "STX" or "STY" => BbcAssemblyPart.IndexOperand,
+            _ when s_impliedMnemonics.Contains(letters) => BbcAssemblyPart.Skipped,
+            _ => BbcAssemblyPart.Operand
+        };
+
+        if (letters == "EQU" && last + 1 < _bytes.Length && _bytes[last + 1] is (byte)'B' or (byte)'W' or (byte)'D' or (byte)'S')
+        {
+            last++;
+        }
+
         return last;
     }
 

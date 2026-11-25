@@ -165,7 +165,8 @@ test("BBC BASIC's assembler, from [ to ], highlights its mnemonics, registers, l
         "40 .loop LDA dest,X:STA &71,Y \\ copy X: INX",
         "50 lda (dest),Y:ASL A:ROR count:ORA #1 ; set A",
         "60 EQUB 1:BNE loop",
-        "65 ASL ADDR:LDX &70,XX:INY",
+        "65 ASL ADDR:LDA &70,XX:INY",
+        "66 .done RTS back:LDY &70,x junk:STX &71,y:EQUb 1",
         "70 ]:NEXT:X=LDA+1"
     ];
     const at = (line: number, value: string, occurrence = 0) => linesScopes("bbcbasic", program, line, value, occurrence);
@@ -190,10 +191,18 @@ test("BBC BASIC's assembler, from [ to ], highlights its mnemonics, registers, l
     assert.ok(has(at(4, "XX"), "variable.language.register"));
     assert.ok(has(at(4, "X:"), "comment.line.assembler"), "after the register too");
     assert.ok(has(at(4, "INY"), "keyword.other.mnemonic"), "a colon ends what is skipped");
-    assert.ok(has(at(5, "]"), "punctuation.section.assembler.end"));
-    assert.ok(has(at(5, "NEXT"), "keyword.control"), "BASIC again after ]");
-    assert.ok(has(at(5, "LDA"), "variable.other"), "outside the assembler LDA is a name");
-    assert.ok(!has(at(5, "NEXT"), "meta") && !has(at(5, "LDA"), "keyword.other.mnemonic"));
+    assert.ok(has(at(5, "done"), "entity.name.label"));
+    assert.ok(has(at(5, "RTS"), "keyword.other.mnemonic"), "after a label");
+    assert.ok(has(at(5, "back"), "comment.line.assembler"), "an implied instruction reads nothing after it");
+    assert.ok(has(at(5, "LDY"), "keyword.other.mnemonic"));
+    assert.ok(has(at(5, "x"), "variable.language.register"), "LDY takes its register in either case");
+    assert.ok(has(at(5, "junk"), "comment.line.assembler"));
+    assert.ok(has(at(5, "y"), "variable.language.register"), "so does STX");
+    assert.ok(!has(at(5, "EQUb"), "keyword.other.mnemonic"), "EQU takes a capital letter");
+    assert.ok(has(at(6, "]"), "punctuation.section.assembler.end"));
+    assert.ok(has(at(6, "NEXT"), "keyword.control"), "BASIC again after ]");
+    assert.ok(has(at(6, "LDA"), "variable.other"), "outside the assembler LDA is a name");
+    assert.ok(!has(at(6, "NEXT"), "meta") && !has(at(6, "LDA"), "keyword.other.mnemonic"));
     assert.ok(has(scopes("bbcbasic", "10 PRINT LDA", "LDA"), "variable.other"), "no [, no assembler");
 });
 

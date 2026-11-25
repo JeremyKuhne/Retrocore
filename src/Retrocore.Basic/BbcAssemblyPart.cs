@@ -31,7 +31,20 @@ internal enum BbcAssemblyPart
     Register,
 
     /// <summary>
-    ///  What the assembler skips to the end of the statement: a comment, or anything after the operand.
+    ///  In the operand of <c>LDX</c>, <c>LDY</c>, <c>STX</c> or <c>STY</c>, whose names are BASIC's.
+    /// </summary>
+    IndexOperand,
+
+    /// <summary>
+    ///  After a comma in the operand of <c>LDX</c>, <c>LDY</c>, <c>STX</c> or <c>STY</c>, which compare the index
+    ///  register by its low five bits, so <c>x</c> and <c>y</c> are registers too.
+    /// </summary>
+    IndexRegister,
+
+    /// <summary>
+    ///  What the assembler skips to the end of the statement: a <c>\</c> comment, everything after an implied
+    ///  instruction, an index register or the shifts' <c>A</c>, and a <c>\</c> or <c>;</c> after an operand. The
+    ///  scanner cannot tell where an operand's expression ends, so other text after it is still read as BASIC.
     /// </summary>
     Skipped
 }

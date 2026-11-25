@@ -106,8 +106,9 @@ function abbreviations(words) {
 // whose capital digits are never searched for words, so &DEF is a number. A * where a statement starts is a command
 // for the MOS, which the tokeniser leaves as it is to the end of the line. Its [ starts the assembler, up to a ] where
 // one of the assembler's statements starts, which may be lines later: a statement there starts with a . label, a
-// mnemonic in either case, or a \ comment; X and Y after a comma are registers, as A is for ASL, LSR, ROL and ROR;
-// and the assembler skips anything after an operand, so ; starts a comment too.
+// mnemonic in either case, or a \ comment. An implied instruction reads nothing after it. X and Y after a comma are
+// registers, in either case for LDX, LDY, STX and STY, and A is the accumulator for ASL, LSR, ROL and ROR. The
+// assembler skips anything after an operand, so a ; after one starts a comment.
 function grammar(dialect, name, words, { names = "[A-Za-z][0-9]*[$%!#]?", ignoreCase = true, business = false, wholeLineData = false, conditional = new Set(), nameFollows = new Set(), abbreviated = new Map(), hex = null, starCommands = false, mnemonics = null } = {}) {
     const matching = text => ignoreCase ? `(?i:${text})` : `(?:${text})`;
     const scope = `retrocore-${dialect}`;
@@ -153,33 +154,49 @@ function grammar(dialect, name, words, { names = "[A-Za-z][0-9]*[$%!#]?", ignore
     ];
     // Where one of the assembler's statements starts: after a line number, at the start of a line, or after [ or :.
     const assemblyStart = "(?:^\\s*(\\d+)\\s*|^\\s*|(?<=[\\[:])\\s*)";
+    // A statement's start, then a label if it has one: captures 1 to 3 are the line number, the label's . and its name.
+    const labelled = `${assemblyStart}(?:(\\.)(${names})\\s*)?`;
+    const word = "(?![A-Za-z0-9_`])";
+    // The letter after EQU is compared in capitals only, while the mnemonics' letters are packed by their low five bits.
     const mnemonic = mnemonics === null ? null
-        : `(?i:EQU[BWDS]|${mnemonics.filter(word => word !== "EQU").join("|")})(?![A-Za-z0-9_\`])`;
+        : `(?:(?i:EQU)[BWDS]|(?i:${mnemonics.filter(word => word !== "EQU").join("|")}))${word}`;
+    // The implied instructions, which come before BCC in the table.
+    const implied = mnemonics === null ? null : `(?i:${mnemonics.slice(0, mnemonics.indexOf("BCC")).join("|")})${word}`;
     const lineNumber = { name: `entity.name.label.line-number.${scope}` };
     const mnemonicName = { name: `keyword.other.mnemonic.${scope}` };
     const register = { name: `variable.language.register.${scope}` };
     const skipped = { name: `comment.line.assembler.${scope}` };
+    const label = { "1": lineNumber, "2": { name: `punctuation.definition.label.${scope}` }, "3": { name: `entity.name.label.${scope}` } };
+    const operand = [
+        { include: "#string" },
+        { match: "[\\\\;][^:]*", name: `comment.line.assembler.${scope}` },
+        ...statements.filter(pattern => pattern.include !== "#remark" && pattern.include !== "#data" && !(pattern.name ?? "").startsWith("string.unquoted.command"))
+    ];
     const assembler = mnemonic === null ? null : {
         begin: "\\[",
         beginCaptures: { "0": { name: `punctuation.section.assembler.begin.${scope}` } },
         end: `${assemblyStart}(\\])`,
         endCaptures: { "1": lineNumber, "2": { name: `punctuation.section.assembler.end.${scope}` } },
         patterns: [
-            { include: "#string" },
-            { match: "[\\\\;][^:]*", name: `comment.line.assembler.${scope}` },
+            // LDX, LDY, STX and STY compare their index register by its low five bits, so x and y are registers too;
+            // after a register, as after any operand, the assembler skips the rest of the statement.
             {
-                match: `${assemblyStart}(\\.)(${names})(?:\\s*(${mnemonic}))?`,
-                captures: { "1": lineNumber, "2": { name: `punctuation.definition.label.${scope}` }, "3": { name: `entity.name.label.${scope}` }, "4": mnemonicName }
+                begin: `${labelled}((?i:LDX|LDY|STX|STY)${word})`,
+                beginCaptures: { ...label, "4": mnemonicName },
+                end: "(?=:|$)",
+                patterns: [{ match: "(?<=,)\\s*([XYxy])([^:]*)", captures: { "1": register, "2": skipped } }, { include: "#assemblerOperand" }]
             },
-            // The assembler takes an operand starting with A as the accumulator, and X or Y after a comma as the
-            // register, and skips the rest of the statement, as it does after any operand: ASL ADDR is ASL A.
+            // An implied instruction reads nothing after it.
+            { match: `${labelled}(${implied})([^:]*)`, captures: { ...label, "4": mnemonicName, "5": skipped } },
+            // The shifts take an operand starting with A as the accumulator: ASL ADDR is ASL A.
             {
-                match: `${assemblyStart}(?:(?i:(ASL|LSR|ROL|ROR))\\s*(A)([^:]*)|(${mnemonic}))`,
-                captures: { "1": lineNumber, "2": mnemonicName, "3": register, "4": skipped, "5": mnemonicName }
+                match: `${labelled}(?:(?i:(ASL|LSR|ROL|ROR))\\s*(A)([^:]*)|(${mnemonic}))`,
+                captures: { ...label, "4": mnemonicName, "5": register, "6": skipped, "7": mnemonicName }
             },
+            { match: `${assemblyStart}(\\.)(${names})`, captures: label },
             { match: "^\\s*(\\d+)", captures: { "1": lineNumber } },
             { match: "(?<=,)\\s*([XY])(\\)?)([^:]*)", captures: { "1": register, "3": skipped } },
-            ...statements.filter(pattern => pattern.include !== "#remark" && pattern.include !== "#data" && !(pattern.name ?? "").startsWith("string.unquoted.command"))
+            { include: "#assemblerOperand" }
         ]
     };
     return {
@@ -199,7 +216,7 @@ function grammar(dialect, name, words, { names = "[A-Za-z][0-9]*[$%!#]?", ignore
         repository: {
             pragma: { match: "^\\s*(?:REM|')\\s*retrocore\\s+\\S+.*$", name: `comment.line.pragma.${scope}` },
             statements: { patterns: assembler === null ? statements : [{ include: "#assembler" }, ...statements] },
-            ...(assembler === null ? {} : { assembler }),
+            ...(assembler === null ? {} : { assembler, assemblerOperand: { patterns: operand } }),
             remark: {
                 match: remark,
                 name: `comment.line.${scope}`,

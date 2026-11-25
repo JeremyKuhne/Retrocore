@@ -10,6 +10,10 @@ the Service Reference Manual. What is left:
 - The Emulation disk's configuration menu (its slot 5 and 7 serial cards), and the paddles in emulation.
 - Host game controllers wired to the joysticks.
 - SOS's documented entry points in `Apple3Equates.asm`, which names only the hardware.
+- Breakpoints and disassembly qualified by bank (`bank2:$2000`), and the call stack across a bank switch: built, but
+  no test covers them.
+- The extension's editor test (`npm run test:editor`) past the machine menu, which needs the IIe ROM dumps.
+- Beam breakpoints, which need the Apple III's debug target to report `HasBeam`.
 
 ## Later
 

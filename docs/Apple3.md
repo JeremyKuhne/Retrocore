@@ -172,7 +172,8 @@ The machine was checked against MAME's `apple3` driver and Apple's Service Refer
 manual where they differ.
 
 - **Power-on.** `Apple3OracleTests` matches MAME's instruction trace, registers included, from power-on to the
-  boot ROM's first disk access, through every diagnostic. What the hardware leaves to chance follows MAME so the two
+  boot ROM's first disk access, through every diagnostic, but for the ROM's read of the screen-blank bit at
+  `$F60F`, which it masks off and the test leaves out. What the hardware leaves to chance follows MAME so the two
   run in step: RAM powers on as `$FF`, the beam starts at line 192, and the test takes MAME's power-on X, S and P.
   The comparison stops at the drive check, where MAME's empty drive returns nothing and ours reads noise, as a real
   drive does, so ours reaches RETRY a little later. MAME's tracer is unsafe here: a debugger read of zero page
@@ -199,8 +200,9 @@ manual where they differ.
   and no ROM. The screen scrolls one line after CONTROL-RESET, as a II Plus's does.
 
 Not checked: SOS and mode-test frames against MAME, frames in Apple II mode, the Emulation disk's configuration
-menu (its slot 5 and 7 serial cards) and the paddles. Host game controllers are not wired to the joysticks, and the
-equates name the hardware but not SOS's entry points.
+menu (its slot 5 and 7 serial cards), the paddles, and breakpoints and the call stack across bank switches. Host
+game controllers are not wired to the joysticks, the equates name the hardware but not SOS's entry points, and
+beam breakpoints are not available on the Apple III.
 
 ## Testing
 
@@ -209,7 +211,7 @@ equates name the hardware but not SOS's entry points.
 - `Apple3MachineTests`, `Apple3SosTests` and `Apple3EmulationTests` need MAME's `apple3` set
   (`RETROCORE_APPLE3_ROMS`, by default `<cache>\apple3-roms\mame\apple3`) and Apple's disks
   (`RETROCORE_APPLE3_DISKS`); the emulation test also needs the DOS 3.3 System Master in `<cache>\iie-disks`.
-- `Apple3OracleTests` runs MAME (`RETROCORE_MAME`). MAME before 0.289 has an older dump of the boot ROM (CRC
+- `Apple3OracleTests` runs MAME (`RETROCORE_MAME`). Every archived MAME set, to 0.279, has an older dump of the boot ROM (CRC
   `55e8eec9`), read from a running machine, so `$FFC0-$FFEF` holds RAM; the chip's contents (CRC `1af7ec42`) have
   the copyright string there, which the SDK's source builds.
 - `Apple3ProFileTests` needs no files: it runs Apple's `.PROFILE` driver from the SDK on the SDK's boot ROM.

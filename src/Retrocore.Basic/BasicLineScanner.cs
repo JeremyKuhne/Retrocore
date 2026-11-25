@@ -625,12 +625,15 @@ internal sealed class BasicLineScanner
                     return true;
                 }
 
-                // A label: the variable after the . is set to P%; the statement goes on.
+                // A label: the variable after the . is set to P%, found as FIND_VARIABLE_A finds it, after any spaces;
+                // the statement goes on.
                 if (value == '.')
                 {
-                    if (index + 1 < _bytes.Length && BbcBasicDialect.IsNameCharacter(_bytes[index + 1]) && !char.IsAsciiDigit((char)_bytes[index + 1]))
+                    int start = index + 1;
+                    while (start < _bytes.Length && _bytes[start] == ' ') { start++; }
+                    if (start < _bytes.Length && BbcBasicDialect.IsNameCharacter(_bytes[start]) && !char.IsAsciiDigit((char)_bytes[start]))
                     {
-                        index = Name(index + 1, function: false, "", sites, diagnostics, split: null, statement: false, out _);
+                        index = Name(start, function: false, "", sites, diagnostics, split: null, statement: false, out _);
                     }
 
                     return true;

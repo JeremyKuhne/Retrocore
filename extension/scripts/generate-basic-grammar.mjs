@@ -155,7 +155,11 @@ function grammar(dialect, name, words, { names = "[A-Za-z][0-9]*[$%!#]?", ignore
     // Where one of the assembler's statements starts: after a line number, at the start of a line, or after [ or :.
     const assemblyStart = "(?:^\\s*(\\d+)\\s*|^\\s*|(?<=[\\[:])\\s*)";
     // A statement's start, then a label if it has one: captures 1 to 3 are the line number, the label's . and its name.
-    const labelled = `${assemblyStart}(?:(\\.)(${names})\\s*)?`;
+    // FIND_VARIABLE_A skips spaces before the name, so . loop is a label too.
+    const labelled = `${assemblyStart}(?:(\\.)\\s*(${names})\\s*)?`;
+    // A keyword that starts with A, such as ABS or its AB., is a token, which the shifts do not take for the accumulator.
+    const notKeyword = `(?!${reserved.filter(word => word.startsWith("A"))
+        .flatMap(word => [word, ...(abbreviated.get(word) ?? []).map(prefix => `${prefix}.`)]).map(escape).join("|") || "$^"})`;
     const word = "(?![A-Za-z0-9_`])";
     // The letter after EQU is compared in capitals only, while the mnemonics' letters are packed by their low five bits.
     const mnemonic = mnemonics === null ? null
@@ -190,10 +194,10 @@ function grammar(dialect, name, words, { names = "[A-Za-z][0-9]*[$%!#]?", ignore
             { match: `${labelled}(${implied})([^:]*)`, captures: { ...label, "4": mnemonicName, "5": skipped } },
             // The shifts take an operand starting with A as the accumulator: ASL ADDR is ASL A.
             {
-                match: `${labelled}(?:(?i:(ASL|LSR|ROL|ROR))\\s*(A)([^:]*)|(${mnemonic}))`,
+                match: `${labelled}(?:(?i:(ASL|LSR|ROL|ROR))\\s*${notKeyword}(A)([^:]*)|(${mnemonic}))`,
                 captures: { ...label, "4": mnemonicName, "5": register, "6": skipped, "7": mnemonicName }
             },
-            { match: `${assemblyStart}(\\.)(${names})`, captures: label },
+            { match: `${assemblyStart}(\\.)\\s*(${names})`, captures: label },
             { match: "^\\s*(\\d+)", captures: { "1": lineNumber } },
             { match: "(?<=,)\\s*([XY])(\\)?)([^:]*)", captures: { "1": register, "3": skipped } },
             { include: "#assemblerOperand" }

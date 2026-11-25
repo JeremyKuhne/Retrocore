@@ -758,8 +758,9 @@ internal sealed class BbcBasicExpression
         return BasicValue.Of([]);
     }
 
-    // A variable or an array element: a name, a suffix, and subscripts in brackets, then, as FIND_VARIABLE takes it, a
-    // ? or ! straight after it for the byte or word at its value plus a factor: A%?1, P!4.
+    // A variable or an array element: a name, a suffix, and subscripts in brackets, then, as FIND_VARIABLE takes it
+    // after a numeric one, a ? or ! straight after it for the byte or word at its value plus a factor: A%?1, P!4.
+    // FIND_VARIABLE returns a string before it looks, so the watch refuses T$?1, with a Type mismatch of its own.
     private BasicValue Name()
     {
         BasicValue value = NameValue();

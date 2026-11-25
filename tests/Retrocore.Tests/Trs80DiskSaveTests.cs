@@ -246,6 +246,24 @@ public sealed class Trs80DiskSaveTests
         read.Track(0, 0).Should().HaveCount(4);
         read.Track(0, 0)[0].Data.Length.Should().Be(1024);
         DmkFormat.Encode(read, DmkFormat.Layout(image)).Bytes.Should().Equal(image);
+
+        // Writing the long sector would write over the others' IDs, so the track is laid out again and every sector
+        // reads back as the disk has it.
+        read.Write(read.Track(0, 0)[0], Filled(1024, 0x6D), 0xFB);
+        Describe(DmkFormat.Read(DmkFormat.Encode(read, DmkFormat.Layout(image)).Bytes)).Should().Equal(Describe(read));
+    }
+
+    /// <summary>
+    ///  Bytes after a DMK image's tracks, which some tools leave, are kept.
+    /// </summary>
+    [TestMethod]
+    public void DmkKeepsBytesAfterItsTracks()
+    {
+        byte[] image = [.. Dmk(out _), 1, 2, 3, 4, 5];
+        FloppyDisk disk = DmkFormat.Read(image);
+        DmkFormat.Encode(disk, DmkFormat.Layout(image)).Bytes.Should().Equal(image);
+        disk.Format(3, 0, [Sector(3, 0, 1, 256, doubleDensity: true)]);
+        DmkFormat.Encode(disk, DmkFormat.Layout(image)).Bytes.AsSpan().EndsWith((byte[])[1, 2, 3, 4, 5]).Should().BeTrue();
     }
 
     /// <summary>

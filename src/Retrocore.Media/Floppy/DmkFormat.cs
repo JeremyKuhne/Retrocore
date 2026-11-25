@@ -123,7 +123,8 @@ public static class DmkFormat
     public static byte[] Layout(ReadOnlySpan<byte> image)
     {
         if (!IsDmk(image)) { throw new InvalidDataException("The image is not DMK."); }
-        byte[] layout = image[..ImageLength(image)].ToArray();
+        // Bytes after the tracks, which some tools leave, stay as they are.
+        byte[] layout = image.ToArray();
         (int cylinders, int sides, int length, bool singleOnly) = Geometry(layout);
         for (int index = 0; index < cylinders * sides; index++)
         {
@@ -162,7 +163,8 @@ public static class DmkFormat
     ///   A track whose sectors are still the layout's, by ID, size and density, keeps its bytes, and only its sectors'
     ///   data marks, data and CRCs are written, where they were; a sector that reads with a CRC error keeps the CRC
     ///   it had when that still does not match. A track the disk formatted anew is laid out as <see cref="Write"/>
-    ///   lays it out. The header keeps its options and track length, growing for a longer track, and its cylinders
+    ///   lays it out, as is one whose sectors no longer read back as the disk has them once written in place, as when
+    ///   one sector's data runs over another's ID. Bytes after the tracks stay. The header keeps its options and track length, growing for a longer track, and its cylinders
     ///   and sides, growing for more. An unchanged disk writes the image it was read from.
     ///  </para>
     ///  <para>
@@ -203,7 +205,9 @@ public static class DmkFormat
         }
 
         int length = Math.Max(oldLength, tracks.Max(track => track.Bytes.Length));
-        byte[] image = new byte[HeaderSize + (length * tracks.Count)];
+        ReadOnlySpan<byte> after = layout[ImageLength(layout)..];
+        byte[] image = new byte[HeaderSize + (length * tracks.Count) + after.Length];
+        after.CopyTo(image.AsSpan(image.Length - after.Length));
         layout[..HeaderSize].CopyTo(image);
         image[0] = disk.IsWriteProtected ? (byte)0xFF : (byte)0;
         image[1] = (byte)cylinders;
@@ -262,7 +266,22 @@ public static class DmkFormat
             Put(track, crcAt + step, (byte)crc, step);
         }
 
-        return track;
+        // A field that runs over another's, as on some protected disks, can leave a sector that no longer reads as the
+        // disk has it; such a track is laid out again.
+        List<DmkField> written = Locate(track, singleOnly, exactSizes: false);
+        for (int index = 0; index < sectors.Count; index++)
+        {
+            if (index >= written.Count || !Same(written[index].Sector, sectors[index])) { return null; }
+        }
+
+        return written.Count == sectors.Count ? track : null;
+    }
+
+    private static bool Same(FloppySector read, FloppySector sector)
+    {
+        var was = (read.Track, read.Side, read.Sector, read.DoubleDensity, read.DataAddressMark, read.CrcError);
+        var now = (sector.Track, sector.Side, sector.Sector, sector.DoubleDensity, sector.DataAddressMark, sector.CrcError);
+        return was == now && read.Data.SequenceEqual(sector.Data);
     }
 
     // A byte of a field, written as many times as a single-density byte is stored.

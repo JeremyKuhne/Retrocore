@@ -312,7 +312,7 @@ BasicOutput = BasicInput + 2
 ;; The entries at $Cn1A-$Cn1F, which this card does not have.
 ;;
 ;; On Apple's card every one of them returns carry clear: TimeData at $Cn1C, as Mouse Technical Note #2 documents,
-;; and GetClamp at $Cn1A and the factory's own, as its code does. On this card all six return carry set.
+;; and GetClamp at $Cn1A and the factory's own, as the card's EPROM does. On this card all six return carry set.
 ;; Out:   carry = set
 ;; Keeps: X, Y
 .proc FactoryEntry

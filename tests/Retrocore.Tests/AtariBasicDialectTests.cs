@@ -200,6 +200,11 @@ public sealed class AtariBasicDialectTests
     [DataRow("SIN(90)")]
     [DataRow("ATN(-1)/ATN(-1)")]
     [DataRow("5/3")]
+    [DataRow("--1")]
+    [DataRow("NOT -1")]
+    [DataRow("2*-.5")]
+    [DataRow("1E50*1E40")]
+    [DataRow("(-2)^3")]
     public void ExpressionsAreTheRoms(string expression)
     {
         AtariMachine machine = EvaluationMachine();
@@ -228,6 +233,10 @@ public sealed class AtariBasicDialectTests
     [DataRow("SQR(-1)", 3)]
     [DataRow("LOG(0)", 3)]
     [DataRow("B(4)", 9)]
+    [DataRow("B(40000)", 9)]
+    [DataRow("0^-1", 3)]
+    [DataRow("(-8)^.5", 3)]
+    [DataRow("1E50*1E50", 11)]
     public void ExpressionErrorsAreTheRoms(string expression, int error)
     {
         AtariMachine machine = EvaluationMachine();
@@ -242,7 +251,7 @@ public sealed class AtariBasicDialectTests
     /// </summary>
     /// <param name="expression">The expression.</param>
     [TestMethod]
-    [DataRow("--1")]
+    [DataRow("- -A")]
     [DataRow("NOT NOT 1")]
     public void SecondUnaryIsRefused(string expression)
     {
@@ -274,7 +283,7 @@ public sealed class AtariBasicDialectTests
     ///  byte shorter is taken.
     /// </summary>
     [TestMethod]
-    public void TokenBufferHoldsTwoHundredFiftyFiveBytes()
+    public void TokenBufferLimitIsTheRoms()
     {
         // Line header (3), statement header (2), then each ",1" adds a comma and a 7-byte constant; PRINT 1 starts it.
         static string Line(int ones) => "10 PRINT 1" + string.Concat(Enumerable.Repeat(",1", ones));

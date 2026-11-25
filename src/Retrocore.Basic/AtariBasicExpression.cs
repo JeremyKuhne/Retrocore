@@ -12,14 +12,15 @@ namespace Retrocore.Basic;
 /// </summary>
 /// <remarks>
 ///  <para>
-///   Numbers are Atari BASIC's: ten significant digits, results rounded to them. Rev. C's precedence holds: a string
-///   comparison binds above everything (NOT A$=B$ is NOT (A$=B$)); NOT, like a sign, takes the operand after it
-///   (NOT A=B is (NOT A)=B), and only one of them; AND is above OR. A comparison is 1 or 0. <c>A(i)</c> and
-///   <c>A(i,j)</c> are array elements, counting from 0, <c>A(i)</c> being <c>A(i,0)</c>; <c>A$(i)</c> is the string
-///   from character i and <c>A$(i,j)</c> characters i to j, counting from 1, never empty. Subscripts, indexes and
-///   the arguments of PEEK and CHR$ round to an integer from 0 to 65535, or are error 3. SIN, COS and ATN work in
-///   degrees after DEG, as DEGFLG says. The functions are .NET's, rounded to ten digits, so their last digit can
-///   differ from the FP package's: ATN(1) in degrees is 45 here and 45.0000003 on the machine. ASC of an empty
+///   Numbers are Atari BASIC's ten significant digits. Results are .NET's, rounded to ten digits, where the FP
+///   package drops the digits it shifts out and works out its functions by series, so a last digit can differ: ATN(1)
+///   in degrees is 45 here and 45.0000003 on the machine. Rev. C's precedence holds: a string comparison binds above
+///   everything (NOT A$=B$ is NOT (A$=B$)); NOT, like a sign, takes the operand after it (NOT A=B is (NOT A)=B), and
+///   only one of them, though a sign before a number is the constant's (- -1 is 1); AND is above OR. A comparison is
+///   1 or 0. <c>A(i)</c> and <c>A(i,j)</c> are array elements, counting from 0, <c>A(i)</c> being <c>A(i,0)</c>;
+///   <c>A$(i)</c> is the string from character i and <c>A$(i,j)</c> characters i to j, counting from 1, never empty.
+///   Subscripts, indexes and the arguments of PEEK and CHR$ round to an integer from 0 to 65535, or are error 3; a
+///   subscript of 32768 up is error 9. SIN, COS and ATN work in degrees after DEG, as DEGFLG says. ASC of an empty
 ///   string is refused, where the ROM returns the byte the first character would be.
 ///  </para>
 ///  <para>
@@ -103,16 +104,13 @@ internal sealed class AtariBasicExpression
         {
             string relation = _tokens[_at++];
             BasicValue right = Additive();
-            if (left.IsString != right.IsString)
+            // A string's comparisons are Operand's; a string left here is compared with a number.
+            if (left.IsString || right.IsString)
             {
                 throw new FormatException("ERROR- 8: a string compares only with a string.");
             }
 
-            int order = left.IsString
-                ? string.CompareOrdinal(Text(left), Text(right))
-                : Number(left).CompareTo(Number(right));
-
-            left = Truth(Compare(relation, order));
+            left = Truth(Compare(relation, Number(left).CompareTo(Number(right))));
         }
 
         return left;
@@ -148,11 +146,25 @@ internal sealed class AtariBasicExpression
     private BasicValue Power()
     {
         BasicValue left = Unary();
-        while (Take("^")) { left = Rounded(Math.Pow(Number(left), Number(Unary()))); }
+        while (Take("^"))
+        {
+            double number = Number(left);
+            double power = Number(Unary());
+
+            // OPERATOR_POWER: error 3 for 0 to a negative power and a negative number to a fraction; 11 for overflow.
+            if ((number == 0 && power < 0) || (number < 0 && power != Math.Floor(power)))
+            {
+                throw new FormatException("ERROR- 3: the power has no value.");
+            }
+
+            left = Rounded(Math.Pow(number, power));
+        }
+
         return left;
     }
 
-    // From rev. B the grammar takes one sign or NOT before an operand, not two.
+    // From rev. B the grammar takes one sign or NOT before an operand, not two; a sign before a number is the
+    // constant's own, so - -1 is 1.
     private BasicValue Unary()
     {
         if (Take("-")) { return Rounded(-Number(Operand())); }
@@ -201,13 +213,14 @@ internal sealed class AtariBasicExpression
             }
 
             if (token[0] == '"') { return BasicValue.Of([.. token[1..^1].Select(character => (byte)character)]); }
-            if (char.IsAsciiDigit(token[0]) || token[0] == '.')
+            if (IsNumber(token)) { return new(Constant(token)); }
+
+            // SYNTAX_NUMERIC_CONSTANT reads with AFP, which takes a sign.
+            if (token is "-" or "+" && Peek() is { } digits && IsNumber(digits))
             {
-                int at = 0;
-                byte[] text = [.. token.Select(character => (byte)character), AtariNumbers.EndOfLine];
-                return AtariNumbers.Parse(text, ref at) is { } number
-                    ? new(AtariNumbers.ToDouble(number))
-                    : throw Syntax($"'{token}' is not a number");
+                _at++;
+                double constant = Constant(digits);
+                return new(token == "-" ? -constant : constant);
             }
 
             if (!char.IsAsciiLetter(token[0])) { throw Syntax($"'{token}' does not start an expression"); }
@@ -239,10 +252,21 @@ internal sealed class AtariBasicExpression
         }
     }
 
+    private static bool IsNumber(string token) => char.IsAsciiDigit(token[0]) || token[0] == '.';
+
+    private static double Constant(string token)
+    {
+        int at = 0;
+        byte[] text = [.. token.Select(character => (byte)character), AtariNumbers.EndOfLine];
+        return AtariNumbers.Parse(text, ref at) is { } number
+            ? AtariNumbers.ToDouble(number)
+            : throw Syntax($"'{token}' is not a number");
+    }
+
     private static BasicValue Ascii(BasicValue text)
     {
         byte[] characters = text.Text ?? [];
-        return characters.Length == 0 ? throw new FormatException("ERROR- 3: ASC of an empty string.") : new(characters[0]);
+        return characters.Length == 0 ? throw Syntax("ASC of an empty string reads past it, which BASIC allows but this refuses") : new(characters[0]);
     }
 
     private static BasicValue Value(BasicValue text)
@@ -407,7 +431,14 @@ internal sealed class AtariBasicExpression
             throw new FormatException("ERROR- 11: the result is out of range.");
         }
 
-        return new(AtariNumbers.ToDouble(AtariNumbers.FromDouble(value)));
+        try
+        {
+            return new(AtariNumbers.ToDouble(AtariNumbers.FromDouble(value)));
+        }
+        catch (OverflowException)
+        {
+            throw new FormatException("ERROR- 11: the result is out of range.");
+        }
     }
 
     // A function's result: the FP package's failure, as for SQR(-1), LOG(0) or EXP(300), is error 3.

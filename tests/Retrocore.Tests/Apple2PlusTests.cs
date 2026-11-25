@@ -162,7 +162,7 @@ public class Apple2PlusTests
     {
         Apple2Machine machine = new(Apple2Model.IIPlus, SdkModules.BuildRoms(Apple2Model.IIPlus, s_inputs));
         machine.Bus.InstallLanguageCard();
-        Apple2DebugTarget target = new(machine, Apple2Model.IIPlus);
+        using Apple2DebugTarget target = new(machine, Apple2Model.IIPlus);
         machine.Run(cycles: 2_000_000);
 
         string[] rows = Rows(target);
@@ -171,10 +171,15 @@ public class Apple2PlusTests
         machine.Bus.TextByte(prompt, 1).Should().Be(0x60, "the II Plus's cursor is a flashing space");
         rows[prompt].TrimEnd().Should().Be("]", "the cursor reads as the space it flashes, not as ` ($60's ASCII)");
 
-        // Flashing and inverse text read as their characters: FLASH's digits are $70-$79, INVERSE's letters $01-$1A.
+        // Flashing and inverse text read as their characters: FLASH's digits are $70-$79, its letters $41-$5A, and
+        // INVERSE's letters $01-$1A. With no lowercase, $E0-$FF show $A0-$BF's symbols.
         machine.Bus.Write(0x0400, 0x71);
-        machine.Bus.Write(0x0401, 0x01);
-        Rows(target)[0][..2].Should().Be("1A");
+        machine.Bus.Write(0x0401, 0x41);
+        machine.Bus.Write(0x0402, 0x01);
+        machine.Bus.Write(0x0403, 0xE1);
+        Rows(target)[0][..4].Should().Be("1AA!");
+        new string([.. Enumerable.Range(0xE0, 32).Select(code => machine.Bus.Video.Character((byte)code))])
+            .Should().Be(" !\"#$%&'()*+,-./0123456789:;<=>?");
 
         foreach (char key in "10 print \"hi\"\r20 end\rlist\r") { target.Key(key); }
         machine.Run(cycles: 2_000_000);
@@ -192,7 +197,7 @@ public class Apple2PlusTests
     public void TheIIesTextRowsKeepLowercaseAndMouseText()
     {
         Apple2Machine machine = new(Apple2Model.IIeEnhanced, SdkModules.BuildRoms(Apple2Model.IIeEnhanced, s_inputs));
-        Apple2DebugTarget target = new(machine, Apple2Model.IIeEnhanced);
+        using Apple2DebugTarget target = new(machine, Apple2Model.IIeEnhanced);
         machine.Bus.Write(0x0400, 0xE1);
         machine.Bus.Write(0x0401, 0x61);
         machine.Bus.Write(0x0402, 0x41);

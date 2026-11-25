@@ -37,6 +37,9 @@ const prompt = /^\][ ]*$/m;
 
 try {
     await request("initialize", { adapterID: "retrocore", linesStartAt1: true, columnsStartAt1: true });
+    await assert.rejects(
+        request("launch", { machine: "apple2", model: "iiplus", romDirectory: join(root, "no-such-roms"), stopOnEntry: true }),
+        /no-such-roms|Could not find/);
 
     // Without dumps, the II Plus runs ROMs built from the SDK's sources. A program typed in lowercase through the
     // keyboard's queue arrives in capitals, and LIST shows it and ends at the prompt.
@@ -54,10 +57,6 @@ try {
         console.log("II Plus DAP passed on the SDK's ROMs: AppleSoft's prompt and a typed program listed back. The rest was skipped: set RETROCORE_IIPLUS_ROMS to the II Plus's chip dumps.");
     } else {
         events.length = 0;
-        await assert.rejects(
-            request("launch", { machine: "apple2", model: "iiplus", romDirectory: join(root, "no-such-roms"), stopOnEntry: true }),
-            /no-such-roms|Could not find/);
-
         await request("launch", { machine: "apple2", model: "iiplus", romDirectory: roms, stopOnEntry: false });
         await request("configurationDone");
         await waitFor("APPLE ][", "the II Plus powers on");

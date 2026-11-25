@@ -730,10 +730,10 @@ MoveLoop:
 ;;
 ;; A divisor of -(2^63) is the exception: its magnitude, $80 00 ..., already has bit 63 set, so <NormalizeFac> shifts
 ;; it right once and leaves <KeptY> -1. The step count is then 0, the branch to Step is not taken, and the dividend is
-;; shifted once before the first comparison, giving a quotient and remainder off by that shift.
-;; Out: Result1 = the quotient's magnitude, Arg = the remainder shifted left <KeptY> + 1 bits (1 for a divisor of
-;;   -(2^63)),
-;;   carry = set when twice the remainder is at least the divisor, InputMode = bit 7 set for a negative result
+;; shifted once before the first comparison. What that gives for such a divisor has not been checked.
+;; Out: Result1 = the quotient's magnitude, Arg = the remainder shifted left <KeptY> + 1 bits (1 bit for a
+;;   divisor of -(2^63)), carry = set when twice the remainder is at least the divisor, InputMode = bit 7 set for a
+;;   negative result
 ;; Errors: <ERROR_DIVISION_BY_ZERO> = <Fac> is zero
 ;; Uses: SavedY, LongOperand1Pointer, LongOperand2Pointer, LongResultPointer
 ;; See: <LongInteger::Div>, <LongInteger::Divide>, <LongInteger::Mod>

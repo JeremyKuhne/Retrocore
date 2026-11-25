@@ -967,7 +967,7 @@ Done:
     rts
 .endproc
 
-;; Ends with `STACK` OVERFLOW.
+;; Ends with `STACK OVERFLOW`.
 ;; See: <ReportError>
 ;; Also: OSERR (BB13)
 .proc StackOverflowError

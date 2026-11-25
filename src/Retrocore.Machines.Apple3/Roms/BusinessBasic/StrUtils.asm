@@ -181,7 +181,7 @@ LastInUse = InputMode
 ;; Also: GMOVPTR (BB13)
 TakeString:
     ldy #0
-    lda (ScanPointer),Y                      ; the type
+    lda (ScanPointer),Y                     ; the type
     sta Temporary
     iny
     lda (ScanPointer),Y
@@ -194,7 +194,7 @@ TakeString:
     beq AddFree                             ; free
     eor LastInUse
     and #1
-    sta FreeRunEnds                          ; set when free space ends here
+    sta FreeRunEnds                         ; set when free space ends here
     lda #1
     sta LastInUse
     lda Temporary
@@ -277,7 +277,7 @@ KeepCount:
     sty CollectorDistance+1
     lda LastInUse
     ora Temporary
-    sta FreeRunEnds                          ; set when strings in use end here
+    sta FreeRunEnds                         ; set when strings in use end here
     lda #0
     sta LastInUse
 

@@ -1097,7 +1097,8 @@ PRECEDENCE_BITS = $3F
 ;; The bits of a verb stack entry's second byte that hold the left operand's type, as <ValueType>'s bits 7 and 6.
 TYPE_BITS = $C0
 
-;; The verb stack's size, two bytes for each of 15 pending operators and the bottom's entry.
+;; The verb stack's size, two bytes for each of 15 operators and the bottom's entry: the 15th pending operator is
+;; too many.
 VERB_STACK_SIZE = $20
 
 ;; The bytes of a noun stack entry: <FacMantissa3XByte>, then the eight bytes from <FacExponent>.

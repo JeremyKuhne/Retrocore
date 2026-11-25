@@ -630,9 +630,8 @@ ExponentSign = SourceStart + 1
 
 ;; The floating-point accumulator: the exponent, four bytes of mantissa, and the sign.
 ;;
-;; Expressions are worked out here. A real operation takes its left operand in <Arg> and its right here, and leaves
-;; the result here; the long-integer operations take the left operand here and the right in <Arg>. An integer or long
-;; integer uses the same bytes.
+;; Expressions are worked out here: a two-operand operation, real or long integer, takes its left operand in <Arg>
+;; and its right here, and leaves the result here. An integer or long integer uses the same bytes.
 ;; Also: FAC (BB13)
 Fac:
 
@@ -1035,7 +1034,7 @@ ReferencePointers:
 ; Page $1E
 ;
 ; Page $1E, above BASIC's stack, which BASIC takes for its own work space. The stack is page $1B, the page after its
-; zero page ($1A), from STACK_END down.
+; zero page ($1A), which the 6502 reaches as page $01 while that zero page is in use; it runs from STACK_END down.
 ; ---------------------------------------------------------------------------------------------------------------------
 
     .dum 255

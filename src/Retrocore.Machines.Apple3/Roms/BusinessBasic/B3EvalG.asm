@@ -142,7 +142,7 @@ ReadReal:
 ;; a string literal, a minus or an opening parenthesis.
 ;; Also: EVAL1 (BB13)
 NotDigit:
-    cmp #TOKEN_ESCAPE                             ; a function, `FN` or `NOT`
+    cmp #TOKEN_ESCAPE                       ; a function, `FN` or `NOT`
     beq EvaluateEscapeToken
     cmp #TOKEN_END                          ; a reserved word
     bcs EvaluateReservedWord

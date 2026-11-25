@@ -717,7 +717,7 @@ NextToken:
     inx
     cpx #TOKEN_NEW+1                        ; Past the statements?
     bne CheckListEnd
-    ldx #TOKEN_ESCAPE                     ; The second list: two-byte tokens from FIRST_TOKEN
+    ldx #TOKEN_ESCAPE                       ; The second list: two-byte tokens from FIRST_TOKEN
     stx Counter+1
     ldx #FIRST_TOKEN
 

@@ -36,7 +36,8 @@ public static class Trs80Model3Timing
     public const int CyclesPerFrame = CyclesPerLine * LinesPerFrame;
 
     /// <summary>
-    ///  Device T-states between real-time clock interrupts, 30 a second.
+    ///  Device T-states between real-time clock interrupts, 30 a second: every other frame. A Model 4 at 4 MHz takes
+    ///  one every frame, 60 a second.
     /// </summary>
     public const int CyclesPerTick = ClockHertz / 30;
 

@@ -347,7 +347,8 @@ Found:
 
 ;; Runs the line from the token at <TokenPointer>, then the lines after it, until a statement stops the program.
 ;;
-;; A typed line without a number runs from here too, with <Running> clear, so it ends after that line. When
+;; A typed line without a number runs from here too, with <Running> clear, so it ends after that line, unless `INPUT`
+;; of a number in it has set <Running> (a bug: <Statements::InputNumber>). When
 ;; TokenPointer is at a statement's first token, that statement starts here; after `RETURN` or `NEXT` it is at the
 ;; colon or the end of the line instead, and the statement after it starts at <Interpreter::RunLine::Wait>. The
 ;; debugger's BASIC thread takes a line's first statement from here.

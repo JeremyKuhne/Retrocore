@@ -47,7 +47,9 @@ tape loads or saves in a fraction of its playing time.
 
 **Disks.** The FD1771 runs Types I-IV commands with their step rates, verify, rotational sector search,
 byte-timed DRQ, lost data, record-not-found and record types. Read address, read and write track, force
-interrupt and the 3-second motor timeout are emulated too. Four drives take JV1 or JV3 images.
+interrupt and the 3-second motor timeout are emulated too. Four drives take JV1, JV3, DMK or IMD images, and a disk
+the DOS changes saves back to its image in its own format, or as another, when the debugger is asked to save it
+([Devices.md](Devices.md#the-debug-protocol)).
 
 Double-sided drives take their side select from bit 3 of the select latch at `$37E1`, which is also drive 3's
 select. Bit 3 with drive 0, 1 or 2 selects side 1 of that drive, so a Model I with double-sided drives has
@@ -63,10 +65,6 @@ A doubler adds a WD1791 for double density beside the FD1771:
 
 NEWDOS/80 probes for the Percom doubler. The Radio Shack doubler's side select (`$40`, `$60`) and write
 precompensation (`$C0`, `$E0`) values change nothing that the emulated disk sees.
-
-**Not emulated yet:**
-
-- writing changed disks back to their image files.
 
 ## ROMs
 

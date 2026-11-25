@@ -33,7 +33,7 @@ the ROM moves each byte: `HALT`, then `INI` or `OUTI` when the NMI wakes it. The
 the ROM, and the ROM puts one in RAM there before it banks the ROM out to transfer. A disk is 40 tracks of ten
 512-byte sectors numbered 0-9: a raw image is 204,800 bytes (`.img` or `.dsk`); IMD and DMK images hold single
 density too. A Kaypro 4's double-sided images (409,600 bytes, side 1's sectors numbered 10-19) read as well. Disks
-save back as raw images or DMK.
+save back as raw images, IMD or DMK, an IMD or DMK image in its own layout.
 
 **Screen.** Each character cell is 7 dots wide and 10 scanlines high, the character generator giving the middle
 five dots of its top eight. The display inverts a code's bit 7 before it addresses the character generator, whose

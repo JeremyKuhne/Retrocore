@@ -101,8 +101,10 @@ The new machines, and now the Model I too, read four formats, by extension or, f
 | DMK | Raw tracks with their ID marks' offsets, single and double density. |
 | IMD | ImageDisk, the usual format for Model II disks: FM and MFM, compressed, deleted and bad sectors. |
 
-A changed disk saves to its image, or as JV3 or DMK, and on the Model III and 4 as JV1 (`.dsk`, `.jv1`) where it
-fits ([Devices.md](Devices.md#the-debug-protocol)). A disk read from IMD saves as another format.
+A changed disk saves to its image in its own format, or as JV3, DMK or IMD, and on the Model III and 4 as JV1 (`.dsk`,
+`.jv1`) where it fits ([Devices.md](Devices.md#the-debug-protocol)). A DMK or IMD image keeps its layout: its tracks,
+gaps and ID offsets, or its comment, modes and compression, so an unchanged disk saves byte for byte. A new IMD image
+is at 250 kbps, or at 500 kbps, an 8-inch drive's, when a track holds more than a 5¼-inch track does.
 
 ## DOSes
 
@@ -230,4 +232,5 @@ What the comparison has to allow for:
 - **The RS-232 ports**, the Model 4's sound beyond the speaker bit, its hi-res graphics board and hard disks, and the
   Model II's hard disks and serial devices.
 - **The Model 16's 68000.**
-- **Writing disk images back**, as on the Model I.
+- **TRSDOS 1.3 writing**: its `DUMP` stops with `ERROR 11` after reading its directory, before it writes a sector,
+  and its `COPY` does not finish.

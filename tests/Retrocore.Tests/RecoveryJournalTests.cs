@@ -6,9 +6,11 @@ using Retrocore.Debug;
 using Retrocore.Machines.Acorn;
 using Retrocore.Machines.Apple2;
 using Retrocore.Machines.Devices;
+using Retrocore.Machines.Trs80;
 using Retrocore.Media;
 using Retrocore.Media.Acorn;
 using Retrocore.Media.Floppy;
+using Retrocore.Media.Trs80;
 using System.Text.Json.Nodes;
 
 namespace Retrocore.Tests;
@@ -503,6 +505,46 @@ public sealed class RecoveryJournalTests
         UefFormat.Read(File.ReadAllBytes(uef)).HalfCycles.Should().Equal(back.HalfCycles);
         Stop(journal, nextFloppy, nextCassette);
         Disks(id).Should().BeEmpty();
+    }
+
+    /// <summary>
+    ///  A TRS-80 disk read from IMD and from DMK is kept and comes back with its image's layout, so a disk written
+    ///  while it was kept saves to its image in its own format, with the comment, modes and ID offsets it had.
+    /// </summary>
+    /// <param name="extension">The image's extension.</param>
+    [TestMethod]
+    [DataRow(".imd")]
+    [DataRow(".dmk")]
+    public void ATrs80DiskComesBackWithItsImagesLayout(string extension)
+    {
+        string id = Id();
+        string path = Path.Join(s_root, $"kept-{Guid.NewGuid():N}{extension}");
+        FloppyDisk blank = new();
+        foreach (int number in Enumerable.Range(1, 18))
+        {
+            blank.Add(0, 0, new FloppySector(0, 0, (byte)number, new byte[256], doubleDensity: true));
+        }
+
+        byte[] image = extension == ".imd" ? ImdFormat.Encode(blank).Bytes : DmkFormat.Write(blank);
+        File.WriteAllBytes(path, image);
+        Trs80Machine machine = Trs80MachineTests.Create(new());
+        FloppyMedia.Insert(machine.Drives[0], path, FloppyFamily.Trs80);
+        FloppyDisk disk = machine.Drives[0].Disk ?? throw new InvalidOperationException("The drive is empty.");
+        disk.Write(disk.Track(0, 0)[4], [.. Enumerable.Repeat((byte)0x42, 256)], 0xFB);
+        Stop(Open(id), machine.Drives[0]);
+
+        Trs80Machine next = Trs80MachineTests.Create(new());
+        FloppyMedia.Insert(next.Drives[0], path, FloppyFamily.Trs80);
+        RecoveryJournal journal = Open(id);
+        MediaActions.Recover([next.Drives[0]], journal).Should().BeEmpty();
+        FloppyDisk back = next.Drives[0].Disk ?? throw new InvalidOperationException("The drive is empty.");
+        MediaActions.Source(back)?.Codec.Should().BeOfType<FloppyImageCodec>().Which.Layout.Should().NotBeNull();
+
+        MediaActions.Device(next.Drives[0], "save", Speaking())?.String("outcome").Should().Be("saved");
+        byte[] saved = File.ReadAllBytes(path);
+        saved.Length.Should().Be(image.Length, "each sector is stored as it was");
+        Trs80DiskImage.Read(saved, extension).Disk.Track(0, 0)[4].Data.ToArray().Should().AllBeEquivalentTo((byte)0x42);
+        Stop(journal, next.Drives[0]);
     }
 
     private static string Id() => $"test-{Guid.NewGuid():N}";

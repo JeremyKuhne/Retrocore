@@ -59,22 +59,26 @@ SELECTOR_SIGNATURE = $EE
 ;; Also: NUMLEV (BB13)
 STACK_LEVELS = 19
 
-; The type byte after each string in string space, which says what holds the string.
+; The values of <VALTYP>, the type of the value just evaluated.
 
 ;; <VALTYP> for a real, or for an integer, which <INTFLG> tells apart; a formula of numbers asks for it, and it marks a
 ;; value as nothing to free.
+;; Also: VREAL (BB13)
 VALUE_TYPE_REAL = 0
 
 ;; <VALTYP> before a formula that may give any type: a type the evaluator is never left with.
 VALUE_TYPE_ANY = $20
 
 ;; <VALTYP> for a long integer: bit 6, which `BIT` of <VALTYP> copies into the overflow flag.
+;; Also: VLNT (BB13)
 VALUE_TYPE_LONG_INTEGER = $40
 
 ;; <VALTYP> for a string: bit 7, which `BIT` of <VALTYP> copies into the negative flag; <PTRGET>'s type for a string
 ;; variable too.
-;; Also: STRTYP (BB13)
+;; Also: STRTYP (BB13), VSTR (BB13)
 VALUE_TYPE_STRING = $FF
+
+; The type byte after each string in string space, which says what holds the string.
 
 ;; A string's type byte: a temporary.
 ;; Also: TEMPTYP (BB13)
@@ -243,11 +247,11 @@ TangentSign:
 ;; Also: ANYNUM (BB13)
 DigitsSeen = TangentSign
 
-;; The output file: OutputFile is where output goes now, OutputFile+1 where it goes between statements.
+;; The output file: OutputFileNumber is where output goes now, OutputFileNumber+1 where it goes between statements.
 ;;
-;; $FF in either means the console; `PRINT#` and the like set OutputFile for one statement.
+;; $FF in either means the console; `PRINT#` and the like set OutputFileNumber for one statement.
 ;; Also: FILNO (BB13)
-OutputFile:
+OutputFileNumber:
     .res 2
 
 ;; The reference number of the `EXEC` file, 0 when `EXEC` is not running.
@@ -511,7 +515,7 @@ ListToken = AssignedVariable + 1
 
 ;; The file's type, in the file commands.
 ;; Also: TYPSAV (BB13)
-FileType = StoppedLine + 1
+SavedFileType = StoppedLine + 1
 
 ;; A pointer to a string descriptor, with its X-byte at <DescriptorPointerXByte>.
 ;; Also: DSCPNT (BB13)

@@ -186,7 +186,7 @@ CopyCharacterReader:
     jsr Console::Initialize
     jsr EraseProgram
 .if VERSION >= 130
-    jsr Prefix::SaveSos                     ; 1.3: keep SOS's prefix in SOSPATH
+    jsr ProgramPrefix::SaveSos                     ; 1.3: keep SOS's prefix in SOSPATH
 .endif
     lda #<(SWCHGO)
     sta DISPATCH+1
@@ -250,7 +250,7 @@ NoProgramName:
 ;; Also: BOOTRUN (BB13)
 RunHello:
 .if VERSION >= 130
-    jsr Prefix::CopySosToProgram            ; 1.3: the program's prefix is SOS's
+    jsr ProgramPrefix::CopySosToProgram            ; 1.3: the program's prefix is SOS's
 .endif
     brk                                     ; GET_FILE_INFO on HELLO
     .byte SGFI
@@ -461,9 +461,6 @@ DEFAULT_OUTREC = 80
 
 ;; The spaces `LIST` indents each `FOR` loop by at start, `INDENT`'s default.
 DEFAULT_INDENT = 2
-
-;; The number of files a program can have open, #1 to #10.
-FILE_COUNT = 10
 
 ;; The bytes of an empty program: a zero length, and the two bytes of its line number.
 EMPTY_PROGRAM_SIZE = 3

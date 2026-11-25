@@ -179,7 +179,7 @@ StartLoop:
 PrintPrompt:
     jsr SYNCHR
     jsr PrintString
-    jmp ReadLine
+    jmp ReadInputLine
 
 ;; Takes `INPUT# n;` from a file, or prints the `?` prompt.
 ;; Also: NOTQT0 (BB13)
@@ -206,7 +206,7 @@ QuestionPrompt:
 
 ;; Reads `INPUT`'s line from the console into <BUF>, with a comma before it.
 ;; Also: NOTQTII (BB13)
-ReadLine:
+ReadInputLine:
     ldx #0
     stx QUOTE                               ; commas end items
     dex

@@ -578,7 +578,7 @@ Store:
 ;; -32768 as a packed real, for <FacToInteger>'s check.
 ;; Also: N32768 (BB13)
 MinimumInteger:
-    .byte WORD_EXPONENT, $80, 0, 0
+    .byte Float::WORD_EXPONENT, $80, 0, 0
     .byte 0
 
 ;; Evaluates a subscript: the formula after the current character, as an integer 0-32767.
@@ -631,7 +631,7 @@ MinimumInteger:
 ;; Also: AYINT (BB13)
 .proc FacToInteger
     lda FACEXP
-    cmp #WORD_EXPONENT                      ; below 32768 in size?
+    cmp #Float::WORD_EXPONENT                      ; below 32768 in size?
     bcc RoundToInteger
     lda #<(MinimumInteger)
     ldx #0

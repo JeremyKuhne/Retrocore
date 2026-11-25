@@ -337,9 +337,9 @@ Done:
 .proc ComplementMantissa
 
 ;; Where the routine keeps X while it counts the mantissa's bytes in X.
-SavedX = DPTFLG
+KeptX = DPTFLG
 
-    stx SavedX
+    stx KeptX
     ldx #3                                  ; FACHO's offset to FACLO
 
 ;; Complements a byte of the mantissa, from the lowest.
@@ -350,7 +350,7 @@ Loop:
     sta FACHO,x
     dex
     bpl Loop
-    ldx SavedX
+    ldx KeptX
     lda FACOV
     eor #$FF
     sta FACOV

@@ -1,6 +1,6 @@
 ; retrocore: style=strict ignore=unlinked-name:DATA -- DATA in the message OUT OF DATA
 ; EXTRAS: statements Business BASIC adds to Applesoft's: OUTREC, INDENT, HPOS and VPOS as statements, NORMAL,
-; INVERSE, TRACE and NOTRACE, ON ERR and RESUME, ON KBD, ON EOF# and OFF, DELETE, TEXT and HOME, with the routines
+; INVERSE, TRACE and NOTRACE, ON ERR and RESUME, ON KBD, ON EOF# and OFF, DEL, TEXT and HOME, with the routines
 ; that test for two-byte tokens and that send a program to its ON KBD or ON EOF# handler.
 ;
 ; ON KBD and ON EOF# keep their handlers in EOFPTRS and EOFLINS, three bytes and two each, by number: 1 to 10 for
@@ -518,19 +518,19 @@ NoHandler:
 .assert EOFSIZ = 3 * Handlers::KEYBOARD, "The keyboard's handler must be the last in EOFPTRS."
 
 ; ---------------------------------------------------------------------------------------------------------------------
-; DELETE
+; DEL
 ; ---------------------------------------------------------------------------------------------------------------------
 
-; DELETE.
+; DEL.
 .scope Statements continued
 
-;; Ends with SYNTAX, for <Statements::Delete>.
+;; Ends with SYNTAX, for <Statements::Del>.
 ;; Also: BLOWDEL (BB13)
 .proc ToSyntaxError
     jmp SNERR
 .endproc
 
-;; The `DELETE first[,last]` statement: deletes a line, or the lines from first to last, from the program.
+;; The `DEL first[,last]` statement: deletes a line, or the lines from first to last, from the program.
 ;;
 ;; A comma, `-` or `TO` may separate the numbers. Run from a program, it may delete only lines after the one it is
 ;; in. The program's end, the variables and the arrays move down with <CloseGap>, so the variables keep their
@@ -541,7 +541,7 @@ NoHandler:
 ;; Entry: ReportRange = ends with RANGE
 ;; See: <FindLine>, <CloseGap>
 ;; Also: DELETE (BB13)
-.proc Delete
+.proc Del
     bcs ToSyntaxError                       ; Not a digit
     jsr LINGET
     jsr FindLine                            ; The first line to delete

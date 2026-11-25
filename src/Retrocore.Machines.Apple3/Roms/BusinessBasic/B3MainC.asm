@@ -46,7 +46,7 @@
     ; 1.3: restore SOS's prefix, and print the program's name when no program has reached the prompt yet.
     txa
     pha
-    jsr Prefix::UseSos
+    jsr ProgramPrefix::UseSos
     lda RNFLG
     bne NameDone
     lda #<(PROGPATH+1)
@@ -138,11 +138,11 @@ SkipNext:
 PrintMessage:
     lda (INDEX),Y
     iny
-    bne PrintCharacter
+    bne PrintMessageCharacter
     inc INDEX+1
 
 ;; Prints the character just read.
-PrintCharacter:
+PrintMessageCharacter:
     pha
     jsr OUTDO
     pla
@@ -190,7 +190,7 @@ Direct:
 ;; Also: READY (BB13)
 .proc ReadyForCommand
 .if VERSION >= 130
-    jsr Prefix::UseSos                      ; 1.3: SOS's own prefix
+    jsr ProgramPrefix::UseSos                      ; 1.3: SOS's own prefix
 .endif
 .if RUNTIME
     lda ERRNUM                              ; Zero: the program ended
@@ -255,10 +255,10 @@ PROMPT = ')'
     lda #1
     sta RNFLG                               ; The prompt has been reached
 .if VERSION >= 130
-    jsr Prefix::UseSos                      ; 1.3: SOS's prefix, and the program's prefix
+    jsr ProgramPrefix::UseSos                      ; 1.3: SOS's prefix, and the program's prefix
 .endif
 .if VERSION >= 130
-    jsr Prefix::StripFileName
+    jsr ProgramPrefix::StripFileName
 .endif
     jsr VPOS
     lda a:Console::CursorColumn
@@ -431,9 +431,6 @@ TWO_BYTE_TOKEN = $FF
 ;; Also: CRUNCH (BB13)
 .proc Tokenize
 
-;; The first token of each keyword list.
-FIRST_TOKEN = $80
-
 ;; Clears bit 5, which makes a lower-case letter upper case.
 UPPER_CASE_MASK = $DF
 
@@ -468,12 +465,12 @@ NextInput:
     cmp #','                                ; A comma?
     bne Classify
     bit INTFLG
-    bpl CheckComma
+    bpl CheckForComma
     ror DORES                               ; After OPEN: copy from here
     bmi Classify
 
 ;; Does a comma turn tokenizing back on?
-CheckComma:
+CheckForComma:
     bit DORES
     bvs Classify
 

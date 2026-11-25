@@ -378,7 +378,7 @@ CheckTemporary:
     beq NoTemporary
     ldy #0
     lda (HEADER),Y                          ; the length
-    beq NextTemporary                       ; empty
+    beq NextTemporaryDescriptor                       ; empty
     sta ANYNUM
     iny
     iny
@@ -405,16 +405,16 @@ CheckTemporary:
     jsr Memory::WrapPage
 CompareEnd:
     cpx DECCNTB
-    bne NextTemporary
+    bne NextTemporaryDescriptor
     cpy DECCNT+1
-    bne NextTemporary
+    bne NextTemporaryDescriptor
     cmp DECCNT
-    bne NextTemporary
+    bne NextTemporaryDescriptor
     jmp MoveDescriptor                      ; this one
 
 ;; Steps to the next temporary descriptor.
 ;; Also: DVARTS (BB13)
-NextTemporary:
+NextTemporaryDescriptor:
     lda #STRSIZ
     clc
     adc HEADER

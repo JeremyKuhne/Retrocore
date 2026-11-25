@@ -13,10 +13,6 @@
 ; Constants
 ; ---------------------------------------------------------------------------------------------------------------------
 
-;; The exponent of a real whose binary point is 16 bits past the top of its mantissa: <FLOATC> and <FLOATS> make a
-;; 16-bit integer a real with it.
-WORD_EXPONENT = $90
-
 ; ---------------------------------------------------------------------------------------------------------------------
 ; FRMEVL's operator step, continued
 ; ---------------------------------------------------------------------------------------------------------------------
@@ -284,7 +280,7 @@ ReturnOne:
     ldy ERRLIN
     sta FACHO
     sty FACHO+1
-    ldx #WORD_EXPONENT
+    ldx #Float::WORD_EXPONENT
     sec                                     ; positive
     jmp FLOATC
 .endproc
@@ -548,14 +544,14 @@ AtAddress:
     stx FACMOB
     bit VALTYP
     bvc LoadNumericVariable                 ; a real or an integer
-    bpl LongInteger                         ; a long integer
+    bpl LongIntegerVariable                 ; a long integer
     ldx #0                                  ; a string: FACMO points to its descriptor
     stx FACOV
     rts
 
 ;; Copies a long integer variable's eight bytes into the <FAC>.
 ;; Also: DBLVAR (BB13)
-LongInteger:
+LongIntegerVariable:
     jmp DMOVFM
 .endproc
 

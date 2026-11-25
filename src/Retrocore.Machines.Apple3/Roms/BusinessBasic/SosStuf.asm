@@ -249,9 +249,6 @@ EVENT_ID = 1
 ;; The priority BASIC gives the events it arms.
 EVENT_PRIORITY = 1
 
-;; The attention key, CONTROL-C.
-CONTROL_C = 3
-
 ;; D_CONTROL's code that resets the console.
 CONTROL_RESET = 0
 
@@ -1057,7 +1054,7 @@ ParameterCounts:
 ; ---------------------------------------------------------------------------------------------------------------------
 
 ;; 1.3's two prefixes, SOS's own in <SOSPATH> and the program's in <PROGPATH>, and setting SOS's prefix to either.
-.scope Prefix
+.scope ProgramPrefix
 
 ;; GET_PREFIX's buffer length.
 PATHNAME_LIMIT = 80
@@ -1087,7 +1084,7 @@ Done:
 .endproc
 
 ;; Sets SOS's prefix back to BASIC's, from <SOSPATH>.
-;; See: <Prefix::UseProgram>
+;; See: <ProgramPrefix::UseProgram>
 ;; Also: SETSOS (BB13)
 .proc UseSos
     lda #<(SOSPATH)
@@ -1098,7 +1095,7 @@ Done:
 .endproc
 
 ;; Sets SOS's prefix to the program's, from <PROGPATH>; after `RUN` or `CHAIN`, it takes the new program's first.
-;; See: <Prefix::UseSos>, <Prefix::TakeFromName>
+;; See: <ProgramPrefix::UseSos>, <ProgramPrefix::TakeFromName>
 ;; Also: SETPROG (BB13)
 .proc UseProgram
     lda CMDFLG
@@ -1111,10 +1108,10 @@ SetProgramPrefix:
     sta a:Pathname
     lda #>(PROGPATH)
     sta a:Pathname+1
-    ; Falls into Prefix::Set.
+    ; Falls into ProgramPrefix::Set.
 .endproc
 
-;; Sets SOS's prefix to the pathname <Prefix::Pathname> points to, ending the statement with an error if it fails.
+;; Sets SOS's prefix to the pathname <ProgramPrefix::Pathname> points to, ending the statement with an error if it fails.
 ;; Entry: Failed = ends the statement with the SOS error in A
 ;; Also: SETPFX (BB13)
 .proc Set
@@ -1218,7 +1215,7 @@ CopyByte:
 Parameters:
     .byte SosCalls::SET_PREFIX_COUNT
 
-;; The pathname's address, for <Prefix::Set> and <Prefix::ToVolumeName>, then GET_PREFIX's buffer length.
+;; The pathname's address, for <ProgramPrefix::Set> and <ProgramPrefix::ToVolumeName>, then GET_PREFIX's buffer length.
 ;; Also: SHFTPFX (BB13)
 Pathname:
     .word 0

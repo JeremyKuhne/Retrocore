@@ -845,7 +845,7 @@ FillName:
     bne FillName
     ldx NAMPNT
     jsr CHRGOT
-    bne CheckCharacter
+    bne TakeCharacter
 
 ;; Ends the statement with a syntax error: no name.
 ;; Also: PERERR (BB13)
@@ -868,7 +868,7 @@ NextCharacter:
 
 ;; Takes the character in A.
 ;; Also: PERFE3 (BB13)
-CheckCharacter:
+TakeCharacter:
     beq ToFind                              ; the statement's end
     bcc AddCharacter                        ; a digit
     jsr ISLETC

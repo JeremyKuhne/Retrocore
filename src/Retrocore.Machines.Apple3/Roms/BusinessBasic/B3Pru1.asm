@@ -661,7 +661,7 @@ ToTypeMismatchError:
 TypesMatch:
     txa
     bpl ToPrintNumber
-    jmp PrintString
+    jmp FormatString
 ToPrintNumber:
     jmp PrintNumber
 .endproc
@@ -721,17 +721,17 @@ OutputLoop:
 ;; In: INDEX = the string, StringLength = its length, RepeatCount = the field's width, SpecCharacter = the spec's
 ;;   letter
 ;; Also: USTRVAR (BB13)
-.proc PrintString
+.proc FormatString
     lda StringLength
     sta TextLength
     lda RepeatCount                         ; the width less the length
     sec
     sbc TextLength
-    beq PrintText
+    beq CopyText
     bcs Fits
     ldx RepeatCount                         ; too long: cut it
     stx TextLength
-    jmp PrintText
+    jmp CopyText
 
 ;; Prints the spaces before a string shorter than its field.
 ;; In: A = the spaces to spare
@@ -739,9 +739,9 @@ OutputLoop:
 Fits:
     ldy SpecCharacter
     cpy #'A'
-    beq PrintText
+    beq CopyText
     cpy #'a'
-    beq PrintText
+    beq CopyText
     cpy #'C'
     beq Center
     cpy #'c'
@@ -761,14 +761,14 @@ PadBefore:
 ;; Also: ULSPCS (BB13)
 PadBeforeLoop:
     dex
-    beq PrintText
+    beq CopyText
     jsr OUTSPC
     dec RepeatCount
     bne PadBeforeLoop
 
 ;; Prints the string's <TextLength> characters, then spaces to the field's end.
 ;; Also: UEXACT (BB13)
-PrintText:
+CopyText:
     ldy #0
     ldx TextLength
     beq PadAfter

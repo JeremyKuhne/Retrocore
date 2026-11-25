@@ -216,7 +216,7 @@ Modulus:
 
 ;; The long integer 16807, the generator's multiplier.
 ;; Also: RMUL_C (BB13)
-Multiplier:
+LehmerMultiplier:
     .byte 0, 0, 0, 0
     .byte 0, 0, $41, $A7
 
@@ -307,8 +307,8 @@ ReturnSeed:
 ;; Also: RNDAT (BB13)
 .proc AdvanceFac
     jsr LongInteger::CopyFacToArg
-    lda #<(Multiplier)
-    ldy #>(Multiplier)
+    lda #<(LehmerMultiplier)
+    ldy #>(LehmerMultiplier)
     ldx #RNDXB
     jsr LongInteger::LoadFac
     jsr LongInteger::Multiply

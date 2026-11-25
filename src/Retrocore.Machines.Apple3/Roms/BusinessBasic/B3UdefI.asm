@@ -350,7 +350,7 @@ Done:
     stx VALTYP
     sta FACHO
     sty FACHO+1
-    ldx #WORD_EXPONENT
+    ldx #Float::WORD_EXPONENT
     jmp FLOATS
 .endproc
 

@@ -110,14 +110,14 @@ ConvertByte:
     sbc #CASE_OFFSET                        ; lower case to upper
     sec
     sbc #'0'
-    bcc IllegalQuantityError
+    bcc ReportIllegalQuantity
     cmp #10
     bcc Done
     sbc #LETTER_OFFSET                      ; 'A' to 10
     cmp #$10
-    bcs IllegalQuantityError
+    bcs ReportIllegalQuantity
     cmp #10                                 ; between '9' and 'A'
-    bcc IllegalQuantityError
+    bcc ReportIllegalQuantity
 
 ;; Returns the digit's value.
 ;; Also: DECDN (BB13)
@@ -191,7 +191,7 @@ Done:
 
 ;; Ends the statement with an illegal quantity error.
 ;; Also: QNERR (BB13)
-.proc IllegalQuantityError
+.proc ReportIllegalQuantity
     ldx #ERRFC
     jmp ERROR
 .endproc

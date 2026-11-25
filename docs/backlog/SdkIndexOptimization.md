@@ -40,8 +40,9 @@ Indexing every SDK root:
 | 6 (`b1`) | f33ce65d | The parser reads each line in place | 874 ms | 834 MB | −25% | −40% |
 | 7 (`b2`) | 83190f75 | The style checks read lines in place | 885 ms | 810 MB | −24% | −42% |
 | 8 (`a1`) | e886a86e | Each source's `Also:` names read once | 847 ms | 737 MB | −27% | −47% |
+| 9 (`m1`) | baf631e6 | Macro names looked up by their text | 819 ms | 705 MB | −30% | −49% |
 
-AppleSoft's root alone: 50.1 ms and 67.7 MB at the baseline, 28.1 ms and 29.7 MB after step 8.
+AppleSoft's root alone: 50.1 ms and 67.7 MB at the baseline, 27.9 ms and 28.6 MB after step 9.
 
 ### 1. Each source path made full once
 
@@ -111,6 +112,16 @@ read every source's again, each a full documentation parse. Every root repeated 
 its state for macro expansions) from them, and `SourceFileCache` gives every assembly in an index build the same
 source for a path. This helps every assembly, not only the index. Allocations fell by 72 MB.
 
+### 9. Macro names looked up by their text
+
+After step 8 the preprocessor made 53% of the allocations, and macro expansion about 18%. `Substitute` copied every
+macro and `.repeat` body line it read, as each is a slice of its file's text, then copied every identifier on it to
+look it up among the parameters and locals, though most are neither. The main loop copied each line's operation to
+look it up among the macros whenever a file defined any. Now names are looked up by their text with the
+dictionaries' span lookup (`GetAlternateLookup<ReadOnlySpan<char>>`, .NET 9 and later), and a line is copied only
+when a name in it is replaced. The source generator compiles this for netstandard2.0, where it still copies each name
+to look it up. Allocations fell by 32 MB.
+
 ## Where the time and memory go now
 
 From the ETW trace before steps 3 and 4, and the allocation trace after step 5:
@@ -133,8 +144,10 @@ From the ETW trace before steps 3 and 4, and the allocation trace after step 5:
   line are kept.
 - **The documentation parsed twice.** The assembler's `Also:` pass parses without style checks and without the
   assembly's knowledge; the editor's with both. Sharing more than the lines needs care.
-- **The preprocessor's macro expansion and string building** (`StringBuilder.ToString`, `Substitute`, the ca65
-  functions).
+- **The ca65 path's copies** (M2, next): `PrepareCa65` copies a line it expands, its operation and an upper-cased
+  copy of that; `ExpandCa65Functions` copies every `.`-token.
+- **The rest of macro expansion**: each invocation's argument list, parameter dictionary and a location for every
+  body line, and `Emit`.
 - **Shared files preprocessed per root.** AppleSoft and each PET BASIC root preprocess the shared BASIC sources again;
   the result depends on each root's definitions and branches.
 

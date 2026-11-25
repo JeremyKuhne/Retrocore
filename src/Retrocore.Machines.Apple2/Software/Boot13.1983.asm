@@ -13,7 +13,7 @@
 ;; came with it.
 ;;
 ;; Its disk reading is DOS 3.2's, under DOS's names: copies of <DiskII::ReadAddressField>,
-;; <DiskII::ReadDataField> and <DiskII::PostNibble> (ReadAddress.asm, ReadData.asm and PostNibble.asm) and
+;; <DiskII::ReadDataField> and <DiskII::PostNibble> (`ReadAddress.asm`, `ReadData.asm` and `PostNibble.asm`) and
 ;; of <DiskII::ReadTranslate>'s entries, with a simpler <DiskII::MoveHead>. The slot is written into the code, as
 ;; the operands of three `ldx` instructions and two `lda` instructions, the constants <Start::StartSlot>,
 ;; <LoadBoot::LoadSlot>, <ReadSector::SectorSlot>, <DiskII::MoveHead::PhaseOffSwitch> and

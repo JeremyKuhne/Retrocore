@@ -203,8 +203,8 @@ public class Trs80Model3OracleTests
     }
 
     /// <summary>
-    ///  Each Model II TRSDOS boots from drive 0, with version 5 of the boot ROM, MAME's default, and takes the date
-    ///  and time. MAME 0.264 asks for the date after about 31 seconds, where this side asks after about 16: in MAME,
+    ///  Each Model II TRSDOS boots from drive 0, with version 5 of the boot ROM (MAME's <c>9733</c>), and takes the
+    ///  date and time. The times are MAME 0.264's. MAME 0.264 asks for the date after about 31 seconds, where this side asks after about 16: in MAME,
     ///  TRSDOS 1.2 restores the drive in single density and seeks again 17 times in its first 30 seconds, where here
     ///  it seeks once, so the keys wait for MAME. TRSDOS 1.2 in MAME is as slow to list its directory, whose heading
     ///  shows the time, so the comparison stops at the prompt; the listing is
@@ -234,7 +234,7 @@ public class Trs80Model3OracleTests
         ];
 
         const double Finish = 60;
-        byte[] dump = RunMame(mame, sets, "trs80m2", ":video_ram", script, Finish, disk, cpu: ":u12");
+        byte[] dump = RunMame(mame, sets, "trs80m2", ":video_ram", script, Finish, disk, ["-bios", "9733"], cpu: ":u12");
 
         Trs80Model2Machine machine = Trs80Model2RomTests.Create();
         (FloppyDisk floppy, string format) = Trs80DiskImage.Read(File.ReadAllBytes(disk), Path.GetExtension(disk));
@@ -253,7 +253,7 @@ public class Trs80Model3OracleTests
         const int Cells = 80 * 24;
         byte[] oracle = dump[0x10000..(0x10000 + Cells)];
         Console.WriteLine(Screen(oracle, 80));
-        Encoding.Latin1.GetString(oracle).Should().Contain("TRSDOS READY", "MAME got through the script");
+        Encoding.Latin1.GetString(oracle).Should().ContainEquivalentOf("TRSDOS READY", "MAME got through the script");
         Match(oracle, [.. Enumerable.Range(0, Cells).Select(machine.Bus.Video.Read)], 80);
     }
 

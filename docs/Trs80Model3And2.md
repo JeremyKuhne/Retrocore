@@ -119,8 +119,8 @@ is at 250 kbps, or at 500 kbps, an 8-inch drive's, when a track holds more than 
 
 ## DOSes
 
-These boot from drive 0, take the date and list their directories, on the SDK's ROMs (`Trs80Model3RomTests`'s
-`BootsItsDos`, and for the Model II `Trs80Model2RomTests`'). The images are not in the repository: the test reads them from `trs80-disks` in the external data
+These boot from drive 0, take the date and list their directories, on the SDK's ROMs (`BootsItsDos` in
+`Trs80Model3RomTests`, and for the Model II in `Trs80Model2RomTests`). The images are not in the repository: the test reads them from `trs80-disks` in the external data
 folder (`RETROCORE_CACHE`, or `Retrocore` in the user's profile) and is inconclusive without them. They are from the
 Internet Archive.
 
@@ -140,14 +140,15 @@ The Model II's DOSes are not among those items. They are in MAME's `trs80m2` sof
 item `MAME_0.202_Software_List_ROMs_merged`, as `trs80m2.zip` (SHA-256 `813f8840…`). That holds a zip for each
 entry, named below with the file in it. The fixtures keep them under new names. TRSDOS 1.2, 2.0a and 2.0b boot,
 take the date and time and list their directories (`Trs80Model2RomTests.BootsItsDos`), and match MAME at their
-prompt (`Trs80Model3OracleTests.Model2DosMatchesMame`). LS-DOS 6.3.1, run the same way, with version 5 of the boot
-ROM, boots to its welcome screen and lists its directory, but its screen is reported to stay blank (see the
-[backlog](backlog/Trs80Model3AndModel2.md#stages), stage 2). TRSDOS-II 4.2 is a Teledisk image, which the media
+prompt in MAME 0.264 (`Trs80Model3OracleTests.Model2DosMatchesMame`). LS-DOS 6.3.1 is not tested; its screen is
+reported to stay blank (see the [backlog](backlog/Trs80Model3AndModel2.md#stages), stage 2). TRSDOS-II 4.2 is a Teledisk image, which the media
 library does not read.
 
 TRSDOS's boot code checks the machine before it loads the DOS. One check copies 80 bytes to video RAM with the DMA,
 interrupting at the block's end with status affecting the vector, and waits for the routine at that vector; a vector
-naming another cause shows `BOOT ERROR DM 23` (`DM` for the DMA test, `23` its code for no end-of-block interrupt).
+naming another cause shows `BOOT ERROR DM 23`. In TRSDOS 1.2's boot code, as loaded at `$1400`, `DM` names the DMA
+test (the codes are at `$171B`: `LM`, `HM`, `DM`, `PI`) and `23` is the code it returns at `$15C5` when the routine's
+flag is not set.
 
 | Machine | DOS | File | In `trs80m2.zip` | SHA-256 |
 | --- | --- | --- | --- | --- |
@@ -280,7 +281,7 @@ types the same keystrokes at the same emulated seconds and dumps the screen's vi
 T-states while the Model 4 runs at 4 MHz. The screens must then match, cell for cell. MAME comes from
 `RETROCORE_MAME`, `mame/mame` or `mame/mame.exe` in the external data folder, or a Linux package's (`apt install
 mame` puts it in `/usr/games`). The tests target MAME 0.289; Ubuntu 24.04's package is 0.264, which passes all but
-the DMK images' tests, the Model II's included. Retrocore's cloud environment sets up 0.289 from Ubuntu 26.10's package as
+the DMK images' tests. The Model II's DOS comparison's times are MAME 0.264's; it has not been run with 0.289. Retrocore's cloud environment sets up 0.289 from Ubuntu 26.10's package as
 `/usr/local/bin/mame-0.289`, in `RETROCORE_MAME`. Its ROM sets, `trs80m3`, `trs80m4` and `trs80m2`, are in
 `trs80-roms/mame`. Without its set the Model 4's tests build MAME's `trs80m4` set from the SDK's sources, after checking
 that the builds have the SHA-1s MAME lists for it (`mame -listroms trs80m4`), and the others are inconclusive.

@@ -513,7 +513,7 @@ Apple Pascal comes after BASIC, with its own [plan](ApplePascal.md).
 | Media writers | Each writer's image reads back through the existing readers (`DosDisk`, `SosVolume`, the D64 and DFS readers, `TapFormat`, `UefFormat`) and boots under emulation: the DOS 3.3 disk on a II Plus as well as a IIe, the SOS disk with SOS 1.3 built from source, the DFS disk with `!BOOT`. |
 | The Apple-1's RAM | 16K and 32K boot the Woz Monitor and run a program above `$1FFF`; other sizes are still rejected. |
 | Dialects | ca65 and Merlin samples include the native headers and build byte-identically to their native twin. |
-| The adventure | It builds for all five targets. A scripted walkthrough of the test adventure, and an opening of Pirate Adventure, run on each target under the debug adapter, in the style of the `tools/Test-*Dap.mjs` scripts, and each transcript must match the packer's reference engine. |
+| The adventure | It builds for all five targets. A scripted walkthrough of the test adventure, and an opening of Pirate Adventure, run on each target under the debug adapter, in the style of the `tools/Test-*Dap.mjs` scripts, and each transcript must match the packer's reference engine. As built in phase 3: Pirate Adventure's win, from start to finish, and its death play on the bare Apple-1, PET, Apple II and BBC Micro, and the test game's three transcripts on a second Apple II target; the Apple III builds but is not played until it has a character set. |
 | VS Code | The active target picker, F5 without a launch.json, the `project` launch, and the language server switching targets. |
 | Versions | A project on the previous major builds with its deprecation warnings; a removed name fails on the current major. |
 

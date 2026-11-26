@@ -1,4 +1,4 @@
-// The adventure on five machines, each a bare target: the engine's core, the same on every one, and the machine's
+// The adventure on five machines as bare targets: the engine's core, the same on every one, and the machine's
 // platform folder, src/platform/<family>/, with its console and its linker configuration. `retrocore build --all`
 // first packs the games with the packer, a step it skips while the packer and the games are unchanged. Every target
 // links Pirate Adventure in but apple2-test, which links the test game (TEST_GAME, src/linked-game.s).

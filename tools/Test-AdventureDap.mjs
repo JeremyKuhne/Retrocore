@@ -6,8 +6,8 @@
 // linked in, from start to finish on bare targets of sample/adventure/retrocore.json (the win and the death on the
 // Apple-1 with 32K, the PET 4032, the Apple II Plus and the BBC Micro), and the test game's transcripts on apple2-test,
 // through project launches, each running the project's steps, which pack the games with the sample's packer, and
-// building the same core with its machine's platform folder, and checks that what the engine writes matches the C# reference engine's transcript in the matching .out
-// file character for character. A watch on the console's Write's store of A records each character the engine sends,
+// building the same core with its machine's platform folder. It checks that what the engine writes matches the C#
+// reference engine's transcript in the matching .out file character for character. A watch on the console's Write's store of A records each character the engine sends,
 // and a logpoint on ReadLine marks where it reads a command, so the commands can be put back where the screen shows
 // them. The Apple II's, PET's and BBC's screens are checked for the game's end as well. The launches check Keeps:
 // contracts and fail on a broken one. A false Keeps: on the top-level LocateTables stops the run, but one on
@@ -69,7 +69,9 @@ function firstLine(consoleSource, routine) {
 }
 
 const { request, event, events, fail, close, failure } = startDap(root);
-const timeout = setTimeout(() => fail(new Error("Adventure DAP integration timed out.")), 900000);
+// A whole run takes about two minutes; each play may take three.
+const timeout = setTimeout(() => fail(new Error("Adventure DAP integration timed out.")),
+    180000 * Math.max(1, targets.reduce((count, target) => count + (plays[target]?.transcripts.length ?? 0), 0)));
 
 // What the engine has written, with each command after the prompt it answers, as the screen shows them. A logpoint
 // can log twice when an interrupt is taken at its instruction, as the PET's and BBC's are, so the reads are counted

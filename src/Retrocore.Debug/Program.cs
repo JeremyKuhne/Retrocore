@@ -37,6 +37,12 @@ if (args.Length > 0 && args[0] == "--basic")
     return;
 }
 
+if (args.Length > 0 && args[0] == "--model100")
+{
+    Environment.ExitCode = Model100Command.Run(args[1..]);
+    return;
+}
+
 if (args.Length > 0 && args[0] == "--dos")
 {
     Environment.ExitCode = DosCommand.Run(args[1..]);

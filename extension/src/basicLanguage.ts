@@ -16,6 +16,7 @@ const dialects: Record<string, string> = {
     apple1: "retrocore-apple1",
     colorbasic: "retrocore-colorbasic",
     mbasic: "retrocore-mbasic",
+    model100: "retrocore-model100",
     petbasic: "retrocore-petbasic",
     bbcbasic: "retrocore-bbcbasic",
     atari: "retrocore-atari"
@@ -49,6 +50,7 @@ function sessionDialect(): string | undefined {
     if (session.configuration.machine === "apple1") return "apple1";
     if (session.configuration.machine === "coco" && session.configuration.model !== "coco3") return "colorbasic";
     if (session.configuration.machine === "kaypro2") return "mbasic";
+    if (session.configuration.machine === "trs80-model100") return "model100";
     // One dialect for both PETs: the machine picks BASIC 1 (the 2001) or BASIC 2 (the upgrade ROMs, the default).
     if (session.configuration.machine === "pet") return "petbasic";
     if (session.configuration.machine === "bbc") return "bbcbasic";
@@ -133,6 +135,7 @@ async function dialectOfFile(file: vscode.Uri): Promise<string | undefined> {
     if (/\.cas$/i.test(name)) {
         return languageRequest<{ dialect: string }>("retrocore/basic/list", { path: file.fsPath }).then(listing => listing.dialect, () => "level2");
     }
+    if (/\.ba$/i.test(name)) return "model100";
     if (/#fc/i.test(name)) return "applesoft";
     if (/#fa/i.test(name)) return "integer";
     return undefined;
@@ -196,7 +199,8 @@ export function registerBasicLanguage(context: vscode.ExtensionContext): void {
                 { label: "Integer BASIC", dialect: "integer", detail: "Saving tokenizes through the Apple II's ROM (RETROCORE_II_ROMS)" },
                 { label: "Business BASIC", dialect: "business" },
                 { label: "Level II BASIC", dialect: "level2" },
-                { label: "MBASIC (BASIC-80 5.21)", dialect: "mbasic" }
+                { label: "MBASIC (BASIC-80 5.21)", dialect: "mbasic" },
+                { label: "Model 100 BASIC", detail: "The TRS-80 Model 100's and Tandy 102's .BA files", dialect: "model100" }
             ],
             { title: "Which BASIC is this program?" }))?.dialect;
         if (dialect === undefined) return undefined;

@@ -204,6 +204,21 @@
         }
       },
       {
+        "id": "retrocore-model100",
+        "aliases": [
+          "Model 100 BASIC",
+          "model100"
+        ],
+        "extensions": [
+          ".model100.bas"
+        ],
+        "configuration": "./basic-language-configuration.json",
+        "icon": {
+          "light": "./media/basic.svg",
+          "dark": "./media/basic.svg"
+        }
+      },
+      {
         "id": "retrocore-mbasic",
         "aliases": [
           "MBASIC",
@@ -333,6 +348,11 @@
         "path": "./syntaxes/colorbasic.tmLanguage.json"
       },
       {
+        "language": "retrocore-model100",
+        "scopeName": "source.retrocore-model100",
+        "path": "./syntaxes/model100.tmLanguage.json"
+      },
+      {
         "language": "retrocore-mbasic",
         "scopeName": "source.retrocore-mbasic",
         "path": "./syntaxes/mbasic.tmLanguage.json"
@@ -412,6 +432,7 @@
             "level2",
             "colorbasic",
             "mbasic",
+            "model100",
             "petbasic",
             "bbcbasic",
             "atari"
@@ -565,6 +586,9 @@
       },
       {
         "language": "retrocore-mbasic"
+      },
+      {
+        "language": "retrocore-model100"
       },
       {
         "language": "retrocore-petbasic"
@@ -1120,7 +1144,7 @@
         },
         {
           "command": "retrocore.basic.renumber",
-          "when": "editorLangId =~ /^retrocore-(applesoft|level2|level1|colorbasic|mbasic|petbasic|bbcbasic|atari|basic)$/"
+          "when": "editorLangId =~ /^retrocore-(applesoft|level2|level1|colorbasic|mbasic|model100|petbasic|bbcbasic|atari|basic)$/"
         },
         {
           "command": "retrocore.basic.openListing",
@@ -1668,6 +1692,13 @@
               "ramImage": {
                 "type": "string",
                 "description": "Model 100 and Tandy 102: a file that keeps the RAM between sessions, as the battery does. When it exists it loads before the power comes on and the ROM carries on; when it does not, the machine starts cold. The RAM is saved to it as the session ends."
+              },
+              "files": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "Model 100 and Tandy 102: host files to put in RAM's directory, so the menu lists them: .ba, .do and .co files as the Model 100 holds them, BASIC text as .bas (tokenized as Model 100 BASIC) and text as .txt. Each is named after its file, up to six letters and digits; one of a name already in RAM replaces it."
               },
               "coldStart": {
                 "type": "boolean",

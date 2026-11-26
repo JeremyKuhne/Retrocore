@@ -208,7 +208,7 @@ internal sealed class BasicLineScanner
                 name = null;
                 if (length == 1 && _dialect.IsRemark(value)) { break; }
                 bool range = jump == BasicJump.Range && afterNumber && word == "-";
-                jump = range ? BasicJump.Range : JumpAfter(word);
+                jump = range ? BasicJump.Range : JumpAfter(word, _dialect);
                 via = range ? via : word;
                 afterNumber = false;
                 afterFunction = word == "FN" || (Bbc && word == "PROC");
@@ -392,10 +392,12 @@ internal sealed class BasicLineScanner
         return Column(at);
     }
 
-    private static BasicJump JumpAfter(string word) => word switch
+    // The Model 100's RESTORE takes a line too, as Level II's and AppleSoft's do not.
+    private static BasicJump JumpAfter(string word, BasicDialect dialect) => word switch
     {
         "GOTO" or "GOSUB" => BasicJump.List,
         "THEN" or "ELSE" or "RUN" or "RESUME" or "EDIT" or "TRAP" => BasicJump.Single,
+        "RESTORE" when dialect == BasicDialect.Model100 => BasicJump.Single,
         "LIST" or "LLIST" or "DEL" or "DELETE" => BasicJump.Range,
         _ => BasicJump.None
     };

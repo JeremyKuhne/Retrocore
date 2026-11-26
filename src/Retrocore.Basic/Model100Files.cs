@@ -185,13 +185,15 @@ public sealed class Model100Files
     /// </summary>
     /// <param name="name">The file's name and extension.</param>
     /// <exception cref="FileNotFoundException">There is no such file.</exception>
-    /// <exception cref="InvalidOperationException">BASIC has the file open.</exception>
+    /// <exception cref="InvalidOperationException">
+    ///  BASIC has the file open, which the ROM's <c>KILL</c> refuses too.
+    /// </exception>
     public void Delete(string name)
     {
         Model100File file = Find(name) ?? throw new FileNotFoundException($"There is no {name} in RAM.", name);
         if (file.Type == Model100FileType.Basic && Word(ProgramPointer) == file.Address)
         {
-            throw new InvalidOperationException($"BASIC has {file.Name} open.");
+            throw new InvalidOperationException($"BASIC has {file.Name} open, and the ROM's KILL refuses it too; open another program first.");
         }
 
         int entry = EntryOf(file.Address);

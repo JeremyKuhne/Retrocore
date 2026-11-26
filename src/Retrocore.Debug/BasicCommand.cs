@@ -11,7 +11,7 @@ namespace Retrocore.Debug;
 /// </summary>
 /// <remarks>
 ///  <para>
-///   <c>--basic list program [--dialect applesoft|integer|level1|level2|business|mbasic] [--out file.bas]</c> lists a
+///   <c>--basic list program [--dialect applesoft|integer|level1|level2|business|mbasic|model100] [--out file.bas]</c> lists a
 ///   tokenized file or a <c>.cas</c> tape. A listing written to a file without a dialect extension starts with a
 ///   pragma naming it.
 ///  </para>
@@ -30,7 +30,7 @@ namespace Retrocore.Debug;
 internal static class BasicCommand
 {
     private const string Usage = """
-        Usage: --basic list program [--dialect applesoft|integer|level1|level2|business|mbasic] [--out file.bas]
+        Usage: --basic list program [--dialect applesoft|integer|level1|level2|business|mbasic|model100] [--out file.bas]
                --basic tokenize file.bas output [--dialect name] [--load-address $0801] [--cas name]
                --basic check file.bas [--dialect name]
                --basic renumber file.bas [--start 10] [--step 10] [--out file.bas] [--dialect name]
@@ -55,7 +55,7 @@ internal static class BasicCommand
         BasicDialect? dialect = null;
         if (options.TryGetValue("--dialect", out string? name) && (dialect = BasicDialect.FromName(name)) is null)
         {
-            Console.Error.WriteLine($"'{name}' is not a BASIC dialect; use applesoft, integer, apple1, level2, level1, business, colorbasic, mbasic, petbasic, bbcbasic or atari.");
+            Console.Error.WriteLine($"'{name}' is not a BASIC dialect; use applesoft, integer, apple1, level2, level1, business, colorbasic, mbasic, model100, petbasic, bbcbasic or atari.");
             return 2;
         }
 
@@ -84,9 +84,14 @@ internal static class BasicCommand
         {
             program = BasicTape.Read(bytes, out _);
         }
+        else if (dialect is null && input.EndsWith(".ba", StringComparison.OrdinalIgnoreCase))
+        {
+            // A .BA file is the Model 100's.
+            program = BasicProgram.FromImage(BasicDialect.Model100, bytes);
+        }
         else if (dialect is null)
         {
-            return Fail("A tokenized file does not say its dialect; give --dialect applesoft, integer, apple1, level2, level1, business, colorbasic, mbasic, petbasic, bbcbasic or atari.", 2);
+            return Fail("A tokenized file does not say its dialect; give --dialect applesoft, integer, apple1, level2, level1, business, colorbasic, mbasic, model100, petbasic, bbcbasic or atari.", 2);
         }
         else
         {

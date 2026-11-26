@@ -1068,9 +1068,12 @@ supply: `rom` names its file, or it is found in `romDirectory` (or `RETROCORE_TR
 - `optionRom`: an option ROM's file;
 - `ramImage`: a file that keeps the RAM between sessions, loaded before the power comes on and saved as the session
   ends; `coldStart` starts from empty RAM anyway;
-- `time`: the clock's start, the host's time by default.
+- `time`: the clock's start, the host's time by default;
+- `files`: host files to put in RAM's directory, so the menu lists them: `.ba`, `.do` and `.co` files, BASIC text
+  as `.bas` and text as `.txt`.
 
-A program (`source` or `program`, loaded at `$E000` by default) runs once the ROM has set up its RAM, and can print
+Model 100 BASIC has `.model100.bas` source files, and `.ba` files open as listings. While BASIC is at its prompt,
+**Retrocore: Open BASIC Program** edits the program it has open. A program (`source` or `program`, loaded at `$E000` by default) runs once the ROM has set up its RAM, and can print
 with `RST 4`. The display is the 240x64 LCD; its buttons are F1-F8, LABEL, PRINT, PASTE, PAUSE and BREAK, and Reset turns
 the machine back on after `POWER OFF`. [The Model 100 guide](../docs/Trs80Model100.md) has the rest.
 

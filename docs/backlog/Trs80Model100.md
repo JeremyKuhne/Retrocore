@@ -373,11 +373,31 @@ and from a `CSAVE` MAME 0.264 recorded to WAV. No new downloads.
   writes a header block (`$D3`, the name in six characters, `FF FF`, the program's length, six `FF`s and a checksum)
   and a data block (`$8D`, the program's bytes, a checksum).
 
+## Phase 3, part 1 (built 2026-11-26)
+
+- **BASIC.** `BasicDialect.Model100` (`model100`, `.model100.bas`): the ROM's tokens, and a tokenizer checked against
+  the bytes the ROM stored for typed lines; listings, renumbering (with `RESTORE`'s line), the grammar, and the
+  language server's diagnostics and completions. Hover help for its words is still to write; until then it has none,
+  rather than another dialect's. BASIC's pointers: the open program at `$F67C`, the current
+  line at `$F67A`, the stack top at `$F678`, the memory top at `$FB67`, the string bottom at `$FB8C`, `CONT`'s text at
+  `$FBAC`, the variables, arrays and free memory at `$FBB2`-`$FBB6`, and the DATA pointer at `$FBB8`, each found by
+  reading RAM after the ROM set them. Between `MENU` and the menu the ROM fixes the directory's addresses and links
+  every `.BA` file again; Retrocore does both as it moves the files.
+- **Files.** `Model100Files` lists, reads, writes and removes `.BA`, `.DO` and `.CO` files in RAM's directory, with
+  the region rules the ROM keeps. Files written at the menu match the ROM's own `SAVE`, `SAVEM` and `OPEN` byte for
+  byte, and the ROM runs and reads them. A program written through the debugger replaces the one BASIC has open,
+  moving the files after it. Removing the open program is refused, as the ROM's `KILL` refuses it (`?FC Error`).
+- **The debugger.** The launch's `files` option; the Machine view's Files row; **Open BASIC Program** at BASIC's
+  prompt; `.ba` files as listings; the `--model100` command on RAM images (`files`, `extract`, `add`, `delete`).
+- **Not yet.** Stepping by BASIC's lines, BASIC's variables (its numbers are BCD, which the variables view does not
+  read), the `basic` launch and BASIC's errors and call stack all follow the ROM's routines, and wait for the ROM as an
+  SDK source (phase 5). Part 2 is the cassette and the beeper.
+
 ## Still open
 
 - **The RAM image and the recovery journal.** The image is saved when the session ends cleanly; a host that crashes
   loses the session's changes since the last image, as the journal keeps disks but not this. Saving it from Retro
-  Devices on demand, and journalling it, wait for the media work in phase 3.
+  Devices on demand, and journalling it, wait for the cassette's media work in phase 3's part 2.
 - **Speed against MAME.** A BASIC loop printing numbers runs within a line in three seconds of MAME's, a little
   slower; MAME's 8085 counts TRAP and the RST 5.5-7.5 entries as 11 states and this core as 12, and the 8155's
   count-by-twos and the LCD's busy times are not modelled. A longer timed comparison would settle it.

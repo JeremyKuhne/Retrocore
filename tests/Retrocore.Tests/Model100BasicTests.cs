@@ -96,6 +96,17 @@ public sealed class Model100BasicTests
     }
 
     /// <summary>
+    ///  Renumbering changes the lines each jump names, RESTORE's too, which takes a line on the Model 100.
+    /// </summary>
+    [TestMethod]
+    public void RenumberingFollowsTheJumps()
+    {
+        const string Program = "' retrocore model100\n5 GOSUB 30:ON A GOTO 5,30\n30 IF A THEN 5 ELSE 30\n40 RESTORE 30:RUN 5\n";
+        (string? text, _) = BasicRenumber.Renumber(Program, start: 100, step: 100);
+        text.Should().Be("' retrocore model100\n100 GOSUB 200:ON A GOTO 100,200\n200 IF A THEN 100 ELSE 200\n300 RESTORE 200:RUN 100\n");
+    }
+
+    /// <summary>
     ///  The dialect's keywords are the Model 100's ROM's table at $0080, one token each from $80 to $FF; inconclusive
     ///  without the user's ROM.
     /// </summary>

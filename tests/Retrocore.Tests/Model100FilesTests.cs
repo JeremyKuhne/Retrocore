@@ -236,8 +236,11 @@ public sealed class Model100FilesTests
     internal static BasicProgram Parse(string text) =>
         BasicProgram.Parse(text, BasicDialect.Model100).Program ?? throw new InvalidOperationException($"{text} does not parse.");
 
-    // A cold start's directory, file area and pointers in a 64K image.
-    private static byte[] ColdStart()
+    /// <summary>
+    ///  Builds a 64K image of a cold start's directory, file area and pointers.
+    /// </summary>
+    /// <returns>The image.</returns>
+    internal static byte[] ColdStart()
     {
         byte[] ram = new byte[0x10000];
         Convert.FromHexString(ColdDirectory).CopyTo(ram, 0xF962);

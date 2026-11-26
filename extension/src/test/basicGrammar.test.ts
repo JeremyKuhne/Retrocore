@@ -23,6 +23,7 @@ before(async () => {
         "source.retrocore-business": "business.tmLanguage.json",
         "source.retrocore-colorbasic": "colorbasic.tmLanguage.json",
         "source.retrocore-mbasic": "mbasic.tmLanguage.json",
+        "source.retrocore-model100": "model100.tmLanguage.json",
         "source.retrocore-petbasic": "petbasic.tmLanguage.json",
         "source.retrocore-bbcbasic": "bbcbasic.tmLanguage.json",
         "source.retrocore-atari": "atari.tmLanguage.json"
@@ -67,6 +68,14 @@ test("BASIC finds reserved words where the ROM does, inside names too", () => {
     assert.ok(has(scopes("level2", "10 INPUT A", "INPUT"), "keyword.other"), "INPUT, not INP then UT");
     assert.ok(has(scopes("level2", "10 GO TO 20", "GO"), "keyword.control"));
     assert.ok(has(scopes("applesoft", "10 X = ATN(1) + A TO B", "ATN"), "support.function"));
+});
+
+test("Model 100 BASIC has its own words, as its ROM's table does", () => {
+    assert.ok(has(scopes("model100", "10 CALL 63012", "CALL"), "keyword"), "CALL, a Model 100 statement");
+    assert.ok(has(scopes("model100", "10 PRINT TIME$;DATE$", "DATE$"), "support.function"), "DATE$, as Level II's TIME$");
+    assert.ok(has(scopes("model100", "10 GO TO 20", "GO"), "keyword.control"));
+    assert.ok(has(scopes("model100", "10 A=1 'note", "'note"), "comment"));
+    assert.ok(!has(scopes("level2", "10 CALL 63012", "CALL"), "keyword"), "Level II has no CALL");
 });
 
 test("Level I finds its words cut short with a period, and runs REM and DATA to the line's end", () => {

@@ -49,8 +49,9 @@ sample/adventure/
 | `bbc` | BBC Micro model B | the MOS's OSWRCH and OSWORD 0 | `$2000` |
 | `bbc-dfs` | BBC Micro model B, from a DFS disk, the game loaded from `$.PIRATE` | the MOS's OSWRCH and OSWORD 0 | `$1900` |
 
-Each console includes the SDK's `<machine.inc>` for its machine's names, and takes the screen's width from the
-SDK's `RC_SCREEN_COLUMNS`. The bare Apple III's console is built but not played under the debugger: a bare program
+Each bare console includes the SDK's `<machine.inc>` for its machine's names, and takes the screen's width from the
+SDK's `RC_SCREEN_COLUMNS`; the `sos` console includes `<environment.inc>` for SOS's calls, and wraps to 40 columns,
+as the transcripts do, on SOS's 80-column console. The bare Apple III's console is built but not played under the debugger: a bare program
 there shows text once a character set is loaded, which SOS does as it boots. `apple3-sos` plays instead: its console,
 `src/platform/sos/console.s`, takes the bare one's place and calls SOS's console driver, and
 `src/platform/sos/game.s` reads `PIRATE.DAT` from the boot disk.

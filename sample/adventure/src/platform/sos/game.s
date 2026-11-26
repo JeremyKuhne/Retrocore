@@ -51,8 +51,8 @@ GameCloseReference:
 
 .section CODE
 
-;; Has SOS read PIRATE.DAT into <Game>. A file that is missing or short leaves <Game> as it was, which the engine
-;; finds is not a game.
+;; Has SOS read PIRATE.DAT into <Game>. A missing file leaves <Game> clear, which the engine finds is not a game; a
+;; short one is read as far as it goes.
 .proc LoadGame
     SosCall OPEN_CALL, GameOpen
     bne Done

@@ -1185,8 +1185,13 @@ internal sealed partial class DebugSession
         {
             BootImage(built);
 
-            // Its program's lines apply where the CPU reads them at the entry: under SOS, the system bank, not bank 0.
-            _debug.Add(new SourceMapModule(built.Result, Target.ReadArea(checked((ushort)built.Entry)), Target.CollapsesMacros(dialect: null)));
+            // Its program's lines apply in the memory the CPU reads them in once it is at the entry: under SOS, the
+            // switched bank SOS gives the interpreter below $A000 and the fixed system RAM above it, not bank 0. A
+            // module for each area the program spans.
+            foreach (Enum area in ProgramAreas(built))
+            {
+                _debug.Add(new SourceMapModule(built.Result, area, Target.CollapsesMacros(dialect: null)));
+            }
         }
 
         // A Kaypro's command, or MBASIC for a BASIC file, is typed at CP/M's prompt from the disks the session mounts.

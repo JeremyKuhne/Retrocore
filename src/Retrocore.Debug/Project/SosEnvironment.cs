@@ -15,7 +15,8 @@ namespace Retrocore.Debug.Project;
 ///  <para>
 ///   Its file, <c>&lt;name&gt;.interp</c>, is the program as SOS.INTERP: its header and the bytes from the map's load
 ///   address, <c>$2000</c>, in the system bank. SOS starts an interpreter at its first byte, so the program's entry is
-///   its first byte, or its first byte is a <c>JMP</c> on to code that reaches its entry, where a launch stops. The disk, <c>&lt;name&gt;.dsk</c> in DOS order,
+///   its first byte, or its first byte is a <c>JMP</c>, which the build checks is there, not where it goes; the program
+///   goes on from it to its entry, where a launch stops, or the launch reports that it did not. The disk, <c>&lt;name&gt;.dsk</c> in DOS order,
 ///   holds the SDK's boot loader, SOS.KERNEL, a SOS.DRIVER with the console's driver, the program as SOS.INTERP, and
 ///   the target's <c>files</c>, each a BIN file (type <c>$06</c>) whose aux type is its <c>address</c>, or 0, for a
 ///   program to read with SOS's OPEN and READ. The volume is named for the project. <c>"image": false</c> leaves the
@@ -82,7 +83,16 @@ internal sealed class SosEnvironment : TargetEnvironment
         ProjectTarget target = build.Target;
         (int start, byte[] bytes) = Interpreter(build);
         string file = Beside(build, ".interp");
-        File.WriteAllBytes(file, SosInterpreterFile.Write(start, bytes));
+        try
+        {
+            File.WriteAllBytes(file, SosInterpreterFile.Write(start, bytes));
+        }
+        catch (ArgumentException exception)
+        {
+            // A target with its own linker configuration is not checked against the map, which keeps it in $2000-$B7FF.
+            throw new ProjectException($"{target.Project.File}: target {target.Name}: it is not a SOS interpreter: {exception.Message}");
+        }
+
         if (!target.BuildsImage)
         {
             return new(file, "SOS.INTERP", Image: null, ImageKind: null, "put it on a SOS disk as SOS.INTERP");
@@ -93,7 +103,7 @@ internal sealed class SosEnvironment : TargetEnvironment
         {
             builder = Apple3SdkModules.BuildSosBootDisk(directory: null, VolumeName(target), start, bytes);
         }
-        catch (Exception exception) when (exception is ArgumentException or InvalidDataException or FileNotFoundException)
+        catch (Exception exception) when (exception is ArgumentException or InvalidDataException or FileNotFoundException or InvalidOperationException)
         {
             throw new ProjectException($"{target.Project.File}: target {target.Name}: its SOS boot disk cannot be built: {exception.Message}");
         }
@@ -113,13 +123,14 @@ internal sealed class SosEnvironment : TargetEnvironment
                 throw new ProjectException($"{target.Project.File}: target {target.Name}: two files on the disk are named {name.ToUpperInvariant()}.");
             }
 
+            byte[] contents = File.ReadAllBytes(data.Path);
             try
             {
-                builder.Add(name, BinaryType, data.Address ?? 0, File.ReadAllBytes(data.Path));
+                builder.Add(name, BinaryType, data.Address ?? 0, contents);
             }
-            catch (Exception exception) when (exception is ArgumentException or InvalidOperationException or IOException)
+            catch (Exception exception) when (exception is ArgumentException or InvalidOperationException)
             {
-                throw new ProjectException($"{target.Project.File}: target {target.Name}: its files do not fit on a SOS disk: {exception.Message}");
+                throw new ProjectException($"{target.Project.File}: target {target.Name}: {name} cannot go on the SOS disk: {exception.Message}");
             }
         }
 
@@ -130,7 +141,7 @@ internal sealed class SosEnvironment : TargetEnvironment
 
     /// <summary>
     ///  Gets a target's program as SOS loads it: its load address and bytes, checked to start at its entry or with a
-    ///  <c>JMP</c>, which a program whose entry is elsewhere goes on from.
+    ///  <c>JMP</c> (opcode <c>$4C</c>), from which a program whose entry is elsewhere goes on to it.
     /// </summary>
     /// <param name="build">The build.</param>
     /// <returns>The load address and the bytes.</returns>

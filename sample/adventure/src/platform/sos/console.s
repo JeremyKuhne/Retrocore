@@ -36,9 +36,9 @@ LINE_SIZE = 64
 ;; The bit that makes a lowercase letter a capital when cleared.
 LOWERCASE_BIT = $20
 
-;; How many times <Console::Pause>'s inner loop runs, which with its outer loop waits about two seconds at the Apple
-;; III's 1.8 MHz.
-PAUSE_LOOPS = 14
+;; How many times <Console::Pause>'s outer loop runs, each about 460,000 cycles, about a quarter of a second at the
+;; 2 MHz SOS runs the Apple III at: about two seconds in all.
+PAUSE_LOOPS = 8
 
 .section CODE
 
@@ -68,7 +68,7 @@ NextByte:
 SavedA:
     .res 1
 
-;; X while <Write> runs.
+;; X while <Write> runs, and the length of the line <ReadLine> copies.
 SavedX:
     .res 1
 
@@ -180,11 +180,15 @@ Written:
 ;; Reads a line into <InputLine>, in capitals, ending in 0. The driver shows it as it is typed, but not its Return, as
 ;; it echoes no control characters, so a new line after it ends the screen's line.
 .proc ReadLine
+    lda #0
+    sta ReadLength
     SosCall READ_CALL, ReadList
     SosCall WRITE_CALL, NewLineList
+    ldy #0
     ldx ReadLength
 
-    ; The line ends at its Return, or at the count; the engine takes at most INPUT_SIZE - 1.
+    ; The line ends at its Return, or at the count; the engine takes at most INPUT_SIZE - 1. A read of nothing, which
+    ; only an error gives, is an empty line.
     beq Done
     dex
     lda Line,x

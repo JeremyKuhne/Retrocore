@@ -14,8 +14,8 @@
 .assert .defined(RC_ENV_SOS), "environment.inc for sos is for targets whose environment is sos."
 
 ;; The interpreter's extend page: the X-byte of the pointer in zero page at zp is at EXTEND_PAGE + zp + 1, the page that
-;; is its zero page's ($1A00) with $0C00 flipped. With its bit 7 clear, (zp),Y and (zp,X) read the system bank as an
-;; absolute address does; with it set, the bank it names.
+;; is its zero page's ($1A00) with $0C00 flipped; SOS's listing calls it CXPAGE. With its bit 7 clear, (zp),Y and (zp,X)
+;; read memory as an absolute address does; with it set, the bank it names.
 EXTEND_PAGE = $1600
 
 ;; Makes a SOS call: BRK, then the call's number, its first argument, such as <OPEN_CALL>, then its second, the address
@@ -63,20 +63,22 @@ CLOSE_CALL = $CC
 ;; CLOSE's count of parameters.
 CLOSE_COUNT = 1
 
-;; TERMINATE: ends the program; SOS asks for the next disk to boot. Its list: the count, 0.
-TERMINATE_CALL = $65
+;; COLD_START, as SOS's listing names it: stops the system, blanking memory, and shows INSERT SYSTEM DISKETTE &
+;; REBOOT until Control-RESET. Its list: the count, 0.
+COLD_START_CALL = $65
 
-;; TERMINATE's count of parameters.
-TERMINATE_COUNT = 0
+;; COLD_START's count of parameters.
+COLD_START_COUNT = 0
 
 ; The console.
 
-;; The Return that ends a line the console reads, and that new-line mode ends a READ at. Written, it moves the cursor
-;; to the start of its line, and down a line only when the console's automatic line feed is on, as it is not at first.
+;; The Return that ends a line the console reads, and that new-line mode ends a READ at, the console driver's ASC_CR.
+;; Written, it moves the cursor to the start of its line, and down a line only when the console's automatic line feed
+;; is on, as it is not at first. The driver does not echo it, as it echoes no control characters.
 CONSOLE_RETURN = $0D
 
-;; The line feed, which written moves the cursor down a line, scrolling at the bottom.
+;; The line feed, the driver's ASC_LF, which written moves the cursor down a line, scrolling at the bottom.
 CONSOLE_LINE_FEED = $0A
 
-;; The console's control code that clears its viewport and puts the cursor at its top left corner.
+;; The console's control code that clears its viewport and puts the cursor at its top left corner, the driver's ASC_FS.
 CONSOLE_CLEAR = $1C

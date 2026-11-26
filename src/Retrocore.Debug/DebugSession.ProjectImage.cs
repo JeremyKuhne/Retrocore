@@ -163,6 +163,25 @@ internal sealed partial class DebugSession
         Target.CallStack.Reset();
     }
 
+    // The memory areas a booted program's bytes are in as the CPU reads them, each once, in address order.
+    private List<Enum> ProgramAreas(TargetBuild build)
+    {
+        List<Enum> areas = [];
+        foreach ((int address, ReadOnlyMemory<byte> bytes) in build.Segments)
+        {
+            for (int at = address; at < address + bytes.Length; at += 0x100)
+            {
+                Enum area = Target.ReadArea((ushort)at);
+                if (!areas.Contains(area)) { areas.Add(area); }
+            }
+
+            Enum last = Target.ReadArea((ushort)(address + bytes.Length - 1));
+            if (!areas.Contains(last)) { areas.Add(last); }
+        }
+
+        return areas;
+    }
+
     // Whether memory holds a program's bytes from its start.
     private bool Loaded(int start, byte[] bytes)
     {

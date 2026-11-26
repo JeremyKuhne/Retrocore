@@ -181,4 +181,59 @@ public class CommodoreTapeImageTests
         tap.Losses.Should().BeEmpty();
         CommodoreTapeCodec.Load(tap.Bytes).Tape.Pulses.Should().Equal(tape.Pulses);
     }
+
+    /// <summary>
+    ///  A TAP image for the PET or the VIC-20 names its machine and video in its header and holds each pulse exactly,
+    ///  up to the longest its clock holds, since a cycle there is no longer than a microsecond; it reads back with a
+    ///  codec for the same machine.
+    /// </summary>
+    /// <param name="machine">The header's machine byte.</param>
+    /// <param name="video">The header's video byte.</param>
+    [TestMethod]
+    [DataRow(TapFormat.PetMachine, TapFormat.Pal)]
+    [DataRow(TapFormat.Vic20Machine, TapFormat.Ntsc)]
+    [DataRow(TapFormat.Vic20Machine, TapFormat.Pal)]
+    public void EachMachinesTapHoldsItsPulses(byte machine, byte video)
+    {
+        int longest = TapFormat.Longest(machine, video);
+        CommodoreTape tape = new([1, 7, 352, 512, 672, 2040, 2041, 3000, 1_000_000, longest - 1, longest]);
+        EncodedImage tap = new CommodoreTapeCodec("TAP", machine, video).Encode(tape.Snapshot());
+        tap.Losses.Should().BeEmpty();
+        tap.Bytes[13].Should().Be(machine);
+        tap.Bytes[14].Should().Be(video);
+
+        (CommodoreTape back, CommodoreTapeCodec codec) = CommodoreTapeCodec.Load(tap.Bytes);
+        back.Pulses.Should().Equal(tape.Pulses);
+        codec.Machine.Should().Be(machine);
+        codec.Video.Should().Be(video);
+    }
+
+    /// <summary>
+    ///  The longest pulse an image holds is three bytes of its machine's cycles: the PET's 16.8 seconds, and the PAL
+    ///  VIC-20's, whose clock is faster, 15.1.
+    /// </summary>
+    [TestMethod]
+    public void TheLongestPulseIsThreeBytesOfCycles()
+    {
+        TapFormat.Longest(TapFormat.PetMachine, TapFormat.Pal).Should().Be(TapFormat.LongestPulse);
+        TapFormat.Longest(TapFormat.Vic20Machine, TapFormat.Pal).Should().Be(15_136_358);
+        TapFormat.Longest(TapFormat.Vic20Machine, TapFormat.Ntsc).Should().Be(16_404_344);
+    }
+
+    /// <summary>
+    ///  A C64's PAL cycle is longer than a microsecond, so a pulse between two of its cycles is rounded to one, and a
+    ///  TAP save lists it as a loss; a pulse longer than the image holds is listed only as that.
+    /// </summary>
+    [TestMethod]
+    public void APulseTheClockRoundsIsALoss()
+    {
+        CommodoreTape tape = new([34, 352, 20_000_000]);
+        EncodedImage tap = new CommodoreTapeCodec("TAP", TapFormat.C64Machine, TapFormat.Pal).Encode(tape.Snapshot());
+        int longest = TapFormat.Longest(TapFormat.C64Machine, TapFormat.Pal);
+        tap.Losses.Should().Equal(
+            "1 pause longer than 17.028418 s, the longest a TAP image holds, shortened to that.",
+            "1 pulse rounded to the image's clock cycles.");
+
+        TapFormat.Read(tap.Bytes).Pulses.Should().Equal(33, 352, longest);
+    }
 }

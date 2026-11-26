@@ -4,6 +4,7 @@
 
 using Retrocore.Machines.Acorn;
 using Retrocore.Machines.Atari;
+using Retrocore.Machines.Commodore;
 using Retrocore.Machines.Devices;
 using Retrocore.Media;
 using Retrocore.Media.Acorn;
@@ -398,6 +399,8 @@ internal static partial class MediaActions
             FloppyDisk when extension.TrimStart('.').ToUpperInvariant() is "SSD" or "DSD" =>
                 new AcornDiskCodec(extension.TrimStart('.').ToUpperInvariant()),
             FloppyDisk => FloppyImageCodec.For(extension, device.Info.SaveFormats),
+            CommodoreTape when device is CommodoreDatasette deck =>
+                new CommodoreTapeCodec(extension.TrimStart('.').ToUpperInvariant(), deck.TapMachine, deck.TapVideo),
             CommodoreTape => new CommodoreTapeCodec(extension.TrimStart('.').ToUpperInvariant()),
             CommodoreDisk => new CommodoreDiskCodec(extension.TrimStart('.').ToUpperInvariant()),
             AltairDisk => new AltairDiskCodec(),

@@ -89,7 +89,7 @@ internal sealed partial class DebugSession
         else
         {
             (CommodoreTape tape, _) = CommodoreTapeCodec.Load(bytes);
-            PetDatasette deck = pet.BootDeck;
+            CommodoreDatasette deck = pet.BootDeck;
             MediaActions.KeepReplaced(deck, $"the build's {build.Media.ImageKind} took its place");
             deck.Insert(tape, label, "TAP");
             deck.Play();

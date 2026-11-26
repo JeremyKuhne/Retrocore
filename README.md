@@ -407,6 +407,7 @@ Design notes for upcoming work live in [`docs/backlog`](docs/backlog):
 - [Business BASIC's other versions, modules and DEF FN view](docs/backlog/BusinessBasic.md);
 - [the Z80 SoftCards](docs/backlog/SoftCard.md): interrupts, the Premium SoftCard IIe and CP/M 3, CP/M sources, if wanted;
 - [the Commodore PET](docs/backlog/Pet.md): the 8032's 80 columns and CRTC, if wanted;
+- [the Commodore VIC-20, 64 and 128](docs/backlog/Commodore.md), with the 1540, 1541 and 1571 drives;
 - [the Kaypro II](docs/backlog/Kaypro.md): CP/M's sources and its disks as a file system;
 - [the BBC Micro's later models and expansions](docs/backlog/BbcMicro.md);
 - [the Atari 400 and 800](docs/backlog/Atari800.md);

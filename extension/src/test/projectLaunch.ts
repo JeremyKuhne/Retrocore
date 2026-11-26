@@ -90,8 +90,8 @@ export async function testProjectLaunch(workspace: vscode.WorkspaceFolder): Prom
         assert.ok(await until(() => vscode.debug.activeDebugSession === undefined, 10000));
         console.log("Isolated VS Code passed: the active target is picked, kept, named by retrocore.activeTarget and debugged through it.");
 
-        // A launch with no configuration debugs the active target. (noLaunch.ts presses F5 itself, in a folder
-        // with no launch.json, which this workspace has.)
+        // A launch with no configuration debugs the active target. (noLaunch.ts presses F5 itself, in sample/project,
+        // which has no launch.json, unlike this workspace.)
         const source = await vscode.workspace.openTextDocument(path.join(root, "sample", "project", "src", "hello.s"));
         await vscode.window.showTextDocument(source);
         const pressed = new Promise<vscode.DebugSession>(resolve => {

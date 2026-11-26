@@ -76,6 +76,9 @@ internal sealed partial class Trs80Model2DebugTarget : IDebugTarget
     public DebugFrame Frame => Trs80DebugTarget.FrameOf(_machine.Processor.Registers);
 
     /// <inheritdoc/>
+    public int StackPointer => _machine.Processor.Registers.SP;
+
+    /// <inheritdoc/>
     public ushort ProgramCounter
     {
         get => _machine.Processor.Registers.PC;

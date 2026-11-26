@@ -74,9 +74,7 @@ internal sealed class DebugContracts
             _pending.RemoveAt(_pending.Count - 1);
             if (stack == callStack && pc == returnAddress)
             {
-                List<string> found = [];
-                Compare(contract, entry, registers, memory, peek, found);
-                broken = found;
+                if (Compare(contract, entry, registers, memory, peek) is { } found) { broken = found; }
                 break;
             }
         }
@@ -98,16 +96,17 @@ internal sealed class DebugContracts
         return broken;
     }
 
-    private void Compare(
+    // The promises a call broke, or null when it kept them all, so a kept call allocates nothing.
+    private List<string>? Compare(
         DebugContract contract,
         in DebugFrame entry,
         in DebugFrame exit,
         byte[] memory,
-        Func<ushort, byte> peek,
-        List<string> broken)
+        Func<ushort, byte> peek)
     {
+        List<string>? broken = null;
         void Report(string item, long before, long after) =>
-            broken.Add(string.Create(
+            (broken ??= []).Add(string.Create(
                 CultureInfo.InvariantCulture,
                 $"{contract.Routine} returned with {item} changed: ${before:X2} at entry, ${after:X2} at return. Its documentation says it keeps {item}."));
 
@@ -133,18 +132,20 @@ internal sealed class DebugContracts
             offset += length;
         }
 
-        if (!_checkChanges || contract.Changes is not { } changes) { return; }
+        if (!_checkChanges || contract.Changes is not { } changes) { return broken; }
         foreach (string register in _used)
         {
             if (changes.Contains(register) || contract.Registers.Contains(register)) { continue; }
             (long before, long after) = Value(register, entry, exit);
             if (before != after)
             {
-                broken.Add(string.Create(
+                (broken ??= []).Add(string.Create(
                     CultureInfo.InvariantCulture,
                     $"{contract.Routine} changed {register} (${before:X2} to ${after:X2}), which its documentation does not list."));
             }
         }
+
+        return broken;
     }
 
     private (long Before, long After) Value(string register, in DebugFrame entry, in DebugFrame exit) =>

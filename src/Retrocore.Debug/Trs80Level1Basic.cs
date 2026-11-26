@@ -128,8 +128,10 @@ internal sealed class Trs80Level1Basic
     /// <remarks>
     ///  <para>
     ///   <c>ST_READ_1</c> pushes <c>CURRNT</c> and calls <c>STORE_VALUE</c>, so the READ line is the word above the
-    ///   call's return address, <c>READ_STORED</c>, wherever on the stack an error inside the call leaves it. A READ
-    ///   typed at the prompt keeps 0 there, as it has no line.
+    ///   call's return address, <c>READ_STORED</c>, wherever on the stack an error inside the call leaves it, with the
+    ///   place in the READ list above it. A READ typed at the prompt keeps 0 there, as it has no line. After STOP the
+    ///   stack keeps the FOR loops saved, whose limit or step may be <c>READ_STORED</c>'s value with a line above it,
+    ///   so the line counts only when that place is in its READ statement.
     ///  </para>
     /// </remarks>
     internal int LineAddress
@@ -138,15 +140,31 @@ internal sealed class Trs80Level1Basic
         {
             int line = Level1Dialect.LineAddress(Memory);
             if (line != 0) { return line; }
-            for (int at = Stack; at + 4 <= StackTop; at += 2)
+            for (int at = Stack; at + 6 <= StackTop; at += 2)
             {
                 if (Word(at) != _readStored) { continue; }
                 int kept = Word(at + 2);
-                if (kept is 0 or >= Level1Dialect.ProgramStart) { return kept; }
+                if (kept == 0) { return 0; }
+                if (kept >= Level1Dialect.ProgramStart && InRead(kept, Word(at + 4))) { return kept; }
             }
 
             return 0;
         }
+    }
+
+    // Whether a place in a line is in its READ statement, as the READ list's position ST_READ keeps above the line
+    // is: a saved FOR loop can hold READ_STORED's value and a line, but its place is in its FOR statement. A READ
+    // after an IF's condition is in the IF statement.
+    private bool InRead(int line, int place)
+    {
+        int text = line + 2;
+        int end = text;
+        while (end < 0x10000 && end - text < 256 && _target.Peek((ushort)end) != Level1Dialect.EndOfLine) { end++; }
+        if (place <= text || place > end) { return false; }
+        byte[] bytes = new byte[end - text];
+        for (int index = 0; index < bytes.Length; index++) { bytes[index] = _target.Peek((ushort)(text + index)); }
+        int statement = Level1Dialect.StatementOffsets(bytes).Last(offset => offset < place - text);
+        return Level1Dialect.StatementWord(Memory, text + statement) is "READ" or "IF";
     }
 
     /// <summary>

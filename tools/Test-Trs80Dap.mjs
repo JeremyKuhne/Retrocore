@@ -443,8 +443,22 @@ try {
     await stoppedAt("breakpoint", 2, "RUN starts at 10.");
     await request("continue", { threadId: 2 });
     assert.equal((await stoppedAt("exception", 2, "WHAT? in 10 (code 2).")).name, "10: READ A");
+    const z80 = (await request("stackTrace", { threadId: 1 })).stackFrames[0];
+    const readStored = /\((\d+)\)/.exec((await request("evaluate", { expression: "READ_STORED", frameId: z80.id, context: "watch" })).result)[1];
     await request("continue", { threadId: 2 });
     await screen(text => text.includes("WHAT?"), "Level I's WHAT? for the DATA item");
+
+    // After STOP the stack keeps the FOR loops saved; one whose limit is READ_STORED's address, with its line above
+    // it, is not taken for READ's frame, so BASIC at the prompt is not running.
+    const loops = `10 FOR I=1 TO ${readStored}\n20 FOR J=1 TO 2\n30 STOP\n`;
+    assert.equal((await request("retro/basic/write", { text: loops })).success, true);
+    await type("RUN\r");
+    await stoppedAt("breakpoint", 2, "RUN starts at 10.");
+    await request("continue", { threadId: 2 });
+    await stoppedAt("exception", 2, "STOP in 30.");
+    await request("continue", { threadId: 2 });
+    await screen(text => text.includes("BREAK AT 30"), "Level I's BREAK AT in the loops");
+    assert.equal((await request("retro/basic/program")).running, false, "BASIC is at its prompt");
 
     // A basic launch of a Level I file loads it into Level I and stops at its first statement, in the file; a Level
     // II file is refused.

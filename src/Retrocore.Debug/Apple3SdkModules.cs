@@ -77,6 +77,39 @@ internal static class Apple3SdkModules
     }
 
     /// <summary>
+    ///  Builds SOS 1.3's SOS.KERNEL file from the SDK's source, for a disk.
+    /// </summary>
+    /// <param name="directory">The SDK ROM directory, or null for the copy beside the debug host.</param>
+    /// <returns>The file's 22,016 bytes, which start with its label, <c>SOS KRNL</c>.</returns>
+    /// <exception cref="FileNotFoundException">
+    ///  The Apple III sources (the directory, or its <c>Apple3</c> folder when it has no <c>BootRom.asm</c>) have no
+    ///  <c>Sos/SosKernel.asm</c>.
+    /// </exception>
+    /// <exception cref="InvalidDataException">The source has errors.</exception>
+    internal static byte[] BuildSosKernel(string? directory) =>
+        AssembleSosKernel(SourcePath(directory, "SosKernel.asm")).Sections[0].Bytes.ToArray();
+
+    /// <summary>
+    ///  Builds SOS's bootstrap loader from the SDK's source, Apple's SOS BOOT 1.1, for block 0 of a disk.
+    /// </summary>
+    /// <param name="directory">The SDK ROM directory, or null for the copy beside the debug host.</param>
+    /// <returns>The block's 512 bytes.</returns>
+    /// <exception cref="FileNotFoundException">
+    ///  The Apple III sources (the directory, or its <c>Apple3</c> folder when it has no <c>BootRom.asm</c>) have no
+    ///  <c>Sos/SosBoot.asm</c>.
+    /// </exception>
+    /// <exception cref="InvalidDataException">The source has errors.</exception>
+    internal static byte[] BuildSosBoot(string? directory) =>
+        AssembleSosBoot(SourcePath(directory, "SosBoot.asm"), "").Sections[0].Bytes.ToArray();
+
+    // A source in the Apple III's Sos folder, which must be there.
+    private static string SourcePath(string? directory, string file)
+    {
+        string path = Path.Join(Directory(directory), "Sos", file);
+        return File.Exists(path) ? path : throw new FileNotFoundException($"The SDK has no SOS source {path}.", path);
+    }
+
+    /// <summary>
     ///  Where the boot ROM reads a SOS disk's block 0.
     /// </summary>
     internal const int SosBootOrigin = 0xA000;

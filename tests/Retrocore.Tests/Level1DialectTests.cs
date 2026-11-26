@@ -223,6 +223,9 @@ public class Level1DialectTests
     [DataRow("FOR I=1 TO 9: READ A|", true)]
     [DataRow("IF X=1 THEN FOR I=1 TO 1826|", false)]
     [DataRow("P. \"READ\"|", false)]
+    [DataRow("READ A(I+1)|", true)]
+    [DataRow("P. \"A:B\": READ A|", true)]
+    [DataRow("READ A: FOR I=1 TO 9|", false)]
     public void ReadListPlacesAreFound(string marked, bool inList)
     {
         string text = marked.Replace("|", "");

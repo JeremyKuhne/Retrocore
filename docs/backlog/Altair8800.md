@@ -25,7 +25,7 @@ and lights, and boards for serial terminals, cassette and 8-inch disks.
 | 88-DCDD | 8-inch disk controller and drives (77 tracks, 32 sectors of 137 bytes) | `$08`-`$0A` |
 | 88-DBL / MBL | The disk boot loader and multi-boot loader PROMs | `$FF00`, `$FE00` |
 
-The ACIA joins the shared chips in `Retrocore.Core` (`Machines/Chips`), as the 6821 and 6522 did.
+The ACIA is one of the shared chips in `Retrocore.Core` (`Machines/Chips/Acia6850.cs`), as the 6821 and 6522 are.
 
 ## Software
 
@@ -35,9 +35,8 @@ Every program the Altair ran is copyrighted, so, as for the other machines, it i
   memory directly. Its documented sense-switch settings choose the terminal board.
 - **CP/M 2.2 and Altair Disk BASIC** on 8-inch disk images in SIMH's format (77 tracks of 32 137-byte sectors,
   337,568 bytes).
-- **The boot PROMs** (88-DBL, MBL) become documented SDK sources rebuilt byte-identically to dumps the user
-  supplies, as the other machines' ROMs did. Until then the disk boots through a loader the debugger deposits,
-  as an operator keyed one in through the front panel.
+- **The boot PROMs** (88-DBL, MBL) are documented SDK sources that assemble byte-identically to the dumps, as the
+  other machines' ROMs are, and a launch with disks boots through DBL.
 
 ## The debug target
 
@@ -69,11 +68,14 @@ Every program the Altair ran is copyrighted, so, as for the other machines, it i
 
 ## Testing
 
-- The machine against SIMH's `altairz80` with the same keystroke-oracle approach the Model I and CoCo use.
-- The ACIA against the MC6850 data sheet's status and interrupt behaviour.
+- The machine against SIMH's `altairz80` with the same keystroke-oracle approach the Model I and CoCo use. *Done*
+  for BASIC: `AltairBasicTests` check its banners, bytes free and tapes against SIMH's; the disks are still open,
+  below.
+- The ACIA against the MC6850 data sheet's status and interrupt behaviour. *Done:* `Acia6850Tests`, and the ACIA's
+  reset and overrun in `AltairMachineTests`.
 - The boot PROMs pinned by digest. *Done:* `AltairDiskTests` check that DBL's and MBL's sources assemble to the
   PROMs' digests, and, with the dumps, byte for byte.
-- A DAP script like the Model I's.
+- A DAP script like the Model I's. *Done:* `tools/Test-AltairDap.mjs`, which boots CP/M from a disk too.
 
 Every download (SIMH, software images, ROM dumps) is approved first, as before.
 

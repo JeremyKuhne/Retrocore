@@ -73,8 +73,8 @@ tracks of 32 sectors of 137 bytes. Its timing is the one Mike Douglas's FDC+ boa
   Selecting a drive unloads its head and disables the controller's interrupts. Status bit 5 shows the 8080's INTE,
   as the controller reads it from the bus.
 
-The controller's sector interrupts are not modeled, as none of the software here uses them, nor is the FD-400's
-wait for the index hole after a drive is selected: the sector position shows once the head has settled.
+The controller's sector interrupts are not modeled, as none of the software here uses them, nor is the
+controller's wait for the index hole after a drive is selected: the sector position shows once the head has settled.
 
 **Disk images** ([`AltairDisk`](../src/Retrocore.Media/Altair/AltairDisk.cs)) are SIMH's `.dsk` files: the
 sectors in order, track by track, 337,568 bytes. Many archive images have 96 more bytes, which are kept, so an image

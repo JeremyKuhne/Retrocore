@@ -59,7 +59,7 @@ export function shadowCopy(host: string, storage: string, folder = "language-ser
 
 /**
  * Starts the retrocore language server for retrocore-asm documents: diagnostics, definition, hover, completion and
- * symbols, assembling a project's sources for its active target.
+ * symbols. It tells the server the active target, for assembling a project's sources with it.
  */
 export async function startLanguageClient(context: vscode.ExtensionContext, targets?: ActiveTargets): Promise<void> {
     const settings = vscode.workspace.getConfiguration("retrocore");

@@ -7,8 +7,8 @@ Retrocore runs the TRS-80's other Z80 machines beside the [Model I](Trs80ModelI.
 - [`Trs80Model2Machine`](../src/Retrocore.Machines.Trs80/Trs80Model2Machine.cs): the **Model II** and **Model 12**,
   and the Z80 side of the **Model 16, 16B and Tandy 6000**.
 
-The SDK has native sources for all of these machines' ROMs, byte-identical to the chips (see [ROMs](#roms)), so they
-run with nothing external, or from dumps. The real ROMs boot to their prompts, and the Model III, 4 and 4P boot their
+The SDK has native sources for all of these machines' dumped ROMs, byte-identical to the chips (see [ROMs](#roms)),
+so they run with nothing external, or from dumps. The real ROMs boot to their prompts, and the Model III, 4 and 4P boot their
 DOSes from disk images (see [DOSes](#doses)); the Model II has not run one yet. See
 [What is not done yet](#what-is-not-done-yet).
 
@@ -171,7 +171,7 @@ hand and assemble byte-identically to each chip:
 | [`Model3.asm`](../src/Retrocore.Machines.Trs80/Roms/Model3.asm) | The Model III's 14K ROM (`ROMC` `'C'` or `'B'` for ROM C's revision) and the Model 4's (`MODEL = 4`). It includes [`Level2.asm`](../src/Retrocore.Machines.Trs80/Roms/Level2.asm), whose `MODEL` blocks hold the Model III's changes to Level II, and [`Model3Equates.asm`](../src/Retrocore.Machines.Trs80/Roms/Model3Equates.asm). |
 | [`Level1.asm`](../src/Retrocore.Machines.Trs80/Roms/Level1.asm) | With `MODEL = 3`, the Model III's Level I ROM (`8040032`): the Model I's Level I with `LPRINT` and `LLIST`, the Model III's ports and NMI, and its restarts moved. |
 | [`Model4PBoot.asm`](../src/Retrocore.Machines.Trs80/Roms/Model4PBoot.asm) | The 4P's boot ROM. |
-| [`Model2Boot.asm`](../src/Retrocore.Machines.Trs80/Roms/Model2Boot.asm) | The Model II's boot ROMs: `VERSION` 1 (`8043216`), 2 (`8047316`), 3 (`cpu_2119`, or `cpu_11be` with `FILL_11BE`) and 5 (`u54`). |
+| [`Model2Boot.asm`](../src/Retrocore.Machines.Trs80/Roms/Model2Boot.asm) | The Model II's boot ROMs: `VERSION` 1 (`8043216`), 2 (`8047316`), 3 (`cpu_2119`, or `cpu_11be` with `FILL_11BE`) and 5 (`u54`). Version 4 (`cpu_fc86`) has no good dump. |
 | [`Model3CharacterGenerator.asm`](../src/Retrocore.Machines.Trs80/Roms/Model3CharacterGenerator.asm) | The Model III's and Model 4's character generator, and with `MODEL4P` the 4P's. |
 | [`Model2CharacterGenerator.asm`](../src/Retrocore.Machines.Trs80/Roms/Model2CharacterGenerator.asm) | The Model II's character generator. |
 
@@ -242,7 +242,7 @@ has Level I's, as [above](#level-i).
 | --- | --- |
 | `Trs80Model3Tests` | The Model III's map, clock interrupt and its mask, keyboard and NMI; the clock's 30 and 60 Hz; typed letters' keys, with shift for uppercase, and on Level I without shift; the Model 4's maps, paging, speed and 80x24; the 4P's boot ROM; the FD1793 with wait and NMI, INTRQ ending the wait; the cassette motor. |
 | `Trs80RomSourceTests` | Each source builds to its ROM's SHA-256, and with the dumps, byte for byte. |
-| `Trs80Model3RomTests` | The real ROMs, built from source: the Model III and Model 4 boot through `Cass?` and `Memory Size?` to BASIC and run a statement; the 4P, with no disk, says the drive is not ready; each Model II boot ROM asks for a diskette; the Model 4 ROM's clock counting the interrupts at 2 and 4 MHz; the Model 4's function keys' codes, with and without shift; `CSAVE` and `CLOAD` at 1500 and 500 baud, a hand-written 1500 baud CAS image loading; Level I booting to `READY`, taking a statement typed in lowercase, and saving and loading at 250 baud; and, with the [DOS images](#doses), each DOS booting to its prompt and listing its directory, and the Model 4's DOSes showing typed text in the case it was typed. |
+| `Trs80Model3RomTests` | The real ROMs, built from source: the Model III and Model 4 boot through `Cass?` and `Memory Size?` to BASIC and run a statement; the 4P, with no disk, says the drive is not ready; versions 1, 2, 3 and 5 of the Model II's boot ROM ask for a diskette; the Model 4 ROM's clock counting the interrupts at 2 and 4 MHz; the Model 4's function keys' codes, with and without shift; `CSAVE` and `CLOAD` at 1500 and 500 baud, a hand-written 1500 baud CAS image loading; Level I booting to `READY`, taking a statement typed in lowercase, and saving and loading at 250 baud; and, with the [DOS images](#doses), each DOS booting to its prompt and listing its directory, and the Model 4's DOSes showing typed text in the case it was typed. |
 | `Trs80Model2Tests` | Banked RAM; the CTC's mode 2 keyboard interrupt with `RETI`, and an NMI's ignored fetch reading as `RETI`; the clock NMI; the 6845; the DMA reading a sector; IMD and DMK images. |
 | `Trs80Model3OracleTests` | Against MAME 0.289, video RAM cell for cell after the same keystrokes on the same ROMs: Model III and Model 4 BASIC running a program; the Model 4's function keys and its clock's count at 2 MHz; with the [DOS images](#doses), TRSDOS 1.3 and 6.0 from their DMK and IMD images, LDOS 5.1.3, TRSDOS 6.2 and LS-DOS 6.3 booting, taking the date and listing their directories; and the Model II's boot ROMs, versions 1, 2, 3 and 5, asking for a diskette. See [Comparing with MAME](#comparing-with-mame). |
 | [`tools/Test-Trs80Model3Dap.mjs`](../tools/Test-Trs80Model3Dap.mjs) | Each machine launching from stand-in dumps it writes, and the Model III and II from the SDK's sources, with source in the stack trace; the missing-dump error, threads, hardware rows, and the Model II's reset stop. |
@@ -297,9 +297,11 @@ What the comparison has to allow for:
 
 ## What is not done yet
 
-- **The Model II's TRSDOS-II**, which needs an image. Its comparison with MAME covers only the boot ROMs.
-- **The Model II's boot ROM version 4**, MAME's `cpu_fc86` of 1982-11-18, which MAME lists but has no dump of, so
-  `Model2Boot.asm` has no source for it.
+- **The Model II's TRSDOS-II**, which needs an image. Its comparison with MAME covers only the boot ROMs, and its
+  DMA and keyboard codes are untested by real software; the keyboard codes also need checking against its keyboard's
+  ROM ([the Model II](#the-model-ii-12-and-16)).
+- **The Model II's boot ROM version 4**, MAME's `cpu_fc86` of 1982-11-18, which MAME lists with no good dump known,
+  so `Model2Boot.asm` has no source for it.
 - **The RS-232 ports**, the Model 4's sound beyond the speaker bit, its hi-res graphics board and hard disks, and the
   Model II's hard disks and serial devices.
 - **The Model 16's 68000.**

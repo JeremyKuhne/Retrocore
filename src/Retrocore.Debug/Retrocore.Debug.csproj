@@ -7,12 +7,12 @@
          Sdk/ and Schemas/ folders go in the package as they go beside the host. It is not published anywhere yet, so
          it installs from the folder dotnet pack wrote, as CI's tool step does. A native (RetrocoreAot) build is not a
          tool. -->
+    <IsPackable>false</IsPackable>
     <IsPackable Condition="'$(RetrocoreAot)' != 'true'">true</IsPackable>
-    <IsPackable Condition="'$(RetrocoreAot)' == 'true'">false</IsPackable>
     <PackAsTool Condition="'$(RetrocoreAot)' != 'true'">true</PackAsTool>
     <ToolCommandName>retrocore</ToolCommandName>
     <PackageId>retrocore</PackageId>
-    <Version>0.1.0-dev</Version>
+    <PackageVersion>0.1.0-dev</PackageVersion>
     <Authors>Jeremy W Kuhne</Authors>
     <Description>Retrocore's debug host and command line: retrocore build builds a project's retrocore.json targets for retro machines, with the SDK's ROM sources and headers.</Description>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>

@@ -62,6 +62,15 @@ jobs:
           mkdir -p artifacts/iie-sample
           dotnet artifacts/AnyCPU/Release/Retrocore.Debug/net11.0/Retrocore.Debug.dll --assemble sample/iie/main.s artifacts/iie-sample/main.bin --dialect ca65 --config sample/iie/link.cfg
 
+      # The packer packs the test game, and the reference engine plays each transcript as its .out shows it.
+      - name: Pack the adventure sample
+        working-directory: Retrocore/sample/adventure
+        run: |
+          dotnet run tools/packer.cs -- pack games/test.dat obj/test.bin
+          for transcript in test-win test-fall test-drown; do
+            dotnet run tools/packer.cs -- play obj/test.bin "games/$transcript.in" --echo --expect "games/$transcript.out"
+          done
+
       - name: Debug adapter tests
         run: |
           node tools/Test-Trs80Dap.mjs

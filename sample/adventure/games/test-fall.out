@@ -1,0 +1,61 @@
+Welcome to the lighthouse! Find the two
+treasures and leave them at the foot of
+the tower.
+I'm on a sandy beach beside a cold grey
+sea. A cave opens in the cliffs.
+Obvious exits: North.
+I can also see: Seagull.
+> xyzzy
+I don't know that word.
+> 
+> go
+Give me a direction too.
+The seagull cries and wheels over the
+sea.
+> s
+I can't go that way.
+The seagull cries and wheels over the
+sea.
+> get
+What?
+The seagull cries and wheels over the
+sea.
+> get lamp
+I don't see it here.
+> drop pearl
+I'm not carrying it.
+The seagull cries and wheels over the
+sea.
+> take sign
+I don't see it here.
+The seagull cries and wheels over the
+sea.
+> n
+I'm in a round room at the foot of a
+lighthouse
+Obvious exits: South, Up.
+I can also see: Wooden sign, Tin of
+oil.
+> swim
+I can't do that yet.
+> light lamp
+I can't do that yet.
+> inventory
+I'm carrying nothing.
+> shout ahoy
+I don't know that word.
+> save
+I don't know that word.
+> s
+The seagull cries and wheels over the
+sea.
+I'm on a sandy beach beside a cold grey
+sea. A cave opens in the cliffs.
+Obvious exits: North.
+I can also see: Seagull.
+> go cave
+It's too dark to see.
+> n
+It's dangerous to move in the dark!
+I fell and broke my neck.
+The game is now over.

@@ -5,7 +5,7 @@
 ;; the player goes on dying. It is dark while <DARK_FLAG> is set, unless the light, <Header::LIGHT_ITEM>, is carried
 ;; or in the room.
 
-;; The turns left at which the light starts to warn that it is growing dim, every fifth turn.
+;; The light warns that it is growing dim with fewer turns left than this, every fifth turn.
 DIM_WARNINGS = 25
 
 ;; How often the light warns, in turns.
@@ -449,9 +449,12 @@ Found:
     lda Locations,x
     beq Done
     lda LightTime
-    and LightTime + 1
-    cmp #$FF
+    cmp #<ENDLESS
+    bne Burns
+    lda LightTime + 1
+    cmp #>ENDLESS
     beq Done
+Burns:
     lda LightTime
     ora LightTime + 1
     beq Done

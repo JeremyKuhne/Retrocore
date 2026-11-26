@@ -10,8 +10,9 @@
 ;; The screen's width, which the engine wraps its text to.
 SCREEN_COLUMNS = 40
 
-;; The engine's pointer into the game's string it is writing. The pointers are in bytes neither DOS 3.3 nor
-;; AppleSoft uses, so they serve a program started from either.
+;; The engine's pointer into the game's string it is writing. The pointers are in bytes neither the Monitor nor
+;; DOS 3.3 uses. AppleSoft keeps its number conversion vectors, for USR routines, in $06-$09, which the engine
+;; may take as it never returns to BASIC.
 TextPointer = $06
 
 ;; The engine's pointer into one of the game's tables.

@@ -102,7 +102,7 @@ Moved:
     beq False
     bne True
 
-    ; The exits every test takes, in the middle of them so each branch reaches.
+    ; The exits most tests take, in the middle of them so each branch reaches.
 True:
     sec
     rts

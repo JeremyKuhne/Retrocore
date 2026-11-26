@@ -75,6 +75,8 @@ try {
 
         // The engine runs to the end of the game.
         for (const end = performance.now() + 60000; performance.now() < end && !transcript(commands).endsWith(gameOver);) {
+            const broken = events.find(message => message.event === "stopped" && message.body.reason === "exception");
+            assert.ok(!broken, `${name}: the machine stopped: ${broken?.body.description}`);
             await new Promise(done => setTimeout(done, 200));
         }
 

@@ -74,8 +74,9 @@ WORD_SIZE = WORD_OPERATOR + 1
     FirstReservedWord 0, word, token, operator
 .endmacro
 
-;; The Compiler's identifier search, <CSP at OpCSP> <IDS at CspIDS>: reads the identifier at the record's cursor and
-;; looks it up in <ReservedWords>.
+;; The Compiler's identifier search, <CSP at Pcodes::CallStandardProcedure>
+;; <IDS at StandardProcedures::IdentifierSearch>: reads the identifier at the record's cursor and looks it up in
+;; <ReservedWords>.
 ;;
 ;; It keeps the identifier's first <ID_LENGTH> letters and digits in upper case, skipping "_", and moves the cursor to
 ;; its last character. For a reserved word it sets the record's token and operator to the word's; for any other
@@ -85,8 +86,8 @@ WORD_SIZE = WORD_OPERATOR + 1
 ;; It takes the identifier's first character as a letter, and does not compare it with the words', since a letter's
 ;; words all start with it. A letter with no words points at <NoWords>, whose count is 0: DEC takes the count to 255
 ;; before testing it, so IdSearch compares 256 entries of <WORD_SIZE> bytes from <NoWords> on, 3 bytes out of step with
-;; the other letters' entries and on past the end of bank 2 to $E928, before it gives up.
-;; Apple's BIOS document jumps to it as IDS (A2PBIOS), the standard procedure's name.
+;; the other letters' entries and on past the end of bank 2 to $E928, before it gives up. Apple's BIOS document jumps to
+;; it as IDS (A2PBIOS), the standard procedure's name.
 ;; In: Stack = under the return address, the buffer's address, then the record's
 .proc IdSearch
 
@@ -412,8 +413,8 @@ WordsL:
 WordsM:
     FirstReservedWord 1, "MOD", $27, $04
 
-;; The reserved words that start with "N".
-;; Kusche's listing calls it NOTK (WK11), the name Apple's BIOS gives a label in ConsoleCheck.
+;; The reserved words that start with "N". Kusche's listing calls it NOTK (WK11), the name Apple's BIOS gives a label in
+;; <ConsoleCheck>.
 WordsN:
     FirstReservedWord 1, "NOT", $26, $00
 

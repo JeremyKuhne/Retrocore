@@ -22,39 +22,39 @@ SysBootUnit = Syscom + 4
 ;; Also: GDIRP (A2POSRM, UCSD20), SYCGDP (WK11)
 SysDirectory = Syscom + 8
 
-;; <KP>, less a mark stack frame and the word below it, when an execution error happened.
+;; <ProgramStackTop>, less a mark stack frame and the word below it, when an execution error happened.
 ;; Also: BOMBP (A2POSRM, UCSD20)
 SysErrorStack = Syscom + 10
 
-;; <BASE>, which the calls keep here as they change it.
+;; <GlobalFrame>, which the calls keep here as they change it.
 ;; Also: STKBASE (A2POSRM, UCSD20), SYCBAS (WK11)
 SysBase = Syscom + 12
 
-;; <MP>, which the calls keep here as they change it.
+;; <LocalFrame>, which the calls keep here as they change it.
 ;; Also: LASTMP (A2POSRM, UCSD20), SYCMS (WK11)
 SysMp = Syscom + 14
 
-;; <JTAB>, which the calls keep here as they change it.
-;; UCSD calls this field JTAB (UCSD20), the name of the register it copies.
+;; <JumpTable>, which the calls keep here as they change it. UCSD calls this field JTAB (UCSD20), the name of the
+;; register it copies.
 ;; Also: SYCJTB (WK11)
 SysJtab = Syscom + 16
 
-;; <SEG>, which the calls keep here as they change it.
-;; UCSD calls this field SEG (UCSD20), the name of the register it copies.
+;; <ProcedureDictionary>, which the calls keep here as they change it. UCSD calls this field SEG (UCSD20), the name of
+;; the register it copies.
 ;; Also: SYCSEG (WK11)
 SysSeg = Syscom + 18
 
-;; Where <KP> and <MP> start, which <Initialize> sets to <MemoryTop>.
+;; Where <ProgramStackTop> and <LocalFrame> start, which <Initialize> sets to <MemoryTop>.
 ;; Also: MEMTOP (UCSD20)
 SysMemoryTop = Syscom + 20
 
-;; The <IPC> an execution error happened at.
+;; The <InstructionPointer> an execution error happened at.
 ;; Also: BOMBIPC (UCSD20), BOMIPC (A2POSRM)
 SysIpc = Syscom + 22
 
-;; The character that ends input from a character unit. Reading the console, <UREAD at UnitIo::CspUREAD> fills the rest
-;; of its buffer with zeros when it comes; reading another unit, it stops there and keeps it. A raw read does not look
-;; for it.
+;; The character that ends input from a character unit. Reading the console, <UREAD at StandardProcedures::UnitRead>
+;; fills the rest of its buffer with zeros when it comes; reading another unit, it stops there and keeps it. A raw read
+;; does not look for it.
 ;; Also: CRTINFO_EOF (A2POSRM, UCSD20)
 SysEofCharacter = Syscom + 82
 
@@ -68,7 +68,7 @@ SyscomExtra = Syscom + 256
 
 ; The tables below SYSCOM.
 
-;; The top of the p-machine's memory, just below <SegmentUses>: where <KP> and <MP> start.
+;; The top of the p-machine's memory, just below <SegmentUses>: where <ProgramStackTop> and <LocalFrame> start.
 MemoryTop = $BD1C
 
 ;; How many active calls use each segment, a word a segment by number. A segment is read in when its count goes up
@@ -76,11 +76,13 @@ MemoryTop = $BD1C
 ;; Also: SUCTBL (WK11)
 SegmentUses = $BD1E
 
-;; The <KP> before each segment was read in, a word a segment by number, given back when its uses fall to 0.
+;; The <ProgramStackTop> before each segment was read in, a word a segment by number, given back when its uses fall to
+;; 0.
 ;; Also: SLATBL (WK11)
 SegmentKp = $BD5E
 
-;; Where each segment is in memory, a word a segment by number: a code segment's last word, as <SEG> holds it, and a
-;; data segment's globals, for <LDE at OpLDE>, <LAE at OpLAE> and <STE at OpSTE>.
+;; Where each segment is in memory, a word a segment by number: a code segment's last word, as <ProcedureDictionary>
+;; holds it, and a data segment's globals, for <LDE at Pcodes::LoadExtended>, <LAE at Pcodes::LoadExtendedAddress> and
+;; <STE at Pcodes::StoreExtended>.
 ;; Also: IUTBL (WK11)
 SegmentAddresses = $BD9E

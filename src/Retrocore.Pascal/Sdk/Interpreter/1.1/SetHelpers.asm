@@ -9,13 +9,13 @@
 ;;
 ;; The sets are under its return address, so it pulls that, and returns by jumping to it plus 1.
 ;; Out:
-;;   TopSize = the first set's size in bytes
-;;   LowerSize = the second set's size in bytes
-;;   Shorter = the shorter set's size in bytes
-;;   LowerExtra = the second set's size less the first's: negative when the first is the longer
-;;   TopSet = the stack index of the first set's first byte
-;;   LowerSet = the stack index of the second set's first byte, and X = the same
-;;   Popped = the stack pointer once both sets are popped
+;;   PopSets::TopSize = the first set's size in bytes
+;;   PopSets::LowerSize = the second set's size in bytes
+;;   PopSets::Shorter = the shorter set's size in bytes
+;;   PopSets::LowerExtra = the second set's size less the first's: negative when the first is the longer
+;;   PopSets::TopSet = the stack index of the first set's first byte
+;;   PopSets::LowerSet = the stack index of the second set's first byte, and X = the same
+;;   PopSets::Popped = the stack pointer once both sets are popped
 ;;   S = just below the first set's first byte, so PLA pulls it
 ;; Keeps: Y
 .proc PopSets

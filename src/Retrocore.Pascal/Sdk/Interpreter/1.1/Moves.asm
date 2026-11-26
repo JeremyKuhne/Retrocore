@@ -1,21 +1,24 @@
 ; retrocore: style=strict
-;; Multiple-word constants, loads and stores, bytes, and <MOV at OpMOV>.
+;; Multiple-word constants, loads and stores, bytes, and <MOV at Pcodes::MoveWords>.
 
-;; The room <LDM at OpLDM> wants on the 6502 stack beyond the words it pushes, in bytes.
+;; The room <LDM at Pcodes::LoadMultiple> wants on the 6502 stack beyond the words it pushes, in bytes.
 LDM_STACK_MARGIN = 8
 
-;; <LDC at OpLDC>: pushes a constant of several words, which follows the opcode's count byte at the next even address.
-;; The words are pushed from the first, so the last ends on top. The count is at least 1.
+; Pcodes: LoadMultipleConstant, LoadMultiple, StoreMultiple, LoadByte, StoreByte and MoveWords.
+.scope Pcodes continued
+
+;; <LDC at Pcodes::LoadMultipleConstant>: pushes a constant of several words, which follows the opcode's count byte at
+;; the next even address. The words are pushed from the first, so the last ends on top. The count is at least 1.
 ;; In: Y = 0, as <Fetch> leaves it
 ;; Also: LDC (A2POSRM, UCSD20)
-.proc OpLDC
+.proc LoadMultipleConstant
 
-;; The bytes to step <IPC> over, once it is even: the opcode, the count and the words.
+;; The bytes to step <InstructionPointer> over, once it is even: the opcode, the count and the words.
 Length = Pointer
 
     ; Take the count, and the length.
     iny
-    lda (IPC),y
+    lda (InstructionPointer),y
     tax
     tay
     iny
@@ -23,22 +26,23 @@ Length = Pointer
     asl a
     sta Length
 
-    ; Make IPC even, stepping over a pad byte when it is odd, so that the words start at IPC+2.
-    lda IPC
+    ; Make InstructionPointer even, stepping over a pad byte when it is odd, so that the words start at
+    ; InstructionPointer+2.
+    lda InstructionPointer
     and #1
     beq PushWords
-    inc IPC
+    inc InstructionPointer
     bne PushWords
-    inc IPC+1
+    inc InstructionPointer+1
 
     ; Push each word, high byte first.
 PushWords:
     ldy #3
 PushWord:
-    lda (IPC),y
+    lda (InstructionPointer),y
     pha
     dey
-    lda (IPC),y
+    lda (InstructionPointer),y
     pha
     iny
     iny
@@ -47,22 +51,22 @@ PushWord:
     bne PushWord
 
     ; Step over the p-code.
-    lda IPC
+    lda InstructionPointer
     clc
     adc Length
-    sta IPC
+    sta InstructionPointer
     bcc Done
-    inc IPC+1
+    inc InstructionPointer+1
 Done:
     jmp Fetch::Next
 .endproc
 
-;; <LDM at OpLDM>: pops an address, and pushes the operand's count of words from it, the last first, so the first ends
-;; on top. Reports a stack overflow unless the 6502 stack pointer is at least the bytes to push plus <LDM_STACK_MARGIN>.
-;; The count is at least 1.
+;; <LDM at Pcodes::LoadMultiple>: pops an address, and pushes the operand's count of words from it, the last first, so
+;; the first ends on top. Reports a stack overflow unless the 6502 stack pointer is at least the bytes to push plus
+;; <LDM_STACK_MARGIN>. The count is at least 1.
 ;; In: Y = 0, as <Fetch> leaves it
 ;; Also: LDM (A2POSRM, UCSD20)
-.proc OpLDM
+.proc LoadMultiple
 
 ;; The count of words.
 Words = Pointer
@@ -72,7 +76,7 @@ Bytes = Pointer2
 
     ; Take the count.
     iny
-    lda (IPC),y
+    lda (InstructionPointer),y
     sta Words
     asl a
     tay
@@ -109,18 +113,18 @@ Overflow:
     jmp ExecutionError::ResetForOverflow
 .endproc
 
-;; <STM at OpSTM>: pops the operand's count of words, the top first, into consecutive words at the address under them,
-;; and pops the address.
+;; <STM at Pcodes::StoreMultiple>: pops the operand's count of words, the top first, into consecutive words at the
+;; address under them, and pops the address.
 ;; In: Y = 0, as <Fetch> leaves it
 ;; Also: STM (A2POSRM, UCSD20)
-.proc OpSTM
+.proc StoreMultiple
 
 ;; The count of words.
 Words = Pointer
 
     ; Take the count, and the address under the words.
     iny
-    lda (IPC),y
+    lda (InstructionPointer),y
     sta Words
     tsx
     txa
@@ -154,10 +158,10 @@ CountWord:
     jmp Fetch::Skip2
 .endproc
 
-;; <LDB at OpLDB>: pops an index, then a byte array's address, and pushes the byte at the index.
+;; <LDB at Pcodes::LoadByte>: pops an index, then a byte array's address, and pushes the byte at the index.
 ;; In: Y = 0, as <Fetch> leaves it
 ;; Also: LDB (A2POSRM, UCSD20)
-.proc OpLDB
+.proc LoadByte
 
 ;; The index, then the byte's address.
 Byte = Pointer
@@ -183,10 +187,11 @@ Byte = Pointer
     jmp Fetch::Skip1
 .endproc
 
-;; <STB at OpSTB>: pops a word, then an index, then a byte array's address, and stores the word's low byte at the index.
+;; <STB at Pcodes::StoreByte>: pops a word, then an index, then a byte array's address, and stores the word's low byte
+;; at the index.
 ;; In: Y = 0, as <Fetch> leaves it
 ;; Also: STB (A2POSRM, UCSD20, WK11)
-.proc OpSTB
+.proc StoreByte
 
 ;; The index, then the byte's address.
 Byte = Pointer
@@ -215,10 +220,10 @@ Byte = Pointer
     jmp Fetch::Skip1
 .endproc
 
-;; <MOV at OpMOV>: pops a source address, then a target address, and copies the big operand's count of words from the
-;; source to the target, with <MoveBytes>.
+;; <MOV at Pcodes::MoveWords>: pops a source address, then a target address, and copies the big operand's count of words
+;; from the source to the target, with <MoveBytes>.
 ;; Also: MOV (A2POSRM, UCSD20, WK11)
-.proc OpMOV
+.proc MoveWords
     ; Pop the addresses.
     pla
     sta Source
@@ -234,3 +239,4 @@ Byte = Pointer
     jsr GetBig
     jmp MoveBytes
 .endproc
+.endscope

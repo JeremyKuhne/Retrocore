@@ -1,7 +1,7 @@
 ; retrocore: style=strict
 ;; Execution errors: an entry for each error SYSTEM.APPLE raises, which loads its number and goes to Report. Report
-;; records the error in SYSCOM and runs <ExecutionError::Call>, a <CXP at OpCXP> to SYSTEM.PASCAL's execution error
-;; handler.
+;; records the error in SYSCOM and runs <ExecutionError::Call>, a <CXP at Pcodes::CallExternalProcedure> to
+;; SYSTEM.PASCAL's execution error handler.
 .scope ExecutionError
 
 ; Each entry's number is positive, so its BPL always goes to Report.
@@ -23,8 +23,8 @@ ExitFromUncalledProc:
     lda #ERROR_EXIT_FROM_UNCALLED_PROC
     bpl Report
 
-;; Makes room to report a stack overflow, and reports it: forgets the heap's directory, and moves <NP> to
-;; <OVERFLOW_HEAP> and <KP> to <OVERFLOW_STACK>.
+;; Makes room to report a stack overflow, and reports it: forgets the heap's directory, and moves <HeapTop> to
+;; <OVERFLOW_HEAP> and <ProgramStackTop> to <OVERFLOW_STACK>.
 ;; Also: OOMERR (WK11)
 ResetForOverflow:
     .assert <OVERFLOW_HEAP = 0 && <OVERFLOW_STACK = 0, "ResetForOverflow stores one 0 as both low bytes."
@@ -35,12 +35,12 @@ ResetForOverflow:
     sta SysDirectory+1
 
     ; Move the heap and the stack out of the error handler's way.
-    sta NP
-    sta KP
+    sta HeapTop
+    sta ProgramStackTop
     lda #>OVERFLOW_STACK
-    sta KP+1
+    sta ProgramStackTop+1
     lda #>OVERFLOW_HEAP
-    sta NP+1
+    sta HeapTop+1
 
 ;; Reports <ERROR_STACK_OVERFLOW>.
 StackOverflow:
@@ -58,7 +58,7 @@ DivideByZero:
     lda #ERROR_DIVIDE_BY_ZERO
     bpl Report
 
-;; Reports <ERROR_INTERRUPTED>. <UCLEAR at UnitIo::CspUCLEAR> gives the console driver this address, through
+;; Reports <ERROR_INTERRUPTED>. <UCLEAR at StandardProcedures::UnitClear> gives the console driver this address, through
 ;; <BreakHandler>, for the break key.
 ;; Also: ERR8 (WK11)
 Interrupted:
@@ -77,8 +77,8 @@ UserIo:
     lda #ERROR_USER_IO
     bpl Report
 
-;; Reports <ERROR_UNIMPLEMENTED>: what EFJ, NFJ and the standard procedures SIN to SQT run, as 1.1 does not implement
-;; them.
+;; Reports <ERROR_UNIMPLEMENTED>: what <EFJ>, <NFJ> and the standard procedures SIN to SQT run, as 1.1 does not
+;; implement them.
 ;; Also: EFJ (A2POSRM), ERR11 (WK11), NFJ (A2POSRM)
 Unimplemented:
     lda #ERROR_UNIMPLEMENTED
@@ -105,36 +105,36 @@ Report:
     sta SysErrorNumber+1
 
     ; Record where it happened.
-    lda IPC
+    lda InstructionPointer
     sta SysIpc
-    lda IPC+1
+    lda InstructionPointer+1
     sta SysIpc+1
 
-    ; Record KP less a mark stack frame and the word below it.
-    lda KP
+    ; Record ProgramStackTop less a mark stack frame and the word below it.
+    lda ProgramStackTop
     sec
     sbc #MSCW_SIZE + KP_LINK_SIZE
     sta SysErrorStack
-    lda KP+1
+    lda ProgramStackTop+1
     sbc #0
     sta SysErrorStack+1
 
     ; Run Call.
     lda CallAddress
-    sta IPC
+    sta InstructionPointer
     lda CallAddress+1
-    sta IPC+1
+    sta InstructionPointer+1
     jmp Fetch::Next
 
     .cpu Pcode
-;; The p-code <Report> runs: <CXP at OpCXP> 0,2, a call to SYSTEM.PASCAL's procedure 2, its execution error handler,
-;; which prints the message with its PRINTERR segment.
+;; The p-code <Report> runs: <CXP at Pcodes::CallExternalProcedure> 0,2, a call to SYSTEM.PASCAL's procedure 2, its
+;; execution error handler, which prints the message with its PRINTERR segment.
 ;; Also: EXECERROR (A2POSRM, UCSD20)
 Call:
     CXP 0, 2
     .cpu Mos6502
 
-;; Call's address, for <Report> to set <IPC> to.
+;; Call's address, for <Report> to set <InstructionPointer> to.
 CallAddress:
     .word Call
 

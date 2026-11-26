@@ -1,9 +1,13 @@
 ; retrocore: style=strict
-;; Logical operations: <LAND at OpLAND>, <LOR at OpLOR> and <LNOT at OpLNOT>, on whole words.
+;; Logical operations: <LAND at Pcodes::LogicalAnd>, <LOR at Pcodes::LogicalOr> and <LNOT at Pcodes::LogicalNot>, on
+;; whole words.
 
-;; <LAND at OpLAND>: pops two words and pushes their bitwise AND.
+; Pcodes: LogicalAnd, LogicalOr and LogicalNot.
+.scope Pcodes continued
+
+;; <LAND at Pcodes::LogicalAnd>: pops two words and pushes their bitwise AND.
 ;; Also: AND (UCSD20), LAND (A2POSRM)
-.proc OpLAND
+.proc LogicalAnd
 
 ;; The top word.
 Operand = Pointer
@@ -26,9 +30,9 @@ Operand = Pointer
     jmp Fetch::Skip1
 .endproc
 
-;; <LOR at OpLOR>: pops two words and pushes their bitwise OR.
+;; <LOR at Pcodes::LogicalOr>: pops two words and pushes their bitwise OR.
 ;; Also: LOR (A2POSRM)
-.proc OpLOR
+.proc LogicalOr
 
 ;; The top word.
 Operand = Pointer
@@ -51,9 +55,9 @@ Operand = Pointer
     jmp Fetch::Skip1
 .endproc
 
-;; <LNOT at OpLNOT>: pops a word and pushes its bitwise complement.
+;; <LNOT at Pcodes::LogicalNot>: pops a word and pushes its bitwise complement.
 ;; Also: LNOT (A2POSRM, WK11), NOT (UCSD20)
-.proc OpLNOT
+.proc LogicalNot
     ; Complement both bytes.
     pla
     tax
@@ -65,3 +69,4 @@ Operand = Pointer
     pha
     jmp Fetch::Skip1
 .endproc
+.endscope

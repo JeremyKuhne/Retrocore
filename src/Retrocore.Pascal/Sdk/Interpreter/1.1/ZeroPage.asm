@@ -4,37 +4,39 @@
 
 ; The p-machine's registers, with UCSD's names.
 
-;; BASE: the outer block's mark stack frame, whose globals <LDO at OpLDO>, <SRO at OpSRO> and <LAO at OpLAO> reach.
+;; GlobalFrame: the outer block's mark stack frame, whose globals <LDO at Pcodes::LoadGlobal>,
+;; <SRO at Pcodes::StoreGlobal> and <LAO at Pcodes::LoadGlobalAddress> reach.
 ;; Also: BASE (A2POSRM), BASPTR (WK11)
-BASE = $50
+GlobalFrame = $50
 
-;; MP: the current procedure's mark stack frame, whose locals <LDL at OpLDL>, <STL at OpSTL> and <LLA at OpLLA> reach.
+;; LocalFrame: the current procedure's mark stack frame, whose locals <LDL at Pcodes::LoadLocal>,
+;; <STL at Pcodes::StoreLocal> and <LLA at Pcodes::LoadLocalAddress> reach.
 ;; Also: MP (A2POSRM), MSPTR (WK11)
-MP = $52
+LocalFrame = $52
 
-;; JTAB: the current procedure's attributes, at the end of its code.
+;; JumpTable: the current procedure's attributes, at the end of its code.
 ;; Also: JTAB (A2POSRM), JTBPTR (WK11)
-JTAB = $54
+JumpTable = $54
 
-;; SEG: the current segment's procedure dictionary, its last word.
+;; ProcedureDictionary: the current segment's procedure dictionary, its last word.
 ;; Also: SEG (A2POSRM), SEGPTR (WK11)
-SEG = $56
+ProcedureDictionary = $56
 
-;; IPC: the next p-code.
+;; InstructionPointer: the next p-code.
 ;; Also: IPC (A2POSRM), IPCPTR (WK11)
-IPC = $58
+InstructionPointer = $58
 
-;; NP: the heap's top. <NEW at CspNEW> allocates up from it.
+;; HeapTop: the heap's top. <NEW at StandardProcedures::New> allocates up from it.
 ;; Also: HPPTR (WK11), NP (A2POSRM)
-NP = $5A
+HeapTop = $5A
 
-;; KP: the program stack's bottom. Each call takes its frame below it, and the stack overflows when KP comes down
-;; to <NP>.
+;; ProgramStackTop: the program stack's bottom. Each call takes its frame below it, and the stack overflows when
+;; ProgramStackTop comes down to <HeapTop>.
 ;; Also: KP (A2POSRM), PSKPTR (WK11)
-KP = $5C
+ProgramStackTop = $5C
 
-; Dispatch. Initialize::StartSystem writes JMP indirect instructions here, and Fetch and OpCSP set their addresses'
-; low bytes.
+; Dispatch. Initialize::StartSystem writes JMP indirect instructions here, and Fetch and Pcodes::CallStandardProcedure
+; set their addresses' low bytes.
 
 ;; JMP (<OpcodeTable>): <Fetch> sets its address's low byte, <DispatchLow>, to the opcode times 2, and jumps here.
 ;; Also: JMPPC (WK11)
@@ -43,8 +45,8 @@ Dispatch = $6E
 ;; The low byte of <Dispatch>'s address.
 DispatchLow = Dispatch + 1
 
-;; JMP (<CspTable>): <OpCSP> sets its address's low byte, <CspDispatchLow>, to the standard procedure's number times 2,
-;; and jumps here.
+;; JMP (<CspTable>): <Pcodes::CallStandardProcedure> sets its address's low byte, <CspDispatchLow>, to the standard
+;; procedure's number times 2, and jumps here.
 ;; Also: JMPCSP (WK11)
 CspDispatch = $71
 
@@ -244,13 +246,12 @@ BiosPointersCopy = $E8
 ;; Also: BAS1H (A2PBIOS), BAS1L (A2PBIOS), SLLPTR (WK11)
 TextLine = $F0
 
-;; The cursor row's address in text page 2, which keeps the other 40 columns.
-;; Apple's BIOS document calls it BAS2L and its high byte BAS2H (A2PBIOS), the Monitor's names for its own.
+;; The cursor row's address in text page 2, which keeps the other 40 columns. Apple's BIOS document calls it BAS2L and
+;; its high byte BAS2H (A2PBIOS), the Monitor's names for its own.
 ;; Also: SLRPTR (WK11)
 TextLine2 = $F2
 
-;; The cursor's column, 0-79.
-;; Apple's BIOS document calls it CH (A2PBIOS), the Monitor's name for its own column.
+;; The cursor's column, 0-79. Apple's BIOS document calls it CH (A2PBIOS), the Monitor's name for its own column.
 ;; Also: HPOS (WK11)
 ConsoleColumn = $F4
 
@@ -258,12 +259,12 @@ ConsoleColumn = $F4
 ;; Also: CV (A2PBIOS), VPOS (WK11)
 CursorRow = $F5
 
-;; $Cn00 for the card being called, then the firmware entry <CallFirmware> jumps through.
-;; Apple's BIOS document calls its high byte TEMP2 (A2PBIOS).
+;; $Cn00 for the card being called, then the firmware entry <CallFirmware> jumps through. Apple's BIOS document calls
+;; its high byte TEMP2 (A2PBIOS).
 ;; Also: TEMP (WK11), TEMP1 (A2PBIOS)
 CardPointer = $F6
 
-;; SYSCOM's address, from <ConsoleInit>, for <ConsoleCheck> to read the console's keys from.
-;; Apple's BIOS document calls it SYSCOM (A2PBIOS), the name of the area it points to.
+;; SYSCOM's address, from <ConsoleInit>, for <ConsoleCheck> to read the console's keys from. Apple's BIOS document calls
+;; it SYSCOM (A2PBIOS), the name of the area it points to.
 ;; Also: SYCPTR (WK11)
 SyscomPointer = $F8

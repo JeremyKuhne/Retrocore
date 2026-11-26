@@ -9,7 +9,7 @@ FIRST_TABLE_OPCODE = $80
 ; Mark stack frames.
 
 ;; The size of a mark stack frame, in bytes. A call places the procedure's frame this far, plus its data, below
-;; <KP>, and its locals follow the frame.
+;; <ProgramStackTop>, and its locals follow the frame.
 ;; Also: MSCW (A2POSRM, UCSD20)
 MSCW_SIZE = 12
 
@@ -17,7 +17,7 @@ MSCW_SIZE = 12
 ;; Also: MSSTAT (A2POSRM), STATLINK (UCSD20)
 MSCW_STATIC_LINK = 0
 
-;; The size of the word a call keeps the caller's <KP> in, just below the new frame.
+;; The size of the word a call keeps the caller's <ProgramStackTop> in, just below the new frame.
 KP_LINK_SIZE = 2
 
 ; Execution errors, numbered as SYSTEM.PASCAL's PRINTERR segment numbers its messages. SYSTEM.APPLE does not raise
@@ -73,10 +73,10 @@ ERROR_STRING_OVERFLOW = 13
 
 ; Memory.
 
-;; Where a stack overflow puts <NP>, out of the error handler's way, before it reports the error.
+;; Where a stack overflow puts <HeapTop>, out of the error handler's way, before it reports the error.
 OVERFLOW_HEAP = $6200
 
-;; Where a stack overflow puts <KP>, so the error handler's call has room below it.
+;; Where a stack overflow puts <ProgramStackTop>, so the error handler's call has room below it.
 OVERFLOW_STACK = $8000
 
 ; Unpacked reals. The floating-point routines unpack a real into 6 bytes of zero page, RealMath's Right and Left or
@@ -216,8 +216,8 @@ UNIT_PRINTER = 6
 ;; The remote line's input.
 UNIT_REMOTE_IN = 7
 
-;; The remote line's output. <UNITCLEAR at UnitIo::CspUCLEAR> and <UNITSTATUS at UnitIo::CspUSTAT> take unit 7 as this
-;; one.
+;; The remote line's output. <UNITCLEAR at StandardProcedures::UnitClear> and
+;; <UNITSTATUS at StandardProcedures::UnitStatus> take unit 7 as this one.
 ;; Also: REMOTE (UCSD20IO)
 UNIT_REMOTE_OUT = 8
 
@@ -234,16 +234,16 @@ UNIT_ENTRY_SIZE = 2
 ;; Bit 7 of a unit number: an attached driver's unit, its driver's number in bits 0-6.
 ATTACHED_UNIT = $80
 
-;; Read: <UNITREAD at UnitIo::CspUREAD>.
+;; Read: <UNITREAD at StandardProcedures::UnitRead>.
 REQUEST_READ = 0
 
-;; Write: <UNITWRITE at UnitIo::CspUWRITE>.
+;; Write: <UNITWRITE at StandardProcedures::UnitWrite>.
 REQUEST_WRITE = 1
 
-;; Clear: <UNITCLEAR at UnitIo::CspUCLEAR>.
+;; Clear: <UNITCLEAR at StandardProcedures::UnitClear>.
 REQUEST_CLEAR = 2
 
-;; Status: <UNITSTATUS at UnitIo::CspUSTAT>.
+;; Status: <UNITSTATUS at StandardProcedures::UnitStatus>.
 REQUEST_STATUS = 4
 
 ;; I/O result 2, "illegal unit #": no such unit.
@@ -263,19 +263,20 @@ CHARACTER_DEVICE = $FFFF
 
 ; Mark stack frames, procedure attributes and segments.
 
-;; Where a mark stack frame keeps its dynamic link: the caller's <MP>.
+;; Where a mark stack frame keeps its dynamic link: the caller's <LocalFrame>.
 ;; Also: DYNLINK (UCSD20), MSDYN (A2POSRM)
 MSCW_DYNAMIC_LINK = 2
 
-;; Where a mark stack frame keeps the caller's <JTAB>.
+;; Where a mark stack frame keeps the caller's <JumpTable>.
 ;; Also: MSJTAB (A2POSRM, UCSD20)
 MSCW_JTAB = 4
 
-;; Where a mark stack frame keeps the caller's <SEG>.
+;; Where a mark stack frame keeps the caller's <ProcedureDictionary>.
 ;; Also: MSSEG (A2POSRM, UCSD20)
 MSCW_SEG = 6
 
-;; Where a mark stack frame keeps the caller's <IPC>, the p-code after the call: where <RNP at OpRNP> returns to.
+;; Where a mark stack frame keeps the caller's <InstructionPointer>, the p-code after the call: where
+;; <RNP at Pcodes::ReturnFromProcedure> returns to.
 ;; Also: MSIPC (A2POSRM, UCSD20)
 MSCW_IPC = 8
 
@@ -298,7 +299,8 @@ ATTR_LEXICAL_LEVEL = 1
 ;; Also: ENTERIC (A2POSRM)
 ATTR_ENTER = -2
 
-;; Where a procedure's attributes keep a self-relative pointer to its exit code, which <EXIT at CspEXIT> runs.
+;; Where a procedure's attributes keep a self-relative pointer to its exit code, which
+;; <EXIT at StandardProcedures::ExitProcedure> runs.
 ;; Also: EXITIC (A2POSRM)
 ATTR_EXIT = -4
 
@@ -327,22 +329,22 @@ SEGMENT_TABLE_ENTRY_SIZE = 6
 
 ; Comparisons, as the comparison handlers pass them to CompareSets in Comparison.
 
-;; The outcome equal, and the kind <EQU at OpEQU> tests for.
+;; The outcome equal, and the kind <EQU at Pcodes::Equal> tests for.
 COMPARISON_EQUAL = 1
 
-;; The outcome less: the lower operand is less than the top one. The kind <LES at OpLES> tests for.
+;; The outcome less: the lower operand is less than the top one. The kind <LES at Pcodes::Less> tests for.
 COMPARISON_LESS = 2
 
-;; The outcome greater: the lower operand is greater than the top one. The kind <GRT at OpGRT> tests for.
+;; The outcome greater: the lower operand is greater than the top one. The kind <GRT at Pcodes::Greater> tests for.
 COMPARISON_GREATER = 4
 
-;; The kind <LEQ at OpLEQ> tests for: less or equal.
+;; The kind <LEQ at Pcodes::LessOrEqual> tests for: less or equal.
 COMPARISON_LESS_OR_EQUAL = COMPARISON_LESS | COMPARISON_EQUAL
 
-;; The kind <GEQ at OpGEQ> tests for: greater or equal.
+;; The kind <GEQ at Pcodes::GreaterOrEqual> tests for: greater or equal.
 COMPARISON_GREATER_OR_EQUAL = COMPARISON_GREATER | COMPARISON_EQUAL
 
-;; The kind <NEQ at OpNEQ> tests for: less or greater.
+;; The kind <NEQ at Pcodes::NotEqual> tests for: less or greater.
 COMPARISON_NOT_EQUAL = COMPARISON_LESS | COMPARISON_GREATER
 
 ; Flags in the console and keyboard bytes.

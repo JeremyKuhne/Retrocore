@@ -128,7 +128,7 @@ ScreenControlRoutines:
 
 ;; Writes a character to the 80-column screen at the cursor, or acts on it as a control character or as part of an
 ;; <ASCII_ESC> or GOTOXY sequence.
-;; In: Character = the character, Y = <ConsoleColumn>
+;; In: ScreenWrite::Character = the character, Y = <ConsoleColumn>
 ;; Also: VOUT2 (A2PBIOS, WK11)
 .proc ScreenWrite
 

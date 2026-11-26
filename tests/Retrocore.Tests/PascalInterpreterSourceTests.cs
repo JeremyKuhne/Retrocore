@@ -4,6 +4,8 @@
 
 using Retrocore.Assembler;
 using Retrocore.Debug;
+using Retrocore.Debug.Language;
+using Retrocore.Documentation;
 using Retrocore.Media;
 using System.Security.Cryptography;
 
@@ -60,6 +62,29 @@ public sealed class PascalInterpreterSourceTests
     }
 
     /// <summary>
+    ///  The source passes the documentation lint as the editor runs it.
+    /// </summary>
+    [TestMethod]
+    public void InterpreterDocumentationIsClean()
+    {
+        // Its links reach the IIe's SDK modules, as the editor's do: IIeEquates.asm names the Monitor's routines.
+        string roms = Path.Join(AppContext.BaseDirectory, "Inputs");
+        List<SourceAnalysis> sdk = [.. SdkDocumentationTests.SdkRoots(roms).Select(Analyze)];
+        SourceAnalysis analysis = Analyze(SourcePath());
+        DocumentationResolver resolver = new(
+            analysis.Documentation,
+            analysis.OtherModules(sdk).Select(other => other.Documentation),
+            isDirective: name => DirectiveDocs.Describe(name) is not null,
+            isInstruction: InstructionDocs.IsMnemonic);
+
+        List<string> problems = [.. resolver.Lint()
+            .Select(problem => $"{Path.GetFileName(problem.Path)}:{problem.Line + 1}: {problem.Text}")
+            .Order()];
+
+        problems.Should().BeEmpty($"the lint found:{Environment.NewLine}{string.Join(Environment.NewLine, problems)}");
+    }
+
+    /// <summary>
     ///  Assembles SYSTEM.APPLE from the SDK's source, with its linker configuration.
     /// </summary>
     /// <returns>The assembly: bank 2, $E000-$FFFF and bank 1, in the file's order.</returns>
@@ -73,6 +98,8 @@ public sealed class PascalInterpreterSourceTests
             origin: 0xD000,
             Path.Join(Path.GetDirectoryName(path), "SYSTEM.APPLE.cfg"));
     }
+
+    private static SourceAnalysis Analyze(string path) => SourceAnalysis.Assemble(path, _ => null);
 
     // The SDK's copy beside the tests.
     private static string SourcePath() =>

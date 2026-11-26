@@ -128,8 +128,9 @@ TypeAheadIn = $BF19
 ;; Also: RETH (A2PBIOS), RETL (A2PBIOS)
 BiosCaller = $BF1A
 
-;; Bits 4-5 of a <UNITREAD at UnitIo::CspUREAD> or <UNITWRITE at UnitIo::CspUWRITE> control word, as bits 0-1. Bit 0
-;; makes <ConsoleCheck> skip Control-K, Control-A, Control-Z and the case keys; bit 1, the stop, break and flush keys.
+;; Bits 4-5 of a <UNITREAD at StandardProcedures::UnitRead> or <UNITWRITE at StandardProcedures::UnitWrite> control
+;; word, as bits 0-1. Bit 0 makes <ConsoleCheck> skip Control-K, Control-A, Control-Z and the case keys; bit 1, the
+;; stop, break and flush keys.
 ;; Also: SPCHAR (A2PBIOS, WK11)
 IoControl = $BF1C
 
@@ -154,7 +155,7 @@ CopiedTablePointer = $BF23
 ;; Also: SLTTYPS (A2PBIOS), SLTYPS (WK11)
 SlotTypes = $BF28
 
-;; Where <Reset> goes: <OpXIT>, which <Initialize> sets, so RESET leaves the system.
+;; Where <Reset> goes: <Pcodes::ExitSystem>, which <Initialize> sets, so RESET leaves the system.
 ;; Also: XITLOC (A2PBIOS, WK11)
 ResetHandler = $BF2F
 

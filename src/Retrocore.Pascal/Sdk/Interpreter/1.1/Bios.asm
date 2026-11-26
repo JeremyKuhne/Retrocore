@@ -35,8 +35,8 @@ BIOS_VECTOR_OFFSET = $5A
 .endmacro
 
 ;; Where the console's break key goes, from bank 2: switches bank 1 in and jumps through <ConsoleBreakVector>, which
-;; <ConsoleInit> takes from its caller (<UCLEAR at UnitIo::CspUCLEAR> and <Initialize>'s NoSystemFile give it
-;; <ExecutionError::Interrupted>).
+;; <ConsoleInit> takes from its caller (<UCLEAR at StandardProcedures::UnitClear> and <Initialize>'s NoSystemFile give
+;; it <ExecutionError::Interrupted>).
 ;; Also: TOBREAK (A2PBIOS), TOBRK (WK11)
 .proc BreakJump
     lda LCBANK1
@@ -52,7 +52,7 @@ BIOS_VECTOR_OFFSET = $5A
 .endproc
 
 ;; Where the 6502's NMI, reset and IRQ vectors go: switches bank 1 in and jumps through <ResetHandler>, which
-;; <Initialize> sets to <OpXIT>.
+;; <Initialize> sets to <Pcodes::ExitSystem>.
 .proc Reset
     lda LCBANK1
     jmp (ResetHandler)

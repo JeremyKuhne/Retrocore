@@ -59,14 +59,14 @@ FIRMWARE_ASK_INPUT = 1
     tya
     pha
 
-;; Counts the poll in PollCount.
+;; Counts the poll in <PollCount>.
 ;; Also: RNDINC (A2PBIOS)
 Poll:
     inc PollCount
     bne ByCard
     inc PollCount+1
 
-;; Polls the console's card, if it has one. A CARD_PASCAL_FIXED card is read only by ConsoleRead.
+;; Polls the console's card, if it has one. A <CARD_PASCAL_FIXED> card is read only by <ConsoleRead>.
 ;; Also: RNDOK (A2PBIOS)
 ByCard:
     lda SlotTypes + CONSOLE_SLOT - 1
@@ -116,7 +116,7 @@ NotCtrlA:
     sta ConsoleFlags
     bne CheckStopped
 
-;; Takes a key from a CARD_SERIAL card's ACIA, if it has one.
+;; Takes a key from a <CARD_SERIAL> card's ACIA, if it has one.
 ;; Also: COMCK (A2PBIOS, WK11)
 SerialKey:
     lda Slot3AciaStatus
@@ -129,14 +129,14 @@ SerialKey:
 StripKey:
     and #ASCII_BITS
 
-;; Skips the stop, break and flush keys if IoControl's bit 1 says so.
+;; Skips the stop, break and flush keys if <IoControl>'s bit 1 says so.
 ;; Also: NOTFOL (A2PBIOS)
 SystemKeys:
     tax
     lda IoControl
     ror a
 
-;; Rotates IoControl's bit 1 into carry: set skips the stop, break and flush keys.
+;; Rotates <IoControl>'s bit 1 into carry: set skips the stop, break and flush keys.
 ;; Also: NOTFOLP2 (A2PBIOS)
 TestSystemKeys:
     ror a
@@ -156,7 +156,7 @@ TestSystemKeys:
 NoKey:
     jmp CheckStopped
 
-;; Takes a key from a CARD_PASCAL_FIRMWARE card, if it has one.
+;; Takes a key from a <CARD_PASCAL_FIRMWARE> card, if it has one.
 ;; Also: FIRMCK (A2PBIOS)
 FirmwareKey:
     lda #FIRMWARE_ASK_INPUT
@@ -190,12 +190,12 @@ NotBreak:
     sta ConsoleFlags
     jmp CheckStopped
 
-;; Stores the key in X in TypeAhead, or beeps if it is full.
+;; Stores the key in X in <TypeAhead>, or beeps if it is full.
 ;; Also: NFMI1 (A2PBIOS)
 StoreX:
     txa
 
-;; Stores the key in A in TypeAhead, or beeps if it is full.
+;; Stores the key in A in <TypeAhead>, or beeps if it is full.
 ;; Also: NOTFLUS (A2PBIOS)
 Store:
     ldx TypeAheadIn
@@ -369,7 +369,7 @@ Wait:
     and #ASCII_BITS
     rts
 
-;; Polls until TypeAhead has a key, and takes it.
+;; Polls until <TypeAhead> has a key, and takes it.
 ;; Also: CREAD2 (A2PBIOS)
 FromTypeAhead:
     jsr ConsoleCheck

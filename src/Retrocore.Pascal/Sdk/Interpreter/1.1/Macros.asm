@@ -22,7 +22,8 @@
     .endrepeat
 .endmacro
 
-;; One entry of <CspTable>: the routine that runs a standard procedure, which <CSP at OpCSP> calls by number.
+;; One entry of <CspTable>: the routine that runs a standard procedure, which <CSP at Pcodes::CallStandardProcedure>
+;; calls by number.
 ;; Parameters:
 ;;   number = the standard procedure's number, as Pcode.asm's `CSP` scope names it; the entries go in order
 ;;   routine = the routine that runs it

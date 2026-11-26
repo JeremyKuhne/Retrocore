@@ -1,7 +1,8 @@
 ; retrocore: style=strict
-;; Unit I/O: the standard procedures <UNITREAD at UnitIo::CspUREAD>, <UNITWRITE at UnitIo::CspUWRITE>,
-;; <UNITCLEAR at UnitIo::CspUCLEAR>, <UNITSTATUS at UnitIo::CspUSTAT>, <UNITBUSY at UnitIo::CspUBUSY> and
-;; <UNITWAIT at UnitIo::CspUWAIT>, IORESULT and the I/O check, and the character units' reading and writing.
+;; Unit I/O: the standard procedures <UNITREAD at StandardProcedures::UnitRead>,
+;; <UNITWRITE at StandardProcedures::UnitWrite>, <UNITCLEAR at StandardProcedures::UnitClear>,
+;; <UNITSTATUS at StandardProcedures::UnitStatus>, <UNITBUSY at StandardProcedures::UnitBusy> and
+;; <UNITWAIT at StandardProcedures::UnitWait>, IORESULT and the I/O check, and the character units' reading and writing.
 ;;
 ;; A unit is a disk drive, a character device the interpreter handles by its unit number, or a driver routine, as
 ;; <UnitTable> says; or, with <ATTACHED_UNIT> set, a driver attached in <AttachedDrivers>.
@@ -57,8 +58,8 @@ DLE_BIAS = $20
 ; refuses unit 0: UnitWriters starts at BreakHandler's high byte, so its unit 0 slot is that byte and SavedIoControl,
 ; and UnitReaders starts at UnitWriters' unit 8 entry.
 
-;; <ExecutionError::Interrupted>'s address, which <UNITCLEAR at UnitIo::CspUCLEAR> and <Initialize> give the console
-;; driver for the break key.
+;; <ExecutionError::Interrupted>'s address, which <UNITCLEAR at StandardProcedures::UnitClear> and <Initialize> give the
+;; console driver for the break key.
 BreakHandler:
     .word ExecutionError::Interrupted
 
@@ -67,8 +68,8 @@ BreakHandler:
 ;; Also: WRITTBL (A2PBIOS)
 UnitWriters = BreakHandler + 1
 
-;; <IoControl> as it was before a <UNITREAD at UnitIo::CspUREAD> or <UNITWRITE at UnitIo::CspUWRITE>, put back when it
-;; ends.
+;; <IoControl> as it was before a <UNITREAD at StandardProcedures::UnitRead> or
+;; <UNITWRITE at StandardProcedures::UnitWrite>, put back when it ends.
 SavedIoControl:
     .res 1
     .assert SavedIoControl = UnitWriters + 1, "SavedIoControl is UnitWriters' unit 0 slot's high byte."
@@ -115,15 +116,17 @@ NoLineFeed = Result
 ;; Also: CONTROL (UCSD20IO)
 Control = Result + 2
 
-;; A <UNITREAD at UnitIo::CspUREAD> or <UNITWRITE at UnitIo::CspUWRITE>'s unit number, its low byte.
+;; A <UNITREAD at StandardProcedures::UnitRead> or <UNITWRITE at StandardProcedures::UnitWrite>'s unit number, its low
+;; byte.
 ;; Also: UNITNUMBER (UCSD20IO)
 Unit = Result + 4
 
-;; A <UNITREAD at UnitIo::CspUREAD> or <UNITWRITE at UnitIo::CspUWRITE>'s block number.
+;; A <UNITREAD at StandardProcedures::UnitRead> or <UNITWRITE at StandardProcedures::UnitWrite>'s block number.
 ;; Also: LOGICALBLOCK (UCSD20IO)
 Block = Pointer2
 
-;; A <UNITREAD at UnitIo::CspUREAD> or <UNITWRITE at UnitIo::CspUWRITE>'s byte count, counted down.
+;; A <UNITREAD at StandardProcedures::UnitRead> or <UNITWRITE at StandardProcedures::UnitWrite>'s byte count, counted
+;; down.
 ;; Also: BYTESTOTRANSFER (UCSD20IO)
 Count = ProcedureNumber
 
@@ -183,9 +186,14 @@ Bad:
     jmp Fetch::Skip2
 .endproc
 
-;; <IOR at UnitIo::CspIOR>, the standard procedure IORESULT: pushes the last I/O call's result.
+.endscope
+
+; StandardProcedures: IoResult, IoCheck, UnitBusy, UnitWait, UnitStatus and UnitClear.
+.scope StandardProcedures continued
+
+;; <IOR at StandardProcedures::IoResult>, the standard procedure IORESULT: pushes the last I/O call's result.
 ;; Also: IORESULT (UCSD20, UCSD20IO), PSHIOR (WK11)
-.proc CspIOR
+.proc IoResult
     lda SysIoResult+1
     pha
     lda SysIoResult
@@ -193,10 +201,10 @@ Bad:
     jmp Fetch::Skip2
 .endproc
 
-;; <IOC at UnitIo::CspIOC>, the I/O check the compiler puts after I/O: reports <ERROR_USER_IO> when the last I/O call's
-;; result was not <IO_OK>.
+;; <IOC at StandardProcedures::IoCheck>, the I/O check the compiler puts after I/O: reports <ERROR_USER_IO> when the
+;; last I/O call's result was not <IO_OK>.
 ;; Also: CSP0 (WK11), IOC (UCSD20)
-.proc CspIOC
+.proc IoCheck
     lda SysIoResult
     beq Done
     jmp ExecutionError::UserIo
@@ -204,16 +212,16 @@ Done:
     jmp Fetch::Skip2
 .endproc
 
-;; <UBUSY at UnitIo::CspUBUSY>, the standard procedure <UNITBUSY at UnitIo::CspUBUSY>: pops a unit number, checks it,
-;; and pushes FALSE, as no unit is ever busy.
+;; <UBUSY at StandardProcedures::UnitBusy>, the standard procedure <UNITBUSY at StandardProcedures::UnitBusy>: pops a
+;; unit number, checks it, and pushes FALSE, as no unit is ever busy.
 ;; Also: CSP35 (WK11), UNITBUSY (UCSD20, UCSD20IO)
-.proc CspUBUSY
+.proc UnitBusy
     ; Pop the unit and check it.
     pla
     tax
     pla
     txa
-    jsr CheckUnit
+    jsr UnitIo::CheckUnit
 
     ; Push FALSE.
     lda #0
@@ -222,30 +230,30 @@ Done:
     jmp Fetch::Skip2
 .endproc
 
-;; <UWAIT at UnitIo::CspUWAIT>, the standard procedure <UNITWAIT at UnitIo::CspUWAIT>: pops a unit number and checks it.
-;; Every transfer is done before its call returns, so there is nothing to wait for.
+;; <UWAIT at StandardProcedures::UnitWait>, the standard procedure <UNITWAIT at StandardProcedures::UnitWait>: pops a
+;; unit number and checks it. Every transfer is done before its call returns, so there is nothing to wait for.
 ;; Also: CSP37 (WK11), UNITWAIT (UCSD20, UCSD20IO)
-.proc CspUWAIT
+.proc UnitWait
     pla
     tax
     pla
     txa
-    jsr CheckUnit
+    jsr UnitIo::CheckUnit
     jmp Fetch::Skip2
 .endproc
 
-;; <USTAT at UnitIo::CspUSTAT>, the standard procedure <UNITSTATUS at UnitIo::CspUSTAT>: pops the control word, the
-;; status record's address (two words, added) and the unit, and has the unit's device fill the record. A character unit
-;; with no status routine gets <IO_NO_DEVICE>.
+;; <USTAT at StandardProcedures::UnitStatus>, the standard procedure <UNITSTATUS at StandardProcedures::UnitStatus>:
+;; pops the control word, the status record's address (two words, added) and the unit, and has the unit's device fill
+;; the record. A character unit with no status routine gets <IO_NO_DEVICE>.
 ;; Also: CSP12 (WK11)
-.proc CspUSTAT
+.proc UnitStatus
     ; Pop the control word.
     lda #REQUEST_STATUS
-    sta Request
+    sta UnitIo::Request
     pla
-    sta Control
+    sta UnitIo::Control
     pla
-    sta Control+1
+    sta UnitIo::Control+1
 
     ; Pop the record's address: a word, plus a word.
     pla
@@ -265,12 +273,12 @@ Done:
     tax
     pla
     txa
-    jsr CheckUnit
+    jsr UnitIo::CheckUnit
 
     ; Push the control word and the record's address again, for the status routine.
-    lda Control+1
+    lda UnitIo::Control+1
     pha
-    lda Control
+    lda UnitIo::Control
     pha
     lda Buffer+1
     pha
@@ -281,7 +289,7 @@ Done:
     txa
     and #ATTACHED_UNIT
     beq NotAttached
-    bne CspUCLEAR::CallAttached
+    bne StandardProcedures::UnitClear::CallAttached
 
     ; The remote units are one device: unit 7 is unit 8.
 NotAttached:
@@ -299,13 +307,13 @@ FindDevice:
     beq Disk
     cmp #>CHARACTER_DEVICE
     beq Characters
-    bne CspUCLEAR::CallDriver
+    bne StandardProcedures::UnitClear::CallDriver
 
     ; A disk: its drive's status.
 Disk:
     lda UnitTable,y
     jsr BiosDiskStatus
-    jmp Finish
+    jmp UnitIo::Finish
 
     ; A character device: the console's, the printer's or the remote line's status. X = REQUEST_STATUS, as for a
     ; driver; the BIOS's status routines do not read it.
@@ -316,17 +324,17 @@ Characters:
     cpy #UNIT_GRAPHICS
     bcs NotConsole
     jsr BiosConsoleStatus
-    jmp Finish
+    jmp UnitIo::Finish
 NotConsole:
     cpy #UNIT_PRINTER
     bne NotPrinter
     jsr BiosPrinterStatus
-    jmp Finish
+    jmp UnitIo::Finish
 NotPrinter:
     cpy #UNIT_REMOTE_OUT
     bne NoDevice
     jsr BiosRemoteStatus
-    jmp Finish
+    jmp UnitIo::Finish
 
     ; The graphics screen has no status: drop the arguments pushed for it.
 NoDevice:
@@ -335,32 +343,32 @@ NoDevice:
     pla
     pla
     pla
-    jmp Finish
+    jmp UnitIo::Finish
 .endproc
 
-;; <UCLEAR at UnitIo::CspUCLEAR>, the standard procedure <UNITCLEAR at UnitIo::CspUCLEAR>: pops a unit number and has
-;; its device reset. The graphics screen is reset, but gets <IO_NO_DEVICE> all the same.
+;; <UCLEAR at StandardProcedures::UnitClear>, the standard procedure <UNITCLEAR at StandardProcedures::UnitClear>: pops
+;; a unit number and has its device reset. The graphics screen is reset, but gets <IO_NO_DEVICE> all the same.
 ;; Also: CSP38 (WK11), UNITCLEAR (UCSD20, UCSD20IO)
-.proc CspUCLEAR
+.proc UnitClear
     ; Pop the unit and check it.
     lda #REQUEST_CLEAR
-    sta Request
+    sta UnitIo::Request
     pla
     tax
     pla
     txa
-    jsr CheckUnit
+    jsr UnitIo::CheckUnit
     and #ATTACHED_UNIT
     beq NotAttached
 
-;; Calls an attached driver, for <UNITCLEAR at UnitIo::CspUCLEAR> and <UNITSTATUS at UnitIo::CspUSTAT>, and ends the
-;; call with its result.
-;; In: X = the unit, Request = the request
+;; Calls an attached driver, for <UNITCLEAR at StandardProcedures::UnitClear> and
+;; <UNITSTATUS at StandardProcedures::UnitStatus>, and ends the call with its result.
+;; In: X = the unit, UnitIo::Request = the request
 CallAttached:
     txa
-    ldx Request
+    ldx UnitIo::Request
     jsr BiosAttachedDriver
-    jmp Finish
+    jmp UnitIo::Finish
 
     ; The remote units are one device: unit 7 is unit 8.
 NotAttached:
@@ -379,20 +387,20 @@ FindDevice:
     cmp #>CHARACTER_DEVICE
     beq Characters
 
-;; Calls a unit's driver routine, from <UnitTable>, for <UNITCLEAR at UnitIo::CspUCLEAR> and
-;; <UNITSTATUS at UnitIo::CspUSTAT>, and ends the call with its result.
-;; In: X = the unit, Y = the unit times 2, Request = the request
+;; Calls a unit's driver routine, from <UnitTable>, for <UNITCLEAR at StandardProcedures::UnitClear> and
+;; <UNITSTATUS at StandardProcedures::UnitStatus>, and ends the call with its result.
+;; In: X = the unit, Y = the unit times 2, UnitIo::Request = the request
 CallDriver:
     txa
-    ldx Request
+    ldx UnitIo::Request
     jsr BiosUnitDriver
-    jmp Finish
+    jmp UnitIo::Finish
 
     ; A disk: reset its drive.
 Disk:
     lda UnitTable,y
     jsr BiosDiskInit
-    jmp Finish
+    jmp UnitIo::Finish
 
     ; A character device. X = REQUEST_CLEAR, as for a driver; the BIOS's routines do not read it.
 Characters:
@@ -416,7 +424,7 @@ Characters:
     lda BootAddresses+4
     pha
     jsr BiosConsoleInit
-    jmp Finish
+    jmp UnitIo::Finish
 
     ; The printer: clear its DLE state, and reset it.
 NotConsole:
@@ -425,14 +433,14 @@ NotConsole:
     lda #0
     sta DleFlags+UNIT_PRINTER
     jsr BiosPrinterInit
-    jmp Finish
+    jmp UnitIo::Finish
 
     ; The remote line.
 NotPrinter:
     cpy #UNIT_REMOTE_OUT
     bne NotRemote
     jsr BiosRemoteInit
-    jmp Finish
+    jmp UnitIo::Finish
 
     ; The graphics screen: reset it, and fall into IO_NO_DEVICE.
 NotRemote:
@@ -441,11 +449,15 @@ NotRemote:
     jsr BiosGraphicsInit
 NoDevice:
     ldx #IO_NO_DEVICE
-    jmp Finish
+    jmp UnitIo::Finish
 .endproc
+.endscope
 
-;; Ends a <UNITREAD at UnitIo::CspUREAD> or <UNITWRITE at UnitIo::CspUWRITE>: puts <IoControl> back, and ends the call
-;; as <Finish> does.
+; UnitIo: FinishRestoring and PushUnitArguments.
+.scope UnitIo continued
+
+;; Ends a <UNITREAD at StandardProcedures::UnitRead> or <UNITWRITE at StandardProcedures::UnitWrite>: puts <IoControl>
+;; back, and ends the call as <Finish> does.
 ;; In: X = the I/O result
 ;; Also: UNTOKX (WK11)
 FinishRestoring:
@@ -459,9 +471,9 @@ Finish:
     stx SysIoResult
     jmp Fetch::Skip2
 
-;; Pushes a <UNITREAD at UnitIo::CspUREAD> or <UNITWRITE at UnitIo::CspUWRITE>'s arguments again, under the return
-;; address, for a driver that takes them from the stack: the control word, the unit (or the drive), the buffer, the byte
-;; count and, on top, the block.
+;; Pushes a <UNITREAD at StandardProcedures::UnitRead> or <UNITWRITE at StandardProcedures::UnitWrite>'s arguments
+;; again, under the return address, for a driver that takes them from the stack: the control word, the unit (or the
+;; drive), the buffer, the byte count and, on top, the block.
 ;; In: X = the unit, or for a disk its drive
 ;; Keeps: X, Y
 .proc PushUnitArguments
@@ -501,44 +513,49 @@ Finish:
     rts
 .endproc
 
-;; Ends a character unit's <UNITREAD at UnitIo::CspUREAD> or <UNITWRITE at UnitIo::CspUWRITE>, whose I/O result
-;; <StoreIoResult> has recorded: puts <IoControl> back and runs the next p-code.
+;; Ends a character unit's <UNITREAD at StandardProcedures::UnitRead> or <UNITWRITE at StandardProcedures::UnitWrite>,
+;; whose I/O result <StoreIoResult> has recorded: puts <IoControl> back and runs the next p-code.
 FinishCharacters:
     lda SavedIoControl
     sta IoControl
     jmp Fetch::Skip2
 
-;; <UREAD at UnitIo::CspUREAD>, the standard procedure <UNITREAD at UnitIo::CspUREAD>: reads, as
-;; <UWRITE at UnitIo::CspUWRITE> writes.
+.endscope
+
+; StandardProcedures: UnitRead and UnitWrite.
+.scope StandardProcedures continued
+
+;; <UREAD at StandardProcedures::UnitRead>, the standard procedure <UNITREAD at StandardProcedures::UnitRead>: reads, as
+;; <UWRITE at StandardProcedures::UnitWrite> writes.
 ;; Also: UNITRD (WK11), UNITREAD (UCSD20, UCSD20IO), URD (UCSD20)
-.proc CspUREAD
+.proc UnitRead
     lda #REQUEST_READ
-    jmp CspUWRITE::Transfer
+    jmp StandardProcedures::UnitWrite::Transfer
 .endproc
 
-;; <UWRITE at UnitIo::CspUWRITE>, the standard procedure <UNITWRITE at UnitIo::CspUWRITE>: pops the control word, the
-;; block, the byte count, the buffer's address (two words, added) and the unit, and writes the buffer to the unit. A
-;; count of 0 or less does nothing.
+;; <UWRITE at StandardProcedures::UnitWrite>, the standard procedure <UNITWRITE at StandardProcedures::UnitWrite>: pops
+;; the control word, the block, the byte count, the buffer's address (two words, added) and the unit, and writes the
+;; buffer to the unit. A count of 0 or less does nothing.
 ;; Also: UNITWR (WK11), UNITWRITE (UCSD20, UCSD20IO), UWT (UCSD20)
-.proc CspUWRITE
+.proc UnitWrite
     lda #REQUEST_WRITE
 
-;; The transfer <UNITREAD at UnitIo::CspUREAD> and <UNITWRITE at UnitIo::CspUWRITE> share.
+;; The transfer <UNITREAD at StandardProcedures::UnitRead> and <UNITWRITE at StandardProcedures::UnitWrite> share.
 ;; In: A = the request, <REQUEST_READ> or <REQUEST_WRITE>
 ;; Also: UNITRW (WK11)
 Transfer:
     ; Keep the request, and IoControl to put back.
-    sta Request
+    sta UnitIo::Request
     ldy #1
-    sty Raw
-    sty NoLineFeed
+    sty UnitIo::Raw
+    sty UnitIo::NoLineFeed
     ldy IoControl
     sty SavedIoControl
 
     ; Pop the control word. Its bits 4 and 5 set IoControl's bits 0 and 1 for the call.
     pla
     tax
-    sta Control
+    sta UnitIo::Control
     lsr a
     lsr a
     lsr a
@@ -553,32 +570,32 @@ Transfer:
     txa
     and #CONTROL_RAW
     bne TakeNoLineFeed
-    sty Raw
+    sty UnitIo::Raw
 TakeNoLineFeed:
     txa
     and #CONTROL_NO_LINE_FEED
     bne TakeHighByte
-    sty NoLineFeed
+    sty UnitIo::NoLineFeed
 TakeHighByte:
     pla
-    sta Control+1
+    sta UnitIo::Control+1
 
     ; Pop the block.
     pla
-    sta Block
+    sta UnitIo::Block
     pla
-    sta Block+1
+    sta UnitIo::Block+1
 
     ; Pop the count, which must be above 0.
     pla
-    sta Count
+    sta UnitIo::Count
     beq LowByteZero
     pla
-    sta Count+1
+    sta UnitIo::Count+1
     bmi NothingToDo
     jmp TakeBuffer
 
-;; Nothing to do: drops the buffer's address and the unit, and ends the call, leaving IoControl changed.
+;; Nothing to do: drops the buffer's address and the unit, and ends the call, leaving <IoControl> changed.
 ;; Also: UNTERX (WK11)
 NothingToDo:
     pla
@@ -592,7 +609,7 @@ LowByteZero:
     pla
     beq NothingToDo
     bmi NothingToDo
-    sta Count+1
+    sta UnitIo::Count+1
 
     ; Pop the buffer's address: a word, plus a word.
 TakeBuffer:
@@ -610,20 +627,20 @@ TakeBuffer:
 
     ; Pop the unit and check it.
     pla
-    sta Unit
+    sta UnitIo::Unit
     tax
     pla
     txa
-    jsr CheckUnit
+    jsr UnitIo::CheckUnit
     and #ATTACHED_UNIT
     beq NotAttached
 
     ; An attached driver's unit: call it, with the arguments on the stack.
-    jsr PushUnitArguments
+    jsr UnitIo::PushUnitArguments
     txa
-    ldx Request
+    ldx UnitIo::Request
     jsr BiosAttachedDriver
-    jmp FinishRestoring
+    jmp UnitIo::FinishRestoring
 
     ; A disk, a character device, or a driver's unit, which is called with the arguments on the stack?
 NotAttached:
@@ -634,23 +651,23 @@ NotAttached:
     beq Disk
     cmp #>CHARACTER_DEVICE
     beq Characters
-    jsr PushUnitArguments
+    jsr UnitIo::PushUnitArguments
     txa
-    ldx Request
+    ldx UnitIo::Request
     jsr BiosUnitDriver
-    jmp FinishRestoring
+    jmp UnitIo::FinishRestoring
 
     ; A disk: read or write its drive.
 Disk:
     ldx UnitTable,y
-    jsr PushUnitArguments
-    lda Request
+    jsr UnitIo::PushUnitArguments
+    lda UnitIo::Request
     bne WriteDisk
     jsr BiosDiskRead
-    jmp FinishRestoring
+    jmp UnitIo::FinishRestoring
 WriteDisk:
     jsr BiosDiskWrite
-    jmp FinishRestoring
+    jmp UnitIo::FinishRestoring
 
     ; A character device: UNIT_CONSOLE echoes what it reads.
 Characters:
@@ -659,57 +676,57 @@ Characters:
     bne SetEcho
     lda #0
 SetEcho:
-    sta NoEcho
+    sta UnitIo::NoEcho
 
     ; Take its write and read calls.
     txa
     asl a
     tax
     lda UnitWriters,x
-    sta Writer
+    sta UnitIo::Writer
     lda UnitWriters+1,x
-    sta Writer+1
+    sta UnitIo::Writer+1
     lda UnitReaders,x
-    sta Reader
+    sta UnitIo::Reader
     lda UnitReaders+1,x
-    sta Reader+1
+    sta UnitIo::Reader+1
 
     ; Without the call the request needs, the result is IO_BAD_REQUEST. (Echoing needs no check: only the console
     ; echoes, and it writes.)
-    lda Request
+    lda UnitIo::Request
     beq NeedReader
-    lda Writer+1
+    lda UnitIo::Writer+1
     bne Start
 BadRequest:
     ldx #IO_BAD_REQUEST
-    jmp FinishRestoring
+    jmp UnitIo::FinishRestoring
 NeedReader:
-    lda Reader+1
+    lda UnitIo::Reader+1
     beq BadRequest
 
     ; Transfer Count characters.
 Start:
-    ldx Count
+    ldx UnitIo::Count
     jmp CountDown
 
     ; Read a character into the buffer.
 NextCharacter:
-    lda Request
+    lda UnitIo::Request
     bne WriteNext
-    jsr ReadCharacter
+    jsr UnitIo::ReadCharacter
     ldx #0
     sta (Buffer,x)
 
     ; Unless raw, SysEofCharacter ends the read. UNIT_CONSOLE puts zeros in the rest of the buffer, from the
     ; end-of-file character on; any other unit leaves it there and stops.
-    ldy Raw
+    ldy UnitIo::Raw
     bne Echo
     cmp SysEofCharacter
     bne Echo
     ldy #UNIT_CONSOLE
-    cpy Unit
+    cpy UnitIo::Unit
     beq FillZeros
-    jmp FinishCharacters
+    jmp UnitIo::FinishCharacters
 FillZeros:
     lda #0
 NextZero:
@@ -718,24 +735,24 @@ NextZero:
     bne CountZero
     inc Buffer+1
 CountZero:
-    dec Count
+    dec UnitIo::Count
     bne NextZero
-    dec Count+1
+    dec UnitIo::Count+1
     bpl NextZero
-    jmp FinishCharacters
+    jmp UnitIo::FinishCharacters
 
     ; Echo it, if the unit echoes.
 Echo:
-    ldy NoEcho
+    ldy UnitIo::NoEcho
     bne Advance
-    jsr WriteExpanded
+    jsr UnitIo::WriteExpanded
     jmp Advance
 
     ; Write a character from the buffer.
 WriteNext:
     ldx #0
     lda (Buffer,x)
-    jsr WriteExpanded
+    jsr UnitIo::WriteExpanded
 
     ; Step to the next, until Count is done.
 Advance:
@@ -743,13 +760,17 @@ Advance:
     bne CountCharacter
     inc Buffer+1
 CountCharacter:
-    dec Count
+    dec UnitIo::Count
 CountDown:
     bne NextCharacter
-    dec Count+1
+    dec UnitIo::Count+1
     bpl NextCharacter
-    jmp FinishCharacters
+    jmp UnitIo::FinishCharacters
 .endproc
+.endscope
+
+; UnitIo: WriteExpanded, StoreIoResult, WriteCharacter and ReadCharacter.
+.scope UnitIo continued
 
 ;; Writes a character to a character unit through <Writer>. Unless <Raw>, a DLE is not written but noted in the unit's
 ;; <DleFlags> byte, and the count byte after it becomes its blanks; unless <NoLineFeed>, a carriage return

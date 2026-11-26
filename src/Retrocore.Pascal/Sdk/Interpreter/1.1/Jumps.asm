@@ -11,7 +11,7 @@ TRUE_BIT = 1
 ;; The jump table's word that a negative offset picks.
 Entry = Pointer
 
-;; FJP: pops a boolean, and jumps by the offset when it is false.
+;; Pops a boolean, and jumps by the offset when it is false.
 ;; Also: FJP (A2POSRM, UCSD20, WK11)
 IfFalse:
     ; Pop the boolean. True: on to the next p-code.
@@ -24,26 +24,26 @@ IfFalse:
 
     ; False: jump, as UJP does.
 
-;; UJP: jumps by the offset.
+;; Jumps by the offset.
 ;; Also: UJP (A2POSRM, UCSD20, WK11)
 Always:
-    ; A positive offset counts from the next p-code: add it to IPC, and step over the UJP.
+    ; A positive offset counts from the next p-code: add it to InstructionPointer, and step over the UJP.
     clc
     ldy #1
-    lda (IPC),y
+    lda (InstructionPointer),y
     bmi Long
-    adc IPC
-    sta IPC
+    adc InstructionPointer
+    sta InstructionPointer
     bcc Fetch::Skip2
-    inc IPC+1
+    inc InstructionPointer+1
     jmp Fetch::Skip2
 
-    ; A negative offset picks a word of the jump table, below JTAB: add it, with $FF as its high byte.
+    ; A negative offset picks a word of the jump table, below JumpTable: add it, with $FF as its high byte.
 Long:
-    adc JTAB
+    adc JumpTable
     sta Entry
     lda #$FF
-    adc JTAB+1
+    adc JumpTable+1
     sta Entry+1
 
     ; The word holds its own distance above the target.
@@ -51,11 +51,11 @@ Long:
     sec
     ldy #0
     sbc (Entry),y
-    sta IPC
+    sta InstructionPointer
     lda Entry+1
     iny
     sbc (Entry),y
-    sta IPC+1
+    sta InstructionPointer+1
     jmp Fetch::Next
 
 .endscope

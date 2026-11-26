@@ -586,13 +586,14 @@ Transferred:
     bne Continue
     plp
 
-;; Leaves with carry clear on success (or, entered at Error, set, with the error in DiskError), turning the motor off.
+;; Leaves with carry clear on success (or, entered at <Error>, set, with the error in <DiskError>), turning the motor
+;; off.
 ;; Also: WROK (WK11)
 Success:
     clc
     .byte $24                 ; BIT zero page: skips the next instruction for the code falling in
 
-;; Leaves with carry set and the error in DiskError, turning the motor off.
+;; Leaves with carry set and the error in <DiskError>, turning the motor off.
 ;; Also: WRNG (WK11)
 Error:
     sec

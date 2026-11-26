@@ -1,11 +1,16 @@
 ; retrocore: style=strict
-;; Integer arithmetic and <CHK at OpCHK>: the handlers for <ABI at OpABI>, <ADI at OpADI>, <NGI at OpNGI>,
-;; <SBI at OpSBI>, <MPI at OpMPI>, <SQI at OpSQI>, <DVI at OpDVI> and <MODI at OpMODI>, the multiply and divide they
-;; share with the array handlers, and <CHK at OpCHK>, the range check.
+;; Integer arithmetic and <CHK at Pcodes::CheckRange>: the handlers for <ABI at Pcodes::AbsoluteInteger>,
+;; <ADI at Pcodes::AddIntegers>, <NGI at Pcodes::NegateInteger>, <SBI at Pcodes::SubtractIntegers>,
+;; <MPI at Pcodes::MultiplyIntegers>, <SQI at Pcodes::SquareInteger>, <DVI at Pcodes::DivideIntegers> and
+;; <MODI at Pcodes::ModuloIntegers>, the multiply and divide they share with the array handlers, and
+;; <CHK at Pcodes::CheckRange>, the range check.
 
-;; <ABI at OpABI>: replaces the integer on top of the stack with its absolute value.
+; Pcodes: AbsoluteInteger, AddIntegers, NegateInteger and SubtractIntegers.
+.scope Pcodes continued
+
+;; <ABI at Pcodes::AbsoluteInteger>: replaces the integer on top of the stack with its absolute value.
 ;; Also: ABI (A2POSRM, UCSD20, WK11)
-.proc OpABI
+.proc AbsoluteInteger
     ; Pop the integer: X = its low byte, A = its high byte.
     pla
     tax
@@ -35,9 +40,9 @@ Negative:
     jmp Fetch::Skip1
 .endproc
 
-;; <ADI at OpADI>: pops two integers and pushes their sum.
+;; <ADI at Pcodes::AddIntegers>: pops two integers and pushes their sum.
 ;; Also: ADI (A2POSRM, UCSD20, WK11)
-.proc OpADI
+.proc AddIntegers
 
 ;; The integer that was on top.
 Addend = Pointer
@@ -67,9 +72,9 @@ Addend = Pointer
     jmp Fetch::Skip1
 .endproc
 
-;; <NGI at OpNGI>: replaces the integer on top of the stack with its two's complement.
+;; <NGI at Pcodes::NegateInteger>: replaces the integer on top of the stack with its two's complement.
 ;; Also: NGI (A2POSRM, UCSD20, WK11)
-.proc OpNGI
+.proc NegateInteger
     ; Negate the low byte, keeping it in X.
     pla
     eor #$FF
@@ -87,9 +92,9 @@ Addend = Pointer
     jmp Fetch::Skip1
 .endproc
 
-;; <SBI at OpSBI>: pops two integers and pushes the lower one less the top one.
+;; <SBI at Pcodes::SubtractIntegers>: pops two integers and pushes the lower one less the top one.
 ;; Also: SBI (A2POSRM, UCSD20, WK11)
-.proc OpSBI
+.proc SubtractIntegers
 
 ;; The integer that was on top, which is subtracted.
 Subtrahend = Pointer
@@ -118,11 +123,13 @@ Subtrahend = Pointer
     pha
     jmp Fetch::Skip1
 .endproc
+.endscope
 
 ;; Multiplies two 16-bit numbers into a 32-bit product, by 16 rounds of shifting the multiplier right and adding the
 ;; multiplicand to the product's high word for each 1 bit, then shifting the product right.
-;; In: Multiplicand = one number, Multiplier = the other
-;; Out: Product = the product's low word, ProductHigh = its high word, Multiplier = destroyed
+;; In: Multiply::Multiplicand = one number, Multiply::Multiplier = the other
+;; Out: Multiply::Product = the product's low word, Multiply::ProductHigh = its high word, Multiply::Multiplier =
+;;     destroyed
 ;; Keeps: Y
 ;; Also: MULSUB (WK11)
 .proc Multiply
@@ -170,12 +177,15 @@ Shift:
     rts
 .endproc
 
-;; <MPI at OpMPI>: pops two integers and pushes the low word of their product.
+; Pcodes: MultiplyIntegers and SquareInteger.
+.scope Pcodes continued
+
+;; <MPI at Pcodes::MultiplyIntegers>: pops two integers and pushes the low word of their product.
 ;;
 ;; The low word is the same for signed numbers as for unsigned ones, so it multiplies them as they are, except that
 ;; when both are negative it negates both first, which leaves the low word as it was.
 ;; Also: MPI (A2POSRM, UCSD20), MULPLY (WK11)
-.proc OpMPI
+.proc MultiplyIntegers
     ; Pop the top integer as the multiplier. Is it negative?
     pla
     sta Multiply::Multiplier
@@ -228,28 +238,29 @@ Calculate:
     jmp Fetch::Skip1
 .endproc
 
-;; <SQI at OpSQI>: replaces the integer on top of the stack with the low word of its square, by pushing a copy and
-;; running <MPI at OpMPI>.
+;; <SQI at Pcodes::SquareInteger>: replaces the integer on top of the stack with the low word of its square, by pushing
+;; a copy and running <MPI at Pcodes::MultiplyIntegers>.
 ;; Also: SQI (A2POSRM, UCSD20, WK11)
-.proc OpSQI
+.proc SquareInteger
     ; Push a copy of the integer on top.
     tsx
     lda Stack+2,x
     pha
     lda Stack+1,x
     pha
-    jmp OpMPI
+    jmp Pcodes::MultiplyIntegers
 .endproc
+.endscope
 
 ;; Divides one integer by another: makes both positive, remembering whether the quotient is negative, and divides
 ;; the magnitudes by shifting the divisor right a bit each round and subtracting it where it fits. A dividend
 ;; below 256 takes 8 rounds, and any other 16. Reports <ERROR_DIVIDE_BY_ZERO> when the divisor is 0.
-;; In: Divisor = the divisor, Remainder = the dividend
+;; In: Divide::Divisor = the divisor, Divide::Remainder = the dividend
 ;; Out:
-;;   Quotient = the magnitudes' quotient
-;;   Remainder = the magnitudes' remainder
-;;   QuotientSign = 0 when the quotient is positive, nonzero when it must be negated
-;;   Divisor = destroyed
+;;   Divide::Quotient = the magnitudes' quotient
+;;   Divide::Remainder = the magnitudes' remainder
+;;   Divide::QuotientSign = 0 when the quotient is positive, nonzero when it must be negated
+;;   Divide::Divisor = destroyed
 ;; Also: DIVIDE (WK11)
 .proc Divide
 
@@ -392,9 +403,12 @@ QuotientBit:
     rts
 .endproc
 
-;; <DVI at OpDVI>: pops a divisor and a dividend below it, and pushes their quotient, rounded toward 0.
+; Pcodes: DivideIntegers, ModuloIntegers and CheckRange.
+.scope Pcodes continued
+
+;; <DVI at Pcodes::DivideIntegers>: pops a divisor and a dividend below it, and pushes their quotient, rounded toward 0.
 ;; Also: DVI (A2POSRM, UCSD20, WK11)
-.proc OpDVI
+.proc DivideIntegers
     ; Pop the divisor and the dividend, and divide.
     pla
     sta Divide::Divisor
@@ -428,10 +442,10 @@ Push:
     jmp Fetch::Skip1
 .endproc
 
-;; <MODI at OpMODI>: pops a divisor and a dividend below it, and pushes the remainder of their magnitudes, which is
-;; never negative.
+;; <MODI at Pcodes::ModuloIntegers>: pops a divisor and a dividend below it, and pushes the remainder of their
+;; magnitudes, which is never negative.
 ;; Also: MOD (UCSD20), MODI (A2POSRM, WK11)
-.proc OpMODI
+.proc ModuloIntegers
     ; Pop the divisor and the dividend, and divide.
     pla
     sta Divide::Divisor
@@ -451,10 +465,10 @@ Push:
     jmp Fetch::Skip1
 .endproc
 
-;; <CHK at OpCHK>: pops an upper and a lower bound, and reports <ERROR_VALUE_RANGE> unless the integer below them, which
-;; it leaves on the stack, is between them, the bounds included.
+;; <CHK at Pcodes::CheckRange>: pops an upper and a lower bound, and reports <ERROR_VALUE_RANGE> unless the integer
+;; below them, which it leaves on the stack, is between them, the bounds included.
 ;; Also: CHK (A2POSRM, UCSD20, WK11)
-.proc OpCHK
+.proc CheckRange
 
 ;; The upper bound, which was on top.
 Upper = Pointer
@@ -522,3 +536,4 @@ InRange:
 OutOfRange:
     jmp ExecutionError::ValueRange
 .endproc
+.endscope

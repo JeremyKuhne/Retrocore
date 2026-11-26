@@ -1,11 +1,14 @@
 ; retrocore: style=strict
-;; Indirection, records and arrays, and packed fields: the handlers for <IND at OpIND>, INC, <IXA at OpIXA>,
-;; <IXP at OpIXP>, <LDP at OpLDP> and STP.
+;; Indirection, records and arrays, and packed fields: the handlers for <IND at Pcodes::LoadIndirect>, INC,
+;; <IXA at Pcodes::IndexArray>, <IXP at Pcodes::IndexPackedArray>, <LDP at Pcodes::LoadPackedField> and STP.
 
-;; <IND at OpIND>: replaces the address on top of the stack with the word at that address plus its big operand, a word
-;; offset.
+; Pcodes: LoadIndirect, IncrementField, IndexArray, IndexPackedArray, LoadPackedField and StorePackedField.
+.scope Pcodes continued
+
+;; <IND at Pcodes::LoadIndirect>: replaces the address on top of the stack with the word at that address plus its big
+;; operand, a word offset.
 ;; Also: IND (A2POSRM, UCSD20, WK11)
-.proc OpIND
+.proc LoadIndirect
 
 ;; The word's address.
 WordAddress = ProcedureNumber
@@ -33,7 +36,7 @@ WordAddress = ProcedureNumber
 
 ;; INC: adds its big operand, a word offset, to the address on top of the stack, as a field's address.
 ;; Also: INC (A2POSRM, UCSD20)
-.proc OpINC
+.proc IncrementField
     ; Add the operand's byte offset to the address, and push it back.
     ldy #1
     jsr GetBig
@@ -49,10 +52,10 @@ WordAddress = ProcedureNumber
     jmp Fetch::Skip2
 .endproc
 
-;; <IXA at OpIXA>: pops an index and an array's address below it, and pushes the element's address: the array's address
-;; plus the index times its big operand, the element's size in words.
+;; <IXA at Pcodes::IndexArray>: pops an index and an array's address below it, and pushes the element's address: the
+;; array's address plus the index times its big operand, the element's size in words.
 ;; Also: IXA (A2POSRM, UCSD20, WK11)
-.proc OpIXA
+.proc IndexArray
 
 ;; The index, which becomes the element's byte offset.
 Index = Multiply::Multiplicand
@@ -107,13 +110,14 @@ AddIndex:
     jmp Fetch::Skip2
 .endproc
 
-;; <IXP at OpIXP>: pops an index and the address of a packed array below it, and pushes what <LDP at OpLDP> and STP take
-;; for the element: the address of the word holding it, the field's width in bits, and the number of its lowest bit.
+;; <IXP at Pcodes::IndexPackedArray>: pops an index and the address of a packed array below it, and pushes what
+;; <LDP at Pcodes::LoadPackedField> and STP take for the element: the address of the word holding it, the field's width
+;; in bits, and the number of its lowest bit.
 ;;
-;; Its operands are two bytes: the elements in each word, and their width in bits. The lowest bit's number is
-;; pushed in both bytes of its word; <LDP at OpLDP> and STP read only the low byte.
+;; Its operands are two bytes: the elements in each word, and their width in bits. The lowest bit's number is pushed in
+;; both bytes of its word; <LDP at Pcodes::LoadPackedField> and STP read only the low byte.
 ;; Also: IXP (A2POSRM, UCSD20)
-.proc OpIXP
+.proc IndexPackedArray
 
 ;; The elements in each word, the divisor.
 ElementsPerWord = Divide::Divisor
@@ -132,10 +136,10 @@ WordLow = ProcedureNumber
 
     ; Read the operands, as words.
     ldy #1
-    lda (IPC),y
+    lda (InstructionPointer),y
     sta ElementsPerWord
     ldy #2
-    lda (IPC),y
+    lda (InstructionPointer),y
     sta FieldWidth
     lda #0
     sta ElementsPerWord+1
@@ -183,10 +187,10 @@ PushBit:
     jmp Fetch::Skip3
 .endproc
 
-;; <LDP at OpLDP>: pops a packed field's lowest bit number, its width and its word's address, as <IXP at OpIXP> pushes
-;; them, and pushes the field's value.
+;; <LDP at Pcodes::LoadPackedField>: pops a packed field's lowest bit number, its width and its word's address, as
+;; <IXP at Pcodes::IndexPackedArray> pushes them, and pushes the field's value.
 ;; Also: LDP (A2POSRM, UCSD20, WK11)
-.proc OpLDP
+.proc LoadPackedField
 
 ;; The number of the field's lowest bit, 0-15.
 RightBit = Procedure
@@ -263,10 +267,10 @@ Mask:
     jmp Fetch::Skip1
 .endproc
 
-;; STP: pops a value, then a packed field's lowest bit number, its width and its word's address, as <IXP at OpIXP>
-;; pushes them, and stores the value's low bits in the field.
+;; STP: pops a value, then a packed field's lowest bit number, its width and its word's address, as
+;; <IXP at Pcodes::IndexPackedArray> pushes them, and stores the value's low bits in the field.
 ;; Also: STP (A2POSRM, UCSD20, WK11)
-.proc OpSTP
+.proc StorePackedField
 
 ;; The value, cut to the width and shifted to the field's place.
 Value = Pointer
@@ -380,3 +384,4 @@ Store:
     sta (WordAddress),y
     jmp Fetch::Skip1
 .endproc
+.endscope

@@ -1,6 +1,6 @@
 ; retrocore: style=strict
-;; Segments: reading them in below <KP>, relocating their assembled procedures, counting their uses, and giving them
-;; back.
+;; Segments: reading them in below <ProgramStackTop>, relocating their assembled procedures, counting their uses, and
+;; giving them back.
 
 ; SegmentTable's entries, 6 bytes a segment, at these offsets.
 
@@ -8,8 +8,8 @@
 
 ; Assembled procedures.
 
-;; Where an assembled procedure's attributes, at these offsets from its <JTAB> as <ATTR_ENTER> is, start its relocation
-;; lists: the first list's count word, where a p-code procedure keeps <ATTR_EXIT>.
+;; Where an assembled procedure's attributes, at these offsets from its <JumpTable> as <ATTR_ENTER> is, start its
+;; relocation lists: the first list's count word, where a p-code procedure keeps <ATTR_EXIT>.
 ATTR_RELOCATION = -4
 
 ; Procedure dictionaries.
@@ -38,7 +38,7 @@ SEG_PROCEDURE_COUNT = 1
 ;; Relocates the words one of an assembled procedure's relocation lists names, by adding <Relocate::Amount> to each.
 ;;
 ;; A list is a count word, then that many self-relative pointers to the words, going down.
-;; In: Procedure = the list's count word, Amount = what to add
+;; In: Procedure = the list's count word, Relocate::Amount = what to add
 ;; Out: Procedure = the word below the list, the next list's count
 .proc Relocate
 
@@ -99,12 +99,13 @@ CountEntry:
     rts
 .endproc
 
-;; Reads a segment's code from its unit, as its <SegmentTable> entry places it, into memory taken below <KP>.
+;; Reads a segment's code from its unit, as its <SegmentTable> entry places it, into memory taken below
+;; <ProgramStackTop>.
 ;;
 ;; A disk drive's segment is read through <BiosDiskRead>, and any other unit's through <BiosUnitDriver>, which runs the
 ;; unit's <UnitTable> routine. A character device's is a system I/O error.
 ;; In: A = the segment
-;; Out: KP = where the code was read, SegmentBase = the same
+;; Out: ProgramStackTop = where the code was read, ReadSegment::SegmentBase = the same
 ;; Also: RDSEG (WK11)
 .proc ReadSegment
 
@@ -145,30 +146,30 @@ DiskUnit:
 PushDrive:
     pha
 
-    ; Take the segment's size below KP, if need be once the heap's directory is given back.
+    ; Take the segment's size below ProgramStackTop, if need be once the heap's directory is given back.
     lda SegmentTable + SEGMENT_SIZE,x
     sta Size
     lda SegmentTable + SEGMENT_SIZE + 1,x
     sta Size+1
-    lda KP
+    lda ProgramStackTop
     sec
     sbc Size
-    sta KP
-    lda KP+1
+    sta ProgramStackTop
+    lda ProgramStackTop+1
     sbc Size+1
-    sta KP+1
+    sta ProgramStackTop+1
     bcc Overflow
-    lda KP
-    sbc NP
-    lda KP+1
-    sbc NP+1
+    lda ProgramStackTop
+    sbc HeapTop
+    lda ProgramStackTop+1
+    sbc HeapTop+1
     bcs Room
     jsr FreeDirectory
     sec
-    lda KP
-    sbc NP
-    lda KP+1
-    sbc NP+1
+    lda ProgramStackTop
+    sbc HeapTop
+    lda ProgramStackTop+1
+    sbc HeapTop+1
     bcs Room
 
 ;; Reports a stack overflow: the segment would reach the heap.
@@ -176,12 +177,12 @@ PushDrive:
 Overflow:
     jmp ExecutionError::ResetForOverflow
 
-    ; Push the buffer, KP, the byte count and the first block.
+    ; Push the buffer, ProgramStackTop, the byte count and the first block.
 Room:
-    lda KP+1
+    lda ProgramStackTop+1
     sta SegmentBase+1
     pha
-    lda KP
+    lda ProgramStackTop
     sta SegmentBase
     pha
     lda Size+1
@@ -215,14 +216,15 @@ Done:
     rts
 .endproc
 
-;; Counts a use of a segment, reading it in below <KP> when it had none and relocating its assembled procedures.
+;; Counts a use of a segment, reading it in below <ProgramStackTop> when it had none and relocating its assembled
+;; procedures.
 ;;
-;; A data segment, with no block on disk, is given its size below <KP>. A code segment's assembled procedures have four
-;; relocation lists, below their enter words: words relocated by the globals (the data segment the procedure's
-;; <ATTR_LEXICAL_LEVEL> byte names, or else the globals' frame), by the segment's address, by the procedure's own, and
-;; by <InterpAddress>, for .INTERP.
+;; A data segment, with no block on disk, is given its size below <ProgramStackTop>. A code segment's assembled
+;; procedures have four relocation lists, below their enter words: words relocated by the globals (the data segment the
+;; procedure's <ATTR_LEXICAL_LEVEL> byte names, or else the globals' frame), by the segment's address, by the
+;; procedure's own, and by <InterpAddress>, for .INTERP.
 ;; In: A = the segment
-;; Out: Segment = the segment, where <FindProcedureIn> takes it
+;; Out: LoadSegment::Segment = the segment, where <FindProcedureIn> takes it
 ;; Also: LODSEG (WK11)
 .proc LoadSegment
 
@@ -235,7 +237,7 @@ DictionaryWord = Dictionary
 ;; Where <ReadSegment> read the segment.
 SegmentBase = ReturnAddress
 
-;; Where the globals are: the frame a call to the segment's outer block will build, or else <BASE>.
+;; Where the globals are: the frame a call to the segment's outer block will build, or else <GlobalFrame>.
 Globals = Work4
 
 ;; Where the assembled procedure being relocated starts.
@@ -261,11 +263,11 @@ CountUse:
 Counted:
     rts
 
-    ; Keep KP for ReleaseSegment, and count the use.
+    ; Keep ProgramStackTop for ReleaseSegmentUse, and count the use.
 Load:
-    lda KP
+    lda ProgramStackTop
     sta SegmentKp,y
-    lda KP+1
+    lda ProgramStackTop+1
     sta SegmentKp+1,y
     lda #1
     sta SegmentUses,y
@@ -278,36 +280,36 @@ Load:
     adc Pointer
     tax
 
-    ; A data segment has no block: give it its size below KP. Its address is 2 bytes below its data, so that the
-    ; word LDE, LAE and STE number 1 is its first.
+    ; A data segment has no block: give it its size below ProgramStackTop. Its address is 2 bytes below its data, so
+    ; that the word LDE, LAE and STE number 1 is its first.
     lda SegmentTable + SEGMENT_BLOCK,x
     bne ReadCode
     lda SegmentTable + SEGMENT_BLOCK + 1,x
     bne ReadCode
     sec
-    lda KP
+    lda ProgramStackTop
     sbc SegmentTable + SEGMENT_SIZE,x
-    sta KP
-    lda KP+1
+    sta ProgramStackTop
+    lda ProgramStackTop+1
     sbc SegmentTable + SEGMENT_SIZE + 1,x
-    sta KP+1
-    lda KP
+    sta ProgramStackTop+1
+    lda ProgramStackTop
     sec
     sbc #2
     sta SegmentAddresses,y
-    lda KP+1
+    lda ProgramStackTop+1
     sbc #0
     sta SegmentAddresses+1,y
     rts
 
-    ; A code segment: its dictionary will be its last word, just below KP. Read it.
+    ; A code segment: its dictionary will be its last word, just below ProgramStackTop. Read it.
 ReadCode:
     sec
-    lda KP
+    lda ProgramStackTop
     sbc #2
     sta SegmentAddresses,y
     sta DictionaryWord
-    lda KP+1
+    lda ProgramStackTop+1
     sbc #0
     sta SegmentAddresses+1,y
     sta DictionaryWord+1
@@ -326,7 +328,7 @@ ReadCode:
     dec DictionaryWord+1
 
     ; When procedure 1 is at lexical level 0, the segment's outer block, the globals will be the frame a call to it
-    ; builds below KP, as FindProcedure places it. Otherwise they are BASE's.
+    ; builds below ProgramStackTop, as FindProcedure places it. Otherwise they are GlobalFrame's.
 FindGlobals:
     jsr FollowSelfRelative
     ldy #ATTR_LEXICAL_LEVEL
@@ -342,11 +344,11 @@ FindGlobals:
 BelowData:
     sec
     ldy #0
-    lda KP
+    lda ProgramStackTop
     sbc (Procedure),y
     sta Globals
     iny
-    lda KP+1
+    lda ProgramStackTop+1
     sbc (Procedure),y
     sta Globals+1
     iny
@@ -366,9 +368,9 @@ BelowParameters:
 NextProcedure:
     jmp Procedures
 UseBase:
-    lda BASE
+    lda GlobalFrame
     sta Globals
-    lda BASE+1
+    lda GlobalFrame+1
     sta Globals+1
 
     ; Each procedure: only an assembled one, numbered 0, is relocated.
@@ -463,11 +465,11 @@ Done:
     rts
 .endproc
 
-;; Gives back a use of a segment: when its uses fall to 0, <KP> goes back to where it was before the segment was read.
-;; Segment 0, the system's, is never given back.
+;; Gives back a use of a segment: when its uses fall to 0, <ProgramStackTop> goes back to where it was before the
+;; segment was read. Segment 0, the system's, is never given back.
 ;; In: A = the segment
 ;; Also: UNLSEG (WK11)
-.proc ReleaseSegment
+.proc ReleaseSegmentUse
     asl a
     tax
     beq Done
@@ -487,16 +489,20 @@ CheckUnused:
     lda SegmentUses+1,x
     bne Done
     lda SegmentKp,x
-    sta KP
+    sta ProgramStackTop
     lda SegmentKp+1,x
-    sta KP+1
+    sta ProgramStackTop+1
 Done:
     rts
 .endproc
 
-;; <GSEG at CspGSEG>: counts a use of the segment on the stack, reading it in if need be.
+;; The standard procedures: the routine that runs each, as <CspTable> gives them for <Pcodes::CallStandardProcedure>.
+;; Each is named for what it does; the standard procedure's UCSD name is its old name.
+.scope StandardProcedures
+
+;; <GSEG at StandardProcedures::GetSegment>: counts a use of the segment on the stack, reading it in if need be.
 ;; Also: CSP21 (WK11), GETSEG (UCSD20)
-.proc CspGSEG
+.proc GetSegment
     pla
     tax
     pla
@@ -505,13 +511,14 @@ Done:
     jmp Fetch::Skip2
 .endproc
 
-;; <RSEG at CspRSEG>: gives back a use of the segment on the stack.
+;; <RSEG at StandardProcedures::ReleaseSegment>: gives back a use of the segment on the stack.
 ;; Also: CSP22 (WK11), RELSEG (UCSD20)
-.proc CspRSEG
+.proc ReleaseSegment
     pla
     tax
     pla
     txa
-    jsr ReleaseSegment
+    jsr ReleaseSegmentUse
     jmp Fetch::Skip2
 .endproc
+.endscope

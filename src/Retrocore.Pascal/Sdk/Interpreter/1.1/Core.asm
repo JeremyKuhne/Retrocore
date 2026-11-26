@@ -9,26 +9,27 @@
 .endproc
 
 ;; Reads a big operand: one byte for 0-127, or two, high byte first, when the first has bit 7 set.
-;; In: Y = the operand's offset from <IPC>
+;; In: Y = the operand's offset from <InstructionPointer>
 ;; Out:
 ;;   Offset = the operand times 2, the byte offset of the word it numbers
-;;   IPC = one more when the operand took two bytes, so the caller's <Fetch::Skip2> or <Fetch::Skip3> steps over both
+;;   InstructionPointer = one more when the operand took two bytes, so the caller's <Fetch::Skip2> or <Fetch::Skip3>
+;;     steps over both
 ;; Keeps: X, Y
 ;; Also: B (A2POSRM), EBIG2M (WK11)
 .proc GetBig
     ; One byte or two?
-    lda (IPC),y
+    lda (InstructionPointer),y
     bpl OneByte
 
-    ; Two: keep the first as the high byte, and step IPC on to the second.
+    ; Two: keep the first as the high byte, and step InstructionPointer on to the second.
     sta Offset+1
-    inc IPC
+    inc InstructionPointer
     bne LowByte
-    inc IPC+1
+    inc InstructionPointer+1
 
     ; Double the operand; doubling drops the first byte's bit 7.
 LowByte:
-    lda (IPC),y
+    lda (InstructionPointer),y
     asl a
     sta Offset
     rol Offset+1
@@ -43,8 +44,8 @@ OneByte:
     rts
 .endproc
 
-;; Finds the mark stack frame of the procedure X lexical levels out from the current one, by following static
-;; links up from <MP>.
+;; Finds the mark stack frame of the procedure X lexical levels out from the current one, by following static links up
+;; from <LocalFrame>.
 ;; In: X = how many levels out
 ;; Out: Frame = that procedure's frame
 .proc FindFrame
@@ -53,9 +54,9 @@ OneByte:
 LinkLow = Pointer
 
     ; Start at the current procedure.
-    lda MP
+    lda LocalFrame
     sta Frame
-    lda MP+1
+    lda LocalFrame+1
     sta Frame+1
     cpx #0
     beq Done
@@ -79,7 +80,7 @@ Done:
 
 ;; Gives the heap back down to the directory SYSTEM.PASCAL read onto it, if there is one, to make room for the
 ;; stack.
-;; Out: NP = <SysDirectory> when it was set, and SysDirectory = 0
+;; Out: HeapTop = <SysDirectory> when it was set, and SysDirectory = 0
 ;; Keeps: Y
 .proc FreeDirectory
     ; Is there a directory?
@@ -89,11 +90,11 @@ Done:
     bne Free
     rts
 
-    ; Put NP back where the directory starts, and forget it.
+    ; Put HeapTop back where the directory starts, and forget it.
 Free:
-    sta NP
+    sta HeapTop
     lda SysDirectory+1
-    sta NP+1
+    sta HeapTop+1
     lda #0
     sta SysDirectory
     lda #0

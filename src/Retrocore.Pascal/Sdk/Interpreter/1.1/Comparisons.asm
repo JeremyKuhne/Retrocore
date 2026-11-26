@@ -1,7 +1,8 @@
 ; retrocore: style=strict
-;; Comparisons: the handlers for <EQU at OpEQU>, <NEQ at OpNEQ>, <LES at OpLES>, <LEQ at OpLEQ>, <GRT at OpGRT> and
-;; <GEQ at OpGEQ>, which compare reals, strings, booleans, sets and arrays, and for their integer forms,
-;; <EQUI at OpEQUI> to <GEQI at OpGEQI>.
+;; Comparisons: the handlers for <EQU at Pcodes::Equal>, <NEQ at Pcodes::NotEqual>, <LES at Pcodes::Less>,
+;; <LEQ at Pcodes::LessOrEqual>, <GRT at Pcodes::Greater> and <GEQ at Pcodes::GreaterOrEqual>, which compare reals,
+;; strings, booleans, sets and arrays, and for their integer forms, <EQUI at Pcodes::EqualIntegers> to
+;; <GEQI at Pcodes::GreaterOrEqualIntegers>.
 ;;
 ;; Each handler loads its kind of comparison, and they share the rest. The comparison finds whether the lower
 ;; operand is less than, equal to or greater than the top one, and pushes true when that outcome is in the kind.
@@ -39,51 +40,55 @@ REALS_IN_ORDER = 1
 ;; Both reals are negative, so the outcome of comparing their bytes is reversed. Any negative value would do.
 REALS_REVERSED = $F4
 
-;; <NEQ at OpNEQ>: compares the two operands on the stack for inequality.
+; Pcodes: the comparisons, of every type and of integers.
+.scope Pcodes continued
+
+;; <NEQ at Pcodes::NotEqual>: compares the two operands on the stack for inequality.
 ;; Also: NEQ (A2POSRM, UCSD20, WK11), NEQBOOL (A2POSRM), NEQBYT (A2POSRM), NEQPOWR (A2POSRM), NEQREAL (A2POSRM),
 ;;   NEQSTR (A2POSRM), NEQWORD (A2POSRM)
-.proc OpNEQ
+.proc NotEqual
     lda #COMPARISON_NOT_EQUAL
-    bpl OpEQU::Compare
+    bpl Pcodes::Equal::Compare
 .endproc
 
-;; <GRT at OpGRT>: compares whether the lower operand on the stack is greater than the top one.
+;; <GRT at Pcodes::Greater>: compares whether the lower operand on the stack is greater than the top one.
 ;; Also: GRT (A2POSRM, UCSD20, WK11), GRTBOOL (A2POSRM), GRTBYT (A2POSRM), GRTSTR (A2POSRM), GTRREAL (A2POSRM)
-.proc OpGRT
+.proc Greater
     lda #COMPARISON_GREATER
-    bpl OpEQU::Compare
+    bpl Pcodes::Equal::Compare
 .endproc
 
-;; <LES at OpLES>: compares whether the lower operand on the stack is less than the top one.
+;; <LES at Pcodes::Less>: compares whether the lower operand on the stack is less than the top one.
 ;; Also: LES (A2POSRM, UCSD20, WK11), LESBOOL (A2POSRM), LESBYT (A2POSRM), LESREAL (A2POSRM), LESSTR (A2POSRM)
-.proc OpLES
+.proc Less
     lda #COMPARISON_LESS
-    bpl OpEQU::Compare
+    bpl Pcodes::Equal::Compare
 .endproc
 
-;; <GEQ at OpGEQ>: compares whether the lower operand on the stack is greater than or equal to the top one.
+;; <GEQ at Pcodes::GreaterOrEqual>: compares whether the lower operand on the stack is greater than or equal to the top
+;; one.
 ;; Also: GEQ (A2POSRM, WK11), GEQBOOL (A2POSRM), GEQBYT (A2POSRM), GEQPOWR (A2POSRM), GEQREAL (A2POSRM),
 ;;   GEQSTR (A2POSRM)
-.proc OpGEQ
+.proc GreaterOrEqual
     lda #COMPARISON_GREATER_OR_EQUAL
-    bpl OpEQU::Compare
+    bpl Pcodes::Equal::Compare
 .endproc
 
-;; <LEQ at OpLEQ>: compares whether the lower operand on the stack is less than or equal to the top one.
+;; <LEQ at Pcodes::LessOrEqual>: compares whether the lower operand on the stack is less than or equal to the top one.
 ;; Also: LEQ (A2POSRM, UCSD20, WK11), LEQBOOL (A2POSRM), LEQBYT (A2POSRM), LEQPOWR (A2POSRM), LEQREAL (A2POSRM),
 ;;   LEQSTR (A2POSRM)
-.proc OpLEQ
+.proc LessOrEqual
     lda #COMPARISON_LESS_OR_EQUAL
-    bpl OpEQU::Compare
+    bpl Pcodes::Equal::Compare
 .endproc
 
-;; <EQU at OpEQU>: compares the two operands on the stack for equality, and pushes the boolean.
+;; <EQU at Pcodes::Equal>: compares the two operands on the stack for equality, and pushes the boolean.
 ;;
 ;; Its operand is the type it compares, <COMPARE_REAL> to <COMPARE_WORDS>, followed for arrays by their size.
 ;; Entry: Compare = makes the comparison in A instead, a kind such as <COMPARISON_LESS_OR_EQUAL>
 ;; Also: EQU (A2POSRM, UCSD20), EQUBOOL (A2POSRM), EQUBYT (A2POSRM), EQUPOWR (A2POSRM), EQUREAL (A2POSRM),
 ;;   EQUSTR (A2POSRM), EQUWORD (A2POSRM)
-.proc OpEQU
+.proc Equal
 
 ;; The top operand's address, or the character a string is.
 Top = Pointer2
@@ -118,7 +123,7 @@ Compare:
 
     ; Go to the comparison for the type.
     ldy #1
-    lda (IPC),y
+    lda (InstructionPointer),y
     cmp #COMPARE_REAL
     bne NotReal
     jmp CompareReals
@@ -153,7 +158,7 @@ Words:
     ldy #2
     jsr GetBig
 
-    ; Pop the addresses, and step IPC past the type. Fetch::Skip2 steps past the opcode and the size.
+    ; Pop the addresses, and step InstructionPointer past the type. Fetch::Skip2 steps past the opcode and the size.
 CompareArrays:
     pla
     sta Top
@@ -163,9 +168,9 @@ CompareArrays:
     sta Lower
     pla
     sta Lower+1
-    inc IPC
+    inc InstructionPointer
     bne CountBytes
-    inc IPC+1
+    inc InstructionPointer+1
 CountBytes:
     ldy #0
     ldx Count
@@ -359,38 +364,40 @@ CompareBooleans:
     jmp Greater
 .endproc
 
-;; <LESI at OpLESI>: compares whether the lower integer on the stack is less than the top one.
+;; <LESI at Pcodes::LessIntegers>: compares whether the lower integer on the stack is less than the top one.
 ;; Also: LESI (A2POSRM, WK11)
-.proc OpLESI
+.proc LessIntegers
     lda #COMPARISON_LESS
-    bpl OpNEQI::Compare
+    bpl Pcodes::NotEqualIntegers::Compare
 .endproc
 
-;; <GRTI at OpGRTI>: compares whether the lower integer on the stack is greater than the top one.
+;; <GRTI at Pcodes::GreaterIntegers>: compares whether the lower integer on the stack is greater than the top one.
 ;; Also: GRTI (A2POSRM, WK11)
-.proc OpGRTI
+.proc GreaterIntegers
     lda #COMPARISON_GREATER
-    bpl OpNEQI::Compare
+    bpl Pcodes::NotEqualIntegers::Compare
 .endproc
 
-;; <LEQI at OpLEQI>: compares whether the lower integer on the stack is less than or equal to the top one.
+;; <LEQI at Pcodes::LessOrEqualIntegers>: compares whether the lower integer on the stack is less than or equal to the
+;; top one.
 ;; Also: LEQI (A2POSRM, WK11)
-.proc OpLEQI
+.proc LessOrEqualIntegers
     lda #COMPARISON_LESS_OR_EQUAL
-    bpl OpNEQI::Compare
+    bpl Pcodes::NotEqualIntegers::Compare
 .endproc
 
-;; <GEQI at OpGEQI>: compares whether the lower integer on the stack is greater than or equal to the top one.
+;; <GEQI at Pcodes::GreaterOrEqualIntegers>: compares whether the lower integer on the stack is greater than or equal to
+;; the top one.
 ;; Also: GEQI (A2POSRM, WK11)
-.proc OpGEQI
+.proc GreaterOrEqualIntegers
     lda #COMPARISON_GREATER_OR_EQUAL
-    bpl OpNEQI::Compare
+    bpl Pcodes::NotEqualIntegers::Compare
 .endproc
 
-;; <NEQI at OpNEQI>: compares the two integers on the stack for inequality, and pushes the boolean.
+;; <NEQI at Pcodes::NotEqualIntegers>: compares the two integers on the stack for inequality, and pushes the boolean.
 ;; Entry: Compare = makes the comparison in A instead, a kind such as <COMPARISON_LESS>
 ;; Also: NEQI (A2POSRM, WK11)
-.proc OpNEQI
+.proc NotEqualIntegers
 
 ;; The top integer.
 Top = Pointer2
@@ -400,7 +407,7 @@ Lower = Pointer
 
     lda #COMPARISON_NOT_EQUAL
 
-;; Makes the comparison in A, and pushes the boolean through <OpEQUI>'s outcomes.
+;; Makes the comparison in A, and pushes the boolean through <Pcodes::EqualIntegers>'s outcomes.
 ;; In: A = the kind
 Compare:
     sta Comparison
@@ -423,25 +430,25 @@ Compare:
     bne Differ
     lda Lower
     cmp Top
-    beq OpEQUI::Equal
+    beq Pcodes::EqualIntegers::Equal
 Differ:
-    bcc OpEQUI::Less
-    bcs OpEQUI::Greater
+    bcc Pcodes::EqualIntegers::Less
+    bcs Pcodes::EqualIntegers::Greater
 
     ; Yes: the negative one is the less.
 SignsDiffer:
     lda Lower+1
-    bmi OpEQUI::Less
-    bpl OpEQUI::Greater
+    bmi Pcodes::EqualIntegers::Less
+    bpl Pcodes::EqualIntegers::Greater
 .endproc
 
-;; <EQUI at OpEQUI>: compares the two integers on the stack for equality, and pushes the boolean.
+;; <EQUI at Pcodes::EqualIntegers>: compares the two integers on the stack for equality, and pushes the boolean.
 ;; Entry:
 ;;   Greater = pushes true when <Comparison> includes <COMPARISON_GREATER>
 ;;   Equal = pushes true when <Comparison> includes <COMPARISON_EQUAL>
 ;;   Less = pushes true when <Comparison> includes <COMPARISON_LESS>
 ;; Also: EQUI (A2POSRM, WK11)
-.proc OpEQUI
+.proc EqualIntegers
 
 ;; The top integer.
 Top = Pointer
@@ -504,3 +511,4 @@ PushFalse:
     pha
     jmp Fetch::Skip1
 .endproc
+.endscope

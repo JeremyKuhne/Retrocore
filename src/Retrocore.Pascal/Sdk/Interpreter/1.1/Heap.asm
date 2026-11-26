@@ -1,10 +1,14 @@
 ; retrocore: style=strict
-;; The heap: <NEW at CspNEW>, MARK and RELEASE, which move <NP>.
+;; The heap: <NEW at StandardProcedures::New>, MARK and RELEASE, which move <HeapTop>.
 
-;; <NEW at CspNEW>: pops a size in words, then a pointer variable's address; points the variable at <NP> and allocates
-;; the size there. Gives back the heap's directory first, and reports a stack overflow when <NP> passes <KP>.
+; StandardProcedures: New, MarkHeap and ReleaseHeap.
+.scope StandardProcedures continued
+
+;; <NEW at StandardProcedures::New>: pops a size in words, then a pointer variable's address; points the variable at
+;; <HeapTop> and allocates the size there. Gives back the heap's directory first, and reports a stack overflow when
+;; <HeapTop> passes <ProgramStackTop>.
 ;; Also: NEW (A2POSRM, UCSD20, WK11)
-.proc CspNEW
+.proc New
 
 ;; The size, in words and then in bytes.
 ;; Also: PCDSIZ (WK11)
@@ -24,40 +28,40 @@ Variable = Pointer2
     pla
     sta Variable+1
 
-    ; Point the variable at NP.
+    ; Point the variable at HeapTop.
     asl Size
     rol Size+1
     ldy #0
-    lda NP
+    lda HeapTop
     sta (Variable),y
     iny
-    lda NP+1
+    lda HeapTop+1
     sta (Variable),y
 
-    ; Move NP up past the allocation.
-    lda NP
+    ; Move HeapTop up past the allocation.
+    lda HeapTop
     clc
     adc Size
-    sta NP
-    lda NP+1
+    sta HeapTop
+    lda HeapTop+1
     adc Size+1
-    sta NP+1
+    sta HeapTop+1
 
-    ; Overflow unless KP is still at or above NP.
+    ; Overflow unless ProgramStackTop is still at or above HeapTop.
     sec
-    lda KP
-    sbc NP
-    lda KP+1
-    sbc NP+1
+    lda ProgramStackTop
+    sbc HeapTop
+    lda ProgramStackTop+1
+    sbc HeapTop+1
     bcs Done
     jmp ExecutionError::ResetForOverflow
 Done:
     jmp Fetch::Skip2
 .endproc
 
-;; MARK: pops a pointer variable's address, and stores <NP> in it. Gives back the heap's directory first.
+;; MARK: pops a pointer variable's address, and stores <HeapTop> in it. Gives back the heap's directory first.
 ;; Also: MARK (UCSD20), MRK (A2POSRM, WK11)
-.proc CspMRK
+.proc MarkHeap
 
 ;; The pointer variable's address.
 Variable = Pointer
@@ -69,35 +73,35 @@ Variable = Pointer
     pla
     sta Variable+1
 
-    ; Store NP in it.
+    ; Store HeapTop in it.
     ldy #0
-    lda NP
+    lda HeapTop
     sta (Variable),y
     iny
-    lda NP+1
+    lda HeapTop+1
     sta (Variable),y
     jmp Fetch::Skip2
 .endproc
 
-;; RELEASE: pops a pointer variable's address, and moves <NP> back to where the variable points, forgetting the heap's
-;; directory.
+;; RELEASE: pops a pointer variable's address, and moves <HeapTop> back to where the variable points, forgetting the
+;; heap's directory.
 ;; Also: RELEASE (UCSD20), RLS (A2POSRM, WK11)
-.proc CspRLS
+.proc ReleaseHeap
 
 ;; The pointer variable's address.
 Variable = Pointer
 
-    ; Pop the address, and move NP to the variable's value.
+    ; Pop the address, and move HeapTop to the variable's value.
     pla
     sta Variable
     pla
     sta Variable+1
     ldy #0
     lda (Variable),y
-    sta NP
+    sta HeapTop
     iny
     lda (Variable),y
-    sta NP+1
+    sta HeapTop+1
 
     ; Forget the directory.
     lda #0
@@ -106,3 +110,4 @@ Variable = Pointer
     sta SysDirectory+1
     jmp Fetch::Skip2
 .endproc
+.endscope

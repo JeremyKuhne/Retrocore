@@ -145,7 +145,7 @@ CardId07:
     CardId CardId07, CARD_PASCAL_FIXED, $18
     CardId CardId07, CARD_PARALLEL, $48
 
-;; Finds the type whose two bytes the ROM has, from CARD_PARALLEL down; no match leaves X = CARD_UNKNOWN.
+;; Finds the type whose two bytes the ROM has, from <CARD_PARALLEL> down; no match leaves X = <CARD_UNKNOWN>.
 ;; Also: SKIPIORTS (A2PBIOS)
 Identify:
     ldx #CARD_PARALLEL
@@ -180,7 +180,7 @@ Matched:
     bne Record
     ldx #CARD_PASCAL_FIRMWARE
 
-;; Records the type: slot n's is at SlotTypes + n - 1.
+;; Records the type: slot n's is at <SlotTypes> + n - 1.
 ;; Also: STOR1 (A2PBIOS)
 Record:
     ldy SlotRom+1
@@ -243,7 +243,7 @@ CopyPointers:
     lda #CONSOLE_CARD_READY
     sta ConsoleCardFlag
 
-;; Goes on to Restart.
+;; Goes on to <Restart>.
 ;; Also: STARTUP (A2PBIOS)
 Done:
     jmp EnterRestart

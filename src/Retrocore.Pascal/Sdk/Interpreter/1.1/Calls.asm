@@ -5,22 +5,23 @@
 ; Mark stack frames: what a call keeps in the frame it builds, at these offsets from the frame (MSCW_STATIC_LINK,
 ; at 0, is in Constants.asm). Each is a word but MSCW_STACK, a byte.
 
-; A procedure's attributes, at these offsets from its JTAB, at the end of its code. The words below JTAB are
+; A procedure's attributes, at these offsets from its JumpTable, at the end of its code. The words below JumpTable are
 ; self-relative: each holds how far below itself the address it means is.
 
 ; Procedure dictionaries.
 
-;; Where a segment's procedure dictionary, at <SEG>, keeps the segment's number, a byte.
+;; Where a segment's procedure dictionary, at <ProcedureDictionary>, keeps the segment's number, a byte.
 SEG_SEGMENT_NUMBER = 0
 
 ;; <FindProcedure::Segment>'s value for a procedure in the current segment, which <FindProcedure> tests by bit 7.
 NO_SEGMENT = $FF
 
 ;; Finds a procedure of a segment in memory, and enters it as <FindProcedure> does.
-;; In: ProcedureNumber = the procedure, FindProcedure::Segment = its segment, which <OpCXP> or <LoadSegment> sets
+;; In: ProcedureNumber = the procedure, FindProcedure::Segment = its segment, which <Pcodes::CallExternalProcedure> or
+;;     <LoadSegment> sets
 ;; Out:
 ;;   Procedure = its attributes, from <ATTR_DATA_SIZE>, for a p-code procedure
-;;   Mark = its frame, as <MP>, with its static link still to set
+;;   Mark = its frame, as <LocalFrame>, with its static link still to set
 ;; Also: CALLX (WK11)
 .proc FindProcedureIn
     ; Keep the return address, from over the parameters.
@@ -42,40 +43,43 @@ NO_SEGMENT = $FF
     jmp FindProcedure::Search
 .endproc
 
-;; Finds a procedure of the current segment, steps <IPC> past the call, and enters the procedure.
+;; Finds a procedure of the current segment, steps <InstructionPointer> past the call, and enters the procedure.
 ;;
 ;; An assembled procedure is jumped to, with <FindProcedure::NativeReturn> as its return address, and FindProcedure does
-;; not return. For a p-code procedure, FindProcedure builds its mark stack frame below <KP>, pulls its parameters from
-;; the stack into the frame's locals, makes it the current procedure (<MP>, <JTAB>, <SEG>, <IPC> and <KP>, and SYSCOM's
-;; copies) and returns.
-;; In: ProcedureNumber = the procedure, IPC = the 2-byte call (or a 3-byte <CXP at OpCXP>, already stepped once)
+;; not return. For a p-code procedure, FindProcedure builds its mark stack frame below <ProgramStackTop>, pulls its
+;; parameters from the stack into the frame's locals, makes it the current procedure (<LocalFrame>, <JumpTable>,
+;; <ProcedureDictionary>, <InstructionPointer> and <ProgramStackTop>, and SYSCOM's copies) and returns.
+;; In: ProcedureNumber = the procedure, InstructionPointer = the 2-byte call (or a 3-byte <CXP at
+;;     Pcodes::CallExternalProcedure>, already stepped once)
 ;; Out:
 ;;   Procedure = its attributes, from <ATTR_DATA_SIZE>
-;;   Mark = its frame, as <MP>, with its static link still to set
+;;   Mark = its frame, as <LocalFrame>, with its static link still to set
 ;; Also: CALAXX (WK11)
 .proc FindProcedure
 
 ;; The procedure's segment, or <NO_SEGMENT> for the current one.
 Segment = Work1
 
-;; The dictionary of the procedure's segment, for <SEG> once the frame is built.
+;; The dictionary of the procedure's segment, for <ProcedureDictionary> once the frame is built.
 NewSeg = Result + 2
 
 ;; The procedure's word in the dictionary, then the attributes' enter word: each a self-relative pointer.
 DictionaryWord = Pointer
 
-;; <KP>, where the frame goes below.
+;; <ProgramStackTop>, where the frame goes below.
 FrameTop = Buffer
 
 ;; Where an assembled procedure starts.
 NativeEntry = Dictionary
 
-;; The word below the frame, which keeps the caller's <KP>.
+;; The word below the frame, which keeps the caller's <ProgramStackTop>.
 KpLink = Pointer2
 
-    .assert MP = BASE + MSCW_DYNAMIC_LINK && JTAB = BASE + MSCW_JTAB, "The frame keeps MP and JTAB as zero page does."
-    .assert SEG = BASE + MSCW_SEG && IPC = BASE + MSCW_IPC, "The frame keeps SEG and IPC as zero page does."
-    .assert MSCW_STACK = MSCW_IPC + 2, "The frame keeps the stack pointer after IPC."
+    .assert LocalFrame = GlobalFrame + MSCW_DYNAMIC_LINK, "The frame keeps LocalFrame as zero page does."
+    .assert JumpTable = GlobalFrame + MSCW_JTAB, "The frame keeps JumpTable as zero page does."
+    .assert ProcedureDictionary = GlobalFrame + MSCW_SEG, "The frame keeps ProcedureDictionary as zero page does."
+    .assert InstructionPointer = GlobalFrame + MSCW_IPC, "The frame keeps InstructionPointer as zero page does."
+    .assert MSCW_STACK = MSCW_IPC + 2, "The frame keeps the stack pointer after InstructionPointer."
 
     ; Keep the return address, from over the parameters.
     pla
@@ -84,28 +88,28 @@ KpLink = Pointer2
     sta ReturnAddress+1
 
     ; The current segment's dictionary.
-    lda SEG
+    lda ProcedureDictionary
     sta NewSeg
     sta DictionaryWord
-    lda SEG+1
+    lda ProcedureDictionary+1
     sta NewSeg+1
     sta DictionaryWord+1
     lda #NO_SEGMENT
     sta Segment
 
 Search:
-    lda KP
+    lda ProgramStackTop
     sta FrameTop
-    lda KP+1
+    lda ProgramStackTop+1
     sta FrameTop+1
 
-    ; Step IPC past the call.
-    lda IPC
+    ; Step InstructionPointer past the call.
+    lda InstructionPointer
     clc
     adc #2
-    sta IPC
+    sta InstructionPointer
     bcc FindWord
-    inc IPC+1
+    inc InstructionPointer+1
 
     ; The procedure's word is 2 bytes a procedure below the dictionary's last word.
 FindWord:
@@ -123,7 +127,7 @@ SecondTime:
     bcs FollowWord
     dec DictionaryWord+1
 
-    ; Follow it to the procedure's JTAB.
+    ; Follow it to the procedure's JumpTable.
 FollowWord:
     ldy #0
     sec
@@ -177,7 +181,8 @@ FollowEntry:
     pha
     jmp (NativeEntry)
 
-;; Where an assembled procedure's RTS returns to: runs the p-code after the call, as <IPC> already points there.
+;; Where an assembled procedure's RTS returns to: runs the p-code after the call, as <InstructionPointer> already points
+;; there.
 NativeReturn:
     jmp Fetch::Next
 
@@ -234,16 +239,16 @@ BelowFrame:
     ; It must stay above the heap, if need be once the heap's directory is given back.
     sec
     lda Mark
-    sbc NP
+    sbc HeapTop
     lda Mark+1
-    sbc NP+1
+    sbc HeapTop+1
     bcs Room
     jsr FreeDirectory
     sec
     lda Mark
-    sbc NP
+    sbc HeapTop
     lda Mark+1
-    sbc NP+1
+    sbc HeapTop+1
     bcs Room
 
 ;; Reports a stack overflow: the new frame would reach the heap.
@@ -251,11 +256,11 @@ BelowFrame:
 Overflow:
     jmp ExecutionError::ResetForOverflow
 
-    ; Keep the caller's MP, JTAB, SEG and IPC in the frame.
+    ; Keep the caller's LocalFrame, JumpTable, ProcedureDictionary and InstructionPointer in the frame.
 Room:
     ldy #MSCW_DYNAMIC_LINK
 KeepRegister:
-    lda BASE,y
+    lda GlobalFrame,y
     sta (Mark),y
     iny
     cpy #MSCW_STACK
@@ -300,30 +305,30 @@ CountParameter:
     sec
     lda DictionaryWord
     sbc (DictionaryWord),y
-    sta IPC
+    sta InstructionPointer
     lda DictionaryWord+1
     iny
     sbc (DictionaryWord),y
-    sta IPC+1
+    sta InstructionPointer+1
 
     ; Make it the current procedure.
     lda Procedure
     clc
     adc #ATTR_PROCEDURE_NUMBER - ATTR_DATA_SIZE
-    sta JTAB
+    sta JumpTable
     sta SysJtab
     lda Procedure+1
     adc #0
-    sta JTAB+1
+    sta JumpTable+1
     sta SysJtab+1
     lda Mark
-    sta MP
+    sta LocalFrame
     sta SysMp
     lda Mark+1
-    sta MP+1
+    sta LocalFrame+1
     sta SysMp+1
 
-    ; Keep the caller's KP in the word below the frame, and take KP down to it.
+    ; Keep the caller's ProgramStackTop in the word below the frame, and take ProgramStackTop down to it.
     lda Mark
     sec
     sbc #KP_LINK_SIZE
@@ -332,22 +337,22 @@ CountParameter:
     sbc #0
     sta KpLink+1
     ldy #0
-    lda KP
+    lda ProgramStackTop
     sta (KpLink),y
     iny
-    lda KP+1
+    lda ProgramStackTop+1
     sta (KpLink),y
     lda KpLink
-    sta KP
+    sta ProgramStackTop
     lda KpLink+1
-    sta KP+1
+    sta ProgramStackTop+1
 
     ; Its segment.
     lda NewSeg
-    sta SEG
+    sta ProcedureDictionary
     sta SysSeg
     lda NewSeg+1
-    sta SEG+1
+    sta ProcedureDictionary+1
     sta SysSeg+1
 
     ; Return past the caller's JSR.
@@ -358,30 +363,35 @@ Return:
     jmp (ReturnAddress)
 .endproc
 
-;; <CIP at OpCIP>: calls an intermediate procedure, whose static link is the frame of the latest active procedure one
-;; lexical level out.
+;; The p-code handlers: the routine that runs each opcode, as <OpcodeTable> gives them (and <Fetch>, which pushes an
+;; <SLDC> itself). Each is named for what its p-code does; the p-code's mnemonic, UCSD's and Apple's name for it, is its
+;; old name.
+.scope Pcodes
+
+;; <CIP at Pcodes::CallIntermediateProcedure>: calls an intermediate procedure, whose static link is the frame of the
+;; latest active procedure one lexical level out.
 ;; Also: CIP (A2POSRM, UCSD20)
-.proc OpCIP
+.proc CallIntermediateProcedure
 
 ;; The lexical level of the procedure whose frame the static link must be.
 ;; Also: MLEXLV (WK11)
 OuterLevel = Result + 4
 
-;; A frame on the way back through the dynamic links, whose <JTAB> and dynamic link are its caller's.
+;; A frame on the way back through the dynamic links, whose <JumpTable> and dynamic link are its caller's.
 ;; Also: TMSPTR (WK11)
 CallerFrame = Work2
 
-;; The <JTAB> of <CallerFrame>'s caller.
+;; The <JumpTable> of <CallerFrame>'s caller.
 CallerJtab = Work4
 
     ; Find the procedure and build its frame.
     ldy #1
-    lda (IPC),y
+    lda (InstructionPointer),y
     sta ProcedureNumber
     jsr FindProcedure
 
-;; Where <OpCXP> goes for a procedure above lexical level 0.
-;; In: Procedure = the attributes, from <ATTR_DATA_SIZE>, MP = Mark = the new frame
+;; Where <Pcodes::CallExternalProcedure> goes for a procedure above lexical level 0.
+;; In: Procedure = the attributes, from <ATTR_DATA_SIZE>, LocalFrame = Mark = the new frame
 ;; Also: CPCOMA (WK11)
 FindStaticLink:
     ldy #ATTR_LEXICAL_LEVEL - ATTR_DATA_SIZE
@@ -390,9 +400,9 @@ FindStaticLink:
     dec OuterLevel
 
     ; Go back from the new frame through the dynamic links.
-    lda MP
+    lda LocalFrame
     sta CallerFrame
-    lda MP+1
+    lda LocalFrame+1
     sta CallerFrame+1
     jmp CheckCaller
 NextFrame:
@@ -421,20 +431,21 @@ CheckCaller:
     ldy #MSCW_DYNAMIC_LINK
     lda (CallerFrame),y
     ldy #MSCW_STATIC_LINK
-    sta (MP),y
+    sta (LocalFrame),y
     ldy #MSCW_DYNAMIC_LINK + 1
     lda (CallerFrame),y
     ldy #MSCW_STATIC_LINK + 1
-    sta (MP),y
+    sta (LocalFrame),y
     jmp Fetch::Next
 .endproc
 
-;; <CLP at OpCLP>: calls a procedure local to the current one, whose static link is the caller's frame.
+;; <CLP at Pcodes::CallLocalProcedure>: calls a procedure local to the current one, whose static link is the caller's
+;; frame.
 ;; Also: CLP (A2POSRM, UCSD20)
-.proc OpCLP
+.proc CallLocalProcedure
     ; Find the procedure and build its frame.
     ldy #1
-    lda (IPC),y
+    lda (InstructionPointer),y
     sta ProcedureNumber
     jsr FindProcedure
 
@@ -450,30 +461,30 @@ CheckCaller:
     jmp Fetch::Next
 .endproc
 
-;; <CGP at OpCGP>: calls a global procedure, whose static link is <BASE>.
+;; <CGP at Pcodes::CallGlobalProcedure>: calls a global procedure, whose static link is <GlobalFrame>.
 ;; Also: CGP (A2POSRM, UCSD20)
-.proc OpCGP
+.proc CallGlobalProcedure
     ; Find the procedure and build its frame.
     ldy #1
-    lda (IPC),y
+    lda (InstructionPointer),y
     sta ProcedureNumber
     jsr FindProcedure
 
-    ; Its static link is BASE.
+    ; Its static link is GlobalFrame.
     ldy #MSCW_STATIC_LINK
-    lda BASE
+    lda GlobalFrame
     sta (Mark),y
-    lda BASE+1
+    lda GlobalFrame+1
     iny
     sta (Mark),y
     jmp Fetch::Next
 .endproc
 
-;; <CXP at OpCXP>: calls a procedure of another segment, loading the segment first unless it is segment 0, the system's,
-;; which stays in memory. A procedure at lexical level 0 or below is called as <CBP at OpCBP> calls one, and the others
-;; as <CIP at OpCIP> does.
+;; <CXP at Pcodes::CallExternalProcedure>: calls a procedure of another segment, loading the segment first unless it is
+;; segment 0, the system's, which stays in memory. A procedure at lexical level 0 or below is called as
+;; <CBP at Pcodes::CallBaseProcedure> calls one, and the others as <CIP at Pcodes::CallIntermediateProcedure> does.
 ;; Also: CXP (A2POSRM, UCSD20)
-.proc OpCXP
+.proc CallExternalProcedure
 
 ;; The segment, for <LoadSegment> and <FindProcedureIn>.
 ;; Also: SEGNO (WK11)
@@ -481,48 +492,49 @@ Segment = Work1
 
     ; The procedure and the segment.
     ldy #2
-    lda (IPC),y
+    lda (InstructionPointer),y
     sta ProcedureNumber
     ldy #1
-    lda (IPC),y
+    lda (InstructionPointer),y
     sta Segment
     beq StepIpc
     jsr LoadSegment
 
-    ; Step IPC past the extra operand byte: FindProcedureIn steps it past the other two.
+    ; Step InstructionPointer past the extra operand byte: FindProcedureIn steps it past the other two.
 StepIpc:
-    inc IPC
+    inc InstructionPointer
     bne Find
-    inc IPC+1
+    inc InstructionPointer+1
 Find:
     jsr FindProcedureIn
 
     ; Which call is it?
     ldy #ATTR_LEXICAL_LEVEL - ATTR_DATA_SIZE
     lda (Procedure),y
-    beq OpCBP::NewBase
-    bmi OpCBP::NewBase
-    jmp OpCIP::FindStaticLink
+    beq Pcodes::CallBaseProcedure::NewBase
+    bmi Pcodes::CallBaseProcedure::NewBase
+    jmp Pcodes::CallIntermediateProcedure::FindStaticLink
 .endproc
 
-;; <CBP at OpCBP>: calls a base procedure, an outer block, which becomes <BASE>. The old <BASE> is pushed before the
-;; frame keeps the stack pointer, so <RBP at OpRBP> finds it on top once it puts the stack back.
+;; <CBP at Pcodes::CallBaseProcedure>: calls a base procedure, an outer block, which becomes <GlobalFrame>. The old
+;; <GlobalFrame> is pushed before the frame keeps the stack pointer, so <RBP at Pcodes::ReturnFromBaseProcedure> finds
+;; it on top once it puts the stack back.
 ;; Also: CBP (A2POSRM, UCSD20)
-.proc OpCBP
+.proc CallBaseProcedure
     ; Find the procedure and build its frame.
     ldy #1
-    lda (IPC),y
+    lda (InstructionPointer),y
     sta ProcedureNumber
     jsr FindProcedure
 
-;; Where <OpCXP> goes for a procedure at lexical level 0 or below.
+;; Where <Pcodes::CallExternalProcedure> goes for a procedure at lexical level 0 or below.
 ;; In: Mark = the new frame
 ;; Also: CPCOMB (WK11)
 NewBase:
-    ; Push the old BASE, and keep the stack pointer that leaves.
-    lda BASE+1
+    ; Push the old GlobalFrame, and keep the stack pointer that leaves.
+    lda GlobalFrame+1
     pha
-    lda BASE
+    lda GlobalFrame
     pha
     tsx
     txa
@@ -531,78 +543,79 @@ NewBase:
 
     ; Its static link is the old base procedure's.
     ldy #MSCW_STATIC_LINK
-    lda (BASE),y
+    lda (GlobalFrame),y
     sta (Mark),y
     iny
-    lda (BASE),y
+    lda (GlobalFrame),y
     sta (Mark),y
 
-    ; It becomes BASE.
+    ; It becomes GlobalFrame.
     lda Mark
-    sta BASE
+    sta GlobalFrame
     sta SysBase
     lda Mark+1
-    sta BASE+1
+    sta GlobalFrame+1
     sta SysBase+1
     jmp Fetch::Next
 .endproc
 
-;; <RBP at OpRBP>: returns from a base procedure, giving back the old <BASE> that <CBP at OpCBP> pushed, and then as
-;; <RNP at OpRNP> does.
+;; <RBP at Pcodes::ReturnFromBaseProcedure>: returns from a base procedure, giving back the old <GlobalFrame> that
+;; <CBP at Pcodes::CallBaseProcedure> pushed, and then as <RNP at Pcodes::ReturnFromProcedure> does.
 ;; Also: RBP (A2POSRM, UCSD20, WK11)
-.proc OpRBP
-    ; Put the stack back, and pull the old BASE.
+.proc ReturnFromBaseProcedure
+    ; Put the stack back, and pull the old GlobalFrame.
     ldy #MSCW_STACK
-    lda (MP),y
+    lda (LocalFrame),y
     tax
     txs
     pla
-    sta BASE
+    sta GlobalFrame
     sta SysBase
     pla
-    sta BASE+1
+    sta GlobalFrame+1
     sta SysBase+1
-    jmp OpRNP::Unwind
+    jmp Pcodes::ReturnFromProcedure::Unwind
 .endproc
 
-;; <RNP at OpRNP>: returns from a procedure, pushing as many words of its result as the operand says, and giving back
-;; its segment when the caller's differs.
+;; <RNP at Pcodes::ReturnFromProcedure>: returns from a procedure, pushing as many words of its result as the operand
+;; says, and giving back its segment when the caller's differs.
 ;; Also: RNP (A2POSRM, UCSD20, WK11)
-.proc OpRNP
+.proc ReturnFromProcedure
 
-;; The word below the frame, which keeps the caller's <KP>.
+;; The word below the frame, which keeps the caller's <ProgramStackTop>.
 KpLink = Pointer
 
-;; The caller's <SEG>, from the frame.
+;; The caller's <ProcedureDictionary>, from the frame.
 CallerSeg = Pointer
 
     ; Put the stack back as the call left it.
     ldy #MSCW_STACK
-    lda (MP),y
+    lda (LocalFrame),y
     tax
     txs
 
-;; Where <RBP at OpRBP> goes on, once it has put the stack back and pulled the old <BASE>.
-;; In: MP = the frame to return from
+;; Where <RBP at Pcodes::ReturnFromBaseProcedure> goes on, once it has put the stack back and pulled the old
+;; <GlobalFrame>.
+;; In: LocalFrame = the frame to return from
 Unwind:
     ; Give back the stack below the frame.
-    lda MP
+    lda LocalFrame
     sec
     sbc #KP_LINK_SIZE
     sta KpLink
-    lda MP+1
+    lda LocalFrame+1
     sbc #0
     sta KpLink+1
     ldy #0
     lda (KpLink),y
-    sta KP
+    sta ProgramStackTop
     iny
     lda (KpLink),y
-    sta KP+1
+    sta ProgramStackTop+1
 
     ; Push the result's words, the first of the locals, from the last byte down.
     ldy #1
-    lda (IPC),y
+    lda (InstructionPointer),y
     asl a
     clc
     adc #MSCW_SIZE - 1
@@ -610,7 +623,7 @@ Unwind:
 PushByte:
     cpy #MSCW_SIZE - 1
     beq CheckSegment
-    lda (MP),y
+    lda (LocalFrame),y
     pha
     dey
     jmp PushByte
@@ -618,47 +631,48 @@ PushByte:
     ; Back to another segment? Then give back a use of this one.
 CheckSegment:
     ldy #MSCW_SEG
-    lda (MP),y
+    lda (LocalFrame),y
     sta CallerSeg
     iny
-    lda (MP),y
+    lda (LocalFrame),y
     sta CallerSeg+1
     ldy #SEG_SEGMENT_NUMBER
-    lda (SEG),y
+    lda (ProcedureDictionary),y
     cmp (CallerSeg),y
     beq RestoreCaller
-    jsr ReleaseSegment
+    jsr ReleaseSegmentUse
     lda CallerSeg
-    sta SEG
+    sta ProcedureDictionary
     sta SysSeg
     lda CallerSeg+1
-    sta SEG+1
+    sta ProcedureDictionary+1
     sta SysSeg+1
 
     ; Make the caller current again.
 RestoreCaller:
     ldy #MSCW_JTAB
-    lda (MP),y
-    sta JTAB
+    lda (LocalFrame),y
+    sta JumpTable
     sta SysJtab
     iny
-    lda (MP),y
-    sta JTAB+1
+    lda (LocalFrame),y
+    sta JumpTable+1
     sta SysJtab+1
     ldy #MSCW_IPC
-    lda (MP),y
-    sta IPC
+    lda (LocalFrame),y
+    sta InstructionPointer
     iny
-    lda (MP),y
-    sta IPC+1
+    lda (LocalFrame),y
+    sta InstructionPointer+1
     ldy #MSCW_DYNAMIC_LINK + 1
-    lda (MP),y
+    lda (LocalFrame),y
     tax
     dey
-    lda (MP),y
-    sta MP
+    lda (LocalFrame),y
+    sta LocalFrame
     sta SysMp
-    stx MP+1
+    stx LocalFrame+1
     stx SysMp+1
     jmp Fetch::Next
 .endproc
+.endscope

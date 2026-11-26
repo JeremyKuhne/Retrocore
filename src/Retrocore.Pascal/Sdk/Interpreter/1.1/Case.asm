@@ -1,7 +1,7 @@
 ; retrocore: style=strict
-;; <XJP at OpXJP>, the case jump.
+;; <XJP at Pcodes::CaseJump>, the case jump.
 
-; XJP's operands, from IPC once XJP has made it odd, so that they are word aligned.
+; XJP's operands, from InstructionPointer once XJP has made it odd, so that they are word aligned.
 
 ;; The case's lowest value, a word.
 XJP_MINIMUM = 1
@@ -15,10 +15,13 @@ XJP_DEFAULT = 5
 ;; The jump table: a word for each value from <XJP_MINIMUM>, holding its own distance above the value's code.
 XJP_TABLE = 7
 
-;; <XJP at OpXJP>: pops a value and jumps to its case through the jump table, or runs the <UJP at Jump::Always> after
-;; the bounds when the value is out of range. The bounds are signed.
+; Pcodes: CaseJump.
+.scope Pcodes continued
+
+;; <XJP at Pcodes::CaseJump>: pops a value and jumps to its case through the jump table, or runs the
+;; <UJP at Jump::Always> after the bounds when the value is out of range. The bounds are signed.
 ;; Also: XJP (A2POSRM, UCSD20)
-.proc OpXJP
+.proc CaseJump
 
 ;; The value.
 Value = Work4
@@ -26,10 +29,10 @@ Value = Work4
 ;; The value's jump table word.
 Entry = Work4
 
-    ; Make IPC odd, stepping over the pad byte when there is one, and pop the value.
+    ; Make InstructionPointer odd, stepping over the pad byte when there is one, and pop the value.
     lda #1
-    ora IPC
-    sta IPC
+    ora InstructionPointer
+    sta InstructionPointer
     pla
     sta Value
     pla
@@ -37,15 +40,15 @@ Entry = Work4
 
     ; Is it at least the minimum? Different signs: only when the value is positive.
     ldy #XJP_MINIMUM + 1
-    eor (IPC),y
+    eor (InstructionPointer),y
     bmi MinimumSign
-    lda (IPC),y
+    lda (InstructionPointer),y
     cmp Value+1
     bcc CheckMaximum
     bne OutOfRange
     dey
     lda Value
-    cmp (IPC),y
+    cmp (InstructionPointer),y
     bcs CheckMaximum
     bcc OutOfRange
 MinimumSign:
@@ -55,15 +58,15 @@ MinimumSign:
     ; Is it at most the maximum? Different signs: only when the value is negative.
 CheckMaximum:
     ldy #XJP_MAXIMUM + 1
-    lda (IPC),y
+    lda (InstructionPointer),y
     eor Value+1
     bmi MaximumSign
     lda Value+1
-    cmp (IPC),y
+    cmp (InstructionPointer),y
     bcc InRange
     bne OutOfRange
     dey
-    lda (IPC),y
+    lda (InstructionPointer),y
     cmp Value
     bcs InRange
     bcc OutOfRange
@@ -76,19 +79,19 @@ InRange:
     sec
     ldy #XJP_MINIMUM
     lda Value
-    sbc (IPC),y
+    sbc (InstructionPointer),y
     sta Value
     lda Value+1
     iny
-    sbc (IPC),y
+    sbc (InstructionPointer),y
     sta Value+1
     asl Value
     rol Value+1
-    lda IPC
+    lda InstructionPointer
     clc
     adc Value
     sta Entry
-    lda IPC+1
+    lda InstructionPointer+1
     adc Value+1
     sta Entry+1
     lda Entry
@@ -104,22 +107,23 @@ Jump:
     sec
     lda Entry
     sbc (Entry),y
-    sta IPC
+    sta InstructionPointer
     lda Entry+1
     iny
     sbc (Entry),y
-    sta IPC+1
+    sta InstructionPointer+1
     jmp Fetch::Next
 
-;; Runs the UJP after the table: the index is out of its range.
+;; Runs the <UJP> after the table: the index is out of its range.
 ;; Also: OUTBND (WK11)
 OutOfRange:
-    lda IPC
+    lda InstructionPointer
     clc
     adc #XJP_DEFAULT
-    sta IPC
+    sta InstructionPointer
     bcc Default
-    inc IPC+1
+    inc InstructionPointer+1
 Default:
     jmp Fetch::Next
 .endproc
+.endscope

@@ -1,75 +1,78 @@
 ; retrocore: style=strict
-;; Strings and packed arrays of characters: the handlers for <LPA at OpLPA>, <LSA at OpLSA>, <SAS at OpSAS> and
-;; <IXS at OpIXS>.
+;; Strings and packed arrays of characters: the handlers for <LPA at Pcodes::LoadPackedArrayAddress>,
+;; <LSA at Pcodes::LoadStringAddress>, <SAS at Pcodes::AssignString> and <IXS at Pcodes::IndexString>.
 
-;; <LPA at OpLPA>: pushes the address of the characters in its operand, a length byte and that many characters, and
-;; steps <IPC> past them.
+; Pcodes: LoadPackedArrayAddress, LoadStringAddress, AssignString and IndexString.
+.scope Pcodes continued
+
+;; <LPA at Pcodes::LoadPackedArrayAddress>: pushes the address of the characters in its operand, a length byte and that
+;; many characters, and steps <InstructionPointer> past them.
 ;; In: Y = 0, as <Fetch::Next> leaves it
 ;; Also: LPA (A2POSRM)
-.proc OpLPA
+.proc LoadPackedArrayAddress
     ; Step past the opcode, and read the length.
-    inc IPC
+    inc InstructionPointer
     bne ReadLength
-    inc IPC+1
+    inc InstructionPointer+1
 ReadLength:
-    lda (IPC),y
+    lda (InstructionPointer),y
     tax
 
     ; Step past the length, and push the characters' address.
-    inc IPC
+    inc InstructionPointer
     bne PushAddress
-    inc IPC+1
+    inc InstructionPointer+1
 PushAddress:
-    lda IPC+1
+    lda InstructionPointer+1
     pha
-    lda IPC
+    lda InstructionPointer
     pha
-    jmp OpLSA::SkipCharacters
+    jmp Pcodes::LoadStringAddress::SkipCharacters
 .endproc
 
-;; <LSA at OpLSA>: pushes the address of its operand, a string constant (a length byte and that many characters), and
-;; steps <IPC> past it.
+;; <LSA at Pcodes::LoadStringAddress>: pushes the address of its operand, a string constant (a length byte and that many
+;; characters), and steps <InstructionPointer> past it.
 ;; In: Y = 0, as <Fetch::Next> leaves it
-;; Entry: SkipCharacters = steps <IPC> past X characters and runs the next p-code
+;; Entry: SkipCharacters = steps <InstructionPointer> past X characters and runs the next p-code
 ;; Also: LCA (UCSD20), LSA (A2POSRM)
-.proc OpLSA
+.proc LoadStringAddress
     ; Step past the opcode, and push the string's address.
-    inc IPC
+    inc InstructionPointer
     bne PushAddress
-    inc IPC+1
+    inc InstructionPointer+1
 PushAddress:
-    lda IPC+1
+    lda InstructionPointer+1
     pha
-    lda IPC
+    lda InstructionPointer
     pha
 
     ; Read the length, and step past it.
-    lda (IPC),y
+    lda (InstructionPointer),y
     tax
-    inc IPC
+    inc InstructionPointer
     bne SkipCharacters
-    inc IPC+1
+    inc InstructionPointer+1
 
-;; Steps <IPC> past X characters and runs the next p-code.
+;; Steps <InstructionPointer> past X characters and runs the next p-code.
 ;; In: X = how many
 SkipCharacters:
     clc
     txa
-    adc IPC
-    sta IPC
+    adc InstructionPointer
+    sta InstructionPointer
     bcc Next
-    inc IPC+1
+    inc InstructionPointer+1
 Next:
     jmp Fetch::Next
 .endproc
 
-;; <SAS at OpSAS>: pops a string, or a character, and a string variable's address below it, and copies the string into
-;; the variable, or makes the character a string of 1 there. Its operand is the variable's largest length, and a longer
-;; string reports <ERROR_STRING_OVERFLOW>.
+;; <SAS at Pcodes::AssignString>: pops a string, or a character, and a string variable's address below it, and copies
+;; the string into the variable, or makes the character a string of 1 there. Its operand is the variable's largest
+;; length, and a longer string reports <ERROR_STRING_OVERFLOW>.
 ;;
 ;; A character is pushed as a word whose high byte is 0, which no string's address has.
 ;; Also: SAS (A2POSRM, UCSD20, WK11)
-.proc OpSAS
+.proc AssignString
     ; Pop the string and the variable, and read the largest length.
     pla
     sta Source
@@ -80,7 +83,7 @@ Next:
     pla
     sta Target+1
     ldy #1
-    lda (IPC),y
+    lda (InstructionPointer),y
 
     ; A character: the variable must hold at least 1. Store a length of 1 and the character.
     ldx Source+1
@@ -118,10 +121,10 @@ Overflow:
     jmp ExecutionError::StringOverflow
 .endproc
 
-;; <IXS at OpIXS>: checks the index on top of the stack against the string whose address is below it, leaving both
-;; there, and reports <ERROR_VALUE_RANGE> unless the index is from 1 to the string's length.
+;; <IXS at Pcodes::IndexString>: checks the index on top of the stack against the string whose address is below it,
+;; leaving both there, and reports <ERROR_VALUE_RANGE> unless the index is from 1 to the string's length.
 ;; Also: IXS (A2POSRM, UCSD20, WK11)
-.proc OpIXS
+.proc IndexString
 
 ;; The string.
 StringAddress = Pointer
@@ -149,3 +152,4 @@ OutOfRange:
 InRange:
     jmp Fetch::Skip1
 .endproc
+.endscope

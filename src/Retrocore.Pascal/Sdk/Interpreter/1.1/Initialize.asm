@@ -93,11 +93,12 @@ COPIED_TABLE_SIZE = 42
     .byte .strlen(text), text
 .endmacro
 
-;; Addresses <Initialize> reads, a word each. <UCLEAR at UnitIo::CspUCLEAR> reads <BootSyscom> too, as BootAddresses+4.
+;; Addresses <Initialize> reads, a word each. <UCLEAR at StandardProcedures::UnitClear> reads <BootSyscom> too, as
+;; BootAddresses+4.
 ;; Also: ADRHIM (WK11)
 BootAddresses:
 
-;; <MemoryTop>'s address, where <KP> and <MP> start.
+;; <MemoryTop>'s address, where <ProgramStackTop> and <LocalFrame> start.
 BootMemoryTop:
     .word MemoryTop
 
@@ -121,10 +122,10 @@ BootCspTable:
 BootOpcodeTable:
     .word OpcodeTable
 
-;; <OpXIT>'s address, which <Initialize> puts in <ResetHandler>, so that RESET leaves the system.
+;; <Pcodes::ExitSystem>'s address, which <Initialize> puts in <ResetHandler>, so that RESET leaves the system.
 ;; Also: ADRXIT (WK11)
 BootResetHandler:
-    .word OpXIT
+    .word Pcodes::ExitSystem
 
 ;; The reset vector as it was before <Initialize>'s NoSystemFile changed it.
 SavedResetVector:
@@ -222,7 +223,7 @@ TableEntry = Pointer
 ;; The segment dictionary entry being read.
 DictionaryEntry = Pointer2
 
-;; <KP> below segment 15, kept while segment 0 is loaded elsewhere.
+;; <ProgramStackTop> below segment 15, kept while segment 0 is loaded elsewhere.
 SavedKp = Comparison
 
 ;; Where <CopiedTableImage>'s bytes are while <Initialize> runs: in the language card, where <Restart> copied them from.
@@ -589,66 +590,68 @@ CountSegment:
     dex
     bne NextSegment
 
-    ; Start KP and MP at MemoryTop, and record it in SYSCOM.
+    ; Start ProgramStackTop and LocalFrame at MemoryTop, and record it in SYSCOM.
 StartSystem:
     lda BootMemoryTop
-    sta KP
-    sta MP
+    sta ProgramStackTop
+    sta LocalFrame
     sta SysMemoryTop
     lda BootMemoryTop+1
-    sta KP+1
-    sta MP+1
+    sta ProgramStackTop+1
+    sta LocalFrame+1
     sta SysMemoryTop+1
 
-    ; Read segment UNNAMED_SEGMENT in below KP, NP's high byte 0 leaving ReadSegment room for it.
+    ; Read segment UNNAMED_SEGMENT in below ProgramStackTop, HeapTop's high byte 0 leaving ReadSegment room for it.
     lda #0
-    sta NP+1
+    sta HeapTop+1
     lda #UNNAMED_SEGMENT
     jsr ReadSegment
 
-    ; Load segment 0 down from SEGMENT_0_TOP, keeping KP below segment 15. LoadSegment leaves SegmentNumber at 0.
-    lda KP
+    ; Load segment 0 down from SEGMENT_0_TOP, keeping ProgramStackTop below segment 15. LoadSegment leaves SegmentNumber
+    ; at 0.
+    lda ProgramStackTop
     sta SavedKp
-    lda KP+1
+    lda ProgramStackTop+1
     sta SavedKp+1
     lda #>SEGMENT_0_TOP
-    sta KP+1
+    sta ProgramStackTop+1
     lda #<SEGMENT_0_TOP
-    sta KP
+    sta ProgramStackTop
     lda #KERNEL_SEGMENT
     jsr LoadSegment
     lda SavedKp
-    sta KP
+    sta ProgramStackTop
     lda SavedKp+1
-    sta KP+1
+    sta ProgramStackTop+1
 
-    ; Call its procedure 1 as CXP does: FindProcedureIn builds its frame below KP, and sets MP, JTAB, SEG and IPC.
+    ; Call its procedure 1 as CXP does: FindProcedureIn builds its frame below ProgramStackTop, and sets LocalFrame,
+    ; JumpTable, ProcedureDictionary and InstructionPointer.
     lda #SYSTEM_PROCEDURE
     sta ProcedureNumber
     jsr FindProcedureIn
 
-    ; Make the frame the outer block's: BASE, and its own static and dynamic links.
+    ; Make the frame the outer block's: GlobalFrame, and its own static and dynamic links.
     .assert MSCW_DYNAMIC_LINK = MSCW_STATIC_LINK + 2, "DEY steps from the dynamic link to the static link's high byte."
     ldy #MSCW_STATIC_LINK
-    lda MP
-    sta BASE
-    sta (MP),y
+    lda LocalFrame
+    sta GlobalFrame
+    sta (LocalFrame),y
     ldy #MSCW_DYNAMIC_LINK
-    sta (MP),y
-    lda MP+1
-    sta BASE+1
+    sta (LocalFrame),y
+    lda LocalFrame+1
+    sta GlobalFrame+1
     dey
-    sta (MP),y
+    sta (LocalFrame),y
     ldy #MSCW_DYNAMIC_LINK + 1
-    sta (MP),y
+    sta (LocalFrame),y
 
     ; Its first global, just after the frame: SYSCOM's address.
     ldy #MSCW_SIZE
     lda BootSyscom
-    sta (MP),y
+    sta (LocalFrame),y
     iny
     lda BootSyscom+1
-    sta (MP),y
+    sta (LocalFrame),y
 
     ; Start the heap at HEAP_START, or HEAP_START_CARD when slot 3's card is the console.
     .assert <HEAP_START = <HEAP_START_CARD, "The heap's two starts share their low byte."
@@ -656,16 +659,16 @@ StartSystem:
     and #CONSOLE_CARD_READY
     beq NoConsoleCard
     lda #>HEAP_START_CARD
-    sta NP+1
+    sta HeapTop+1
 
     ; The page is positive, so this always branches.
     bpl HeapLowByte
 NoConsoleCard:
     lda #>HEAP_START
-    sta NP+1
+    sta HeapTop+1
 HeapLowByte:
     lda #<HEAP_START
-    sta NP
+    sta HeapTop
 
     ; Set UnreadFlag, and clear every unit's DLE state.
     lda #1
@@ -678,7 +681,8 @@ ClearDleFlag:
     cpx #UNIT_COUNT
     bne ClearDleFlag
 
-    ; Write JMP (OpcodeTable) at Dispatch and JMP (CspTable) at CspDispatch. Fetch and OpCSP set the low bytes.
+    ; Write JMP (OpcodeTable) at Dispatch and JMP (CspTable) at CspDispatch. Fetch and Pcodes::CallStandardProcedure set
+    ; the low bytes.
     lda #JMP_INDIRECT
     sta CspDispatch
     sta Dispatch

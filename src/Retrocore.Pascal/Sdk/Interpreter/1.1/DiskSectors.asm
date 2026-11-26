@@ -152,12 +152,12 @@ WriteSync:
     ldy #TWO_BIT_BYTES
     bne FirstTwoBits
 
-;; Writes the next of TwoBitParts' nibbles, from its last byte down.
+;; Writes the next of <TwoBitParts>' nibbles, from its last byte down.
 ;; Also: WRDAA (WK11)
 NextTwoBits:
     lda TwoBitParts,y
 
-;; Writes a TwoBitParts nibble exclusive-ored with the one before it.
+;; Writes a <TwoBitParts> nibble exclusive-ored with the one before it.
 ;; Also: WRDAB (WK11)
 FirstTwoBits:
     eor TwoBitParts-1,y
@@ -173,7 +173,7 @@ FirstTwoBits:
     lda LastTwoBits
     nop
 
-;; Writes the next of ScratchBuffer's nibbles, exclusive-ored with the one before it.
+;; Writes the next of <ScratchBuffer>'s nibbles, exclusive-ored with the one before it.
 ;; Also: WRDAC (WK11)
 NextSixBits:
     eor ScratchBuffer,y
@@ -666,7 +666,7 @@ ReadThird:
 NextTwoBits:
     sta Checksum
 
-;; Reads a TwoBitParts nibble from the slot's data latch, patched into its LDX.
+;; Reads a <TwoBitParts> nibble from the slot's data latch, patched into its LDX.
 ;; Also: WAITD4 (WK11)
 ReadTwoBits:
     ldx DiskLatch + MAIN_DISK_SLOT * 16
@@ -737,7 +737,7 @@ ReadBuffer2 = *-2
     iny
     bne ReadSecondPass
 
-;; Reads the third pass's first nibble: bytes $AC-$FF, with ThirdPairs.
+;; Reads the third pass's first nibble: bytes $AC-$FF, with <ThirdPairs>.
 ;; Also: WAITD7 (WK11)
 ReadThirdFirst:
     ldx DiskLatch + MAIN_DISK_SLOT * 16
@@ -784,7 +784,7 @@ ReadEpilogue:
     cmp #EPILOGUE_1
     beq Good
 
-;; Leaves with carry set when bad (or, entered at Good, clear), storing byte $55 either way.
+;; Leaves with carry set when bad (or, entered at <Good>, clear), storing byte $55 either way.
 ;; Also: RDFNG2 (WK11)
 Bad:
     sec

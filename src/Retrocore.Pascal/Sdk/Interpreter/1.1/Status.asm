@@ -1,5 +1,5 @@
 ; retrocore: style=strict
-;; The BIOS's status calls, which fill the record a <UNITSTATUS at UnitIo::CspUSTAT> call passes.
+;; The BIOS's status calls, which fill the record a <UNITSTATUS at StandardProcedures::UnitStatus> call passes.
 
 ; The status records.
 

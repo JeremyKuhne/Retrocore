@@ -1,6 +1,7 @@
 ; retrocore: style=strict
-;; Sets: the handlers for <INT at OpINT>, <DIF at OpDIF>, <UNI at OpUNI>, <ADJ at OpADJ>, <INN at OpINN>, <SGS at OpSGS>
-;; and <SRS at OpSRS>, and the bit mask tables.
+;; Sets: the handlers for <INT at Pcodes::SetIntersection>, <DIF at Pcodes::SetDifference>, <UNI at Pcodes::SetUnion>,
+;; <ADJ at Pcodes::AdjustSet>, <INN at Pcodes::InSet>, <SGS at Pcodes::SingletonSet> and <SRS at Pcodes::SubrangeSet>,
+;; and the bit mask tables.
 ;;
 ;; A set on the stack is its bytes, element 0's byte first at the lowest address, with its length in words on top.
 ;; The set routines read only the length's low byte.
@@ -51,16 +52,16 @@ WORD_BIT_MASK = $0F
     .word $FFFF << bit & $FFFF
 .endmacro
 
-;; Pops the top set's length for <INT at OpINT>, <DIF at OpDIF> and <UNI at OpUNI>, and finds both sets. Their result
-;; goes in place of the lower set.
+;; Pops the top set's length for <INT at Pcodes::SetIntersection>, <DIF at Pcodes::SetDifference> and
+;; <UNI at Pcodes::SetUnion>, and finds both sets. Their result goes in place of the lower set.
 ;;
 ;; The sets are under its return address, so it pulls that, and returns by jumping to it plus 1.
 ;; Out:
 ;;   A = the lower set's size in bytes
-;;   TopSize = the top set's size in bytes
-;;   LowerLength = the stack index of the lower set's length word
+;;   PopSetOperands::TopSize = the top set's size in bytes
+;;   PopSetOperands::LowerLength = the stack index of the lower set's length word
 ;;   Y = the stack index of the lower set's first byte
-;;   LowerSet = the same
+;;   PopSetOperands::LowerSet = the same
 ;;   S = just below the top set's first byte, so PLA pulls it
 ;; Also: FIXSET (WK11)
 .proc PopSetOperands
@@ -113,9 +114,12 @@ Jump:
     jmp (Return)
 .endproc
 
-;; <INT at OpINT>: pops two sets and pushes their intersection, as long as the lower set.
+; Pcodes: SetIntersection, SetDifference, SetUnion, AdjustSet and InSet.
+.scope Pcodes continued
+
+;; <INT at Pcodes::SetIntersection>: pops two sets and pushes their intersection, as long as the lower set.
 ;; Also: INT (A2POSRM, UCSD20, WK11)
-.proc OpINT
+.proc SetIntersection
 
 ;; How many of the lower set's bytes are past the top set's, which become 0.
 Excess = Dictionary
@@ -167,9 +171,10 @@ Done:
     jmp Fetch::Skip1
 .endproc
 
-;; <DIF at OpDIF>: pops two sets and pushes the lower one without the top one's elements, as long as the lower set.
+;; <DIF at Pcodes::SetDifference>: pops two sets and pushes the lower one without the top one's elements, as long as the
+;; lower set.
 ;; Also: DIF (A2POSRM, WK11)
-.proc OpDIF
+.proc SetDifference
     jsr PopSetOperands
 
     ; Clear bits in the shorter set's size in bytes.
@@ -197,9 +202,9 @@ Done:
     jmp Fetch::Skip1
 .endproc
 
-;; <UNI at OpUNI>: pops two sets and pushes their union, as long as the longer of the two.
+;; <UNI at Pcodes::SetUnion>: pops two sets and pushes their union, as long as the longer of the two.
 ;; Also: UNI (A2POSRM, UCSD20, WK11)
-.proc OpUNI
+.proc SetUnion
 
 ;; The lower set's size in bytes, when it is the shorter.
 LowerSize = Buffer
@@ -286,10 +291,10 @@ MoveByte:
     jmp Fetch::Skip1
 .endproc
 
-;; <ADJ at OpADJ>: pops a set's length and makes its bytes as many words as its operand says: cuts bytes off its end, or
-;; adds zeros. The set stays on the stack without its length.
+;; <ADJ at Pcodes::AdjustSet>: pops a set's length and makes its bytes as many words as its operand says: cuts bytes off
+;; its end, or adds zeros. The set stays on the stack without its length.
 ;; Also: ADJ (A2POSRM, UCSD20)
-.proc OpADJ
+.proc AdjustSet
 
 ;; The set's size in bytes.
 SetSize = Result+2
@@ -302,7 +307,7 @@ Extra = Work1
 
     ; Read the wanted size, and pop the set's size, as bytes. Are they the same?
     ldy #1
-    lda (IPC),y
+    lda (InstructionPointer),y
     asl a
     sta WantedSize
     pla
@@ -387,9 +392,9 @@ StoreZero:
     jmp Fetch::Skip2
 .endproc
 
-;; <INN at OpINN>: pops a set and the element below it, and pushes true when the element is in the set.
+;; <INN at Pcodes::InSet>: pops a set and the element below it, and pushes true when the element is in the set.
 ;; Also: INN (A2POSRM, UCSD20, WK11)
-.proc OpINN
+.proc InSet
 
 ;; The set's size in bytes.
 SetSize = Result+2
@@ -474,8 +479,9 @@ NotIn:
     pha
     jmp Fetch::Skip1
 .endproc
+.endscope
 
-;; A byte with each bit set, for <INN at OpINN>.
+;; A byte with each bit set, for <INN at Pcodes::InSet>.
 ;; Also: BITTBL (WK11)
 BitMasks:
     BitMask 0
@@ -487,10 +493,13 @@ BitMasks:
     BitMask 6
     BitMask 7
 
-;; <SGS at OpSGS>: pops an element and pushes the set of just that element, by pushing it twice and going on into
-;; <OpSRS>.
+; Pcodes: SingletonSet and SubrangeSet.
+.scope Pcodes continued
+
+;; <SGS at Pcodes::SingletonSet>: pops an element and pushes the set of just that element, by pushing it twice and going
+;; on into <Pcodes::SubrangeSet>.
 ;; Also: SGS (A2POSRM, UCSD20, WK11)
-.proc OpSGS
+.proc SingletonSet
 
 ;; The element.
 Element = Result
@@ -510,11 +519,11 @@ Element = Result
     pha
 .endproc
 
-;; <SRS at OpSRS>: pops an upper and a lower bound, and pushes the set of the elements from one to the other, or the
-;; empty set when the lower is the greater. A negative lower bound, or an upper one above 511, pushes the empty set and
-;; reports <ERROR_VALUE_RANGE>.
+;; <SRS at Pcodes::SubrangeSet>: pops an upper and a lower bound, and pushes the set of the elements from one to the
+;; other, or the empty set when the lower is the greater. A negative lower bound, or an upper one above 511, pushes the
+;; empty set and reports <ERROR_VALUE_RANGE>.
 ;; Also: SRS (A2POSRM, UCSD20, WK11)
-.proc OpSRS
+.proc SubrangeSet
 
 ;; The upper bound, which was on top.
 Upper = Buffer
@@ -682,6 +691,7 @@ OutOfRange:
     pha
     jmp ExecutionError::ValueRange
 .endproc
+.endscope
 
 ;; Words with their low bits set, from none to all 16, for packed fields and subrange sets.
 LowMasks:

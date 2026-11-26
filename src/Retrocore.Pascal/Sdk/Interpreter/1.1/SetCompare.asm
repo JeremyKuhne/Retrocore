@@ -1,6 +1,6 @@
 ; retrocore: style=strict
-;; Set comparisons: the end of <SetsEqual>, continued from bank 1, and <CompareSets>, which <EQU at OpEQU>,
-;; <NEQ at OpNEQ>, <LEQ at OpLEQ> and <GEQ at OpGEQ> run for sets.
+;; Set comparisons: the end of <SetsEqual>, continued from bank 1, and <CompareSets>, which <EQU at Pcodes::Equal>,
+;; <NEQ at Pcodes::NotEqual>, <LEQ at Pcodes::LessOrEqual> and <GEQ at Pcodes::GreaterOrEqual> run for sets.
 
 ; The comparisons, as the comparison handlers keep them in Comparison.
 
@@ -61,12 +61,12 @@ JumpBack:
     jmp (CallerReturn)
 .endproc
 
-;; Compares two sets for <EQU at OpEQU>, <NEQ at OpNEQ>, <LEQ at OpLEQ> or <GEQ at OpGEQ>, and pushes the boolean in
-;; their place.
+;; Compares two sets for <EQU at Pcodes::Equal>, <NEQ at Pcodes::NotEqual>, <LEQ at Pcodes::LessOrEqual> or
+;; <GEQ at Pcodes::GreaterOrEqual>, and pushes the boolean in their place.
 ;;
-;; <LEQ at OpLEQ> tests that the set below, the first operand, is a subset of the set on top; any other comparison but
-;; <COMPARISON_EQUAL>, <COMPARISON_NOT_EQUAL> and <COMPARISON_LESS_OR_EQUAL> is <GEQ at OpGEQ>, which tests that it is a
-;; superset.
+;; <LEQ at Pcodes::LessOrEqual> tests that the set below, the first operand, is a subset of the set on top; any other
+;; comparison but <COMPARISON_EQUAL>, <COMPARISON_NOT_EQUAL> and <COMPARISON_LESS_OR_EQUAL> is
+;; <GEQ at Pcodes::GreaterOrEqual>, which tests that it is a superset.
 ;; In: Comparison = the comparison, Stack = the two sets, each with its length in words on top of its bytes
 ;; Also: CMPSET (WK11)
 .proc CompareSets

@@ -1,6 +1,7 @@
 ; retrocore: style=strict
-;; Floating point: the real arithmetic handlers, <FLO at RealMath::OpFLO> and <FLT at RealMath::OpFLT>, and the standard
-;; procedures <TNC at RealMath::CspTNC>, <RND at RealMath::CspRND> and <POT at RealMath::CspPOT>.
+;; Floating point: the real arithmetic handlers, <FLO at Pcodes::FloatNextToTop> and <FLT at Pcodes::FloatTop>, and the
+;; standard procedures <TNC at StandardProcedures::Truncate>, <RND at StandardProcedures::Round> and
+;; <POT at StandardProcedures::PowerOfTen>.
 ;;
 ;; A real is 4 bytes, pushed high word first: the high word holds the sign (bit 15), an 8-bit exponent biased by
 ;; <REAL_BIAS> (bits 14-7), and the mantissa's top 7 bits; the low word holds its low 16 bits. The mantissa's top
@@ -22,7 +23,7 @@ GUARD_STICKY = $01
 ;; The bits of a mantissa, with its hidden 1.
 MANTISSA_BITS = 24
 
-;; The quotient bits <RealMath::OpDVR> works out: the mantissa's and the guard byte's.
+;; The quotient bits <Pcodes::DivideReals> works out: the mantissa's and the guard byte's.
 QUOTIENT_BITS = 32
 
 ;; With X = S, as TSX leaves it, the offset from <Stack> of the real on top of the stack's high byte: its sign and
@@ -33,10 +34,11 @@ TOP_REAL_SIGN = 4
 ;; the mantissa's top 7 bits.
 TOP_REAL_EXPONENT_LOW = 3
 
-;; The powers of ten <POT at RealMath::CspPOT> has, 1.0E0 to 1.0E38.
+;; The powers of ten <POT at StandardProcedures::PowerOfTen> has, 1.0E0 to 1.0E38.
 POWERS_OF_TEN = 39
 
-;; One entry of <RealMath::PowersOfTen>: a real, its high word first, as <POT at RealMath::CspPOT> pushes it.
+;; One entry of <RealMath::PowersOfTen>: a real, its high word first, as <POT at StandardProcedures::PowerOfTen> pushes
+;; it.
 ;; Parameters:
 ;;   power = the power of ten it is; the entries go in order from 0
 ;;   high = the real's high word: the sign, the exponent and the mantissa's top 7 bits
@@ -51,7 +53,7 @@ POWERS_OF_TEN = 39
 .scope RealMath
 
 ;; The right operand, unpacked: the real on top of the stack, which a handler pops first. It is the only operand of
-;; <SQR at RealMath::OpSQR>, <TNC at RealMath::CspTNC> and <RND at RealMath::CspRND>.
+;; <SQR at Pcodes::SquareReal>, <TNC at StandardProcedures::Truncate> and <RND at StandardProcedures::Round>.
 ;; Also: FPREG1 (WK11)
 Right = Pointer
 
@@ -439,125 +441,130 @@ Swap:
     rts
 .endproc
 
-;; <ADR at RealMath::OpADR>: pops two reals and pushes their sum.
+.endscope
+
+; Pcodes: AddReals, SubtractReals and DivideReals.
+.scope Pcodes continued
+
+;; <ADR at Pcodes::AddReals>: pops two reals and pushes their sum.
 ;; Also: ADR (A2POSRM, WK11)
-.proc OpADR
+.proc AddReals
     ; Pop the right operand, then the left.
-    ldx #Right
-    jsr PopReal
-    ldx #Left
-    jsr PopReal
+    ldx #RealMath::Right
+    jsr RealMath::PopReal
+    ldx #RealMath::Left
+    jsr RealMath::PopReal
 
     ; When either is 0.0, the sum is the other.
-    lda Right+REAL_EXPONENT
+    lda RealMath::Right+REAL_EXPONENT
     bne RightNotZero
-    ldx #Left
-    jsr PushReal
+    ldx #RealMath::Left
+    jsr RealMath::PushReal
     jmp Fetch::Skip1
 RightNotZero:
-    lda Left+REAL_EXPONENT
+    lda RealMath::Left+REAL_EXPONENT
     bne BothNotZero
-    ldx #Right
-    jsr PushReal
+    ldx #RealMath::Right
+    jsr RealMath::PushReal
     jmp Fetch::Skip1
 
     ; The same signs: add the magnitudes, under that sign.
 BothNotZero:
-    lda Right+REAL_SIGN
-    eor Left+REAL_SIGN
+    lda RealMath::Right+REAL_SIGN
+    eor RealMath::Left+REAL_SIGN
     bne SignsDiffer
-    lda Right+REAL_SIGN
+    lda RealMath::Right+REAL_SIGN
     sta Result+REAL_SIGN
-    jsr AddMantissas
+    jsr RealMath::AddMantissas
     ldx #Result
-    jsr PushReal
+    jsr RealMath::PushReal
     jmp Fetch::Skip1
 
     ; Different signs: subtract the smaller magnitude from the larger, under the larger's sign.
 SignsDiffer:
-    jsr OrderOperands
+    jsr RealMath::OrderOperands
     sta Result+REAL_SIGN
-    jsr SubtractMantissas
+    jsr RealMath::SubtractMantissas
     ldx #Result
-    jsr PushReal
+    jsr RealMath::PushReal
     jmp Fetch::Skip1
 .endproc
 
-;; <SBR at RealMath::OpSBR>: pops two reals and pushes the left one minus the right one.
+;; <SBR at Pcodes::SubtractReals>: pops two reals and pushes the left one minus the right one.
 ;; Also: SBR (A2POSRM, WK11)
-.proc OpSBR
+.proc SubtractReals
     ; Pop the right operand, then the left.
-    ldx #Right
-    jsr PopReal
-    ldx #Left
-    jsr PopReal
+    ldx #RealMath::Right
+    jsr RealMath::PopReal
+    ldx #RealMath::Left
+    jsr RealMath::PopReal
 
     ; Subtracting 0.0 leaves the left one.
-    lda Right+REAL_EXPONENT
+    lda RealMath::Right+REAL_EXPONENT
     bne RightNotZero
-    ldx #Left
-    jsr PushReal
+    ldx #RealMath::Left
+    jsr RealMath::PushReal
     jmp Fetch::Skip1
 
     ; From 0.0, the difference is the right one negated.
 RightNotZero:
-    lda Left+REAL_EXPONENT
+    lda RealMath::Left+REAL_EXPONENT
     bne BothNotZero
-    lda Right+REAL_SIGN
+    lda RealMath::Right+REAL_SIGN
     eor #REAL_NEGATIVE
-    sta Right+REAL_SIGN
-    ldx #Right
-    jsr PushReal
+    sta RealMath::Right+REAL_SIGN
+    ldx #RealMath::Right
+    jsr RealMath::PushReal
     jmp Fetch::Skip1
 
     ; Different signs: add the magnitudes, under the left one's sign.
 BothNotZero:
-    lda Right+REAL_SIGN
-    eor Left+REAL_SIGN
+    lda RealMath::Right+REAL_SIGN
+    eor RealMath::Left+REAL_SIGN
     beq SignsSame
-    lda Left+REAL_SIGN
+    lda RealMath::Left+REAL_SIGN
     sta Result+REAL_SIGN
-    jsr AddMantissas
+    jsr RealMath::AddMantissas
     ldx #Result
-    jsr PushReal
+    jsr RealMath::PushReal
     jmp Fetch::Skip1
 
     ; The same signs: subtract the smaller magnitude from the larger, under their sign, negated when the right
     ; one's was larger.
 SignsSame:
-    jsr OrderOperands
+    jsr RealMath::OrderOperands
     bcs SetSign
     eor #REAL_NEGATIVE
 SetSign:
     sta Result+REAL_SIGN
-    jsr SubtractMantissas
+    jsr RealMath::SubtractMantissas
     ldx #Result
-    jsr PushReal
+    jsr RealMath::PushReal
     jmp Fetch::Skip1
 .endproc
 
-;; <DVR at RealMath::OpDVR>: pops two reals and pushes the left one divided by the right one.
+;; <DVR at Pcodes::DivideReals>: pops two reals and pushes the left one divided by the right one.
 ;; Also: DVR (A2POSRM, UCSD20, WK11)
-.proc OpDVR
+.proc DivideReals
 
 ;; The trial difference's mantissa low byte, and at Difference+1 its guard byte, kept until the subtraction is known
 ;; to fit.
 Difference = Work1
 
     ; Pop the right operand, then the left.
-    ldx #Right
-    jsr PopReal
-    ldx #Left
-    jsr PopReal
+    ldx #RealMath::Right
+    jsr RealMath::PopReal
+    ldx #RealMath::Left
+    jsr RealMath::PopReal
 
     ; Dividing by 0.0 is an error.
-    lda Right+REAL_EXPONENT
+    lda RealMath::Right+REAL_EXPONENT
     bne RightNotZero
     jmp ExecutionError::DivideByZero
 
     ; 0.0 divided by anything is 0.0.
 RightNotZero:
-    lda Left+REAL_EXPONENT
+    lda RealMath::Left+REAL_EXPONENT
     bne BothNotZero
     lda #0
     pha
@@ -568,12 +575,12 @@ RightNotZero:
 
     ; The quotient's sign, and its exponent: the difference of theirs, biased.
 BothNotZero:
-    lda Right+REAL_SIGN
-    eor Left+REAL_SIGN
+    lda RealMath::Right+REAL_SIGN
+    eor RealMath::Left+REAL_SIGN
     sta Result+REAL_SIGN
-    lda Left+REAL_EXPONENT
+    lda RealMath::Left+REAL_EXPONENT
     sec
-    sbc Right+REAL_EXPONENT
+    sbc RealMath::Right+REAL_EXPONENT
     bcc Smaller
 
     ; Left's exponent is no smaller: the biased one must stay below REAL_EXPONENT_OVERFLOW.
@@ -598,26 +605,26 @@ SetExponent:
     ldx #QUOTIENT_BITS
 NextBit:
     sec
-    lda Left+REAL_GUARD
-    sbc Right+REAL_GUARD
+    lda RealMath::Left+REAL_GUARD
+    sbc RealMath::Right+REAL_GUARD
     sta Difference+1
-    lda Left+REAL_MANTISSA+2
-    sbc Right+REAL_MANTISSA+2
+    lda RealMath::Left+REAL_MANTISSA+2
+    sbc RealMath::Right+REAL_MANTISSA+2
     sta Difference
-    lda Left+REAL_MANTISSA+1
-    sbc Right+REAL_MANTISSA+1
+    lda RealMath::Left+REAL_MANTISSA+1
+    sbc RealMath::Right+REAL_MANTISSA+1
     tay
-    lda Left+REAL_MANTISSA
-    sbc Right+REAL_MANTISSA
+    lda RealMath::Left+REAL_MANTISSA
+    sbc RealMath::Right+REAL_MANTISSA
     bcc ShiftQuotient
 
     ; It fits: keep the difference, and make the bit 1.
-    sta Left+REAL_MANTISSA
-    sty Left+REAL_MANTISSA+1
+    sta RealMath::Left+REAL_MANTISSA
+    sty RealMath::Left+REAL_MANTISSA+1
     lda Difference
-    sta Left+REAL_MANTISSA+2
+    sta RealMath::Left+REAL_MANTISSA+2
     lda Difference+1
-    sta Left+REAL_GUARD
+    sta RealMath::Left+REAL_GUARD
     sec
 
     ; Shift the bit into Result's mantissa, and Right's mantissa right.
@@ -626,21 +633,25 @@ ShiftQuotient:
     rol Result+REAL_MANTISSA+2
     rol Result+REAL_MANTISSA+1
     rol Result+REAL_MANTISSA
-    lsr Right+REAL_MANTISSA
-    ror Right+REAL_MANTISSA+1
-    ror Right+REAL_MANTISSA+2
-    ror Right+REAL_GUARD
+    lsr RealMath::Right+REAL_MANTISSA
+    ror RealMath::Right+REAL_MANTISSA+1
+    ror RealMath::Right+REAL_MANTISSA+2
+    ror RealMath::Right+REAL_GUARD
     dex
     bne NextBit
 
     ; Normalize, round, and push the quotient.
-    jsr NormalizeResult
-    jsr RoundResult
-    jsr ShiftResultRight
+    jsr RealMath::NormalizeResult
+    jsr RealMath::RoundResult
+    jsr RealMath::ShiftResultRight
     ldx #Result
-    jsr PushReal
+    jsr RealMath::PushReal
     jmp Fetch::Skip1
 .endproc
+.endscope
+
+; RealMath: MultiplyOperands.
+.scope RealMath continued
 
 ;; Multiplies <Right> and <Left>, neither 0.0, into <Result>, and rounds it. When the product's exponent is out of
 ;; range, it drops its return address and reports <ERROR_FLOATING_POINT>.
@@ -648,7 +659,7 @@ ShiftQuotient:
 ;;   Result = the product
 ;;   Right = its exponent less <REAL_BIAS>, and its mantissa shifted out to 0
 ;; Keeps: Y
-.proc MultiplyReals
+.proc MultiplyOperands
     ; The product's sign, and its exponent: the sum of theirs, which must stay in range.
     lda Right+REAL_SIGN
     eor Left+REAL_SIGN
@@ -727,19 +738,24 @@ Round:
     rts
 .endproc
 
-;; <MPR at RealMath::OpMPR>: pops two reals and pushes their product.
+.endscope
+
+; Pcodes: MultiplyReals, SquareReal, AbsoluteReal and NegateReal.
+.scope Pcodes continued
+
+;; <MPR at Pcodes::MultiplyReals>: pops two reals and pushes their product.
 ;; Also: MPR (A2POSRM, WK11)
-.proc OpMPR
+.proc MultiplyReals
     ; Pop the right operand, then the left.
-    ldx #Right
-    jsr PopReal
-    ldx #Left
-    jsr PopReal
+    ldx #RealMath::Right
+    jsr RealMath::PopReal
+    ldx #RealMath::Left
+    jsr RealMath::PopReal
 
     ; When either is 0.0, so is the product.
-    lda Right+REAL_EXPONENT
+    lda RealMath::Right+REAL_EXPONENT
     beq Zero
-    lda Left+REAL_EXPONENT
+    lda RealMath::Left+REAL_EXPONENT
     beq Zero
     bne Multiply
 Zero:
@@ -752,19 +768,19 @@ Zero:
 
     ; Multiply them, and push the product.
 Multiply:
-    jsr MultiplyReals
+    jsr RealMath::MultiplyOperands
     ldx #Result
-    jsr PushReal
+    jsr RealMath::PushReal
     jmp Fetch::Skip1
 .endproc
 
-;; <SQR at RealMath::OpSQR>: pops a real and pushes its square.
+;; <SQR at Pcodes::SquareReal>: pops a real and pushes its square.
 ;; Also: SQR (A2POSRM, UCSD20, WK11)
-.proc OpSQR
+.proc SquareReal
     ; Pop it. The square of 0.0 is 0.0.
-    ldx #Right
-    jsr PopReal
-    lda Right+REAL_EXPONENT
+    ldx #RealMath::Right
+    jsr RealMath::PopReal
+    lda RealMath::Right+REAL_EXPONENT
     bne NotZero
     lda #0
     pha
@@ -775,27 +791,27 @@ Multiply:
 
     ; Copy it to Left, and multiply them.
 NotZero:
-    lda Right+REAL_SIGN
-    sta Left+REAL_SIGN
-    lda Right+REAL_EXPONENT
-    sta Left+REAL_EXPONENT
-    lda Right+REAL_MANTISSA
-    sta Left+REAL_MANTISSA
-    lda Right+REAL_MANTISSA+1
-    sta Left+REAL_MANTISSA+1
-    lda Right+REAL_MANTISSA+2
-    sta Left+REAL_MANTISSA+2
-    lda Right+REAL_GUARD
-    sta Left+REAL_GUARD
-    jsr MultiplyReals
+    lda RealMath::Right+REAL_SIGN
+    sta RealMath::Left+REAL_SIGN
+    lda RealMath::Right+REAL_EXPONENT
+    sta RealMath::Left+REAL_EXPONENT
+    lda RealMath::Right+REAL_MANTISSA
+    sta RealMath::Left+REAL_MANTISSA
+    lda RealMath::Right+REAL_MANTISSA+1
+    sta RealMath::Left+REAL_MANTISSA+1
+    lda RealMath::Right+REAL_MANTISSA+2
+    sta RealMath::Left+REAL_MANTISSA+2
+    lda RealMath::Right+REAL_GUARD
+    sta RealMath::Left+REAL_GUARD
+    jsr RealMath::MultiplyOperands
     ldx #Result
-    jsr PushReal
+    jsr RealMath::PushReal
     jmp Fetch::Skip1
 .endproc
 
-;; <ABR at RealMath::OpABR>: clears the sign bit of the real on top of the stack, making it its absolute value.
+;; <ABR at Pcodes::AbsoluteReal>: clears the sign bit of the real on top of the stack, making it its absolute value.
 ;; Also: ABR (A2POSRM, UCSD20, WK11)
-.proc OpABR
+.proc AbsoluteReal
     ; Point X at the real's high byte, TOP_REAL_SIGN past S.
     tsx
     inx
@@ -809,9 +825,9 @@ NotZero:
     jmp Fetch::Skip1
 .endproc
 
-;; <NGR at RealMath::OpNGR>: flips the sign bit of the real on top of the stack, unless it is 0.0.
+;; <NGR at Pcodes::NegateReal>: flips the sign bit of the real on top of the stack, unless it is 0.0.
 ;; Also: NGR (A2POSRM, UCSD20, WK11)
-.proc OpNGR
+.proc NegateReal
 
 ;; The real's high word's low byte: the exponent's low bit, then the mantissa's top 7 bits.
 ExponentLow = Pointer
@@ -841,6 +857,10 @@ Exponent = Pointer2
 Done:
     jmp Fetch::Skip1
 .endproc
+.endscope
+
+; RealMath: PopIntegerAsReal.
+.scope RealMath continued
 
 ;; Pops an integer and converts it to a real in <Result>, leaving <Result>'s guard byte as it was. It never returns for
 ;; -32768: its magnitude, $8000, already has bit 15 set, and the normalizing loop shifts before it tests, so it
@@ -920,9 +940,14 @@ JumpBack:
     jmp (CallerReturn)
 .endproc
 
-;; <FLO at RealMath::OpFLO>: converts the integer under the real on top of the stack to a real.
+.endscope
+
+; Pcodes: FloatNextToTop and FloatTop.
+.scope Pcodes continued
+
+;; <FLO at Pcodes::FloatNextToTop>: converts the integer under the real on top of the stack to a real.
 ;; Also: FLO (A2POSRM, UCSD20, WK11)
-.proc OpFLO
+.proc FloatNextToTop
 
 ;; The real on top of the stack, its 4 bytes as they were pulled from the top, kept while the integer under it is
 ;; converted.
@@ -939,9 +964,9 @@ SavedReal = Pointer2
     sta SavedReal
 
     ; Convert the integer.
-    jsr PopIntegerAsReal
+    jsr RealMath::PopIntegerAsReal
     ldx #Result
-    jsr PushReal
+    jsr RealMath::PushReal
 
     ; Put the real back on top.
     lda SavedReal
@@ -955,22 +980,26 @@ SavedReal = Pointer2
     jmp Fetch::Skip1
 .endproc
 
-;; <FLT at RealMath::OpFLT>: converts the integer on top of the stack to a real.
+;; <FLT at Pcodes::FloatTop>: converts the integer on top of the stack to a real.
 ;; Also: FLT (A2POSRM, UCSD20, WK11)
-.proc OpFLT
-    jsr PopIntegerAsReal
+.proc FloatTop
+    jsr RealMath::PopIntegerAsReal
     ldx #Result
-    jsr PushReal
+    jsr RealMath::PushReal
     jmp Fetch::Skip1
 .endproc
+.endscope
+
+; RealMath: TruncateReal.
+.scope RealMath continued
 
 ;; Converts <Right> to an integer, truncating toward 0, or rounding to nearest (half away from 0) when
 ;; <RealMath::TruncateReal::Rounding> is not 0. When the integer does not fit 15 bits and a sign, it drops its return
 ;; address and reports <ERROR_FLOATING_POINT>.
-;; In: Rounding = 0 to truncate, or 1 to round
+;; In: TruncateReal::Rounding = 0 to truncate, or 1 to round
 ;; Out:
-;;   IntegerHigh = the integer's high byte
-;;   IntegerLow = its low byte
+;;   TruncateReal::IntegerHigh = the integer's high byte
+;;   TruncateReal::IntegerLow = its low byte
 ;; Also: FIX (WK11)
 .proc TruncateReal
 
@@ -1047,41 +1076,46 @@ Done:
     rts
 .endproc
 
-;; <RND at RealMath::CspRND>, the standard procedure ROUND: pops a real and pushes the integer nearest it, half away
-;; from 0.
+.endscope
+
+; StandardProcedures: Round, Truncate and PowerOfTen.
+.scope StandardProcedures continued
+
+;; <RND at StandardProcedures::Round>, the standard procedure ROUND: pops a real and pushes the integer nearest it, half
+;; away from 0.
 ;; Also: RND (A2POSRM, WK11), ROUND (UCSD20)
-.proc CspRND
+.proc Round
     lda #1
-    sta TruncateReal::Rounding
-    ldx #Right
-    jsr PopReal
-    jsr TruncateReal
-    lda TruncateReal::IntegerHigh
+    sta RealMath::TruncateReal::Rounding
+    ldx #RealMath::Right
+    jsr RealMath::PopReal
+    jsr RealMath::TruncateReal
+    lda RealMath::TruncateReal::IntegerHigh
     pha
-    lda TruncateReal::IntegerLow
+    lda RealMath::TruncateReal::IntegerLow
     pha
     jmp Fetch::Skip2
 .endproc
 
-;; <TNC at RealMath::CspTNC>, the standard procedure TRUNC: pops a real and pushes its integer part.
+;; <TNC at StandardProcedures::Truncate>, the standard procedure TRUNC: pops a real and pushes its integer part.
 ;; Also: TNC (A2POSRM, WK11), TRUNC (UCSD20)
-.proc CspTNC
+.proc Truncate
     lda #0
-    sta TruncateReal::Rounding
-    ldx #Right
-    jsr PopReal
-    jsr TruncateReal
-    lda TruncateReal::IntegerHigh
+    sta RealMath::TruncateReal::Rounding
+    ldx #RealMath::Right
+    jsr RealMath::PopReal
+    jsr RealMath::TruncateReal
+    lda RealMath::TruncateReal::IntegerHigh
     pha
-    lda TruncateReal::IntegerLow
+    lda RealMath::TruncateReal::IntegerLow
     pha
     jmp Fetch::Skip2
 .endproc
 
-;; <POT at RealMath::CspPOT>, the standard procedure PWROFTEN: pops an integer, 0 to <POWERS_OF_TEN> - 1, and pushes ten
-;; to that power, from <PowersOfTen>.
+;; <POT at StandardProcedures::PowerOfTen>, the standard procedure PWROFTEN: pops an integer, 0 to <POWERS_OF_TEN> - 1,
+;; and pushes ten to that power, from <RealMath::PowersOfTen>.
 ;; Also: POT (A2POSRM), PWR10 (WK11), PWROFTEN (UCSD20)
-.proc CspPOT
+.proc PowerOfTen
     ; Pop the power. Its high byte must be 0, and its low byte below POWERS_OF_TEN; BPL tests the difference's bit
     ; 7, so 167 to 255 pass too, and read entry n mod 64: a power for 192 to 230, and the bytes past PowersOfTen for
     ; the rest.
@@ -1097,13 +1131,13 @@ Done:
     asl a
     asl a
     tax
-    lda PowersOfTen+1,x
+    lda RealMath::PowersOfTen+1,x
     pha
-    lda PowersOfTen,x
+    lda RealMath::PowersOfTen,x
     pha
-    lda PowersOfTen+3,x
+    lda RealMath::PowersOfTen+3,x
     pha
-    lda PowersOfTen+2,x
+    lda RealMath::PowersOfTen+2,x
     pha
     jmp Fetch::Skip2
 
@@ -1116,8 +1150,12 @@ OutOfRange:
     pha
     jmp ExecutionError::FloatingPoint
 .endproc
+.endscope
 
-;; The reals 1.0E0 to 1.0E38, for <POT at RealMath::CspPOT>, each with its high word first.
+; RealMath: PowersOfTen.
+.scope RealMath continued
+
+;; The reals 1.0E0 to 1.0E38, for <POT at StandardProcedures::PowerOfTen>, each with its high word first.
 ;; Also: P10TBL (WK11)
 PowersOfTen:
     PowerOfTen 0, $3F80, $0000

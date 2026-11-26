@@ -175,6 +175,9 @@ internal sealed class AltairDebugTarget : DisposableBase, IDebugTarget, IRecordi
     public DebugFrame Frame => FrameOf(_machine.Processor.Registers);
 
     /// <inheritdoc/>
+    public int StackPointer => _machine.Processor.Registers.SP;
+
+    /// <inheritdoc/>
     public ushort ProgramCounter
     {
         get => _machine.Processor.Registers.PC;

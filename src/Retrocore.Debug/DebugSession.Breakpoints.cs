@@ -1002,7 +1002,7 @@ internal sealed partial class DebugSession
                 cycle = z80;
             }
 
-            if (!watch.Matches(cycle, out bool write) || hits.Exists(hit => hit.Breakpoint == watch.Breakpoint))
+            if (!watch.Matches(cycle, out bool write) || Noted(hits, watch.Breakpoint))
             {
                 continue;
             }
@@ -1021,6 +1021,18 @@ internal sealed partial class DebugSession
             string description = write ? $"Wrote ${cycle.Value:X2} to {place}." : $"Read ${cycle.Value:X2} from {place}.";
             hits.Add((watch.Breakpoint, description));
         }
+    }
+
+    // Whether an instruction's cycles have already hit a breakpoint. A loop rather than a lambda, as the lambda's
+    // capture would be allocated for every watch at every cycle.
+    private static bool Noted(List<(BreakpointState Breakpoint, string Description)> hits, BreakpointState breakpoint)
+    {
+        foreach ((BreakpointState noted, _) in hits)
+        {
+            if (noted == breakpoint) { return true; }
+        }
+
+        return false;
     }
 
     // Stops for the data breakpoints the instruction that just finished hit, if their conditions and hit counts say
@@ -1072,7 +1084,9 @@ internal sealed partial class DebugSession
         {
             try
             {
-                if (new ExpressionEvaluator(TriggeringCpu, _debug, condition).Evaluate() == 0) { return false; }
+                state.ConditionTokens ??= ExpressionEvaluator.Tokenize(condition);
+                ExpressionEvaluator evaluator = new(TriggeringCpu, _debug, state.ConditionTokens);
+                if (evaluator.Evaluate() == 0) { return false; }
             }
             catch (Exception exception) when (IsEvaluationError(exception))
             {

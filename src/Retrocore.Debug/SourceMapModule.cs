@@ -89,6 +89,9 @@ internal sealed partial class SourceMapModule : IDebugModule
 
         HashSet<AssemblyLocation> started = [with(ReferenceEqualityComparer.Instance)];
         HashSet<AssemblyLocation> previous = [with(ReferenceEqualityComparer.Instance)];
+
+        // Each file's lines share one full path, which compares and hashes faster as the debugger follows lines.
+        Dictionary<string, string> fullPaths = [with(StringComparer.Ordinal)];
         _statements = new Statement[emitted.Count];
         for (int index = 0; index < emitted.Count; index++)
         {
@@ -114,7 +117,12 @@ internal sealed partial class SourceMapModule : IDebugModule
             {
                 AssemblyLocation location = kept[level];
                 string? name = level < kept.Count - 1 ? CallText(Invocation(location)) : null;
-                chain[level] = new(Path.GetFullPath(location.Path), location.Line + 1, name);
+                if (!fullPaths.TryGetValue(location.Path, out string? fullPath))
+                {
+                    fullPaths.Add(location.Path, fullPath = Path.GetFullPath(location.Path));
+                }
+
+                chain[level] = new(fullPath, location.Line + 1, name);
 
                 // Every statement starts its innermost line; an outer line starts where its occurrence begins.
                 if (level == 0 || !previous.Contains(location)) { Entry(chain[level], address); }
@@ -346,6 +354,9 @@ internal sealed partial class SourceMapModule : IDebugModule
             _result),
         _result,
         relocation: _relocation);
+
+    /// <inheritdoc/>
+    public bool Covers(ushort address) => _byAddress.ContainsKey(address);
 
     /// <inheritdoc/>
     public DebugPosition? Position(IDebugMemory memory, ushort address)

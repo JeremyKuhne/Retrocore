@@ -141,6 +141,9 @@ internal sealed class SoftCardDebugTarget : IDebugTarget
     public DebugFrame Frame => Trs80DebugTarget.FrameOf(Card.Processor.Registers);
 
     /// <inheritdoc/>
+    public int StackPointer => Card.Processor.Registers.SP;
+
+    /// <inheritdoc/>
     public ushort ProgramCounter
     {
         get => Card.Processor.Registers.PC;

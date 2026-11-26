@@ -11,6 +11,10 @@ internal sealed class DebugInfo
 {
     private readonly List<IDebugModule> _modules = [];
 
+    // The modules that may describe each address, in order, found when an address is first looked up: a lookup
+    // follows every instruction, and most modules cover few addresses.
+    private IDebugModule[]?[]? _covering;
+
     /// <summary>
     ///  Gets the modules, searched in the order they were added.
     /// </summary>
@@ -20,7 +24,25 @@ internal sealed class DebugInfo
     ///  Adds a module.
     /// </summary>
     /// <param name="module">The module.</param>
-    internal void Add(IDebugModule module) => _modules.Add(module);
+    internal void Add(IDebugModule module)
+    {
+        _modules.Add(module);
+        _covering = null;
+    }
+
+    // The modules that cover an address, in the order they were added.
+    private IDebugModule[] Covering(ushort address)
+    {
+        IDebugModule[]?[] covering = _covering ??= new IDebugModule[]?[ushort.MaxValue + 1];
+        if (covering[address] is { } found) { return found; }
+        List<IDebugModule>? modules = null;
+        foreach (IDebugModule module in _modules)
+        {
+            if (module.Covers(address)) { (modules ??= []).Add(module); }
+        }
+
+        return covering[address] = modules is null ? [] : [.. modules];
+    }
 
     /// <summary>
     ///  Gets or sets the launch's hints file, whose names win over the modules' in expressions, as they do when
@@ -38,6 +60,11 @@ internal sealed class DebugInfo
     internal static bool Active(IDebugModule module, IDebugMemory memory, ushort address) =>
         module.Area is not { } area || area.Equals(memory.ReadArea(address));
 
+    // Whether a module applies, reading the address's area only for the first module that names one: a lookup
+    // searches many modules, and reading the area boxes it.
+    private static bool Active(IDebugModule module, IDebugMemory memory, ushort address, ref Enum? read) =>
+        module.Area is not { } area || area.Equals(read ??= memory.ReadArea(address));
+
     /// <summary>
     ///  Gets the source behind an address from the first module that applies to it.
     /// </summary>
@@ -46,9 +73,10 @@ internal sealed class DebugInfo
     /// <returns>The position, or null when no module describes the code there.</returns>
     internal DebugPosition? Position(IDebugMemory memory, ushort address)
     {
-        foreach (IDebugModule module in _modules)
+        Enum? read = null;
+        foreach (IDebugModule module in Covering(address))
         {
-            if (Active(module, memory, address) && module.Position(memory, address) is { } position)
+            if (Active(module, memory, address, ref read) && module.Position(memory, address) is { } position)
             {
                 return position;
             }
@@ -109,9 +137,10 @@ internal sealed class DebugInfo
     /// <returns>The label, or null.</returns>
     internal string? Label(IDebugMemory memory, ushort address)
     {
-        foreach (IDebugModule module in _modules)
+        Enum? read = null;
+        foreach (IDebugModule module in Covering(address))
         {
-            if (Active(module, memory, address) && module.Position(memory, address) is not null)
+            if (Active(module, memory, address, ref read) && module.Position(memory, address) is not null)
             {
                 return module.Label(address);
             }

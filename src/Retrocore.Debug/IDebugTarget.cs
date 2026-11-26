@@ -81,6 +81,11 @@ internal interface IDebugTarget : IDebugMemory
     ushort ProgramCounter { get; set; }
 
     /// <summary>
+    ///  Gets the stack pointer, as <see cref="Frame"/> has it, without reading the other registers.
+    /// </summary>
+    int StackPointer => Frame.StackPointer;
+
+    /// <summary>
     ///  Gets whether the CPU is between instructions.
     /// </summary>
     bool IsInstructionBoundary { get; }

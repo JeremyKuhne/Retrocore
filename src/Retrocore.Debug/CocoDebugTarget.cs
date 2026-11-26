@@ -74,6 +74,9 @@ internal sealed partial class CocoDebugTarget : IDebugTarget
     public DebugFrame Frame => FrameOf(_machine.Processor.Registers);
 
     /// <inheritdoc/>
+    public int StackPointer => _machine.Processor.Registers.S;
+
+    /// <inheritdoc/>
     public ushort ProgramCounter
     {
         get => _machine.Processor.Registers.PC;

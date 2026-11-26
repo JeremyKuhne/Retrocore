@@ -47,15 +47,25 @@ internal sealed class DebugContracts
     internal void Clear() => _pending.Clear();
 
     /// <summary>
+    ///  Gets whether observing an instruction can change anything: it makes a call, or its stack is back where a
+    ///  pending call's was. Otherwise <see cref="Observe"/> neither reads the registers nor reports anything.
+    /// </summary>
+    /// <param name="stack">The stack pointer before the instruction.</param>
+    /// <param name="call">Whether the instruction makes a call.</param>
+    /// <returns>Whether to observe the instruction.</returns>
+    internal bool Observes(int stack, bool call) => call || (_pending.Count != 0 && stack >= _pending[^1].Stack);
+
+    /// <summary>
     ///  Observes an instruction boundary.
     /// </summary>
     /// <param name="registers">The registers before the instruction.</param>
     /// <param name="call">The call the instruction makes, or null.</param>
     /// <param name="peek">Reads memory without side effects.</param>
     /// <returns>The broken promises of a call that returned here, or none.</returns>
-    internal List<string> Observe(in DebugFrame registers, (ushort Target, int Length)? call, Func<ushort, byte> peek)
+    internal IReadOnlyList<string> Observe(in DebugFrame registers, (ushort Target, int Length)? call, Func<ushort, byte> peek)
     {
-        List<string> broken = [];
+        // Most instructions return no call, so they share the empty list rather than each allocating one.
+        IReadOnlyList<string> broken = [];
         ushort pc = registers.ProgramCounter;
         int stack = registers.StackPointer;
         while (_pending.Count != 0 && stack >= _pending[^1].Stack)
@@ -64,7 +74,7 @@ internal sealed class DebugContracts
             _pending.RemoveAt(_pending.Count - 1);
             if (stack == callStack && pc == returnAddress)
             {
-                Compare(contract, entry, registers, memory, peek, broken);
+                if (Compare(contract, entry, registers, memory, peek) is { } found) { broken = found; }
                 break;
             }
         }
@@ -86,16 +96,17 @@ internal sealed class DebugContracts
         return broken;
     }
 
-    private void Compare(
+    // The promises a call broke, or null when it kept them all, so a kept call allocates nothing.
+    private List<string>? Compare(
         DebugContract contract,
         in DebugFrame entry,
         in DebugFrame exit,
         byte[] memory,
-        Func<ushort, byte> peek,
-        List<string> broken)
+        Func<ushort, byte> peek)
     {
+        List<string>? broken = null;
         void Report(string item, long before, long after) =>
-            broken.Add(string.Create(
+            (broken ??= []).Add(string.Create(
                 CultureInfo.InvariantCulture,
                 $"{contract.Routine} returned with {item} changed: ${before:X2} at entry, ${after:X2} at return. Its documentation says it keeps {item}."));
 
@@ -121,18 +132,20 @@ internal sealed class DebugContracts
             offset += length;
         }
 
-        if (!_checkChanges || contract.Changes is not { } changes) { return; }
+        if (!_checkChanges || contract.Changes is not { } changes) { return broken; }
         foreach (string register in _used)
         {
             if (changes.Contains(register) || contract.Registers.Contains(register)) { continue; }
             (long before, long after) = Value(register, entry, exit);
             if (before != after)
             {
-                broken.Add(string.Create(
+                (broken ??= []).Add(string.Create(
                     CultureInfo.InvariantCulture,
                     $"{contract.Routine} changed {register} (${before:X2} to ${after:X2}), which its documentation does not list."));
             }
         }
+
+        return broken;
     }
 
     private (long Before, long After) Value(string register, in DebugFrame entry, in DebugFrame exit) =>

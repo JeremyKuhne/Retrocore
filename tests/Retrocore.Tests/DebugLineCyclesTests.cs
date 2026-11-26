@@ -74,4 +74,22 @@ public class DebugLineCyclesTests
         lines.Update(second, 4, entered: true, track: true);
         lines.Changed.Should().BeFalse();
     }
+
+    /// <summary>
+    ///  A line is one line whichever string names its file, among more files than paths' hashes are kept for.
+    /// </summary>
+    [TestMethod]
+    public void EqualPathsAreOneLine()
+    {
+        DebugLineCycles lines = new();
+        for (int file = 0; file < 40; file++)
+        {
+            string path = $"file{file}";
+            lines.Update((path, 1), 8, entered: true, track: true);
+            lines.Update((new string(path.AsSpan()), 1), (ulong)file, entered: false, track: true);
+        }
+
+        lines.Last.Should().HaveCount(40);
+        lines.Last[("file39", 1)].Should().Be(47UL);
+    }
 }

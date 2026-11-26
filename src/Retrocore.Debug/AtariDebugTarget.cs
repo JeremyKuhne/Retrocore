@@ -126,6 +126,9 @@ internal sealed partial class AtariDebugTarget : IDebugTarget
     public DebugFrame Frame => M6502Frames.Of(_machine.Processor.Registers);
 
     /// <inheritdoc/>
+    public int StackPointer => _machine.Processor.Registers.StackPointer;
+
+    /// <inheritdoc/>
     public ushort ProgramCounter
     {
         get => _machine.Processor.Registers.ProgramCounter;

@@ -135,6 +135,9 @@ internal sealed partial class DebugSession
     // Documented Keeps: contracts, checked when calls return; null when off or nothing documents one.
     private DebugContracts? _contracts;
 
+    // Target.Peek, made once rather than at every instruction the contracts observe.
+    private Func<ushort, byte>? _peek;
+
     // How often the machine's changed disks are kept in its recovery journal: every 30 seconds, or as
     // RETROCORE_CHECKPOINT_SECONDS says, as the tests that end a host without stopping it do.
     private static readonly int s_checkpointMilliseconds =
@@ -1954,17 +1957,19 @@ internal sealed partial class DebugSession
     // returning to it break. Returns false when a broken contract stops.
     private bool Observe(IDebugTarget cpu)
     {
-        DebugFrame before = cpu.Frame;
-        _instructionStart = before.ProgramCounter;
-        _instructionStack = before.StackPointer;
+        // Only a contract needs every register, so the rest of the frame is read only for one.
+        ushort pc = cpu.ProgramCounter;
+        int stack = cpu.StackPointer;
+        _instructionStart = pc;
+        _instructionStack = stack;
         bool machineCpu = IsMachineCpu(cpu);
         if (machineCpu)
         {
-            ObserveBasic(before.ProgramCounter);
-            ObservePascal(before.ProgramCounter);
+            ObserveBasic(pc);
+            ObservePascal(pc);
         }
 
-        (string Path, int Line)? next = _debug.Position(cpu, before.ProgramCounter)?.Chain[0] is { } line
+        (string Path, int Line)? next = _debug.Position(cpu, pc)?.Chain[0] is { } line
             ? (line.Path, line.Line)
             : null;
 
@@ -1979,9 +1984,11 @@ internal sealed partial class DebugSession
 
         // Call cycles and contracts follow the machine's CPU, whose routines the SDK documents.
         if (!machineCpu) { return true; }
-        (ushort Target, int Length)? call = Target.CallAt(before.ProgramCounter);
-        _sourceCyclesDirty |= _callCycles.Observe(before.ProgramCounter, call?.Length, before.StackPointer, Target.CycleCount, _cycleSource);
-        if (_contracts?.Observe(before, call, Target.Peek) is { Count: > 0 } broken)
+        (ushort Target, int Length)? call = Target.CallAt(pc);
+        _sourceCyclesDirty |= _callCycles.Observe(pc, call?.Length, stack, Target.CycleCount, _cycleSource);
+        if (_contracts is not { } contracts || !contracts.Observes(stack, call is not null)) { return true; }
+        if (_peek?.Target != _target) { _peek = Target.Peek; }
+        if (_peek is { } peek && contracts.Observe(cpu.Frame, call, peek) is { Count: > 0 } broken)
         {
             foreach (string message in broken)
             {

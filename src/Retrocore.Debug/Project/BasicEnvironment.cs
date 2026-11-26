@@ -15,8 +15,8 @@ namespace Retrocore.Debug.Project;
 ///  <para>
 ///   Its file, <c>&lt;name&gt;.prg</c>, loads at BASIC's start, <c>$0401</c>: the line <c>10 SYS&lt;entry&gt;</c>, then
 ///   zeros to the map's load address, <c>$0410</c>, then the program. It goes on a TAP tape, <c>&lt;name&gt;.tap</c>,
-///   which plays from the SDK's sources alone, and on a CBM DOS 2 disk for the 4040, <c>&lt;name&gt;.d64</c>, each under
-///   the name <see cref="ProgramName"/> gives. A launch boots the tape: it types <c>LOAD</c> at BASIC's prompt with
+///   which plays from the SDK's sources alone, and on a CBM DOS 2 disk for the 4040, <c>&lt;name&gt;.d64</c>, each
+///   under the name <see cref="ProgramName"/> gives. A launch boots the tape: it types <c>LOAD</c> at BASIC's prompt with
 ///   PLAY down, and <c>RUN</c> once the program has loaded. A target whose <c>image</c> gives <c>"boot": "disk"</c>
 ///   boots the disk instead, in unit 8's drive 0, with <c>LOAD"&lt;NAME&gt;",8</c>; that needs the 4040's ROMs, which
 ///   the launch finds by their hashes (<see cref="BootMedia"/>). <c>"image": false</c> leaves the tape and the disk

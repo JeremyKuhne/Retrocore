@@ -10,8 +10,10 @@
 import * as vscode from "vscode";
 import { randomUUID } from "node:crypto";
 import { fingerprint, restorable, type SavedMachine } from "./hardware";
+import { savedName, withProjectMachine } from "./project";
 
-// Each launch configuration's saved machine is under this prefix and its name.
+// Each launch configuration's saved machine is under this prefix and its name (a project launch's, with its target's:
+// project.ts savedName).
 const prefix = "retrocore.savedMachine:";
 
 // Each launch configuration's recovery id, which names the journal its machine keeps its unsaved disks in.
@@ -48,11 +50,11 @@ export function registerSavedMachines(context: vscode.ExtensionContext): SavedMa
     const last = new Map<string, string>();
     const saved: SavedMachines = {
         get(configuration) {
-            const name = configuration.name;
+            const name = savedName(configuration);
             return typeof name === "string" ? restorable(state.get<SavedMachine>(key(name)), configuration) : undefined;
         },
         async set(configuration, machine) {
-            const name = configuration.name;
+            const name = savedName(configuration);
             if (typeof name !== "string") return;
             // The same cards and media under other settings are saved again, under those settings' fingerprint.
             const text = JSON.stringify({ fingerprint: fingerprint(configuration), machine });
@@ -63,7 +65,7 @@ export function registerSavedMachines(context: vscode.ExtensionContext): SavedMa
         onDidReset: reset.event,
         // Configurations of one name in the folders of a multi-root workspace are each their own.
         recoveryId(configuration, folder) {
-            const name = configuration.name;
+            const name = savedName(configuration);
             if (typeof configuration.recoveryId === "string") {
                 // Kept apart from the one made for the name, which still finds that id's journal.
                 const ownerKey = `${ownerPrefix}${configuration.recoveryId}`;
@@ -91,8 +93,11 @@ export function registerSavedMachines(context: vscode.ExtensionContext): SavedMa
 
     context.subscriptions.push(vscode.debug.registerDebugConfigurationProvider("retrocore", {
         resolveDebugConfigurationWithSubstitutedVariables(folder, configuration) {
-            const name = configuration.name;
-            if (typeof name !== "string") return configuration;
+            // A project launch's target decides its machine, which is filled in first: the views read it, and the
+            // saved machine and recovery journal are the target's.
+            configuration = withProjectMachine(configuration) as vscode.DebugConfiguration;
+            const name = savedName(configuration);
+            if (name === undefined) return configuration;
 
             // The machine keeps its changed disks for the next launch of the same configuration, under one id for
             // it, made the first time it launches; a configuration can give its own.

@@ -132,7 +132,7 @@ function dialectName(dialect: string, machine: Machine): string {
 /**
  * The dialect a BASIC file names, as the debug host reads it: its first line's pragma, such as REM retrocore level1,
  * else its name's, as in game.level1.bas. A file that cannot be read is judged by its name alone, and one that names
- * none is the machine's BASIC.
+ * none gives no dialect, so it goes into whichever BASIC the machine has.
  */
 export function namedDialect(path: string): string | undefined {
     let text = "";

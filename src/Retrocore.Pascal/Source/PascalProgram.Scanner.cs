@@ -641,9 +641,9 @@ public sealed partial class PascalProgram
         }
 
         // The undocumented declarations of the statement a trailing comment ends, at its own level: back to the ";",
-        // BEGIN or declaration keyword that starts the statement (past a directive's heading ";", and to a variant
-        // part's OF only when the comment follows it), not inside a "(", RECORD or BEGIN the comment is outside of,
-        // and not past one it is inside of.
+        // BEGIN or declaration keyword that starts the statement (past a directive's heading ";", and not to a
+        // variant part's tag unless the comment follows its OF), not inside a "(", RECORD or BEGIN the comment is
+        // outside of, and not past one it is inside of.
         private List<PascalDeclaration> StatementBefore(PascalToken doc)
         {
             // Far enough for any statement; a bound only for text with no statement start at all.
@@ -652,6 +652,10 @@ public sealed partial class PascalProgram
             int level = 0;
             bool first = true;
             bool directive = false;
+
+            // Names past an OF are a variant part's tag if a CASE comes before the statement starts, an ARRAY's,
+            // SET's or FILE's variable if not.
+            List<PascalDeclaration>? pastOf = null;
             for (int index = _at - 1; index >= 0 && index >= _at - Reach; index--)
             {
                 PascalToken token = _tokens[index];
@@ -672,14 +676,20 @@ public sealed partial class PascalProgram
                     // The heading's ";" before its directive: the comment is the routine's.
                     directive = false;
                 }
-                else if (StartsStatement(token) || (token.Is("OF") && !last)) { break; }
+                else if (token.Is("OF") && !last && pastOf is null) { pastOf = []; }
+                else if (token.Is("CASE") && pastOf is not null)
+                {
+                    pastOf = null;
+                    return found;
+                }
+                else if (StartsStatement(token)) { break; }
                 else if (_declared.TryGetValue(token, out PascalDeclaration? declaration) && declaration.Doc is null)
                 {
-                    found.Add(declaration);
+                    (pastOf ?? found).Add(declaration);
                 }
             }
 
-            return found;
+            return [.. found, .. pastOf ?? []];
         }
 
         // Whether a token starts a declaration's or statement's text, so a trailing comment's reach ends there.

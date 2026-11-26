@@ -539,7 +539,8 @@ public sealed class PascalSourceTests
                 + "PROCEDURE T BEGIN (** none *) END;\n"
                 + "PROCEDURE U; FORWARD (** u *);\nPROCEDURE V(F: INTEGER); FORWARD;\nPROCEDURE V(F: INTEGER) (** v *);\n"
                 + "BEGIN END;\nPROCEDURE U;\nBEGIN END;\n"
-                + "TYPE W = RECORD CASE Tag: INTEGER OF 1: (G: INTEGER) (** variant *) END;\nBEGIN END.");
+                + "TYPE W = RECORD CASE Tag: INTEGER OF 1: (G: INTEGER) (** variant *) END;\n"
+                + "VAR H: ARRAY[1..2] OF INTEGER (** h *);\n  J: SET OF CHAR (** j *);\nBEGIN END.");
 
         PascalDeclaration Find(string name) => program.Declarations.Single(declaration => declaration.Name == name);
         (Find("Kind").Doc?.Summary).Should().Be("k");
@@ -560,6 +561,8 @@ public sealed class PascalSourceTests
         (Find("U").Doc?.Summary).Should().Be("u");
         (Find("V").Doc?.Summary).Should().Be("v");
         Find("Tag").Doc.Should().BeNull();
+        (Find("H").Doc?.Summary).Should().Be("h");
+        (Find("J").Doc?.Summary).Should().Be("j");
         program.StrayDocs.Select(doc => doc.Summary).Should().BeEquivalentTo(["stray", "none", "variant"]);
     }
 

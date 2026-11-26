@@ -469,12 +469,21 @@ public sealed partial class DocumentationResolver
     }
 
 
-    // Whether an Entry: label is in the routine: from its address up to the next documented routine that is neither
-    // one of its entries nor one of its own locals (a .proc's labels may have their own ;; blocks).
+    // Whether an Entry: label is in the routine: one of a .proc's own locals, or a label from the routine's address up
+    // to the next documented routine that is neither one of its entries nor one of its own locals (a .proc's labels may
+    // have their own ;; blocks).
     private bool InsideRoutine(DocumentationTopic topic, string label)
     {
-        if (!Current.Symbols.TryGetValue(Current.EntrySymbol(topic, label), out long address)) { return false; }
-        if (topic.Value is not { } start) { return true; }
+        string symbol = Current.EntrySymbol(topic, label);
+        if (!Current.Symbols.TryGetValue(symbol, out long address)) { return false; }
+
+        // A .proc's own local is inside it wherever it is: banked code (two banks at the same addresses) can put
+        // another bank's routine between the routine's start and its label.
+        if (topic.Value is not { } start || symbol.StartsWith($"{topic.Name}::", StringComparison.Ordinal))
+        {
+            return true;
+        }
+
         HashSet<string> entries = [.. topic.EntryLabels.Select(entry => Current.EntrySymbol(topic, entry))];
         string local = $"{topic.Name}::";
         long next = long.MaxValue;

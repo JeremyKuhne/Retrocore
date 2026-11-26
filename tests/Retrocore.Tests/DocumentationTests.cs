@@ -700,6 +700,29 @@ public class DocumentationTests
             """);
 
         new DocumentationResolver(builds).Check().Should().BeEmpty();
+
+        // In banked code another bank's routine can lie between a routine's start and its own local.
+        DocumentationSet banked = Set("""
+            .cpu Mos6502
+            ;; Pushes a value.
+            ;; Entry:
+            ;;   Late = pushes it from A
+            .proc Push
+                nop
+                nop
+            Late:
+                rts
+            .endproc
+
+                .logicalorg $1001
+            ;; The other bank's routine.
+            .proc Other
+                rts
+            .endproc
+                .logicalorg
+            """);
+
+        new DocumentationResolver(banked).Check().Should().BeEmpty();
     }
 
     /// <summary>

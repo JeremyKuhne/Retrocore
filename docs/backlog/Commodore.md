@@ -197,6 +197,68 @@ Still to fetch, each shown before it is fetched:
   a typed program runs, colours and both character sets show, and traces match MAME's `vic20` and `vic20p` from
   power-on.
 
+**Built 2026-11-25.** Phase V2 made one change to it: the VIC fetches only the board's RAM,
+not the expansion port's 3K at `$0400`, which the Programmer's Reference Guide says it cannot access.
+
+- **`Vic6560`** (in `Retrocore.Core`'s chips, with `IVicMemory` and `VicVideoStandard`):
+  - 65 cycles × 261 lines (NTSC) or 71 × 312 (PAL), at 14.318 MHz / 14 or 4.434 MHz / 4.
+  - It draws four dots a cycle and fetches a character's code and colour, then its row of dots, two fetches in two
+    cycles. It takes the window's columns at each line's second cycle and its rows at the frame's first line, as
+    MAME does, and the other registers at the cycle it uses them, so mid-line changes to colours and addresses show.
+  - The text window comes from registers 0-3. Characters are 8 × 8 or 8 × 16, hires or multicolour (00 background,
+    01 border, 10 character, 11 auxiliary), and register 15's bit 3 reverses them. The raster line reads from
+    registers 3 and 4, and the paddles from 8 and 9 (`$FF` with none connected).
+  - The visible frame is 200 × 248 from line 12 (NTSC) or 224 × 296 from line 14 (PAL). The widths are MAME's, and
+    PAL's starts on the line where MAME's does, while NTSC's starts a cycle later, so its picture sits 4 dots left of
+    MAME's and the kernal's window is centred. The heights are taller than MAME's, which shows from line 28: 233
+    lines on NTSC and 284 on PAL.
+  - Sound: bass, alto and soprano count a clock prescaled by 128, 64 or 32 cycles and reload from
+    (register + 1) & 127, toggling at each reload, which gives Mäkelä's measured periods and MAME's. Noise is MAME's:
+    a 16-bit shift register stepped every 2 cycles' count, and an 8-bit ring on its rises. The voices are mixed in
+    proportion to the volume (MAME uses a DAC table) as 48 kHz stereo.
+  - The palettes are MAME's, the 6560's and the 6561's. Interlace is a register bit but is not drawn, and the light
+    pen registers read 0, as no pen is connected.
+  - Where it differs from MAME, the class remarks say so: a row's screen address, the 6560's raster registers, which
+    MAME counts 37 cycles ahead, and what an unanswered read sees.
+- **`Retrocore.Machines.Commodore.Vic20`** (in `Vic20/`):
+  - `Vic20Machine` (id `vic20`), `Vic20Bus`, `Vic20Keyboard`, `Vic20Key`, `Vic20Roms`, `Vic20Expansion` and
+    `Vic20MemoryArea`. `CommodoreJoystick` is shared for the 64.
+  - The bus: RAM, the expansion blocks (3K, blocks 1, 2, 3 and 5, in any mix), the VIC's 16K view (its A13 is A15
+    inverted), the colour RAM's nybbles, and the VIC at `$9000-$90FF`. A4 and A5 select the VIAs in
+    `$9100-$93FF`.
+  - A read that nothing answers sees the VIC's last fetch, as Mäkelä measured; so do a colour RAM read's top four
+    bits. MAME's decode differs slightly: it puts VIA 1 on any address with A4 set in `$9000-$93FF`, and the VIC at
+    `$9000-$900F` only.
+  - VIA 1's interrupt is the NMI and VIA 2's the IRQ. RESTORE is on VIA 1's CA1. The joystick is on VIA 1's PA2-PA5
+    and VIA 2's PB7. The serial bus's lines are wired already (ATN from VIA 1's PA7, CLK and DATA from VIA 2's CA2
+    and CB2, read back on VIA 1's PA0 and PA1), with nothing on the bus yet.
+  - The keyboard matrix comes from the kernal's key table at `$EC5E`: column (VIA 2's port B) × 8 + row (port A).
+    Typing holds each key three jiffies, with SHIFT or CTRL where PETSCII needs them: the colours, RVS, f1-f8, CLR,
+    INST and the cursor keys.
+- **Tests:**
+  - `Vic20MachineTests`: both standards boot to `**** CBM BASIC V2 ****` with 3,583 bytes free, and 6,655, 11,775,
+    19,967 and 28,159 with 3K, 8K, 16K and 24K. All the RAM gives 28,159, as the kernal skips the 3K once block 1
+    has RAM.
+  - They also check that the screen and colour RAM move with block 1, a typed program prints every symbol, the
+    scanned frame shows the kernal's colours, `POKE 36869,242` picks the lower-case set, STOP-RESTORE breaks into a
+    running program through the NMI, the joystick reads, and a voice makes a tone.
+  - `Vic6560Tests`, on blank ROMs: the light pen reads 0, the VIC sees colour RAM, and the window takes its rows at
+    the frame and its columns at the line.
+  - `Vic20OracleTests` traces MAME's `vic20` and `vic20p`, unexpanded and with `-exp 3k`, `8k` and `16k`, for three
+    emulated seconds: 150,000-476,000 instructions each. They match ours from power-on to the wait for a key.
+    - The jiffy interrupt is VIA 2's timer on both, so no beam waits need to be left out.
+    - The kernal's RAM test reads unconnected addresses, which see the VIC's bus: here its last fetch or its read of
+      `$001C`, and in MAME the last byte on it, including the processor's accesses to RAM, the character ROM and the
+      VIC's registers. So A, X and the compare's flags are left out of the test's rows (`$FDAF-$FDEA`, `$FE91-$FEA8`,
+      the same in both kernals). The instructions still match.
+  - `tools/PetOracle.lua` takes the CPU's tag in `RETRO_CPU` (the PET's `f3` by default, the VIC-20's `ue10`).
+- **PGO:** no refresh. The profile trains Apple II workloads only. No Apple II, 6502 core or Desktop path changed;
+  the new chip and machine run only on the VIC-20.
+- **Speed:** a typed-program test runs about 8 emulated seconds in under half a second, with other tests in parallel,
+  so well over ten times real time. That is a rough figure, not a benchmark.
+- **Left for later phases:** the serial bus's devices (V3), the ROM sources (V4), the drives' DOS sources (V5), and
+  the debugger, extension and Desktop (V6).
+
 #### V2. Tape, cartridges and programs
 
 - `CommodoreDatasette` (from `PetDatasette`) on the VIC's cassette port: TAP at the VIC's clocks, WAV, and `.prg`
@@ -206,6 +268,64 @@ Still to fetch, each shown before it is fetched:
 - `.prg` programs loaded straight into memory, as the PET's debugger does.
 - **Done when** LOAD, SAVE and VERIFY work against images MAME reads, both of MAME's tapes load, and a sample of
   cartridges from `vic1001_cart` (games, the Super Expander, the Programmer's Aid) starts on the right RAM size.
+
+**Built 2026-11-25** after "Start phase V2". The Datasette's rename and the TAP changes landed first, with the
+plan (#239).
+
+- **`CommodoreDatasette`** is the PET's `PetDatasette`, renamed and given the machine's clock:
+  - The tape's pulses are still microseconds. The Datasette works out each pulse's length in the machine's cycles as
+    the head reaches it, and a recorded pulse's in microseconds, so the PET's timing is unchanged.
+  - On the VIC-20 it is the machine's one device (`cassette`). VIA 1's PA6 senses the keys, its CA2 runs the motor
+    (low runs it, as MAME's C2N has it), VIA 2's CA1 reads the tape and its PB3 writes it.
+  - It keeps the TAP header it saves with: machine 1 (the VIC-20) and the standard's video byte.
+- **`TapFormat` and `CommodoreTapeCodec`:**
+  - TAP images are written for the machine that records them. A pulse is a byte of 8-cycle units where that reads
+    back as the same pulse, and otherwise a zero and its length in cycles. The PET's and the VIC-20's cycles are no
+    longer than a microsecond, so their images hold every pulse recorded to the microsecond exactly.
+  - The codec carries the header's machine and video bytes. It keeps those it read from an image, and the debug
+    host's Save picks them from the Datasette and keeps them in the recovery journal. Its losses now come from
+    reading the image back, so a rounded pulse is listed as well as an over-long pause.
+- **`Vic20Cartridge`:**
+  - It holds chips at addresses in blocks 1, 2, 3 and 5, and any RAM it brings, such as the Super Expander's 3K.
+  - A chip that fills an aligned part of its block is seen again through the rest, as VICE's `.crt` description says
+    hardware does: a 4K chip at `$A000` is at `$B000` too, and the Programmer's Aid at `$7000` is at `$6000`.
+  - It reads MAME's chips by extension (`.20`, `.40`, `.60`, `.70`, `.a0`, `.b0`), `.prg` images by their first two
+    bytes, VICE's generic `.crt` (type 0, with ROM and RAM packets), and a file with no known name at `$A000`, as the
+    Super Expander's `325323-01` is. Other `.crt` types are refused, as are chips that overlap or fall outside the
+    blocks.
+  - `Autostarts` says whether `A0CBM` is at `$A004`. The kernal does the rest.
+  - The machine takes it in its constructor; its ROM takes the blocks it fills from any RAM there, and memory areas
+    show it as `Cartridge`.
+- **`Vic20Machine.LoadProgram`** loads a `.prg` straight into RAM, as LOAD does. A program at a BASIC start (`$0401`,
+  `$1001` or `$1201`) goes to this machine's `TXTTAB`, its lines are linked again, and `VARTAB`, `ARYTAB` and
+  `STREND` are set past it. Anything else goes where its address says.
+- **Tests:**
+  - `Vic20TapeTests`:
+    - A program saved on NTSC and on PAL loads, runs and verifies, and loads on the other standard.
+    - A `CommodoreTapeBuilder` tape, at the PET's pulse lengths, loads.
+    - A `.prg` from an unexpanded machine loads into memory at `$1201` with 8K, relinked, and runs.
+    - MAME's two tapes load: 3D Maze (TAP) and Speakeasy's PHONEME EDITOR (a WAV marked a bad dump).
+    - TAP images carry the VIC-20's header and hold every pulse.
+    - MAME's `vic20` loads a program ours saved, as TAP and as WAV, to the same bytes.
+    - `tools/PetTapeLoad.lua` takes the CPU's tag in `RETRO_CPU`, as `PetOracle.lua` does.
+  - `Vic20CartridgeTests`:
+    - The cartridge formats, mirroring, `.crt` packets and refusals, including lengths too big for the file.
+    - Avenger, Lode Runner, the Programmer's Aid, Adventureland and Story Machine, read by their files' names, fill
+      the addresses MAME's hash file gives.
+    - Avenger, Gorf and Lode Runner (PAL) start themselves on the unexpanded machine and run from their ROM.
+    - The Super Expander adds its 3K and reaches `READY.`, and `SYS 28681` starts the Programmer's Aid without an
+      error.
+  - `Vic20OracleTests.CartridgeBootMatchesMame` traces MAME with the list's Avenger, Gorf, Donkey Kong (blocks 1 and
+    5), Lode Runner (PAL, blocks 3 and 5), the Super Expander and the Programmer's Aid for three seconds; they match.
+    - Lode Runner clears VIA 1's DDR and reads PA7 as an input, a pin nothing drives: high here, as an open TTL input
+      is, and low in MAME. So after a load from `$9111` or `$911F` the comparison leaves out bit 7 and the N flag.
+- **Not done here:**
+  - Insert, Save and the Datasette's keys from the debugger and the Desktop come with the VIC-20's debug target in V6.
+    The Datasette is an `IMediumSlot` and the codec is ready, but no client drives it yet.
+  - The cartridge is chosen when the machine is built; changing it means building a new machine, as switching the
+    VIC-20 off does. Banked cartridges (the Mega-Cart, the Final Expansion) are not modelled.
+- **PGO:** no refresh. The Datasette's PET path changed only in working out each pulse's length once per pulse, and
+  the profile trains Apple II workloads only.
 
 #### V3. The serial bus and the 1540/1541
 

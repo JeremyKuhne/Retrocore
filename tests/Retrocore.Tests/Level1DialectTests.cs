@@ -212,8 +212,12 @@ public class Level1DialectTests
     [TestMethod]
     public void ImagesAreToldFromText()
     {
-        Level1Dialect.IsImage(Image("1000 P. 1\n1010 GOTO 1000\n")).Should().BeTrue("line 1000 is $03E8");
+        Level1Dialect.IsImage(Image("1000 P. 1\n1010 GOTO 1000\n")).Should().BeTrue("line 1000 is $03E8, a control byte");
         Level1Dialect.IsImage(Image("2400 P. 1\n2500 END\n")).Should().BeTrue("lines 2400 and 2500 are $0960 and $09C4");
+        Level1Dialect.IsImage(Image("3400 END\n")).Should().BeTrue("line 3400's high byte is a carriage return");
+
+        // An image whose lines are all from 8192 up, with no control byte, cannot be told from text, and reads as text.
+        Level1Dialect.IsImage(Image("9000 END\n")).Should().BeFalse();
         Level1Dialect.IsImage(Image("10 P. 1\n")).Should().BeTrue();
         foreach (string text in (string[])["10 PRINT\r20 END\r", "PRINT 1\r", "10 P. 1\r\n20 END\r\n", "10 P. 1\n", "\t10 P. 1\n", ""])
         {

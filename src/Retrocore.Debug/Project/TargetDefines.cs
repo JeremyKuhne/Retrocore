@@ -167,10 +167,14 @@ internal static class TargetDefines
     // 48K with it, otherwise 16K under Level II and 4K under Level I, as the launch has it.
     private static int RamKilobytes(ProjectTarget target)
     {
-        // An option that is not a whole number is the launch's to refuse; the define takes the default.
-        if (target.Options["ramKilobytes"] is System.Text.Json.Nodes.JsonValue ram && ram.TryGetValue(out int kilobytes))
+        // Read as the launch reads it; one the launch refuses leaves the define the default, and the launch says why.
+        try
         {
-            return kilobytes;
+            if (target.Options.Int("ramKilobytes") is { } kilobytes) { return kilobytes; }
+        }
+        catch (ArgumentException)
+        {
+            // The launch refuses it.
         }
 
         if (target.Machine.Machine == "trs80-model1")

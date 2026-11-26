@@ -107,4 +107,5 @@ test("a file is in a project when it is in a project's folder or below it, and n
     assert.equal(inProject(sample, folders), false);
     assert.equal(inProject(path.join(sample, "..", "iie", "main.s"), folders), false);
     assert.equal(inProject(path.join(sample + "-other", "a.s"), folders), false);
+    assert.equal(inProject(path.join(sample, "..x", "a.s"), folders), true, "a folder whose name starts with .. is inside");
 });

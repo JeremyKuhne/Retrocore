@@ -148,7 +148,7 @@ export function inProject(file: string, projectFolders: readonly string[]): bool
     const own = key(file);
     return projectFolders.some(folder => {
         const relative = path.relative(key(folder), own);
-        return relative !== "" && !relative.startsWith("..") && !path.isAbsolute(relative);
+        return relative !== "" && relative !== ".." && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative);
     });
 }
 

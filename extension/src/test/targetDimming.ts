@@ -7,8 +7,8 @@ import * as path from "node:path";
 import * as vscode from "vscode";
 
 /**
- * The lines (1-based) a document's Unnecessary diagnostics cover: here, the lines its target's .if blocks leave out
- * (the server also fades macros never used and such, which hello.s has none of).
+ * The lines (1-based) a document's Unnecessary diagnostics cover: here, the lines its target's .if blocks leave out,
+ * as hello.s has nothing else the server fades.
  */
 function fadedLines(uri: vscode.Uri): number[] {
     return vscode.languages.getDiagnostics(uri)

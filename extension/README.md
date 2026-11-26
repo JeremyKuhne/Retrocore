@@ -13,8 +13,9 @@ which starts when a `retrocore-asm` document opens; see
 **MACRO-10 Assembly**. `*.s` and `*.inc` are not claimed, as ca65 and the GNU
 assembler use them, except in a Retrocore project: a `*.s` or `*.inc` in the folder of
 a project's `retrocore.json` (one with targets), or below it, opens as Retrocore
-Assembly whenever it opens as plain text. To use another language for one, map it to
-that language in `files.associations`.
+Assembly whenever it is plain text, as it opens or a project file changes. To use
+another language for one, map it to that language (not plain text) in
+`files.associations`.
 Elsewhere, select the language with the status-bar language selector or
 **Change Language Mode**, or add a workspace setting:
 

@@ -5,8 +5,9 @@
 // A Retrocore project's sources are Retrocore assembly. *.s and *.inc are not claimed in general, as ca65 and the GNU
 // assembler use them too (see the README's "Select the assembly language"), but one in a folder with a project's
 // retrocore.json, or below it, is the project's: it opens as retrocore-asm, so the language server analyzes it for the
-// active target. Only a document no other language claims (plain text) is changed, each time it opens as one; a
-// file another extension's language claims, or a files.associations entry maps to one, is left alone.
+// active target. Only a plain-text document is changed: each time it opens as one, and each time the projects are
+// read. A file in another installed language (another extension's, or one files.associations maps it to) is left
+// alone.
 
 import * as path from "node:path";
 import * as vscode from "vscode";

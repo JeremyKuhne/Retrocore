@@ -465,9 +465,27 @@ Every code file on Apple Pascal's and Apple III Pascal's disks, the system's own
 and assembles back byte-identically, named or not. Hovers in the editor show a p-code's macro on a p-code line and the 6502's
 instruction on a 6502 line.
 
+## The interpreter's source
+
+The SDK has Apple Pascal 1.1's interpreter, `SYSTEM.APPLE`, as native 6502 source:
+[`Sdk/Interpreter/1.1`](../src/Retrocore.Pascal/Sdk/Interpreter/1.1), shipped beside `Pcode.asm` as
+`Pascal/Interpreter/1.1/`. It assembles byte for byte to the file on 1.1's APPLE1 with its linker configuration:
+
+```text
+Retrocore.Debug --assemble SYSTEM.APPLE.asm SYSTEM.APPLE --config SYSTEM.APPLE.cfg
+```
+
+Its p-code handlers are named for what they do, in the `Pcodes` scope, and its standard procedures in
+`StandardProcedures`; each keeps the names UCSD's and Apple's documents give it in `Also:`, so `ADI` reaches
+`Pcodes::AddIntegers` and `IORSLT` reaches `Syscom::IoResult`. The p-machine's registers in zero page are named for
+what they point to (`LocalFrame` for MP, `InstructionPointer` for IPC). Its conversion log,
+[PascalInterpreter.md](conversions/PascalInterpreter.md), says where each name came from.
+
 ## Testing
 
 - `PcodeTests`, `PascalListingTests` and `PascalMediaTests` need no files for most of their tests.
+- `PascalInterpreterSourceTests` pins the interpreter's source by digest and lint; with Apple Pascal 1.1's APPLE1, it
+  compares it byte for byte with `SYSTEM.APPLE`.
 - With the disks, `PascalMediaTests` and `PcodeTests` read and disassemble every code file on them;
   `Apple3PascalTests` and `Apple2PascalTests` boot Pascal, compile and run a program, and read its frames: Apple III
   Pascal 1.0, 1.1 and 1.2 (on disks built as above), and Apple Pascal 1.0, 1.1 and 1.2 on the II Plus, 1.1 and 1.2

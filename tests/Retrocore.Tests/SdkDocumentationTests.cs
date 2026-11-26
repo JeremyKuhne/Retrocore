@@ -395,9 +395,13 @@ public class SdkDocumentationTests
     private static readonly string[] s_sdkFolders =
         ["AppleSoft", "DiskII", "Dos", "IntegerBasic", "Microsoft6502Basic", "ProgrammersAid", "System"];
 
-    // The SDK's modules as the editor indexes them: the roots among the IIe's ROM sources. AppleSoft.asm is the
-    // default module; the overlay is a mutually exclusive MACRO-10 source.
-    private static IEnumerable<string> SdkRoots(string roms) =>
+    /// <summary>
+    ///  The SDK's modules as the editor indexes them: the roots among the IIe's ROM sources. AppleSoft.asm is the
+    ///  default module; the overlay is a mutually exclusive MACRO-10 source.
+    /// </summary>
+    /// <param name="roms">The folder holding the IIe's ROM sources.</param>
+    /// <returns>Each module's root.</returns>
+    internal static IEnumerable<string> SdkRoots(string roms) =>
         s_sdkFolders
             .SelectMany(folder => SourceIncludes.Roots(Path.Join(roms, folder)))
             .Where(root => !Path.GetFileName(root).Equals("applesoft.mac", StringComparison.OrdinalIgnoreCase))

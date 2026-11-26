@@ -46,7 +46,7 @@ internal static class BasicFiles
         BasicDialect dialect = DialectOf(path, args.String("dialect"));
         byte[] bytes = File.ReadAllBytes(path);
         BasicProgram program = IsTape(path) ? BasicTape.Read(bytes, out _) : BasicProgram.FromImage(dialect, bytes);
-        return new JsonObject { ["text"] = program.ToText(), ["dialect"] = dialect.Name };
+        return new JsonObject { ["text"] = program.ToText(), ["dialect"] = program.Dialect.Name };
     }
 
     /// <summary>
@@ -101,7 +101,7 @@ internal static class BasicFiles
         if (file.Contains("#fa", StringComparison.OrdinalIgnoreCase)) { return BasicDialect.Integer; }
         return file.Contains("#fc", StringComparison.OrdinalIgnoreCase)
             ? BasicDialect.AppleSoft
-            : throw new ArgumentException($"Say which BASIC {file} is: applesoft, integer, apple1, level2, business, colorbasic, mbasic, petbasic, bbcbasic or atari.");
+            : throw new ArgumentException($"Say which BASIC {file} is: applesoft, integer, apple1, level2, level1, business, colorbasic, mbasic, petbasic, bbcbasic or atari.");
     }
 
     private static bool IsTape(string path) => path.EndsWith(".cas", StringComparison.OrdinalIgnoreCase);

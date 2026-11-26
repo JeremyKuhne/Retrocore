@@ -417,6 +417,7 @@ internal sealed partial class DebugSession
     {
         if (_basicStatement is not { } statement || Target.Basic is not { } dialect) { return null; }
         IBasicMemory text = TextMemory;
+        if (dialect is Level1Dialect) { return Level1Dialect.StatementWord(text, statement.Address); }
         if (dialect is AtariBasicDialect)
         {
             // An Atari BASIC statement is its offset byte, then the statement's token, which numbers its word up to the

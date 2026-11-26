@@ -32,6 +32,7 @@ internal sealed class BasicDocuments
     {
         LanguageHost.AppleSoftId => BasicDialect.AppleSoft,
         LanguageHost.Level2Id => BasicDialect.Level2,
+        LanguageHost.Level1Id => BasicDialect.Level1,
         LanguageHost.IntegerId => BasicDialect.Integer,
         LanguageHost.BusinessId => BasicDialect.BusinessBasic,
         LanguageHost.Apple1Id => BasicDialect.Apple1,
@@ -90,13 +91,7 @@ internal sealed class BasicDocuments
 
     private static BasicDocument Analyze(DocumentUri uri, string languageId, string text)
     {
-        if (languageId == LanguageHost.Level1Id)
-        {
-            BasicSource none = BasicSource.Analyze("", BasicDialect.Level2);
-            return new(uri, languageId, text, none, "Level I BASIC is not supported yet.");
-        }
-
-        return new(uri, languageId, text, BasicSource.Analyze(text, DialectOf(languageId), uri.Path), Note: null);
+        return new(uri, languageId, text, BasicSource.Analyze(text, DialectOf(languageId), uri.Path));
     }
 
     private static Diagnostic Convert(BasicDocument document, BasicDiagnostic diagnostic)

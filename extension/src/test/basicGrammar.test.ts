@@ -18,6 +18,7 @@ before(async () => {
     const files: Record<string, string> = {
         "source.retrocore-applesoft": "applesoft.tmLanguage.json",
         "source.retrocore-level2": "level2.tmLanguage.json",
+        "source.retrocore-level1": "level1.tmLanguage.json",
         "source.retrocore-integer": "integer.tmLanguage.json",
         "source.retrocore-business": "business.tmLanguage.json",
         "source.retrocore-colorbasic": "colorbasic.tmLanguage.json",
@@ -66,6 +67,15 @@ test("BASIC finds reserved words where the ROM does, inside names too", () => {
     assert.ok(has(scopes("level2", "10 INPUT A", "INPUT"), "keyword.other"), "INPUT, not INP then UT");
     assert.ok(has(scopes("level2", "10 GO TO 20", "GO"), "keyword.control"));
     assert.ok(has(scopes("applesoft", "10 X = ATN(1) + A TO B", "ATN"), "support.function"));
+});
+
+test("Level I finds its words cut short with a period, and runs REM and DATA to the line's end", () => {
+    assert.ok(has(scopes("level1", "10 P. \"HI\"", "P."), "keyword.other"), "P. is PRINT");
+    assert.ok(has(scopes("level1", "20 GOS. 100", "GOS."), "keyword.control"), "GOS. is GOSUB");
+    assert.ok(has(scopes("level1", "30 A=RND(6)", "RND"), "support.function"));
+    assert.ok(has(scopes("level1", "40 A$=\"X\"", "A$"), "variable.other"));
+    assert.ok(has(scopes("level1", "50 D. 1:PRINT", "PRINT"), "string.unquoted.data"), "D. is DATA, to the line's end");
+    assert.ok(has(scopes("level1", "60 REM A:PRINT", "PRINT"), "comment.line"));
 });
 
 test("Integer BASIC's names run to any length, and MOD and # are operators", () => {

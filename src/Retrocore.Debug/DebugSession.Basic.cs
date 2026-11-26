@@ -89,11 +89,16 @@ internal sealed partial class DebugSession
             BasicProgram tape = BasicTape.Read(bytes, out _);
             return tape.Dialect.Name == dialect.Name
                 ? StoreBasic(tape, [])
-                : throw new InvalidOperationException($"A CSAVE tape holds Level II BASIC, not {dialect.DisplayName}.");
+                : throw new InvalidOperationException($"The tape holds a {tape.Dialect.DisplayName} program, not {dialect.DisplayName}.");
         }
 
-        // Every tokenized program has zero bytes, which end its lines; a text file has none.
-        if (bytes.AsSpan().IndexOf((byte)0) >= 0) { return StoreBasic(BasicProgram.FromImage(dialect, bytes), []); }
+        // Every tokenized program has zero bytes, which end its lines; a text file has none. Level I's image may have
+        // none, so it is told by its line numbers (Level1Dialect.IsImage).
+        bool image = dialect is Level1Dialect
+            ? Level1Dialect.IsImage(bytes)
+            : bytes.AsSpan().IndexOf((byte)0) >= 0;
+
+        if (image) { return StoreBasic(BasicProgram.FromImage(dialect, bytes), []); }
         return WriteBasic(File.ReadAllText(path));
     }
 

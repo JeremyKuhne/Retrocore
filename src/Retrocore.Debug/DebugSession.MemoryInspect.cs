@@ -497,11 +497,15 @@ internal sealed partial class DebugSession
     }
 
     // The BASIC's floating point formats: AppleSoft's and Color BASIC's five bytes and Business BASIC's four,
-    // exponent first; Level II's single and double, exponent last. None for an integer BASIC.
+    // exponent first; Level II's single and double, exponent last. None for an integer BASIC, nor for Level I, whose
+    // four bytes keep the sign over the exponent, which these readers do not decode.
     private IEnumerable<(string Label, int Length, bool ExponentFirst, int Digits)> FloatFormats()
     {
         BasicDialect? basic = Target.Basic;
-        if (basic is null || ReferenceEquals(basic, BasicDialect.Integer) || ReferenceEquals(basic, BasicDialect.Apple1))
+        if (basic is null
+            || ReferenceEquals(basic, BasicDialect.Integer)
+            || ReferenceEquals(basic, BasicDialect.Apple1)
+            || ReferenceEquals(basic, BasicDialect.Level1))
         {
             return [];
         }

@@ -179,7 +179,7 @@ internal sealed partial class LanguageWorkspace
             Schedule(root);
         }
 
-        // A dropped target still waiting to be analyzed is not analyzed after all.
+        // A dropped target still waiting or running is not stored or published after all.
         lock (_scheduling)
         {
             foreach (string root in dropped.Except(roots, StringComparer.OrdinalIgnoreCase))

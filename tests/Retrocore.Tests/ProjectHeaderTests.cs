@@ -152,7 +152,7 @@ public sealed partial class ProjectHeaderTests
 
     /// <summary>
     ///  A target's <c>ramKilobytes</c> is read as the launch reads it: a whole number written as a number with a
-    ///  fraction or as text counts, and one the launch refuses leaves the machine's default.
+    ///  fraction or as text counts, and one that is not a whole number leaves the machine's default.
     /// </summary>
     /// <param name="value">The option's JSON.</param>
     /// <param name="ram">The define's value.</param>

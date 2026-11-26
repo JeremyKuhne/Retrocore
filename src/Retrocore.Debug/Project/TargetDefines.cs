@@ -167,7 +167,8 @@ internal static class TargetDefines
     // 48K with it, otherwise 16K under Level II and 4K under Level I, as the launch has it.
     private static int RamKilobytes(ProjectTarget target)
     {
-        // Read as the launch reads it; one the launch refuses leaves the define the default, and the launch says why.
+        // Read as the launch reads it. One that is not a whole number leaves the define the default; a size the
+        // machine does not offer is the define's value as given, and the launch refuses it.
         try
         {
             if (target.Options.Int("ramKilobytes") is { } kilobytes) { return kilobytes; }

@@ -6,7 +6,10 @@ import * as assert from "node:assert/strict";
 import * as path from "node:path";
 import * as vscode from "vscode";
 
-/** The lines (1-based) a document's Unnecessary diagnostics cover: the lines its target's .if blocks leave out. */
+/**
+ * The lines (1-based) a document's Unnecessary diagnostics cover: here, the lines its target's .if blocks leave out
+ * (the server also fades macros never used and such, which hello.s has none of).
+ */
 function fadedLines(uri: vscode.Uri): number[] {
     return vscode.languages.getDiagnostics(uri)
         .filter(problem => problem.tags?.includes(vscode.DiagnosticTag.Unnecessary) === true)

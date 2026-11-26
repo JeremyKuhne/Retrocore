@@ -5,17 +5,21 @@
 // A Retrocore project's sources are Retrocore assembly. *.s and *.inc are not claimed in general, as ca65 and the GNU
 // assembler use them too (see the README's "Select the assembly language"), but one in a folder with a project's
 // retrocore.json, or below it, is the project's: it opens as retrocore-asm, so the language server analyzes it for the
-// active target. Only a document no other language claims (plain text) is changed.
+// active target. Only a document no other language claims (plain text) is changed, each time it opens as one; a
+// file another extension's language claims, or a files.associations entry maps to one, is left alone.
 
 import * as path from "node:path";
 import * as vscode from "vscode";
-import { activeTargetRead, type ActiveTargets } from "./activeTarget";
+import type { ActiveTargets } from "./activeTarget";
 import { inProject } from "./project";
 
 /** The extensions of the sources a project's folder gives the assembly language. */
 const sourceExtensions = new Set([".s", ".inc"]);
 
-/** Opens a project's plain-text .s and .inc sources as Retrocore assembly, now and as they open. */
+/**
+ * Opens a project's plain-text .s and .inc sources as Retrocore assembly: those open when the workspace's projects are
+ * read (again, as project files change), and those that open later.
+ */
 export function registerProjectLanguage(context: vscode.ExtensionContext, targets: ActiveTargets): void {
     const claim = (document: vscode.TextDocument): void => {
         if (document.uri.scheme !== "file" || document.languageId !== "plaintext"
@@ -27,6 +31,5 @@ export function registerProjectLanguage(context: vscode.ExtensionContext, target
         }
     };
     const claimOpen = (): void => { for (const document of vscode.workspace.textDocuments) claim(document); };
-    context.subscriptions.push(vscode.workspace.onDidOpenTextDocument(claim), targets.onDidChange(claimOpen));
-    void activeTargetRead().then(claimOpen);
+    context.subscriptions.push(vscode.workspace.onDidOpenTextDocument(claim), targets.onDidRead(claimOpen));
 }

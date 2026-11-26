@@ -55,6 +55,8 @@ export interface ActiveTargets {
     readonly targets: readonly ProjectTarget[];
     /** Fires when the active target, its project's name or what its file gives the target changes. */
     readonly onDidChange: vscode.Event<ProjectTarget | undefined>;
+    /** Fires each time the workspace's project files have been read, whether or not the targets changed. */
+    readonly onDidRead: vscode.Event<void>;
     /** Reads the workspace's project files again. */
     refresh(): Promise<void>;
 }
@@ -62,10 +64,11 @@ export interface ActiveTargets {
 /** Finds the workspace's projects, shows the active target and registers the commands that name and pick it. */
 export function registerActiveTarget(context: vscode.ExtensionContext): ActiveTargets {
     const changed = new vscode.EventEmitter<ProjectTarget | undefined>();
+    const read = new vscode.EventEmitter<void>();
     const item = vscode.window.createStatusBarItem("retrocore.activeTarget", vscode.StatusBarAlignment.Left, 100);
     item.name = "Retrocore Target";
     item.command = "retrocore.pickTarget";
-    context.subscriptions.push(changed, item);
+    context.subscriptions.push(changed, read, item);
 
     let targets: ProjectTarget[] = [];
     let shown = "";
@@ -131,6 +134,7 @@ export function registerActiveTarget(context: vscode.ExtensionContext): ActiveTa
         targets = found;
         current = active();
         show();
+        read.fire();
     };
     const queue = (): Promise<void> => {
         const next = (reading ?? Promise.resolve()).then(refresh, refresh);
@@ -200,6 +204,7 @@ export function registerActiveTarget(context: vscode.ExtensionContext): ActiveTa
         get active() { return active(); },
         get targets() { return targets; },
         onDidChange: changed.event,
+        onDidRead: read.event,
         refresh: queue
     };
 }

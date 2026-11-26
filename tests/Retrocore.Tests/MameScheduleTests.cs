@@ -74,6 +74,10 @@ public class MameScheduleTests
         Action format = () => MameSchedule.Script([(6, "RUN\r"), (2.5, "\r")]);
         format.Should().Throw<ArgumentException>();
         MameSchedule.Script([(2, "A"), (2, "B")]).Should().Be("2=A|2=B");
+
+        // A negative time is out of range, not out of order.
+        Action negative = () => MameSchedule.Script([(-0.5, "\r")]);
+        negative.Should().Throw<ArgumentOutOfRangeException>();
     }
 
     /// <summary>

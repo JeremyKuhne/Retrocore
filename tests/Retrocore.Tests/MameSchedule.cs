@@ -20,7 +20,7 @@ internal static class MameSchedule
 {
     /// <summary>
     ///  The latest an entry may fire after its time: MAME checks the schedule once a frame, and every machine the
-    ///  oracles run draws at least 50 frames a second.
+    ///  oracles run draws at least 50 frames a second, so a frame (0.02 s) and a margin.
     /// </summary>
     internal const double FrameSeconds = 0.025;
 
@@ -29,7 +29,10 @@ internal static class MameSchedule
     ///  whatever the culture.
     /// </summary>
     /// <param name="seconds">The emulated second; zero or more, and finite.</param>
-    /// <returns>The time to 15 significant digits, such as <c>2.5</c>, <c>3</c> or <c>0.00001</c>.</returns>
+    /// <returns>
+    ///  The time to 15 significant digits or 15 decimals, whichever is fewer, such as <c>2.5</c>, <c>3</c> or
+    ///  <c>0.00001</c>.
+    /// </returns>
     /// <exception cref="ArgumentOutOfRangeException">
     ///  <paramref name="seconds"/> is negative, infinite or not a number.
     /// </exception>
@@ -40,8 +43,8 @@ internal static class MameSchedule
             throw new ArgumentOutOfRangeException(nameof(seconds), seconds, "A schedule time is a finite second, zero or more.");
         }
 
-        // "R" and the default format write 1E-05 and 1E+15, which the scripts can't read. A custom format keeps 15
-        // significant digits, and writes -0 for negative zero, so zero is written on its own.
+        // "R" and the default format write 1E-05 and 1E+15, which the scripts can't read. A custom format keeps at
+        // most 15 significant digits, and writes -0 for negative zero, so zero is written on its own.
         return seconds == 0 ? "0" : seconds.ToString("0.###############", CultureInfo.InvariantCulture);
     }
 
@@ -73,7 +76,7 @@ internal static class MameSchedule
     /// </exception>
     internal static string Script(IEnumerable<(double At, string Text)> script)
     {
-        double previous = 0;
+        double previous = double.NegativeInfinity;
         foreach ((double at, _) in script)
         {
             if (at < previous)
@@ -88,7 +91,7 @@ internal static class MameSchedule
     }
 
     /// <summary>
-    ///  Checks the script's <c>RETRO_FIRED</c> log: every entry fired, in order, at its time or within a frame after.
+    ///  Checks the script's <c>RETRO_FIRED</c> log: every entry fired, in order, at its time or within <see cref="FrameSeconds"/> after.
     /// </summary>
     /// <param name="script">The schedule MAME was given.</param>
     /// <param name="log">

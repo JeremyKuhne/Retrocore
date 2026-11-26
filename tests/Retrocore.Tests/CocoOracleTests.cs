@@ -216,9 +216,12 @@ public class CocoOracleTests
             start.Environment["RETRO_END"] = MameSchedule.Seconds(finish);
             start.Environment["RETRO_OUT"] = output;
             using Process process = Process.Start(start) ?? throw new InvalidOperationException("MAME did not start.");
-            string log = process.StandardOutput.ReadToEnd() + process.StandardError.ReadToEnd();
+            // Both streams drain as MAME runs, so a full pipe can't stall it.
+            Task<string> errors = process.StandardError.ReadToEndAsync();
+            Task<string> standard = process.StandardOutput.ReadToEndAsync();
             process.WaitForExit(120_000).Should().BeTrue("MAME finishes");
-            File.Exists(output).Should().BeTrue($"the Lua script dumps memory; MAME said: {log}");
+            Task.WaitAll(errors, standard);
+            File.Exists(output).Should().BeTrue($"the Lua script dumps memory; MAME said: {standard.Result}{errors.Result}");
             MameSchedule.ShouldHaveFiredOnTime(script, File.ReadAllText(fired));
             return (File.ReadAllBytes(output), disk is null ? null : File.ReadAllBytes(image));
         }

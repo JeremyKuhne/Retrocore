@@ -6,9 +6,9 @@ the Model I. Hardware beyond that, such as the RS-232 ports, hard disks and the 
 scope; the page's [What is not done yet](../Trs80Model3And2.md#what-is-not-done-yet) lists it.
 
 **Status:** every stage is built; what each still lacks is listed with it: TRSDOS on the Model II, which stops at
-`BOOT ERROR DM 23`, with its oracle and its DMA and keyboard codes; LS-DOS 6.3.1 on the Model II, whose screen stays
-blank; Teledisk images, for TRSDOS-II 4.2; the Model II's keyboard codes against its keyboard's ROM; MAME's
-`cpu_fc86` Model II boot ROM, which needs a good dump; and TRSDOS 1.3 writing.
+`BOOT ERROR DM 23`, with its DMA and keyboard codes; LS-DOS 6.3.1 on the Model II, whose screen stays blank; the
+Model II's oracle with both, once they boot; Teledisk images, for TRSDOS-II 4.2; the Model II's keyboard codes
+against its keyboard's ROM; MAME's `cpu_fc86` Model II boot ROM, which needs a good dump; and TRSDOS 1.3 writing.
 
 ## Stages
 
@@ -30,8 +30,9 @@ blank; Teledisk images, for TRSDOS-II 4.2; the Model II's keyboard codes against
    the Model II:
    - **Its images.** MAME's `trs80m2` software list has the Model II's DOSes on 8-inch disks: TRSDOS 1.2, 2.0a and
      2.0b (IMD), TRSDOS-II 4.2 for the Model 16 (Teledisk) and LS-DOS 6.3.1 (DMK). The fixtures keep them in
-     `trs80-disks` as `M2TRSDOS12.imd`, `M2TRSDOS20A.imd`, `M2TRSDOS20B.imd`, `M2TDOSCALC.imd`,
-     `M16TRSDOS42.td0` and `M2LSDOS631.dmk`, with where each came from.
+     `trs80-disks` as `M2TRSDOS12.imd`, `M2TRSDOS20A.imd`, `M2TRSDOS20B.imd`, `M16TRSDOS42.td0` and
+     `M2LSDOS631.dmk`, with the TRSDOS 2.0 set's calculator disk as `M2TDOSCALC.imd`, and with where each came
+     from.
    - **TRSDOS stops at `BOOT ERROR DM 23`.** TRSDOS 1.2, 2.0a and 2.0b load their boot sector and stop there, on
      main at `5c7ce12`. MAME 0.264 boots TRSDOS 1.2 and 2.0a from the same images to their logo, so the fault is
      ours, probably in the DMA or the FD1791's single-density track 0. Then check the DMA and the keyboard codes

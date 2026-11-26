@@ -85,6 +85,21 @@ public sealed class BootMediaTests
     }
 
     /// <summary>
+    ///  The folders searched are the target's <c>bootImage</c>, then the launch's ROM folder, then the set's variable's
+    ///  and the cache, those that exist, each once.
+    /// </summary>
+    [TestMethod]
+    public void RootsAreBootImageThenTheLaunchsRomFolder()
+    {
+        Directory.CreateDirectory(Path.Join(_folder, "boot"));
+        Directory.CreateDirectory(Path.Join(_folder, "roms"));
+        BootMediaSet set = new("test", "chips", "a test", "nowhere", Variable: null, "chips", []);
+        List<string> roots = BootMedia.Roots(set, Path.Join(_folder, "boot"), Path.Join(_folder, "roms"));
+        roots.Take(2).Should().Equal(Path.Join(_folder, "boot"), Path.Join(_folder, "roms"));
+        BootMedia.Roots(set, Path.Join(_folder, "missing"), romDirectory: null).Should().NotContain(Path.Join(_folder, "missing"));
+    }
+
+    /// <summary>
     ///  With MAME's c4040 set in <c>RETROCORE_PET_ROMS</c>, its files match the catalog's hashes, so the lookup finds
     ///  the drive's ROMs; inconclusive without them.
     /// </summary>

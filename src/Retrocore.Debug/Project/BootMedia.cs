@@ -11,15 +11,16 @@ namespace Retrocore.Debug.Project;
 
 /// <summary>
 ///  The boot media and device dumps the SDK's environments use that are not SDK sources, as
-///  <c>Sdk/1/boot-media.json</c> lists them, and where a build or a launch finds them: by each file's hash, whatever
-///  its name.
+///  <c>Sdk/1/boot-media.json</c> lists them, and where a launch finds them: by each file's hash, whatever its name.
 /// </summary>
 /// <remarks>
 ///  <para>
 ///   Each set is identified by the SHA-1 of each file, as its usual source publishes it (MAME's sets give SHA-1). The
-///   files are looked for in a target's <c>bootImage</c> folder, the folder the set's variable names (such as
-///   <c>RETROCORE_PET_ROMS</c>), and <c>RETROCORE_CACHE</c> (by default <c>%USERPROFILE%\Retrocore</c>), each searched
-///   with its subfolders. Only files of a set's sizes are read. A set is found when every file is.
+///   files are looked for in a target's <c>bootImage</c> folder, the launch's ROM folder, the folder the set's
+///   variable names (such as <c>RETROCORE_PET_ROMS</c>), and <c>RETROCORE_CACHE</c> (by default
+///   <c>%USERPROFILE%\Retrocore</c>), each searched with its subfolders, a linked file read as its target is and a
+///   linked folder left out, so no search loops. Only files of a set's sizes are read. A set is found when every
+///   file is.
 ///  </para>
 /// </remarks>
 internal static class BootMedia
@@ -90,16 +91,18 @@ internal static class BootMedia
             : Path.Join(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Retrocore");
 
     /// <summary>
-    ///  Gets the folders a set's files are looked for in, in order: a target's <c>bootImage</c>, the folder the set's
-    ///  variable names, and the cache.
+    ///  Gets the folders a set's files are looked for in, in order: a target's <c>bootImage</c>, the launch's ROM
+    ///  folder, the folder the set's variable names, and the cache.
     /// </summary>
     /// <param name="set">The set.</param>
     /// <param name="bootImage">The target's <c>bootImage</c>, or null.</param>
+    /// <param name="romDirectory">The launch's ROM folder, such as a PET's <c>romDirectory</c>, or null.</param>
     /// <returns>The folders, those that exist.</returns>
-    internal static List<string> Roots(BootMediaSet set, string? bootImage)
+    internal static List<string> Roots(BootMediaSet set, string? bootImage, string? romDirectory = null)
     {
         List<string> roots = [];
         if (bootImage is not null) { roots.Add(bootImage); }
+        if (!string.IsNullOrWhiteSpace(romDirectory)) { roots.Add(Path.GetFullPath(romDirectory)); }
         string? folder = set.Variable is { } variable ? Environment.GetEnvironmentVariable(variable) : null;
         if (!string.IsNullOrEmpty(folder)) { roots.Add(folder); }
         roots.Add(CacheDirectory);
@@ -117,14 +120,9 @@ internal static class BootMedia
         HashSet<long> sizes = [.. set.Files.Select(file => (long)file.Size)];
         Dictionary<string, BootMediaFile> wanted = set.Files.ToDictionary(file => file.Sha1, StringComparer.Ordinal);
         Dictionary<string, string> found = [];
-        EnumerationOptions options = new()
-        {
-            RecurseSubdirectories = true, IgnoreInaccessible = true, AttributesToSkip = FileAttributes.ReparsePoint
-        };
-
         foreach (string root in roots)
         {
-            foreach (FileInfo file in new DirectoryInfo(root).EnumerateFiles("*", options))
+            foreach (FileInfo file in Files(root))
             {
                 if (!sizes.Contains(file.Length)) { continue; }
                 string hash;
@@ -143,6 +141,21 @@ internal static class BootMedia
         }
 
         return null;
+    }
+
+    // A folder's files and its subfolders', a linked file among them, but not a linked folder's, so no search loops.
+    private static IEnumerable<FileInfo> Files(string root)
+    {
+        EnumerationOptions options = new() { IgnoreInaccessible = true, AttributesToSkip = 0 };
+        Stack<DirectoryInfo> folders = new([new DirectoryInfo(root)]);
+        while (folders.TryPop(out DirectoryInfo? folder))
+        {
+            foreach (FileInfo file in folder.EnumerateFiles("*", options)) { yield return file; }
+            foreach (DirectoryInfo child in folder.EnumerateDirectories("*", options))
+            {
+                if (!child.Attributes.HasFlag(FileAttributes.ReparsePoint)) { folders.Push(child); }
+            }
+        }
     }
 
     /// <summary>

@@ -189,8 +189,8 @@ A target's fields for its media, which an environment that has no use for one re
 usual source publishes. Today that is the 4040's ROMs, MAME's `c4040` set (DOS 2.0 revision 2, the controller's
 901466-04 and the GCR PROM 901467), which only booting a `basic` target's disk needs; its tape plays from the SDK's
 sources alone. A launch finds a set's files by size and hash, whatever their names, in the target's `bootImage`, the
-machine's ROM folder variable (`RETROCORE_PET_ROMS`) and `RETROCORE_CACHE` (by default `%USERPROFILE%\Retrocore`),
-each with its subfolders, and copies them under their usual names to `obj/<target>/media/` for the machine to load. When
+launch's `romDirectory`, the machine's ROM folder variable (`RETROCORE_PET_ROMS`) and `RETROCORE_CACHE` (by default `%USERPROFILE%\Retrocore`),
+each with its subfolders, and copies them under their usual names to `obj/<target>/media/c4040/` for the machine to load. When
 one is missing, the launch fails naming each file, its hash, where it looked and where to put them. There is no
 download for them: they are the user's own dumps.
 

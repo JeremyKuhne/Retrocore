@@ -58,11 +58,12 @@ internal sealed class BasicEnvironment : TargetEnvironment
     /// <inheritdoc/>
     /// <remarks>
     ///  <para>
-    ///   The tape of the largest program a PET holds plays for a few of the machine's minutes; a launch that has not
-    ///   started the program in ten has failed, such as at a tape or disk error.
+    ///   A tape plays about 56 of the program's bytes a second, as each block is written twice, so the largest program a
+    ///   32K PET holds, 31K, plays for nearly ten of the machine's minutes; a launch that has not started the program
+    ///   in twenty has failed, such as at a tape or disk error.
     ///  </para>
     /// </remarks>
-    internal override int BootSeconds => 600;
+    internal override int BootSeconds => 1200;
 
     /// <inheritdoc/>
     internal override IReadOnlyList<string> Extensions { get; } = [".prg", ".tap", ".d64"];
@@ -71,9 +72,10 @@ internal sealed class BasicEnvironment : TargetEnvironment
     /// <remarks>
     ///  <para>
     ///   The tape goes in cassette 1 with PLAY down. The disk goes in unit 8, connected for the launch, with the 4040's
-    ///   ROMs found by their hashes in the target's <c>bootImage</c>, <c>RETROCORE_PET_ROMS</c> and
-    ///   <c>RETROCORE_CACHE</c>, and copied to <c>obj/&lt;target&gt;/media/</c> under their usual names; a launch that
-    ///   gives <c>driveRomDirectory</c> takes the ROMs from there instead.
+    ///   ROMs found by their hashes in the target's <c>bootImage</c>, the launch's <c>romDirectory</c>,
+    ///   <c>RETROCORE_PET_ROMS</c> and <c>RETROCORE_CACHE</c>, and copied to <c>obj/&lt;target&gt;/media/c4040/</c>
+    ///   under their usual names; a launch that gives <c>driveRomDirectory</c> takes the ROMs from there instead. BASIC
+    ///   1's PET, whose IEEE-488 routines stop disk drives working, boots only its tape.
     ///  </para>
     /// </remarks>
     internal override void Launch(ProjectTarget target, JsonObject launch)
@@ -89,11 +91,22 @@ internal sealed class BasicEnvironment : TargetEnvironment
         }
 
         if (target.ImageBoot != "disk") { return; }
+        if (target.Machine.Id == "pet2001")
+        {
+            throw new ProjectException(
+                $"{where}: it boots its 4040 disk, but BASIC 1's IEEE-488 routines have the bug that stops disk drives working; boot the tape, or target a PET with BASIC 2 or 4.");
+        }
+
+        if (target.BootImage is { } folder && !Directory.Exists(folder))
+        {
+            throw new ProjectException($"{where}: its 'bootImage', {folder}, is not a folder of the 4040's ROMs.");
+        }
+
         launch["diskUnits"] = new JsonArray(8);
         if (launch.String("driveRomDirectory") is { Length: > 0 }) { return; }
 
         BootMediaSet set = BootMedia.Named(SdkModules.SdkDirectory, DriveRoms);
-        List<string> roots = BootMedia.Roots(set, target.BootImage);
+        List<string> roots = BootMedia.Roots(set, target.BootImage, launch.String("romDirectory"));
         Dictionary<string, string> found = BootMedia.Find(set, roots)
             ?? throw new ProjectException($"{where}: it boots its 4040 disk, but {BootMedia.Missing(set, roots)}.");
 
@@ -149,13 +162,14 @@ internal sealed class BasicEnvironment : TargetEnvironment
     }
 
     /// <summary>
-    ///  Gets the name of a target's program on its tape and disk: its project's name in capitals, cut to 16.
+    ///  Gets the name of a target's program on its tape and disk: its project's name in capitals, its letters, digits,
+    ///  <c>-</c> and <c>.</c>, which CBM DOS takes in a name and a PET's keyboard types, cut to 16.
     /// </summary>
     /// <param name="target">The target.</param>
-    /// <returns>The name.</returns>
+    /// <returns>The name, or <c>PROGRAM</c> when none of the project's name is left.</returns>
     internal static string ProgramName(ProjectTarget target)
     {
-        string name = target.Project.Name.ToUpperInvariant();
-        return name[..Math.Min(name.Length, NameLength)];
+        string name = new([.. target.Project.Name.ToUpperInvariant().Where(character => character is (>= 'A' and <= 'Z') or (>= '0' and <= '9') or '-' or '.')]);
+        return name.Length == 0 ? "PROGRAM" : name[..Math.Min(name.Length, NameLength)];
     }
 }

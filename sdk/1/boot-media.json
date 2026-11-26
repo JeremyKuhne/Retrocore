@@ -1,5 +1,5 @@
 {
-  "description": "The boot media and device dumps the SDK's environments use that are not SDK sources, each identified by the SHA-1 its usual source publishes. The build and a launch find a set's files by hash, whatever they are named, in a target's bootImage folder, the machine's ROM folder variable, and RETROCORE_CACHE.",
+  "description": "The boot media and device dumps the SDK's environments use that are not SDK sources, each identified by the SHA-1 its usual source publishes. A launch finds a set's files by hash, whatever they are named, in a target's bootImage folder, the launch's ROM folder, the machine's ROM folder variable, and RETROCORE_CACHE.",
   "media": [
     {
       "id": "c4040",

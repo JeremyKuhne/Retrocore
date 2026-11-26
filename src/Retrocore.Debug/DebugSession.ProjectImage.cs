@@ -103,14 +103,14 @@ internal sealed partial class DebugSession
         long used = 0;
         RunUntil(build, () => pet.ShowsReady, "BASIC's READY prompt", limit, ref used);
         foreach (char key in load) { pet.Key(key); }
-        RunUntil(build, () => Loaded(start, program) && drive.Activity == Machines.Devices.DeviceActivity.Idle, "the program loaded", limit, ref used);
+        RunUntil(build, () => drive.Activity == Machines.Devices.DeviceActivity.Idle && Loaded(start, program), "the program loaded", limit, ref used);
         foreach (char key in "RUN\r") { pet.Key(key); }
         RunToEntry(build, limit - used);
     }
 
     // Runs the machine one cycle at a time until a condition holds at an instruction's start, counting the cycles it
-    // takes against the boot's limit. The condition, which may read the screen or the program's bytes, is tested about
-    // every millisecond of the machine's time, not at every instruction.
+    // takes against the boot's limit. The condition, which may read the screen or the program's bytes, is tested every
+    // 4,096 cycles, about 4 ms of a 1 MHz machine's time, not at every instruction.
     private void RunUntil(TargetBuild build, Func<bool> done, string what, long limit, ref long used)
     {
         const int Interval = 4096;
@@ -133,14 +133,14 @@ internal sealed partial class DebugSession
         }
     }
 
-    // Runs the machine from power-on until an instruction starts at the program's entry with its bytes in memory, for
-    // as long as the environment takes to boot.
+    // Runs the machine until an instruction starts at the program's entry with its bytes in memory: from power-on, for
+    // as long as the environment takes to boot, or, after a boot's earlier steps, for the cycles they left it.
     private void RunToEntry(TargetBuild build, long? cycles = null)
     {
         (int start, byte[] bytes) = ProjectBuild.Image(build);
         if (cycles is null) { ForgetBoundaries(); }
-        int seconds = build.Target.Built?.BootSeconds ?? 0;
-        long limit = cycles ?? ((long)seconds * Target.ClockHertz);
+        long limit = cycles ?? ((long)(build.Target.Built?.BootSeconds ?? 0) * Target.ClockHertz);
+        long seconds = limit / Target.ClockHertz;
         for (long cycle = 0; ; cycle++)
         {
             if (Target.IsInstructionBoundary && Target.ProgramCounter == build.Entry && Loaded(start, bytes)) { break; }
@@ -148,7 +148,7 @@ internal sealed partial class DebugSession
             {
                 ProjectTarget target = build.Target;
                 throw new ProjectException(
-                    $"{target.Project.File}: target {target.Name}: booted from its {build.Media.ImageKind}, the machine did not start the program at its entry, ${build.Entry:X4}, within {seconds} seconds.");
+                    $"{target.Project.File}: target {target.Name}: booted from its {build.Media.ImageKind}, the machine did not start the program at its entry, ${build.Entry:X4}, within the {seconds} seconds its boot had left.");
             }
 
             Target.StepCycle();

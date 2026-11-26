@@ -384,6 +384,24 @@ public sealed class ProjectEnvironmentTests
     }
 
     /// <summary>
+    ///  A <c>basic</c> program's name on its tape and disk keeps the project name's letters, digits, <c>-</c> and
+    ///  <c>.</c>, which CBM DOS takes and the PET types, so a project named with <c>_</c> builds.
+    /// </summary>
+    [TestMethod]
+    public void BasicNamesTheProgramWhatThePetTypes()
+    {
+        Write("retrocore.json", """
+            { "sdk": "1", "name": "my_game-2.0", "cpu": "6502", "sources": ["main.s"],
+              "targets": { "pet": { "machine": "pet4032", "environment": "basic" } } }
+            """);
+
+        Write("main.s", "rts\n");
+        ProjectBuild.Build(RetrocoreProject.Load(_folder).Target("pet"));
+        CbmDosDisk.FromD64(File.ReadAllBytes(Path.Join(_folder, "artifacts", "pet", "my_game-2.0.d64"))).Files.Single().Name
+            .Should().Be("MYGAME-2.0");
+    }
+
+    /// <summary>
     ///  A <c>basic</c> target takes no <c>files</c>, boots only its tape or its disk, and an environment that boots one
     ///  image takes no <c>boot</c>.
     /// </summary>

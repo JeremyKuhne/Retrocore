@@ -7,6 +7,8 @@ import * as path from "node:path";
 import * as vscode from "vscode";
 import { LanguageClient, LanguageClientOptions, ServerOptions, TransportKind } from "vscode-languageclient/node";
 import { defaultHost, isBundled } from "./host";
+import type { ActiveTargets } from "./activeTarget";
+import { activeTargetParams } from "./project";
 
 let client: LanguageClient | undefined;
 // The current client's start, which requests wait for.
@@ -55,8 +57,11 @@ export function shadowCopy(host: string, storage: string, folder = "language-ser
     return path.join(target, path.basename(host));
 }
 
-/** Starts the retrocore language server for retrocore-asm documents: diagnostics, definition, hover, completion and symbols. */
-export async function startLanguageClient(context: vscode.ExtensionContext): Promise<void> {
+/**
+ * Starts the retrocore language server for retrocore-asm documents: diagnostics, definition, hover, completion and
+ * symbols, assembling a project's sources for its active target.
+ */
+export async function startLanguageClient(context: vscode.ExtensionContext, targets?: ActiveTargets): Promise<void> {
     const settings = vscode.workspace.getConfiguration("retrocore");
     if (!settings.get<boolean>("languageServer.enabled", true)) return;
     const host = hostPath(context);
@@ -67,6 +72,8 @@ export async function startLanguageClient(context: vscode.ExtensionContext): Pro
     }
 
     const configurations = vscode.workspace.createFileSystemWatcher("**/*.cfg");
+    // A project file's changes reach the server too, which analyzes its sources again.
+    const projects = vscode.workspace.createFileSystemWatcher("**/retrocore.json");
     const isConfiguration = (document: vscode.TextDocument): boolean =>
         document.uri.scheme === "file" && path.extname(document.uri.fsPath).toLowerCase() === ".cfg";
     const notify = (method: string, params: object): void => {
@@ -93,7 +100,9 @@ export async function startLanguageClient(context: vscode.ExtensionContext): Pro
             uri: folder.uri.toString(), words: wordsFor(folder.uri)
         }))
     });
-    context.subscriptions.push(configurations, vscode.workspace.onDidOpenTextDocument(opened),
+    const updateTarget = (): void => notify("retrocore/activeTarget", activeTargetParams(targets?.active));
+    if (targets !== undefined) context.subscriptions.push(targets.onDidChange(updateTarget));
+    context.subscriptions.push(configurations, projects, vscode.workspace.onDidOpenTextDocument(opened),
         vscode.workspace.onDidChangeTextDocument(event => {
             if (isConfiguration(event.document)) notify("textDocument/didChange", {
                 textDocument: { uri: event.document.uri.toString(), version: event.document.version },
@@ -110,8 +119,9 @@ export async function startLanguageClient(context: vscode.ExtensionContext): Pro
         vscode.commands.registerCommand("retrocore.lint.addUnlinkedNameWord", addUnlinkedNameWord));
 
     const start = async (): Promise<void> => {
-        await startFrom(context, host, configurations);
+        await startFrom(context, host, [configurations, projects]);
         updateWords();
+        updateTarget();
         for (const document of vscode.workspace.textDocuments) opened(document);
     };
     await start();
@@ -150,7 +160,7 @@ async function addUnlinkedNameWord(word?: unknown, scope?: unknown): Promise<boo
     return true;
 }
 
-async function startFrom(context: vscode.ExtensionContext, host: string, configurations: vscode.FileSystemWatcher): Promise<void> {
+async function startFrom(context: vscode.ExtensionContext, host: string, watchers: vscode.FileSystemWatcher[]): Promise<void> {
     let server = host;
     try {
         // The packaged host never changes while it runs; a build can, so it runs from a copy.
@@ -168,7 +178,7 @@ async function startFrom(context: vscode.ExtensionContext, host: string, configu
     };
     const clientOptions: LanguageClientOptions = {
         documentSelector,
-        synchronize: { fileEvents: configurations }
+        synchronize: { fileEvents: watchers }
     };
     const started = new LanguageClient("retrocore", "Retrocore Assembly", serverOptions, clientOptions);
     client = started;

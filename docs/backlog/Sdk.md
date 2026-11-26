@@ -387,8 +387,10 @@ Each writer reads back through the existing readers in its tests, and boots unde
 - **Stopping on entry** stops at the program's entry point, not at the boot, even when F5 boots a disk.
 - **The language server follows the active target.** It uses that target's SDK paths, defines, CPU and platform
   folders for completion, hover and diagnostics. Changing the target re-checks the open files. Today the server's only
-  inputs are `--sdk-roms`, `.cfg` files and the lint words. The target's settings go to it in a notification like the
-  existing `retrocore/unlinkedNameWords`.
+  inputs are `--sdk-roms`, `.cfg` files and the lint words. The extension sends the active target in a
+  `retrocore/activeTarget` notification, `{ "project": "<retrocore.json path>", "target": "<name>" }` (both null
+  without one), at the server's start and whenever the target or its file changes; the server loads the target's
+  settings from the file itself.
 - **Inactive `.if` blocks are dimmed** with the `Unnecessary` diagnostic tag the server already uses for an unused
   `.using`.
 - **A build error** fails the launch, and its diagnostics name the target.

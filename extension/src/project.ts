@@ -150,6 +150,15 @@ export function projectLaunch(target: ProjectTarget): { type: string; request: s
     };
 }
 
+/**
+ * The retrocore/activeTarget notification's parameters: the active target's retrocore.json and name, so the server
+ * assembles the open sources with that target's settings (its SDK paths, defines, CPU and platform folders); both
+ * null without one, when the server uses each source's first target that assembles it.
+ */
+export function activeTargetParams(target: ProjectTarget | undefined): { project: string | null; target: string | null } {
+    return { project: target?.file ?? null, target: target?.name ?? null };
+}
+
 /** The target a project launch configuration names, if the extension can read it; else the host's launch reports why. */
 export function launchTarget(configuration: Record<string, unknown>): ProjectTarget | undefined {
     if (typeof configuration.project !== "string" || typeof configuration.target !== "string") return undefined;

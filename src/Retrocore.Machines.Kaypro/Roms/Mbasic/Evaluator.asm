@@ -556,7 +556,8 @@ MAKUPS:
 
 ;; Reads a line number, or an &H or &O constant.
 ;;
-;; Nothing in MBASIC calls it: line numbers are read by LINGET itself.
+;; INIT reads the numbers of the command line's /F:, /M: and /S: switches through it, so they may be &H or &O
+;; constants (Init.asm). Line numbers in programs are read by LINGET itself.
 ;;
 ;; In:    A = the first character, HL = the text at it
 CNSGET:

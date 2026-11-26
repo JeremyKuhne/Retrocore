@@ -63,7 +63,7 @@ Offset = $5E
 ;; The mark stack frame <FindFrame> finds.
 Frame = $62
 
-;; A variable's address, as the load and store handlers work it out.
+;; A variable's address, as the load and store handlers work it out; and working storage for <Multiply> and <Divide>.
 ;; Also: SUM (WK11), VARPTR (WK11)
 Address = $64
 

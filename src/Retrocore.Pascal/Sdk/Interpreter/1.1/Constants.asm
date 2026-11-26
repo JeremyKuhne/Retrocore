@@ -328,7 +328,8 @@ ATTR_DATA_SIZE = -8
     SIZE .word
 .endstruct
 
-; Comparisons, as the comparison handlers pass them to CompareSets in Comparison.
+; Comparisons, as the comparison handlers pass them to CompareSets in Comparison. A kind is the outcomes that make it
+; true, a bit for each.
 
 ;; The outcome equal, and the kind <EQU at Pcodes::Equal> tests for.
 COMPARISON_EQUAL = 1

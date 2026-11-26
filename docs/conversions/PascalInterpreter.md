@@ -52,8 +52,8 @@ each one's address and bank. After the conversion, 591 definitions carry 731 old
 - **A2PBIOS** (148): Barry Haynes's *ATTACH-BIOS Document for Apple II Pascal 1.1* (Apple, January 1980), whose text
   layer is clean. Its excerpts of Apple's BIOS source are matched to the build instruction for instruction (SAVERET is
   `BiosCall`, UDRWIS `AttachedDriver`, CONCK `ConsoleCheck`), and its equates by address (WPTR `$BF19` is
-  `TypeAheadIn`). A name it gives only in prose or a comment is not cited; BIOSTBL and WRITTBL, which it gives so, are
-  in prose.
+  `TypeAheadIn`). A name it gives only in prose or a comment is not cited; BIOSTBL (in a comment) and WRITTBL (in prose)
+  are in prose here too.
 - **UCSD20** (154): UCSD's II.0 system source listings. SYSCOMREC's offsets are computed from its declaration,
   allocating each identifier list backward as its own comment says; the Compiler's p-code and standard-procedure
   comments by their numbers; the mark stack (MSCW), segment description and directory entry records by their fields.

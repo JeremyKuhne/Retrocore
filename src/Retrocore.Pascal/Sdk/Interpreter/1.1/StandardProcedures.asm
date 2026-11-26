@@ -245,8 +245,8 @@ Mode = Work3
 ;; The limit's high byte: negative to scan down.
 Direction = Work1
 
-;; The limit; when the scan's end address is $8000 or above, its low byte negated and the end address's high byte
-;; negated in place of its own. Nothing reads it.
+;; The limit. When the scan's end address is $8000 or above, the low byte is replaced by its two's complement, and the
+;; high byte by the end address's high byte's complement plus that carry. Nothing reads it.
 Distance = Offset
 
     ; Pull the parameters.

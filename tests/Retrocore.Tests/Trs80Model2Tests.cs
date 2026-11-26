@@ -172,6 +172,46 @@ public class Trs80Model2Tests
     }
 
     /// <summary>
+    ///  With the PIO's port A in bit control mode, as LS-DOS 6.3.1 sets it to take the FD1791's INTRQ as an interrupt,
+    ///  the PIO reads port A at every T-state, and with it whether the selected drive's disk is two-sided. That costs
+    ///  nothing: once it sorted all the disk's tracks each time, which slowed LS-DOS so far that its screen stayed
+    ///  blank.
+    /// </summary>
+    [TestMethod]
+    public void PioWatchingTheControllerDoesNotAllocate()
+    {
+        Trs80Model2Machine machine = Create(new());
+        Trs80Model2Bus bus = machine.Bus;
+        FloppyDisk disk = new();
+        for (int cylinder = 0; cylinder < 77; cylinder++)
+        {
+            for (int side = 0; side < 2; side++)
+            {
+                for (int sector = 1; sector <= 26; sector++)
+                {
+                    disk.Add(cylinder, side, new FloppySector((byte)cylinder, (byte)side, (byte)sector, new byte[256], doubleDensity: true));
+                }
+            }
+        }
+
+        machine.Drives[0].Insert(disk, "test", "DMK");
+        bus.Out(0xEF, 0x4E);
+
+        // Port A in mode 3, bit 0 (INTRQ) an input, its interrupt enabled on bit 0 going high.
+        foreach (byte value in (byte[])[0xCF, 0xFF, 0xB7, 0xFE]) { bus.Out(0xE2, value); }
+        bus.Pio.Mode(0).Should().Be(3);
+        (bus.Pio.Read(0) & 0x02).Should().Be(0x02, "port A's bit 1 shows a two-sided disk");
+
+        void Run()
+        {
+            for (int cycle = 0; cycle < 10_000; cycle++) { bus.Tick(); }
+        }
+
+        Run();
+        Allocations.During(Run).Should().Be(0);
+    }
+
+    /// <summary>
     ///  The 6845's registers set the picture: rows, scanlines, the start address and the cursor.
     /// </summary>
     [TestMethod]

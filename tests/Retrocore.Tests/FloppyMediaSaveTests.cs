@@ -60,6 +60,40 @@ public sealed class FloppyMediaSaveTests
     }
 
     /// <summary>
+    ///  A disk's cylinders and sides follow the tracks that have sectors, as they are added and formatted, and reading
+    ///  them allocates nothing, as the Model II's PIO reads the sides at every clock.
+    /// </summary>
+    [TestMethod]
+    public void GeometryFollowsTheTracks()
+    {
+        FloppyDisk disk = new();
+        disk.Cylinders.Should().Be(0);
+        disk.Sides.Should().Be(1);
+
+        disk.Add(4, 0, new FloppySector(4, 0, 1, new byte[256], doubleDensity: true));
+        disk.Cylinders.Should().Be(5);
+        disk.Sides.Should().Be(1);
+
+        disk.Add(2, 1, new FloppySector(2, 1, 1, new byte[256], doubleDensity: true));
+        disk.Cylinders.Should().Be(5, "a lower cylinder does not shrink the disk");
+        disk.Sides.Should().Be(2);
+
+        // Formatting a track with no sectors leaves it unformatted, as if it had none.
+        disk.Format(2, 1, []);
+        disk.Sides.Should().Be(1);
+        disk.Format(4, 0, []);
+        disk.Cylinders.Should().Be(0);
+
+        disk.Format(9, 1, [new FloppySector(9, 1, 1, new byte[128], doubleDensity: false)]);
+        disk.Cylinders.Should().Be(10);
+        disk.Sides.Should().Be(2);
+
+        int read = 0;
+        Allocations.During(() => read = disk.Sides + disk.Cylinders).Should().Be(0);
+        read.Should().Be(12);
+    }
+
+    /// <summary>
     ///  A track holds what a DMK track can: as many sectors as fit with no gaps, up to 64, and refuses more.
     /// </summary>
     [TestMethod]

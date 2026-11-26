@@ -46,7 +46,8 @@ access read-write ASL LSR ROL ROR INC DEC TRB TSB RMB SMB SLO RLA SRE RRA DCP IS
 # 'writes' those it always assigns; the rest keep their values. Registers go by name and flags by word, and P
 # means every flag, as PHP pushes them. A written flag=0 or flag=1 takes that value, flag=bitN a copy of bit N
 # of the memory operand. 'push n' and 'pull n' move n bytes through the stack register, S, which they also
-# read and write. Instruction:Form replaces the instruction's own line, and a :Form line adds to each
+# read and write. 'copies X=A' says the instruction sets X to A's value. Instruction:Form replaces the
+# instruction's own line, and a :Form line adds to each
 # instruction in that form, as the index register an address is formed from. 'effects in Set' lines win over
 # these in that set and those built on it. PC is left to the flow lines and the memory operand to the access
 # lines.
@@ -70,12 +71,12 @@ effects STX                     reads X
 effects STY                     reads Y
 effects INX DEX                 reads X                 writes X negative zero
 effects INY DEY                 reads Y                 writes Y negative zero
-effects TAX                     reads A                 writes X negative zero
-effects TAY                     reads A                 writes Y negative zero
-effects TXA                     reads X                 writes A negative zero
-effects TYA                     reads Y                 writes A negative zero
-effects TSX                     reads S                 writes X negative zero
-effects TXS                     reads X                 writes S
+effects TAX                     reads A                 writes X negative zero copies X=A
+effects TAY                     reads A                 writes Y negative zero copies Y=A
+effects TXA                     reads X                 writes A negative zero copies A=X
+effects TYA                     reads Y                 writes A negative zero copies A=Y
+effects TSX                     reads S                 writes X negative zero copies X=S
+effects TXS                     reads X                 writes S copies S=X
 effects PHA                     reads A S               writes S                        push 1
 effects PHX                     reads X S               writes S                        push 1
 effects PHY                     reads Y S               writes S                        push 1

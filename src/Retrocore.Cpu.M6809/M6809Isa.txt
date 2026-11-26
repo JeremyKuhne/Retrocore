@@ -140,8 +140,8 @@ effects LEAX                                            writes X zero
 effects LEAY                                            writes Y zero
 effects LEAS                                            writes S
 effects LEAU                                            writes U
-effects TFR                     reads $1                writes $2
-effects EXG                     reads $1 $2             writes $1 $2
+effects TFR                     reads $1                writes $2               copies $2=$1
+effects EXG                     reads $1 $2             writes $1 $2            copies $1=$2 $2=$1
 effects PSHS                    reads $1 S              writes S                        push $1
 effects PULS                    reads S                 writes $1 S                     pull $1
 effects PSHU                    reads $1 U              writes U                        push U $1

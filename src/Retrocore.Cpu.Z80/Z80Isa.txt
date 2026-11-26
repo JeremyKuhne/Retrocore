@@ -46,15 +46,18 @@ access write LD:[nn],A LD:[nn],BC LD:[nn],DE LD:[nn],HL LD:[nn],SP LD:[nn],IX LD
 # writes and may-write list registers by name and flags by word, X and Y by name; F means every flag. $1, $2
 # and $3 are the operands of the form's name: a register operand is that register, and a bracketed one, such
 # as [HL] or [IX+d], reads its address register. A pair stands for its parts, so writing HL writes H and L. A
-# conditional call or return may write SP and may push or pull. PC, R's refresh count and the hidden state
+# conditional call or return may write SP and may push or pull. 'copies $1=$2' sets the first operand to the
+# second's value where both are registers without parts. PC, R's refresh count and the hidden state
 # (WZ, Q, IFF1, IFF2 and the interrupt mode) are left out; LD A,R and LD R,A name R.
 parts AF=A,F BC=B,C DE=D,E HL=H,L IX=IXH,IXL IY=IYH,IYL
 stack SP
-effects LD                      reads $2                writes $1
-effects LD:A,I LD:A,R           reads $2                writes A negative zero Y half-carry=0 X overflow subtract=0
+effects LD                      reads $2                writes $1                       copies $1=$2
+effects LD:A,I reads I writes A negative zero Y half-carry=0 X overflow subtract=0 copies A=I
+effects LD:A,R                  reads R                 writes A negative zero Y half-carry=0 X overflow subtract=0
 effects PUSH                    reads $1 SP             writes SP                       push 2
 effects POP                     reads SP                writes $1 SP                    pull 2
 effects EX                      reads $1 $2             writes $1 $2
+effects EX:DE,HL                reads DE HL             writes DE HL            copies D=H E=L H=D L=E
 effects EXX                     reads BC DE HL BC' DE' HL'      writes BC DE HL BC' DE' HL'
 effects ADD                     reads $1 $2             writes $1 F subtract=0
 effects ADD:HL,BC ADD:HL,DE ADD:HL,HL ADD:HL,SP     reads $1 $2     writes $1 Y half-carry X subtract=0 carry

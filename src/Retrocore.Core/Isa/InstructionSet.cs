@@ -334,7 +334,7 @@ public sealed partial class InstructionSet
         if ((rule.WriteSlots & 2) != 0) { written |= field.Second; }
         if ((rule.MayWriteSlots & 1) != 0) { may |= field.First; }
         if ((rule.MayWriteSlots & 2) != 0) { may |= field.Second; }
-        return Combine(effects, new InstructionEffects
+        InstructionEffects named = new()
         {
             RegistersRead = read,
             RegistersWritten = written,
@@ -344,7 +344,30 @@ public sealed partial class InstructionSet
             FlagsMayWrite = (may & _flagsRegisterMask) != 0 ? _allFlags : (byte)0,
             Pushed = rule.PushSlot == 1 ? field.Bytes : (byte)0,
             Pulled = rule.PullSlot == 1 ? field.Bytes : (byte)0
-        });
+        };
+
+        // A copy between the postbyte's registers, as TFR X,Y; a pair of another width copies nothing.
+        foreach ((int destination, int source) in rule.SlotCopies ?? [])
+        {
+            int to = SingleBit(destination == -1 ? field.First : destination == -2 ? field.Second : 0);
+            int from = SingleBit(source == -1 ? field.First : source == -2 ? field.Second : 0);
+            if (to >= 0 && from >= 0 && to != from) { named = named.WithCopy(to, from); }
+        }
+
+        return Combine(effects, named);
+    }
+
+    private static int SingleBit(uint mask)
+    {
+        if (mask == 0 || (mask & (mask - 1)) != 0) { return -1; }
+        int bit = 0;
+        while ((mask & 1) == 0)
+        {
+            mask >>= 1;
+            bit++;
+        }
+
+        return bit;
     }
 
     /// <summary>

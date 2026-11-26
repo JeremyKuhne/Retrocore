@@ -9,7 +9,7 @@ namespace Retrocore.Isa;
 public static partial class IsaParser
 {
     private const string ExpectedEffects =
-        "Expected 'effects [in Set] Instruction ... [reads ...] [writes ...] [may-write ...] [push|pull|may-push|may-pull [Register] n]', or '... none'.";
+        "Expected 'effects [in Set] Instruction ... [reads ...] [writes ...] [may-write ...] [push|pull|may-push|may-pull [Register] n] [copies ...]', or '... none'.";
 
     // The register map effects lines share; the registers and flags lines must come before it.
     private static EffectRegisterMap Map(int number, List<IsaRegister> registers, List<IsaFlag> flags, IsaRules rules)
@@ -81,6 +81,7 @@ public static partial class IsaParser
         byte flagsRead = 0, flagsWritten = 0, flagsMay = 0, set = 0, cleared = 0, fromOperand = 0;
         byte pushed = 0, pulled = 0, mayPush = 0, mayPull = 0, readSlots = 0, writeSlots = 0, maySlots = 0;
         byte pushSlot = 0, pullSlot = 0;
+        List<(int Destination, int Source)> copies = [];
         int stack = -1;
         HashSet<string> seen = [];
         while (index < tokens.Count)
@@ -141,6 +142,26 @@ public static partial class IsaParser
                     default: mayPull = count; break;
                 }
 
+                continue;
+            }
+
+            if (keyword == "copies")
+            {
+                // copies Destination=Source ...: a register, or $n for an operand, set to another's value.
+                for (; index < tokens.Count && !IsEffectKeyword(tokens[index]); index++)
+                {
+                    string[] sides = tokens[index].Split('=');
+                    int destination = sides.Length == 2 ? CopySide(sides[0], map) : int.MinValue;
+                    int source = sides.Length == 2 ? CopySide(sides[1], map) : int.MinValue;
+                    if (destination == int.MinValue || source == int.MinValue)
+                    {
+                        throw Error(number, $"Expected 'copies Register=Register', a register without parts or $n each, not '{tokens[index]}'.");
+                    }
+
+                    copies.Add((destination, source));
+                }
+
+                if (copies.Count is 0 or > 4) { throw Error(number, "Expected one to four copies."); }
                 continue;
             }
 
@@ -255,6 +276,14 @@ public static partial class IsaParser
             StackRegisterPlusOne = (byte)(stack + 1)
         };
 
+        // Copies between registers are kept now; those naming an operand wait for its encoding.
+        List<(int Destination, int Source)> slotCopies = [];
+        foreach ((int destination, int source) in copies)
+        {
+            if (destination >= 0 && source >= 0) { effects = effects.WithCopy(destination, source); }
+            else { slotCopies.Add((destination, source)); }
+        }
+
         if (!rules.Effects.TryGetValue(scope, out Dictionary<string, EffectsLine>? scoped))
         {
             scoped = [with(StringComparer.OrdinalIgnoreCase)];
@@ -276,7 +305,8 @@ public static partial class IsaParser
                 WriteSlots = writeSlots,
                 MayWriteSlots = maySlots,
                 PushSlot = pushSlot,
-                PullSlot = pullSlot
+                PullSlot = pullSlot,
+                SlotCopies = slotCopies
             };
         }
     }
@@ -296,7 +326,15 @@ public static partial class IsaParser
     }
 
     private static bool IsEffectKeyword(string token) =>
-        token is "reads" or "writes" or "may-write" or "push" or "pull" or "may-push" or "may-pull" or "none";
+        token is "reads" or "writes" or "may-write" or "push" or "pull" or "may-push" or "may-pull" or "copies" or "none";
+
+    // A side of a copy: a register without parts by its bit, or an operand slot as minus its number.
+    private static int CopySide(string token, EffectRegisterMap map)
+    {
+        if (Slot(token) is var slot && slot != 0) { return -slot; }
+        int bit = map.Names.IndexOf(token);
+        return bit >= 0 && map.Mask(token) == 1u << bit ? bit : int.MinValue;
+    }
 
     // Each effects line names a known set, and some encoding takes it, so a misspelling or a line every set
     // overrides fails.

@@ -190,6 +190,7 @@ public sealed partial class InstructionSet
         }
 
         uint read = 0, written = 0, may = 0;
+        Span<int> registers = [-1, -1, -1, -1, -1, -1, -1, -1];
         int slot = 0;
         for (int start = 0; start <= form.Length && slot < 8; slot++)
         {
@@ -197,6 +198,8 @@ public sealed partial class InstructionSet
             if (end < 0) { end = form.Length; }
             string operand = form[start..end];
             start = end + 1;
+            uint single = map.Mask(operand);
+            if (single != 0 && (single & (single - 1)) == 0) { registers[slot] = BitIndex(single); }
             byte bit = (byte)(1 << slot);
             if ((bit & (line.ReadSlots | line.WriteSlots | line.MayWriteSlots)) == 0) { continue; }
 
@@ -215,6 +218,14 @@ public sealed partial class InstructionSet
             else if ((line.MayWriteSlots & bit) != 0) { may |= mask; }
         }
 
+        // A copy between operands that are registers without parts, as LD A,B; others, as LD A,[HL], copy nothing.
+        foreach ((int destination, int source) in line.SlotCopies)
+        {
+            int to = destination >= 0 ? destination : registers[-destination - 1];
+            int from = source >= 0 ? source : registers[-source - 1];
+            if (to >= 0 && from >= 0 && to != from) { effects = effects.WithCopy(to, from); }
+        }
+
         return Combine(effects, new InstructionEffects
         {
             RegistersRead = read,
@@ -226,11 +237,23 @@ public sealed partial class InstructionSet
         });
     }
 
+    private static int BitIndex(uint single)
+    {
+        int index = 0;
+        while ((single & 1) == 0)
+        {
+            single >>= 1;
+            index++;
+        }
+
+        return index;
+    }
+
     private static InstructionEffects Combine(InstructionEffects effects, InstructionEffects other)
     {
         uint written = effects.RegistersWritten | other.RegistersWritten;
         byte flagsWritten = (byte)(effects.FlagsWritten | other.FlagsWritten);
-        return effects with
+        InstructionEffects combined = effects with
         {
             RegistersRead = effects.RegistersRead | other.RegistersRead,
             RegistersWritten = written,
@@ -248,5 +271,7 @@ public sealed partial class InstructionSet
             MayPull = (byte)(effects.MayPull + other.MayPull),
             StackRegisterPlusOne = effects.StackRegisterPlusOne != 0 ? effects.StackRegisterPlusOne : other.StackRegisterPlusOne
         };
+
+        return combined.WithCopies(other);
     }
 }

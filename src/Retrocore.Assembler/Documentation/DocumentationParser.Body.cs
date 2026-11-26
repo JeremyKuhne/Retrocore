@@ -131,7 +131,7 @@ public static partial class DocumentationParser
             {
                 foreach (string part in SplitEntries(joined))
                 {
-                    if (Entry(part, line) is { } entry) { entries.Add(entry); }
+                    AddEntries(entries, part, line);
                 }
             }
             else
@@ -139,11 +139,9 @@ public static partial class DocumentationParser
                 int offset = 1;
                 foreach (string text in content)
                 {
-                    if (Entry(text.Trim(), line + offset) is { } entry)
-                    {
-                        entries.Add(entry);
-                    }
-                    else if (entries.Count != 0)
+                    int before = entries.Count;
+                    AddEntries(entries, text.Trim(), line + offset);
+                    if (entries.Count == before && entries.Count != 0)
                     {
                         // A wrapped meaning continues the entry above.
                         DocumentationEntry previous = entries[^1];
@@ -190,7 +188,11 @@ public static partial class DocumentationParser
             while (separator < text.Length && text[separator] == ' ') { separator++; }
             bool equals = separator < text.Length && text[separator] == '=';
             bool dash = separator + 1 < text.Length && text[separator] == '-' && text[separator + 1] == ' ' && separator > end;
-            if (end > name && (equals || dash))
+
+            // Names that start the text share the meaning after them, as HL and DE do in "HL, DE = ...". Later in
+            // the text a name before a comma may end a meaning, as in "the fraction, normalised, zero = ...".
+            bool shares = start == 0 && IsNames(text[..index]);
+            if (end > name && !shares && (equals || dash))
             {
                 parts.Add(text[start..index]);
                 start = index + 2;
@@ -199,6 +201,50 @@ public static partial class DocumentationParser
 
         parts.Add(text[start..]);
         return parts;
+    }
+
+    // Whether text is names, as a register, flag or symbol is written, separated by a comma and a space.
+    private static bool IsNames(string text)
+    {
+        if (text.Length == 0) { return false; }
+        bool start = true;
+        for (int index = 0; index < text.Length; index++)
+        {
+            char character = text[index];
+            if (character == ',' && !start && index + 1 < text.Length && text[index + 1] == ' ')
+            {
+                index++;
+                start = true;
+            }
+            else if (char.IsLetterOrDigit(character) || character is '_' or '\'' or '.' or '$' or '+' or '[' or ']')
+            {
+                start = false;
+            }
+            else
+            {
+                return false;
+            }
+        }
+
+        return !start;
+    }
+
+    // An entry, or one per name when names share a meaning, as "HL, DE = past the bytes" does.
+    private static void AddEntries(List<DocumentationEntry> entries, string text, int line)
+    {
+        if (Entry(text, line) is { } entry) { entries.Add(entry); }
+        else if (Shared(text, line) is { } shared) { entries.AddRange(shared); }
+    }
+
+    private static List<DocumentationEntry>? Shared(string text, int line)
+    {
+        int separator = text.IndexOf(" = ", StringComparison.Ordinal);
+        if (separator <= 0) { return null; }
+        string[] names = text[..separator].Split(", ");
+        if (names.Length < 2 || !IsNames(text[..separator])) { return null; }
+
+        string meaning = text[(separator + 3)..].Trim();
+        return [.. names.Select(name => new DocumentationEntry(name, meaning, line))];
     }
 
     private static DocumentationEntry? Entry(string text, int line)

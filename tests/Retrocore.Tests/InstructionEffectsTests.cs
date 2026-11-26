@@ -394,6 +394,16 @@ public class InstructionEffectsTests
         ref Observed observed)
     {
         ProcessorRegisters end = outcome.Registers;
+        for (int index = 0; index < effects.CopyCount; index++)
+        {
+            // A copy leaves its destination with the source's value from before the instruction.
+            effects.GetCopy(index, out int destination, out int source);
+            if (GetRegister(end, destination) != GetRegister(start, source))
+            {
+                failures.Add($"{label}: {Name(destination)} is ${GetRegister(end, destination):X2}, not {Name(source)}'s ${GetRegister(start, source):X2}.");
+            }
+        }
+
         foreach ((int register, byte before, byte after) in RegisterPairs(start, end))
         {
             if (before != after) { observed.Registers |= 1u << register; }

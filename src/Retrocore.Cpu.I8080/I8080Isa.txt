@@ -55,7 +55,7 @@ access write STA SHLD
 # PC is left to the flow lines, and the interrupt enable, masks and serial lines to the hardware.
 parts BC=B,C DE=D,E HL=H,L PSW=A,F
 stack SP
-effects MOV                     reads $2                writes $1
+effects MOV                     reads $2                writes $1               copies $1=$2
 effects MVI                                             writes $1
 effects :M :A,M :B,M :C,M :D,M :E,M :H,M :L,M           reads HL
 effects :M,A :M,B :M,C :M,D :M,E :M,H :M,L :M,n         reads HL
@@ -71,7 +71,7 @@ effects LDAX:B                  reads BC                writes A
 effects LDAX:D                  reads DE                writes A
 effects STAX:B                  reads A BC
 effects STAX:D                  reads A DE
-effects XCHG                    reads DE HL             writes DE HL
+effects XCHG                    reads DE HL             writes DE HL            copies D=H E=L H=D L=E
 effects XTHL                    reads SP HL             writes HL
 effects SPHL                    reads HL                writes SP
 effects PCHL                    reads HL

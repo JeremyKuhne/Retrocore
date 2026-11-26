@@ -44,9 +44,14 @@ internal sealed record EffectsLine(InstructionEffects Effects, int Line)
     internal byte PullSlot { get; init; }
 
     /// <summary>
+    ///  Gets the copies that name an operand slot: each side a register's bit, or for a slot, minus its number.
+    /// </summary>
+    internal IReadOnlyList<(int Destination, int Source)> SlotCopies { get; init; } = [];
+
+    /// <summary>
     ///  Gets whether the line names any operand slot.
     /// </summary>
-    internal bool HasSlots => (ReadSlots | WriteSlots | MayWriteSlots | PushSlot | PullSlot) != 0;
+    internal bool HasSlots => (ReadSlots | WriteSlots | MayWriteSlots | PushSlot | PullSlot) != 0 || SlotCopies.Count != 0;
 
     /// <summary>
     ///  Gets or sets whether some encoding of some set took these effects, so a line no encoding takes, such as

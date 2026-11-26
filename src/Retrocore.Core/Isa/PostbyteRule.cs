@@ -36,6 +36,11 @@ internal readonly record struct PostbyteRule
     internal byte PullSlot { get; init; }
 
     /// <summary>
+    ///  Gets the copies that name the postbyte's slots, as <c>$2=$1</c> for TFR: each side minus its slot number.
+    /// </summary>
+    internal IReadOnlyList<(int Destination, int Source)>? SlotCopies { get; init; }
+
+    /// <summary>
     ///  Gets the postbyte's field kind.
     /// </summary>
     internal OperandFieldKind Kind { get; init; }
@@ -48,7 +53,7 @@ internal readonly record struct PostbyteRule
     /// <summary>
     ///  Gets any slot named, nonzero when one is.
     /// </summary>
-    internal int Slots => ReadSlots | WriteSlots | MayWriteSlots | PushSlot | PullSlot;
+    internal int Slots => ReadSlots | WriteSlots | MayWriteSlots | PushSlot | PullSlot | (SlotCopies?.Count ?? 0);
 
     /// <summary>
     ///  Adds a line's slots.
@@ -61,6 +66,7 @@ internal readonly record struct PostbyteRule
         WriteSlots = (byte)(WriteSlots | line.WriteSlots),
         MayWriteSlots = (byte)(MayWriteSlots | line.MayWriteSlots),
         PushSlot = line.PushSlot != 0 ? line.PushSlot : PushSlot,
-        PullSlot = line.PullSlot != 0 ? line.PullSlot : PullSlot
+        PullSlot = line.PullSlot != 0 ? line.PullSlot : PullSlot,
+        SlotCopies = [.. SlotCopies ?? [], .. line.SlotCopies]
     };
 }

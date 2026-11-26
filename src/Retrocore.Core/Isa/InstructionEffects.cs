@@ -125,6 +125,61 @@ public readonly record struct InstructionEffects
     internal byte StackRegisterPlusOne { get; init; }
 
     /// <summary>
+    ///  Gets the number of register copies, at most four: registers the instruction sets to another's value, as
+    ///  TAX sets X to A.
+    /// </summary>
+    public byte CopyCount { get; init; }
+
+    /// <summary>
+    ///  Gets the copies, twelve bits each, the destination's register bit above the source's.
+    /// </summary>
+    internal ulong Copies { get; init; }
+
+    /// <summary>
+    ///  Gets one register copy: the register the instruction sets to the value another had before it.
+    /// </summary>
+    /// <param name="index">The copy, below <see cref="CopyCount"/>.</param>
+    /// <param name="destination">Receives the register set, by bit.</param>
+    /// <param name="source">Receives the register whose value it takes, by bit.</param>
+    public void GetCopy(int index, out int destination, out int source)
+    {
+        ulong copy = (Copies >> (index * 12)) & 0xFFF;
+        destination = (int)(copy >> 6);
+        source = (int)(copy & 0x3F);
+    }
+
+    /// <summary>
+    ///  Gets these effects with one more copy, unless four are already given.
+    /// </summary>
+    /// <param name="destination">The register set, by bit.</param>
+    /// <param name="source">The register whose value it takes, by bit.</param>
+    /// <returns>The effects.</returns>
+    internal InstructionEffects WithCopy(int destination, int source) => CopyCount >= 4
+        ? this
+        : this with
+        {
+            Copies = Copies | ((ulong)(((destination & 0x3F) << 6) | (source & 0x3F)) << (CopyCount * 12)),
+            CopyCount = (byte)(CopyCount + 1)
+        };
+
+    /// <summary>
+    ///  Gets these effects with another's copies after their own.
+    /// </summary>
+    /// <param name="other">The other effects.</param>
+    /// <returns>The effects.</returns>
+    internal InstructionEffects WithCopies(InstructionEffects other)
+    {
+        InstructionEffects effects = this;
+        for (int index = 0; index < other.CopyCount; index++)
+        {
+            other.GetCopy(index, out int destination, out int source);
+            effects = effects.WithCopy(destination, source);
+        }
+
+        return effects;
+    }
+
+    /// <summary>
     ///  Gets whether a register is read.
     /// </summary>
     /// <param name="register">The register's bit in <see cref="IsaDescription.EffectRegisters"/>.</param>

@@ -1,9 +1,9 @@
 # Backlog: static analysis of assembly sources
 
-Status: **survey, with item 4's groundwork done for every CPU: the 6502 family, the Z80, the MC6809, the 8080 and the
-8085**. This note gathers what Retrocore already checks, what other assemblers and tools check, and where the two
-differ, as the starting point for a design. The [effects lines](#register-and-flag-effects) are decided; the analyses
-that would use them are not.
+Status: **survey, with item 4's groundwork done for every CPU (the 6502 family, the Z80, the MC6809, the 8080 and the
+8085) and its first slice, [the Keeps and Uses check](#the-keeps-and-uses-check), in tests**. This note gathers what
+Retrocore already checks, what other assemblers and tools check, and where the two differ, as the starting point for
+a design. The [effects lines](#register-and-flag-effects) are decided; where the check runs is not.
 
 ## What Retrocore has
 
@@ -203,8 +203,8 @@ warnings, which most assemblers have.
 4. **`Keeps:` and `Uses:` without running.** The instruction-set descriptions say what each instruction reads
    and writes, and a per-routine dataflow over `AnalysisEngine`'s flow would take each callee's documented
    contract at a `JSR` or `CALL`. It would find the leftover-Y kind of problem and contracts the documentation
-   gets wrong. The first part is done for every CPU: see
-   [Register and flag effects](#register-and-flag-effects). The dataflow is not.
+   gets wrong. The effects are done for every CPU: see [Register and flag effects](#register-and-flag-effects).
+   The dataflow is started: see [The Keeps and Uses check](#the-keeps-and-uses-check).
 5. **Flag values,** as SourceGen carries them, to report branches never taken and the code only they reach.
 6. **Unreferenced code and fall-through:** what no entry point reaches, and a routine that runs into the next,
    for the conversions to document.
@@ -241,7 +241,7 @@ and for the Z80:
 ```text
 parts AF=A,F BC=B,C DE=D,E HL=H,L IX=IXH,IXL IY=IYH,IYL
 stack SP
-effects LD                      reads $2                writes $1
+effects LD                      reads $2                writes $1       copies $1=$2
 effects RL RR                   reads $1 carry          writes $1 $2 F half-carry=0 subtract=0
 effects CALL:NZ,nn CALL:Z,nn    reads zero SP           may-write SP                    may-push 2
 effects XOR:A writes A negative=0 zero=1 Y=0 half-carry=0 X=0 overflow=1 subtract=0 carry=0
@@ -273,6 +273,10 @@ to its arithmetic, K to `INX` and `DCX`, and the whole of F to PSW.
   carry flag cannot be confused. A flag without a word, the Z80's undocumented X and Y, goes by its name. The
   flags register by name (`P`, `F`) means every flag, as `PHP` pushes them and `POP AF` pulls them.
 - In `writes`, `flag=0` and `flag=1` are constants, and `flag=bitN` is a copy of bit N of the memory operand.
+- `copies Dst=Src` says a written register takes another's value unchanged, as `TAX`, `LD A,B`, `MOV` and `TFR`
+  do, and `EX DE,HL` and `XCHG` copy both ways (`copies D=H E=L H=D L=E`). Operand slots work as in `reads`; a
+  copy between operands that are not single registers, as `LD A,[HL]` and `LD HL,DE`, copies nothing. An
+  instruction holds at most four. `LD A,R` is not a copy, and `LD A,I` is.
 - `parts Pair=Part,Part` makes a register stand for its parts: writing HL writes H and L, and the masks hold only
   the parts. A part the registers line lacks, as the Z80's IXH, is added for effects alone, so the debugger's
   frame, which holds the registers line, does not grow.
@@ -318,7 +322,8 @@ some paths; and the stack register. `ReadsAny(mask)` and `ChangesAny(mask)` test
 `InstructionSet.HasEffects` says whether the description has them; without, `IsKnown` is false. Where
 `DependsOnPostbyte` is set, `Effects(encoding)` leaves out what the postbyte names, and
 `Effects(encoding, postbyte)` adds it from tables of every postbyte built with the set, so it too is an array
-lookup that allocates nothing; `DisassembledInstruction.Effects` passes the postbyte.
+lookup that allocates nothing; `DisassembledInstruction.Effects` passes the postbyte. `CopyCount` and
+`GetCopy(index, out destination, out source)` give the copies, by register bit.
 
 What it costs, measured in Release: a lookup about 1.3 ns, with nothing allocated; the tables 36 bytes an encoding,
 about 37 KB for the four 6502 family sets, 45 KB for the Z80's 1,255 encodings, and for the 6809 its encodings' and
@@ -374,7 +379,66 @@ Taken on the open questions this work raised:
 
 ### Follow-ups
 
-- **The analyses themselves,** items 4 and 5, which this data was made for.
+- **Item 5,** flag values, which the Keeps and Uses check needs next (see its limits).
+
+## The Keeps and Uses check
+
+The first slice of item 4: `AnalysisContracts` (in `Retrocore.Assembler`) takes an assembled source, its
+documentation and the instruction set, follows each routine that documents `Keeps:` or `Uses:` from its entry, and
+reports what the code contradicts: a register or flag `Keeps:` names that some path changes, and, where there is a
+`Uses:`, a register some path changes that `Uses:`, `Out:` and `Keeps:` do not list. `Check()` returns the findings
+with the routines checked, the `Keeps:` items it could not verify, and the routines it skipped, with the reason.
+
+### How it follows a routine
+
+- Each register and flag holds its entry value, a value changed at an address, or a value unknown at an address,
+  as after a call the analysis could not see. Paths join at each address until nothing changes; a joined value
+  that differs is changed where it first was. Only definite changes are findings; unknown ones are counted as not
+  verified, so the check does not report what it cannot show.
+- Pushes save values on a model of each stack, and a pull of exactly the bytes and registers a push saved restores
+  them; a push of the flags register saves its flags, as `PHP` and `PUSH AF` do. A store of one register to a fixed
+  address and a load back restore it too, as the BBC MOS saves X in zero page; a write through a pointer or an
+  index forgets what memory held. `copies` carry a value from register to register, as `TXA ... TAX` does.
+- At a call it applies the callee's documented contract, where there is one, else the callee's own analysis. A
+  jump to the start of another routine with a contract, with nothing pushed, is a tail call, whose contract
+  applies; a jump to an internal label is followed.
+- It gives up on a routine, and skips it, where the code does what the model cannot follow: an indirect jump; a
+  return through data it pushed or a pull of its return address; a change of the stack pointer; a call into a
+  routine that changes the stack under its return address, as Acorn's SAVE_REGISTERS inserts a restoring return;
+  and bytes the source does not assemble. A routine that pushes data and then calls such a helper, as SAVE_X_Y
+  does, changes its own caller's stack, so its callers are skipped too.
+
+### What it found
+
+`ContractAnalysisTests` cover the rules on small sources for the 6502, the Z80 and the 6809.
+`ContractAnalysisSdkTests.SdkSourcesReport` runs the check over the Monitor, the IIe firmwares, AppleSoft, the BBC
+MOS, BASIC and DFS, three CoCo ROMs and Kaypro MBASIC, and prints the report: 990 routines checked, 31 findings and
+30 `Keeps:` items not verified. Working through earlier reports fixed both the analysis and the documentation:
+
+- Real: Color BASIC's BLINK loads B, which its `Uses:` left out; it now lists it.
+- The documentation parser dropped `Out:` and `In:` entries that name several registers with one meaning, as
+  `HL, DE = past the bytes`, and the check took those outputs for undocumented changes. Names that start a section
+  are now an entry each. Later in a section a comma may end a meaning (`the fraction, normalised, zero = ...`), so
+  there `carry = set, X, Y = the offset` still reads X as part of carry's meaning; DFS's OSFILE_SEARCH now puts X
+  and Y first.
+- Most of the rest are analysis limits, not documentation errors, and each is a follow-up below.
+
+### Limits and follow-ups
+
+- **Branches that cannot fall through** (item 5). The MOS writes `bne ... ; always` after a load of a non-zero
+  value, and the Monitor `ldy #0` then `beq`; the check follows the fall-through it cannot rule out, which accounts
+  for most of the MOS findings. Known flag values from immediate loads, `SEC` and `CLC` would remove them; that
+  needs each branch's condition and sense in the data.
+- **Arithmetic that restores a value,** as IsLetter's `sbc #$5B` and `sbc #$A5`, which leave A as it was.
+- **Memory saved by a callee,** as NetFS's SAVE_CALL_REGISTERS stores X and Y for NFS_CALL_RETURN to load back:
+  a summary would need the fixed addresses a routine stores and writes.
+- **Data pushed by the caller** and pulled by the routine, as the MOS's INVERT_TEXT_CELL documents with
+  `STACK = the flags and A`.
+- **Calls into other modules,** which run into unassembled bytes (22 routines are skipped so); cross-module
+  contracts would let them be checked.
+- **Hints a source cannot give yet:** calls that never return or take inline bytes.
+- `Keeps:` of memory is not checked, only of registers and flags.
+- Where the check runs, as for the other analyses, is the first open question below.
 
 ## Open questions
 

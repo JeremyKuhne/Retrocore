@@ -47,6 +47,31 @@ public class DocumentationTests
     }
 
     /// <summary>
+    ///  Names that start a section and share a meaning, as "X, Y = the offset", are an entry each.
+    /// </summary>
+    [TestMethod]
+    public void SharedMeaningsParseAsEntries()
+    {
+        DocumentationComment comment = Parse("""
+            ;; Finds a file.
+            ;; In:    HL, DE = the names
+            ;; Out:   X, Y = its offset, carry = set when found, A = 0
+            FIND:
+                rts
+            """).Comments.Single();
+
+        Required(comment.Section("In")).Entries.Select(entry => (entry.Name, entry.Meaning)).Should().Equal(
+            ("HL", "the names"),
+            ("DE", "the names"));
+
+        Required(comment.Section("Out")).Entries.Select(entry => (entry.Name, entry.Meaning)).Should().Equal(
+            ("X", "its offset"),
+            ("Y", "its offset"),
+            ("carry", "set when found"),
+            ("A", "0"));
+    }
+
+    /// <summary>
     ///  The expanded form, remarks, wrapped lists and plain headings parse to the same model.
     /// </summary>
     [TestMethod]

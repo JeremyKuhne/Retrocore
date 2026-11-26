@@ -145,6 +145,18 @@ public class M6809EffectsTests
         ref Observed observed)
     {
         M6809Registers end = outcome.Registers;
+        for (int index = 0; index < effects.CopyCount; index++)
+        {
+            // A copy leaves its destination with the source's value from before the instruction.
+            effects.GetCopy(index, out int destination, out int source);
+            string to = M6809Isa.Description.EffectRegisters[destination];
+            string from = M6809Isa.Description.EffectRegisters[source];
+            if (to is not ("PC" or "CC") && from is not ("PC" or "CC") && Get(end, to) != Get(start, from))
+            {
+                failures.Add($"{label}: {to} is ${Get(end, to):X2}, not {from}'s ${Get(start, from):X2}.");
+            }
+        }
+
         foreach ((string name, uint mask, _) in s_leaves)
         {
             int before = Get(start, name);

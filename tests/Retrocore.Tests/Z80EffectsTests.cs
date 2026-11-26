@@ -158,6 +158,19 @@ public class Z80EffectsTests
         List<string> failures,
         ref Observed observed)
     {
+        IsaDescription description = Description;
+        for (int index = 0; index < effects.CopyCount; index++)
+        {
+            // A copy leaves its destination with the source's value from before the instruction.
+            effects.GetCopy(index, out int destination, out int source);
+            string to = description.EffectRegisters[destination];
+            string from = description.EffectRegisters[source];
+            if (to != "R" && from != "R" && Get(end, to) != Get(start, from))
+            {
+                failures.Add($"{label}: {to} is ${Get(end, to):X2}, not {from}'s ${Get(start, from):X2}.");
+            }
+        }
+
         foreach ((string name, uint mask, _) in s_leaves)
         {
             int before = Get(start, name);
@@ -471,6 +484,8 @@ public class Z80EffectsTests
 
         return registers;
     }
+
+    private static IsaDescription Description => Z80Isa.Description;
 
     private static (string Name, uint Mask, int Bits)[] Leaves()
     {

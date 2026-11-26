@@ -602,11 +602,17 @@ Checked against main once the PET and BBC Micro had landed:
 - **The media writers are their own work** ahead of the starting environments: Woz Monitor hex, more DOS 3.3 files,
   the PET's `SYS` stub, the DFS catalogue, the SOS boot disk, and later CBM DOS.
 - **The Apple II target reuses the launch's `dos: "3.3"` disk**, extended to more files.
+- **The SOS boot disk's `SOS.DRIVER` carries the console alone by default**, from the SDK's source. The built-in
+  disk's driver, `.D1` to `.D4`, is part of SOS.KERNEL, so the disk needs no entry. `SosDriverFile.Write` writes any
+  drivers it is given: it rewrites Apple's own files byte for byte, and the SDK builds every Apple driver it has a
+  source for (console, RS-232, printer, graphics, audio, Silentype, ProFile, formatter and RAM disk). A target can
+  add those by name. The drivers are relocated, because `SOS.DRIVER` has no fixed-address form: SOS's loader puts
+  each driver wherever it finds room below the interpreter and adds that address to the words its relocation table
+  lists. The build finds those words by assembling each driver at two origins. The header's character set and
+  keyboard layout come from a new SDK source, `Sos/SosDriverHeader.asm`: Apple's STANDARD set and SHOLES layout.
 
 ## Open questions
 
-- **The SOS boot disk's scope.** Should the first `SOS.DRIVER` writer carry only the drivers the SDK builds (console,
-  disk), or every driver `SosDriverFile` can read? And should it relocate them, or place them at fixed addresses?
 - **The packed format's budget.** How small Pirate Adventure packs, and so whether the Apple-1 could fit in 16K. This
   is measured in phase 3.
 - **Saving the game.** A save to disk on the disk targets, and to tape or nothing on the Apple-1. Is this in the first

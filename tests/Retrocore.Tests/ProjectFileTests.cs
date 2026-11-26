@@ -262,7 +262,7 @@ public sealed class ProjectFileTests
         RetrocoreProject project = RetrocoreProject.Load(_folder);
         project.Target("cpm").Cpu.Should().BeSameAs(ProjectCpu.I8080);
         project.Target("cpm-z80").Cpu.Should().BeSameAs(ProjectCpu.Z80);
-        Error(project.Target("cpm").RequireSupported).Should().EndWith("the 'cpm' environment is not yet supported; only 'bare', 'wozmon', 'dos33' and 'dfs' build.");
+        Error(project.Target("cpm").RequireSupported).Should().EndWith("the 'cpm' environment is not yet supported; only 'bare', 'wozmon', 'dos33', 'dfs' and 'basic' build.");
     }
 
     /// <summary>
@@ -330,7 +330,7 @@ public sealed class ProjectFileTests
         Error(wozFiles.RequireSupported).Should().EndWith(
             "target wozfiles: the 'wozmon' environment has no disk to put 'files' on; the 'wozmon' environment's image does not start from a template.");
 
-        Error(project.Target("disk").RequireSupported).Should().EndWith("target disk: the 'prodos' environment is not yet supported; only 'bare', 'wozmon', 'dos33' and 'dfs' build.");
+        Error(project.Target("disk").RequireSupported).Should().EndWith("target disk: the 'prodos' environment is not yet supported; only 'bare', 'wozmon', 'dos33', 'dfs' and 'basic' build.");
     }
 
     /// <summary>
@@ -351,8 +351,8 @@ public sealed class ProjectFileTests
         Fails("\"files\": [{ \"name\": \"A\" }]").Should().EndWith("a file of target t must give 'path'.");
         Fails("\"files\": [{ \"path\": \"a.bin\", \"address\": 4096 }]").Should().EndWith("a.bin's 'address' must be an address such as \"$6000\".");
         Fails("\"files\": [{ \"path\": \"a.bin\", \"kind\": \"B\" }]").Should().Contain("a file of target t has no field 'kind'");
-        Fails("\"image\": \"disk\"").Should().EndWith("target t's 'image' must be true, false or an object giving 'template'.");
-        Fails("\"image\": {}").Should().EndWith("target t's 'image' must give 'template'.");
+        Fails("\"image\": \"disk\"").Should().EndWith("target t's 'image' must be true, false or an object giving 'template' or 'boot'.");
+        Fails("\"image\": {}").Should().EndWith("target t's 'image' must give 'template' or 'boot'.");
         Fails("\"files\": [\"${in}/a.bin\"]").Should().EndWith("target t: '${in}/a.bin' uses a variable it cannot; a path can use ${obj} only.");
         Fails("\"bootImage\": \"${objs}/boot.dsk\"").Should().EndWith("target t: '${objs}/boot.dsk' uses a variable it cannot; a path can use ${obj} only.");
     }

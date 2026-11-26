@@ -133,7 +133,7 @@
         },
         "environment": {
           "$ref": "#/definitions/environment",
-          "description": "How the program is loaded and started, and which system calls it may make. Every machine runs bare; each other environment runs on the machines the SDK plan pairs it with. bare, wozmon, dos33 and dfs build yet."
+          "description": "How the program is loaded and started, and which system calls it may make. Every machine runs bare; each other environment runs on the machines the SDK plan pairs it with. bare, wozmon, dos33, dfs and basic build yet."
         },
         "cpu": {
           "$ref": "#/definitions/cpu",
@@ -216,15 +216,16 @@
           }
         },
         "image": {
-          "description": "Whether the target builds its environment's disk or tape image (true, the default), or not (false), or an object whose template names the disk the image starts from. An environment that builds no image takes none.",
+          "description": "Whether the target builds its environment's disk or tape image (true, the default), or not (false), or an object whose template names the disk the image starts from or whose boot names the image a launch boots. An environment that builds no image takes none.",
           "oneOf": [
             { "type": "boolean" },
             {
               "type": "object",
-              "required": ["template"],
+              "minProperties": 1,
               "additionalProperties": false,
               "properties": {
-                "template": { "type": "string", "minLength": 1, "description": "The disk the image starts from, relative to the project's folder; ${obj} is its obj/ folder." }
+                "template": { "type": "string", "minLength": 1, "description": "The disk the image starts from, relative to the project's folder; ${obj} is its obj/ folder." },
+                "boot": { "type": "string", "minLength": 1, "description": "Which of its environment's images a launch boots, where it builds more than one: basic's tape (the default) or disk." }
               }
             }
           ]
@@ -232,7 +233,7 @@
         "bootImage": {
           "type": "string",
           "minLength": 1,
-          "description": "The boot media the environment needs, where it is not an SDK source, relative to the project's folder (${obj} is its obj/ folder). An environment that boots from the SDK's sources takes none; none that builds yet needs any."
+          "description": "The folder of the boot media or device dumps the environment needs where they are not SDK sources, relative to the project's folder (${obj} is its obj/ folder), such as the 4040's ROMs a basic target's disk boots with. The launch finds them there by their hashes, then in the machine's ROM folder variable and RETROCORE_CACHE. An environment that boots from the SDK's sources alone takes none."
         }
       }
     },
@@ -293,7 +294,7 @@
         "A B file on a DOS 3.3 disk that its HELLO starts. The Apple II, II Plus and IIe.",
         "A SYS or BIN file under ProDOS. The II Plus with 64K, and the IIe. Not yet supported.",
         "A SOS.INTERP on a SOS boot disk. The Apple III. Not yet supported.",
-        "A PRG with a BASIC SYS line. The PET. Not yet supported.",
+        "A PRG with a BASIC SYS line, on a TAP tape and a 4040 disk. The PET.",
         "A *RUN file on a DFS disk that its !BOOT runs, and a UEF tape. The BBC Micro.",
         "A .COM file under CP/M. The Apple II and IIe with a SoftCard, the TRS-80 Model 4, the Altair and the Kaypro II. Not yet supported.",
         "A SYSTEM tape. The TRS-80 Model I and III. Not yet supported.",

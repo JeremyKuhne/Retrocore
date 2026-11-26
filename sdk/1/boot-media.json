@@ -3,7 +3,7 @@
   "media": [
     {
       "id": "c4040",
-      "title": "The Commodore 4040 dual drive's ROMs: DOS 2.0 revision 2, the controller's and the GCR PROM",
+      "title": "the Commodore 4040 dual drive's ROMs: DOS 2.0 revision 2, the controller's and the GCR PROM",
       "for": "booting a PET basic target from its 4040 disk",
       "source": "MAME's c4040 set, with the GCR PROM from its c2040_fdc set",
       "variable": "RETROCORE_PET_ROMS",

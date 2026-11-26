@@ -387,8 +387,15 @@ Plus, the enhanced IIe, and the II with the Autostart ROM. The adventure's `appl
 its disk with `BLOAD`, printed through `COUT`, and plays both of Pirate Adventure's transcripts. `dfs` writes
 `<name>.ssd`, the program as a `*RUN` file with the target's `files` and a `!BOOT` that runs it, and a UEF tape of
 the same files; a launch fits the disk interface, puts the disk in drive 0 and boots it holding SHIFT, on the model B
-and on a model A. The adventure's `bbc-dfs` target loads `$.PIRATE` with OSFILE and plays both transcripts. A target's `bootImage` is a path, relative to the project's folder; the
-lookup by hash, which phase 4 also gives, is still to come.
+and on a model A. The adventure's `bbc-dfs` target loads `$.PIRATE` with OSFILE and plays both transcripts. `basic`
+writes `<name>.prg` (its `SYS` line, then the program from `$0410`), its TAP tape and a 4040 disk; a launch puts the
+tape in with PLAY down, types `LOAD` and then `RUN`, on BASIC 4, 2 and 1. A target whose image boots the disk needs the
+4040's ROMs, which the launch finds by hash: the SDK's first [boot media](../../sdk/1/README.md#environments) lookup,
+by the SHA-1s MAME publishes (the plan said SHA-256; MAME's sets give SHA-1), in `bootImage`, `RETROCORE_PET_ROMS` and
+`RETROCORE_CACHE`. The disk is written even without them, as the writer is the host's. The adventure's `pet-basic`
+target plays both Pirate transcripts from its tape; `pet-disk` plays from the disk with the dumps, and the DAP test
+reports it skipped without them. A target's `bootImage` is a path, relative to the project's folder; the
+lookup by hash came with `basic`, below.
 
 ## Debugging in VS Code
 

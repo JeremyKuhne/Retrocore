@@ -41,6 +41,9 @@ internal sealed class BasicEnvironment : TargetEnvironment
     internal override string Name => "basic";
 
     /// <inheritdoc/>
+    internal override string NoFiles => "the 'basic' environment puts only its program on its tape and disk, so it takes no 'files'";
+
+    /// <inheritdoc/>
     internal override bool BuildsImage => true;
 
     /// <inheritdoc/>

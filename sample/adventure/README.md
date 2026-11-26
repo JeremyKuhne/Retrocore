@@ -13,7 +13,9 @@ in each machine's own environment follow as the SDK's environments arrive: `appl
 program as Woz Monitor hex to type in and an ACI tape, and `apple2-dos` builds a DOS 3.3 disk whose `HELLO` starts the
 engine, which loads Pirate Adventure from the disk as `PIRATE.DAT` (`GAME_LINKED` is 0 there, and
 `src/platform/dos33/game.s` loads the game), and `bbc-dfs` builds a DFS disk whose `!BOOT` runs the engine, which
-loads the game with OSFILE as `$.PIRATE` (`src/platform/dfs/game.s`). The packer writes the game's size beside it, `obj/pirate.inc`, for the
+loads the game with OSFILE as `$.PIRATE` (`src/platform/dfs/game.s`). `pet-basic` builds a PRG whose BASIC line
+`SYS`es the engine, on a tape that a launch `LOAD`s and `RUN`s; `pet-disk` boots the same program from a 4040 disk,
+once the drive's ROMs are found (they are not the SDK's). The PET links its game in, as the plan has it. The packer writes the game's size beside it, `obj/pirate.inc`, for the
 buffer it loads into.
 
 ```text
@@ -41,6 +43,8 @@ sample/adventure/
 | `apple2-test` | Apple II Plus, the test game | the Monitor's COUT and GETLN1 | `$6000` |
 | `apple3` | Apple III | its own text page 1 and keyboard routines | `$2000` |
 | `pet` | PET 4032 | the kernal's jump table | `$0800` |
+| `pet-basic` | PET 4032, from a TAP tape: `LOAD`, then `RUN` | the kernal's jump table | `$0410` |
+| `pet-disk` | PET 4032, from a 4040 disk, with the drive's ROMs | the kernal's jump table | `$0410` |
 | `bbc` | BBC Micro model B | the MOS's OSWRCH and OSWORD 0 | `$2000` |
 | `bbc-dfs` | BBC Micro model B, from a DFS disk, the game loaded from `$.PIRATE` | the MOS's OSWRCH and OSWORD 0 | `$1900` |
 
@@ -86,7 +90,8 @@ engine itself writes it. `--columns` sets the screen's width, 40 by default.
 [`tools/Test-AdventureDap.mjs`](../../tools/Test-AdventureDap.mjs) plays both of Pirate Adventure's transcripts, the
 win from start to finish and the death, on the Apple-1 with 32K, the PET 4032, the Apple II and the BBC Micro, the
 win on `apple1-wozmon`, whose hex it checks against what the launch loaded, both on `apple2-dos` and `bbc-dfs`, each
-booted from its disk, and the test game's three on
+booted from its disk, both on `pet-basic`, from its tape, the win on `pet-disk` (reported as skipped without the 4040's
+ROMs), and the test game's three on
 `apple2-test` alone, under the debug adapter, through project launches, and checks that what the
 6502 engine writes matches the transcript's `.out`, character for character. Give target names to play only those,
 such as `node tools/Test-AdventureDap.mjs apple1 pet`.

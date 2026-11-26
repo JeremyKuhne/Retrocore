@@ -30,6 +30,11 @@ internal abstract class TargetEnvironment
     internal virtual bool TakesFiles => false;
 
     /// <summary>
+    ///  Gets why the environment takes no <c>files</c>, as a phrase that ends a build's error.
+    /// </summary>
+    internal virtual string NoFiles => $"the '{Name}' environment has no disk to put 'files' on";
+
+    /// <summary>
     ///  Gets whether the environment builds an image, which a target's <c>"image": false</c> leaves out.
     /// </summary>
     internal virtual bool BuildsImage => false;
@@ -126,7 +131,7 @@ internal abstract class TargetEnvironment
     {
         if (target.Files.Count != 0 && !TakesFiles)
         {
-            yield return $"the '{Name}' environment has no disk to put 'files' on";
+            yield return NoFiles;
         }
 
         if (target.ImageGiven && !BuildsImage)

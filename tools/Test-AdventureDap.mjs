@@ -6,8 +6,9 @@
 // linked in, from start to finish on bare targets of sample/adventure/retrocore.json (the win and the death on the
 // Apple-1 with 32K, the PET 4032, the Apple II Plus and the BBC Micro), its win on the Apple-1's wozmon target, which a
 // launch loads as if its hex had been typed in, both on the Apple II Plus's dos33 target and the BBC Micro's dfs
-// target, each booted from its disk, which loads the game from the disk, and the test game's transcripts on
-// apple2-test,
+// target, each booted from its disk, which loads the game from the disk, both on the PET's basic target, LOADed from
+// its tape and RUN, the win on its 4040 disk (skipped, and said to be, without the drive's ROMs), and the test game's
+// transcripts on apple2-test,
 // through project launches, each running the project's steps, which pack the games with the sample's packer, and
 // building the same core with its machine's platform folder. It checks that what the engine writes matches the C#
 // reference engine's transcript in the matching .out file character for character. A logpoint on the console's Write
@@ -34,6 +35,7 @@ const plays = {
     "apple1-wozmon": { family: "apple1", transcripts: ["pirate-win"], hex: true },
     pet: { family: "pet", transcripts: ["pirate-win", "pirate-die"] },
     "pet-basic": { family: "pet", transcripts: ["pirate-win", "pirate-die"] },
+    "pet-disk": { family: "pet", transcripts: ["pirate-win"], needs: "the 4040's ROMs" },
     apple2: { family: "apple2", transcripts: ["pirate-win", "pirate-die"] },
     "apple2-dos": { family: "apple2", transcripts: ["pirate-win", "pirate-die"] },
     bbc: { family: "bbc", transcripts: ["pirate-win", "pirate-die"] },
@@ -96,6 +98,7 @@ async function checkHex(target, entry) {
 }
 
 const { request, event, events, fail, close, failure } = startDap(root);
+const skippedTargets = [];
 // A whole run takes about two minutes; each play may take three.
 const timeout = setTimeout(() => fail(new Error("Adventure DAP integration timed out.")),
     180000 * Math.max(1, targets.reduce((count, target) => count + (plays[target]?.transcripts.length ?? 0), 0)));
@@ -125,13 +128,28 @@ try {
         const consoleSource = join(sample, "src", "platform", family, "console.s");
         const readLine = firstLine(consoleSource, "ReadLine");
         const write = firstLine(consoleSource, "Write");
+        let skipped = false;
         for (const name of transcripts) {
+            if (skipped) break;
             const commands = readFileSync(join(sample, "games", `${name}.in`), "utf8").split(/\r?\n/);
             if (commands.at(-1) === "") commands.pop();
             const expected = readFileSync(join(sample, "games", `${name}.out`), "utf8").replace(/\r\n/g, "\n");
             events.length = 0;
-            const launched = await request("launch", { project: sample, target, stopOnEntry: false, speed: "max",
-                sound: "off", logpointLimit: 0, checkContracts: "stop" });
+            const launchArgs = { project: sample, target, stopOnEntry: false, speed: "max", sound: "off", logpointLimit: 0,
+                checkContracts: "stop" };
+
+            // A target that needs dumps the SDK does not build, such as the 4040's ROMs for the PET's disk, is skipped,
+            // and reported as skipped, when the launch does not find them.
+            let launched;
+            try {
+                launched = await request("launch", launchArgs);
+            } catch (error) {
+                if (!plays[target].needs || !/were not found by their hashes/.test(error.message)) throw error;
+                console.log(`SKIPPED ${target}: ${plays[target].needs} were not found: ${error.message}`);
+                skippedTargets.push(target);
+                skipped = true;
+                break;
+            }
 
             // A wozmon target's hex, typed in, stores what the launch loaded, and runs it at its entry.
             if (plays[target].hex) await checkHex(target, launched.project.entry);
@@ -185,7 +203,13 @@ try {
     }
 
     await request("disconnect");
-    console.log(`Adventure DAP passed: the 6502 engine plays each transcript on ${targets.join(", ")} as the reference engine does.`);
+    const played = targets.filter(target => !skippedTargets.includes(target));
+    if (played.length !== 0) {
+        console.log(`Adventure DAP passed: the 6502 engine plays each transcript on ${played.join(", ")} as the reference engine does.`);
+    }
+    if (skippedTargets.length !== 0) {
+        console.log(`Adventure DAP skipped ${skippedTargets.join(", ")}: not played, so not passed, as their dumps were not found.`);
+    }
 } finally {
     clearTimeout(timeout);
     close();

@@ -302,6 +302,7 @@ public sealed partial class ProjectHeaderTests
     [DataRow("apple2-iiplus", "dos33", "Monitor,Dos33")]
     [DataRow("apple3", "bare", "")]
     [DataRow("pet4032", "bare", "Kernal4")]
+    [DataRow("pet4032", "basic", "Kernal4")]
     [DataRow("bbcb", "bare", "Mos")]
     [DataRow("bbcb", "dfs", "Mos")]
     public void HeadersAreCleanInTheEditor(string machine, string environment, string modules)

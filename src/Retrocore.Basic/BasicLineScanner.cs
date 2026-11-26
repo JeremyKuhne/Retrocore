@@ -763,10 +763,10 @@ internal sealed class BasicLineScanner
         return _text[start..End(last)];
     }
 
-    // A type suffix: $ and %, on Level II ! and # for single and double precision, and in Business BASIC & for a
+    // A type suffix: $ and %, on Level II, MBASIC and the Model 100 ! and # for single and double precision, and in Business BASIC & for a
     // long integer.
     private bool IsSuffix(byte value) => value is (byte)'$' or (byte)'%'
-        || ((_dialect == BasicDialect.Level2 || _dialect == BasicDialect.Mbasic) && value is (byte)'!' or (byte)'#')
+        || ((_dialect == BasicDialect.Level2 || _dialect == BasicDialect.Mbasic || _dialect == BasicDialect.Model100) && value is (byte)'!' or (byte)'#')
         || (Business && value == '&');
 
     private bool Business => _dialect == BasicDialect.BusinessBasic;

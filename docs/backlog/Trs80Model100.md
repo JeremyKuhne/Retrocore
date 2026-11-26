@@ -349,6 +349,30 @@ by the user first, and stays out of the repository.
   counter at `$FF90` starts near 116 scans), though the menu is up by 0.8 s, so a key typed at once is lost, in MAME
   too. A cold start sets the clock to January 1 whatever the launch's `time`.
 
+## Phase 3 findings (2026-11-26)
+
+Read from the ROM, from RAM after the ROM saved files (in Retrocore's machine, whose menu and bytes free match MAME's),
+and from a `CSAVE` MAME 0.264 recorded to WAV. No new downloads.
+
+- **Tokens.** BASIC's keyword table is at `$0080`, each keyword's first letter with bit 7 set, `$80` (`END`) to
+  `$FF` (`'`), one byte each; `$D0`-`$DE` are the operators `+ - * / ^ AND OR XOR EQV IMP MOD \ > = <`. Numbers and
+  line numbers (after `GOTO` and `THEN` too) stay as ASCII digits. `'` is stored as `: REM '` (`3A 8E FF`), and
+  `ELSE` with a `:` before it (`3A 91`), as in Microsoft's other BASICs.
+- **The directory** at `$F962`: 11-byte entries of a type, the file's address, and a six-character name and two-character
+  extension, padded with spaces. Types seen: `$B0` the ROM's own programs (BASIC, TEXT, TELCOM, ADDRSS, SCHEDL), `$80`
+  `.BA`, `$C0` `.DO`, `$A0` `.CO`, and `$88`, `$C8` and `$48` for the three hidden entries, "Suzuki" (BASIC's unsaved
+  program), "Hayashi" (the paste buffer) and "RickY". A new file takes the first free entry; the menu shows files in
+  the directory's order.
+- **The file area** from `$8000` (a `$00` before the first file): the `.BA` files, then Suzuki's program; the `.DO`
+  files from the pointer at `$FBAE`, then Hayashi's `$1A`; the `.CO` files from `$FBB0`; BASIC's variables from
+  `$FBB2`. A `.BA` file is linked lines ending in `00 00`; a `.DO` file is CR LF lines ending in `$1A`; a `.CO` file
+  is its start, length and entry, two bytes each, then its bytes.
+- **The cassette** (MAME's WAV at 44.1 kHz): a bit is one cycle, 1 at 2400 Hz and 0 at 1200 Hz, from SOD. A block is
+  a leader of `$55` bytes sent least significant bit first, a `$7F`, then 9-bit frames, eight data bits most
+  significant first and a ninth bit, with each frame's last cycle stretched by the ROM's per-byte work. `CSAVE`
+  writes a header block (`$D3`, the name in six characters, `FF FF`, the program's length, six `FF`s and a checksum)
+  and a data block (`$8D`, the program's bytes, a checksum).
+
 ## Still open
 
 - **The RAM image and the recovery journal.** The image is saved when the session ends cleanly; a host that crashes

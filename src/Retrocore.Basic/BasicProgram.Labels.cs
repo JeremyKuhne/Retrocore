@@ -87,7 +87,7 @@ public sealed partial class BasicProgram
                 continue;
             }
 
-            if (character == '\'' && (dialect == BasicDialect.Level2 || dialect == BasicDialect.Mbasic || dialect is ColorBasicDialect))
+            if (character == '\'' && (dialect == BasicDialect.Level2 || dialect == BasicDialect.Mbasic || dialect == BasicDialect.Model100 || dialect is ColorBasicDialect))
             {
                 break;
             }

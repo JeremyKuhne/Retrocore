@@ -96,6 +96,7 @@ jobs:
           node tools/Test-AltairDap.mjs
           node tools/Test-AtariDap.mjs
           node tools/Test-AdventureDap.mjs
+          node tools/Test-ProjectDap.mjs
           node tools/Test-OffMachine.mjs
 
       - name: Extension tests

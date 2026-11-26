@@ -3,6 +3,7 @@
 // See LICENSE file in the project root for full license information
 
 using Retrocore.Assembler;
+using Retrocore.Debug.Project;
 using Retrocore.Documentation;
 using Retrocore.Isa;
 using Retrocore.Machines.Devices;
@@ -939,6 +940,31 @@ internal sealed partial class DebugSession
         return name.Length == 0 || !char.IsAsciiLetter(name[0]) ? "PROGRAM" : name[..Math.Min(name.Length, 30)];
     }
 
+    // Runs the machine for a time with nothing tracked, then to the end of its instruction, so a program loaded after
+    // starts from an instruction boundary.
+    private void Boot(double seconds)
+    {
+        Target.RunCycles(checked((int)(seconds * Target.ClockHertz)));
+        while (!Target.IsInstructionBoundary) { Target.StepCycle(); }
+        Target.CallStack.Reset();
+    }
+
+    // Puts a project target's cards in the machine's slots, as a saved machine's go in: every one must, or the launch
+    // fails naming the target.
+    private void PutCards(ProjectTarget target, JsonObject cards)
+    {
+        if (Target.Cards() is null)
+        {
+            throw new ProjectException($"{target.Project.File}: target {target.Name}: {target.Machine.Id} has no slots for its cards.");
+        }
+
+        List<string> problems = [.. Target.RestoreCards(cards)];
+        if (problems.Count != 0)
+        {
+            throw new ProjectException($"{target.Project.File}: target {target.Name}'s cards: {string.Join(" ", problems)}");
+        }
+    }
+
     private JsonObject Launch(JsonObject args)
     {
         // The launch takes a configurationDone that came before it, even if it fails.
@@ -948,6 +974,10 @@ internal sealed partial class DebugSession
         _launchReady = false;
         _run?.Cancel();
         args = LaunchMedia.WithSaved(args, args["machineState"]);
+
+        // A project launch builds its target, as retrocore build does, and launches the target's machine.
+        TargetBuild? built = null;
+        if (args.ContainsKey("project")) { (args, built) = ProjectLaunch.Prepare(args); }
         string machine = DebugMachines.Require(args.String("machine"));
         string? sourceFile = args.String("source");
         string? program = args.String("program");
@@ -957,7 +987,7 @@ internal sealed partial class DebugSession
             throw new ArgumentException("Give one of source, program and basic.");
         }
 
-        bool loads = sourceFile is not null || program is not null;
+        bool loads = sourceFile is not null || program is not null || built is not null;
 
         // The old machine's changed disks are kept and its recordings saved, and it is disposed before the new one is
         // built, as machines can share host resources, such as the game controllers SDL reads. A launch that then
@@ -982,6 +1012,9 @@ internal sealed partial class DebugSession
         };
 
         if (args.String("screen") is { } screen) { Target.Screen = screen; }
+
+        // A project target's cards go in its slots; a saved machine's, restored next, replace them.
+        if (built?.Target.Cards is { } cards) { PutCards(built.Target, cards); }
 
         // The cards and media the editor saved from the last session of this launch configuration replace the
         // launch's own; a DOS launch's disk, built below, still goes in drive 1.
@@ -1020,15 +1053,17 @@ internal sealed partial class DebugSession
         _debug = new();
         _firstSdkModule = int.MaxValue;
         LoadHints(args, sourceFile, program);
-        if (sourceFile is not null)
+        if (built is not null || sourceFile is not null)
         {
             // The retrocore assembler builds any dialect in place, and the debugger reads its source map directly.
-            AssemblyDialect? dialect = SourceBuild.Dialect(args.String("dialect"));
+            // A project's target is already built, each of its sources in its own dialect.
+            AssemblyDialect? dialect = built is null ? SourceBuild.Dialect(args.String("dialect")) : null;
 
             // A .cpu Z80 source on a machine with the SoftCard is the Z80's: it loads where the Z80's addresses reach,
-            // and the Z80 takes the bus at its entry.
+            // and the Z80 takes the bus at its entry. A bare project target is the machine's own CPU's.
             SoftCardDebugTarget? z80 = null;
-            if (Target.Coprocessor is SoftCardDebugTarget softCard
+            if (sourceFile is not null
+                && Target.Coprocessor is SoftCardDebugTarget softCard
                 && SourceBuild.DeclaresCpu(sourceFile, dialect, Target.Cpu, softCard.Cpu))
             {
                 z80 = softCard;
@@ -1037,14 +1072,18 @@ internal sealed partial class DebugSession
             // The build preprocesses as the check did, starting on the machine's CPU; the first .cpu that remains, which
             // made the source the Z80's, selects the Z80's instructions.
             IDebugTarget loader = z80 ?? Target;
-            AssemblyResult result = SourceBuild.Assemble(
-                sourceFile,
+
+            // A bare program calls the ROM's routines, such as COUT, which the Apple II's Monitor sets up as it
+            // resets, so the ROM runs first, as the other machines' ROMs do before a program loads.
+            if (built is not null && Target is Apple2DebugTarget) { Boot(args.Double("bootSeconds") ?? 0.25); }
+            AssemblyResult result = built?.Result ?? SourceBuild.Assemble(
+                sourceFile ?? "",
                 dialect,
                 Target.Cpu,
                 args.Int("loadAddress") ?? loader.DefaultLoadAddress,
                 args.String("linkerConfiguration"));
 
-            if (z80 is null && Target is Apple2DebugTarget { Dos: not null } dosTarget)
+            if (sourceFile is not null && z80 is null && Target is Apple2DebugTarget { Dos: not null } dosTarget)
             {
                 LoadOnDosDisk(dosTarget, SourceBuild.Emitted(result), args.Int("entryAddress"), sourceFile);
             }
@@ -1058,7 +1097,7 @@ internal sealed partial class DebugSession
                 }
 
                 z80?.Card.TakeBus();
-                loader.ProgramCounter = checked((ushort)(args.Int("entryAddress") ?? first ?? loader.DefaultLoadAddress));
+                loader.ProgramCounter = checked((ushort)(built?.Entry ?? args.Int("entryAddress") ?? first ?? loader.DefaultLoadAddress));
                 z80?.Begin();
             }
 

@@ -1502,10 +1502,28 @@
         ],
         "configurationAttributes": {
           "launch": {
-            "required": [
-              "machine"
+            "anyOf": [
+              {
+                "required": [
+                  "machine"
+                ]
+              },
+              {
+                "required": [
+                  "project",
+                  "target"
+                ]
+              }
             ],
             "properties": {
+              "project": {
+                "type": "string",
+                "description": "A Retrocore project to build and debug: its retrocore.json, or the folder that holds it. The target supplies machine, model and its options and cards; project replaces source, program, debugFile and basic, and decides dialect, linkerConfiguration, loadAddress, entryAddress and dos."
+              },
+              "target": {
+                "type": "string",
+                "description": "With project: the target to build and debug, by name, or as project/target where a root retrocore.json's projects share one."
+              },
               "machine": {
                 "enum": [
                   "apple2",

@@ -125,7 +125,9 @@ assembly sources. The decompiler's own generated names (`P12`, `L059A`) aren't h
   1.2. `(**)` is an empty ordinary comment. `{ }` comments aren't used.
 - **Placement.** A doc comment goes above the declaration it documents, at its indentation: a procedure, function,
   segment, constant, type, variable, field, enumeration value or parameter. A short one may follow a field, variable
-  or constant on its line. A file's first `(** *)`, with a blank line after it, documents the file.
+  or constant on its line, and documents the names its statement declared. In a record's variant, a field's
+  comment goes inside the parentheses, `1: (Radius: INTEGER (** … *))`; after the `)` it documents nothing. A
+  file's first `(** *)`, after any ordinary comments, with a blank line after it, documents the file.
 - **Summary.** The first paragraph is the summary, which hover and the outline show. Further paragraphs are remarks.
 - **Sections** go on lines of their own after the summary, each continuing onto lines indented two or more spaces:
 

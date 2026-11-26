@@ -18,7 +18,9 @@ public sealed partial class PascalProgram
         private int _at;
         private PascalDocComment? _pending;
         private readonly List<PascalDeclaration> _statement = [];
-        private readonly Dictionary<PascalToken, PascalDeclaration> _declared = [];
+        // By the token itself: a file included twice has equal tokens, each copy's its own declaration.
+        private readonly Dictionary<PascalToken, PascalDeclaration> _declared =
+            [with(ReferenceEqualityComparer.Instance)];
 
         /// <summary>
         ///  Creates a scanner.
@@ -115,7 +117,10 @@ public sealed partial class PascalProgram
                 {
                     // The statement part, or the unit's implementation, ends the declarations; anything else, such as
                     // a name still being typed, is stepped over, so the declarations after it are still read.
-                    bool ends = token.Is("BEGIN") || token.Is("IMPLEMENTATION") || (token.Is("END") && IsSymbol(1, "."));
+                    bool ends = token.Is("BEGIN")
+                        || token.Is("IMPLEMENTATION")
+                        || (token.Is("END") && IsSymbol(1, "."));
+
                     if (ends) { return; }
                     if (token.IsSymbol(".") && IsEndOfProgram()) { return; }
                     Use(scope);

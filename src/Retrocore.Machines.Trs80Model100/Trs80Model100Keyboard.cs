@@ -12,7 +12,9 @@ namespace Retrocore.Machines.Trs80Model100;
 ///   The ROM's RST 7.5 handler scans the keyboard every third interrupt, about every 11.7 ms (its counter at
 ///   <c>$FF8F</c>), takes a key seen on two scans in a row, and forgets the last key once no key has been down for two
 ///   scans (<c>$FF90</c>). A typed key is held 50 ms and released for 50 ms before the next, so each is seen at least
-///   four times either way, and a doubled letter reads as two. Held keys do not repeat in BASIC. MAME's
+///   four times either way, and a doubled letter reads as two. A key's SHIFT or CTRL goes down 20 ms before it and
+///   up with it, since the ROM reads the modifiers' column apart from the others, and a key pressed between the two
+///   reads with its modifier would be taken without it. Held keys do not repeat in BASIC. MAME's
 ///   <c>trsm100</c> needs keys held longer, about 100 ms, as its driver's notes say its keyboard is slow.
 ///  </para>
 /// </remarks>
@@ -24,8 +26,12 @@ public sealed class Trs80Model100Keyboard
     private readonly Queue<(Trs80Model100Key Key, Trs80Model100Key? Modifier)> _typed = new();
     private readonly int _holdCycles;
     private readonly int _releaseCycles;
+    private readonly int _leadCycles;
     private (Trs80Model100Key Key, Trs80Model100Key? Modifier)? _current;
     private int _remaining;
+
+    // Whether the key itself is down yet; its modifier goes down first.
+    private bool _keyDown;
 
     /// <summary>
     ///  Builds a keyboard with no keys down.
@@ -35,6 +41,7 @@ public sealed class Trs80Model100Keyboard
     {
         _holdCycles = 50 * (clockHertz / 1000);
         _releaseCycles = 50 * (clockHertz / 1000);
+        _leadCycles = 20 * (clockHertz / 1000);
     }
 
     /// <summary>
@@ -101,19 +108,37 @@ public sealed class Trs80Model100Keyboard
     internal void Tick()
     {
         if (_remaining > 0 && --_remaining > 0) { return; }
-        if (_current is { } held)
+        if (_current is { } held && !_keyDown)
         {
-            Set(held.Key, pressed: false);
-            if (held.Modifier is { } modifier) { Set(modifier, pressed: false); }
+            Set(held.Key, pressed: true);
+            _keyDown = true;
+            _remaining = _holdCycles;
+            return;
+        }
+
+        if (_current is { } released)
+        {
+            Set(released.Key, pressed: false);
+            if (released.Modifier is { } modifier) { Set(modifier, pressed: false); }
             _current = null;
+            _keyDown = false;
             _remaining = _releaseCycles;
             return;
         }
 
         if (!_typed.TryDequeue(out (Trs80Model100Key Key, Trs80Model100Key? Modifier) next)) { return; }
         _current = next;
+        if (next.Modifier is { } pressedModifier)
+        {
+            // The modifier goes down first, as a typist presses it: the ROM reads the modifiers' column apart from the
+            // others, so a key and its SHIFT pressed together can be taken as the key alone.
+            Set(pressedModifier, pressed: true);
+            _remaining = _leadCycles;
+            return;
+        }
+
         Set(next.Key, pressed: true);
-        if (next.Modifier is { } pressedModifier) { Set(pressedModifier, pressed: true); }
+        _keyDown = true;
         _remaining = _holdCycles;
     }
 

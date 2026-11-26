@@ -95,6 +95,22 @@ public sealed class Model100ChipTests
         pulse.TimerRunning.Should().BeTrue();
         pulse.TimerOutput.Should().BeTrue("a pulse mode holds TIMER OUT high until terminal count");
         pulse.Peek(5).Should().Be(0xC0);
+
+        // Continuous pulses reloading at terminal count keep that count's pulse low, then go high.
+        Pio8155 pulses = new();
+        pulses.Write(4, 3);
+        pulses.Write(5, 0xC0);
+        pulses.Write(0, 0xC0);
+        pulses.Write(4, 4);
+        pulses.Write(0, 0xC0);
+        pulses.Tick();
+        pulses.Tick();
+        pulses.TimerOutput.Should().BeTrue();
+        pulses.Tick();
+        pulses.TimerOutput.Should().BeFalse("the terminal count's pulse");
+        pulses.Peek(4).Should().Be(4, "the new count is loaded");
+        pulses.Tick();
+        pulses.TimerOutput.Should().BeTrue();
     }
 
     /// <summary>

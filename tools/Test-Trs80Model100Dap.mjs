@@ -158,7 +158,11 @@ try {
         await type("power off\r");
         await screen((_, running) => running.poweredOff === true, "the power to go off");
         await request("retro/reset", {});
-        await screen((screenText, running) => running.poweredOff === false && screenText.includes("Select:"), "the menu after Reset");
+        const reset = await screen((screenText, running) => running.poweredOff === false && screenText.includes("Select:"), "the menu after Reset");
+
+        // The ROM ignores the keyboard for a second or so after the power comes on, warm or cold, so two emulated
+        // seconds pass before the next key, however fast the host runs the machine.
+        await screen((_, running) => running.cycles > reset.cycles + 2 * 2457600, "two seconds after Reset");
 
         // The RAM image is written as another launch replaces the machine, and the next session resumes from it: BASIC
         // after POWER OFF,RESUME, with its variable.

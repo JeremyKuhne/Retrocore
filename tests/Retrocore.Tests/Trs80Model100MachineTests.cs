@@ -127,7 +127,9 @@ public sealed class Trs80Model100MachineTests
         foreach ((byte code, Trs80Model100Key key, Trs80Model100Key? modifier) in cases)
         {
             machine.Keyboard.Type(code).Should().BeTrue();
-            machine.Run(1000);
+
+            // Past a modifier's 20 ms lead.
+            machine.RunSeconds(0.03);
             machine.Keyboard.IsPressed(key).Should().BeTrue($"code {code} presses {key}");
             machine.Keyboard.IsPressed(Trs80Model100Key.Shift).Should().Be(modifier == Trs80Model100Key.Shift);
             machine.Keyboard.IsPressed(Trs80Model100Key.Control).Should().Be(modifier == Trs80Model100Key.Control);

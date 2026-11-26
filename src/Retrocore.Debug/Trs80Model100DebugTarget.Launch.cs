@@ -30,13 +30,13 @@ internal sealed partial class Trs80Model100DebugTarget
     ///   or <c>trs80m100-roms</c> folder, by MAME's name (<c>m100rom.m12</c>, <c>m102rom.m12</c>) or the fixtures'
     ///   (<c>m100.bin</c>, <c>t102.bin</c>). <c>model</c> is <c>100</c> or <c>102</c>, which picks the ROM to look
     ///   for (the Model 100's when it is not given); with no <c>model</c>, a ROM named by <c>rom</c> tells its model by
-    ///   its digest. <c>ramKilobytes</c> is 8, 16, 24 or 32 (the default), <c>optionRom</c> names an option ROM's file, and <c>time</c> sets the clock (an ISO 8601
-    ///   date and time; the host's local time by default).
+    ///   its digest. <c>ramKilobytes</c> is 8, 16, 24 or 32 (the default), <c>optionRom</c> names an option ROM's file,
+    ///   and <c>time</c> sets the clock (an ISO 8601 date and time; the host's local time by default).
     ///  </para>
     ///  <para>
     ///   <c>ramImage</c> names a file that keeps the RAM between sessions, as the Model 100's battery does: the fitted
-    ///   RAM's bytes, from its first address to $FFFF. When it exists it is loaded before the power comes on, so the ROM
-    ///   finds its RAM valid and carries on, the clock taken from <c>time</c> or the host; when it does not, the
+    ///   RAM's bytes, from its first address to $FFFF. When it exists it is loaded before the power comes on, so the
+    ///   ROM finds its RAM valid and carries on, the clock taken from <c>time</c> or the host; when it does not, the
     ///   machine cold-starts and the file is written. Either way the RAM is saved to it when the session ends or
     ///   another launch replaces it (see <see cref="SaveRecordings"/>). <c>coldStart</c>, true, starts from empty RAM
     ///   even when the file exists, and replaces it when the session ends.

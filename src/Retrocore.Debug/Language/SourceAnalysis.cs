@@ -8,6 +8,8 @@ using Retrocore.Isa;
 using System.Collections.Concurrent;
 using System.Text.RegularExpressions;
 
+using Retrocore.Debug.Project;
+
 namespace Retrocore.Debug.Language;
 
 /// <summary>
@@ -380,6 +382,11 @@ internal sealed partial class SourceAnalysis
     internal static SourceAnalysis Assemble(string root, Func<string, string?> openText, SourceFileCache? files = null)
     {
         files ??= new();
+        if (root.EndsWith(ProjectSources.Extension, StringComparison.OrdinalIgnoreCase))
+        {
+            return AssembleTarget(root, openText, files);
+        }
+
         string text = openText(root) ?? files.Read(root);
         string configuration = Path.ChangeExtension(root, ".cfg");
         string? configurationText = openText(configuration) ?? (File.Exists(configuration) ? File.ReadAllText(configuration) : null);
@@ -424,6 +431,49 @@ internal sealed partial class SourceAnalysis
             BuildTime = DateTimeOffset.UnixEpoch,
             LinkerConfiguration = linker
         };
+    }
+
+    // A project's target, assembled as retrocore build assembles it: its platform folders' and sources' files as one
+    // stream, with its headers and defines. A target its project no longer has, or whose sources are missing, is an
+    // analysis with that error and no files.
+    private static SourceAnalysis AssembleTarget(string root, Func<string, string?> openText, SourceFileCache files)
+    {
+        WorkspaceSourceResolver resolver = new(openText, files);
+        List<TargetSourceFile> sourceFiles;
+        AssemblyOptions options;
+        ProjectTarget? target = ProjectSources.Target(root);
+        try
+        {
+            if (target is null) { throw new ProjectException($"{root}: the project no longer has this target."); }
+            sourceFiles = target.SourceFiles();
+            string? linker = target.LinkerConfiguration;
+            options = ProjectBuild.Options(
+                target,
+                resolver,
+                linker is null ? null : new(openText(linker) ?? files.Read(linker), linker));
+        }
+        catch (Exception exception) when (exception is ProjectException or IOException or UnauthorizedAccessException)
+        {
+            AssemblyDiagnostic error = new(exception.Message, new AssemblyLocation(root, line: 0));
+            AssemblyProject empty = new(0);
+            return new(root, Assembler.Assembler.Failed(new(empty, [error])), empty, [], TextOf(openText), _ => []);
+        }
+
+        List<AssemblySource> sources =
+            [.. sourceFiles.Select(file => new AssemblySource(openText(file.Path) ?? files.Read(file.Path), file.Path, file.Dialect))];
+
+        AssemblyParseResult parsed = Assembler.Assembler.Parse(sources, options);
+        AssemblyResult result = parsed.Success
+            ? new Assembler.Assembler().Assemble(parsed.Project, options)
+            : Assembler.Assembler.Failed(parsed);
+
+        return new(
+            root,
+            result,
+            parsed.Project,
+            [.. sourceFiles.Select(file => file.Path), .. resolver.Resolved],
+            TextOf(openText),
+            path => openText(path) is { } open ? SourceText.Lines(open) : files.ReadLinesIfExists(path));
     }
 
     // The analysis keeps this function, so it is made apart from Assemble's lambdas: those share one closure, and

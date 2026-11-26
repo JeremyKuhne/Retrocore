@@ -109,18 +109,83 @@ internal sealed partial class LanguageWorkspace
     }
 
     /// <summary>
-    ///  Reanalyzes roots that use a changed companion configuration.
+    ///  Reanalyzes roots that use a changed companion configuration, or a project's targets when its
+    ///  <c>retrocore.json</c> changed.
     /// </summary>
     /// <param name="path">The configuration's full path.</param>
     internal void ConfigurationChanged(string path)
     {
+        if (Path.GetFileName(path).Equals(Project.RetrocoreProject.FileName, StringComparison.OrdinalIgnoreCase))
+        {
+            ProjectChanged(path);
+            return;
+        }
+
         foreach (string root in _analyses.Keys.Concat(_pending.Keys).Distinct(StringComparer.OrdinalIgnoreCase))
         {
-            if (string.Equals(Path.ChangeExtension(root, ".cfg"), path, StringComparison.OrdinalIgnoreCase))
+            string? configuration = root.EndsWith(ProjectSources.Extension, StringComparison.OrdinalIgnoreCase)
+                ? ProjectSources.Target(root)?.LinkerConfiguration
+                : Path.ChangeExtension(root, ".cfg");
+
+            if (string.Equals(configuration, path, StringComparison.OrdinalIgnoreCase)) { Schedule(root); }
+        }
+    }
+
+    /// <summary>
+    ///  Analyzes a project's open sources again, through the targets they now belong to, after its file or its active
+    ///  target changed. Its targets' analyses are forgotten and their diagnostics cleared first, since a source may
+    ///  now be analyzed through another target.
+    /// </summary>
+    /// <param name="projectFile">The project's <c>retrocore.json</c>.</param>
+    internal void ProjectChanged(string projectFile)
+    {
+        string folder = (Path.GetDirectoryName(Path.GetFullPath(projectFile)) ?? "") + Path.DirectorySeparatorChar;
+        bool InProject(string path) => path.StartsWith(folder, StringComparison.OrdinalIgnoreCase);
+        bool IsTarget(string root) => root.EndsWith(ProjectSources.Extension, StringComparison.OrdinalIgnoreCase) && InProject(root);
+
+        foreach ((string path, string root) in _owners)
+        {
+            if (IsTarget(root) || InProject(path)) { _owners.TryRemove(KeyValuePair.Create(path, root)); }
+        }
+
+        foreach (string root in _analyses.Keys.Where(IsTarget).ToList())
+        {
+            _analyses.TryRemove(root, out _);
+            _lastGood.TryRemove(root, out _);
+            if (!_published.TryRemove(root, out HashSet<string>? published)) { continue; }
+            lock (published)
             {
-                Schedule(root);
+                foreach (string path in published)
+                {
+                    _server.PublishDiagnostics(DocumentUri.FromFileSystemPath(path), []);
+                }
             }
         }
+
+        foreach (string root in _open.Keys.Where(InProject).Select(RootOf).Distinct(StringComparer.OrdinalIgnoreCase).ToList())
+        {
+            Schedule(root);
+        }
+    }
+
+    /// <summary>
+    ///  Gets the lines of a file that its analysis's conditional assembly left out, for the editor to dim.
+    /// </summary>
+    /// <param name="path">The file's full path.</param>
+    /// <param name="cancellation">Cancels the wait for its analysis.</param>
+    /// <returns>
+    ///  The runs of lines left out, or null when no analysis opened the file, so nothing says which lines are.
+    /// </returns>
+    internal async Task<IReadOnlyList<AssemblyLineRange>?> InactiveLinesAsync(string path, CancellationToken cancellation)
+    {
+        string root = RootOf(path);
+        await AnalysisOfAsync(path, cancellation).ConfigureAwait(continueOnCapturedContext: false);
+        if (!_analyses.TryGetValue(root, out SourceAnalysis? latest) || latest.Result.SkippedLines is not { } skipped)
+        {
+            return null;
+        }
+
+        return skipped.Skipped.TryGetValue(path, out IReadOnlyList<AssemblyLineRange>? lines) ? lines : null;
     }
 
     /// <summary>
@@ -293,7 +358,8 @@ internal sealed partial class LanguageWorkspace
 
     private void Analyze(string root, CancellationToken cancellation)
     {
-        if (OpenText(root) is null && !File.Exists(root)) { return; }
+        bool target = root.EndsWith(ProjectSources.Extension, StringComparison.OrdinalIgnoreCase);
+        if (!target && OpenText(root) is null && !File.Exists(root)) { return; }
         SourceAnalysis analysis = SourceAnalysis.Assemble(root, OpenText);
         cancellation.ThrowIfCancellationRequested();
         _analyses[root] = analysis;

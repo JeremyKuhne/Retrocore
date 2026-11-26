@@ -166,8 +166,10 @@ the same names Start Machine and favorites use: `apple1`, `apple2-iiplus`, `appl
 
 **Sources for each target.** Besides `sources`, every target gets its family's folder `src/platform/<family>/`,
 then its model's folder `src/platform/<model>/`. A model's file replaces its family's file of the same name, so
-`platform/apple2-iie/console.s` replaces `platform/apple2/console.s` on IIe targets. A target's own `sources` are added
-after those. Most projects need no per-target lists.
+`platform/apple2-iie/console.s` replaces `platform/apple2/console.s` on IIe targets. The platform folders assemble
+first, then `sources`, then a target's own `sources`: the shared code builds on the platform, whose constants (a
+screen's width for a `.res`) and zero-page locations must be known before it. Most projects need no per-target
+lists.
 
 Build output goes to `artifacts/<target>/` and intermediate files to `obj/<target>/` (`${obj}`), unless `output` says
 otherwise.
@@ -250,13 +252,14 @@ thing on every machine that has it.
 | `RC_SDK` | `RC_SDK = 1` | the SDK's major version |
 | `RC_CPU_<cpu>` | `RC_CPU_65C02` | 1 for the target's CPU and every CPU it is a superset of |
 | `RC_MACHINE_<family>` | `RC_MACHINE_APPLE2` | 1 for the machine's family |
-| `RC_MODEL_<model>` | `RC_MODEL_IIE_ENHANCED` | 1 for the exact model |
+| `RC_MODEL_<machine>` | `RC_MODEL_APPLE2_IIE_ENHANCED` | 1 for the exact machine, by its catalog id |
 | `RC_ENV_<environment>` | `RC_ENV_SOS` | 1 for the environment |
 | `RC_RAM_KB` | `RC_RAM_KB = 32` | the target's RAM |
 | `RC_SCREEN_COLUMNS`, `RC_SCREEN_ROWS` | `RC_SCREEN_COLUMNS = 40` | the text screen the environment starts in |
 | `RC_TARGET` | `.define RC_TARGET "apple2-dos"` | the target's name, as a textual definition |
 
-Names a program defines itself may not start with `RC_`; the assembler reports any that do.
+Names a program defines itself may not start with `RC_`; the build reports any that do. [sdk/1/README.md](../../sdk/1/README.md)
+has the headers and defines as built, and where a target's includes are found.
 
 The `RC_` defines are build switches, so they follow
 [Builds and their switches](../ConvertingSources.md#builds-and-their-switches): a header that depends on one asserts

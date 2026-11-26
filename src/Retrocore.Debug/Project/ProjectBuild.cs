@@ -60,17 +60,10 @@ internal static class ProjectBuild
     {
         target.RequireSupported();
         List<TargetSourceFile> files = target.SourceFiles();
-        int origin = target.Machine.LoadAddress;
-        AssemblyOptions options = new(target.Cpu.AssemblerName, origin, 0x10000 - origin)
-        {
-            Dialect = AssemblyDialect.Native,
-            SourceResolver = new OverlayBaseResolver(OverlayBaseResolver.SdkFallback),
-            SdkPaths = [SdkModules.SdkDirectory],
-            PredefinedSymbols = target.Symbols(),
-            LinkerConfiguration = target.LinkerConfiguration is { } linker
-                ? new(Read(target, linker, "linker configuration"), linker)
-                : null
-        };
+        AssemblyOptions options = Options(
+            target,
+            new OverlayBaseResolver(OverlayBaseResolver.SdkFallback),
+            target.LinkerConfiguration is { } linker ? new(Read(target, linker, "linker configuration"), linker) : null);
 
         List<AssemblySource> sources =
             [.. files.Select(file => new AssemblySource(Read(target, file.Path, "source"), file.Path, file.Dialect))];
@@ -81,6 +74,7 @@ internal static class ProjectBuild
 
         AssemblyResult result = new Assembler.Assembler().Assemble(parsed.Project, options);
         if (!result.Success) { throw Errors(target, result.Diagnostics); }
+        CheckReservedNames(target, result);
 
         List<(int Address, ReadOnlyMemory<byte> Bytes)> segments = [.. SourceBuild.Emitted(result)];
         if (segments.Count == 0)
@@ -107,6 +101,29 @@ internal static class ProjectBuild
             DebugFile = Path.Join(output, name + ".dbg"),
             MapFile = Path.Join(output, name + ".map"),
             Record = Path.Join(target.Project.Intermediate, target.Name, "build.json")
+        };
+    }
+
+    /// <summary>
+    ///  Gets the options a target assembles with: its CPU and load address, the native dialect, its headers' folders
+    ///  on the SDK paths, and its defines, the SDK's with the project's and its own. The build and the language server
+    ///  both assemble with them, so a source chooses the same code in each.
+    /// </summary>
+    /// <param name="target">The target.</param>
+    /// <param name="resolver">Reads the sources' includes.</param>
+    /// <param name="linkerConfiguration">The target's linker configuration's text, or null for none.</param>
+    /// <returns>The options.</returns>
+    internal static AssemblyOptions Options(ProjectTarget target, IAssemblySourceResolver resolver, AssemblySource? linkerConfiguration)
+    {
+        int origin = target.Machine.LoadAddress;
+        return new(target.Cpu.AssemblerName, origin, 0x10000 - origin)
+        {
+            Dialect = AssemblyDialect.Native,
+            SourceResolver = resolver,
+            SdkPaths = target.SdkPaths(SdkModules.SdkDirectory),
+            PredefinedSymbols = target.Symbols(),
+            PredefinedTexts = target.Texts(),
+            LinkerConfiguration = linkerConfiguration
         };
     }
 
@@ -236,6 +253,31 @@ internal static class ProjectBuild
             string where = statement.Location is { } location ? $"{location.Path}({location.Line + 1}): " : "";
             errors.Add(
                 $"{where}.cpu {name} names a CPU target {target.Name} lacks: its machine, {target.Machine.Id}, runs {machine} code.");
+        }
+
+        if (errors.Count != 0)
+        {
+            throw new ProjectException($"{target.Project.File}: target {target.Name}:{Environment.NewLine}{string.Join(Environment.NewLine, errors)}");
+        }
+    }
+
+    // Names starting with RC_, in any case, are the SDK's: the project's sources may use them but not define them. The
+    // predefined ones are defined at "<predefined>", not in a file, and the SDK's own headers may define more.
+    private static void CheckReservedNames(ProjectTarget target, AssemblyResult result)
+    {
+        string sdk = Path.GetFullPath(SdkModules.SdkDirectory) + Path.DirectorySeparatorChar;
+        List<string> errors = [];
+        foreach (AssemblySymbol symbol in result.SymbolDefinitions)
+        {
+            if (!symbol.Name.StartsWith(TargetDefines.Prefix, StringComparison.OrdinalIgnoreCase)
+                || symbol.Location is not { } location
+                || !File.Exists(location.Path)
+                || Path.GetFullPath(location.Path).StartsWith(sdk, StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            errors.Add($"{location.Path}({location.Line + 1}): {symbol.Name}: names starting with {TargetDefines.Prefix} are the SDK's; give it another name.");
         }
 
         if (errors.Count != 0)

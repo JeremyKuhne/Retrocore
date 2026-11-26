@@ -44,7 +44,7 @@
         },
         "sources": {
           "$ref": "#/definitions/sources",
-          "description": "The files every target assembles, in order: paths or patterns (* and ? in a name, ** for any folders), relative to the project's folder. Each target also gets src/platform/<family>/'s .s and .asm files, then src/platform/<model>/'s, a model's file taking the place of its family's file of the same name."
+          "description": "The files every target assembles, in order: paths or patterns (* and ? in a name, ** for any folders), relative to the project's folder. Each target assembles src/platform/<family>/'s .s and .asm files first, then src/platform/<model>/'s, a model's file taking the place of its family's file of the same name, and these after them."
         },
         "steps": {
           "type": "array",
@@ -111,7 +111,7 @@
         },
         "sources": {
           "$ref": "#/definitions/sources",
-          "description": "Sources added for this target only, after the project's and the platform folders'."
+          "description": "Sources added for this target only, after the platform folders' and the project's."
         },
         "linkerConfiguration": {
           "type": "string",

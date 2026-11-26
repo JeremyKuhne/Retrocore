@@ -115,7 +115,8 @@ internal static partial class SourceIncludes
     }
 
     /// <summary>
-    ///  Gets the roots among a folder's sources: every assembly source that no other one includes.
+    ///  Gets the roots among a folder's sources: every assembly source that no other one includes, with a project's
+    ///  sources replaced by its targets' roots (<see cref="ProjectSources"/>), one for each target.
     /// </summary>
     /// <param name="folder">The folder, searched with its subfolders.</param>
     /// <returns>The roots' full paths.</returns>
@@ -127,13 +128,19 @@ internal static partial class SourceIncludes
 
         HashSet<string> included = [with(StringComparer.OrdinalIgnoreCase)];
         foreach (string file in files) { included.UnionWith(IncludesOf(file)); }
-        return [.. files.Where(file => !included.Contains(file))];
+        List<string> roots = [.. files.Where(file => !included.Contains(file))];
+
+        // A project's sources are its targets' members: each target is one root.
+        List<string> targets = ProjectSources.RootsIn(folder);
+        if (targets.Count == 0) { return roots; }
+        return [.. roots.Select(root => ProjectSources.RootOf(root) ?? root).Concat(targets).Distinct(StringComparer.OrdinalIgnoreCase)];
     }
 
     /// <summary>
     ///  Gets the root to analyze a file through: the outermost source that includes it, found in its own folder
     ///  and the folders beside it, or the file itself when nothing includes it. The repository's shared BASIC
-    ///  sources also search the other projects' ROM sources.
+    ///  sources also search the other projects' ROM sources. A source a <c>retrocore.json</c> project's target
+    ///  assembles, or one such a source includes, is analyzed through the target (<see cref="ProjectSources"/>).
     /// </summary>
     /// <remarks>
     ///  <para>
@@ -144,7 +151,11 @@ internal static partial class SourceIncludes
     /// </remarks>
     /// <param name="path">The file's full path.</param>
     /// <returns>The root's full path.</returns>
-    internal static string RootOf(string path) => RootOf(path, NeighborFolders(path));
+    internal static string RootOf(string path)
+    {
+        string root = RootOf(path, NeighborFolders(path));
+        return ProjectSources.RootOf(root) ?? root;
+    }
 
     /// <summary>
     ///  Gets the root to analyze a file through, searching the given folders' sources.

@@ -74,7 +74,7 @@ public sealed partial class Assembler
         CancellationToken cancellationToken,
         AssemblyOptions? options)
     {
-        if (AssemblyPreprocessor.HasDialectSelection(source, options) || options?.PredefinedSymbols.Count > 0)
+        if (AssemblyPreprocessor.HasDialectSelection(source, options) || options?.PredefinedSymbols.Count > 0 || options?.PredefinedTexts.Count > 0)
         {
             return AssemblyPreprocessor.Parse([source], options ?? DefaultPreprocessingOptions(), cancellationToken);
         }

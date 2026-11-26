@@ -9,8 +9,8 @@ namespace Retrocore.Media.Acorn;
 /// </summary>
 /// <remarks>
 ///  <para>
-///   An address is 18 bits, <c>&amp;00000</c>-<c>&amp;2FFFF</c>, or <c>&amp;FFFF0000</c>-<c>&amp;FFFFFFFF</c> for the
-///   I/O processor's memory: the catalogue keeps bits 16-17, and the DFS reads both set as <c>&amp;FFFF</c>.
+///   An address is <c>&amp;00000</c>-<c>&amp;2FFFF</c>, or <c>&amp;FFFF0000</c>-<c>&amp;FFFFFFFF</c> for the I/O
+///   processor's memory: the catalogue keeps bits 16-17, and the DFS reads both set as <c>&amp;FFFF</c>.
 ///  </para>
 /// </remarks>
 /// <param name="Directory">The directory, one character, <c>$</c> by default.</param>
@@ -52,7 +52,8 @@ public sealed record AcornDfsFile(
         character is > ' ' and < (char)0x7F and not ('.' or ':' or '"' or '#' or '*');
 
     /// <summary>
-    ///  Gets whether an address fits the catalogue: 18 bits, or the I/O processor's <c>&amp;FFFFxxxx</c>.
+    ///  Gets whether an address fits the catalogue: <c>&amp;00000</c>-<c>&amp;2FFFF</c>, or the I/O processor's
+    ///  <c>&amp;FFFFxxxx</c>.
     /// </summary>
     /// <param name="address">The address.</param>
     /// <returns>Whether it does.</returns>
@@ -83,13 +84,13 @@ public sealed record AcornDfsFile(
         if (!IsCatalogueAddress(LoadAddress))
         {
             throw new ArgumentException(
-                $"{FullName}'s load address &{LoadAddress:X} is neither 18 bits nor &FFFFxxxx.");
+                $"{FullName}'s load address &{LoadAddress:X} is neither &00000-&2FFFF nor &FFFFxxxx.");
         }
 
         if (!IsCatalogueAddress(ExecutionAddress))
         {
             throw new ArgumentException(
-                $"{FullName}'s execution address &{ExecutionAddress:X} is neither 18 bits nor &FFFFxxxx.");
+                $"{FullName}'s execution address &{ExecutionAddress:X} is neither &00000-&2FFFF nor &FFFFxxxx.");
         }
 
         if (Data.Length > MaximumLength)

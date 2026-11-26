@@ -25,7 +25,7 @@ public static class AcornTapeBuilder
     ///  Records files on a blank tape.
     /// </summary>
     /// <param name="files">The files, in order.</param>
-    /// <param name="baud">The baud rate, 1200 or 300 (*TAPE12 or *TAPE3).</param>
+    /// <param name="baud">The baud rate, 1200 or 300 (*TAPE or *TAPE3).</param>
     /// <returns>The tape.</returns>
     /// <exception cref="ArgumentException">
     ///  A name is empty, too long or holds a zero, or the rate is neither.
@@ -92,7 +92,7 @@ public static class AcornTapeBuilder
     ///  the same tape.
     /// </summary>
     /// <param name="files">The files, in order.</param>
-    /// <param name="baud">The baud rate, 1200 or 300 (*TAPE12 or *TAPE3).</param>
+    /// <param name="baud">The baud rate, 1200 or 300 (*TAPE or *TAPE3).</param>
     /// <returns>The UEF file's bytes, uncompressed.</returns>
     /// <exception cref="ArgumentException">
     ///  A name is empty, too long or holds a zero, or the rate is neither.

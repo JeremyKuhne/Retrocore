@@ -202,7 +202,7 @@ public sealed class AcornDfsDiskTests
         // A replacement needs no new entry, and goes where SAVE would put it: the first gap that holds it.
         disk.Add(new('$', "f3", 0x2000, 0x2000, new byte[300])).StartSector.Should().Be(33);
         disk.Entries.Should().HaveCount(AcornDfsDisk.MaximumFiles);
-        disk.Find('$', "F3")?.File.Name.Should().Be("f3");
+        (disk.Find('$', "F3") ?? throw new AssertFailedException("No F3.")).File.Name.Should().Be("f3");
         disk.Entries[0].File.Name.Should().Be("f3");
 
         disk.Remove('$', "F0").Should().BeTrue();
@@ -243,6 +243,39 @@ public sealed class AcornDfsDiskTests
         disk.Add(new('$', "FITS", 0, 0, new byte[392 * Sector])).StartSector.Should().Be(8);
         disk.Add(new('$', "ONE", 0, 0, [1])).StartSector.Should().Be(4);
         disk.FreeSectors.Should().Be(0);
+    }
+
+    /// <summary>
+    ///  Changes move the entries they do not touch as raw bytes, as the DFS does: a name byte with bit 7 set and NUL
+    ///  padding are kept, and *DELETE's freed slot takes the bytes past the last entry.
+    /// </summary>
+    [TestMethod]
+    public void UntouchedEntriesKeepTheirBytes()
+    {
+        AcornDfsDisk disk = AcornDfsDisk.Create(40);
+        disk.Add(new('$', "FIRST", 0, 0, [1]));
+        disk.Add(new('$', "SECOND", 0, 0, [2]));
+        byte[] image = disk.ToImage();
+
+        // FIRST, now the second entry: bit 7 on a name character, and NUL padding.
+        image[16] = (byte)('F' | 0x80);
+        image[21] = 0;
+        image[22] = 0;
+        image.AsSpan(32, 8).Fill(0x5A);
+        image.AsSpan(Sector + 32, 8).Fill(0xA5);
+        disk = AcornDfsDisk.Read(image);
+        disk.Add(new('$', "THIRD", 0, 0, [3])).StartSector.Should().Be(4);
+        byte[] first = [0xC6, (byte)'I', (byte)'R', (byte)'S', (byte)'T', 0, 0, (byte)'$'];
+        disk.ToImage().AsSpan(24, 8).ToArray().Should().Equal(first);
+
+        // THIRD's removal moves SECOND and FIRST down, and the slot past them into FIRST's old place.
+        disk.Remove('$', "THIRD").Should().BeTrue();
+        image = disk.ToImage();
+        image.AsSpan(16, 8).ToArray().Should().Equal(first);
+        image[Sector + 5].Should().Be(16);
+        image.AsSpan(24, 8).ToArray().Should().OnlyContain(value => value == 0x5A);
+        image.AsSpan(Sector + 24, 8).ToArray().Should().OnlyContain(value => value == 0xA5);
+        AcornDfsDisk.Read(image).Entries.Select(entry => entry.File.Name).Should().Equal("SECOND", "FIRST");
     }
 
     /// <summary>
@@ -353,7 +386,7 @@ public sealed class AcornDfsDiskTests
         FloppyDisk saved = machine.Drives[0].Disk ?? throw new AssertFailedException("Drive 0 is empty.");
         AcornDfsDisk read = AcornDfsDisk.Read(new AcornDiskCodec().Encode(saved.Snapshot()).Bytes);
         read.Entries.Select(entry => (entry.File.FullName, entry.StartSector)).Should().Equal(("$.PROG", 3), ("$.HELLO", 2));
-        read.Find('$', "PROG")?.File.LoadAddress.Should().Be(0xFFFF1900);
+        (read.Find('$', "PROG") ?? throw new AssertFailedException("No PROG.")).File.LoadAddress.Should().Be(0xFFFF1900);
         read.SequenceNumber.Should().Be(0x02, "the writer's one change and SAVE's");
     }
 

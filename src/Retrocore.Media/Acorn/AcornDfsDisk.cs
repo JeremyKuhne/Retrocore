@@ -9,7 +9,7 @@ namespace Retrocore.Media.Acorn;
 
 /// <summary>
 ///  A side of an Acorn DFS disk as an <c>.ssd</c> image, whose catalogue can be read and changed: files added and
-///  removed, the title and the boot option set, and <c>$.!BOOT</c> written, as DNFS 1.20's commands would.
+///  removed, the title and the boot option set, and <c>$.!BOOT</c> written, as DNFS 1.20 changes them.
 /// </summary>
 /// <remarks>
 ///  <para>
@@ -24,8 +24,9 @@ namespace Retrocore.Media.Acorn;
 ///  <para>
 ///   Files are kept in order of start sector, the highest first. A file goes where <c>SAVE</c> would put it: in the
 ///   first gap that holds it, walking up from sector 2, and a file of the same name is deleted first. A removed file's
-///   sectors are left as they were, and only the bytes of the catalogue's entries in use are written, as the DFS
-///   does, so an image read and written back unchanged comes back byte for byte.
+///   sectors are left as they were. Entries move in the catalogue as raw bytes, as the DFS moves them, so the files a
+///   change does not touch keep their bytes, and the bytes past the last entry stay as the DFS would leave them. An
+///   image read and written back unchanged comes back byte for byte.
 ///  </para>
 /// </remarks>
 public sealed class AcornDfsDisk
@@ -178,7 +179,7 @@ public sealed class AcornDfsDisk
         }
 
         int count = image[FileCount];
-        if ((count & 7) != 0 || count / 8 > MaximumFiles)
+        if ((count & 7) != 0)
         {
             throw new InvalidDataException($"The catalogue's file count, &{count:X2}, is not eight times 0-31.");
         }
@@ -263,9 +264,8 @@ public sealed class AcornDfsDisk
             if (limit - start < needed) { continue; }
 
             AcornDfsEntry entry = new(file with { Data = [.. file.Data] }, start);
-            others.Insert(slot, entry);
-            _entries.Clear();
-            _entries.AddRange(others);
+            if (existing >= 0) { DeleteEntry(existing); }
+            InsertEntry(slot, entry);
 
             Span<byte> sectors = _image.AsSpan(start * SectorSize, needed * SectorSize);
             sectors.Clear();
@@ -274,8 +274,9 @@ public sealed class AcornDfsDisk
             return entry;
         }
 
+        int free = Sectors - FirstFileSector - others.Sum(other => SectorsFor(other.File.Data.Length));
         throw new InvalidOperationException(
-            $"The disk is full: no gap holds {file.FullName}'s {needed} sectors ({FreeSectors} are free in all).");
+            $"The disk is full: no gap holds {file.FullName}'s {needed} sectors ({free} are free in all).");
     }
 
     /// <summary>
@@ -293,9 +294,18 @@ public sealed class AcornDfsDisk
     }
 
     /// <summary>
-    ///  Writes <c>$.!BOOT</c> as <c>*BUILD</c> would, each line ending in a carriage return, and sets the boot option
-    ///  to <see cref="AcornBootOption.Exec"/>, so SHIFT-BREAK types the lines as commands: <c>*RUN ADVENT</c>, say.
+    ///  Writes <c>$.!BOOT</c> as text, each line ending in a carriage return as <c>*BUILD</c> ends them, with zero
+    ///  addresses, and sets the boot option to <see cref="AcornBootOption.Exec"/>, so SHIFT-BREAK types the lines as
+    ///  commands: <c>*RUN ADVENT</c>, say.
     /// </summary>
+    /// <remarks>
+    ///  <para>
+    ///   The file is placed as <see cref="Add(AcornDfsFile)"/> places any file, by its length, replacing an existing
+    ///   one. <c>*BUILD</c> opens it with OSFIND instead, which keeps an existing file's place and addresses, or makes
+    ///   a new one with zero addresses and 64 sectors long until it is closed; so on a disk with gaps, or with a
+    ///   <c>!BOOT</c> already, the two can differ.
+    ///  </para>
+    /// </remarks>
     /// <param name="lines">The lines.</param>
     /// <returns>The boot file's entry.</returns>
     /// <exception cref="ArgumentException">A line holds a character that is not printable ASCII.</exception>
@@ -318,7 +328,7 @@ public sealed class AcornDfsDisk
             text.Add(0x0D);
         }
 
-        // *BUILD opens the file with OSFIND, which gives it load and execution addresses of zero.
+        // A file OSFIND makes, as *BUILD makes a new one, has load and execution addresses of zero.
         AcornDfsEntry entry = Add(new('$', BootFileName, 0, 0, [.. text]));
         BootOption = AcornBootOption.Exec;
         return entry;
@@ -354,7 +364,7 @@ public sealed class AcornDfsDisk
             throw new InvalidOperationException($"{_entries[index].File.FullName} is locked.");
         }
 
-        _entries.RemoveAt(index);
+        DeleteEntry(index);
         WriteCatalogue();
         return true;
     }
@@ -372,7 +382,7 @@ public sealed class AcornDfsDisk
     /// <returns>The disk.</returns>
     public FloppyDisk ToDisk() => AcornDiskImage.Read(_image, doubleSided: false);
 
-    // Sectors start in whole tracks, so a disk of 400 sectors is 40 tracks.
+    // Rounds a size in bytes up to whole tracks: a disk of 400 sectors is 40 tracks.
     private static int RoundToTrack(int bytes) => (bytes + TrackSize - 1) / TrackSize * TrackSize;
 
     private static int SectorsFor(int length) => (length + SectorSize - 1) / SectorSize;
@@ -396,39 +406,60 @@ public sealed class AcornDfsDisk
             && entry.File.Name.Length == name.Length
             && entry.File.Name.Zip(name).All(pair => SameCharacter(pair.First, pair.Second)));
 
-    // Writes the entries in use, the file count and the next sequence number, as the DFS's WRITE_CATALOGUE does.
-    private void WriteCatalogue()
+    // Removes an entry as the DFS's DELETE_ENTRY does, moving the bytes of the entries after it down a place in both
+    // sectors, raw, so the slot that falls out of use takes the bytes past the last entry. With 31 files those are
+    // past sector 1, in the DFS's workspace, so the last slot's information is left as it was.
+    private void DeleteEntry(int index)
     {
-        for (int index = 0; index < _entries.Count; index++)
+        int count = _entries.Count * 8;
+        int from = index * 8;
+        _image.AsSpan(16 + from, count - from).CopyTo(_image.AsSpan(8 + from));
+        int information = Math.Min(count - from, (2 * SectorSize) - (SectorSize + 16 + from));
+        _image.AsSpan(SectorSize + 16 + from, information).CopyTo(_image.AsSpan(SectorSize + 8 + from));
+        _entries.RemoveAt(index);
+    }
+
+    // Inserts an entry as the DFS's MAKE_CATALOGUE_ENTRY does, moving the bytes of the entries from its place on up a
+    // place in both sectors, raw, and writing its own.
+    private void InsertEntry(int index, AcornDfsEntry entry)
+    {
+        int count = _entries.Count * 8;
+        int from = index * 8;
+        _image.AsSpan(8 + from, count - from).CopyTo(_image.AsSpan(16 + from));
+        _image.AsSpan(SectorSize + 8 + from, count - from).CopyTo(_image.AsSpan(SectorSize + 16 + from));
+        _entries.Insert(index, entry);
+
+        AcornDfsFile file = entry.File;
+        int names = 8 + from;
+        int info = SectorSize + names;
+        for (int at = 0; at < AcornDfsFile.MaximumNameLength; at++)
         {
-            AcornDfsEntry entry = _entries[index];
-            AcornDfsFile file = entry.File;
-            int names = 8 + (index * 8);
-            int info = SectorSize + names;
-            for (int at = 0; at < AcornDfsFile.MaximumNameLength; at++)
-            {
-                _image[names + at] = at < file.Name.Length ? (byte)file.Name[at] : (byte)' ';
-            }
-
-            _image[names + 7] = (byte)(file.Directory | (file.Locked ? 0x80 : 0));
-            int length = file.Data.Length;
-            _image[info] = (byte)file.LoadAddress;
-            _image[info + 1] = (byte)(file.LoadAddress >> 8);
-            _image[info + 2] = (byte)file.ExecutionAddress;
-            _image[info + 3] = (byte)(file.ExecutionAddress >> 8);
-            _image[info + 4] = (byte)length;
-            _image[info + 5] = (byte)(length >> 8);
-            _image[info + 6] = (byte)((((file.ExecutionAddress >> 16) & 3) << 6)
-                    | (((uint)length >> 16 & 3) << 4)
-                    | (((file.LoadAddress >> 16) & 3) << 2)
-                    | (uint)((entry.StartSector >> 8) & 3));
-
-            _image[info + 7] = (byte)entry.StartSector;
+            _image[names + at] = at < file.Name.Length ? (byte)file.Name[at] : (byte)' ';
         }
 
+        _image[names + 7] = (byte)(file.Directory | (file.Locked ? 0x80 : 0));
+        int length = file.Data.Length;
+        _image[info] = (byte)file.LoadAddress;
+        _image[info + 1] = (byte)(file.LoadAddress >> 8);
+        _image[info + 2] = (byte)file.ExecutionAddress;
+        _image[info + 3] = (byte)(file.ExecutionAddress >> 8);
+        _image[info + 4] = (byte)length;
+        _image[info + 5] = (byte)(length >> 8);
+        _image[info + 6] = (byte)((((file.ExecutionAddress >> 16) & 3) << 6)
+                | (((uint)length >> 16 & 3) << 4)
+                | (((file.LoadAddress >> 16) & 3) << 2)
+                | (uint)((entry.StartSector >> 8) & 3));
+
+        _image[info + 7] = (byte)entry.StartSector;
+    }
+
+    // Writes the file count and the next sequence number; the DFS's WRITE_CATALOGUE then writes both sectors whole.
+    private void WriteCatalogue()
+    {
         _image[FileCount] = (byte)(_entries.Count * 8);
 
-        // The sequence number counts in decimal, as the DFS adds one in the 6502's decimal mode: 99 wraps to 00.
+        // The sequence number counts in decimal, as the DFS adds one in the 6502's decimal mode: for a BCD number,
+        // 99 wraps to 00.
         int sequence = _image[Sequence];
         int units = (sequence & 0x0F) + 1;
         int tens = sequence >> 4;

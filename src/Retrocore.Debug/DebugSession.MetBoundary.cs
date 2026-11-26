@@ -17,6 +17,8 @@ internal sealed partial class DebugSession
     /// <param name="Trap">Whether the BRK filter's check ran there.</param>
     /// <param name="Basic">Whether BASIC's stops were checked there.</param>
     /// <param name="Pascal">Whether Pascal's stops were checked there.</param>
+    /// <param name="BasicGoal">BASIC's step goal then: a new one is checked where the interrupt returns.</param>
+    /// <param name="PascalGoal">Pascal's step goal then.</param>
     private sealed record MetBoundary(
         IDebugTarget Cpu,
         ushort Address,
@@ -25,5 +27,7 @@ internal sealed partial class DebugSession
         BreakpointState[] Breakpoints,
         bool Trap,
         bool Basic,
-        bool Pascal);
+        bool Pascal,
+        BasicGoal? BasicGoal,
+        PascalGoal? PascalGoal);
 }

@@ -18,7 +18,6 @@ internal sealed partial class DebugSession
     private long _basicToken;
     private long _pascalToken;
 
-
     // The boundaries interrupts were taken at, innermost last.
     private readonly List<MetBoundary> _metBoundaries = [];
 
@@ -86,8 +85,8 @@ internal sealed partial class DebugSession
         MetBoundary met = _metBoundaries[index];
         foreach (BreakpointState state in met.Breakpoints) { state.MetToken = met.Token; }
         if (met.Trap) { _trapToken = met.Token; }
-        if (met.Basic) { _basicToken = met.Token; }
-        if (met.Pascal) { _pascalToken = met.Token; }
+        if (met.Basic && ReferenceEquals(met.BasicGoal, _basicGoal)) { _basicToken = met.Token; }
+        if (met.Pascal && ReferenceEquals(met.PascalGoal, _pascalGoal)) { _pascalToken = met.Token; }
 
         boundary.Token = met.Token;
         return met.Token;
@@ -133,7 +132,9 @@ internal sealed partial class DebugSession
             [.. breakpoints],
             _trapToken == token,
             _basicToken == token,
-            _pascalToken == token));
+            _pascalToken == token,
+            _basicGoal,
+            _pascalGoal));
     }
 
     /// <summary>

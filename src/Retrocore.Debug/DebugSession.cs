@@ -1740,6 +1740,9 @@ internal sealed partial class DebugSession
             IDebugTarget ran = Cpu;
             if (!Execute()) { return; }
 
+            // A reset whose response ended here stops for the reset filter, as running does, not as the step's end.
+            if (Cpu.IsInstructionBoundary && ResetStops()) { return; }
+
             // The other CPU's instruction: only its breakpoints can stop the step. While the stepping CPU is idle no
             // instruction of its has finished, so the step neither ends nor meets a breakpoint of its own.
             if (!ReferenceEquals(ran, cpu) || !cpu.IsInstructionBoundary)
@@ -1915,7 +1918,7 @@ internal sealed partial class DebugSession
             // A Z80 that handed the bus back mid-instruction, as a 16-bit store to the switch does, waits there.
             if (cpu is SoftCardDebugTarget { Card.Running: false }) { return _dataHits.Count == 0 || DataStop(cpu); }
 
-            // An idle CPU may stay so for any time, so its cycles go back to the run loop a few at a time; the next
+            // An idle CPU may stay so for any time, so its cycles go back to the run loop one at a time; the next
             // instruction is observed once the CPU goes on. An instruction that ends by waiting, as CWAI does, has
             // made its writes, so the watchpoints they hit stop now. A CPU idle at a boundary stays at it, with what
             // was checked there.

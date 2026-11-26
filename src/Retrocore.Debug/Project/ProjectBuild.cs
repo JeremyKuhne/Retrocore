@@ -49,8 +49,8 @@ internal static partial class ProjectBuild
     {
         target.RequireSupported();
 
-        // The configuration made from the memory map is written first, so it is there to read when the build fails,
-        // and a target whose map is missing or malformed fails before its project's steps run.
+        // The configuration made from the memory map is written before the assembly, so it is there to read when the
+        // assembly or the memory check fails.
         if (target.LinkerConfiguration is null && target.MemoryMap(SdkModules.SdkDirectory) is { } map)
         {
             string made = MadeConfigurationPath(target);

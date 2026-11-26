@@ -207,7 +207,7 @@ public sealed class MemoryMapTests
     /// <summary>
     ///  A target's zero page merges runs that touch, so the made configuration's zero page is the largest of them; a
     ///  zero page of nothing, or free areas in the zero page, are errors; and the made configuration is there when the
-    ///  build fails.
+    ///  map's check fails.
     /// </summary>
     [TestMethod]
     public void ZeroPageOverridesMergeAndTheConfigurationOutlivesAFailure()

@@ -86,9 +86,10 @@ an error.
   that touch count as one.
 
 **The build.** With no `linkerConfiguration`, a target links by one made from its map, which `retrocore build` and a
-`project` launch write to `obj/<target>/memory.cfg` before the project's steps run, so it is there when a build fails. It
-places `CODE`, `RODATA`, `DATA` and `BSS` in that order from `load` (`BSS` defines `__BSS_RUN__` and `__BSS_SIZE__`),
-and `ZEROPAGE` in the largest run of free zero-page bytes. Code in no section goes in `CODE`.
+`project` launch write to `obj/<target>/memory.cfg` before they assemble, so it is there when the assembly or the
+map's check fails. It places `CODE`, `RODATA`, `DATA` and `BSS` in that order from `load` (`BSS` defines
+`__BSS_RUN__` and `__BSS_SIZE__`), and `ZEROPAGE` in the largest run of free zero-page bytes. Code in no section goes
+in `CODE`.
 With a configuration or without, every section is checked against the map. One in zero page the map doesn't give, or
 overlapping a reserved area, fails the build:
 

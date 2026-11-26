@@ -13,9 +13,9 @@ namespace Retrocore.Media;
 /// <remarks>
 ///  <para>
 ///   The file starts with <c>SOS DRVR</c>, then the header: a 2-byte count and that many bytes. SOS's loader reads
-///   the header at fixed offsets: the number of built-in floppy drives to configure (a word, 1-4), a 16-character
-///   name it skips, the 1,024-byte character set, another name, and the 256-byte keyboard layout. Then come the
-///   drivers. Each driver is a comment, its code assembled at origin 0, and its relocation table, each with a 2-byte
+///   the header at fixed offsets: the number of built-in floppy drives to configure (a word, of which the loader
+///   reads the low byte, taking 0 as 1 and more than 4 as 4), a 16-character name it skips, the 1,024-byte
+///   character set, another name, and the 256-byte keyboard layout. Then come the drivers. Each driver is a comment, its code assembled at origin 0, and its relocation table, each with a 2-byte
 ///   length; a comment length of <c>$FFFF</c> ends the file. A driver's code starts with its first device
 ///   information block (DIB): the link to the next, the entry point, then the device's name as a length and 15
 ///   characters. The links chain the driver's own DIBs; the loader links each driver's chain to the one before.
@@ -146,9 +146,10 @@ public sealed class SosDriverFile
     /// </param>
     /// <returns>The file's contents.</returns>
     /// <exception cref="ArgumentException">
-    ///  The header is short or its drive count is not 1-4; there are no drivers; or a driver's comment is not ASCII,
-    ///  a field is $8000 bytes or more, its code is too short for a DIB, or a relocation does not point at a word in
-    ///  its code.
+    ///  The header is short, $8000 bytes or more, or its drive count is not 1-4 (stricter than the loader, which
+    ///  takes 0 as 1 and more than 4 as 4); there are no drivers; or a driver's comment is not ASCII, a field is
+    ///  $8000 bytes or more, its code is too short for its first DIB's fields the loader reads, or a relocation does
+    ///  not point at a word in its code.
     /// </exception>
     public static byte[] Write(ReadOnlySpan<byte> header, IReadOnlyList<SosDriver> drivers)
     {
@@ -183,9 +184,14 @@ public sealed class SosDriverFile
             }
 
             byte[] comment = Encoding.ASCII.GetBytes(driver.Comment);
-            if (driver.Code.Length < Dib || driver.Code.Length > MaxField)
+            if (driver.Code.Length < DibFlags + 1 || driver.Code.Length > MaxField)
             {
-                throw new ArgumentException($"A driver's code is {Dib}-{MaxField} bytes; {driver.Name}'s is {driver.Code.Length}.", nameof(drivers));
+                throw new ArgumentException($"A driver's code is {DibFlags + 1}-{MaxField} bytes; {driver.Name}'s is {driver.Code.Length}.", nameof(drivers));
+            }
+
+            if ((driver.Code[DibFlags] & DibActivePageAligned) == DibActivePageAligned && driver.Code.Length < DibDcb + 2)
+            {
+                throw new ArgumentException($"{driver.Name} asks to be page-aligned but its code ends before its DCB's length.", nameof(drivers));
             }
 
             if (comment.Length > MaxField || driver.Relocations.Length * 2 > MaxField)
@@ -216,8 +222,12 @@ public sealed class SosDriverFile
         return file.ToArray();
     }
 
-    // A DIB's size up to the end of its name: the link, the entry point, and the name's length and 15 characters.
-    private const int Dib = 2 + 2 + 1 + 15;
+    // A DIB's flags byte, after the link, the entry point, and the name's length and 15 characters: the loader reads
+    // it for every DIB. Bit 7 marks the DIB active; an active DIB with bit 6 set asks for the driver to be
+    // page-aligned, for which the loader also reads the word at the DCB's offset, its length.
+    private const int DibFlags = 0x14;
+    private const int DibActivePageAligned = 0xC0;
+    private const int DibDcb = 0x20;
 
     private static void WriteField(MemoryStream file, ReadOnlySpan<byte> field)
     {

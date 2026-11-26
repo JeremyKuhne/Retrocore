@@ -149,7 +149,9 @@ internal static class Apple3SdkModules
     /// </param>
     /// <returns>The driver.</returns>
     /// <exception cref="FileNotFoundException">The SDK has no source for the driver.</exception>
-    /// <exception cref="InvalidDataException">The source has errors, or emits nothing.</exception>
+    /// <exception cref="InvalidDataException">
+    ///  The source has errors, emits no code, or its comment record runs past what it emits.
+    /// </exception>
     internal static SosDriver BuildSosDriver(string? directory, string folder, string define = "")
     {
         ArgumentException.ThrowIfNullOrEmpty(folder);
@@ -219,6 +221,7 @@ internal static class Apple3SdkModules
         if (end >= 4 && bytes[0] == 0xFF && bytes[1] == 0xFF)
         {
             int size = bytes[2] | (bytes[3] << 8);
+            if (4 + size > end) { throw new InvalidDataException("The driver's comment record runs past its code."); }
             comment = Encoding.ASCII.GetString(bytes.Slice(4, size));
             start = 4 + size;
         }

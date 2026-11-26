@@ -114,7 +114,8 @@ GlyphRow .set 0
     .byte key - KeyboardLayout
 .endmacro
 
-;; The number of built-in floppy drives SOS configures once the drivers load: .D1 and the next DRIVES - 1.
+;; The number of built-in floppy drives SOS configures, .D1 and the next DRIVES - 1, before it adds the drivers. The
+;; loader reads only the low byte.
 Drives:
     .word DRIVES
 
@@ -1416,16 +1417,16 @@ KeyboardLayoutName:
 ;; The keyboard layout, SHOLES, which the console driver reads to turn what the keyboard sends into the character
 ;; typed.
 ;;
-;; The keyboard sends a character with bit 7 clear (capitals for the letter keys) and the state of Shift, Control
-;; and Alpha Lock. The driver folds the character into one of the 64 entries at the table's end, <KeySlots>: a
-;; character below $7B by setting its bits 6 and 7, so that 1 ($31) reads $F1 and ! ($21) reads $E1; { | } by
-;; first clearing bit 5, so they read with [ \ ]; and ~ and DEL by flipping bits 6 and 7, to $BE and $BF. Each of
-;; those entries holds the offset of a key's entry, and the driver reads the character at that offset, plus 1 for
-;; Shift and 2 for Control. When the key's first character has <ALPHA_LOCK> set and Alpha Lock is down, it reads
-;; the shifted character instead; and it clears bit 7 of what it read.
+;; The keyboard sends a character (capitals for the letter keys) and the state of Shift, Control and Alpha Lock, with
+;; a flag for the special keys: Escape, Tab, space, the arrows and the keypad. The driver folds the character into
+;; one of the 66 entries at the table's end, <KeySlots>: a character below $7B by setting its bits 6 and 7, so that
+;; 1 ($31) reads $F1 and ! ($21) reads $E1; { | } by first clearing bit 5, so they read with [ \ ]; and ~ and DEL by
+;; flipping bits 6 and 7, to $BE and $BF. Each of those entries holds the offset of a key's entry, and the driver
+;; reads the character at that offset, plus 1 for Shift and 2 for Control. When the character it reads has
+;; <ALPHA_LOCK> set (only a letter key's first does) and Alpha Lock is down, it reads the shifted character instead;
+;; and it clears bit 7 of what it read.
 ;;
-;; The keys are listed row by row, as on the keyboard. Return and the keys that send bit 7 set (Escape, Tab, space,
-;; the arrows and the keypad) never reach the table.
+;; The keys are listed row by row, as on the keyboard. The special keys, and Return without Control, skip the table.
 KeyboardLayout:
 KeyOne:
     Key '1', '!', '1', '!'
@@ -1532,71 +1533,70 @@ KeySlash:
 ;; @ A-Z [ \ ] ^ _ at $C0-$DF (with the control codes $00-$1F and { | }), then the other characters, from ` and !
 ;; to ? at $E0-$FF.
 KeySlots:
-    Slot KeyGrave       ; $BE: ~
-    Slot KeyBackslash   ; $BF: DEL
-    Slot KeyTwo         ; $C0: @
-    Slot KeyA           ; $C1: A
-    Slot KeyB           ; $C2: B
-    Slot KeyC           ; $C3: C
-    Slot KeyD           ; $C4: D
-    Slot KeyE           ; $C5: E
-    Slot KeyF           ; $C6: F
-    Slot KeyG           ; $C7: G
-    Slot KeyH           ; $C8: H
-    Slot KeyI           ; $C9: I
-    Slot KeyJ           ; $CA: J
-    Slot KeyK           ; $CB: K
-    Slot KeyL           ; $CC: L
-    Slot KeyM           ; $CD: M
-    Slot KeyN           ; $CE: N
-    Slot KeyO           ; $CF: O
-    Slot KeyP           ; $D0: P
-    Slot KeyQ           ; $D1: Q
-    Slot KeyR           ; $D2: R
-    Slot KeyS           ; $D3: S
-    Slot KeyT           ; $D4: T
-    Slot KeyU           ; $D5: U
-    Slot KeyV           ; $D6: V
-    Slot KeyW           ; $D7: W
-    Slot KeyX           ; $D8: X
-    Slot KeyY           ; $D9: Y
-    Slot KeyZ           ; $DA: Z
-    Slot KeyLeftBracket ; $DB: [
-    Slot KeyBackslash   ; $DC: \
-    Slot KeyRightBracket; $DD: ]
-    Slot KeySix         ; $DE: ^
-    Slot KeyMinus       ; $DF: _
-    Slot KeyGrave       ; $E0:  
-    Slot KeyOne         ; $E1: !
-    Slot KeyQuote       ; $E2: "
-    Slot KeyThree       ; $E3: #
-    Slot KeyFour        ; $E4: $
-    Slot KeyFive        ; $E5: %
-    Slot KeySeven       ; $E6: &
-    Slot KeyQuote       ; $E7: '
-    Slot KeyNine        ; $E8: (
-    Slot KeyZero        ; $E9: )
-    Slot KeyEight       ; $EA: *
-    Slot KeyEquals      ; $EB: +
-    Slot KeyComma       ; $EC: ,
-    Slot KeyMinus       ; $ED: -
-    Slot KeyPeriod      ; $EE: .
-    Slot KeySlash       ; $EF: /
-    Slot KeyZero        ; $F0: 0
-    Slot KeyOne         ; $F1: 1
-    Slot KeyTwo         ; $F2: 2
-    Slot KeyThree       ; $F3: 3
-    Slot KeyFour        ; $F4: 4
-    Slot KeyFive        ; $F5: 5
-    Slot KeySix         ; $F6: 6
-    Slot KeySeven       ; $F7: 7
-    Slot KeyEight       ; $F8: 8
-    Slot KeyNine        ; $F9: 9
-    Slot KeySemicolon   ; $FA: :
-    Slot KeySemicolon   ; $FB: ;
-    Slot KeyComma       ; $FC: <
-    Slot KeyEquals      ; $FD: =
-    Slot KeyPeriod      ; $FE: >
-    Slot KeySlash       ; $FF: ?
-
+    Slot KeyGrave           ; $BE: ~
+    Slot KeyBackslash       ; $BF: DEL
+    Slot KeyTwo             ; $C0: @
+    Slot KeyA               ; $C1: A
+    Slot KeyB               ; $C2: B
+    Slot KeyC               ; $C3: C
+    Slot KeyD               ; $C4: D
+    Slot KeyE               ; $C5: E
+    Slot KeyF               ; $C6: F
+    Slot KeyG               ; $C7: G
+    Slot KeyH               ; $C8: H
+    Slot KeyI               ; $C9: I
+    Slot KeyJ               ; $CA: J
+    Slot KeyK               ; $CB: K
+    Slot KeyL               ; $CC: L
+    Slot KeyM               ; $CD: M
+    Slot KeyN               ; $CE: N
+    Slot KeyO               ; $CF: O
+    Slot KeyP               ; $D0: P
+    Slot KeyQ               ; $D1: Q
+    Slot KeyR               ; $D2: R
+    Slot KeyS               ; $D3: S
+    Slot KeyT               ; $D4: T
+    Slot KeyU               ; $D5: U
+    Slot KeyV               ; $D6: V
+    Slot KeyW               ; $D7: W
+    Slot KeyX               ; $D8: X
+    Slot KeyY               ; $D9: Y
+    Slot KeyZ               ; $DA: Z
+    Slot KeyLeftBracket     ; $DB: [
+    Slot KeyBackslash       ; $DC: \
+    Slot KeyRightBracket    ; $DD: ]
+    Slot KeySix             ; $DE: ^
+    Slot KeyMinus           ; $DF: _
+    Slot KeyGrave           ; $E0: `
+    Slot KeyOne             ; $E1: !
+    Slot KeyQuote           ; $E2: "
+    Slot KeyThree           ; $E3: #
+    Slot KeyFour            ; $E4: $
+    Slot KeyFive            ; $E5: %
+    Slot KeySeven           ; $E6: &
+    Slot KeyQuote           ; $E7: '
+    Slot KeyNine            ; $E8: (
+    Slot KeyZero            ; $E9: )
+    Slot KeyEight           ; $EA: *
+    Slot KeyEquals          ; $EB: +
+    Slot KeyComma           ; $EC: ,
+    Slot KeyMinus           ; $ED: -
+    Slot KeyPeriod          ; $EE: .
+    Slot KeySlash           ; $EF: /
+    Slot KeyZero            ; $F0: 0
+    Slot KeyOne             ; $F1: 1
+    Slot KeyTwo             ; $F2: 2
+    Slot KeyThree           ; $F3: 3
+    Slot KeyFour            ; $F4: 4
+    Slot KeyFive            ; $F5: 5
+    Slot KeySix             ; $F6: 6
+    Slot KeySeven           ; $F7: 7
+    Slot KeyEight           ; $F8: 8
+    Slot KeyNine            ; $F9: 9
+    Slot KeySemicolon       ; $FA: :
+    Slot KeySemicolon       ; $FB: ;
+    Slot KeyComma           ; $FC: <
+    Slot KeyEquals          ; $FD: =
+    Slot KeyPeriod          ; $FE: >
+    Slot KeySlash           ; $FF: ?
     .assert * - KeyboardLayout = LAYOUT_SIZE, "The keyboard layout is 256 bytes."

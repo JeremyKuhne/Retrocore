@@ -298,17 +298,15 @@ public sealed class ProjectFileTests
     public void UnsupportedFieldsFailTheBuild()
     {
         Write("retrocore.json", """
-            { "sdk": "1", "cpu": "6502", "steps": [], "targets": {
+            { "sdk": "1", "cpu": "6502", "targets": {
                 "plain": { "machine": "apple2-iiplus", "environment": "bare" },
                 "disk": { "machine": "apple2-iiplus", "environment": "dos33", "files": [], "image": false, "memoryMap": {}, "bootImage": "x" } } }
             """);
 
         RetrocoreProject project = RetrocoreProject.Load(_folder);
-        Error(project.Target("plain").RequireSupported).Should().EndWith(
-            "target plain: the project's 'steps' is not yet supported.");
-
+        project.Target("plain").RequireSupported();
         Error(project.Target("disk").RequireSupported).Should().EndWith(
-            "target disk: the project's 'steps' is not yet supported; 'memoryMap' is not yet supported; "
+            "target disk: 'memoryMap' is not yet supported; "
                 + "'files' is not yet supported; 'image' is not yet supported; 'bootImage' is not yet supported; "
                 + "the 'dos33' environment is not yet supported; only 'bare' builds.");
     }

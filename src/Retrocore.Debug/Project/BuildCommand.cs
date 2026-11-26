@@ -92,6 +92,14 @@ internal static class BuildCommand
             try
             {
                 TargetBuild build = ProjectBuild.Build(target);
+                foreach (StepResult step in build.Steps.Where(step => step.Ran))
+                {
+                    string Relative(string path) => Path.GetRelativePath(target.Project.Directory, path).Replace('\\', '/');
+                    string files = string.Join(", ", step.Step.Inputs.Select(Relative)) + " -> " + string.Join(", ", step.Step.Outputs.Select(Relative));
+                    output.WriteLine($"{target.Project.Name}: ran {Relative(step.Step.Tool)} ({files})");
+                    if (step.Output.Length != 0) { output.Write(step.Output); }
+                }
+
                 (int start, byte[] bytes) = ProjectBuild.Image(build);
                 output.WriteLine(
                     $"{target.Project.Name}/{target.Name}: {build.Binary} (${start:X4}-${start + bytes.Length - 1:X4}, {bytes.Length} {(bytes.Length == 1 ? "byte" : "bytes")}, entry ${build.Entry:X4})");

@@ -85,6 +85,7 @@ public sealed partial class ProjectCatalogTests
         Fields(definitions["root"]).Should().BeEquivalentTo(RetrocoreProject.RootFields);
         Fields(definitions["target"]).Should().BeEquivalentTo(RetrocoreProject.TargetFields);
         Fields(definitions["sources"]?["items"]?["oneOf"]?[1]).Should().BeEquivalentTo(RetrocoreProject.SourceFields);
+        Fields(definitions["step"]).Should().BeEquivalentTo(ProjectStep.Fields);
         Strings(definitions["target"]?["properties"]?["options"]?["propertyNames"]?["not"]?["enum"])
             .Should().BeEquivalentTo(RetrocoreProject.ReservedOptions);
 

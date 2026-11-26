@@ -20,6 +20,20 @@ function fadedLines(uri: vscode.Uri): number[] {
         });
 }
 
+/** The lines (1-based) the extension shades, from the server's retrocore/inactiveRanges. */
+async function shadedLines(uri: vscode.Uri): Promise<number[] | undefined> {
+    const lines = await vscode.commands.executeCommand<number[] | undefined>("retrocore.inactiveLines", uri);
+    return lines?.map(line => line + 1);
+}
+
+/** Waits for a document's shaded lines to be the wanted ones, up to a time. */
+async function untilShaded(uri: vscode.Uri, wanted: number[], milliseconds = 30000): Promise<number[] | undefined> {
+    for (const end = Date.now() + milliseconds; Date.now() < end; await new Promise(resolve => setTimeout(resolve, 200))) {
+        if (JSON.stringify(await shadedLines(uri)) === JSON.stringify(wanted)) break;
+    }
+    return shadedLines(uri);
+}
+
 /** Waits for a document's faded lines to be the wanted ones, up to a time. */
 async function untilFaded(uri: vscode.Uri, wanted: number[], milliseconds = 30000): Promise<number[]> {
     for (const end = Date.now() + milliseconds; Date.now() < end; await new Promise(resolve => setTimeout(resolve, 200))) {
@@ -50,8 +64,10 @@ export async function testTargetDimming(workspace: vscode.WorkspaceFolder): Prom
 
     assert.equal(await vscode.commands.executeCommand("retrocore.pickTarget", file, "apple2-iiplus"), "hello/apple2-iiplus");
     assert.deepEqual(await untilFaded(source, [lowercase]), [lowercase], "the II Plus leaves out the lowercase line");
+    assert.deepEqual(await untilShaded(source, [lowercase]), [lowercase], "the extension shades the line the server says the II Plus leaves out");
     assert.equal(await vscode.commands.executeCommand("retrocore.pickTarget", file, "apple2-iie"), "hello/apple2-iie");
     assert.deepEqual(await untilFaded(source, [capitals]), [capitals], "the IIe, which defines LOWERCASE, leaves out the capitals");
+    assert.deepEqual(await untilShaded(source, [capitals]), [capitals], "the shading moves with the target");
     await vscode.commands.executeCommand("workbench.action.closeActiveEditor");
-    console.log("Isolated VS Code passed: the language server assembles a project's source for the active target, and its faded lines follow the target.");
+    console.log("Isolated VS Code passed: the language server assembles a project's source for the active target, and its faded and shaded lines follow the target.");
 }

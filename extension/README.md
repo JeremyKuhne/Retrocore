@@ -183,6 +183,11 @@ saved machine and recovery journal. `retrocore.json` is checked against the proj
 schema as you edit it; leave out a `$schema` line, which would make VS Code fetch the
 schema from the web instead.
 
+**Lines the active target leaves out**, such as the other branch of an `.if RC_MODEL_...`
+block, are faded by the language server and shaded across the whole line, with a mark
+in the overview ruler; both move when you pick another target. The shade's color is
+`retrocore.inactiveCodeBackground`, and `retrocore.inactiveCode.shade` turns it off.
+
 ## What is highlighted
 
 - All three current CPU maps: MOS 6502, WDC 65C02 and Rockwell 65C02, including

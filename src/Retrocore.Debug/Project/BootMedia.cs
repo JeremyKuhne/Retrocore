@@ -124,10 +124,15 @@ internal static class BootMedia
         {
             foreach (FileInfo file in Files(root))
             {
-                if (!sizes.Contains(file.Length)) { continue; }
                 string hash;
                 try
                 {
+                    // A linked file's size is its target's, as its bytes are; a broken link is passed over.
+                    FileInfo target = file.Attributes.HasFlag(FileAttributes.ReparsePoint)
+                        ? file.ResolveLinkTarget(returnFinalTarget: true) as FileInfo ?? file
+                        : file;
+
+                    if (!target.Exists || !sizes.Contains(target.Length)) { continue; }
                     hash = Convert.ToHexStringLower(SHA1.HashData(File.ReadAllBytes(file.FullName)));
                 }
                 catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)

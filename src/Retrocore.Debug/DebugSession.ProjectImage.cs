@@ -140,7 +140,7 @@ internal sealed partial class DebugSession
         (int start, byte[] bytes) = ProjectBuild.Image(build);
         if (cycles is null) { ForgetBoundaries(); }
         long limit = cycles ?? ((long)(build.Target.Built?.BootSeconds ?? 0) * Target.ClockHertz);
-        long seconds = limit / Target.ClockHertz;
+        long seconds = (limit + Target.ClockHertz - 1) / Target.ClockHertz;
         for (long cycle = 0; ; cycle++)
         {
             if (Target.IsInstructionBoundary && Target.ProgramCounter == build.Entry && Loaded(start, bytes)) { break; }

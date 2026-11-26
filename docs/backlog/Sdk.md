@@ -392,8 +392,8 @@ writes `<name>.prg` (its `SYS` line, then the program from `$0410`), its TAP tap
 tape in with PLAY down, types `LOAD` and then `RUN`, on BASIC 4, 2 and 1. A target whose image boots the disk (BASIC 2
 and 4: BASIC 1's IEEE-488 bug stops disk drives) needs the
 4040's ROMs, which the launch finds by hash: the SDK's first [boot media](../../sdk/1/README.md#environments) lookup,
-by the SHA-1s MAME publishes (the plan said SHA-256; MAME's sets give SHA-1), in `bootImage`, `RETROCORE_PET_ROMS` and
-`RETROCORE_CACHE`. The disk is written even without them, as the writer is the host's. The adventure's `pet-basic`
+by the SHA-1s MAME publishes (the plan said SHA-256; MAME's sets give SHA-1), in `bootImage`, the launch's
+`romDirectory`, `RETROCORE_PET_ROMS` and `RETROCORE_CACHE`. The disk is written even without them, as the writer is the host's. The adventure's `pet-basic`
 target plays both Pirate transcripts from its tape; `pet-disk` plays from the disk with the dumps, and the DAP test
 reports it skipped without them. A target's `bootImage` names the folder its boot media is looked for in
 first, by hash, as the `basic` environment's 4040 disk, above, uses it.

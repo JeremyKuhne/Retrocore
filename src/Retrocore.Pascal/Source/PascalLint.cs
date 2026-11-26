@@ -360,6 +360,12 @@ public static class PascalLint
                 Add($"'{key}' is not a document in the bibliography (docs/Bibliography.md).");
             }
 
+            // A use of a reserved word or standard identifier would otherwise find the declaration that gives it.
+            if (PascalNames.IsKeyword(also.Name) || PascalNames.IsStandard(also.Name))
+            {
+                Add($"The historical name {also.Name} is Pascal's own: give it in prose.");
+            }
+
             if (program.Declarations.Any(declaration => string.Equals(
                 declaration.Name,
                 also.Name,

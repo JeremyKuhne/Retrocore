@@ -142,6 +142,13 @@ public sealed partial class PascalProgram
         }
 
         if (found is not null) { return (found, false); }
+
+        // Pascal's own names are never historical ones, whatever a comment says.
+        if (PascalNames.IsStandard(reference.Token.Text) || PascalNames.IsKeyword(reference.Token.Text))
+        {
+            return null;
+        }
+
         return OldName(reference.Token.Text) is { } old ? (old, true) : null;
     }
 

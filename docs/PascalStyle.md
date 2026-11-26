@@ -114,8 +114,8 @@ A definition's names from documents are kept three ways:
 3. **In the editor**: an old name used in the source, or linked, leads to its definition for hover and go to
    definition, as `Also:` does in the assembler.
 
-A historical name that would clash with another definition, or that wasn't checked, goes in prose, as in the
-assembly sources. The decompiler's own generated names (`P12`, `L059A`) aren't historical.
+A historical name that would clash with another definition, that is one of Pascal's reserved words or standard
+identifiers (`EXIT`, `SCAN`), or that wasn't checked, goes in prose, as in the assembly sources. The decompiler's own generated names (`P12`, `L059A`) aren't historical.
 
 ## 5. Doc comments
 

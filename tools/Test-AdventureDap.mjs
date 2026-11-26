@@ -37,7 +37,8 @@ function firstLine(consoleSource, routine) {
     const lines = readFileSync(consoleSource, "utf8").split(/\r?\n/);
     const start = lines.indexOf(`.proc ${routine}`);
     assert.ok(start >= 0, `${routine} is in ${consoleSource}`);
-    const first = lines.findIndex((line, at) => at > start && line.trim() !== "" && !line.trim().startsWith(";"));
+    const isInstruction = text => text !== "" && !text.startsWith(";") && !/^[A-Za-z_][A-Za-z0-9_]*:$/.test(text);
+    const first = lines.findIndex((line, at) => at > start && isInstruction(line.trim()));
     assert.ok(first > start, `${routine} has an instruction`);
     return first + 1;
 }

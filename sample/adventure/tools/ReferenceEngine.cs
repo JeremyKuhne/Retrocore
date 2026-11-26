@@ -10,7 +10,7 @@ using System.Text;
 ///  of the 6502 engine can be checked against it character for character.
 /// </summary>
 /// <param name="game">The packed game.</param>
-/// <param name="columns">The screen's width the text wraps to.</param>
+/// <param name="columns">The screen's width; the text wraps a column short of it, as the 6502 engine's does.</param>
 internal sealed class ReferenceEngine(byte[] game, int columns)
 {
     /// <summary>

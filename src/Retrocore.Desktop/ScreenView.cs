@@ -260,6 +260,7 @@ internal sealed class ScreenView : Control
         "trs80-model3" or "altair" => (640, 480),
         "trs80-model2" => (640, 576),
         "kaypro2" => (560, 480),
+        "trs80-model100" => (720, 192),
         "coco" => width == 704 ? (704, 498) : (640, 480),
         "bbc" => (704, 576),
         "pet" => (640, 400),
@@ -271,6 +272,7 @@ internal sealed class ScreenView : Control
     private static double Aspect(string machine) => machine switch
     {
         "bbc" => 704.0 / 576.0,
+        "trs80-model100" => 240.0 / 64.0,
         "trs80-model1" or "trs80-model3" or "trs80-model2" or "coco" or "altair" or "kaypro2" or "atari800" => 4.0 / 3.0,
         "pet" => 320.0 / 200.0,
         _ => 280.0 / 192.0,

@@ -25,9 +25,9 @@ internal sealed partial class Trs80Model100DebugTarget
     /// </summary>
     /// <remarks>
     ///  <para>
-    ///   The ROM is the user's: <c>rom</c> names its file, or it is found in <c>romDirectory</c> (or
-    ///   <c>RETROCORE_TRS80M100_ROMS</c>) or that folder's <c>trs80m100</c>, <c>tandy102</c> or
-    ///   <c>trs80m100-roms</c> folder, by MAME's name (<c>m100rom.m12</c>, <c>m102rom.m12</c>) or the fixtures'
+    ///   The ROM is the user's: <c>rom</c> names its file (a path, or a name in the ROM folder), or it is found in
+    ///   <c>romDirectory</c> (or <c>RETROCORE_TRS80M100_ROMS</c>) or that folder's <c>trs80m100</c>, <c>tandy102</c>
+    ///   or <c>trs80m100-roms</c> folder, by MAME's name (<c>m100rom.m12</c>, <c>m102rom.m12</c>) or the fixtures'
     ///   (<c>m100.bin</c>, <c>t102.bin</c>). <c>model</c> is <c>100</c> (the default) or <c>102</c>, which picks the
     ///   ROM to look for; a ROM named by <c>rom</c> tells its model by its digest. <c>ramKilobytes</c> is 8, 16, 24 or
     ///   32 (the default), <c>optionRom</c> names an option ROM's file, and <c>time</c> sets the clock (an ISO 8601
@@ -116,9 +116,15 @@ internal sealed partial class Trs80Model100DebugTarget
 
     private static byte[] Rom(JsonObject args, Trs80Model100Variant model)
     {
-        if (args.String("rom") is { } named) { return ReadRom(named, "ROM"); }
-        string[] names = model == Trs80Model100Variant.Tandy102 ? s_tandy102Roms : s_model100Roms;
         string? directory = args.String("romDirectory") ?? Environment.GetEnvironmentVariable(RomDirectoryVariable);
+        if (args.String("rom") is { } named)
+        {
+            // A path, or a name in the ROM folder or its MAME and fixture folders.
+            string? found = File.Exists(named) || directory is null ? named : FindRom(directory, [named]);
+            return ReadRom(found ?? named, "ROM");
+        }
+
+        string[] names = model == Trs80Model100Variant.Tandy102 ? s_tandy102Roms : s_model100Roms;
         string machineName = model == Trs80Model100Variant.Tandy102 ? "Tandy 102" : "Model 100";
         if (directory is null)
         {

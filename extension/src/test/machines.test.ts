@@ -55,12 +55,15 @@ test("the machines are the ones agreed, each with its own id and name, in order"
     assert.deepEqual(machines.map(machine => machine.label), [
         "Apple IIe (enhanced)", "Apple IIe", "Apple II Plus", "Apple II", "Apple III", "TRS-80 Model I (Level II)",
         "TRS-80 Model I (Level I)", "TRS-80 Model III", "TRS-80 Model III (Level I)", "TRS-80 Model 4", "TRS-80 Model 4P",
-        "TRS-80 Model II", "TRS-80 Model 12", "TRS-80 Model 16 (Z80 side)", "Apple-1", "TRS-80 Color Computer",
+        "TRS-80 Model II", "TRS-80 Model 12", "TRS-80 Model 16 (Z80 side)", "TRS-80 Model 100", "Tandy 102", "Apple-1", "TRS-80 Color Computer",
         "TRS-80 Color Computer 2", "TRS-80 Color Computer 3", "Commodore PET 2001 (BASIC 2)", "Commodore PET 2001",
         "Commodore PET 4032", "Commodore PET 4032 (business keyboard)", "BBC Micro Model B", "BBC Micro Model A",
         "Atari 800", "Atari 400", "MITS Altair 8800", "Kaypro II"
     ]);
     assert.deepEqual(machineById("altair")?.configuration, { machine: "altair" });
+    assert.deepEqual(machineById("trs80-model100")?.configuration, { machine: "trs80-model100", model: "100" });
+    assert.deepEqual(machineById("tandy102")?.configuration, { machine: "trs80-model100", model: "102" });
+    assert.deepEqual(machineById("tandy102")?.diskFormats, [], "the Model 100 has no disk drive of its own");
     assert.deepEqual(machineById("altair")?.diskFormats, ["dsk"], "the 88-DCDD's SIMH images");
     assert.deepEqual(machineById("altair")?.tapeFormats, [], "an Altair tape needs a bootstrap, so it cannot start the machine");
     assert.deepEqual(machineById("apple3")?.configuration, { machine: "apple3" });

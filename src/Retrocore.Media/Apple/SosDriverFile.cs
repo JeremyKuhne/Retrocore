@@ -15,10 +15,12 @@ namespace Retrocore.Media;
 ///   The file starts with <c>SOS DRVR</c>, then the header: a 2-byte count and that many bytes. SOS's loader reads
 ///   the header at fixed offsets: the number of built-in floppy drives to configure (a word, of which the loader
 ///   reads the low byte, taking 0 as 1 and more than 4 as 4), a 16-character name it skips, the 1,024-byte
-///   character set, another name, and the 256-byte keyboard layout. Then come the drivers. Each driver is a comment, its code assembled at origin 0, and its relocation table, each with a 2-byte
-///   length; a comment length of <c>$FFFF</c> ends the file. A driver's code starts with its first device
+///   character set, another name, and the 256-byte keyboard layout. Then come the drivers. Each driver is a
+///   comment, its code assembled at origin 0, and its relocation table, each with a 2-byte length; a comment length
+///   of <c>$FFFF</c> ends the file. A driver's code starts with its first device
 ///   information block (DIB): the link to the next, the entry point, then the device's name as a length and 15
-///   characters. The links chain the driver's own DIBs; the loader links each driver's chain to the one before.
+///   characters. The links chain the driver's own DIBs. The loader places and links the drivers from the last in the
+///   file to the first, linking each driver's last active DIB to the first active DIB of the driver before it.
 ///  </para>
 ///  <para>
 ///   The relocation table lists the offsets, 2 bytes each, of the code's words that hold addresses in the code.
@@ -68,7 +70,8 @@ public sealed class SosDriverFile
     public ReadOnlySpan<byte> Header => _header;
 
     /// <summary>
-    ///  Gets the number of built-in floppy drives SOS configures, or 0 when the header is too short to hold it.
+    ///  Gets the drive count the header asks for, as its word, or 0 when the header is too short to hold it. The
+    ///  loader reads only the low byte, and configures 1 drive for 0 and 4 for more than 4.
     /// </summary>
     public int Drives => _header.Length >= 2 ? _header[0] | (_header[1] << 8) : 0;
 
@@ -142,7 +145,7 @@ public sealed class SosDriverFile
     ///  <c>Sos/SosDriverHeader.asm</c> assembled, with a drive count of 1-4.
     /// </param>
     /// <param name="drivers">
-    ///  The drivers, in the order SOS is to load them; the first device of the first is usually <c>.CONSOLE</c>.
+    ///  The drivers, in the file's order; SOS's loader places and links them from the last to the first.
     /// </param>
     /// <returns>The file's contents.</returns>
     /// <exception cref="ArgumentException">
@@ -223,7 +226,8 @@ public sealed class SosDriverFile
     }
 
     // A DIB's flags byte, after the link, the entry point, and the name's length and 15 characters: the loader reads
-    // it for every DIB. Bit 7 marks the DIB active; an active DIB with bit 6 set asks for the driver to be
+    // it for every DIB in the chain. Write checks the first, which starts the code; the links to the others are the
+    // driver's own. Bit 7 marks the DIB active; an active DIB with bit 6 set asks for the driver to be
     // page-aligned, for which the loader also reads the word at the DCB's offset, its length.
     private const int DibFlags = 0x14;
     private const int DibActivePageAligned = 0xC0;

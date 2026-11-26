@@ -150,7 +150,8 @@ internal static class Apple3SdkModules
     /// <returns>The driver.</returns>
     /// <exception cref="FileNotFoundException">The SDK has no source for the driver.</exception>
     /// <exception cref="InvalidDataException">
-    ///  The source has errors, emits no code, or its comment record runs past what it emits.
+    ///  The source has errors, emits no code, assembles to different lengths at the two origins, or its comment record
+    ///  runs past what it emits.
     /// </exception>
     internal static SosDriver BuildSosDriver(string? directory, string folder, string define = "")
     {
@@ -181,7 +182,7 @@ internal static class Apple3SdkModules
     /// <param name="directory">The SDK ROM directory, or null for the copy beside the debug host.</param>
     /// <param name="drives">The number of built-in floppy drives SOS is to configure, 1-4.</param>
     /// <param name="folders">
-    ///  The drivers' folders in <c>Sos/Drivers</c>, in the order SOS is to load them, such as <c>Console</c>; SOS
+    ///  The drivers' folders in <c>Sos/Drivers</c>, in the file's order, such as <c>Console</c>; SOS
     ///  needs the console's. The built-in disk's driver, <c>.D1</c> to <c>.D4</c>, is in the kernel.
     /// </param>
     /// <returns>The file.</returns>

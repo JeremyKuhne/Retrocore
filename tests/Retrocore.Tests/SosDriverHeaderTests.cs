@@ -229,6 +229,9 @@ public sealed class SosDriverHeaderTests
         aligned[0x14] = 0xC0;
         Action unaligned = () => SosDriverFile.Write(header, [new SosDriver("", aligned, [])]);
         unaligned.Should().Throw<ArgumentException>().WithParameterName("drivers");
+        byte[] reaches = new byte[0x22];
+        reaches[0x14] = 0xC0;
+        SosDriverFile.Read(SosDriverFile.Write(header, [new SosDriver("", reaches, [])])).Drivers.Should().ContainSingle();
         Action outside = () => SosDriverFile.Write(header, [console with { Relocations = [console.Code.Length - 1] }]);
         outside.Should().Throw<ArgumentException>().WithParameterName("drivers");
         Action notAscii = () => SosDriverFile.Write(header, [console with { Comment = "café" }]);

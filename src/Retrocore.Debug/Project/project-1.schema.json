@@ -1,0 +1,214 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://retrocore.dev/schemas/project-1.json",
+  "title": "Retrocore project",
+  "description": "A Retrocore project (retrocore.json): the CPU its code keeps to, its sources and defines, and the machine × environment targets it builds for. At a repository's root it can instead list the folders of the repository's projects.",
+  "oneOf": [
+    { "$ref": "#/definitions/root" },
+    { "$ref": "#/definitions/project" }
+  ],
+  "definitions": {
+    "root": {
+      "type": "object",
+      "description": "A repository's root file that lists its projects.",
+      "required": ["projects"],
+      "additionalProperties": false,
+      "properties": {
+        "$schema": { "type": "string" },
+        "projects": {
+          "type": "array",
+          "minItems": 1,
+          "description": "The folders of the repository's projects, each with its own retrocore.json.",
+          "items": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "project": {
+      "type": "object",
+      "required": ["sdk", "cpu", "targets"],
+      "additionalProperties": false,
+      "properties": {
+        "$schema": { "type": "string" },
+        "sdk": {
+          "enum": ["1"],
+          "description": "The SDK's major version the project is written against."
+        },
+        "name": {
+          "type": "string",
+          "pattern": "^(?!\\.\\.?$)[A-Za-z0-9._-]+$",
+          "description": "The project's name, which names its output files: letters, digits, '-', '_' and '.'. Defaults to its folder's name."
+        },
+        "cpu": {
+          "$ref": "#/definitions/cpu",
+          "description": "The CPU the code keeps to. A target can raise it (r65c02 on an enhanced IIe), never lower it."
+        },
+        "sources": {
+          "$ref": "#/definitions/sources",
+          "description": "The files every target assembles, in order: paths or patterns (* and ? in a name, ** for any folders), relative to the project's folder. Each target also gets src/platform/<family>/'s .s and .asm files, then src/platform/<model>/'s, a model's file taking the place of its family's file of the same name."
+        },
+        "steps": {
+          "type": "array",
+          "description": "Host-side build steps that run before assembly. Not yet supported: a build that has them fails."
+        },
+        "defines": {
+          "$ref": "#/definitions/defines",
+          "description": "Symbols every target defines before its sources."
+        },
+        "entry": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The entry point's label; defaults to the first section."
+        },
+        "output": {
+          "type": "string",
+          "minLength": 1,
+          "default": "artifacts",
+          "description": "The folder build output goes in, each target's in a folder of its name; intermediate files go in obj/<target>/."
+        },
+        "targets": {
+          "type": "object",
+          "minProperties": 1,
+          "description": "The project's targets by name. The name also names the target's output folders.",
+          "propertyNames": { "pattern": "^(?!\\.\\.?$)[A-Za-z0-9._-]+$" },
+          "additionalProperties": { "$ref": "#/definitions/target" }
+        }
+      }
+    },
+    "target": {
+      "type": "object",
+      "required": ["machine", "environment"],
+      "additionalProperties": false,
+      "properties": {
+        "machine": {
+          "$ref": "#/definitions/machine",
+          "description": "The machine, as Retrocore: Start Machine and favorites name it."
+        },
+        "environment": {
+          "$ref": "#/definitions/environment",
+          "description": "How the program is loaded and started, and which system calls it may make. Every machine runs bare; each other environment runs on the machines the SDK plan pairs it with. Only bare builds yet."
+        },
+        "cpu": {
+          "$ref": "#/definitions/cpu",
+          "description": "Raises the project's CPU for this target; the machine must run it."
+        },
+        "options": {
+          "type": "object",
+          "description": "The machine's launch options, such as ramKilobytes, as a launch configuration gives them. They cannot give what the project and its targets decide: type, request, name, project, target, machine, model, rom, source, program, basic, debugFile, dialect, linkerConfiguration, machineState, dos, loadAddress, entryAddress, executable or basicSource.",
+          "propertyNames": {
+            "not": {
+              "enum": ["type", "request", "name", "project", "target", "machine", "model", "rom", "source", "program", "basic", "debugFile", "dialect", "linkerConfiguration", "machineState", "dos", "loadAddress", "entryAddress", "executable", "basicSource"]
+            }
+          }
+        },
+        "cards": {
+          "type": "object",
+          "description": "The cards in the machine's slots, by slot, such as { \"4\": \"mockingboard\" }, as a saved machine lists them.",
+          "additionalProperties": { "type": "string" }
+        },
+        "defines": {
+          "$ref": "#/definitions/defines",
+          "description": "Symbols this target defines, over the project's."
+        },
+        "sources": {
+          "$ref": "#/definitions/sources",
+          "description": "Sources added for this target only, after the project's and the platform folders'."
+        },
+        "linkerConfiguration": {
+          "type": "string",
+          "minLength": 1,
+          "description": "An ld65-style linker configuration, relative to the project's folder."
+        },
+        "memoryMap": {
+          "type": "object",
+          "description": "Overrides of the target's memory map. Not yet supported: a build that has it fails."
+        },
+        "files": {
+          "type": "array",
+          "description": "Data files put beside the program on its disk. Not yet supported: a build that has them fails."
+        },
+        "image": {
+          "description": "The disk or tape image the target builds, or false for none. Not yet supported: a build that has it fails."
+        },
+        "bootImage": {
+          "type": "string",
+          "description": "The boot media the environment needs, by name or hash, where it is not an SDK source. Not yet supported: a build that has it fails."
+        }
+      }
+    },
+    "sources": {
+      "type": "array",
+      "items": {
+        "oneOf": [
+          { "type": "string", "minLength": 1 },
+          {
+            "type": "object",
+            "required": ["path"],
+            "additionalProperties": false,
+            "properties": {
+              "path": { "type": "string", "minLength": 1, "description": "A file or pattern." },
+              "dialect": {
+                "enum": ["native", "ca65", "merlin", "macro10"],
+                "description": "The files' dialect; defaults to native unless a file's first-line pragma names one."
+              },
+              "kind": {
+                "enum": ["asm", "basic"],
+                "default": "asm",
+                "description": "The files' language: asm, or basic, which loads but does not build yet."
+              }
+            }
+          }
+        ]
+      }
+    },
+    "defines": {
+      "type": "object",
+      "propertyNames": { "pattern": "^(?![Rr][Cc]_)[A-Za-z_][A-Za-z0-9_]*$" },
+      "additionalProperties": {
+        "oneOf": [
+          { "type": "integer" },
+          { "type": "boolean" },
+          { "type": "string", "pattern": "^\\s*(\\$[0-9A-Fa-f]+|0[xX][0-9A-Fa-f]+|[+-]?[0-9]+)\\s*$" }
+        ]
+      }
+    },
+    "cpu": {
+      "enum": ["6502", "65c02", "r65c02", "w65c02", "8080", "8085", "z80", "6809"],
+      "enumDescriptions": [
+        "The NMOS 6502.",
+        "The instructions every 65C02 has (the 65SC02's).",
+        "The Rockwell R65C02, with the bit instructions, as the enhanced IIe runs it.",
+        "The WDC W65C02S, with WAI and STP as well.",
+        "The Intel 8080.",
+        "The Intel 8085.",
+        "The Zilog Z80, which also runs 8080 code.",
+        "The Motorola 6809."
+      ]
+    },
+    "environment": {
+      "enum": ["bare", "wozmon", "dos33", "prodos", "sos", "basic", "dfs", "cpm", "level2", "trsdos", "colorbasic", "diskbasic"],
+      "enumDescriptions": [
+        "A raw binary loaded straight into RAM, with the ROM's routines only. All machines.",
+        "Woz Monitor hex and an ACI tape. The Apple-1. Not yet supported.",
+        "A B file on a DOS 3.3 disk. The Apple II, II Plus and IIe. Not yet supported.",
+        "A SYS or BIN file under ProDOS. The II Plus with 64K, and the IIe. Not yet supported.",
+        "A SOS.INTERP on a SOS boot disk. The Apple III. Not yet supported.",
+        "A PRG with a BASIC SYS line. The PET. Not yet supported.",
+        "A *RUN file on a DFS disk. The BBC Micro. Not yet supported.",
+        "A .COM file under CP/M. The Apple II and IIe with a SoftCard, the TRS-80 Model 4, the Altair and the Kaypro II. Not yet supported.",
+        "A SYSTEM tape. The TRS-80 Model I and III. Not yet supported.",
+        "A /CMD load module. The TRS-80 Model I, III and 4. Not yet supported.",
+        "A DECB .BIN under Color BASIC. The Color Computer. Not yet supported.",
+        "A DECB .BIN under Disk BASIC. The Color Computer. Not yet supported."
+      ]
+    },
+    "machine": {
+      "enum": [
+        "apple2-iie-enhanced", "apple2-iie", "apple2-iiplus", "apple2-ii", "apple3",
+        "trs80-model1-level2", "trs80-model1-level1", "trs80-model3", "trs80-model3-level1", "trs80-model4",
+        "trs80-model4p", "trs80-model2", "trs80-model12", "trs80-model16", "apple1", "coco1", "coco2", "coco3",
+        "pet2001-basic2", "pet2001", "pet4032", "pet4032-business", "bbcb", "bbca", "atari800", "atari400",
+        "altair", "kaypro2"
+      ]
+    }
+  }
+}

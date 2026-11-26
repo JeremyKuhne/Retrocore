@@ -188,7 +188,7 @@ make.
 | `sos` | the Apple III | SOS calls (`BRK`, a call number, its parameters) | a `SOS.INTERP` on a boot disk with the SDK's SOS 1.3 kernel and drivers |
 | `basic` | the PET | the Kernal and BASIC | a PRG with a BASIC `SYS` line, on a TAP tape; also on a 4040 disk when the drive's ROM dumps are found |
 | `dfs` | the BBC Micro | the MOS (`OSWRCH`, `OSRDCH`, `OSFILE`, …) | a `*RUN` file on a DFS disk (`.ssd`) whose `!BOOT` runs it; a UEF tape as an option |
-| `cpm` | the Apple II and IIe with a SoftCard, the Model 4, the Altair | the BDOS at `$0005` | a `.COM` file at `$0100` |
+| `cpm` | the Apple II and IIe with a SoftCard, the Model 4, the Altair, the Kaypro II | the BDOS at `$0005` | a `.COM` file at `$0100` |
 | `level2` | the Model I and III | Level II's routines | a SYSTEM tape (CAS) |
 | `trsdos` | the Model I, III and 4 | TRSDOS, LDOS and LS-DOS SVCs | a `/CMD` load module |
 | `colorbasic`, `diskbasic` | the Color Computer 1, 2 and 3 | Color BASIC's and Disk BASIC's routines | a DECB `.BIN` for `LOADM`, on a CAS tape or a JVC disk |
@@ -196,10 +196,10 @@ make.
 The first five starting targets use `wozmon`, `dos33`, `sos`, `basic` and `dfs`. The rest follow.
 
 **CPU compatibility** follows supersets. A `6502` project can target 65C02 machines, and an `8080` project can target
-Z80 machines (the Altair, and the Model 4 or a SoftCard under CP/M). A `z80` or `65c02` project cannot target a machine
-whose CPU lacks its instructions. Each build starts at the target's CPU, as a launch does today. The assembler already
-rejects a 65C02 opcode under `.cpu Mos6502`. What is new is that a `.cpu` in the source naming a CPU the target lacks is
-an error naming the target, where today it silently replaces the launch's CPU.
+the Altair and Z80 machines (the Model 4, the Kaypro II, or a SoftCard under CP/M). A `z80` or `65c02` project cannot
+target a machine whose CPU lacks its instructions. Each build starts at the target's CPU, as a launch does today. The
+assembler already rejects a 65C02 opcode under `.cpu Mos6502`. What is new is that a `.cpu` in the source naming a CPU
+the target lacks is an error naming the target, where today it silently replaces the launch's CPU.
 
 **Boot media.** An environment whose system is an SDK source boots with nothing external: DOS 3.3, SOS, DFS, and
 the ROM environments. The SDK lists the known images of every other environment (title, version, SHA-256), such as

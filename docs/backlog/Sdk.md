@@ -131,7 +131,6 @@ and validation in VS Code.
 ```jsonc
 // a project
 {
-  "$schema": "https://retrocore.dev/schemas/project-1.json",
   "sdk": "1",
   "name": "adventure",
   "cpu": "6502",
@@ -365,11 +364,11 @@ Each writer reads back through the existing readers in its tests, and boots unde
   has several, with the same quick picks Start Machine uses. The choice is kept in workspace state, and
   `retrocore.activeTarget` returns it for launch configurations.
 - **F5 with no launch.json** in a folder with a `retrocore.json` builds the active target and starts its machine.
-  Today the extension's providers fill the Run and Debug list and resolve breakpoints and saved machines, but none
-  handles the empty configuration F5 sends without a launch.json, so VS Code shows its own debugger picker. A
-  `resolveDebugConfiguration` takes that case, and a `workspaceContains:retrocore.json` activation event starts the
-  extension for it. A target maps to a launch configuration through the catalog and `startFlow.setupConfiguration`,
-  so it gets the same saved machine and recovery as any other launch.
+  A `resolveDebugConfiguration` (`extension/src/activeTarget.ts`) takes the empty configuration F5 sends without a
+  launch.json and makes it a `project` launch of the active target, and `workspaceContains` activation events (a
+  `retrocore.json` at the root or below) start the extension for it. VS Code gives that configuration to the
+  debugger the editor's language picks, so F5 does this from a Retrocore source. The launch resolves the target's
+  machine through the catalog, so it gets a saved machine and recovery journal of its own, as any other launch does.
 - **The project file has a schema**, contributed through `jsonValidation`, and the extension watches it.
 - **One launch configuration** covers every target when you want one:
 

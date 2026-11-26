@@ -2,14 +2,14 @@
 // SPDX-License-Identifier: MIT
 // See LICENSE file in the project root for full license information
 
-// The active target: the project target ${command:retrocore.activeTarget} names in a launch configuration. It shows
-// in the status bar, which picks it from the targets of the workspace's retrocore.json files, and is kept in
-// workspace state.
+// The active target: the project target F5 debugs in a workspace with no launch.json, and the one
+// ${command:retrocore.activeTarget} names in a launch configuration. It shows in the status bar, which picks it from
+// the targets of the workspace's retrocore.json files, and is kept in workspace state.
 
 import * as path from "node:path";
 import * as vscode from "vscode";
 import { machineById } from "./machines";
-import { isRootFile, loadTargets, projectFileName, qualifiedName, type ProjectTarget } from "./project";
+import { isRootFile, loadTargets, projectFileName, projectLaunch, qualifiedName, type ProjectTarget } from "./project";
 
 // The workspace state the active target is kept in: its project's file and its name.
 const stateKey = "retrocore.activeTarget";
@@ -86,7 +86,8 @@ export function registerActiveTarget(context: vscode.ExtensionContext): ActiveTa
             item.text = `$(target) ${target.project} · ${target.name}`;
             item.tooltip = new vscode.MarkdownString(`**Retrocore target:** ${target.project} · ${target.name}`
                 + `${machine === undefined ? "" : `, on the ${machine.label}`}\n\n`
-                + "A launch whose target is `${command:retrocore.activeTarget}` builds and debugs it, when the launch's "
+                + "F5 with no launch.json builds and debugs it, as does a launch whose target is "
+                + "`${command:retrocore.activeTarget}` when the launch's "
                 + "project is this target's retrocore.json or a root file that lists it. "
                 + `Click to pick another of the workspace's targets.\n\n\`${target.file.replaceAll("`", "'")}\``);
             item.show();
@@ -173,6 +174,22 @@ export function registerActiveTarget(context: vscode.ExtensionContext): ActiveTa
         return qualifiedName(picked);
     }));
 
+    // F5 with no launch.json sends an empty configuration: in a workspace with a project, that debugs the active
+    // target. VS Code gives it to the providers of the debugger the editor's language picks, or the one picked when
+    // it asks, without setting its type. Only Retrocore's own provider takes it, so another debugger's F5 is its own.
+    const provider: vscode.DebugConfigurationProvider = {
+        async resolveDebugConfiguration(_folder, configuration) {
+            // A configuration with a type other than Retrocore's, a request or a name is someone's own.
+            const empty = (configuration.type === undefined || configuration.type === "retrocore")
+                && configuration.request === undefined && configuration.name === undefined;
+            if (!empty) return configuration;
+            await reading;
+            const target = active();
+            return target === undefined ? configuration : { ...configuration, ...projectLaunch(target) };
+        }
+    };
+    context.subscriptions.push(vscode.debug.registerDebugConfigurationProvider("retrocore", provider));
+
     // For the tests: what the status bar shows, which they cannot read from VS Code.
     context.subscriptions.push(vscode.commands.registerCommand("retrocore.activeTarget.statusBar", async () => {
         await reading;
@@ -214,7 +231,7 @@ async function pick(targets: readonly ProjectTarget[], chosen: ProjectTarget | u
     }
     const picked = await vscode.window.showQuickPick(items, {
         title: "Retrocore: Pick Target",
-        placeHolder: "Which target do launches of the active target use?",
+        placeHolder: "Which target do F5 and launches of the active target build and debug?",
         matchOnDescription: true
     });
     return picked?.target;

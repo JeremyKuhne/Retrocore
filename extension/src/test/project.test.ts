@@ -8,7 +8,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { after, test } from "node:test";
 import { fingerprint } from "../hardware";
-import { findTarget, loadTargets, parseJsonc, projectTargetKey, qualifiedName, savedLabel, savedName, splitSavedName, withProjectMachine } from "../project";
+import { findTarget, loadTargets, parseJsonc, projectLaunch, projectTargetKey, qualifiedName, savedLabel, savedName, splitSavedName, withProjectMachine } from "../project";
 
 const sample = path.resolve(__dirname, "..", "..", "..", "sample", "project");
 
@@ -84,4 +84,12 @@ test("a launch that is not a project's, or names a target the extension cannot f
     assert.equal(savedLabel(savedName(missing) ?? ""), "Missing · pet");
     const nowhere = { name: "Nowhere", project: path.join(sample, "no-such-folder"), target: "x" };
     assert.equal(withProjectMachine(nowhere), nowhere);
+});
+
+test("a target's launch, as F5 starts it, names its project file and its target as project/target", () => {
+    const [plus] = loadTargets(sample);
+    assert.deepEqual(projectLaunch(plus), {
+        type: "retrocore", request: "launch", name: "hello · apple2-iiplus (Retrocore)",
+        project: path.join(sample, "retrocore.json"), target: "hello/apple2-iiplus"
+    });
 });

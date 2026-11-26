@@ -142,6 +142,14 @@ export function findTarget(targets: readonly ProjectTarget[], name: string): Pro
     return named.length === 1 ? named[0] : undefined;
 }
 
+/** The launch configuration that builds and debugs a target: F5's, in a workspace with no launch.json. */
+export function projectLaunch(target: ProjectTarget): { type: string; request: string; name: string; project: string; target: string } {
+    return {
+        type: "retrocore", request: "launch", name: `${target.project} · ${target.name} (Retrocore)`,
+        project: target.file, target: qualifiedName(target)
+    };
+}
+
 /** The target a project launch configuration names, if the extension can read it; else the host's launch reports why. */
 export function launchTarget(configuration: Record<string, unknown>): ProjectTarget | undefined {
     if (typeof configuration.project !== "string" || typeof configuration.target !== "string") return undefined;

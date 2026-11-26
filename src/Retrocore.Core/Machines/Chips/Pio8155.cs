@@ -17,11 +17,10 @@ namespace Retrocore.Machines.Chips;
 ///  <para>
 ///   The command register: bits 0 and 1 make port A and B outputs, bits 2 and 3 port C's mode (00 all inputs, 11 all
 ///   outputs, 01 and 10 the handshake modes; only inputs are modelled, so port C always reads its pins and ignores
-///   writes, as the Model 100 has it), bits 4 and 5 enable
-///   the ports' handshake interrupts (stored only), and bits 6 and 7 command the timer: 00 nothing, 01 stop at once,
-///   10 stop after the next terminal count, 11 start, loading the count and mode written, or, if it is running,
-///   loading them at its next terminal count. Status: bit 6 is the timer's terminal-count latch, which a status read
-///   clears; the handshake bits read 0.
+///   writes, as the Model 100 has it), bits 4 and 5 enable the ports' handshake interrupts (stored only), and bits 6
+///   and 7 command the timer: 00 nothing, 01 stop at once, 10 stop after the next terminal count, 11 start, loading
+///   the count and mode written, or, if it is running, loading them at its next terminal count. Status: bit 6 is the
+///   timer's terminal-count latch, which a status read clears; the handshake bits read 0.
 ///  </para>
 ///  <para>
 ///   The timer counts the TIMER IN clock, which <see cref="Tick"/> advances, and its mode is the count's top two

@@ -36,6 +36,26 @@ public sealed class Trs80Model100DebugTargetTests
     }
 
     /// <summary>
+    ///  The target takes the Model 100's key codes up to 140, BREAK, and no further.
+    /// </summary>
+    [TestMethod]
+    public void KeysGoUpToBreak()
+    {
+        string folder = Folder();
+        try
+        {
+            Trs80Model100DebugTarget target = Launch(Path.Join(folder, "m100.ram"));
+            target.MaximumKey.Should().Be(140);
+            target.Key(140).Should().BeTrue();
+            target.Key(141).Should().BeFalse();
+        }
+        finally
+        {
+            Directory.Delete(folder, recursive: true);
+        }
+    }
+
+    /// <summary>
     ///  A RAM image that does not exist yet starts the machine cold and is written when the session ends; the next
     ///  session loads it, and the ROM carries on in BASIC where POWER OFF,RESUME left it, with its variables.
     ///  <c>coldStart</c> starts from empty RAM all the same.

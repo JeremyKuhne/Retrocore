@@ -253,7 +253,7 @@ Covington's names kept as historical names. Covington's map is a second set of n
   RAM (8-32 KB), the model (`100`, `102`), an option ROM, the clock's starting time (the host's by default), and a RAM
   image.
 - **The LCD** as the machine's screen, 240x64 at a chosen scale, with the gray-green panel; **the keyboard** mapped
-  from the host's, with F1-F8, PASTE, LABEL, PRINT, GRPH, CODE, NUM and PAUSE/BREAK.
+  from the host's, with F1-F8, PASTE, LABEL, PRINT, GRPH, CODE, NUM, PAUSE and BREAK.
 - **Assembling `source`** and loading `program` binaries, as `.CO` files placed in RAM's directory, so they appear
   on the menu; loading `.BA` and `.DO` files the same way.
 - **The call tracker** for `CALL`, `RST`, TRAP and RST 5.5-7.5; the register view with the 8085's flags and the
@@ -335,7 +335,8 @@ by the user first, and stays out of the repository.
   `RETROCORE_TRS80M100_ROMS` under MAME's or the fixtures' names; `ramKilobytes`, `optionRom` and `time`. The LCD is
   the display and the ROM's screen copy its text; the call stack follows the 8085's TRAP and RST 5.5-7.5, which push
   the program counter with no opcode fetch; programs load at `$E000` after 3 seconds of boot. Keys are ASCII with the
-  ROM's arrow codes (28-31) and 128-139 for F1-F8, LABEL, PRINT, PASTE and PAUSE/BREAK. Reset is the power switch.
+  ROM's arrow codes (28-31) and 128-140 for F1-F8, LABEL, PRINT, PASTE, PAUSE and BREAK (PAUSE/BREAK with
+  SHIFT). Reset does what the power switch and the RESET button do.
 - **The RAM image.** `ramImage` keeps the RAM between sessions, as the battery does: loaded before the power comes
   on, so the ROM resumes, and saved as the session ends or another launch replaces the machine, through a file beside
   it so a failed save leaves the old image and can be retried, as `IRecordingTarget` has it. `coldStart` starts

@@ -30,7 +30,7 @@ run as well.
 | RAM | `$8000`-`$FFFF` | 8, 16, 24 or 32 KB (`ramKilobytes`, 32 by default), filled down from `$FFFF`. Addresses below it read `$FF` and lose writes. |
 | 81C55 | Ports `$B0`-`$BF` | [`Pio8155`](../src/Retrocore.Core/Machines/Chips/Pio8155.cs): ports A and B strobe the keyboard and select the LCD drivers; port A also drives the clock; port B turns the power off; port C reads the clock. Its timer runs but drives nothing yet. |
 | LCD | Ports `$F0`-`$FF` | Ten HD44102 drivers ([`Lcd44102`](../src/Retrocore.Core/Machines/Chips/Lcd44102.cs)); even ports take instructions and give status, odd ports display data. |
-| Keyboard | Port `$E0` | The 9x8 matrix ([`Trs80Model100Keyboard`](../src/Retrocore.Machines.Trs80Model100/Trs80Model100Keyboard.cs)). |
+| Keyboard | Ports `$E0`-`$EF` (the ROM reads `$E8`) | The 9x8 matrix ([`Trs80Model100Keyboard`](../src/Retrocore.Machines.Trs80Model100/Trs80Model100Keyboard.cs)). |
 | Clock | Port A, port C, `$E0` bit 2 | The uPD1990AC ([`Rtc1990`](../src/Retrocore.Core/Machines/Chips/Rtc1990.cs)); its TP output drives RST 7.5 at 256 Hz. |
 | Option ROM | `$0000`-`$7FFF` | Up to 32 KB (`optionRom`); an empty socket reads `$FF`. |
 
@@ -48,7 +48,7 @@ byte sets the page (bits 6-7) and column (bits 0-5), turns the display on or off
 the start page; each data byte moves on a column. The first read after setting an address is a dummy, as on the
 chip. The ROM keeps a copy of the screen's 40x8 characters at `$FE00`-`$FF3F`, which the debugger shows as the text.
 
-**The keyboard.** A key pulls its row low in port `$E0`'s read while its column is strobed low; column 8, from port B
+**The keyboard.** A key pulls its row low in a read of port `$E0`-`$EF` (the ROM reads `$E8`) while its column is strobed low; column 8, from port B
 bit 0, holds SHIFT, CTRL, GRPH, CODE, NUM, CAPS LOCK and PAUSE/BREAK. Typed keys are held for 50 ms and released for
 50 ms, since the ROM takes a key once it has seen it on two scans in a row. For its first second or so after a cold
 start the ROM ignores the keyboard, though its menu shows sooner.
@@ -61,8 +61,8 @@ from a RAM image shows.
 
 **Power.** Software turns the power off with port B bit 4 (BASIC's `POWER OFF`, or the automatic power-off): the CPU
 stops, the panel goes blank, and RAM and the clock go on. The debugger's Reset does what the power switch and the
-RESET button both do: the CPU starts at `$0000` with the devices reset, the ROM finds RAM valid, and it comes back to the menu, or to where it was after
-`POWER OFF,RESUME`.
+RESET button both do: the CPU starts at `$0000` with the devices reset, the ROM finds RAM valid, and it comes back
+to the menu, or to where it was after `POWER OFF,RESUME`.
 
 ## Debugging
 
@@ -112,8 +112,7 @@ text. The Machine view lists the ROM, the option ROM, the RAM and its image, the
 - `Trs80Model100MachineTests`: small 8085 programs in place of the ROM drive the clock's RST 7.5 at 256 Hz, the
   keyboard matrix, the option ROM's switch, the LCD's ports, the RAM sizes and the power-off bit. They need no ROM.
 - `Trs80Model100RomTests`: both ROMs boot to the menu with the bytes free MAME 0.264 shows at each RAM size (MAME's
-  Tandy 102 offers only 24 and 32 KB), BASIC
-  runs what is typed, sets the clock and keeps its variables through `POWER OFF,RESUME`, and the menu's LCD dots
+  Tandy 102 offers only 24 and 32 KB, so its 8 and 16 are the Model 100's figures), BASIC runs what is typed, sets the clock and keeps its variables through `POWER OFF,RESUME`, and the menu's LCD dots
   match MAME's screen. They read `m100.bin` and `t102.bin` from `RETROCORE_TRS80M100_ROMS` or the external test
   data's `trs80m100-roms` folder, and are inconclusive without them.
 - `Trs80Model100DebugTargetTests`: the launch's messages for a missing ROM, and the RAM image across sessions, cold

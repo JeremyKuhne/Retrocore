@@ -64,8 +64,8 @@ public sealed class Trs80Model100MachineTests
     }
 
     /// <summary>
-    ///  A key pulls its row low in port $E8's read (the ROM's port of $E0-$EF) while its column is strobed low, column 8 from port B bit 0. Port B
-    ///  keeps bit 4 low, which would turn the power off.
+    ///  A key pulls its row low in port $E8's read (the ROM's port of $E0-$EF) while its column is strobed low,
+    ///  column 8 from port B bit 0. Port B keeps bit 4 low, which would turn the power off.
     /// </summary>
     [TestMethod]
     public void KeyboardReadsTheStrobedColumns()

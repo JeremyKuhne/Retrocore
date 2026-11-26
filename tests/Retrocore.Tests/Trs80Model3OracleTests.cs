@@ -23,9 +23,9 @@ namespace Retrocore.Tests;
 ///   <see cref="ExternalTestData.Root"/>; or a Linux package's) runs <c>tools/Trs80Model3Oracle.lua</c> with MAME's
 ///   ROM sets (<c>trs80m3</c>, <c>trs80m4</c> and <c>trs80m2</c>, as zip or 7z) in <c>trs80-roms/mame</c>. The
 ///   machines here run the SDK's builds of the same ROMs, which are byte-identical to MAME's dumps of them; without
-///   its set, the Model 4's tests give MAME its <c>trs80m4</c> set built from those sources. The DOS tests use the
-///   images in <c>trs80-disks</c>. The others are inconclusive without their sets, and the DOS tests without the
-///   images.
+///   its set, the Model 4's tests give MAME its <c>trs80m4</c> set built from those sources. The DOS tests use
+///   the images in <c>trs80-disks</c>. The others are inconclusive without their sets, the DOS tests without the
+///   images too.
 ///  </para>
 /// </remarks>
 [TestClass]

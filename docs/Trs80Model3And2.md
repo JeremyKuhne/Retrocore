@@ -11,8 +11,8 @@ The SDK has native sources for every ROM these machines run with a known good du
 (see [ROMs](#roms)), so they run with nothing external, or from dumps. The real ROMs boot to their prompts, and the
 Model III, 4 and 4P boot their DOSes from disk images (see [DOSes](#doses)); the Model II has not run one yet. See
 [What is not done yet](#what-is-not-done-yet). The Model II's keyboard has its own processor and ROM (MAME's
-`65-1991.z4`), which is not run here: the keyboard sends its codes directly
-([the Model II](#the-model-ii-12-and-16)).
+`65-1991.z4`), which are not run here: the emulated keyboard queues its codes directly, as its documentation
+describes them rather than as its ROM sends them ([the Model II](#the-model-ii-12-and-16)).
 
 ## The Model III, 4 and 4P
 

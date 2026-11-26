@@ -39,8 +39,8 @@ public sealed class Trs80Model100RomTests
     };
 
     /// <summary>
-    ///  Both ROMs cold-start to the menu, with the bytes free MAME shows for each RAM size on the Model 100 (and, on the
-    ///  102, at the 24 and 32 KB MAME offers; at 8 and 16 KB, the Model 100's figures).
+    ///  Both ROMs cold-start to the menu, with the bytes free MAME shows for each RAM size on the Model 100 (and, on
+    ///  the 102, at the 24 and 32 KB MAME offers; at 8 and 16 KB, the Model 100's figures).
     /// </summary>
     [TestMethod]
     public void BootsToTheMenu()

@@ -28,9 +28,9 @@ internal sealed partial class Trs80Model100DebugTarget
     ///   The ROM is the user's: <c>rom</c> names its file (a path, or a name in the ROM folder), or it is found in
     ///   <c>romDirectory</c> (or <c>RETROCORE_TRS80M100_ROMS</c>) or that folder's <c>trs80m100</c>, <c>tandy102</c>
     ///   or <c>trs80m100-roms</c> folder, by MAME's name (<c>m100rom.m12</c>, <c>m102rom.m12</c>) or the fixtures'
-    ///   (<c>m100.bin</c>, <c>t102.bin</c>). <c>model</c> is <c>100</c> (the default) or <c>102</c>, which picks the
-    ///   ROM to look for; with no <c>model</c>, a ROM named by <c>rom</c> tells its model by its digest. <c>ramKilobytes</c> is 8, 16, 24 or
-    ///   32 (the default), <c>optionRom</c> names an option ROM's file, and <c>time</c> sets the clock (an ISO 8601
+    ///   (<c>m100.bin</c>, <c>t102.bin</c>). <c>model</c> is <c>100</c> or <c>102</c>, which picks the ROM to look
+    ///   for (the Model 100's when it is not given); with no <c>model</c>, a ROM named by <c>rom</c> tells its model by
+    ///   its digest. <c>ramKilobytes</c> is 8, 16, 24 or 32 (the default), <c>optionRom</c> names an option ROM's file, and <c>time</c> sets the clock (an ISO 8601
     ///   date and time; the host's local time by default).
     ///  </para>
     ///  <para>

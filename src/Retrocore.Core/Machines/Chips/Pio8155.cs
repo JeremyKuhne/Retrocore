@@ -27,7 +27,8 @@ namespace Retrocore.Machines.Chips;
 ///   bits: 00 one square wave, 01 a continuous square wave, 10 one pulse at terminal count, 11 a pulse each terminal
 ///   count. A square wave of count n is high for the first n/2 counts, rounded up, and low for the rest; a pulse mode
 ///   holds TIMER OUT high but for the one count at terminal count. Counts below 2 are taken as 2. TIMER OUT is high
-///   while the timer is stopped, but for a single pulse's last count. This is the timer as Intel's <i>MCS-80/85 Family User's Manual</i> describes it, but
+///   while the timer is stopped, except that a pulse mode leaves it low for the count at terminal count. A start
+///   pending at terminal count wins over a stop after it. This is the timer as Intel's <i>MCS-80/85 Family User's Manual</i> describes it, but
 ///   for one thing: the chip counts down by twos, twice a cycle, so its count registers read an encoded value while
 ///   it runs; here they read the counts left.
 ///  </para>
@@ -227,7 +228,8 @@ public sealed class Pio8155
             _pulse = true;
         }
 
-        // A start while running takes effect at terminal count, whatever the mode, and over a stop after it.
+        // A start while running takes effect at terminal count, whatever the mode, and over a stop after terminal
+        // count, whichever came first; Intel's data sheet does not say which wins.
         if (_reload)
         {
             Load();
@@ -241,8 +243,9 @@ public sealed class Pio8155
             return;
         }
 
+        // A new count starts high, but for a terminal-count pulse, which lasts its one count.
         _remaining = _runCount;
-        if (_runMode is 0 or 1) { SetOutput(level: true); }
+        if (!_pulse) { SetOutput(level: true); }
     }
 
     // Running, the counts left; stopped, the count as written.

@@ -76,6 +76,25 @@ public sealed class Model100ChipTests
         pio.Peek(5).Should().Be(0x40);
         for (int count = 0; count < 12; count++) { pio.Tick(); }
         pio.TimerRunning.Should().BeTrue("the new mode is continuous");
+
+        // A square wave that is low at terminal count reloads into a pulse mode high, and a pending stop after
+        // terminal count gives way to the start.
+        Pio8155 pulse = new();
+        pulse.Write(4, 4);
+        pulse.Write(5, 0x00);
+        pulse.Write(0, 0xC0);
+        pulse.Tick();
+        pulse.Tick();
+        pulse.TimerOutput.Should().BeFalse();
+        pulse.Write(0, 0x80);
+        pulse.Write(4, 5);
+        pulse.Write(5, 0xC0);
+        pulse.Write(0, 0xC0);
+        pulse.Tick();
+        pulse.Tick();
+        pulse.TimerRunning.Should().BeTrue();
+        pulse.TimerOutput.Should().BeTrue("a pulse mode holds TIMER OUT high until terminal count");
+        pulse.Peek(5).Should().Be(0xC0);
     }
 
     /// <summary>

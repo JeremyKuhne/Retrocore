@@ -108,7 +108,10 @@ public sealed class Trs80Model100DebugTargetTests
         {
             string image = Path.Join(folder, "m100.ram");
             File.WriteAllBytes(image, new byte[32 * 1024]);
-            Action launch = () => Launch(image, new JsonObject { ["ramKilobytes"] = 8 });
+
+            // The ROM is read first, so a missing one leaves the test inconclusive rather than failing the throw check.
+            byte[] rom = Trs80Model100RomTests.Rom("m100.bin");
+            Action launch = () => Launch(image, new JsonObject { ["ramKilobytes"] = 8 }, rom);
             launch.Should().Throw<ArgumentException>().WithMessage("*has 32768 bytes; a 8 KB machine's has 8192*");
         }
         finally
@@ -160,9 +163,9 @@ public sealed class Trs80Model100DebugTargetTests
         return folder;
     }
 
-    private static Trs80Model100DebugTarget Launch(string image, JsonObject? more = null)
+    private static Trs80Model100DebugTarget Launch(string image, JsonObject? more = null, byte[]? rom = null)
     {
-        byte[] rom = Trs80Model100RomTests.Rom("m100.bin");
+        rom ??= Trs80Model100RomTests.Rom("m100.bin");
         string romFile = Path.Join(Path.GetTempPath(), $"retrocore-m100-{Guid.NewGuid():N}.bin");
         File.WriteAllBytes(romFile, rom);
         try

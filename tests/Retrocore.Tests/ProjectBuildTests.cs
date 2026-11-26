@@ -250,7 +250,7 @@ public sealed class ProjectBuildTests
         code.Should().Be(0, error);
         output.Should().Be($"game/pet: {Path.Join(_folder, "game", "artifacts", "pet", "game.bin")} ($0800-$0800, 1 byte, entry $0800)\n");
 
-        Run("--project", _folder, "--target", "pet").Error.Should().Contain("The projects game and tool each have a target 'pet'; give --project.");
+        Run("--project", _folder, "--target", "pet").Error.Should().Contain("The projects game and tool each have a target 'pet'; give project/target or --project.");
         Run("--project", _folder).Error.Should().Contain("Give --target name or --all; the targets are game/apple2, game/pet, tool/pet.");
         Run("--project", _folder, "--target", "atari").Code.Should().Be(1);
         Run("--target", "x", "--all").Code.Should().Be(2);

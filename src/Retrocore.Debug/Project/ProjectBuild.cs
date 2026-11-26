@@ -141,7 +141,7 @@ internal static class ProjectBuild
         using StringWriter map = new(CultureInfo.InvariantCulture);
         map.WriteFormatted($"; {target.Project.Name}, target {target.Name}: ");
         map.WriteFormatted($"{target.Machine.Id}, {target.Environment}, {target.Cpu}\n");
-        map.WriteFormatted($"load ${start:X4}-${start + bytes.Length - 1:X4} ({bytes.Length} bytes)\n");
+        map.WriteFormatted($"load ${start:X4}-${start + bytes.Length - 1:X4} ({bytes.Length} {(bytes.Length == 1 ? "byte" : "bytes")})\n");
         map.WriteFormatted($"entry ${build.Entry:X4}\n\nsections\n");
         foreach ((string name, int origin, int length) in Sections(build.Result))
         {

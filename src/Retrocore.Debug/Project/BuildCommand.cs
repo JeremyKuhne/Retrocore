@@ -14,12 +14,13 @@ namespace Retrocore.Debug.Project;
 ///   one in the current folder or above it. A root file builds its projects' targets, and <c>--target</c> takes a
 ///   target's name or <c>project/target</c>. Without <c>--target</c> or <c>--all</c>, the only target there is
 ///   builds. Each target's line, or its errors, is printed as it builds; with <c>--all</c> the rest still build
-///   after one fails. <c>--sdk-roms</c>, which every command takes, builds against other SDK sources.
+///   after one fails. The build includes the SDK beside the host; <c>--sdk-roms</c>, which the host reads for every
+///   command, is accepted but changes only where machines load their ROMs.
 ///  </para>
 /// </remarks>
 internal static class BuildCommand
 {
-    private const string Usage = "Usage: retrocore build [--target name|--all] [--project path] [--sdk-roms folder]";
+    private const string Usage = "Usage: retrocore build [--target name|--all] [--project path]";
 
     /// <summary>
     ///  Runs the command.
@@ -80,7 +81,7 @@ internal static class BuildCommand
         catch (Exception exception)
             when (exception is ProjectException or ArgumentException or IOException or UnauthorizedAccessException or NotSupportedException)
         {
-            // A path the system cannot take, such as one with '|' on Windows, is an ArgumentException.
+            // A path the system cannot take, such as an empty one, is an ArgumentException.
             error.WriteLine(exception.Message);
             return 1;
         }
@@ -148,7 +149,7 @@ internal static class BuildCommand
             1 => named,
             0 => throw new ProjectException($"There is no target '{name}'; the targets are {names}."),
             _ => throw new ProjectException(
-                $"The projects {string.Join(" and ", named.Select(target => target.Project.Name))} each have a target '{name}'; give --project.")
+                $"The projects {string.Join(" and ", named.Select(target => target.Project.Name))} each have a target '{name}'; give project/target or --project.")
         };
     }
 

@@ -20,7 +20,8 @@ namespace Retrocore.Debug.Project;
 ///   files and its inputs' contents) and of what it wrote. The tool's files are the tool and, for a file-based app,
 ///   the files its <c>#:include</c> directives name and the folders of the projects its <c>#:project</c> directives
 ///   name; for a project, every file in its folder outside <c>bin/</c> and <c>obj/</c> and outside the project's own
-///   output and intermediate folders. Deleting <c>obj/</c> runs every step again.
+///   output and intermediate folders, every step's outputs and folders whose names start with <c>.</c>. Deleting
+///   <c>obj/</c> runs every step again.
 ///  </para>
 /// </remarks>
 internal static class ProjectSteps
@@ -275,8 +276,9 @@ internal static class ProjectSteps
         }
     }
 
-    // A tool project's files: everything in its folder outside its build output, and outside the retrocore project's
-    // output and intermediate folders, which the builds rewrite, should the tool sit beside retrocore.json.
+    // A tool project's files: everything in its folder but what builds write there (its bin/ and obj/, the retrocore
+    // project's output and intermediate folders, and every step's outputs, should the tool sit beside retrocore.json)
+    // and folders whose names start with '.', such as .git/ and .vs/, which change as the repository is used.
     private static IEnumerable<string> ProjectFolderFiles(RetrocoreProject project, string folder)
     {
         if (!Directory.Exists(folder)) { return []; }
@@ -286,8 +288,11 @@ internal static class ProjectSteps
                 .Select(path => Path.TrimEndingDirectorySeparator(Path.GetFullPath(path)) + Path.DirectorySeparatorChar)
         ];
 
+        HashSet<string> outputs = [with(ProjectGlob.FileNames), .. project.Steps.SelectMany(step => step.Outputs)];
         return Directory.EnumerateFiles(folder, "*", SearchOption.AllDirectories)
-            .Where(file => !skipped.Any(prefix => file.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)));
+            .Where(file => !skipped.Any(prefix => file.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+                && !outputs.Contains(file)
+                && !Path.GetRelativePath(folder, file).Split(['/', '\\']).Any(part => part.StartsWith('.')));
     }
 
     // A directive's path with '/' between folders, as dotnet takes it on every system.

@@ -13,9 +13,9 @@ namespace Retrocore.Debug.Project;
 ///   The tool is a C# file-based app (a <c>.cs</c> file, run as <c>dotnet run &lt;file&gt; -- &lt;args&gt;</c>) or a
 ///   project (a <c>.csproj</c>, run as <c>dotnet run --project &lt;file&gt; -- &lt;args&gt;</c>), started in the
 ///   project's folder. Paths are relative to the project's folder, and <c>${obj}</c> in an input, an output or an
-///   argument is the project's intermediate folder, <c>obj/</c>; the tool's own path takes no variables. An argument that is exactly <c>${in}</c> or <c>${out}</c> stands for
-///   every input or every output, one argument each; with no <c>args</c> the tool is given the inputs, then the
-///   outputs.
+///   argument is the project's intermediate folder, <c>obj/</c>; the tool's own path takes no variables. An argument
+///   that is exactly <c>${in}</c> or <c>${out}</c> stands for every input or every output, one argument each; with no
+///   <c>args</c> the tool is given the inputs, then the outputs.
 ///  </para>
 /// </remarks>
 /// <param name="Tool">The tool's full path.</param>

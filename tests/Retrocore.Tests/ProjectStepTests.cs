@@ -118,6 +118,26 @@ public sealed class ProjectStepTests
     }
 
     /// <summary>
+    ///  A project tool's files are its folder's, but not its build output, the retrocore project's output and
+    ///  intermediate folders, any step's outputs, or folders such as .git/.
+    /// </summary>
+    [TestMethod]
+    public void ProjectToolsAreTheirFoldersSourceFiles()
+    {
+        Project("""[{ "tool": "pack.csproj", "in": "game.dat", "out": "game.bin" }]""");
+        foreach (string file in (string[])["pack.csproj", "Pack.cs", "game.dat", "lib/Part.cs", "game.bin", "bin/pack.dll", "obj/x.json",
+            "artifacts/t/one.bin", ".git/index", "src/.vs/state"])
+        {
+            Write(file, "x");
+        }
+
+        RetrocoreProject project = RetrocoreProject.Load(_folder);
+        ProjectSteps.ToolFiles(project, project.Steps[0]).Should().Equal(
+            Path.Join(_folder, "pack.csproj"), Path.Join(_folder, "Pack.cs"), Path.Join(_folder, "game.dat"),
+            Path.Join(_folder, "lib", "Part.cs"), Path.Join(_folder, "retrocore.json"));
+    }
+
+    /// <summary>
     ///  A step that fails, or does not write its output, fails the build with what it printed; one whose tool or
     ///  input is missing fails before it runs.
     /// </summary>

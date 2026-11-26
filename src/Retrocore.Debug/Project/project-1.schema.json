@@ -25,11 +25,11 @@
           "description": "The tool's arguments. ${obj} is the intermediate folder; an argument that is exactly ${in} or ${out} stands for every input or output. Without args the tool gets the inputs, then the outputs."
         },
         "in": {
-          "$ref": "#/definitions/stepPaths",
+          "allOf": [{ "$ref": "#/definitions/stepPaths" }],
           "description": "The files the tool reads; a change to one runs the step again."
         },
         "out": {
-          "$ref": "#/definitions/stepPaths",
+          "allOf": [{ "$ref": "#/definitions/stepPaths" }],
           "description": "The files the tool writes, such as ${obj}/game.bin for an .incbin."
         }
       }

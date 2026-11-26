@@ -1,0 +1,596 @@
+* Welcome to Adventure number 2:
+"pirate adventure"
+  by Alexis & Scott Adams, dedicated:
+Ted Heeren & Paul Sharland
+Remember you can always ask for "help".
+
+I'm in a Flat in london
+Obvious exits: none.
+I can also see: Flight of stairs, Sign
+says: "Bring *TREASURES* here, say:
+SCORE", Bottle of rum, Rug, Safety
+sneakers, Sack of crackers.
+> GET RUM
+OK
+> GET SNEAKERS
+OK
+> GET CRACKERS
+OK
+> CLIMB STAIRS
+I'm in a alcove
+Obvious exits: Down.
+I can also see: Open window, Books in a
+bookcase.
+> GET BOOK
+There's a strange sound
+> GO PASSAGE
+I'm in a secret passageway
+Obvious exits: East, West.
+> E
+I'm in a musty attic
+Obvious exits: West.
+I can also see: Pirate's duffel bag,
+Unlit torch, Rum bottle smashed into
+pieces.
+Sign "Opposite of LIGHT is Unlight".
+> OPEN BAG
+Something falls out
+> GET MATCHES
+OK
+> GET TORCH
+OK
+> W
+I'm in a secret passageway
+Obvious exits: East, West.
+> W
+I'm in a alcove
+Obvious exits: Down.
+I can also see: Open window, Bookcase
+with secret passage beyond.
+> SAY YOHO
+Everything spins around and suddenly
+I'm elsewhere...
+I'M outside an open window
+on the ledge of a very tall building
+Obvious exits: none.
+> SAY YOHO
+Everything spins around and suddenly
+I'm elsewhere...
+I'm in a sandy beach on a tropical isle
+Obvious exits: East.
+I can also see: Small ship's keel and
+mast, Sand, Lagoon, Sign in the sand
+says:
+"Welcome to Pirates Island, watch out
+for the tide!".
+> E
+I'm in a meadow
+Obvious exits: East, West.
+I can also see: Mongoose, Grass shack.
+> GO SHACK
+I'm in a grass shack
+Obvious exits: West.
+I can also see: Wicked looking pirate,
+Treasure chest, Parrot.
+> DROP RUM
+OK
+> DROP CRACKERS
+OK
+Pirate grabs rum and scuttles off
+chortling
+> W
+I'm in a meadow
+Obvious exits: East, West.
+I can also see: Mongoose, Grass shack.
+> E
+I'm at the foot of a cave ridden hill,
+a pathway
+leads on up to the top
+Obvious exits: West.
+> GO PATH
+I'm on top of a hill. Below is Pirates
+Island. Across the sea
+way off in the distance I see Treasure
+Island
+Obvious exits: Down.
+I can also see: Rock wall with narrow
+crack in it.
+> DROP BOOK
+OK
+> LIGHT TORCH
+Torch is lit
+I'm on top of a hill. Below is Pirates
+Island. Across the sea
+way off in the distance I see Treasure
+Island
+Obvious exits: Down.
+I can also see: Large blood soaked
+book, Rock wall with narrow crack in
+it.
+> DROP MATCHES
+OK
+> GO CRACK
+It was a tight squeeze!
+I'm in a large cavern
+Obvious exits: West.
+I can also see: Pile of sails, Pile of
+precut lumber, Tool shed, Narrow crack
+in the rock.
+> GO SHED
+I'm in a tool shed
+Obvious exits: North.
+I can also see: Claw hammer, Shovel,
+Water wings.
+> GET HAMMER
+OK
+> GET WINGS
+OK
+> N
+I'm in a large cavern
+Obvious exits: West.
+I can also see: Pile of sails, Pile of
+precut lumber, Tool shed, Narrow crack
+in the rock.
+> GO CRACK
+I'm on top of a hill. Below is Pirates
+Island. Across the sea
+way off in the distance I see Treasure
+Island
+Obvious exits: Down.
+I can also see: Large blood soaked
+book, Matches, Rock wall with narrow
+crack in it.
+> GET BOOK
+OK
+> D
+I'm at the foot of a cave ridden hill,
+a pathway
+leads on up to the top
+Obvious exits: West.
+> W
+I'm in a meadow
+Obvious exits: East, West.
+I can also see: Mongoose, Grass shack.
+> W
+I'm in a sandy beach on a tropical isle
+Obvious exits: East.
+I can also see: Small ship's keel and
+mast, Sand, Lagoon, Sign in the sand
+says:
+"Welcome to Pirates Island, watch out
+for the tide!".
+> DROP TORCH
+OK
+> DROP WINGS
+OK
+> SAY YOHO
+Everything spins around and suddenly
+I'm elsewhere...
+I'M outside an open window
+on the ledge of a very tall building
+Obvious exits: none.
+> GO WINDOW
+I'm in a alcove
+Obvious exits: Down.
+I can also see: Open window, Bookcase
+with secret passage beyond.
+> D
+I'm in a Flat in london
+Obvious exits: none.
+I can also see: Flight of stairs, Sign
+says: "Bring *TREASURES* here, say:
+SCORE", Rug.
+> GET NAILS
+OK
+> GET RUG
+OK
+There's a strange sound
+> GET KEYS
+OK
+> DROP RUG
+OK
+> CLIMB STAIRS
+I'm in a alcove
+Obvious exits: Down.
+I can also see: Open window, Bookcase
+with secret passage beyond.
+> GO PASSAGE
+I'm in a secret passageway
+Obvious exits: East, West.
+> E
+I'm in a musty attic
+Obvious exits: West.
+I can also see: Pirate's duffel bag,
+Empty bottle, Sleeping pirate, Rum
+bottle smashed into pieces.
+Sign "Opposite of LIGHT is Unlight".
+> GET BOTTLE
+OK
+> WAKE PIRATE
+Pirate awakens and says "Aye matey we
+be casting off soon"
+He then VANISHES!
+> W
+I'm in a secret passageway
+Obvious exits: East, West.
+> W
+I'm in a alcove
+Obvious exits: Down.
+I can also see: Open window, Bookcase
+with secret passage beyond.
+> SAY YOHO
+Everything spins around and suddenly
+I'm elsewhere...
+I'M outside an open window
+on the ledge of a very tall building
+Obvious exits: none.
+> SAY YOHO
+Everything spins around and suddenly
+I'm elsewhere...
+I'm in a sandy beach on a tropical isle
+Obvious exits: East.
+I can also see: Lit torch, Small ship's
+keel and mast, Sand, Lagoon, Water
+wings, Sign in the sand says:
+"Welcome to Pirates Island, watch out
+for the tide!".
+> DROP BOOK
+OK
+> DROP SNEAKERS
+OK
+> DROP HAMMER
+OK
+> DROP NAILS
+OK
+> GET WINGS
+OK
+> GO LAGOON
+I'm in a shallow lagoon.
+to the north is the ocean
+Obvious exits: North, South, East,
+West.
+I can also see: Rusty anchor, The tide
+is out.
+> N
+I'm in the ocean
+Obvious exits: North, South, East,
+West.
+I can also see: Fish, Salt water.
+> GET WATER
+OK
+> GET FISH
+OK
+> S
+I'm in a shallow lagoon.
+to the north is the ocean
+Obvious exits: North, South, East,
+West.
+I can also see: Rusty anchor, The tide
+is out.
+> S
+I'm in a sandy beach on a tropical isle
+Obvious exits: East.
+I can also see: Large blood soaked
+book, Lit torch, Small ship's keel and
+mast, Claw hammer, Nails, Safety
+sneakers, Sand, Lagoon, Sign in the
+sand says:
+"Welcome to Pirates Island, watch out
+for the tide!".
+> GET TORCH
+OK
+> E
+I'm in a meadow
+Obvious exits: East, West.
+I can also see: Mongoose, Grass shack.
+> E
+I'm at the foot of a cave ridden hill,
+a pathway
+leads on up to the top
+Obvious exits: West.
+> GO CAVE
+I'm in a maze of caves
+Obvious exits: South, East, West, Down.
+> D
+I'm in a pit
+Obvious exits: Up.
+I can also see: Mean and hungry looking
+crocodiles, Locked door.
+> DROP FISH
+OK
+Crocs eat fish and leave
+> UNLOCK DOOR
+OK
+> DROP BOTTLE
+OK
+> GO HALL
+I'm in a long hallway
+Obvious exits: East.
+I can also see: Open door with pit
+beyond.
+> E
+I'm in a large cavern
+Obvious exits: West.
+I can also see: Pile of sails, Pile of
+precut lumber, Tool shed, Narrow crack
+in the rock.
+> GO SHED
+I'm in a tool shed
+Obvious exits: North.
+I can also see: Shovel.
+> GET SHOVEL
+OK
+> N
+I'm in a large cavern
+Obvious exits: West.
+I can also see: Pile of sails, Pile of
+precut lumber, Tool shed, Narrow crack
+in the rock.
+> GET LUMBER
+OK
+> GET SAILS
+OK
+> W
+I'm in a long hallway
+Obvious exits: East.
+I can also see: Open door with pit
+beyond.
+> GO PIT
+I'm in a pit
+Obvious exits: Up.
+I can also see: Open door with hall
+beyond, Bottle of salt water.
+> U
+I'm in a maze of caves
+Obvious exits: South, East, West, Down.
+> W
+I'm at the foot of a cave ridden hill,
+a pathway
+leads on up to the top
+Obvious exits: West.
+> W
+I'm in a meadow
+Obvious exits: East, West.
+I can also see: Mongoose, Grass shack.
+> GO SHACK
+I'm in a grass shack
+Obvious exits: West.
+I can also see: Treasure chest, Parrot,
+Sack of crackers.
+> UNLOCK CHEST
+Its open
+> LOOK CHEST
+There are a set of plans in it
+Parrot ate a cracker.
+> DROP KEYS
+OK
+Parrot ate a cracker.
+> DROP TORCH
+OK
+> GET PLANS
+OK
+The Parrot crys:
+"Tides be a changing matey"
+> W
+I'm in a meadow
+Obvious exits: East, West.
+I can also see: Mongoose, Grass shack.
+> W
+I'm in a sandy beach on a tropical isle
+Obvious exits: East.
+I can also see: Large blood soaked
+book, Small ship's keel and mast, Claw
+hammer, Nails, Safety sneakers, Sand,
+Lagoon, Sign in the sand says:
+"Welcome to Pirates Island, watch out
+for the tide!".
+> WAIT
+OK
+> GO LAGOON
+I'm in a shallow lagoon.
+to the north is the ocean
+Obvious exits: North, South, East,
+West.
+I can also see: Rusty anchor, The tide
+is out.
+> DIG
+OK
+> GET ANCHOR
+OK
+> S
+I'm in a sandy beach on a tropical isle
+Obvious exits: East.
+I can also see: Large blood soaked
+book, Small ship's keel and mast, Claw
+hammer, Nails, Safety sneakers, Sand,
+Lagoon, Sign in the sand says:
+"Welcome to Pirates Island, watch out
+for the tide!".
+> BUILD BOAT
+CONGRATULATIONS !!!
+ But your Adventure is not over yet...
+
+> DROP WINGS
+OK
+> DROP PLANS
+OK
+> GET HAMMER
+OK
+> E
+I'm in a meadow
+Obvious exits: East, West.
+I can also see: Mongoose, Grass shack.
+> GO SHACK
+I'm in a grass shack
+Obvious exits: West.
+I can also see: Lit torch, Parrot, Ring
+of keys, Open treasure chest, Sack of
+crackers.
+> LOOK CHEST
+There's a map in it
+> GET MAP
+OK
+> GET PARROT
+The Parrot crys:
+"Pieces of eight"
+> GET CRACKERS
+OK
+The Parrot crys:
+"Pieces of eight"
+> W
+The Parrot crys:
+"Tides be a changing matey"
+Parrot ate a cracker.
+I'm in a meadow
+Obvious exits: East, West.
+I can also see: Mongoose, Grass shack.
+> W
+Parrot ate a cracker.
+The Parrot crys:
+"Check the book, matey!"
+I'm in a sandy beach on a tropical isle
+Obvious exits: East.
+I can also see: Large blood soaked
+book, Set of plans, Pirate ship, Safety
+sneakers, Sand, Lagoon, Water wings,
+Sign in the sand says:
+"Welcome to Pirates Island, watch out
+for the tide!".
+> GO BOAT
+I'm aboard Pirate ship anchored off
+shore
+Obvious exits: none.
+I can also see: Wicked looking pirate.
+The Parrot crys:
+"Tides be a changing matey"
+> WAIT
+"Tides be a changing matey"
+> SET SAIL
+After a day at sea we set anchor off of
+a sandy beach.
+ All Ashore who's going Ashore...
+> GO SHORE
+Pirate follows me ashore as if
+expecting something
+I'm on the beach at *Treasure* Island
+Obvious exits: South.
+I can also see: Wicked looking pirate,
+Pirate ship.
+> DIG
+I found something!
+I'm on the beach at *Treasure* Island
+Obvious exits: South.
+I can also see: Wicked looking pirate,
+Pirate ship, Bottles of rum.
+Pirate grabs rum and scuttles off
+chortling
+Parrot ate a cracker.
+> S
+I'm in a spooky old graveyard filled
+with piles
+of empty and broken rum bottles
+Obvious exits: North, East.
+I can also see: Sleeping pirate.
+> WAKE PIRATE
+Pirate awakens and says "Aye matey we
+be casting off soon"
+He then VANISHES!
+> E
+I'm in a large barren field
+Obvious exits: West.
+I can also see: Monastary.
+> GO 30
+OK I walked off 30 paces.
+Parrot ate a cracker.
+> DIG
+I found something!
+I'm in a large barren field
+Obvious exits: West.
+I can also see: Monastary, Wooden box.
+> OPEN BOX
+Something falls out
+The Parrot crys:
+"Pieces of eight"
+> GET STAMPS
+OK
+> DROP SHOVEL
+OK
+Parrot ate a cracker.
+> DROP HAMMER
+OK
+> GO MONASTARY
+I'm in a sacked and deserted monastary
+Obvious exits: West.
+I can also see: *DUBLEONS*, Deadly
+mamba snakes.
+> DROP PARROT
+OK
+The Parrot crys:
+"Pieces of eight"
+Parrot attacks snakes and drives them
+off
+> GET DUBLEONS
+OK
+> W
+I'm in a large barren field
+Obvious exits: West.
+I can also see: Claw hammer, Shovel,
+Monastary, Wooden box.
+> W
+I'm in a spooky old graveyard filled
+with piles
+of empty and broken rum bottles
+Obvious exits: North, East.
+> N
+I'm on the beach at *Treasure* Island
+Obvious exits: South.
+I can also see: Pirate ship, Bottles of
+rum.
+> GO BOAT
+I'm aboard Pirate ship anchored off
+shore
+Obvious exits: none.
+I can also see: Wicked looking pirate.
+> SET SAIL
+After a day at sea we set anchor off of
+a sandy beach.
+ All Ashore who's going Ashore...
+> GO SHORE
+I'm in a sandy beach on a tropical isle
+Obvious exits: East.
+I can also see: Large blood soaked
+book, Set of plans, Pirate ship, Safety
+sneakers, Sand, Lagoon, Water wings,
+Sign in the sand says:
+"Welcome to Pirates Island, watch out
+for the tide!".
+> GET BOOK
+OK
+> GET SNEAKERS
+OK
+> SAY YOHO
+Everything spins around and suddenly
+I'm elsewhere...
+I'M outside an open window
+on the ledge of a very tall building
+Obvious exits: none.
+> GO WINDOW
+I'm in a alcove
+Obvious exits: Down.
+I can also see: Open window, Bookcase
+with secret passage beyond.
+> D
+I'm in a Flat in london
+Obvious exits: none.
+I can also see: Flight of stairs, Sign
+says: "Bring *TREASURES* here, say:
+SCORE", Rug.
+> DROP DUBLEONS
+OK
+> DROP STAMPS
+OK
+> SCORE
+I've stored 2 treasures. On a scale of
+0 to 100, that rates 100.
+Well done!
+The game is now over.

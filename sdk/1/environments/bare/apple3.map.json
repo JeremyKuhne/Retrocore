@@ -1,0 +1,17 @@
+{
+  "description": "The Apple III, bare: a program loaded into the system bank and bank 0 before SOS, with its own console.",
+  "load": "$2000",
+  "free": [
+    { "start": "$0200", "end": "$03FF" },
+    { "start": "$0C00", "end": "$BFFF" }
+  ],
+  "zeroPage": ["$00-$BF"],
+  "reserved": [
+    { "start": "$0100", "end": "$01FF", "why": "the stack" },
+    { "start": "$0400", "end": "$07FF", "why": "text page 1, the screen's characters" },
+    { "start": "$0800", "end": "$0BFF", "why": "text page 2, the screen's colours" },
+    { "start": "$C000", "end": "$CFFF", "why": "I/O and the slots" },
+    { "start": "$D000", "end": "$EFFF", "why": "RAM that the power-on state write-protects" },
+    { "start": "$F000", "end": "$FFFF", "why": "the boot ROM, with the VIAs at $FFD0" }
+  ]
+}

@@ -85,6 +85,9 @@ public sealed partial class BasicRenameGateTests
         ["OverlayBaseResolverTests.cs"] = "looks no name up",
         ["SystemMasterBasicTests.cs"] = "looks no name up",
 
+        // Hands BASIC's symbols to the debug target, as a launch does, and looks no name up itself.
+        ["PetSysProgramTests.cs"] = "looks no name up",
+
         // The lookups themselves and this gate.
         ["BasicNames.cs"] = "the lookups",
         ["BasicRenameGateTests.cs"] = "this gate"

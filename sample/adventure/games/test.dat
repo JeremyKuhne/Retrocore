@@ -1,0 +1,120 @@
+0
+9
+25
+19
+5
+3
+1
+2
+4
+8
+16
+2
+100 29 20 0 0 0 208 0
+50 24 162 0 0 0 300 0
+100 87 308 0 0 0 8550 0
+100 328 180 20 320 0 10860 2400
+100 84 16 0 0 0 11550 0
+100 84 59 0 0 0 2100 0
+100 84 19 0 0 0 2311 0
+100 104 0 0 0 0 9450 0
+464 3 0 0 0 0 450 0
+450 0 0 0 0 0 9600 0
+764 3 0 0 0 0 450 0
+1365 24 74 60 20 0 662 0
+1365 24 0 0 0 0 750 0
+166 24 80 100 0 0 8454 11850
+907 21 141 20 140 0 8319 8256
+907 21 0 0 0 0 1050 0
+907 181 0 0 0 0 1200 0
+1063 82 66 0 0 0 1350 0
+1063 82 61 80 100 0 10810 10950
+0 120 100 0 0 0 11250 0
+1063 102 0 0 0 0 1650 0
+1800 0 0 0 0 0 9750 0
+1950 0 0 0 0 0 9900 0
+2100 0 0 0 0 0 9450 0
+2250 0 0 0 0 0 12612 0
+2550 24 0 0 0 0 2011 0
+"AUTO" "ANY"
+"GO" "NORTH"
+"*WALK" "SOUTH"
+"LOOK" "EAST"
+"*EXAMINE" "WEST"
+"READ" "UP"
+"LIGHT" "DOWN"
+"OPEN" "LAMP"
+"*UNLOCK" "KEY"
+"SEARCH" "PEARL"
+"GET" "COIN"
+"*TAKE" "*DOUBLOON"
+"SCORE" "OIL"
+"INVENTORY" "CHEST"
+"QUIT" "SIGN"
+"SAY" "SAND"
+"*SHOUT" "CAVE"
+"SWIM" "HELLO"
+"DROP" "SEAGULL"
+"*LEAVE" "*GULL"
+0 0 0 0 0 0 ""
+2 0 0 0 0 0 "*I'm on a sandy beach beside a cold grey sea. A cave opens in the cliffs."
+0 1 0 0 3 0 "round room at the foot of a lighthouse"
+0 0 0 0 0 2 "lamp room at the top of the lighthouse"
+0 0 0 1 0 0 "damp sea cave"
+0 0 0 0 0 0 "*I'm floating in a grey mist. I think I'm dead."
+""
+"Welcome to the lighthouse! Find the two treasures and leave them at the foot of the tower."
+"The seagull cries and wheels over the sea."
+"The sign says: `Leave treasures here, then say SCORE.`"
+"I found something in the sand!"
+"I find nothing more."
+"I pour in the oil and light the lamp."
+"There's no oil in it."
+"It's already lit."
+"It's locked."
+"The chest creaks open."
+"It's already open."
+" echoes back from the cliffs."
+"The icy water is too much for me."
+"The tide is rising!"
+"The tide floods the cave!"
+"The lamp gutters and goes out."
+"Wooden sign" 2
+"Unlit oil lamp/LAMP/" 3
+"*Silver pearl*/PEARL/" 4
+"Brass key/KEY/" 0
+"Iron chest" 3
+"Open iron chest" 0
+"*Gold doubloon*/COIN/" 0
+"Tin of oil/OIL/" 2
+"Seagull" 1
+"Lit oil lamp/LAMP/" 0
+"Welcome, once"
+"The seagull cries, half the time, on the beach"
+"Daylight again outside the cave"
+"The lit lamp runs out and goes back to unlit"
+"The tide counts down in the cave"
+"The tide warns"
+"The tide drowns"
+"Death ends the game"
+"LOOK SIGN"
+"LOOK"
+"READ SIGN"
+"SEARCH SAND finds the key"
+"SEARCH SAND again"
+"GO CAVE: dark, the cave, the tide's count"
+"LIGHT LAMP with the oil"
+"LIGHT LAMP without oil"
+"LIGHT LAMP when lit"
+"OPEN CHEST without the key"
+"OPEN CHEST with the key"
+"... and the doubloon is in it"
+"OPEN CHEST when open"
+"SCORE"
+"INVENTORY"
+"QUIT"
+"SAY anything"
+"SWIM from the beach"
+1
+1
+0

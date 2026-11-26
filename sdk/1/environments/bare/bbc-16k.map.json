@@ -1,0 +1,21 @@
+{
+  "description": "The BBC Micro model A, bare: a program loaded between PAGE and HIMEM in MODE 7 that calls the MOS and does not return to BASIC.",
+  "load": "$2000",
+  "free": [
+    { "start": "$0E00", "end": "$3BFF" }
+  ],
+  "zeroPage": ["$70-$8F"],
+  "reserved": [
+    { "start": "$0100", "end": "$01FF", "why": "the stack" },
+    { "start": "$0200", "end": "$02FF", "why": "the MOS's vectors and variables" },
+    { "start": "$0300", "end": "$03FF", "why": "the MOS's VDU, cassette and keyboard workspace" },
+    { "start": "$0400", "end": "$07FF", "why": "the current language's workspace: BASIC's" },
+    { "start": "$0800", "end": "$0DFF", "why": "the MOS's sound, printer and RS-423 buffers, its soft keys and characters, and the NMI routine" },
+    { "start": "$3C00", "end": "$3FFF", "why": "MODE 7's screen, above HIMEM" },
+    { "start": "$4000", "end": "$7FFF", "why": "the model A's 16K again, which answers twice, so a write here changes the byte $4000 lower" },
+    { "start": "$8000", "end": "$BFFF", "why": "the paged ROMs: BASIC, and the DFS on the model B" },
+    { "start": "$C000", "end": "$FBFF", "why": "the MOS's ROM" },
+    { "start": "$FC00", "end": "$FEFF", "why": "the I/O pages FRED, JIM and SHEILA" },
+    { "start": "$FF00", "end": "$FFFF", "why": "the MOS's ROM: its entry points and vectors" }
+  ]
+}

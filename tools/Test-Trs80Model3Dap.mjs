@@ -6,7 +6,7 @@
 // on the screen, and checks the display, the thread, the hardware rows, the reset stop and the error a launch with a
 // dump missing gives. The stand-ins are a few hand-assembled instructions, so the script needs no real ROMs. Without a
 // ROM directory, the Model III and Model II boot the SDK's builds of their real ROMs, with source and, on the Model
-// III, the BASIC thread.
+// III, the BASIC thread, for Level II's BASIC and Level I's.
 
 import { resolve, join } from "node:path";
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
@@ -160,10 +160,39 @@ try {
     await launch({ machine: "trs80-model2" }, [], null);
     await screen("INSERT DISKETTE");
 
-    // The Model III with Level I BASIC, from Level1.asm's Model III build, with no BASIC thread.
-    await launch({ machine: "trs80-model3", rom: "level1" }, [], null);
+    // The Model III with Level I BASIC, from Level1.asm's Model III build, has a BASIC thread too: RUN stops on it at
+    // its first statement, and a pause at INPUT shows the INPUT's line.
+    await launch({ machine: "trs80-model3", rom: "level1" }, ["basicStart"], null);
     await screen("READY");
-    assert.ok(!filters().includes("basicStart"), "Level I has no BASIC thread");
+    assert.ok(filters().includes("basicStart"), "Level I has a BASIC thread");
+    const written = await request("retro/basic/write", { text: "10 INPUT A\n20 P. A*2\n30 GOTO 10\n" });
+    assert.equal(written.success, true, JSON.stringify(written.diagnostics));
+    drop("stopped");
+    await type("RUN\r");
+    const levelOne = await event("stopped");
+    assert.deepEqual([levelOne.threadId, levelOne.description], [2, "RUN starts at 10."]);
+    await request("continue", { threadId: 2 });
+    await new Promise(resolve => setTimeout(resolve, 500));
+    await request("pause", { threadId: 2 });
+    await event("stopped");
+    assert.equal((await request("stackTrace", { threadId: 2 })).stackFrames[0].name, "10: INPUT A");
+
+    // A basic launch of a Level I file loads it into the Model III's Level I and stops at its first statement.
+    const file = join(roms, "program.level1.bas");
+    writeFileSync(file, "10 A=5\n20 P. A*2\n");
+    await launch({ machine: "trs80-model3", rom: "level1", basic: file, stopOnEntry: true }, [], null);
+    const entry = await event("stopped");
+    assert.deepEqual([entry.threadId, entry.reason], [2, "entry"]);
+    const first = (await request("stackTrace", { threadId: 2 })).stackFrames[0];
+    assert.deepEqual([first.name, first.source?.path, first.line], ["10: A=5", file, 1]);
+
+    // An error in a DATA item that READ is taking stops in the READ's line, as on the Model I.
+    const data = join(roms, "data.level1.bas");
+    writeFileSync(data, "10 READ A\n20 DATA 1+\n");
+    await launch({ machine: "trs80-model3", rom: "level1", basic: data }, ["basicErrors"], null);
+    const dataError = await event("stopped");
+    assert.deepEqual([dataError.threadId, dataError.reason, dataError.description], [2, "exception", "WHAT? in 10 (code 2)."]);
+    assert.equal((await request("stackTrace", { threadId: 2 })).stackFrames[0].name, "10: READ A");
     await assert.rejects(request("launch", { machine: "trs80-model4", rom: "level1" }), /Only the Model III has Level I/);
 
     // A disks value that is not a list, or an entry that is neither a path nor null, is refused, rather than

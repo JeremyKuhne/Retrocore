@@ -1563,6 +1563,8 @@ ST_READ_1:
     LD BC,START                     ; no current line while the DATA item is read
     LD [CURRNT],BC
     CALL STORE_VALUE
+;; Where STORE_VALUE returns to, with the READ line above it on the stack; the debugger finds that line by it.
+READ_STORED:
     POP BC
     LD [CURRNT],BC                  ; the READ line again
     LD [DATAPTR],DE                 ; where the next item will be

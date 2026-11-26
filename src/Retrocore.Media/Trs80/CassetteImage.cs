@@ -9,7 +9,8 @@ namespace Retrocore.Media.Trs80;
 /// </summary>
 /// <remarks>
 ///  <para>
-///   Level II tapes run at 500 baud and Level I tapes at 250; the image itself does not say which.
+///   Level II tapes run at 500 baud and Level I tapes at 250; the image itself does not say which, though its first
+///   recording's header shows which BASIC wrote it (<see cref="CassetteFormat"/>).
 ///  </para>
 /// </remarks>
 public sealed class CassetteImage

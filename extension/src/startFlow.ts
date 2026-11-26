@@ -6,7 +6,8 @@
 // launch configuration that starts it. Free of the vscode module, so the unit tests walk it. startMachine.ts shows the
 // quick picks.
 
-import { catalogMachine, launchConfiguration, machineById, type Machine } from "./machines";
+import { readFileSync } from "node:fs";
+import { catalogMachine, defaultValue, impliedValue, isLevel1, launchConfiguration, machineById, settingValue, withSetting, type Machine } from "./machines";
 
 /** The launch property Start Machine marks its launches with, so where a session came from is known; the debug host ignores it. */
 export const startOrigin = "retrocoreOrigin";
@@ -112,6 +113,7 @@ function dialectName(dialect: string, machine: Machine): string {
         case "integer": return "Integer BASIC";
         case "apple1": return "Apple-1 BASIC";
         case "level2": return "Level II BASIC";
+        case "level1": return "Level I BASIC";
         case "business": return "Business BASIC";
         case "colorbasic": return "Color BASIC";
         case "mbasic": return "MBASIC";
@@ -125,6 +127,37 @@ function dialectName(dialect: string, machine: Machine): string {
         case "atari": return "Atari BASIC";
         default: return dialect;
     }
+}
+
+/**
+ * The dialect a BASIC file names, as the debug host reads it: its first line's pragma, such as REM retrocore level1,
+ * else its name's, as in game.level1.bas. A file that cannot be read is judged by its name alone, and one that names
+ * none gives no dialect, so it goes into whichever BASIC the machine has.
+ */
+export function namedDialect(path: string): string | undefined {
+    let text = "";
+    try {
+        text = readFileSync(path, "utf8");
+    } catch {
+        // A file that cannot be read now is refused by the launch, which reads it again.
+    }
+
+    const first = text.split(/\r?\n/).find(line => line.trim().length !== 0);
+    const pragma = first === undefined ? undefined : /^\s*\d*\s*(?:REM|')\s*retrocore\s+(\S+)/i.exec(first)?.[1];
+    if (pragma !== undefined) return pragma.toLowerCase();
+    return /\.([^.]+)\.bas$/i.exec(fileName(path))?.[1]?.toLowerCase();
+}
+
+/**
+ * Why a launch that runs a BASIC file cannot change its ROM to a value, if it cannot: a Model I or Model III file that
+ * names its dialect keeps the ROM whose BASIC that is, as Level I cannot load Level II's file, nor Level II Level I's.
+ */
+export function basicRomRefusal(label: string, path: string, changed: Record<string, unknown>): string | undefined {
+    const named = namedDialect(path);
+    const machine = catalogMachine(changed);
+    if (named === undefined || machine === undefined || machine.basicDialects.includes(named)) return undefined;
+    const runs = machine.basicDialects.map(dialect => dialectName(dialect, machine)).join(" or ") || "its BASIC";
+    return `${label} runs ${fileName(path)}, which is ${dialectName(named, machine)}, and ${runs} cannot load it.`;
 }
 
 function fileName(path: string): string {
@@ -192,21 +225,70 @@ export function crowdsCartridge(configuration: Record<string, unknown>, option: 
     return option === "basicCartridge" && value !== "none" && typeof configuration.cartridge === "string";
 }
 
-/** The setup's options with one changed, dropping it when it is back to the machine's default. */
+/**
+ * Why a setup cannot take a change, if it cannot: a cartridge keeps BASIC out of its slot, one that starts from a
+ * disk keeps its drives, Level I, which has no disks, cannot run a disk, and a BASIC file that names its dialect keeps
+ * the ROM whose BASIC that is.
+ */
+export function refusal(machine: Machine, setup: Setup, option: string, value: string | number | boolean): string | undefined {
+    const choice = machine.choices.find(candidate => candidate.option === option);
+    if (crowdsCartridge(setupConfiguration(setup), option, value)) return `${machine.label} starts with a cartridge in BASIC's slot, so BASIC stays out.`;
+    if (removesDrives(setup, option, value)) return `${machine.label} starts from a disk, so it keeps its ${choice?.label.toLowerCase() ?? option}.`;
+    if (choice === undefined || option !== "rom" || (setup.kind !== "disk" && setup.kind !== "basic")) return undefined;
+    const changed = withSetting(setupConfiguration(setup), choice, value);
+    if (setup.kind === "basic") return setup.path === undefined ? undefined : basicRomRefusal(machine.label, setup.path, changed);
+    return isLevel1(changed) ? `${machine.label} starts from a disk, which Level I cannot read.` : undefined;
+}
+
+/**
+ * The launch options a configuration sets for its machine's choices that differ from what the debug host would make
+ * them: for the ROM, its revision, as the catalog machine is its Level. A TRS-80's disk controller, which the catalog
+ * has no choice for, is kept as the launch gives it.
+ */
+function chosenOptions(machine: Machine, configuration: Record<string, unknown>): Setup["options"] {
+    const options: Setup["options"] = {};
+    for (const choice of machine.choices) {
+        const option = choice.option === "rom" ? "revision" : choice.option;
+        const value = configuration[option];
+        if (typeof value !== "string" && typeof value !== "number" && typeof value !== "boolean") continue;
+        // A setup's default is the choice's, except the Model I's memory and Expansion Interface, which follow its ROM.
+        const standard = machine.configuration.machine === "trs80-model1" ? impliedValue(choice, configuration) : choice.default;
+        if (choice.option === "rom" || value !== standard) options[option] = value;
+    }
+    const trs80 = ["trs80-model1", "trs80-model3"].includes(machine.configuration.machine);
+    if (trs80 && !machine.choices.some(choice => choice.option === "diskController") && configuration.diskController === true) {
+        options.diskController = true;
+    }
+    return options;
+}
+
+/**
+ * The setup with one of its machine's choices changed, its options keeping what still fits as a launch configuration's
+ * would (withSetting); a change of ROM moves it to the catalog's machine for the other Level.
+ */
 export function withOption(machine: Machine, setup: Setup, option: string, value: string | number | boolean): Setup {
     const choice = machine.choices.find(candidate => candidate.option === option);
     if (choice === undefined) throw new Error(`${machine.label} has no ${option}.`);
-    const options = { ...setup.options };
-    if (value === choice.default) delete options[option];
-    else options[option] = value;
-    return { ...setup, options };
+    const configuration = withSetting(setupConfiguration(setup), choice, value);
+    const next = catalogMachine(configuration) ?? machine;
+    const options = chosenOptions(next, configuration);
+    // A cartridge's launch takes BASIC out itself, so the setup does not keep that as a choice.
+    if (setup.kind === "cartridge") delete options.basicCartridge;
+    return { ...setup, machineId: next.id, options };
 }
 
-/** The value a setup gives one of the machine's choices: its own, or the default (a cartridge's BASIC is none). */
+/** The value a setup gives one of the machine's choices: its own, or what the debug host would make it. */
 export function optionValue(machine: Machine, setup: Setup, option: string): string | number | boolean | undefined {
     // A cartridge's launch takes BASIC out, whatever the options say.
     if (setup.kind === "cartridge" && option === "basicCartridge") return "none";
-    return setup.options[option] ?? machine.choices.find(choice => choice.option === option)?.default;
+    const choice = machine.choices.find(candidate => candidate.option === option);
+    return choice === undefined ? undefined : settingValue(choice, setupConfiguration(setup));
+}
+
+/** What a setup's choice is when it leaves it out, as Start Machine's options mark it. */
+export function optionDefault(machine: Machine, setup: Setup, option: string): string | number | boolean | undefined {
+    const choice = machine.choices.find(candidate => candidate.option === option);
+    return choice === undefined ? undefined : defaultValue(choice, setupConfiguration(setup));
 }
 
 /** A one-line description of a setup, for the last-setup item: the machine, what it runs, and changed options. */
@@ -217,8 +299,10 @@ export function describeSetup(setup: Setup): string {
     if (setup.path !== undefined) parts.push(fileName(setup.path));
     if (setup.dos !== undefined) parts.push(`DOS ${setup.dos}`);
     for (const [option, value] of Object.entries(setup.options)) {
-        const choice = machine.choices.find(candidate => candidate.option === option);
-        const label = choice?.values.find(candidate => candidate.value === value)?.label ?? String(value);
+        // The ROM's revision is the ROM choice's.
+        const choice = machine.choices.find(candidate => candidate.option === (option === "revision" ? "rom" : option));
+        const shown = choice === undefined ? value : settingValue(choice, setupConfiguration(setup));
+        const label = choice?.values.find(candidate => candidate.value === shown)?.label ?? String(value);
         parts.push(`${choice?.label ?? option}: ${label}`);
     }
 
@@ -240,13 +324,7 @@ export function isUsable(setup: Setup | undefined): setup is Setup {
 export function setupFromConfiguration(configuration: Record<string, unknown>): Setup | undefined {
     const machine = catalogMachine(configuration);
     if (machine === undefined) return undefined;
-    const options: Setup["options"] = {};
-    for (const choice of machine.choices) {
-        const value = configuration[choice.option];
-        if ((typeof value === "string" || typeof value === "number" || typeof value === "boolean") && value !== choice.default) {
-            options[choice.option] = value;
-        }
-    }
+    const options = chosenOptions(machine, configuration);
 
     const text = (key: string): string | undefined => typeof configuration[key] === "string" ? configuration[key] as string : undefined;
     const disks = Array.isArray(configuration.disks) ? configuration.disks.filter((disk): disk is string => typeof disk === "string") : [];
@@ -258,7 +336,6 @@ export function setupFromConfiguration(configuration: Record<string, unknown>): 
     const trs80 = ["trs80-model1", "trs80-model3"].includes(machine.configuration.machine);
     const implied = controller !== undefined ? controller.default === false : trs80;
     if (implied && disks.length !== 0 && configuration.diskController === undefined) options.diskController = true;
-    if (controller === undefined && trs80 && configuration.diskController === true) options.diskController = true;
 
     const source = text("source");
     if (source !== undefined) {

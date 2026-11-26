@@ -12,25 +12,29 @@
 -- RETRO_OUT: the file to write: $0000-$FFFF.
 
 local output = os.getenv("RETRO_OUT") or "memory.bin"
-local run = tonumber(os.getenv("RETRO_RUN") or "60")
-local finish = tonumber(os.getenv("RETRO_END") or "70")
+-- MAME's time is whole seconds and attoseconds, so times are compared as attotimes: time.seconds drops a
+-- fraction such as 2.5, and time:as_double() rounds a frame at 2.999999999999999880 up to 3, a frame early.
+local load_at = emu.attotime.from_double(3)
+local return_at = emu.attotime.from_double(6)
+local run = emu.attotime.from_double(tonumber(os.getenv("RETRO_RUN") or "60"))
+local finish = emu.attotime.from_double(tonumber(os.getenv("RETRO_END") or "70"))
 local stage = 0
 
 subscription = emu.add_machine_frame_notifier(function()
-  local seconds = manager.machine.time.seconds
-  if stage == 0 and seconds >= 3 then
+  local now = manager.machine.time
+  if stage == 0 and now >= load_at then
     stage = 1
     manager.machine.natkeyboard:post("CLOAD\r")
     for _, cassette in pairs(manager.machine.cassettes) do cassette:play() end
-  elseif stage == 1 and seconds >= 6 then
+  elseif stage == 1 and now >= return_at then
     stage = 2
     manager.machine.natkeyboard:post("\r")
-  elseif stage == 2 and seconds >= run then
+  elseif stage == 2 and now >= run then
     stage = 3
     manager.machine.natkeyboard:post("RUN\r")
   end
 
-  if seconds < finish then return end
+  if now < finish then return end
   local space = manager.machine.devices[":maincpu"].spaces["program"]
   local bytes = {}
   for address = 0x0000, 0xFFFF do bytes[#bytes + 1] = string.char(space:read_u8(address)) end

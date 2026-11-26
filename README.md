@@ -4,24 +4,24 @@ Retrocore emulates and debugs 8-bit computers in one .NET codebase: cycle-exact 
 peripherals built around them, a multi-dialect assembler and disassembler, BASIC language and program tools, a
 source-level debugger for assembly and BASIC, and a VS Code extension.
 
-Every machine's ROMs are also maintained here as documented assembly sources that rebuild byte-identically to the
-original chips. No external ROM dumps are needed to run or debug a machine, and you can step from your own code
-straight into the ROM or DOS source.
+Every ROM the machines run is also maintained here as documented assembly sources that rebuild byte-identically to
+the original chips wherever a good dump of the chip is known. No external ROM dumps are needed to run or debug a
+machine, and you can step from your own code straight into the ROM or DOS source.
 
 | Machine | CPU | ROMs (SDK sources, or dumps you supply) | Media and peripherals |
 | --- | --- | --- | --- |
-| Apple-1 | MOS 6502 | Woz Monitor, Apple Cassette Interface PROM, Signetics 2513 character generator; Apple-1 BASIC, which loads into RAM | 4 or 8 KB RAM plus the `$E000` bank, 6821 PIA keyboard and 60-characters-a-second video terminal, Apple Cassette Interface (WAV tapes, play and record) |
+| Apple-1 | MOS 6502 | Woz Monitor, Apple Cassette Interface PROM, Signetics 2513 character generator; Apple-1 BASIC, which loads into RAM | 4 or 8 KB RAM, or 16 or 32 KB of expansion RAM, plus the `$E000` bank, 6821 PIA keyboard and 60-characters-a-second video terminal, Apple Cassette Interface (WAV tapes, play and record) |
 | Apple II and II Plus | MOS 6502 | Integer BASIC (II), AppleSoft (II Plus), original or Autostart Monitor, character generator, Programmer's Aid #1 | Disk II 16- and 13-sector (WOZ, DSK, DO, PO, D13), fresh DOS 3.3 and 3.2 disks, slot-7 ProDOS block storage, slot-0 language or firmware card, speaker and slot-4 stereo Mockingboard, AppleMouse II-compatible mouse card, Apple II 3.5 Disk Controller-compatible SmartPort with two SuperDrives (400K/800K, 720K/1.44 MB), ProFile hard disk cards (PO, HDV), SDL3 game controllers |
 | Apple IIe, original and enhanced | MOS 6502 / Rockwell 65C02 | Monitor, internal `$C100`–`$CFFF` firmware, AppleSoft, video ROM (with MouseText on enhanced) | Built-in language card and extended 80-column card (64 KB auxiliary RAM), plus the same Disk II, ProDOS block storage, audio, and controller support as the II |
 | Apple III | Synertek 6502A | Boot ROM (diagnostics, monitor and SOS boot) | 128, 256 or 512 KB banked RAM with extended addressing, all native video modes with character RAM, built-in and three external drives (WOZ, DSK, DO, PO), speaker and 6-bit DAC, ProFile hard disk cards with pseudo-DMA (PO, HDV), SOS 1.3 |
 | TRS-80 Model I, Level II and Level I | Z80 | Level II 1.2 and 1.3, Level I, MCM6670P character generator; plus the Radio Shack lowercase kit's font (from source; no chip dump is known) | CAS tapes (play and record), Expansion Interface (up to 48 KB RAM, 40 Hz clock, FD1771 with Percom/Radio Shack double-density doubler), JV1 and JV3 disks, lowercase modification |
 | TRS-80 Model III, 4 and 4P | Z80 | The Model III's ROM (ROM C revisions B and C) and its Level I ROM, the Model 4's, the 4P's boot ROM, and their character generators | 16-128 KB with the Model 4's memory maps and banking, 64x16 and 80x24 video, FD1793 with wait states and NMIs, JV1, JV3, DMK and IMD disks, CAS tapes at 500 and 1500 baud; boots TRSDOS, LDOS and LS-DOS |
-| TRS-80 Model II, 12 and 16 (Z80 side) | Z80 | Five boot ROM versions and the character generator | 32-512 KB banked RAM, MC6845 80x24 video, Z80 CTC, PIO, SIO and DMA with mode 2 interrupts, FD1791 with 8-inch IMD, DMK and JV3 disks |
+| TRS-80 Model II, 12 and 16 (Z80 side) | Z80 | Versions 1, 2, 3 and 5 of the boot ROM (five ROMs, as version 3 has two; version 4 has no known good dump) and the character generator | 32-512 KB banked RAM, MC6845 80x24 video, Z80 CTC, PIO, SIO and DMA with mode 2 interrupts, FD1791 with 8-inch IMD, DMK and JV3 disks |
 | TRS-80 Color Computer 1, 2 and 3 | Motorola 6809E | Color BASIC 1.0-1.3, Extended Color BASIC 1.0 and 1.1, Disk Extended Color BASIC 1.0 and 1.1, and the CoCo 3's Extended Color BASIC 2.0 with Super Extended BASIC | SAM and MC6847/MC6847T1 VDG with artifact colors, the CoCo 3's GIME (MMU, 128 or 512 KB, palette, timer, 40/80 columns), CAS tapes, sound, joysticks, ROM packs, the disk controller cartridge with JVC disks |
 | BBC Micro Model B and Model A | MOS 6502 at 2 MHz | MOS 1.20, BBC BASIC II, DNFS 1.20 and the SAA5050's characters | 6845 and video ULA in modes 0-6, SAA5050 teletext in mode 7, SN76489 sound, UEF tapes (play and record) and `.inf` files, the Intel 8271 with SSD and DSD disks, the analogue port |
 | Commodore PET 2001 and 4032 | MOS 6502 | BASIC 1 and 4 (original and revised) and BASIC 2, their screen editors (BASIC 4's for the graphics and business keyboards) and kernals, with the machine-language monitor, and the 901447-08 and -10 character ROMs | 4-32 KB RAM, two 6520 PIAs and a 6522 VIA, 40x25 video with the 2001's timing and snow, the chiclet, graphics and business keyboards, CB2 sound, two Datasettes (TAP, WAV and PRG tapes, play and record), the IEEE-488 bus with 4040 and 2040 dual drives as devices 8-15 (D64, D67 and G64 disks, which save) |
 | Atari 400 and 800 | MOS 6502 | OS rev. A and B and the PAL OS, the floating point package, Atari BASIC rev. A, B and C, and the 810's firmware | ANTIC and GTIA (or CTIA) with every display mode, players and missiles, POKEY's sound, keyboard and timers, joysticks, 8-48 KB, both cartridge slots with bank-switched cartridges, the 410 recorder (CAS), 810 disk drives at the hardware level (ATR, XFD), and `.xex` files |
-| MITS Altair 8800 | Intel 8080 | None: it starts in RAM | 1-64 KB RAM, the 88-2SIO's MC6850 ACIAs or the 88-SIO with an 80x24 ADM-3A-style terminal, the 88-ACR cassette, sense switches, the front panel's EXAMINE and DEPOSIT; runs Altair BASIC from your images |
+| MITS Altair 8800 | Intel 8080 | None of its own; DBL and MBL PROMs from SDK sources | 1-64 KB RAM, the 88-2SIO's MC6850 ACIAs or the 88-SIO with an 80x24 ADM-3A-style terminal, the 88-ACR cassette, sense switches, the front panel's EXAMINE and DEPOSIT, the 88-DCDD with 8-inch drives and the DBL and MBL boot PROMs; runs Altair BASIC and CP/M 2.2 from your images |
 | Kaypro II | Z80 | Monitor ROM 81-149C and its character generator; MBASIC 5.21 too, which loads from disk | 64 KB RAM under the banked ROM and 4 KB of video RAM, 80x24 text, serial keyboard, FD1793 with two drives (raw IMG, IMD and DMK disks), Z80 SIO and PIOs; runs CP/M 2.2 and MBASIC from your disks |
 
 The Disk II controller's boot and state-sequencer ROMs, Apple DOS 3.3 and 3.2, and the firmware of the emulated
@@ -122,11 +122,10 @@ completions, document outlines, and workspace symbol search across your code and
 
 ## BASIC
 
-Retrocore supports **AppleSoft BASIC**, **Integer BASIC**, and **TRS-80 Level II BASIC** (Level I BASIC is
-[planned](docs/backlog/BasicDebugging.md)). **MBASIC** (Microsoft BASIC-80 5.21, the Kaypro II's CP/M BASIC) has
-`.mbasic.bas` source files with the same editing support:
+Retrocore supports **AppleSoft BASIC**, **Integer BASIC**, and **TRS-80 Level II and Level I BASIC**. **MBASIC**
+(Microsoft BASIC-80 5.21, the Kaypro II's CP/M BASIC) has `.mbasic.bas` source files with the same editing support:
 
-- **Source files with optional labels.** `.applesoft.bas`, `.integer.bas`, `.level2.bas`, `.mbasic.bas`, and `.bas` files can
+- **Source files with optional labels.** `.applesoft.bas`, `.integer.bas`, `.level2.bas`, `.level1.bas`, `.mbasic.bas`, and `.bas` files can
   omit line numbers, indent freely, and jump to `label:` or `@label` targets. They get dialect-accurate
   highlighting (finding reserved words inside identifiers where the ROMs do), diagnostics, keyword and variable
   hovers, go to definition, find all references, completions, outlines, and line renumbering.
@@ -204,7 +203,7 @@ code never shows stale source lines. The [extension README](extension/README.md)
 | [`CharacterGeneratorKit.asm`](src/Retrocore.Machines.Trs80/Roms/CharacterGeneratorKit.asm) | The Radio Shack lowercase kit's character generator, following xtrs's reconstruction (no chip dump is known). |
 | [`Model3.asm`](src/Retrocore.Machines.Trs80/Roms/Model3.asm), [`Model3Equates.asm`](src/Retrocore.Machines.Trs80/Roms/Model3Equates.asm) | The TRS-80 Model III's 14K ROM (both revisions of ROM C) and the Model 4's, including `Level2.asm` for the BASIC they share with the Model I. |
 | [`Model4PBoot.asm`](src/Retrocore.Machines.Trs80/Roms/Model4PBoot.asm) | The Model 4P's boot ROM. |
-| [`Model2Boot.asm`](src/Retrocore.Machines.Trs80/Roms/Model2Boot.asm) | The Model II's boot ROMs, five versions. |
+| [`Model2Boot.asm`](src/Retrocore.Machines.Trs80/Roms/Model2Boot.asm) | The Model II's boot ROMs: versions 1, 2, 3 and 5, five ROMs, as version 3 has two. |
 | [`Model3CharacterGenerator.asm`](src/Retrocore.Machines.Trs80/Roms/Model3CharacterGenerator.asm), [`Model2CharacterGenerator.asm`](src/Retrocore.Machines.Trs80/Roms/Model2CharacterGenerator.asm) | The Model III's and 4's, the 4P's, and the Model II's character generators. |
 | [`ColorBasic.asm`](src/Retrocore.Machines.Coco/Roms/ColorBasic.asm) | TRS-80 Color Computer Color BASIC, versions 1.0 to 1.3. |
 | [`ExtendedBasic.asm`](src/Retrocore.Machines.Coco/Roms/ExtendedBasic.asm) | TRS-80 Color Computer Extended Color BASIC, versions 1.0 and 1.1. |
@@ -236,7 +235,7 @@ verify them—and also compare against your chip dumps byte for byte when dumps 
 | [`Retrocore.Cpu.M6809`](src/Retrocore.Cpu.M6809) | Cycle-exact Motorola MC6809 with indexed postbytes, interrupts, `SYNC`/`CWAI`, and its [instruction set](src/Retrocore.Cpu.M6809/M6809Isa.txt). |
 | [`Retrocore.Cpu.Z80`](src/Retrocore.Cpu.Z80) | T-state-exact Z80 with undocumented flags and MEMPTR, and its [instruction set](src/Retrocore.Cpu.Z80/Z80Isa.txt). |
 | [`Retrocore.Assembler`](src/Retrocore.Assembler) | Multi-dialect assembler (native, ca65, Merlin, MACRO-10), disassembler, flow analysis, and `;;` documentation parser. |
-| [`Retrocore.Basic`](src/Retrocore.Basic) | AppleSoft, Integer BASIC, and Level II BASIC: tokenizers, listings, label-based source compilation, diagnostics, expression evaluation, renumbering, tokenized files, and Model I tapes. |
+| [`Retrocore.Basic`](src/Retrocore.Basic) | The Apple, TRS-80, Color Computer, PET, BBC Micro, Atari and CP/M BASICs, Level I among them: tokenizers, listings, label-based source compilation, diagnostics, expression evaluation, renumbering, tokenized files, and Model I tapes. |
 | [`Retrocore.Media`](src/Retrocore.Media) | Disk, tape, and block media: WOZ, DOS 3.3 and 3.2 (`.dsk`, `.do`, `.d13`), ProDOS block images, SOS and Apple Pascal volumes and code files, sector floppies (DMK, IMD and raw Kaypro images in `Floppy`; JV1, JV3 and JVC), and CAS tapes. |
 | [`Retrocore.Pascal`](src/Retrocore.Pascal) | Apple Pascal's p-code and its disassembler, and the p-machine's state as its interpreters keep it on the Apple II and Apple III. |
 | [`Retrocore.Input`](src/Retrocore.Input) | SDL3 game controller discovery and polling, mapped to emulated joysticks and paddles. |
@@ -378,7 +377,7 @@ execution under Native AOT, and [`tests/Retrocore.Perf`](tests/Retrocore.Perf) h
 
 Design notes for upcoming work live in [`docs/backlog`](docs/backlog):
 
-- [debugging BASIC programs](docs/backlog/BasicDebugging.md): Level I BASIC and disk-image import/export;
+- [debugging BASIC programs](docs/backlog/BasicDebugging.md): disk-image import/export;
 - [choosing and starting a machine, next round](docs/backlog/MachineLaunch.md);
 - [CPU core and machine loop speed](docs/backlog/CoreOptimization.md), including what .NET 11 might offer;
 - [the language server's SDK index speed](docs/backlog/SdkIndexOptimization.md), with every change measured;
@@ -389,13 +388,15 @@ Design notes for upcoming work live in [`docs/backlog`](docs/backlog):
 - [the media library and explorers](docs/backlog/Media.md);
 - [saving media back to images](docs/backlog/MediaPersistence.md): changed disks and tapes on every machine;
 - [machine files, data folders and libraries](docs/backlog/MachineFiles.md), shared by VS Code and the standalone emulator;
+- [the Retrocore SDK](docs/backlog/Sdk.md): projects for a CPU family that build for and debug on each of its machines,
+  starting with a Scott Adams adventure interpreter;
 - [Retrocore Desktop](docs/backlog/Desktop.md), the standalone emulator, with the extension's views in an Avalonia window;
 - [Apple Pascal](docs/backlog/ApplePascal.md) on the Apple II and Apple III;
 - [more assembler dialects (Zilog, EDTASM, zmac, 6809)](docs/backlog/Dialects.md);
 - [the Motorola 6809 and the TRS-80 Color Computer](docs/backlog/M6809-CoCo.md), and
   [its ROM sources](docs/backlog/CocoRomSources.md);
 - [the Apple III's open checks and later work](docs/backlog/Apple3.md);
-- [the Intel 8080 and 8085](docs/backlog/I8080.md), and [the Altair 8800](docs/backlog/Altair8800.md): its disks and front panel view;
+- [the Intel 8080 and 8085](docs/backlog/I8080.md), and [the Altair 8800](docs/backlog/Altair8800.md): CP/M's sources and its front panel view;
 - [the 3.5 disk controller at the hardware level](docs/backlog/Disk35Hardware.md), running Apple's EPROM on an emulated 65C02 and SWIM;
 - [SOS sources: the Apple III's kernel and drivers](docs/backlog/SosSources.md);
 - [Business BASIC's other versions, modules and DEF FN view](docs/backlog/BusinessBasic.md);

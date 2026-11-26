@@ -265,9 +265,9 @@ ToSetIntegerFlag:
 ;; Also: UMULT (BB13)
 .proc MultiplyUnsigned
 ;; The bits of <LinearIndex>, one round each.
-BITS = 16
+BIT_COUNT = 16
 
-    lda #BITS
+    lda #BIT_COUNT
     sta DigitCount
     stx Addend+1
     sty Addend

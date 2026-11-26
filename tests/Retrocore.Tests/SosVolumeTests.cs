@@ -127,7 +127,7 @@ public class SosVolumeTests
     }
 
     /// <summary>
-    ///  A driver file's fields read in order: the file's comment, then each driver's comment, code and relocations.
+    ///  A driver file's fields read in order: the file's header, then each driver's comment, code and relocations.
     /// </summary>
     [TestMethod]
     public void DriverFileReadsItsFields()
@@ -138,7 +138,8 @@ public class SosVolumeTests
         byte[] file = [.. "SOS DRVR"u8, 2, 0, (byte)'h', (byte)'i', 1, 0, (byte)'c', 20, 0, .. code, 2, 0, 3, 0, 0xFF, 0xFF];
 
         SosDriverFile drivers = SosDriverFile.Read(file);
-        drivers.Comment.Should().Be("hi");
+        drivers.Header.ToArray().Should().Equal("hi"u8.ToArray());
+        drivers.CharacterSetName.Should().BeEmpty("the header is too short to hold the character set");
         drivers.Drivers.Should().ContainSingle();
         drivers.Drivers[0].Name.Should().Be(".ABC");
         drivers.Drivers[0].Comment.Should().Be("c");

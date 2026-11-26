@@ -233,6 +233,7 @@ internal sealed partial class DebugSession
         if (Basic == BasicDialect.BusinessBasic) { return BusinessProgramVariables(line); }
         if (Basic == BasicDialect.BbcBasic) { return BbcProgramVariables(line, Span); }
         if (Basic is AtariBasicDialect) { return AtariProgramVariables(line, Span); }
+        if (Basic is Level1Dialect) { return Level1ProgramVariables(line, Span); }
         BasicPointers pointers = Basic.Pointers;
         int start = Word(pointers.ProgramStart);
         int variables = Word(pointers.Variables);
@@ -276,6 +277,25 @@ internal sealed partial class DebugSession
             new JsonObject { ["name"] = "Free", ["value"] = span(memtop, top + 1), ["variablesReference"] = 0 },
             new JsonObject { ["name"] = "Current line", ["value"] = line, ["variablesReference"] = 0 },
             new JsonObject { ["name"] = "DATA line", ["value"] = data, ["variablesReference"] = 0 }
+        ];
+    }
+
+    // Level I's memory: the program from $4200 to TXTUNF, then free space, into which A(n) grows down from MEMTOP.
+    // DATAPTR is where READ takes its next item, or 0 before the first READ.
+    private List<JsonNode?> Level1ProgramVariables(string line, Func<int, int, string> span)
+    {
+        int end = Word(Level1Dialect.TextEnd);
+        int top = Word(Level1Dialect.MemoryTop);
+        int data = Word(Basic.Pointers.DataPointer);
+        string next = data == 0 ? "the first" : $"${data:X4}";
+        string program = span(Level1Dialect.ProgramStart, end);
+        string free = span(end, top);
+        return
+        [
+            new JsonObject { ["name"] = "Program", ["value"] = program, ["variablesReference"] = 0 },
+            new JsonObject { ["name"] = "Free, A(n) at its top", ["value"] = free, ["variablesReference"] = 0 },
+            new JsonObject { ["name"] = "Current line", ["value"] = line, ["variablesReference"] = 0 },
+            new JsonObject { ["name"] = "Next DATA", ["value"] = next, ["variablesReference"] = 0 }
         ];
     }
 

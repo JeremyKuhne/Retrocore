@@ -11,7 +11,7 @@ namespace Retrocore.Machines.Apple1;
 /// </summary>
 /// <remarks>
 ///  <para>
-///   RAM fills <c>$0000</c> up (4 or 8K), and an optional 4K bank sits at <c>$E000</c>. The cassette interface
+///   RAM fills <c>$0000</c> up (4, 8, 16 or 32K), and an optional 4K bank sits at <c>$E000</c>. The cassette interface
 ///   answers at <c>$C000</c>-<c>$C1FF</c>. The PIA answers in <c>$D000</c>-<c>$DFFF</c> wherever address bit 4 is
 ///   set, its registers chosen by bits 0 and 1: <c>$D010</c> KBD, <c>$D011</c> KBDCR, <c>$D012</c> DSP and
 ///   <c>$D013</c> DSPCR. The Monitor's PROMs see only the low byte of the address, so they fill

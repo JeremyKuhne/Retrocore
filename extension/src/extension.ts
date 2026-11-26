@@ -18,12 +18,16 @@ import { registerBreakpoints } from "./breakpoints";
 import { registerMemory } from "./memory";
 import { registerBasic } from "./basic";
 import { registerBasicLanguage } from "./basicLanguage";
+import { registerActiveTarget } from "./activeTarget";
+import { registerProjectLanguage } from "./projectLanguage";
 import { panelKeyCode, webviewHtml } from "./display";
 import { PictureCache } from "./pictures";
 import { groupCycleLines, type CycleLine } from "./cycles";
 
 export function activate(context: vscode.ExtensionContext): void {
-    void startLanguageClient(context);
+    const targets = registerActiveTarget(context);
+    registerProjectLanguage(context, targets);
+    void startLanguageClient(context, targets);
     registerLaunchBreakpoints(context);
     const basic = registerBasic(context);
     const saved = registerSavedMachines(context);

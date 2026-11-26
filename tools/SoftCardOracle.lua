@@ -11,7 +11,9 @@
 -- RETRO_CPU: the Z80's tag, ":sl4:softcard:z80" if not set.
 
 local output = (os.getenv("RETRO_OUT") or "trace.log"):gsub("\\", "/")
-local finish = tonumber(os.getenv("RETRO_END") or "1")
+-- MAME's time is whole seconds and attoseconds, so times are compared as attotimes: time.seconds drops a
+-- fraction such as 2.5, and time:as_double() rounds a frame at 2.999999999999999880 up to 3, a frame early.
+local finish = emu.attotime.from_double(tonumber(os.getenv("RETRO_END") or "1"))
 local cpu = os.getenv("RETRO_CPU") or ":sl4:softcard:z80"
 local debugger = manager.machine.debugger
 debugger:command('trace ' .. output .. ',' .. cpu ..
@@ -19,7 +21,7 @@ debugger:command('trace ' .. output .. ',' .. cpu ..
 debugger.execution_state = "run"
 
 subscription = emu.add_machine_frame_notifier(function()
-  if manager.machine.time.seconds >= finish then
+  if manager.machine.time >= finish then
     debugger:command("trace off," .. cpu)
     manager.machine:exit()
   end

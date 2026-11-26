@@ -8,6 +8,8 @@ using Retrocore.Isa;
 using System.Collections.Concurrent;
 using System.Text.RegularExpressions;
 
+using Retrocore.Debug.Project;
+
 namespace Retrocore.Debug.Language;
 
 /// <summary>
@@ -44,6 +46,9 @@ internal sealed partial class SourceAnalysis
 
     // Definitions found only in the text, such as in a branch the assembly skipped.
     private readonly HashSet<SymbolSite> _textOnly = [];
+
+    // The members a project target's analysis reports on, decided once (Owns).
+    private HashSet<string>? _owned;
 
     // Built once under the lock, as requests run in parallel with each other and with the publishing of diagnostics,
     // and the resolver, the lint and a hover's link compare sets by reference: every caller gets the same instance.
@@ -314,6 +319,62 @@ internal sealed partial class SourceAnalysis
     internal AssemblyResult Result { get; }
 
     /// <summary>
+    ///  Gets whether the analysis is a project target's (<see cref="ProjectSources"/>).
+    /// </summary>
+    internal bool IsTarget => Root.EndsWith(ProjectSources.Extension, StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    ///  Tests whether the analysis reports on a file: shows its diagnostics and owns it for requests.
+    /// </summary>
+    /// <remarks>
+    ///  <para>
+    ///   An analysis that is not a project target's reports on every file. A target reports on the project's sources
+    ///   the project prefers it for (the active target, or the first that lists them), on the project's files those
+    ///   include, and on files outside the project, such as the SDK's headers. So a source two targets assemble shows
+    ///   its preferred target's diagnostics, whichever target finishes last; only a file outside the project, which every
+    ///   target that includes it reports on, shows the last one's. The members are decided once, as the analysis is
+    ///   first asked; a file that is not a member is reported on unless the project prefers another target for it.
+    ///  </para>
+    /// </remarks>
+    /// <param name="path">The file's full path.</param>
+    /// <returns>Whether it reports on it.</returns>
+    internal bool Owns(string path)
+    {
+        if (!IsTarget) { return true; }
+        if (Members.Contains(path))
+        {
+            return LazyInitializer.EnsureInitialized(ref _owned, OwnedMembers).Contains(path);
+        }
+
+        return ProjectSources.RootOf(path) is not { } preferred || string.Equals(preferred, Root, StringComparison.OrdinalIgnoreCase);
+    }
+
+    // The members a target reports on: outside the project's folder, all; a source the project lists, when it prefers
+    // this target; a file a source includes, when this target reports on one of the files that include it.
+    private HashSet<string> OwnedMembers()
+    {
+        string folder = (Path.GetDirectoryName(Root) ?? "") + Path.DirectorySeparatorChar;
+        Dictionary<string, bool> decided = [with(StringComparer.OrdinalIgnoreCase)];
+        bool Owned(string path)
+        {
+            if (decided.TryGetValue(path, out bool known)) { return known; }
+
+            // A file that includes itself, through others, is not its own reason to be reported on.
+            decided[path] = false;
+            bool owned = !path.StartsWith(folder, StringComparison.OrdinalIgnoreCase)
+                || (ProjectSources.RootOf(path) is { } preferred
+                    ? string.Equals(preferred, Root, StringComparison.OrdinalIgnoreCase)
+                    : !_includedFrom.TryGetValue(path, out List<(string Path, int Line)>? sites)
+                        || sites.Count == 0
+                        || sites.Any(site => Owned(site.Path)));
+
+            return decided[path] = owned;
+        }
+
+        return [with(StringComparer.OrdinalIgnoreCase), .. Members.Where(Owned)];
+    }
+
+    /// <summary>
     ///  Gets the root and every file it included.
     /// </summary>
     internal HashSet<string> Members { get; }
@@ -380,6 +441,11 @@ internal sealed partial class SourceAnalysis
     internal static SourceAnalysis Assemble(string root, Func<string, string?> openText, SourceFileCache? files = null)
     {
         files ??= new();
+        if (root.EndsWith(ProjectSources.Extension, StringComparison.OrdinalIgnoreCase))
+        {
+            return AssembleTarget(root, openText, files);
+        }
+
         string text = openText(root) ?? files.Read(root);
         string configuration = Path.ChangeExtension(root, ".cfg");
         string? configurationText = openText(configuration) ?? (File.Exists(configuration) ? File.ReadAllText(configuration) : null);
@@ -424,6 +490,51 @@ internal sealed partial class SourceAnalysis
             BuildTime = DateTimeOffset.UnixEpoch,
             LinkerConfiguration = linker
         };
+    }
+
+    // A project's target, assembled as retrocore build assembles it: its platform folders' and sources' files as one
+    // stream, with its headers and defines. A target its project no longer has, or whose sources are missing, is an
+    // analysis with that error on the project file, its one member.
+    private static SourceAnalysis AssembleTarget(string root, Func<string, string?> openText, SourceFileCache files)
+    {
+        WorkspaceSourceResolver resolver = new(openText, files);
+        List<TargetSourceFile> sourceFiles;
+        AssemblyOptions options;
+        ProjectTarget? target = ProjectSources.Target(root);
+        try
+        {
+            if (target is null) { throw new ProjectException($"{root}: the project no longer has this target."); }
+            sourceFiles = target.SourceFiles();
+            string? linker = target.LinkerConfiguration;
+            options = ProjectBuild.Options(
+                target,
+                resolver,
+                linker is null ? null : new(openText(linker) ?? files.Read(linker), linker));
+        }
+        catch (Exception exception) when (exception is ProjectException or IOException or UnauthorizedAccessException)
+        {
+            string file = target?.Project.File ?? ProjectSources.FileOf(root) ?? root;
+            string message = target is null && ProjectSources.ErrorOf(root) is { } unreadable ? unreadable : exception.Message;
+            AssemblyDiagnostic error = new(message, new AssemblyLocation(file, line: 0));
+            AssemblyProject empty = new(0);
+            return new(root, Assembler.Assembler.Failed(new(empty, [error])), empty, [file], TextOf(openText), _ => []);
+        }
+
+        List<AssemblySource> sources =
+            [.. sourceFiles.Select(file => new AssemblySource(openText(file.Path) ?? files.Read(file.Path), file.Path, file.Dialect))];
+
+        AssemblyParseResult parsed = Assembler.Assembler.Parse(sources, options);
+        AssemblyResult result = parsed.Success
+            ? new Assembler.Assembler().Assemble(parsed.Project, options)
+            : Assembler.Assembler.Failed(parsed);
+
+        return new(
+            root,
+            result,
+            parsed.Project,
+            [.. sourceFiles.Select(file => file.Path), .. resolver.Resolved],
+            TextOf(openText),
+            path => openText(path) is { } open ? SourceText.Lines(open) : files.ReadLinesIfExists(path));
     }
 
     // The analysis keeps this function, so it is made apart from Assemble's lambdas: those share one closure, and

@@ -3,6 +3,7 @@
 // See LICENSE file in the project root for full license information
 
 using Retrocore.Assembler;
+using Retrocore.Debug.Project;
 using Retrocore.Documentation;
 using Retrocore.Isa;
 using Retrocore.Machines.Devices;
@@ -78,6 +79,10 @@ internal sealed partial class DebugSession
 
     // The last retro/devices event sent, to send another only when a device changes.
     private string? _devices;
+
+    // The media label and warning the console last gave for each device, by its id, such as a tape for the other
+    // Level's ROM: said once while that media stays in, and again once the device has been seen without it.
+    private readonly Dictionary<string, string> _mediaWarnings = [];
 
     // Whether running keeps to the machine's real speed, rather than running as fast as it can.
     // The speed running keeps to, as a multiple of the machine's clock; 0 runs as fast as the host can.
@@ -160,6 +165,7 @@ internal sealed partial class DebugSession
     private CancellationToken _running;
     private bool _stopOnContracts;
     private ushort _instructionStart;
+    private int _instructionStack;
 
     /// <summary>
     ///  Registers the DAP and machine-view request handlers.
@@ -938,6 +944,57 @@ internal sealed partial class DebugSession
         return name.Length == 0 || !char.IsAsciiLetter(name[0]) ? "PROGRAM" : name[..Math.Min(name.Length, 30)];
     }
 
+    // Runs the machine for a time with nothing tracked, then to the end of its instruction, so a program loaded after
+    // starts from an instruction boundary.
+    private void Boot(double seconds)
+    {
+        if (!(seconds is >= 0 and <= 60)) { throw new ArgumentException("bootSeconds must be from 0 to 60."); }
+        ForgetBoundaries();
+        Target.RunCycles((int)(seconds * Target.ClockHertz));
+        while (!Target.IsInstructionBoundary) { Target.StepCycle(); }
+        Target.CallStack.Reset();
+    }
+
+    // Puts a project target's cards in the machine's slots, as a saved machine's go in: every one must, or the launch
+    // fails naming the target. A Disk II and block storage come with their media from the launch's options, which
+    // a saved machine leaves to the launch, so they cannot be cards.
+    private void PutCards(ProjectTarget target, JsonObject cards)
+    {
+        if (Target.Cards() is null)
+        {
+            throw new ProjectException($"{target.Project.File}: target {target.Name}: {target.Machine.Id} has no slots for its cards.");
+        }
+
+        JsonObject? current = Target.Cards();
+        foreach ((string slot, JsonNode? card) in cards)
+        {
+            if (card?.GetValueKind() == JsonValueKind.String
+                && card.GetValue<string>() is { } name
+                && LaunchOwned(name))
+            {
+                throw new ProjectException(
+                    $"{target.Project.File}: target {target.Name}: slot {slot}'s {card} comes with its media from the target's options, such as diskImage, not from its cards.");
+            }
+
+            // A slot the options filled with a Disk II or block storage keeps it: a target that wants another card
+            // there, or none, leaves that option out.
+            if (current?[slot] is JsonValue held && held.GetValueKind() == JsonValueKind.String && LaunchOwned(held.GetValue<string>()))
+            {
+                throw new ProjectException(
+                    $"{target.Project.File}: target {target.Name}: slot {slot} holds the {held} its options give, so it cannot take {card}.");
+            }
+        }
+
+        List<string> problems = [.. Target.RestoreCards(cards)];
+        if (problems.Count != 0)
+        {
+            throw new ProjectException($"{target.Project.File}: target {target.Name}'s cards: {string.Join(" ", problems)}");
+        }
+    }
+
+    // The cards a launch's media options put in, which a saved machine and a target's cards leave to the launch.
+    private static bool LaunchOwned(string card) => card.StartsWith("diskII", StringComparison.Ordinal) || card == "blockStorage";
+
     private JsonObject Launch(JsonObject args)
     {
         // The launch takes a configurationDone that came before it, even if it fails.
@@ -946,6 +1003,10 @@ internal sealed partial class DebugSession
         _launchAttempted = true;
         _launchReady = false;
         _run?.Cancel();
+        // A project launch builds its target, as retrocore build does, and launches the target's machine with the
+        // target's options, which the saved media then goes over as over any launch's.
+        TargetBuild? built = null;
+        if (args.ContainsKey("project")) { (args, built) = ProjectLaunch.Prepare(args); }
         args = LaunchMedia.WithSaved(args, args["machineState"]);
         string machine = DebugMachines.Require(args.String("machine"));
         string? sourceFile = args.String("source");
@@ -956,7 +1017,7 @@ internal sealed partial class DebugSession
             throw new ArgumentException("Give one of source, program and basic.");
         }
 
-        bool loads = sourceFile is not null || program is not null;
+        bool loads = sourceFile is not null || program is not null || built is not null;
 
         // The old machine's changed disks are kept and its recordings saved, and it is disposed before the new one is
         // built, as machines can share host resources, such as the game controllers SDL reads. A launch that then
@@ -964,6 +1025,7 @@ internal sealed partial class DebugSession
         CloseJournal();
         ReleaseTarget();
         _target = null;
+        ForgetBoundaries();
         _target = machine switch
         {
             DebugMachines.Trs80Model1 => LaunchModelI(args, loads),
@@ -980,7 +1042,16 @@ internal sealed partial class DebugSession
             _ => Apple2DebugTarget.Launch(args)
         };
 
+        // A bare program calls the ROM's routines, such as COUT, which the Apple II's Monitor sets up as it resets, so
+        // the ROM runs first, as the other machines' ROMs do before a program loads. It runs before the target's cards
+        // and a saved machine's cards and disks go in; a disk the target's own options insert is in the drive from the
+        // start, and the ROM starts booting it for that time, which bootSeconds: 0 leaves out.
+        if (built is not null && Target is Apple2DebugTarget) { Boot(args.Double("bootSeconds") ?? 0.25); }
+
         if (args.String("screen") is { } screen) { Target.Screen = screen; }
+
+        // A project target's cards go in its slots; a saved machine's, restored next, replace them.
+        if (built?.Target.Cards is { } cards) { PutCards(built.Target, cards); }
 
         // The cards and media the editor saved from the last session of this launch configuration replace the
         // launch's own; a DOS launch's disk, built below, still goes in drive 1.
@@ -1019,15 +1090,17 @@ internal sealed partial class DebugSession
         _debug = new();
         _firstSdkModule = int.MaxValue;
         LoadHints(args, sourceFile, program);
-        if (sourceFile is not null)
+        if (built is not null || sourceFile is not null)
         {
             // The retrocore assembler builds any dialect in place, and the debugger reads its source map directly.
-            AssemblyDialect? dialect = SourceBuild.Dialect(args.String("dialect"));
+            // A project's target is already built, each of its sources in its own dialect.
+            AssemblyDialect? dialect = built is null ? SourceBuild.Dialect(args.String("dialect")) : null;
 
             // A .cpu Z80 source on a machine with the SoftCard is the Z80's: it loads where the Z80's addresses reach,
-            // and the Z80 takes the bus at its entry.
+            // and the Z80 takes the bus at its entry. A bare project target is the machine's own CPU's.
             SoftCardDebugTarget? z80 = null;
-            if (Target.Coprocessor is SoftCardDebugTarget softCard
+            if (sourceFile is not null
+                && Target.Coprocessor is SoftCardDebugTarget softCard
                 && SourceBuild.DeclaresCpu(sourceFile, dialect, Target.Cpu, softCard.Cpu))
             {
                 z80 = softCard;
@@ -1036,14 +1109,14 @@ internal sealed partial class DebugSession
             // The build preprocesses as the check did, starting on the machine's CPU; the first .cpu that remains, which
             // made the source the Z80's, selects the Z80's instructions.
             IDebugTarget loader = z80 ?? Target;
-            AssemblyResult result = SourceBuild.Assemble(
-                sourceFile,
+            AssemblyResult result = built?.Result ?? SourceBuild.Assemble(
+                sourceFile ?? "",
                 dialect,
                 Target.Cpu,
                 args.Int("loadAddress") ?? loader.DefaultLoadAddress,
                 args.String("linkerConfiguration"));
 
-            if (z80 is null && Target is Apple2DebugTarget { Dos: not null } dosTarget)
+            if (sourceFile is not null && z80 is null && Target is Apple2DebugTarget { Dos: not null } dosTarget)
             {
                 LoadOnDosDisk(dosTarget, SourceBuild.Emitted(result), args.Int("entryAddress"), sourceFile);
             }
@@ -1057,7 +1130,7 @@ internal sealed partial class DebugSession
                 }
 
                 z80?.Card.TakeBus();
-                loader.ProgramCounter = checked((ushort)(args.Int("entryAddress") ?? first ?? loader.DefaultLoadAddress));
+                loader.ProgramCounter = checked((ushort)(built?.Entry ?? args.Int("entryAddress") ?? first ?? loader.DefaultLoadAddress));
                 z80?.Begin();
             }
 
@@ -1182,7 +1255,21 @@ internal sealed partial class DebugSession
             });
         }
 
-        return [];
+        // A project launch says which machine it started, which only the target said, for the editor to follow.
+        return built is null ? [] : new JsonObject
+        {
+            ["project"] = new JsonObject
+            {
+                ["file"] = built.Target.Project.File,
+                ["target"] = built.Target.Name,
+                ["catalogMachine"] = built.Target.Machine.Id,
+                ["machine"] = built.Target.Machine.Machine,
+                ["model"] = built.Target.Machine.Model,
+                ["rom"] = built.Target.Machine.Rom,
+                ["binary"] = built.Binary,
+                ["entry"] = built.Entry
+            }
+        };
     }
 
     // The Monitor sets up the PIA as it starts, so a loaded program's output through ECHO, and BASIC's own, reaches
@@ -1619,11 +1706,15 @@ internal sealed partial class DebugSession
         bool running = ReferenceEquals(cpu, Cpu);
         bool boundary = cpu.IsInstructionBoundary;
         ushort start = boundary || !running ? cpu.ProgramCounter : _instructionStart;
-        if (Resume(boundary) && running && Hit(start) is { } waiting)
+        bool check = Resume(boundary);
+        if (check && running && Hit(start) is { } waiting)
         {
             Stopped(waiting);
             return;
         }
+
+        // A step passes the boundary it starts at, as continuing does.
+        if (!check && boundary && running) { PassBoundary(cpu, start); }
 
         DebugPosition? position = _debug.Position(cpu, start);
         int hiddenNow = ThreadOf(cpu) == _stoppedThread ? _hidden : 0;
@@ -1652,8 +1743,9 @@ internal sealed partial class DebugSession
             IDebugTarget ran = Cpu;
             if (!Execute()) { return; }
 
-            // The other CPU's instruction: only its breakpoints can stop the step. While the stepping CPU is idle no
-            // instruction of its has finished, so the step neither ends nor meets a breakpoint of its own.
+
+            // The other CPU's instruction: only its breakpoints can stop the step. While the stepping CPU is idle off
+            // a boundary no instruction of its has finished, so the step neither ends nor meets a breakpoint of its own.
             if (!ReferenceEquals(ran, cpu) || !cpu.IsInstructionBoundary)
             {
                 if (Cpu.IsInstructionBoundary && Hit(Cpu.ProgramCounter) is { } other)
@@ -1727,8 +1819,8 @@ internal sealed partial class DebugSession
         return true;
     }
 
-    // Runs the rest of the current instruction, or the next one; an interrupt's response runs with the
-    // instruction after it. A Z80 interrupt response and an indexed bit instruction together stay under 64.
+    // Runs the rest of the current instruction, or the next one, or an interrupt's response. A Z80 interrupt
+    // response, which counts as an instruction, and an indexed bit instruction together stay under 64.
     private const int InstructionCycleBudget = 64;
 
     private bool Execute()
@@ -1742,6 +1834,18 @@ internal sealed partial class DebugSession
         // CPU's own view; the SoftCard's Z80 runs its last T-states beside the 6502.
         IDebugTarget cpu = Cpu;
         bool instruction = cpu.InInstruction;
+
+        // Starting between instructions, the CPU leaves the boundary for the instruction there or for an interrupt's
+        // response, or stays while it idles. An interrupt keeps what was checked there for its return; the
+        // instruction forgets it. On the SoftCard, the 6502 may leave its boundary beside the Z80.
+        bool atBoundary = !instruction && cpu.IsInstructionBoundary;
+        bool met = atBoundary && _metBoundaries.Count != 0 && FindMet(cpu, cpu.ProgramCounter) >= 0;
+        bool left = false;
+        if (!atBoundary && !cpu.IsIdle) { LeftBoundary(cpu); }
+        IDebugTarget? host = cpu is SoftCardDebugTarget && !IsMachineCpu(cpu) ? Target : null;
+
+        // An interrupt's response that fetches no opcode, as on the 6502 and 6809, is not an instruction.
+        bool responding = false;
 
         // What the 6502 hit beside the Z80 counts toward the 6502's instruction, which goes on here.
         if (_hostDataHits.Count != 0 && IsMachineCpu(cpu))
@@ -1777,7 +1881,22 @@ internal sealed partial class DebugSession
                 }
             }
 
+            ushort? hostBoundary = host is { IsInstructionBoundary: true } ? host.ProgramCounter : null;
             instruction |= cpu.StepCycle();
+            if (host is { IsInstructionBoundary: false, IsIdle: false } && hostBoundary is { } hostAddress)
+            {
+                // The 6502's stack has not moved on its response's first cycle, which pushes nothing.
+                LeaveFor(host, hostAddress, host.Frame.StackPointer, host.IsTakingInterrupt, met: null);
+            }
+
+            // It latches on the response's first cycle, as IsTakingInterrupt asks; it is not read after an opcode
+            // fetch, where an 8080 RST instruction's internal cycle looks like the 8085's vectored response.
+            responding |= !instruction && cpu.IsTakingInterrupt;
+            if (atBoundary && !left && !cpu.IsInstructionBoundary && !cpu.IsIdle)
+            {
+                left = true;
+                LeaveFor(cpu, _instructionStart, _instructionStack, cpu.IsTakingInterrupt, met);
+            }
 
             if (_frozen.Count is > 0 and <= FreezesChecked) { FreezeCycle(cpu); }
             if (_watches.Count != 0)
@@ -1793,12 +1912,17 @@ internal sealed partial class DebugSession
 
             if (instruction && cpu.IsInstructionBoundary) { return _dataHits.Count == 0 || DataStop(cpu); }
 
+            // That response ends at the handler's first instruction, whose breakpoints the caller checks. The
+            // watchpoints its stacking hit stop now.
+            if (responding && cpu.IsInstructionBoundary) { return _dataHits.Count == 0 || DataStop(cpu); }
+
             // A Z80 that handed the bus back mid-instruction, as a 16-bit store to the switch does, waits there.
             if (cpu is SoftCardDebugTarget { Card.Running: false }) { return _dataHits.Count == 0 || DataStop(cpu); }
 
-            // An idle CPU may stay so for any time, so its cycles go back to the run loop a few at a time; the next
+            // An idle CPU may stay so for any time, so its cycles go back to the run loop one at a time; the next
             // instruction is observed once the CPU goes on. An instruction that ends by waiting, as CWAI does, has
-            // made its writes, so the watchpoints they hit stop now.
+            // made its writes, so the watchpoints they hit stop now. A CPU idle at a boundary stays at it, with what
+            // was checked there.
             if (cpu.IsIdle) { return !instruction || _dataHits.Count == 0 || DataStop(cpu); }
 
             // A held CPU may stay so for any time too. Its instruction has not finished, so the watchpoints it hit
@@ -1812,7 +1936,11 @@ internal sealed partial class DebugSession
     // Stops where a reset reaches its handler, at a breakpoint there if one hits, so that the two stop once.
     private bool ResetStops()
     {
-        if (!Target.TakeResetStop() || !BreaksOn(MachineResetFilter)) { return false; }
+        if (!Target.TakeResetStop()) { return false; }
+
+        // The reset abandons the interrupts it cut short, and the boundaries they would return to.
+        ForgetBoundaries();
+        if (!BreaksOn(MachineResetFilter)) { return false; }
         if (Hit(Cpu.ProgramCounter) is { } hit)
         {
             Stopped(hit);
@@ -1833,6 +1961,7 @@ internal sealed partial class DebugSession
         ushort pc = cpu.ProgramCounter;
         int stack = cpu.StackPointer;
         _instructionStart = pc;
+        _instructionStack = stack;
         bool machineCpu = IsMachineCpu(cpu);
         if (machineCpu)
         {
@@ -1946,28 +2075,41 @@ internal sealed partial class DebugSession
                                 break;
                             }
 
+                            // Each check runs once at a boundary, and not again where an interrupt taken there
+                            // returns, or while the CPU idles there. Continuing passes the boundary it starts at.
                             IDebugTarget cpu = Cpu;
                             ushort pc = cpu.ProgramCounter;
                             bool boundary = cpu.IsInstructionBoundary;
-                            if (boundary
-                                && !first
-                                && Hit(pc) is { } hit)
+                            long here = boundary ? BoundaryToken(cpu, pc) : 0;
+                            if (boundary && first) { PassBoundary(cpu, pc); }
+                            if (boundary && Hit(pc) is { } hit)
                             {
                                 Stopped(hit);
                                 return;
                             }
 
-                            if (boundary && !first && IsMachineCpu(cpu) && BasicStops(pc)) { return; }
-                            if (boundary && !first && IsMachineCpu(cpu) && PascalStops(pc)) { return; }
+                            bool basic = boundary && IsMachineCpu(cpu);
+                            if (basic && _basicToken != here)
+                            {
+                                _basicToken = here;
+                                if (BasicStops(pc)) { return; }
+                            }
+
+                            if (basic && _pascalToken != here)
+                            {
+                                _pascalToken = here;
+                                if (PascalStops(pc)) { return; }
+                            }
 
                             // Continuing from a BRK stop runs the BRK.
-                            if (boundary
-                                && !(first && trapReported)
-                                && BreaksOn(BrkFilter)
-                                && cpu.Trap(pc) is { } trap)
+                            if (boundary && _trapToken != here && BreaksOn(BrkFilter))
                             {
-                                Stopped("exception", description: trap, exception: "brk");
-                                return;
+                                _trapToken = here;
+                                if (!(first && trapReported) && cpu.Trap(pc) is { } trap)
+                                {
+                                    Stopped("exception", description: trap, exception: "brk");
+                                    return;
+                                }
                             }
 
                             first = false;
@@ -2208,7 +2350,7 @@ internal sealed partial class DebugSession
         AddLoadedModules();
 
         // A stop where a reset reaches its handler is that reset's stop.
-        if (_target is not null && Target.IsInstructionBoundary) { Target.TakeResetStop(); }
+        if (_target is not null && Target.IsInstructionBoundary && Target.TakeResetStop()) { ForgetBoundaries(); }
         ReportDropped();
         _exception = reason == "exception" ? (exception ?? "error", description ?? "The machine stopped.") : null;
         IDebugTarget? stopped = _target is null ? null : ThreadTarget(thread);
@@ -2273,7 +2415,26 @@ internal sealed partial class DebugSession
         string text = devices.ToJsonString();
         if (text == _devices) { return; }
         _devices = text;
+        SayMediaWarnings();
         Notify("retro/devices", devices);
+    }
+
+    // Says in the console why the machine cannot read media just put in, once for each insertion.
+    private void SayMediaWarnings()
+    {
+        foreach (IDevice device in Target.Devices)
+        {
+            if (device.Media is not { Warning: { } warning } media)
+            {
+                _mediaWarnings.Remove(device.Id);
+                continue;
+            }
+
+            string said = $"{media.Label}|{warning}";
+            if (_mediaWarnings.TryGetValue(device.Id, out string? last) && last == said) { continue; }
+            _mediaWarnings[device.Id] = said;
+            Say($"{device.Info.Name}: {Path.GetFileName(media.Label)}: {warning}");
+        }
     }
 
     // Adds the cycles run since the last time to the current line's count, starting it over if the line was entered.

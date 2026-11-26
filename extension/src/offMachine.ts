@@ -8,12 +8,14 @@
 
 import * as vscode from "vscode";
 import { keepResolved, resolveVariables } from "./favorite";
-import { changesFrom } from "./hardware";
+import { changesFrom, fitting } from "./hardware";
 import type { Device } from "./drives";
 import { languageRequest } from "./languageClient";
 import { catalogMachine, launchConfiguration, machineById, machines, startsWithDisks, withSetting, type Machine, type MachineChoice } from "./machines";
+import { activeTargetRead, withActiveTarget } from "./activeTarget";
+import { withProjectMachine } from "./project";
 import type { SavedMachines } from "./savedMachine";
-import { crowdsCartridge, describeSetup, driveOptions, isUsable, setupConfiguration, setupFromConfiguration, startOrigin, withOption, type Setup } from "./startFlow";
+import { basicRomRefusal, crowdsCartridge, describeSetup, driveOptions, isUsable, refusal, setupConfiguration, setupFromConfiguration, startOrigin, withOption, type Setup } from "./startFlow";
 
 /** Where an off machine came from, which decides how it boots. */
 export type OffSource =
@@ -95,7 +97,10 @@ export class OffMachine {
         }
     }
 
-    /** The configuration's name, which its saved machine is kept under. */
+    /**
+     * The configuration's name. Its saved machine is kept under this name, with a project launch's target added
+     * (project.ts savedName).
+     */
     get name(): string | undefined {
         const name = this.target?.configuration.name;
         return typeof name === "string" ? name : undefined;
@@ -169,7 +174,8 @@ export class OffMachine {
         // What only a launch resolves, such as ${file}, keeps the value the session it came from resolved it to.
         const { machineState: _saved, ...fresh } = resolveVariables(entry, workspace?.uri.fsPath);
         // The recovery id is launch.json's when it gives one; otherwise the one its launches are given, by its name.
-        const configuration = keepResolved(fresh, target.configuration);
+        // A project launch's target gives its machine and the name its saved machine is kept under, as its session's.
+        const configuration = withProjectMachine(keepResolved(fresh, target.configuration));
         if (JSON.stringify(configuration) === JSON.stringify(target.configuration)) return;
         this.target = { ...target, configuration };
         this.body = undefined;
@@ -211,8 +217,9 @@ export class OffMachine {
             // What only a launch resolves, such as ${file}, keeps the value its session resolved it to.
             const started = this.state.get<OffTarget>(`${recoveryTargetPrefix}${recoveryId}`);
             if (entry !== undefined) {
-                const fresh = resolveVariables(entry, workspace?.uri.fsPath);
-                await this.select({ configuration: { ...keepResolved(fresh, started?.configuration ?? {}), recoveryId },
+                // A project launch's journal is its target's, whatever target the entry names now.
+                const fresh = { ...resolveVariables(entry, workspace?.uri.fsPath), ...owner.target === undefined ? {} : { target: owner.target } };
+                await this.select({ configuration: { ...withProjectMachine(keepResolved(fresh, started?.configuration ?? {})), recoveryId },
                     source: { kind: "launch", name: owner.name, folder: workspace?.uri.toString() } });
             } else if (isUsable(setup) && setupConfiguration(setup).name === owner.name) {
                 await this.select({ configuration: { ...setupConfiguration(setup), recoveryId }, source: { kind: "setup", setup } });
@@ -237,7 +244,8 @@ export class OffMachine {
         const workspace = folderOf(owner.folder);
         const entry = launchConfigurations(workspace).find(candidate => candidate.name === owner.name);
         if (entry !== undefined) {
-            return this.saved.recoveryId(resolveVariables(entry, workspace?.uri.fsPath), workspace?.uri.toString()) === recoveryId;
+            const fresh = { ...resolveVariables(entry, workspace?.uri.fsPath), ...owner.target === undefined ? {} : { target: owner.target } };
+            return this.saved.recoveryId(fresh, workspace?.uri.toString()) === recoveryId;
         }
         const setup = this.state.get<Setup>(lastSetupKey);
         if (isUsable(setup) && setupConfiguration(setup).name === owner.name) {
@@ -303,23 +311,40 @@ export class OffMachine {
         await this.serially(() => this.setSettingNow(option, value));
     }
 
-    private async setSettingNow(option: string, value: string | number | boolean): Promise<void> {
-        await this.reread();
+    /**
+     * Why the machine shown cannot take a setting, if it cannot: it has no such setting; its disks need their
+     * controller, and the Model I's controller its Expansion Interface; a cartridge holds BASIC's slot; Level I
+     * cannot read the disk a Start Machine setup starts from; or the BASIC file it runs names its dialect, which
+     * keeps the ROM whose BASIC that is.
+     */
+    refusal(option: string, value: string | number | boolean): string | undefined {
         const target = this.target;
         const machine = this.machine;
         const choice = machine?.choices.find(candidate => candidate.option === option);
-        if (target === undefined || machine === undefined || choice === undefined) {
-            throw new Error(`${this.name ?? "The machine"} has no setting ${option}.`);
-        }
-        // Its disks need their controller, and the Model I's controller its Expansion Interface: without them the launch
-        // would have no drives to put them in.
+        if (target === undefined || machine === undefined || choice === undefined) return `${this.name ?? "The machine"} has no setting ${option}.`;
         if (driveOptions.has(option) && value === false && startsWithDisks(target.configuration)) {
-            throw new Error(`${this.name ?? "The machine"} starts with disks in its drives, so it keeps its ${choice.label.toLowerCase()}.`);
+            return `${this.name ?? "The machine"} starts with disks in its drives, so it keeps its ${choice.label.toLowerCase()}.`;
         }
         // A cartridge holds the left slot, where BASIC would go.
         if (crowdsCartridge(target.configuration, option, value)) {
-            throw new Error(`${this.name ?? "The machine"} starts with a cartridge in BASIC's slot, so BASIC stays out.`);
+            return `${this.name ?? "The machine"} starts with a cartridge in BASIC's slot, so BASIC stays out.`;
         }
+        if (target.source.kind === "setup") return refusal(machine, target.source.setup, option, value);
+        // A launch that runs a BASIC file that names its dialect keeps the ROM whose BASIC that is.
+        if (option === "rom" && typeof target.configuration.basic === "string") {
+            return basicRomRefusal(this.name ?? "The machine", target.configuration.basic, withSetting(target.configuration, choice, value));
+        }
+        return undefined;
+    }
+
+    private async setSettingNow(option: string, value: string | number | boolean): Promise<void> {
+        await this.reread();
+        const refused = this.refusal(option, value);
+        if (refused !== undefined) throw new Error(refused);
+        const target = this.target;
+        const machine = this.machine;
+        const choice = machine?.choices.find(candidate => candidate.option === option);
+        if (target === undefined || machine === undefined || choice === undefined) throw new Error(`${this.name ?? "The machine"} has no setting ${option}.`);
 
         let next: OffTarget;
         if (target.source.kind === "setup") {
@@ -331,10 +356,14 @@ export class OffMachine {
             next = { configuration: withSetting(target.configuration, choice, value), source: target.source };
         }
 
+        // What the new machine has no drive for, such as the disks Level I has none for, is left out. It is described
+        // with the changes, so the drives of cards added to it are there to keep theirs.
         const saved = this.saved.get(target.configuration);
         if (saved !== undefined) {
             const base = await languageRequest<OffBody>("retrocore/machine/describe", { configuration: target.configuration });
-            await this.saved.set(next.configuration, changesFrom(saved, base.configuration));
+            const changes = changesFrom(saved, base.configuration);
+            const fresh = await languageRequest<OffBody>("retrocore/machine/describe", { configuration: next.configuration, machineState: changes });
+            await this.saved.set(next.configuration, fitting(changes, fresh.configuration));
         }
 
         await this.selectNow(next);
@@ -371,7 +400,9 @@ export class OffMachine {
             items.push({ label: "$(history) " + describeSetup(setup), detail: "What Start Machine started last",
                 target: { configuration: setupConfiguration(setup), source: { kind: "setup", setup } } });
         }
-        // Each folder's launch.json, resolved against that folder, as a multi-root workspace has one in each.
+        // Each folder's launch.json, resolved against that folder, as a multi-root workspace has one in each; an
+        // entry whose target is the active target's gets it once the workspace's projects are read.
+        await activeTargetRead();
         const folders = vscode.workspace.workspaceFolders ?? [];
         for (const workspace of folders) {
             const launches = launchConfigurations(workspace);
@@ -379,8 +410,9 @@ export class OffMachine {
             items.push({ label: folders.length > 1 ? `launch.json: ${workspace.name}` : "launch.json", kind: vscode.QuickPickItemKind.Separator });
             for (const entry of launches) {
                 const name = String(entry.name);
-                items.push({ label: name, description: String(entry.machine ?? ""),
-                    target: { configuration: resolveVariables(entry, workspace.uri.fsPath), source: { kind: "launch", name, folder: workspace.uri.toString() } } });
+                const configuration = withProjectMachine(withActiveTarget(resolveVariables(entry, workspace.uri.fsPath)));
+                items.push({ label: name, description: String(configuration.machine ?? ""),
+                    target: { configuration, source: { kind: "launch", name, folder: workspace.uri.toString() } } });
             }
         }
         items.push({ label: "Machines", kind: vscode.QuickPickItemKind.Separator });

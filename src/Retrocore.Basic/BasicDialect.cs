@@ -28,6 +28,7 @@ public abstract partial class BasicDialect
     [
         AppleSoftDialect.Enhanced,
         Level2Dialect.Instance,
+        Level1Dialect.Instance,
         IntegerBasicDialect.Instance,
         IntegerBasicDialect.Apple1Basic,
         BusinessBasicDialect.Instance,
@@ -53,6 +54,11 @@ public abstract partial class BasicDialect
     ///  Gets the TRS-80 Model I's Level II BASIC.
     /// </summary>
     public static BasicDialect Level2 => Level2Dialect.Instance;
+
+    /// <summary>
+    ///  Gets the TRS-80's Level I BASIC, the Model I's first BASIC and the Model III's other ROM.
+    /// </summary>
+    public static BasicDialect Level1 => Level1Dialect.Instance;
 
     /// <summary>
     ///  Gets the Apple II's Integer BASIC.

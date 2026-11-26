@@ -3,7 +3,19 @@
     <TargetFrameworks />
     <TargetFramework>net11.0</TargetFramework>
     <OutputType>Exe</OutputType>
+    <!-- The host is also the .NET tool retrocore (dotnet pack), whose command is `retrocore build` and the rest. Its
+         Sdk/ and Schemas/ folders go in the package as they go beside the host. It is not published anywhere yet, so
+         it installs from the folder dotnet pack wrote, as CI's tool step does. A native (RetrocoreAot) build is not a
+         tool. -->
     <IsPackable>false</IsPackable>
+    <IsPackable Condition="'$(RetrocoreAot)' != 'true'">true</IsPackable>
+    <PackAsTool Condition="'$(RetrocoreAot)' != 'true'">true</PackAsTool>
+    <ToolCommandName>retrocore</ToolCommandName>
+    <PackageId>retrocore</PackageId>
+    <PackageVersion>0.1.0-dev</PackageVersion>
+    <Authors>Jeremy W Kuhne</Authors>
+    <Description>Retrocore's debug host and command line: retrocore build builds a project's retrocore.json targets for retro machines, with the SDK's ROM sources.</Description>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <!-- The host stays free of reflection so it can be compiled ahead of time; the analyzers report what would
          stop it. dotnet publish -p:RetrocoreAot=true builds it native. (PublishAot itself would also reach the
          analyzer and generator projects it references, which cannot be.) -->
@@ -36,6 +48,8 @@
     <PackageReference Include="SDL3-CS.Windows" Version="3.4.20" />
     <PackageReference Include="SDL3-CS.Linux" Version="3.4.20" />
     <PackageReference Include="SDL3-CS.MacOS" Version="3.4.20" />
+    <!-- The schema of retrocore.json, for editors to validate project files with. -->
+    <None Update="Project\project-1.schema.json" Link="Schemas\project-1.schema.json" CopyToOutputDirectory="PreserveNewest" />
     <!-- SDK ROM sources ship beside the debug host, which assembles them to step through their source. -->
     <None Include="..\..\docs\Bibliography.md" Link="Sdk\Bibliography.md" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\Retrocore.Machines.Apple2\Roms\*.rom.asm" Link="Sdk\Roms\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
@@ -52,6 +66,7 @@
     <None Include="..\Retrocore.Machines.Apple2\Roms\ProgrammersAid\*" Link="Sdk\Roms\ProgrammersAid\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\Retrocore.Machines.Trs80\Roms\*.asm" Link="Sdk\Roms\Trs80\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\Retrocore.Machines.Kaypro\Roms\*.asm" Link="Sdk\Roms\Kaypro\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\Retrocore.Machines.Altair\Roms\*.asm" Link="Sdk\Roms\Altair\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\Retrocore.Machines.Kaypro\Roms\Mbasic\*.asm" Link="Sdk\Roms\Kaypro\Mbasic\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\Retrocore.Machines.Apple3\Roms\*.asm" Link="Sdk\Roms\Apple3\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\Retrocore.Pascal\Pcode.asm" Link="Sdk\Pascal\Pcode.asm" CopyToOutputDirectory="PreserveNewest" />
@@ -71,6 +86,10 @@
     <None Include="..\Retrocore.Machines.Atari\Roms\Os\*.asm" Link="Sdk\Roms\Atari\Os\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\Retrocore.Machines.Atari\Roms\FloatingPoint\*.asm" Link="Sdk\Roms\Atari\FloatingPoint\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\Retrocore.Machines.Atari\Roms\AtariBasic\*.asm" Link="Sdk\Roms\Atari\AtariBasic\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <!-- The SDK's headers for projects, by major version: sdk/1/ is Sdk/1/, which a target's includes search, and its memory
+         maps, which a target's build checks its program against. -->
+    <None Include="..\..\sdk\**\*.inc" Link="Sdk\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\sdk\**\*.map.json" Link="Sdk\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <!-- SDL's packages carry each library once per name its platform links by: libSDL3.so, .so.0 and .so.0.4.20 on

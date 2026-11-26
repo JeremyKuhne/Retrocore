@@ -14,7 +14,7 @@ import { readFile } from "node:fs/promises";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { cardsFor, group, type HardwareRow, type HardwareSetting } from "./hardware";
 import type { BasicPrograms, BasicSummary } from "./basic";
-import { catalogMachine, settingValue, type MachineChoice } from "./machines";
+import { catalogMachine, defaultValue, isLevel1, settingValue, withSetting, type MachineChoice } from "./machines";
 import { favoriteChoices, type Favorites } from "./favorites";
 import type { OffMachine, OffTarget } from "./offMachine";
 import type { SavedMachines } from "./savedMachine";
@@ -270,7 +270,9 @@ class MachineTree implements vscode.TreeDataProvider<Node> {
         item.tooltip = hardwareTooltip(row);
         item.iconPath = new vscode.ThemeIcon(isEmpty(row) ? "circle-outline" : hardwareIcons[row.id] ?? "circuit-board",
             isEmpty(row) ? new vscode.ThemeColor("disabledForeground") : undefined);
-        item.contextValue = ["hardware", ...row.actions ?? []].join(" ");
+        // The ROM row of a machine whose ROM is a setting changes it, off or running.
+        const rom = row.id === "rom" && catalogMachine(this.configuration())?.choices.some(choice => choice.option === "rom") === true;
+        item.contextValue = ["hardware", ...row.actions ?? [], ...rom ? ["changeRom"] : []].join(" ");
         return item;
     }
 
@@ -284,7 +286,9 @@ class MachineTree implements vscode.TreeDataProvider<Node> {
         item.description = off ? "" : "fixed while it runs";
         item.tooltip = off
             ? "What the machine is built with. A change keeps the cards and media you added, where they still fit."
-            : "What the machine was built with. Stop it to change them.";
+            : catalogMachine(this.configuration())?.choices.some(choice => choice.option === "rom") === true
+                ? "What the machine was built with. Stop it to change them; the ROM setting starts it again with the other ROM."
+                : "What the machine was built with. Stop it to change them.";
         return item;
     }
 
@@ -295,13 +299,20 @@ class MachineTree implements vscode.TreeDataProvider<Node> {
         const item = new vscode.TreeItem(choice.label, vscode.TreeItemCollapsibleState.None);
         item.id = `setting/${choice.option}`;
         item.description = chosen?.label ?? String(value);
-        const standard = choice.values.find(candidate => candidate.value === choice.default)?.label ?? String(choice.default);
+        const implied = defaultValue(choice, this.configuration());
+        const standard = choice.values.find(candidate => candidate.value === implied)?.label ?? String(implied);
         const tooltip = new vscode.MarkdownString(`**${escape(choice.label)}**: ${escape(chosen?.label ?? String(value))}`);
         if (chosen?.detail !== undefined) tooltip.appendMarkdown(`\n\n${escape(chosen.detail)}`);
         tooltip.appendMarkdown(`\n\nThe launch option \`${choice.option}\`; ${escape(standard)} by default.`);
-        if (this.state.session !== undefined) tooltip.appendMarkdown(" Stop the machine to change it.");
+        // The ROM changes while it runs by starting it again.
+        const restarts = this.state.session !== undefined && choice.option === "rom";
+        if (restarts) tooltip.appendMarkdown(" Click to start the machine again with another ROM.");
+        else if (this.state.session !== undefined) tooltip.appendMarkdown(" Stop the machine to change it.");
         item.tooltip = tooltip;
-        if (this.state.session === undefined) {
+        if (restarts) {
+            item.contextValue = "setting";
+            item.command = { command: "retrocore.machine.setting", title: "Change ROM", arguments: [choice.option] };
+        } else if (this.state.session === undefined) {
             item.contextValue = "setting off";
             item.command = { command: "retrocore.machine.setting", title: "Change Setting", arguments: [choice.option] };
         } else {
@@ -500,7 +511,7 @@ function keptItem(kept: KeptDisk, device: Device): vscode.TreeItem {
 /** The scheme of the drives' rows, which the drive decorations mark. */
 const driveScheme = "retrocore-drive";
 
-/** A drive row's resource, whose query is the mark it gets: changed, stale, conflict or none. */
+/** A drive row's resource, whose query is the mark it gets: changed, stale, conflict, behind, unreadable or none. */
 const driveUri = (device: Device): vscode.Uri => vscode.Uri.from({ scheme: driveScheme, path: `/${device.id}`, query: mark(device) ?? "" });
 
 /** The marks at the end of the drive rows, as Git marks a changed file: ● changed, ⚠ an image changed on disk. */
@@ -516,6 +527,8 @@ class DriveDecorations implements vscode.FileDecorationProvider {
                 return { badge: "⚠", tooltip: "Changed, and its image changed on disk too", color: new vscode.ThemeColor("list.warningForeground") };
             case "behind":
                 return { badge: "⚠", tooltip: "Changed, and its recovery copy is behind", color: new vscode.ThemeColor("list.warningForeground") };
+            case "unreadable":
+                return { badge: "⚠", tooltip: "The machine cannot read it, as its tooltip says", color: new vscode.ThemeColor("list.warningForeground") };
             default:
                 return undefined;
         }
@@ -806,7 +819,7 @@ export function registerDevices(context: vscode.ExtensionContext, basic: BasicPr
         for (const journal of journals) {
             const owner = saved.recoveryOf(journal.id);
             if (owner === undefined) continue;
-            const machine = journal.name ?? owner.name;
+            const machine = journal.name ?? (owner.target === undefined ? owner.name : `${owner.name} · ${owner.target}`);
             void vscode.window.showWarningMessage(crashedMessage(machine, journal.disks, journal.kept ?? undefined), "Recover", "Review", "Discard")
                 .then(async choice => {
                     if (choice === undefined) return;
@@ -1036,7 +1049,10 @@ export function registerDevices(context: vscode.ExtensionContext, basic: BasicPr
     const act = async (node: Node | undefined, action: string, args: Record<string, unknown> = {}): Promise<void> => {
         if (node !== undefined && "device" in node) await send("device", { id: node.device.id, action, ...args });
     };
-    const filters = (device: Device): Record<string, string[]> => ({ [`${device.name} images`]: device.formats });
+    // Record offers the formats the deck saves its tapes as, or, on a deck that writes the recording itself, the ones
+    // it takes. An Atari's .xex goes in but is not written.
+    const filters = (device: Device): Record<string, string[]> =>
+        ({ [`${device.name} images`]: device.saveFormats?.length ? device.saveFormats : device.formats });
 
     context.subscriptions.push(vscode.commands.registerCommand("retrocore.device.insert", async (node?: Node) => {
         if (node === undefined || !("device" in node)) return;
@@ -1169,33 +1185,97 @@ export function registerDevices(context: vscode.ExtensionContext, basic: BasicPr
         stale = false;
         await off.select(picked.target, picked.machineState);
     }));
-    // A setting's row: pick its value while the machine is off, or take it given, as the tests do.
+    // A value for one of the machine's settings, from a quick pick.
+    const pickSetting = async (choice: MachineChoice, configuration: Record<string, unknown>, title: string, placeHolder: string):
+        Promise<string | number | boolean | undefined> => {
+        const current = settingValue(choice, configuration);
+        const standard = defaultValue(choice, configuration);
+        return (await vscode.window.showQuickPick(
+            choice.values.map(candidate => ({
+                label: candidate.label,
+                detail: candidate.detail,
+                description: candidate.value === standard ? "default" : undefined,
+                picked: candidate.value === current,
+                value: candidate.value
+            })),
+            { title, placeHolder }))?.value;
+    };
+    // The ROM of a running Model I or Model III: the machine starts again with the other, once its user agrees, as
+    // what is only in its memory is lost. The session stops, the ROM is set as it would be while off, keeping its
+    // tape (and disks, where the new ROM has drives), and it starts again as it was started.
+    const changeRunningRom = async (session: vscode.DebugSession, choice: MachineChoice, value: string | number | boolean, confirmed: boolean): Promise<void> => {
+        const configuration = session.configuration as Record<string, unknown>;
+        // The machine its start noted, which becomes the off one once it stops; with another started since, the
+        // setting would go to that one, so nothing is stopped. What the new ROM cannot run is refused first too.
+        const matches = (): boolean => {
+            const shown = off.target?.configuration;
+            return shown?.name === configuration.name && shown?.recoveryId === configuration.recoveryId;
+        };
+        if (!matches()) throw new Error(`${session.name} is not the machine started last, so its ROM can be changed only once it stops.`);
+        const refused = off.refusal(choice.option, value);
+        if (refused !== undefined) throw new Error(refused);
+
+        const label = choice.values.find(candidate => candidate.value === value)?.label ?? String(value);
+        const level1 = isLevel1(withSetting(configuration, choice, value));
+        const restart = `Restart with ${label}`;
+        const detail = `${session.name} starts afresh with ${label}: what is only in its memory, such as a program not saved `
+            + `to tape${level1 ? "" : " or disk"}, is lost. Any tape stays in${level1 ? "; Level I has no disks, so any disks come out" : ", and so do any disks"}. `
+            + "Its later starts have this ROM too.";
+        // Its end is watched from before the question, so a session that ends while it is asked is seen to.
+        let listener: vscode.Disposable | undefined;
+        let over = false;
+        const ended = new Promise<void>(resolve => {
+            listener = vscode.debug.onDidTerminateDebugSession(stopped => {
+                if (stopped.id !== session.id) return;
+                over = true;
+                resolve();
+            });
+        });
+        try {
+            if (!confirmed && await vscode.window.showWarningMessage(`Restart ${session.name} with ${label}?`, { modal: true, detail }, restart) !== restart) return;
+            if (!over) await vscode.debug.stopDebugging(session);
+            await ended;
+        } finally {
+            listener?.dispose();
+        }
+        if (!matches()) throw new Error(`${session.name} stopped, but another machine is shown now, so its ROM was not changed.`);
+        await off.setSetting(choice.option, value);
+        if (!await off.boot()) throw new Error(`${session.name} has the new ROM, but did not start again.`);
+    };
+    // A setting's row: pick its value while the machine is off, or take it given, as the tests do. While it runs, only
+    // the ROM changes, by starting it again; confirmed skips asking, for the tests.
     context.subscriptions.push(vscode.commands.registerCommand("retrocore.machine.setting",
-        async (option: string, given?: string | number | boolean) => {
-            // The note is not awaited: it settles only when dismissed.
-            if (tree.session !== undefined || tree.off === undefined) {
-                void vscode.window.showInformationMessage("Retrocore: stop the machine to change its settings.");
-                return;
-            }
-            const choice = off.machine?.choices.find(candidate => candidate.option === option);
-            if (choice === undefined) return;
-            const current = settingValue(choice, tree.off);
-            const value = given ?? (await vscode.window.showQuickPick(
-                choice.values.map(candidate => ({
-                    label: candidate.label,
-                    detail: candidate.detail,
-                    description: candidate.value === choice.default ? "default" : undefined,
-                    picked: candidate.value === current,
-                    value: candidate.value
-                })),
-                { title: `${off.name ?? "Machine"}: ${choice.label}`, placeHolder: "Applies when it starts; cards and disks you added stay" }))?.value;
-            if (value === undefined || value === current) return;
+        async (option: string, given?: string | number | boolean, confirmed = false) => {
             try {
+                const session = tree.session;
+                if (session !== undefined && option === "rom") {
+                    const configuration = session.configuration as Record<string, unknown>;
+                    const choice = catalogMachine(configuration)?.choices.find(candidate => candidate.option === option);
+                    if (choice === undefined) return;
+                    const value = given ?? await pickSetting(choice, configuration, `${session.name}: ${choice.label}`,
+                        "Starts the machine again with this ROM, keeping its tape");
+                    if (value === undefined || value === settingValue(choice, configuration)) return;
+                    await changeRunningRom(session, choice, value, confirmed);
+                    return;
+                }
+                // The note is not awaited: it settles only when dismissed.
+                if (session !== undefined || tree.off === undefined) {
+                    void vscode.window.showInformationMessage("Retrocore: stop the machine to change its settings.");
+                    return;
+                }
+                const choice = off.machine?.choices.find(candidate => candidate.option === option);
+                if (choice === undefined) return;
+                const value = given ?? await pickSetting(choice, tree.off, `${off.name ?? "Machine"}: ${choice.label}`,
+                    "Applies when it starts; cards and disks you added stay");
+                if (value === undefined || value === settingValue(choice, tree.off)) return;
                 await off.setSetting(option, value);
             } catch (error) {
                 void vscode.window.showErrorMessage(`Retrocore: ${error instanceof Error ? error.message : String(error)}`);
             }
         }));
+    // The ROM row's button, and its setting's: the setting's quick pick, off or running.
+    context.subscriptions.push(vscode.commands.registerCommand("retrocore.machine.changeRom",
+        () => vscode.commands.executeCommand("retrocore.machine.setting", "rom")));
     // A change without a view's row, for the tests: as retro/hardware or retro/device takes it.
     context.subscriptions.push(vscode.commands.registerCommand("retrocore.machine.change",
         (request: "hardware" | "device", args: Record<string, unknown>) => send(request, args)));

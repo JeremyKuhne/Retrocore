@@ -55,6 +55,16 @@ Inserting media belongs to the concrete devices, since the image formats are the
 A tape drive has `transport` (`motor`, `mode`, `position`, `length`) instead of `head`, and block storage has
 `blocks` (`count`, `last`).
 
+Where a drive can tell, its `media` also has `contents`, what the media holds, and `warning`, why the machine
+cannot read it. The TRS-80 cassettes give both, for a tape recorded for the other Level's ROM; the Drives view marks
+the row ⚠ and shows them, and the session says the warning in the debug console as such a tape goes in, once while that tape stays in:
+
+```json
+"media": { "label": "C:\\tapes\\eliza.cas", "format": "CAS", "writeProtected": true, "changed": false,
+  "contents": "Level I tape (250 baud)",
+  "warning": "This tape was recorded by Level I BASIC (250 baud); Level II can't read it. Switch the ROM to Level I." }
+```
+
 The body also has `hardware`, the machine's installed hardware in order: built-in parts, then each slot or
 option, empty ones included. Each row names the devices on it, by id:
 

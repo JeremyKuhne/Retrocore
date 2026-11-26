@@ -40,6 +40,11 @@ internal static class GamePacker
     internal const int MostWords = 150;
 
     /// <summary>
+    ///  The code after the last: the .dat gives two codes in a number as the first times 150 plus the second.
+    /// </summary>
+    internal const int CodeLimit = 150;
+
+    /// <summary>
     ///  Packs a game.
     /// </summary>
     /// <param name="game">The game.</param>
@@ -266,7 +271,7 @@ internal static class GamePacker
 
             foreach (int code in action.Codes)
             {
-                Require(code is >= 0 and < MostWords, $"Action code {code} is out of range: codes run from 0 to 149.");
+                Require(code is >= 0 and < CodeLimit, $"Action code {code} is out of range: codes run from 0 to 149.");
                 int message = code is >= 1 and <= 51 ? code : code >= 102 ? code - 50 : 0;
                 Require(message < game.Messages.Count, $"Action code {code} prints message {message}, which the game lacks.");
             }

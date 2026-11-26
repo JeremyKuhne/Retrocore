@@ -45,8 +45,8 @@ internal sealed class Dos33Environment : TargetEnvironment
     /// <inheritdoc/>
     /// <remarks>
     ///  <para>
-    ///   DOS boots in about 3 seconds and HELLO starts the program in about 1 more, as the SDK's DOS runs; a launch
-    ///   that does not start it in 30 has failed, such as at a DOS error.
+    ///   DOS boots and HELLO starts the program in a few of the machine's seconds; a launch that has not started it in
+    ///   30 has failed, such as at a DOS error.
     ///  </para>
     /// </remarks>
     internal override int BootSeconds => 30;
@@ -126,8 +126,12 @@ internal sealed class Dos33Environment : TargetEnvironment
         // the string, as the escape {$84}.
         bool integer = target.Machine.Id == "apple2-ii";
         string command = build.Entry == start ? $"BRUN {program}" : $"BLOAD {program}";
-        // Integer BASIC's numbers run to 32767, so CALL takes an address from $8000 as a negative one.
-        int address = integer && build.Entry > short.MaxValue ? build.Entry - 0x10000 : build.Entry;
+        // Integer BASIC's numbers run from -32767 to 32767, so CALL takes an address from $8000 as a negative one, and
+        // $8000 itself as the sum Integer BASIC makes of -32767 and -1.
+        string address = !integer || build.Entry <= short.MaxValue
+            ? $"{build.Entry}"
+            : build.Entry == 0x8000 ? "-32767-1" : $"{build.Entry - 0x10000}";
+
         string call = build.Entry == start ? "" : $":CALL {address}";
         string text = integer
             ? $"10 PRINT \"{{$84}}{command}\"{call}\n"

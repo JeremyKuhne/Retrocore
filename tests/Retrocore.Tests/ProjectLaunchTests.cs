@@ -269,6 +269,28 @@ public sealed class ProjectLaunchTests
     }
 
     /// <summary>
+    ///  On the Apple II, HELLO CALLs an entry at <c>$8000</c>, which Integer BASIC cannot write as a number, as
+    ///  <c>-32767-1</c>, and the program starts there.
+    /// </summary>
+    [TestMethod]
+    public void Dos33LaunchCallsAnEntryAt8000OnTheII()
+    {
+        Write("retrocore.json", """
+            { "sdk": "1", "name": "game", "cpu": "6502", "sources": ["src/*.s"], "entry": "START",
+              "targets": { "dos": { "machine": "apple2-ii", "environment": "dos33", "memoryMap": { "load": "$7FFF" } } } }
+            """);
+
+        Write("src/main.s", "DATA:\n    nop\nSTART:\n    lda #1\nLoop:\n    jmp Loop\n");
+        using DapTestClient client = new();
+        client.Request("initialize", []);
+        client.Request("launch", Launch("dos"))["project"]?["entry"]?.GetValue<int>().Should().Be(0x8000);
+        client.Request("evaluate", new JsonObject
+        {
+            ["expression"] = "PC"
+        }).String("result").Should().StartWith("$8000");
+    }
+
+    /// <summary>
     ///  A <c>dos33</c> target, or its launch, cannot give the options of the Disk II its launch boots, nor launch with its
     ///  image off, nor on the Apple II's original Monitor, which boots no disk.
     /// </summary>

@@ -3,6 +3,7 @@
 // See LICENSE file in the project root for full license information
 
 using Retrocore.Debug.Project;
+using Retrocore.Media;
 
 namespace Retrocore.Debug;
 
@@ -40,9 +41,11 @@ internal sealed partial class DebugSession
         switch (Target)
         {
             case Apple2DebugTarget apple2:
-                // Slot 6's drive 1, which the Disk II's firmware boots.
+                // Slot 6's drive 1, which the Disk II's firmware boots. The image is read before the disk there is
+                // kept, so an image that cannot go in leaves the drive and the kept disks as they were.
+                WozDisk disk = SectorDiskConverter.Convert(bytes, proDosOrder: false);
                 MediaActions.KeepReplaced(apple2.BootDrive, $"the build's {build.Media.ImageKind} took its place");
-                apple2.InsertDisk(bytes, label);
+                apple2.BootDrive.Insert(disk, label, "DSK");
                 break;
             default:
                 throw new ProjectException($"{target.Project.File}: target {target.Name}: {target.Machine.Id} cannot boot the '{target.Environment}' environment's image yet.");

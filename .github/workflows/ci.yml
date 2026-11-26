@@ -62,7 +62,7 @@ jobs:
           mkdir -p artifacts/iie-sample
           dotnet artifacts/AnyCPU/Release/Retrocore.Debug/net11.0/Retrocore.Debug.dll --assemble sample/iie/main.s artifacts/iie-sample/main.bin --dialect ca65 --config sample/iie/link.cfg
 
-      # The project builds the engine for its five bare targets, the game linked in, after its steps pack both games
+      # The project builds the engine for its bare targets, a game linked into each, after its steps pack both games
       # with the packer; then the reference engine plays each game's transcripts as their .out files show them.
       - name: Build the adventure sample and play its transcripts
         working-directory: Retrocore/sample/adventure

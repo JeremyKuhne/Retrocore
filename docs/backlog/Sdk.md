@@ -513,7 +513,7 @@ Apple Pascal comes after BASIC, with its own [plan](ApplePascal.md).
 | Media writers | Each writer's image reads back through the existing readers (`DosDisk`, `SosVolume`, the D64 and DFS readers, `TapFormat`, `UefFormat`) and boots under emulation: the DOS 3.3 disk on a II Plus as well as a IIe, the SOS disk with SOS 1.3 built from source, the DFS disk with `!BOOT`. |
 | The Apple-1's RAM | 16K and 32K boot the Woz Monitor and run a program above `$1FFF`; other sizes are still rejected. |
 | Dialects | ca65 and Merlin samples include the native headers and build byte-identically to their native twin. |
-| The adventure | It builds for all five targets. A scripted walkthrough of the test adventure, and an opening of Pirate Adventure, run on each target under the debug adapter, in the style of the `tools/Test-*Dap.mjs` scripts, and each transcript must match the packer's reference engine. |
+| The adventure | It builds for all five targets. A scripted walkthrough of the test adventure, and an opening of Pirate Adventure, run on each target under the debug adapter, in the style of the `tools/Test-*Dap.mjs` scripts, and each transcript must match the packer's reference engine. As built in phase 3: Pirate Adventure's win, from start to finish, and its death play on the bare Apple-1, PET, Apple II and BBC Micro, and the test game's three transcripts on a second Apple II target; the Apple III builds but is not played until it has a character set. |
 | VS Code | The active target picker, F5 without a launch.json, the `project` launch, and the language server switching targets. |
 | Versions | A project on the previous major builds with its deprecation warnings; a removed name fails on the current major. |
 
@@ -625,8 +625,9 @@ Checked against main once the PET and BBC Micro had landed:
 
 ## Open questions
 
-- **The packed format's budget.** How small Pirate Adventure packs, and so whether the Apple-1 could fit in 16K. This
-  is measured in phase 3.
+- **The packed format's budget.** How small Pirate Adventure packs, and so whether the Apple-1 could fit in 16K.
+  Measured in phase 3: it packs to 5,894 bytes, and the Apple-1's whole program, the game linked in, is 10,141 bytes
+  from `$0300` with about 0.5K of engine state after it, so it would fit in 16K. The target keeps 32K.
 - **Saving the game.** A save to disk on the disk targets, and to tape or nothing on the Apple-1. Is this in the first
   sample, or after it?
 - **Where the extension and tool disagree.** Should the extension refuse to build when the repository pins a tool it

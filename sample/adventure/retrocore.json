@@ -1,6 +1,7 @@
-// The adventure on five machines, each a bare target: the engine's core, the same on every one, and the machine's
+// The adventure on five machines as bare targets: the engine's core, the same on every one, and the machine's
 // platform folder, src/platform/<family>/, with its console and its linker configuration. `retrocore build --all`
-// first packs the games with the packer, a step it skips while the packer and the games are unchanged.
+// first packs the games with the packer, a step it skips while the packer and the games are unchanged. Every target
+// links Pirate Adventure in but apple2-test, which links the test game (TEST_GAME, src/linked-game.s).
 {
   "sdk": "1",
   "name": "adventure",
@@ -22,11 +23,14 @@
     { "tool": "tools/packer.cs", "args": ["pack", "${in}", "${out}"], "in": "games/test.dat", "out": "${obj}/test.bin" },
     { "tool": "tools/packer.cs", "args": ["pack", "${in}", "${out}"], "in": "games/pirate.dat", "out": "${obj}/pirate.bin" }
   ],
+  "defines": { "TEST_GAME": 0 },
   "entry": "Engine::Start",
   "targets": {
     "apple1": { "machine": "apple1", "environment": "bare", "options": { "ramKilobytes": 32 },
                 "linkerConfiguration": "src/platform/apple1/bare.cfg" },
     "apple2": { "machine": "apple2-iiplus", "environment": "bare", "linkerConfiguration": "src/platform/apple2/bare.cfg" },
+    "apple2-test": { "machine": "apple2-iiplus", "environment": "bare", "linkerConfiguration": "src/platform/apple2/bare.cfg",
+                     "defines": { "TEST_GAME": 1 } },
     "apple3": { "machine": "apple3", "environment": "bare", "linkerConfiguration": "src/platform/apple3/bare.cfg" },
     "pet": { "machine": "pet4032", "environment": "bare", "linkerConfiguration": "src/platform/pet/bare.cfg" },
     "bbc": { "machine": "bbcb", "environment": "bare", "linkerConfiguration": "src/platform/bbc/bare.cfg" }

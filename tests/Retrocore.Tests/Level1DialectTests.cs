@@ -206,6 +206,42 @@ public class Level1DialectTests
     }
 
     /// <summary>
+    ///  A place READ keeps is in its READ list, after any item and after an IF's condition; a FOR loop's place, after
+    ///  its FOR statement, is not, after an IF's condition either, nor is READ in quotes.
+    /// </summary>
+    /// <param name="marked">A line's text, with a bar at the place.</param>
+    /// <param name="inList">Whether the place is in a READ list.</param>
+    [TestMethod]
+    [DataRow("READ A|", true)]
+    [DataRow("READ A,B|", true)]
+    [DataRow("REA. A|,B", true)]
+    [DataRow("P. 1: READ A|", true)]
+    [DataRow("IF X=1 THEN READ A|", true)]
+    [DataRow("IF X=1 READ A|", true)]
+    [DataRow("FOR I=1 TO 1826|", false)]
+    [DataRow("FOR I=1 TO 9|: READ A", false)]
+    [DataRow("FOR I=1 TO 9: READ A|", true)]
+    [DataRow("IF X=1 THEN FOR I=1 TO 1826|", false)]
+    [DataRow("P. \"READ\"|", false)]
+    [DataRow("READ A(I+1)|", true)]
+    [DataRow("READ A(R.(9))|", true)]
+    [DataRow("READ A(I.(X))|,B", true)]
+    [DataRow("IF P.(1,2) THEN READ A|", true)]
+    [DataRow("IF X=1 T. FOR I=1 T. 1826|", false)]
+    [DataRow("P. \"A:B\": READ A|", true)]
+    [DataRow("READ A: FOR I=1 TO 9|", false)]
+    public void ReadListPlacesAreFound(string marked, bool inList)
+    {
+        string text = marked.Replace("|", "");
+        byte[] memory = new byte[0x10000];
+        memory[0x4200] = 10;
+        System.Text.Encoding.ASCII.GetBytes(text).CopyTo(memory, 0x4202);
+        memory[0x4202 + text.Length] = Level1Dialect.EndOfLine;
+        DelegateBasicMemory basic = new(address => memory[address], (address, value) => memory[address] = value);
+        Level1Dialect.InReadList(basic, 0x4200, 0x4202 + marked.IndexOf('|')).Should().Be(inList, marked);
+    }
+
+    /// <summary>
     ///  A file is a Level I image when its line numbers say so, though it may hold no zero byte; text, with any line
     ///  ends, is not.
     /// </summary>

@@ -185,6 +185,14 @@ try {
     assert.deepEqual([entry.threadId, entry.reason], [2, "entry"]);
     const first = (await request("stackTrace", { threadId: 2 })).stackFrames[0];
     assert.deepEqual([first.name, first.source?.path, first.line], ["10: A=5", file, 1]);
+
+    // An error in a DATA item that READ is taking stops in the READ's line, as on the Model I.
+    const data = join(roms, "data.level1.bas");
+    writeFileSync(data, "10 READ A\n20 DATA 1+\n");
+    await launch({ machine: "trs80-model3", rom: "level1", basic: data }, ["basicErrors"], null);
+    const dataError = await event("stopped");
+    assert.deepEqual([dataError.threadId, dataError.reason, dataError.description], [2, "exception", "WHAT? in 10 (code 2)."]);
+    assert.equal((await request("stackTrace", { threadId: 2 })).stackFrames[0].name, "10: READ A");
     await assert.rejects(request("launch", { machine: "trs80-model4", rom: "level1" }), /Only the Model III has Level I/);
 
     // A disks value that is not a list, or an entry that is neither a path nor null, is refused, rather than

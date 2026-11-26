@@ -91,7 +91,7 @@ internal sealed partial class DebugSession
     private BasicRom? ActiveBasic => Target.BasicRom is { } rom
         && (Target.BasicRomInMemory || _debug.Position(Target, rom.Gone) is not null) ? rom : null;
 
-    private bool BasicDirect => Target.Basic is not { } dialect || dialect.InDirectMode(new TargetBasicMemory(Target));
+    private bool BasicDirect => Target.BasicInDirectMode;
 
     private int CurrentLine => Target.BasicCurrentLine;
 

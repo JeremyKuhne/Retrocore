@@ -88,7 +88,7 @@ export function registerActiveTarget(context: vscode.ExtensionContext): ActiveTa
                 + `${machine === undefined ? "" : `, on the ${machine.label}`}\n\n`
                 + "A launch whose target is `${command:retrocore.activeTarget}` builds and debugs it, when the launch's "
                 + "project is this target's retrocore.json or a root file that lists it. "
-                + `Click to pick another of the workspace's targets.\n\n${target.file}`);
+                + `Click to pick another of the workspace's targets.\n\n\`${target.file.replaceAll("`", "'")}\``);
             item.show();
         }
         if (text !== shown) {

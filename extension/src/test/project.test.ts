@@ -6,14 +6,18 @@ import * as assert from "node:assert/strict";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import { test } from "node:test";
+import { after, test } from "node:test";
 import { fingerprint } from "../hardware";
-import { findTarget, loadTargets, parseJsonc, projectTargetKey, qualifiedName, savedName, withProjectMachine } from "../project";
+import { findTarget, loadTargets, parseJsonc, projectTargetKey, qualifiedName, savedLabel, savedName, splitSavedName, withProjectMachine } from "../project";
 
 const sample = path.resolve(__dirname, "..", "..", "..", "sample", "project");
 
+const scratches: string[] = [];
+after(() => { for (const root of scratches) fs.rmSync(root, { recursive: true, force: true }); });
+
 function scratch(files: Record<string, string>): string {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), "retrocore-project-"));
+    scratches.push(root);
     for (const [name, text] of Object.entries(files)) {
         fs.mkdirSync(path.dirname(path.join(root, name)), { recursive: true });
         fs.writeFileSync(path.join(root, name), text);
@@ -48,6 +52,8 @@ test("a root file's projects each give their targets, and a name they share need
     assert.equal(findTarget(targets, "apple2"), undefined, "two projects have an apple2");
     assert.equal(findTarget(targets, "editor/apple2")?.machine, "apple2-iiplus");
     assert.equal(findTarget(targets, "pet")?.file, path.join(root, "game", "retrocore.json"));
+    const broken = scratch({ "retrocore.json": `{ "projects": "game", "targets": { "a": { "machine": "pet4032" } } }` });
+    assert.deepEqual(loadTargets(broken), [], "a root whose projects are not a list has no targets, as the host refuses it");
 });
 
 test("a project launch gets its target's machine, and every target of one configuration keeps its own saved machine", () => {
@@ -58,11 +64,13 @@ test("a project launch gets its target's machine, and every target of one config
     assert.equal(plus.model, "iiplus");
     assert.equal(iie.model, "iie-enhanced");
     assert.deepEqual((iie[projectTargetKey] as { target: string }).target, "hello/apple2-iie");
-    assert.equal(savedName(plus), "Debug project · hello/apple2-iiplus");
-    assert.equal(savedName(iie), "Debug project · hello/apple2-iie");
+    assert.equal(savedLabel(savedName(plus) ?? ""), "Debug project · hello/apple2-iiplus");
+    assert.deepEqual(splitSavedName(savedName(iie) ?? ""), { name: "Debug project", target: "hello/apple2-iie" });
     assert.notEqual(fingerprint(plus), fingerprint(iie));
     assert.equal(savedName(withProjectMachine({ ...launch, target: "apple2-iie" })), savedName(iie),
         "the target by name or as project/target is the same target");
+    assert.equal(savedName({ ...launch, target: "apple2-iie" }), savedName(iie),
+        "and a launch.json entry read as it is, as the off machine reads it, keeps the same name");
 });
 
 test("a launch that is not a project's, or names a target the extension cannot find, is left for the host", () => {
@@ -71,7 +79,7 @@ test("a launch that is not a project's, or names a target the extension cannot f
     assert.equal(savedName(plain), "Plain");
     const missing = { name: "Missing", project: sample, target: "pet" };
     assert.equal(withProjectMachine(missing), missing);
-    assert.equal(savedName(missing), "Missing · pet");
+    assert.equal(savedLabel(savedName(missing) ?? ""), "Missing · pet");
     const nowhere = { name: "Nowhere", project: path.join(sample, "no-such-folder"), target: "x" };
     assert.equal(withProjectMachine(nowhere), nowhere);
 });

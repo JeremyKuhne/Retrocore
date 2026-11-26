@@ -118,14 +118,17 @@ export function isRootFile(file: string): boolean {
 }
 
 /**
- * The targets a launch's project names, in the host's order: a project's, or each of a root file's projects' in the
- * order it lists them.
+ * The targets a launch's project names: a project's, or each of a root file's projects' in the order it lists them.
+ * A project's are in its file's order, as the host lists them, except that here names that are whole numbers come
+ * first, as JSON.parse orders them.
  * @throws Error when a file cannot be read or is not JSON.
  */
 export function loadTargets(project: string): ProjectTarget[] {
     const file = projectFile(project);
     const root = read(file);
-    if (!Array.isArray(root.projects)) return targetsOf(file, root);
+    if (!("projects" in root)) return targetsOf(file, root);
+    // The host refuses a root whose projects are not a list of folders, or an empty one.
+    if (!Array.isArray(root.projects)) return [];
     return root.projects.flatMap(folder => {
         if (typeof folder !== "string") return [];
         const member = path.join(path.resolve(path.dirname(file), folder), projectFileName);
@@ -133,7 +136,7 @@ export function loadTargets(project: string): ProjectTarget[] {
     });
 }
 
-/** The one target a launch's target names, by its name or as project/target, as the host chooses it; none for no one. */
+/** The one target a launch's target names, by its name or as project/target, as the host chooses it; none when no target, or more than one, has that name. */
 export function findTarget(targets: readonly ProjectTarget[], name: string): ProjectTarget | undefined {
     const named = targets.filter(target => target.name === name || qualifiedName(target) === name);
     return named.length === 1 ? named[0] : undefined;
@@ -148,6 +151,12 @@ export function launchTarget(configuration: Record<string, unknown>): ProjectTar
         return undefined;
     }
 }
+
+/**
+ * The launch property a project launch's resolved target goes in: its file, its qualified name and what the file
+ * gives it, so the saved machine follows the target and changes with it. The debug host ignores it.
+ */
+export const projectTargetKey = "retrocoreTarget";
 
 /**
  * A project launch configuration with the machine its target runs filled in, as the catalog configures it, so what
@@ -167,23 +176,34 @@ export function withProjectMachine(configuration: Record<string, unknown>): Reco
     };
 }
 
-/**
- * The launch property a project launch's resolved target goes in: its file, its qualified name and what the file
- * gives it, so the saved machine follows the target and changes with it. The debug host ignores it.
- */
-export const projectTargetKey = "retrocoreTarget";
+/** What separates a project launch's name from its target's in the name its saved machine is kept under. */
+export const targetSeparator = "";
 
 /**
  * The name a launch configuration's saved machine and recovery journal are kept under: its own name, or for a project
- * launch its name and its target's, so each target of a `${command:retrocore.activeTarget}` launch keeps its own.
+ * launch its name and its target's as project/target (separated by targetSeparator), so each target of a launch
+ * whose target is a variable keeps its own, whether the launch names it by name or as project/target.
  */
 export function savedName(configuration: Record<string, unknown>): string | undefined {
     const name = configuration.name;
     if (typeof name !== "string") return undefined;
-    const target = configuration[projectTargetKey];
-    if (typeof target === "object" && target !== null && "target" in target && typeof target.target === "string") {
-        return `${name} · ${target.target}`;
+    const resolved = configuration[projectTargetKey];
+    if (typeof resolved === "object" && resolved !== null && "target" in resolved && typeof resolved.target === "string") {
+        return `${name}${targetSeparator}${resolved.target}`;
     }
-    return typeof configuration.project === "string" && typeof configuration.target === "string"
-        ? `${name} · ${configuration.target}` : name;
+    if (typeof configuration.project !== "string" || typeof configuration.target !== "string") return name;
+    // A target the extension cannot find keeps the name it is given, as the host reports it.
+    const target = launchTarget(configuration);
+    return `${name}${targetSeparator}${target === undefined ? configuration.target : qualifiedName(target)}`;
+}
+
+/** A saved name as it is shown: a project launch's as its name · project/target. */
+export function savedLabel(saved: string): string {
+    return saved.replace(targetSeparator, " · ");
+}
+
+/** A saved name's launch configuration name and, for a project launch, its target as project/target. */
+export function splitSavedName(saved: string): { name: string; target: string | undefined } {
+    const at = saved.indexOf(targetSeparator);
+    return at < 0 ? { name: saved, target: undefined } : { name: saved.slice(0, at), target: saved.slice(at + 1) };
 }

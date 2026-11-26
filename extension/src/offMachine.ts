@@ -12,6 +12,7 @@ import { changesFrom, fitting } from "./hardware";
 import type { Device } from "./drives";
 import { languageRequest } from "./languageClient";
 import { catalogMachine, isLevel1, launchConfiguration, machineById, machines, startsWithDisks, withSetting, type Machine, type MachineChoice } from "./machines";
+import { withProjectMachine } from "./project";
 import type { SavedMachines } from "./savedMachine";
 import { crowdsCartridge, describeSetup, driveOptions, isUsable, refusal, setupConfiguration, setupFromConfiguration, startOrigin, withOption, type Setup } from "./startFlow";
 
@@ -169,7 +170,8 @@ export class OffMachine {
         // What only a launch resolves, such as ${file}, keeps the value the session it came from resolved it to.
         const { machineState: _saved, ...fresh } = resolveVariables(entry, workspace?.uri.fsPath);
         // The recovery id is launch.json's when it gives one; otherwise the one its launches are given, by its name.
-        const configuration = keepResolved(fresh, target.configuration);
+        // A project launch's target gives its machine and the name its saved machine is kept under, as its session's.
+        const configuration = withProjectMachine(keepResolved(fresh, target.configuration));
         if (JSON.stringify(configuration) === JSON.stringify(target.configuration)) return;
         this.target = { ...target, configuration };
         this.body = undefined;
@@ -211,8 +213,9 @@ export class OffMachine {
             // What only a launch resolves, such as ${file}, keeps the value its session resolved it to.
             const started = this.state.get<OffTarget>(`${recoveryTargetPrefix}${recoveryId}`);
             if (entry !== undefined) {
-                const fresh = resolveVariables(entry, workspace?.uri.fsPath);
-                await this.select({ configuration: { ...keepResolved(fresh, started?.configuration ?? {}), recoveryId },
+                // A project launch's journal is its target's, whatever target the entry names now.
+                const fresh = { ...resolveVariables(entry, workspace?.uri.fsPath), ...owner.target === undefined ? {} : { target: owner.target } };
+                await this.select({ configuration: { ...withProjectMachine(keepResolved(fresh, started?.configuration ?? {})), recoveryId },
                     source: { kind: "launch", name: owner.name, folder: workspace?.uri.toString() } });
             } else if (isUsable(setup) && setupConfiguration(setup).name === owner.name) {
                 await this.select({ configuration: { ...setupConfiguration(setup), recoveryId }, source: { kind: "setup", setup } });
@@ -237,7 +240,8 @@ export class OffMachine {
         const workspace = folderOf(owner.folder);
         const entry = launchConfigurations(workspace).find(candidate => candidate.name === owner.name);
         if (entry !== undefined) {
-            return this.saved.recoveryId(resolveVariables(entry, workspace?.uri.fsPath), workspace?.uri.toString()) === recoveryId;
+            const fresh = { ...resolveVariables(entry, workspace?.uri.fsPath), ...owner.target === undefined ? {} : { target: owner.target } };
+            return this.saved.recoveryId(fresh, workspace?.uri.toString()) === recoveryId;
         }
         const setup = this.state.get<Setup>(lastSetupKey);
         if (isUsable(setup) && setupConfiguration(setup).name === owner.name) {
@@ -399,8 +403,9 @@ export class OffMachine {
             items.push({ label: folders.length > 1 ? `launch.json: ${workspace.name}` : "launch.json", kind: vscode.QuickPickItemKind.Separator });
             for (const entry of launches) {
                 const name = String(entry.name);
-                items.push({ label: name, description: String(entry.machine ?? ""),
-                    target: { configuration: resolveVariables(entry, workspace.uri.fsPath), source: { kind: "launch", name, folder: workspace.uri.toString() } } });
+                const configuration = withProjectMachine(resolveVariables(entry, workspace.uri.fsPath));
+                items.push({ label: name, description: String(configuration.machine ?? ""),
+                    target: { configuration, source: { kind: "launch", name, folder: workspace.uri.toString() } } });
             }
         }
         items.push({ label: "Machines", kind: vscode.QuickPickItemKind.Separator });

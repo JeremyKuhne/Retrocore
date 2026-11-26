@@ -10,7 +10,7 @@
 import * as vscode from "vscode";
 import { randomUUID } from "node:crypto";
 import { fingerprint, restorable, type SavedMachine } from "./hardware";
-import { savedName, withProjectMachine } from "./project";
+import { savedLabel, savedName, splitSavedName, withProjectMachine } from "./project";
 
 // Each launch configuration's saved machine is under this prefix and its name (a project launch's, with its target's:
 // project.ts savedName).
@@ -35,8 +35,11 @@ export interface SavedMachines {
      * its unsaved disks in: its own, or one made the first time it is asked for.
      */
     recoveryId(configuration: Record<string, unknown>, folder: string | undefined): string | undefined;
-    /** The configuration a recovery id was made for: its name and workspace folder's URI, if any. */
-    recoveryOf(id: string): { name: string; folder: string | undefined; made: boolean } | undefined;
+    /**
+     * The configuration a recovery id was made for: its name, a project launch's target as project/target, and its
+     * workspace folder's URI, if any.
+     */
+    recoveryOf(id: string): { name: string; target: string | undefined; folder: string | undefined; made: boolean } | undefined;
 }
 
 /** Saves each session's machine as it changes, and gives it back to the next launch of the same configuration. */
@@ -87,14 +90,14 @@ export function registerSavedMachines(context: vscode.ExtensionContext): SavedMa
             const rest = made ?? state.get<string>(`${ownerPrefix}${id}`);
             if (rest === undefined) return undefined;
             const bar = rest.indexOf("|");
-            return { name: rest.slice(bar + 1), folder: bar > 0 ? rest.slice(0, bar) : undefined, made: made !== undefined };
+            return { ...splitSavedName(rest.slice(bar + 1)), folder: bar > 0 ? rest.slice(0, bar) : undefined, made: made !== undefined };
         }
     };
 
     context.subscriptions.push(vscode.debug.registerDebugConfigurationProvider("retrocore", {
         resolveDebugConfigurationWithSubstitutedVariables(folder, configuration) {
-            // A project launch's target decides its machine, which is filled in first: the views read it, and the
-            // saved machine and recovery journal are the target's.
+            // A project launch's target decides its machine, which is filled in first: its session's views read it,
+            // and the saved machine and recovery journal are the target's. The off machine resolves it the same way.
             configuration = withProjectMachine(configuration) as vscode.DebugConfiguration;
             const name = savedName(configuration);
             if (name === undefined) return configuration;
@@ -124,11 +127,11 @@ export function registerSavedMachines(context: vscode.ExtensionContext): SavedMa
             return;
         }
         const all = "All launch configurations";
-        const picked = await vscode.window.showQuickPick([...names, all], {
+        const picked = await vscode.window.showQuickPick([...names.map(savedLabel), all], {
             title: "Reset the saved machine (cards and disks) of"
         });
         if (picked === undefined) return;
-        for (const name of picked === all ? names : [picked]) {
+        for (const name of picked === all ? names : names.filter(name => savedLabel(name) === picked)) {
             last.delete(name);
             await state.update(key(name), undefined);
         }

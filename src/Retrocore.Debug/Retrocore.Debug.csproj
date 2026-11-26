@@ -37,6 +37,7 @@
     <ProjectReference Include="..\Retrocore.Machines.Acorn\Retrocore.Machines.Acorn.csproj" />
     <ProjectReference Include="..\Retrocore.Machines.Commodore\Retrocore.Machines.Commodore.csproj" />
     <ProjectReference Include="..\Retrocore.Machines.Altair\Retrocore.Machines.Altair.csproj" />
+    <ProjectReference Include="..\Retrocore.Machines.Trs80Model100\Retrocore.Machines.Trs80Model100.csproj" />
     <ProjectReference Include="..\Retrocore.Machines.Trs80\Retrocore.Machines.Trs80.csproj" />
     <ProjectReference Include="..\Retrocore.Machines.Kaypro\Retrocore.Machines.Kaypro.csproj" />
     <ProjectReference Include="..\Retrocore.Input\Retrocore.Input.csproj" />

@@ -1,7 +1,7 @@
 # Retrocore Assembly and Debugger
 
 Native Retrocore assembly highlighting, language features and source debugging on
-the Apple II family, the Apple-1, the TRS-80 Model I, III, 4, II, 12 and 16, the TRS-80 Color Computer, the Commodore PET 2001 and 4032, the BBC Micro, the Atari 400 and 800 and the MITS Altair 8800 in one extension. Highlighting is declarative and needs no C# process,
+the Apple II family, the Apple-1, the TRS-80 Model I, III, 4, II, 12 and 16, the TRS-80 Color Computer, the Commodore PET 2001 and 4032, the BBC Micro, the Atari 400 and 800, the TRS-80 Model 100 and Tandy 102, and the MITS Altair 8800 in one extension. Highlighting is declarative and needs no C# process,
 ROMs or debug session. Language features (errors as you type, go to definition,
 hover, completion and symbols) come from a language server in the .NET debug host,
 which starts when a `retrocore-asm` document opens; see
@@ -111,7 +111,7 @@ character ROM, the Atari 400 and 800 their OS, floating point package, Atari BAS
 The quickest way is the **Run and Debug** dropdown. Under Retrocore it lists each
 machine: Apple IIe (enhanced), Apple IIe, Apple II Plus, Apple II, Apple III, TRS-80
 Model I (Level II), TRS-80 Model I (Level I), TRS-80 Model III, Model III (Level I), Model 4, Model 4P,
-Model II, Model 12 and Model 16 (Z80 side), Apple-1, the TRS-80 Color Computer,
+Model II, Model 12 and Model 16 (Z80 side), the TRS-80 Model 100 and Tandy 102 (from your ROM), Apple-1, the TRS-80 Color Computer,
 Color Computer 2 and Color Computer 3, the Commodore PET 2001 (BASIC 2), PET 2001, PET 4032 and PET 4032 (business keyboard), the BBC Micro Model B and Model A, the Atari 800 and Atari 400, the MITS Altair 8800, and the Kaypro II. Pick one and press F5, and it boots as it is. **Debug: Select and Start Debugging** lists them too.
 
 To start a machine with something in it, run **Retrocore: Start Machine…**. It is in
@@ -1057,6 +1057,22 @@ real one does. **Backspace** types the back arrow (`_`), **Escape** ESC, and
 Screen**. Letters arrive as capitals. Tapes go in and out from the cassette's row in
 the [Drives](#machine-and-drives) view; a recording is saved as a WAV file when it is
 ejected.
+
+## Debugging on the Model 100
+
+`"machine": "trs80-model100"` debugs a TRS-80 Model 100, or with `"model": "102"` a Tandy 102, from the ROM you
+supply: `rom` names its file, or it is found in `romDirectory` (or `RETROCORE_TRS80M100_ROMS`) as `m100rom.m12` or
+`m102rom.m12`. Its options:
+
+- `ramKilobytes`: 8, 16, 24 or 32 (the default);
+- `optionRom`: an option ROM's file;
+- `ramImage`: a file that keeps the RAM between sessions, loaded before the power comes on and saved as the session
+  ends; `coldStart` starts from empty RAM anyway;
+- `time`: the clock's start, the host's time by default.
+
+A program (`source` or `program`, loaded at `$E000` by default) runs once the ROM has set up its RAM, and can print
+with `RST 4`. The display is the 240x64 LCD; its buttons are F1-F8, LABEL, PRINT, PASTE, PAUSE and BREAK, and Reset turns
+the machine back on after `POWER OFF`. [The Model 100 guide](../docs/Trs80Model100.md) has the rest.
 
 ## Debugging on the Altair 8800
 

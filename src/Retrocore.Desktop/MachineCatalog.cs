@@ -11,6 +11,15 @@ namespace Retrocore.Desktop;
 /// </summary>
 internal static class MachineCatalog
 {
+    // The Model 100's and Tandy 102's RAM: 8 KB modules from $FFFF down.
+    private static readonly MachineChoice s_model100Ram = new("ramKilobytes", "Memory",
+    [
+        new("32 KB", 32),
+        new("24 KB", 24),
+        new("16 KB", 16),
+        new("8 KB", 8, "The smallest RAM size"),
+    ], 32);
+
     private static readonly MachineChoice s_sound = new("sound", "Sound",
     [
         new("Speaker", "speaker"),
@@ -161,6 +170,12 @@ internal static class MachineCatalog
             Options(("machine", "trs80-model2"), ("model", "12")), [s_model2Ram]),
         new("trs80-model16", "TRS-80 Model 16 (Z80 side)", "The Model 16, 16B or Tandy 6000 running Model II software; the 68000 board is not emulated",
             Options(("machine", "trs80-model2"), ("model", "16")), [s_model2Ram]),
+        new("trs80-model100", "TRS-80 Model 100", "80C85 at 2.4 MHz, a 240x64 LCD and 32 KB, from your ROM",
+            Options(("machine", "trs80-model100"), ("model", "100")),
+            [s_model100Ram]),
+        new("tandy102", "Tandy 102", "The Model 100 with its revised ROM: 80C85, a 240x64 LCD and 32 KB, from your ROM",
+            Options(("machine", "trs80-model100"), ("model", "102")),
+            [s_model100Ram]),
         new("apple1", "Apple-1", "6502, the Woz Monitor, 4 KB plus 4 KB at $E000, and the cassette interface",
             Options(("machine", "apple1")),
             [
@@ -292,6 +307,14 @@ internal static class MachineCatalog
             ["model4"] = "4",
             ["4P"] = "4p",
             ["model4p"] = "4p"
+        },
+        ["trs80-model100"] = new()
+        {
+            [""] = "100",
+            ["m100"] = "100",
+            ["model100"] = "100",
+            ["t102"] = "102",
+            ["tandy102"] = "102"
         },
         ["trs80-model2"] = new()
         {

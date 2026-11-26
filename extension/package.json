@@ -468,6 +468,8 @@
                   "trs80-model2",
                   "trs80-model12",
                   "trs80-model16",
+                  "trs80-model100",
+                  "tandy102",
                   "apple1",
                   "coco1",
                   "coco2",
@@ -1579,6 +1581,7 @@
                   "trs80-model3",
                   "trs80-model4",
                   "trs80-model2",
+                  "trs80-model100",
                   "apple1",
                   "coco",
                   "pet",
@@ -1595,6 +1598,7 @@
                   "The TRS-80 Model III, 4 or 4P; model says which (3 by default).",
                   "The TRS-80 Model 4: trs80-model3 with model 4 by default.",
                   "The TRS-80 Model II, 12 or 16 (its Z80 side); model says which (2 by default).",
+                  "The TRS-80 Model 100 or Tandy 102: an 80C85, the 240x64 LCD and 8-32 KB, from your ROM; model says which (100 by default).",
                   "The Apple-1, with the Woz Monitor and the Apple Cassette Interface.",
                   "The TRS-80 Color Computer 1, 2 or 3; model says which.",
                   "The Commodore PET: the 2001 with BASIC 1 or the BASIC 2 upgrade ROMs, or the 4032 with BASIC 4; model says which (pet2001-basic2 by default).",
@@ -1605,11 +1609,11 @@
                   "The older name for apple2, from when only the IIe was emulated."
                 ],
                 "default": "apple2",
-                "description": "The machine to emulate: apple2 is the Apple II family (model picks the IIe or enhanced IIe), apple3 an Apple III, trs80-model1 a TRS-80 Model I, trs80-model3 a Model III, 4 or 4P, trs80-model2 a Model II, 12 or 16, apple1 an Apple-1, coco a TRS-80 Color Computer (model picks 1, 2 or 3), pet a Commodore PET (model picks the 2001 with BASIC 1 or 2, or the 4032), altair a MITS Altair 8800, kaypro2 a Kaypro II, bbc a BBC Micro (model picks the Model B or A), and atari800 an Atari 800 or 400 (model picks which)."
+                "description": "The machine to emulate: apple2 is the Apple II family (model picks the IIe or enhanced IIe), apple3 an Apple III, trs80-model1 a TRS-80 Model I, trs80-model3 a Model III, 4 or 4P, trs80-model2 a Model II, 12 or 16, trs80-model100 a Model 100 or Tandy 102, apple1 an Apple-1, coco a TRS-80 Color Computer (model picks 1, 2 or 3), pet a Commodore PET (model picks the 2001 with BASIC 1 or 2, or the 4032), altair a MITS Altair 8800, kaypro2 a Kaypro II, bbc a BBC Micro (model picks the Model B or A), and atari800 an Atari 800 or 400 (model picks which)."
               },
               "romDirectory": {
                 "type": "string",
-                "description": "Directory of externally supplied ROM dumps; defaults to RETROCORE_IIE_ROMS for the IIe, RETROCORE_IIPLUS_ROMS for the II Plus, RETROCORE_II_ROMS for the II, RETROCORE_APPLE3_ROMS for the Apple III (MAME's apple3 set), RETROCORE_TRS80_ROMS for the Model I, III, 4, 4P, II, 12 and 16 (the Model III, 4 and II families' dumps are under MAME's names, in the directory or its trs80m3, trs80m4, trs80m4p, trs80m2 or trs80m16 folder), RETROCORE_APPLE1_ROMS for the Apple-1 (wozmon.bin and aci.bin), RETROCORE_COCO_ROMS for the Color Computer, RETROCORE_PET_ROMS for the PET (MAME's pet2001, pet2001n, pet4016 and pet4032b chips, in the directory or its folder for the set) and RETROCORE_KAYPRO_ROMS for the Kaypro II (81-149c.u47 or 81-149c.rom, and 81-146.u43 or 81-146a.bin, in the directory or its kayproii folder), RETROCORE_BBC_ROMS for the BBC Micro and RETROCORE_ATARI_ROMS for the Atari 400 and 800. Without dumps the ROMs are assembled from the SDK's sources, which are byte-identical to them; the Color Computer's dumps are under MAME's names (such as bas12.rom, extbas11.rom, coco3.rom and disk11.rom), in the directory or its coco, coco2b, coco3 and coco_fdc folders, and the BBC Micro's too (os12.rom, basic2.rom, dnfs120.rom and saa5050), in the directory or its bbcb, bbc_acorn8271 and saa5050 folders, and the Atari's too (MAME's a800 and a800pal chips, such as co12399b.rom, co12499b.rom and co14599b.rom), with the 810's firmware in an atari810 folder beside them and Atari BASIC as basic-revc.rom (or -reva or -revb) in the directory or its basic folder."
+                "description": "Directory of externally supplied ROM dumps; defaults to RETROCORE_IIE_ROMS for the IIe, RETROCORE_IIPLUS_ROMS for the II Plus, RETROCORE_II_ROMS for the II, RETROCORE_APPLE3_ROMS for the Apple III (MAME's apple3 set), RETROCORE_TRS80_ROMS for the Model I, III, 4, 4P, II, 12 and 16 (the Model III, 4 and II families' dumps are under MAME's names, in the directory or its trs80m3, trs80m4, trs80m4p, trs80m2 or trs80m16 folder), RETROCORE_APPLE1_ROMS for the Apple-1 (wozmon.bin and aci.bin), RETROCORE_COCO_ROMS for the Color Computer, RETROCORE_PET_ROMS for the PET (MAME's pet2001, pet2001n, pet4016 and pet4032b chips, in the directory or its folder for the set) and RETROCORE_KAYPRO_ROMS for the Kaypro II (81-149c.u47 or 81-149c.rom, and 81-146.u43 or 81-146a.bin, in the directory or its kayproii folder), RETROCORE_BBC_ROMS for the BBC Micro and RETROCORE_ATARI_ROMS for the Atari 400 and 800. Without dumps the ROMs are assembled from the SDK's sources, which are byte-identical to them; the Color Computer's dumps are under MAME's names (such as bas12.rom, extbas11.rom, coco3.rom and disk11.rom), in the directory or its coco, coco2b, coco3 and coco_fdc folders, and the BBC Micro's too (os12.rom, basic2.rom, dnfs120.rom and saa5050), in the directory or its bbcb, bbc_acorn8271 and saa5050 folders, and the Atari's too (MAME's a800 and a800pal chips, such as co12399b.rom, co12499b.rom and co14599b.rom), with the 810's firmware in an atari810 folder beside them and Atari BASIC as basic-revc.rom (or -reva or -revb) in the directory or its basic folder. The Model 100 and Tandy 102 default to RETROCORE_TRS80M100_ROMS, and need m100rom.m12 or m102rom.m12 (or m100.bin, m100rom.bin, t102.bin, t102_rom.bin or m102rom.bin) there or in its trs80m100, tandy102 or trs80m100-roms folder."
               },
               "highRam": {
                 "type": "boolean",
@@ -1651,11 +1655,28 @@
                   }
                 ],
                 "default": "level2",
-                "description": "Model I and Model III: level2 or level1, Level II or Level I BASIC. Kaypro II: the monitor ROM dump's file name in romDirectory; by default 81-149c.u47 or 81-149c.rom."
+                "description": "Model I and Model III: level2 or level1, Level II or Level I BASIC. Kaypro II: the monitor ROM dump's file name in romDirectory; by default 81-149c.u47 or 81-149c.rom. Model 100 and Tandy 102: the 32 KB ROM's file, a path or a name in romDirectory."
               },
               "bootRom": {
                 "type": "string",
                 "description": "Model II, 12 and 16: the boot ROM dump's file name in romDirectory; by default the newest of u54.u11, cpu_fc86.u11, cpu_2119.u11, cpu_11be.u11, 8047316.u11 and 8043216.u11 found."
+              },
+              "optionRom": {
+                "type": "string",
+                "description": "Model 100 and Tandy 102: an option ROM's file, up to 32 KB, which port $E0 bit 0 puts over $0000-$7FFF."
+              },
+              "ramImage": {
+                "type": "string",
+                "description": "Model 100 and Tandy 102: a file that keeps the RAM between sessions, as the battery does. When it exists it loads before the power comes on and the ROM carries on; when it does not, the machine starts cold. The RAM is saved to it as the session ends."
+              },
+              "coldStart": {
+                "type": "boolean",
+                "default": false,
+                "description": "Model 100 and Tandy 102: start from empty RAM even when ramImage exists, and replace it as the session ends."
+              },
+              "time": {
+                "type": "string",
+                "description": "Model 100 and Tandy 102: the clock's time to start at, as an ISO 8601 date and time; the host's by default. A cold start clears the date, as the ROM does."
               },
               "revision": {
                 "enum": [
@@ -1667,7 +1688,7 @@
               },
               "ramKilobytes": {
                 "type": "number",
-                "description": "Model I: RAM in kilobytes, 4-48; defaults to 48 with the Expansion Interface, else 16 (4 for Level I). Apple II and II Plus: 16, 32 or 48 (the default) on the board. Apple III: 128, 256 (the default) or 512. Apple-1: 4 (the default), 8, 16 or 32 from $0000. Color Computer 1 and 2: 4, 16, 32 or 64 (16 on a CoCo 1, 64 on a CoCo 2); CoCo 3: 128 (the default) or 512. Model III: 16, 32 or 48 (the default). Model 4 and 4P: 64 or 128 (the default). Model II, 12 and 16: 32 to 512 in 32K banks, 64 by default. Altair 8800: 1 to 64 from $0000, 64 by default. PET: 4, 8, 16 or 32; 8 by default, or 32 on a 4032 (16 is the 4016). Atari 800 and 400: 8 to 48 in steps of 8; 48 on the 800 and 16 on the 400 by default."
+                "description": "Model I: RAM in kilobytes, 4-48; defaults to 48 with the Expansion Interface, else 16 (4 for Level I). Apple II and II Plus: 16, 32 or 48 (the default) on the board. Apple III: 128, 256 (the default) or 512. Apple-1: 4 (the default), 8, 16 or 32 from $0000. Color Computer 1 and 2: 4, 16, 32 or 64 (16 on a CoCo 1, 64 on a CoCo 2); CoCo 3: 128 (the default) or 512. Model III: 16, 32 or 48 (the default). Model 4 and 4P: 64 or 128 (the default). Model II, 12 and 16: 32 to 512 in 32K banks, 64 by default. Altair 8800: 1 to 64 from $0000, 64 by default. PET: 4, 8, 16 or 32; 8 by default, or 32 on a 4032 (16 is the 4016). Atari 800 and 400: 8 to 48 in steps of 8; 48 on the 800 and 16 on the 400 by default. Model 100 and Tandy 102: 8, 16, 24 or 32 (the default), filled down from $FFFF."
               },
               "switches": {
                 "type": "number",
@@ -1815,7 +1836,7 @@
               },
               "bootSeconds": {
                 "type": "number",
-                "description": "Model I, III, 4 and Color Computer: emulated seconds the ROM runs before a program loads, to set up its RAM; defaults to 1 on a Model I, III or 4 and 2 on a Color Computer or an Atari when loading a program. Model II and Kaypro II: 0 by default. Apple II project launches: 0.25 by default, so the Monitor is set up for a bare program."
+                "description": "Model I, III, 4 and Color Computer: emulated seconds the ROM runs before a program loads, to set up its RAM; defaults to 1 on a Model I, III or 4 and 2 on a Color Computer or an Atari when loading a program. Model 100 and Tandy 102: 3 when loading a program, else 0. Model II and Kaypro II: 0 by default. Apple II project launches: 0.25 by default, so the Monitor is set up for a bare program."
               },
               "command": {
                 "type": "string",
@@ -2026,7 +2047,9 @@
                   "4p",
                   "2",
                   "12",
-                  "16"
+                  "16",
+                  "100",
+                  "102"
                 ],
                 "enumDescriptions": [
                   "The enhanced Apple IIe: a 65C02, MouseText and the enhanced firmware.",
@@ -2051,10 +2074,12 @@
                   "TRS-80 Model 4P: a Model 4 whose only ROM is a boot loader, with no cassette.",
                   "TRS-80 Model II: a 4 MHz Z80, 64 KB, 80x24 and 8-inch disks.",
                   "TRS-80 Model 12: the Model II's successor.",
-                  "TRS-80 Model 16, 16B or Tandy 6000, its Z80 side only: the 68000 board is not emulated."
+                  "TRS-80 Model 16, 16B or Tandy 6000, its Z80 side only: the 68000 board is not emulated.",
+                  "TRS-80 Model 100: the 1983 laptop's ROM, m100rom.m12.",
+                  "Tandy 102: the Model 100 with its revised ROM, m102rom.m12."
                 ],
                 "default": "iie-enhanced",
-                "description": "Apple II: which model of the family. Color Computer: coco1, coco2 or coco3. PET: pet2001-basic2 (the default), pet2001, pet4032 or pet4032-business. BBC Micro: bbcb or bbca. Atari: atari800 or atari400. trs80-model3: 3, 4 or 4p. trs80-model2: 2, 12 or 16."
+                "description": "Apple II: which model of the family. Color Computer: coco1, coco2 or coco3. PET: pet2001-basic2 (the default), pet2001, pet4032 or pet4032-business. BBC Micro: bbcb or bbca. Atari: atari800 or atari400. trs80-model3: 3, 4 or 4p. trs80-model2: 2, 12 or 16. trs80-model100: 100 or 102."
               },
               "basicRevision": {
                 "enum": [
@@ -2284,7 +2309,7 @@
               },
               "loadAddress": {
                 "type": "number",
-                "description": "Load address of program, or origin of source when no linker configuration places it; defaults to $6000 on the IIe, $7000 on the Model I and $0800 on the PET."
+                "description": "Load address of program, or origin of source when no linker configuration places it; defaults to $6000 on the IIe, $7000 on the Model I, $0800 on the PET and $E000 on the Model 100."
               },
               "entryAddress": {
                 "type": "number",

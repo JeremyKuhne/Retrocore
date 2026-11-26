@@ -97,6 +97,7 @@ jobs:
           node tools/Test-CocoDap.mjs
           node tools/Test-BbcDap.mjs
           node tools/Test-AltairDap.mjs
+          node tools/Test-Trs80Model100Dap.mjs
           node tools/Test-AtariDap.mjs
           node tools/Test-AdventureDap.mjs
           node tools/Test-ProjectDap.mjs

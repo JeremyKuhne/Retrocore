@@ -159,6 +159,18 @@ const model4Ram: MachineChoice = {
     default: 128
 };
 
+const model100Ram: MachineChoice = {
+    option: "ramKilobytes",
+    label: "Memory",
+    values: [
+        { label: "32 KB", value: 32 },
+        { label: "24 KB", value: 24 },
+        { label: "16 KB", value: 16 },
+        { label: "8 KB", detail: "The smallest RAM size", value: 8 }
+    ],
+    default: 32
+};
+
 const model2Ram: MachineChoice = {
     option: "ramKilobytes",
     label: "Memory",
@@ -496,6 +508,30 @@ export const machines: readonly Machine[] = [
         dos: false,
         choices: [model2Ram]
     },
+    // The Model 100 and Tandy 102 run your ROM, from romDirectory (or RETROCORE_TRS80M100_ROMS); Retrocore has
+    // none to build. A launch's ramImage keeps the RAM between sessions, as the battery does.
+    {
+        id: "trs80-model100",
+        label: "TRS-80 Model 100",
+        detail: "80C85 at 2.4 MHz, a 240x64 LCD and 32 KB, from your ROM",
+        configuration: { machine: "trs80-model100", model: "100" },
+        diskFormats: [],
+        tapeFormats: [],
+        basicDialects: [],
+        dos: false,
+        choices: [model100Ram]
+    },
+    {
+        id: "tandy102",
+        label: "Tandy 102",
+        detail: "The Model 100 with its revised ROM: 80C85, a 240x64 LCD and 32 KB, from your ROM",
+        configuration: { machine: "trs80-model100", model: "102" },
+        diskFormats: [],
+        tapeFormats: [],
+        basicDialects: [],
+        dos: false,
+        choices: [model100Ram]
+    },
     {
         id: "apple1",
         label: "Apple-1",
@@ -825,7 +861,8 @@ const models: Record<string, Record<string, string>> = {
     bbc: { "": "bbcb" },
     atari800: { "": "atari800" },
     "trs80-model3": { "": "3", III: "3", model3: "3", model4: "4", "4P": "4p", model4p: "4p" },
-    "trs80-model2": { "": "2", II: "2", model2: "2", model12: "12", "16b": "16", "6000": "16", model16: "16" }
+    "trs80-model2": { "": "2", II: "2", model2: "2", model12: "12", "16b": "16", "6000": "16", model16: "16" },
+    "trs80-model100": { "": "100", m100: "100", model100: "100", t102: "102", tandy102: "102" }
 };
 
 // The machine names the debug host takes for another: the Model 4 is the Model III's machine, a 4 unless it says.

@@ -37,6 +37,9 @@ internal static class MachineIcon
         ["trs80-model1"] = ("#2C2C2A", "#E6F1FB", false),
         ["trs80-model3"] = ("#2C2C2A", "#E6F1FB", false),
         ["altair"] = ("#2C2C2A", "#E6F1FB", false),
+
+        // The Model 100's LCD: dark dots on a gray-green panel.
+        ["trs80-model100"] = ("#A8B498", "#283028", false),
     };
 
     /// <summary>

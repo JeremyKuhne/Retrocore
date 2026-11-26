@@ -4,9 +4,10 @@ Retrocore emulates and debugs 8-bit computers in one .NET codebase: cycle-exact 
 peripherals built around them, a multi-dialect assembler and disassembler, BASIC language and program tools, a
 source-level debugger for assembly and BASIC, and a VS Code extension.
 
-Every ROM the machines run is also maintained here as documented assembly sources that rebuild byte-identically to
-the original chips wherever a good dump of the chip is known. No external ROM dumps are needed to run or debug a
-machine, and you can step from your own code straight into the ROM or DOS source.
+Every ROM the machines run but the TRS-80 Model 100's is also maintained here as documented assembly sources that
+rebuild byte-identically to the original chips wherever a good dump of the chip is known. No external ROM dumps are
+needed to run or debug the other machines, and you can step from your own code straight into the ROM or DOS source.
+The Model 100 runs the ROM you supply until its source is written.
 
 | Machine | CPU | ROMs (SDK sources, or dumps you supply) | Media and peripherals |
 | --- | --- | --- | --- |
@@ -21,13 +22,14 @@ machine, and you can step from your own code straight into the ROM or DOS source
 | BBC Micro Model B and Model A | MOS 6502 at 2 MHz | MOS 1.20, BBC BASIC II, DNFS 1.20 and the SAA5050's characters | 6845 and video ULA in modes 0-6, SAA5050 teletext in mode 7, SN76489 sound, UEF tapes (play and record) and `.inf` files, the Intel 8271 with SSD and DSD disks, the analogue port |
 | Commodore PET 2001 and 4032 | MOS 6502 | BASIC 1 and 4 (original and revised) and BASIC 2, their screen editors (BASIC 4's for the graphics and business keyboards) and kernals, with the machine-language monitor, and the 901447-08 and -10 character ROMs | 4-32 KB RAM, two 6520 PIAs and a 6522 VIA, 40x25 video with the 2001's timing and snow, the chiclet, graphics and business keyboards, CB2 sound, two Datasettes (TAP, WAV and PRG tapes, play and record), the IEEE-488 bus with 4040 and 2040 dual drives as devices 8-15 (D64, D67 and G64 disks, which save) |
 | Atari 400 and 800 | MOS 6502 | OS rev. A and B and the PAL OS, the floating point package, Atari BASIC rev. A, B and C, and the 810's firmware | ANTIC and GTIA (or CTIA) with every display mode, players and missiles, POKEY's sound, keyboard and timers, joysticks, 8-48 KB, both cartridge slots with bank-switched cartridges, the 410 recorder (CAS), 810 disk drives at the hardware level (ATR, XFD), and `.xex` files |
+| TRS-80 Model 100 and Tandy 102 | OKI 80C85 | None of their own; your ROM runs | 8-32 KB RAM kept between sessions in a RAM image, the 240x64 LCD's ten HD44102 drivers, the keyboard matrix, the uPD1990AC clock on RST 7.5, the 81C55, the option ROM socket and the power-off bit; boots the menu and runs BASIC from your ROM |
 | MITS Altair 8800 | Intel 8080 | None of its own; DBL and MBL PROMs from SDK sources | 1-64 KB RAM, the 88-2SIO's MC6850 ACIAs or the 88-SIO with an 80x24 ADM-3A-style terminal, the 88-ACR cassette, sense switches, the front panel's EXAMINE and DEPOSIT, the 88-DCDD with 8-inch drives and the DBL and MBL boot PROMs; runs Altair BASIC and CP/M 2.2 from your images |
 | Kaypro II | Z80 | Monitor ROM 81-149C and its character generator; MBASIC 5.21 too, which loads from disk | 64 KB RAM under the banked ROM and 4 KB of video RAM, 80x24 text, serial keyboard, FD1793 with two drives (raw IMG, IMD and DMK disks), Z80 SIO and PIOs; runs CP/M 2.2 and MBASIC from your disks |
 
 The Disk II controller's boot and state-sequencer ROMs, Apple DOS 3.3 and 3.2, and the firmware of the emulated
 slot-7 ProDOS block device, mouse card and ProFile card are documented SDK sources too. See the
 [Apple-1](docs/Apple1.md), [Apple II family](docs/Apple2.md), [Apple III](docs/Apple3.md),
-[TRS-80 Model I](docs/Trs80ModelI.md), [Model III, 4 and II](docs/Trs80Model3And2.md),
+[TRS-80 Model I](docs/Trs80ModelI.md), [Model III, 4 and II](docs/Trs80Model3And2.md), [Model 100](docs/Trs80Model100.md),
 [Color Computer](docs/Coco.md), [PET](docs/Pet.md), [BBC Micro](docs/BbcMicro.md), [Atari 400 and 800](docs/Atari800.md), [Altair 8800](docs/Altair8800.md) and [Kaypro II](docs/Kaypro.md) guides for hardware details and launch options. On the Color Computer, Color, Extended and Disk BASIC and the CoCo 3's ROM are all SDK sources, so every
 model runs with nothing external, and so are all of the PET's ROMs, the BBC Micro's MOS, BASIC, DFS and character ROM, and the Atari's OS,
 floating point package, Atari BASIC and 810 firmware.
@@ -244,6 +246,7 @@ verify them—and also compare against your chip dumps byte for byte when dumps 
 | [`Retrocore.Machines.Apple3`](src/Retrocore.Machines.Apple3) | The Apple III: banked bus and extended addressing, video, keyboard, clock, serial port, drives, and its SDK ROM source. |
 | [`Retrocore.Machines.Chips`](src/Retrocore.Machines.Chips) | Chips more than one machine uses: the Western Digital FD1771 and FD179x floppy disk controller and its drives, and the Z80 PIO, SIO, CTC and DMA. |
 | [`Retrocore.Machines.Trs80`](src/Retrocore.Machines.Trs80) | The TRS-80 Model I, Expansion Interface with its drive select and doublers, cassette, and SDK ROM sources; the Model III, 4 and 4P; and the Model II family. |
+| [`Retrocore.Machines.Trs80Model100`](src/Retrocore.Machines.Trs80Model100) | The TRS-80 Model 100 and Tandy 102: the 80C85's memory and ports, the LCD, keyboard and clock, and power. |
 | [`Retrocore.Machines.Kaypro`](src/Retrocore.Machines.Kaypro) | The Kaypro II: banked memory, the system PIO, serial keyboard, display and disks, and its SDK sources, MBASIC's included. |
 | [`Retrocore.Machines.Coco`](src/Retrocore.Machines.Coco) | The TRS-80 Color Computer 1, 2 and 3: SAM, VDG, GIME, PIAs, cassette, sound, cartridges, and the disk controller. |
 | [`Retrocore.Machines.Acorn`](src/Retrocore.Machines.Acorn) | The BBC Micro Model B and A: the paged ROMs, both VIAs, the video ULA and SAA5050, keyboard, sound, the serial ULA and cassette, the 8271, and SDK ROM sources. |
@@ -272,6 +275,7 @@ launch are invisible to Explorer, VS Code, and normal terminals.
 | `RETROCORE_IIPLUS_ROMS`, `RETROCORE_II_ROMS` | Apple II Plus and Apple II 2716 chip dumps (defaults `<cache>\apple2-roms\APPLE II+` and `<cache>\apple2-roms\APPLE II`); optional for debugging. |
 | `RETROCORE_DISKII_ROMS` | Disk II P5/P6 chip dumps under their `apple2.org.za` names (default `<cache>\disk2-roms`). |
 | `RETROCORE_APPLE1_ROMS` | Apple-1 Monitor, ACI and BASIC dumps, `wozmon.bin`, `aci.bin` and `basic.bin` (default `<cache>\apple1-roms` for the ROM source checks); optional for debugging. |
+| `RETROCORE_TRS80M100_ROMS` | The Model 100's and Tandy 102's ROMs (`m100rom.m12` and `m102rom.m12`, or `m100.bin` and `t102.bin`; default `<cache>\trs80m100-roms` for the tests); the debugger needs it, `romDirectory` or `rom` to run either, as Retrocore has no source for the ROMs yet. |
 | `RETROCORE_TRS80_ROMS` | TRS-80 ROM dumps under MAME's names (default `<cache>\trs80-roms\extract`); optional for every TRS-80, whose ROMs the SDK's sources build. |
 | `RETROCORE_APPLE3_ROMS` | MAME's `apple3` set unzipped (default `<cache>\apple3-roms\mame\apple3`); optional for debugging. |
 | `RETROCORE_APPLE3_DISKS` | SOS 1.3 disk images for the Apple III tests (default `<cache>\apple3-disks`). |
@@ -397,6 +401,7 @@ Design notes for upcoming work live in [`docs/backlog`](docs/backlog):
   [its ROM sources](docs/backlog/CocoRomSources.md);
 - [the Apple III's open checks and later work](docs/backlog/Apple3.md);
 - [the Intel 8080 and 8085](docs/backlog/I8080.md), and [the Altair 8800](docs/backlog/Altair8800.md): CP/M's sources and its front panel view;
+- [the TRS-80 Model 100](docs/backlog/Trs80Model100.md): its files, cassette, serial port and disk drive, its ROM as an SDK source, and its relatives;
 - [the 3.5 disk controller at the hardware level](docs/backlog/Disk35Hardware.md), running Apple's EPROM on an emulated 65C02 and SWIM;
 - [SOS sources: the Apple III's kernel and drivers](docs/backlog/SosSources.md);
 - [Business BASIC's other versions, modules and DEF FN view](docs/backlog/BusinessBasic.md);

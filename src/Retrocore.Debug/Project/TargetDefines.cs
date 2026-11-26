@@ -58,6 +58,8 @@ internal static class TargetDefines
         ["trs80-model2"] = 64,
         ["trs80-model12"] = 64,
         ["trs80-model16"] = 64,
+        ["trs80-model100"] = 32,
+        ["tandy102"] = 32,
         ["apple1"] = 4,
         ["coco1"] = 16,
         ["coco2"] = 64,
@@ -75,7 +77,8 @@ internal static class TargetDefines
     };
 
     // Each family's text screen as its ROM starts it, columns by rows: the Model 4 and 4P start in the Model III's
-    // 64 by 16, the Model II, 12 and 16 in 80 by 24, and the Altair's and Kaypro's terminals are 80 by 24.
+    // 64 by 16, the Model II, 12 and 16 in 80 by 24, the Altair's and Kaypro's terminals are 80 by 24, and the
+    // Model 100's LCD is 40 by 8.
     private static readonly Dictionary<string, (int Columns, int Rows)> s_screens = new()
     {
         ["apple1"] = (40, 24),
@@ -87,7 +90,8 @@ internal static class TargetDefines
         ["bbc"] = (40, 25),
         ["atari"] = (40, 24),
         ["altair"] = (80, 24),
-        ["kaypro"] = (80, 24)
+        ["kaypro"] = (80, 24),
+        ["trs80-model100"] = (40, 8)
     };
 
     private static readonly HashSet<string> s_eightyColumns = ["trs80-model2", "trs80-model12", "trs80-model16"];

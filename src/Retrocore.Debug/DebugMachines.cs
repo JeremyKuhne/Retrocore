@@ -75,6 +75,11 @@ internal static class DebugMachines
     internal const string Kaypro2 = "kaypro2";
 
     /// <summary>
+    ///  The TRS-80 Model 100 and Tandy 102.
+    /// </summary>
+    internal const string Trs80Model100 = "trs80-model100";
+
+    /// <summary>
     ///  The Atari 800 or 400; the launch's <c>model</c> says which.
     /// </summary>
     internal const string Atari = "atari800";
@@ -97,11 +102,12 @@ internal static class DebugMachines
         Pet => Pet,
         Altair => Altair,
         Kaypro2 => Kaypro2,
+        Trs80Model100 => Trs80Model100,
         Bbc => Bbc,
         Atari => Atari,
         null => throw new ArgumentException($"machine is required, such as \"{Apple2}\", \"{Apple3}\", \"{Trs80Model1}\" or \"{Coco}\"."),
         _ => throw new ArgumentException(
             $"Unknown machine \"{machine}\"; the known machines are \"{Apple2}\", \"{Apple1}\", \"{Apple3}\", \"{Trs80Model1}\", "
-                + $"\"{Trs80Model2}\", \"{Trs80Model3}\", \"{Trs80Model4}\", \"{Coco}\", \"{Pet}\", \"{Altair}\", \"{Kaypro2}\", \"{Bbc}\" and \"{Atari}\".")
+                + $"\"{Trs80Model2}\", \"{Trs80Model3}\", \"{Trs80Model4}\", \"{Trs80Model100}\", \"{Coco}\", \"{Pet}\", \"{Altair}\", \"{Kaypro2}\", \"{Bbc}\" and \"{Atari}\".")
     };
 }

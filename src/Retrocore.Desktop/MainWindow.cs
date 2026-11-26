@@ -650,6 +650,14 @@ internal sealed class MainWindow : Window
                 Code("F2", 2, "F2");
                 Reset("Reset", "The reset switch (or Ctrl+F12 or Ctrl+Break): the boot ROM starts again");
                 break;
+            case "trs80-model100":
+                Code("Label", 136, "LABEL: shows the function keys' labels");
+                Code("Print", 137, "PRINT: prints the screen");
+                Code("Paste", 138, "PASTE: types the paste buffer");
+                Code("Pause", 139, "PAUSE (or Pause): the PAUSE/BREAK key, which pauses a listing or program");
+                Code("Break", 140, "BREAK: PAUSE/BREAK with SHIFT, which stops a BASIC program");
+                Reset("Reset", "The RESET button (or Ctrl+F12 or Ctrl+Break): the 80C85 starts again, keeping RAM, and turns the machine on after POWER OFF");
+                break;
             case "kaypro2":
                 Code("Esc", 27, "ESC (or Esc)");
                 Reset("Reset", "The reset button (or Ctrl+F12 or Ctrl+Break): the monitor ROM boots CP/M from drive A again");
@@ -699,6 +707,7 @@ internal sealed class MainWindow : Window
                 "trs80-model2" => "Esc: BREAK · Ctrl+letter: control character · arrows: the arrow keys · Ctrl+F12: reset",
                 "pet" => "Esc: STOP · Home: HOME · arrows: the cursor keys · Backspace: DEL · Insert: INST · Tab: TAB (business keyboard) · Ctrl+F12: reset",
                 "kaypro2" => "Ctrl+letter: control character · Esc: ESC · arrows: the arrow keys · Ctrl+F12: reset",
+                "trs80-model100" => "Ctrl+letter: CTRL (but Ctrl+H, I and M: DEL, TAB, ENTER) · Esc: ESC · arrows: the arrow keys · F1-F8: the function keys · Pause: PAUSE · Ctrl+F12: RESET",
                 "apple3" => "Ctrl+letter: control character · arrows and Esc: the arrow and ESCAPE keys · Ctrl+F12: CONTROL-RESET · left/right Alt: Open/Solid Apple",
                 "apple1" => "Backspace: the back arrow (_) · Esc: ESC · Ctrl+F12: RESET · letters arrive as capitals",
                 "altair" => "Ctrl+letter: control character · arrows: ^H ^J ^K ^L, as the ADM-3A sends them · Ctrl+F12: RESET",

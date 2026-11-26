@@ -478,10 +478,41 @@ where its value came from (`AnalysisValue`). Two paths that meet keep the bits b
   instruction whose result is unknown costs a few runs. Flags the effects lines set or clear are not waited for.
   Only the registers an instruction reads are set and only those it writes read back, which the effects lines'
   exactness allows.
-- Memory holds where a value came from, as before, but no constant: without the machine's memory map a fixed
-  address may be I/O. The BBC's keyboard scan stores 1 in the VIA's IFR and tests it with `BIT`, and a remembered
-  constant there decided a branch the hardware decides.
-- `copies` and pulls carry constants with the values.
+- Memory follows the [memory map](#memory-maps) the check is given. Without one, memory holds where a value came
+  from but no bits of it, since a fixed address may be I/O: the BBC's keyboard scan stores 1 in the VIA's IFR and
+  tests it with `BIT`, and a remembered constant there decided a branch the hardware decides.
+- `copies` and pulls carry known bits with the values.
+
+### Memory maps
+
+`MemoryMap` (in `Retrocore.Core`) says what kind of memory each address is: RAM, ROM, devices (`Io`) or nothing.
+`MemoryMap.Capture(machine)` takes it from a machine as it is, from the area its memory map reaches at each address
+(`IMachine.MemoryArea`) and that area's kind (`IMachine.AreaKind`, which every machine gives for its own areas), so
+the map is the emulator's own decoding, not a second table. `MemoryMap.AllRam` is a CP/M program's, and
+`MemoryMap.FromRanges` builds one by hand. `AnalysisContracts` takes the map of the state the program runs in:
+
+- In RAM, a store keeps its value's known bits for a load to read back. They do not go round a loop: a backward
+  branch or jump drops them, as a loop may wait for an interrupt to change the byte. Calls forget memory, as before.
+- In ROM, a byte the source assembles as data, as a `.byte` table, reads as itself, so `lda Table,x` with X known
+  to be 0 to 3 has the bits all four entries share. Code bytes do not: code may run elsewhere, as AppleSoft's
+  character reader is copied to page zero and run there with its `lda $EA60` operand rewritten, and its `$EA60`
+  would otherwise read as AppleSoft's ROM. A store to ROM is not remembered.
+- A device, or nothing, gives back nothing known, and a store there is not remembered.
+
+The report captures each module's map from its machine in the state it runs in (`MemoryMapTests` check them
+against the machines' documentation):
+
+| Module | Machine | State |
+|---|---|---|
+| Monitor, AppleSoft | Apple IIe | After reset: RAM, I/O at `$C000-$C0FF`, the system ROM over the language card |
+| IIe firmware | Apple IIe | With SETINTCXROM, so the internal ROM is at `$C100-$CFFF` |
+| BBC MOS, BASIC, DFS | Model B | After reset: RAM to `&7FFF`, paged ROM and the MOS, I/O at `&FC00-&FEFF` |
+| CoCo 3 BASIC, ROM | CoCo 3 | Running from RAM, as reset leaves BASIC: the MMU on, the SAM all RAM |
+| Kaypro MBASIC | CP/M | All RAM |
+
+The firmware's map is not the IIe's after reset, where `$C100-$CFFF` is the empty slots' space, and the CoCo 3's
+is not its power-up map, where the GIME maps 16 KB of ROM and 16 KB of cartridge: the map must be the state the
+code runs in, or its tables read as the wrong bytes or as nothing.
 
 ### How they decide branches
 
@@ -495,19 +526,32 @@ where its value came from (`AnalysisValue`). Two paths that meet keep the bits b
   (SCAN_FOR_NEW_KEY clears carry and falls into SCAN_KEYBOARD, an entry where it is set). A routine the analysis
   gave up on may have left a way unfollowed, as MBASIC's QINT does at a call into a routine that changes the stack,
   so its conditions count as going both ways.
+- Code no routine was followed through can reach a condition too, as BBC BASIC's `bne NUMBER_TO_STRING_POINT`
+  does from a path no documented routine completes. So a condition stays fixed only if, walking back from it over
+  fall-throughs and direct branches and jumps through instructions a complete analysis reached, it meets none such
+  an analysis did not reach; the walk stops at any address analyzed as a routine's start, whose analysis took any
+  values there.
 
 ### What it found
 
 `FlagValueAnalysisTests` cover constants from loads, the core's results, what branches imply, the Z80's `XOR A`
 with `JR NZ` and `RET Z`, the 6809's two-flag `BHI` and `BLS` from A (a part of D), the Z80's IXH and IXL through
-IX, an untaken `CALL C`, and bits known after `ORA`, `AND`, `OR` and `ANDA` with memory or A unknown.
+IX, an untaken `CALL C`, bits known after `ORA`, `AND`, `OR` and `ANDA` with memory or A unknown, a ROM table read
+through a known range of indexes but not ROM code, RAM that keeps a stored byte but not round a polling loop nor
+at a device, and paths that join with only memory different.
+
+Following those joins found a bug the Keeps and Uses check had had all along: `AnalysisRoutineState.SameAs`, which
+decides whether a join changed anything, compared registers, flags and stacks but not memory, so a path that
+changed only what a fixed address held was not followed on. With known bits in memory it made BBC BASIC's
+`bmi NUMBER_TO_STRING_SMALL` look never taken.
 
 `SdkSourcesReport` now also compares the fixed conditions with the sources' own comments. Of the branches the
-sources mark `always`, 125 are proved (120 with whole constants alone); 120 are not, mostly because a value from
-memory or from a caller decides them, as SET_VDU_STATUS's `ora VDU_STATUS` with the A its caller passes, or
-because a routine the analysis gave up on reaches them. 10 conditions are fixed without the mark, and each was
-checked by hand: real always-branches such as `ldy #TEXT_INVERSE` then `bne`, `clc` then `bcc`, a `bvs` followed
-by a `bvc`, and the Enhanced firmware's `ora #MODE_CURSOR_OFF` then `bne`, whose comment is on the line above.
+sources mark `always`, 126 are proved (120 with whole constants alone, 125 with known bits); 119 are not, mostly
+because a value from RAM or from a caller decides them, as SET_VDU_STATUS's `ora VDU_STATUS` with the A its caller
+passes, or because a routine the analysis gave up on reaches them. 11 conditions are fixed without the mark, and
+each was checked by hand: real always-branches such as `ldy #TEXT_INVERSE` then `bne`, `clc` then `bcc`, a `bvs`
+followed by a `bvc`, the Enhanced firmware's `ora #MODE_CURSOR_OFF` then `bne`, whose comment is on the line above,
+and from the memory map, the DFS's `bit FS_CONTROL_BLOCK_TEMPLATE_HIGH` of a ROM byte of `&FF`, then `bvs`.
 
 For the Keeps and Uses check: 1,023 routines checked (from 990), 26 findings (from 30), 30 `Keeps:` items not
 verified. Gone: the Monitor's ScreenOutNoInverse, the MOS's START_TRANSMITTING, VDU_PAGED_MODE_ON,
@@ -519,16 +563,20 @@ documentation errors in MBASIC, fixed:
 - DEL's `Out: VARTAB = HL = ...` named only VARTAB; it is now `HL, VARTAB = ...`.
 - CHKRES's `Out:` had HL inside the zero flag's meaning; HL now has its own entry.
 
-What it costs, measured in Release over the MOS, the DFS and MBASIC: about 125 to 150 ms for the three once warm,
-less than the 150 to 200 ms with whole constants alone, because each run now sets and reads back only the
-registers the instruction uses; a run on the core takes 1 to 3 us. They allocate 88 MB, against 52 MB without the
-core and 58 MB with whole constants, from more revisits as known bits are joined away one at a time; the engine's
-copies of states are most of it, and a follow-up could cut them.
+What it costs, measured in Release over the MOS, the DFS and MBASIC with their maps: about 220 ms for the three
+once warm, and 107 MB allocated. Without maps it was about 140 ms and 88 MB; with whole constants alone 150 to 200
+ms and 58 MB, and without the core 52 MB. Each run sets and reads back only the registers the instruction uses; a
+run on the core takes 1 to 3 us. Most of the growth is revisits: of joins where only memory changed, which the
+fix above follows, and as known bits are joined away one at a time. The engine's copies of states are most of the
+allocation, and a follow-up could cut them.
 
 ### Limits and follow-ups
 
-- **Memory constants** need the machine's memory map, to tell RAM, ROM and I/O apart; ROM tables and RAM flags
-  would then decide branches too.
+- **Maps are of one state.** A program that switches banks, as an Apple II one that runs from the language card,
+  needs the map of the state each part runs in; a source cannot say it yet. Where the map is wrong, a table reads
+  as the wrong bytes. RAM bits are kept between a store and a load with no loop between, which code that an
+  interrupt changes memory under, without a loop, would break.
+- **Known bits of RAM in a read:** the core takes a RAM byte only when it is all known.
 - **Wider unknowns:** an instruction with more than 12 unknown bits, as a compare of two unknown bytes or a
   16-bit index, is not run; known bits of its result would need rules per operation, or ranges.
 - **What a caller passes:** `In:` sections such as `carry = set` could seed an entry's flags.

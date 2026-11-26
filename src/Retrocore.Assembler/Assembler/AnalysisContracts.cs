@@ -4,6 +4,7 @@
 
 using Retrocore.Documentation;
 using Retrocore.Isa;
+using Retrocore.Machines;
 using System.Numerics;
 
 namespace Retrocore.Assembler;
@@ -28,6 +29,8 @@ internal sealed class AnalysisContracts
     private readonly DocumentationSet _documentation;
     private readonly byte[] _memory = new byte[0x10000];
     private readonly bool[] _defined = new bool[0x10000];
+    private readonly bool[] _data = new bool[0x10000];
+    private readonly List<ushort> _instructions = [];
     private readonly Dictionary<ushort, AnalysisContract> _contracts = [];
     private readonly Dictionary<ushort, DocumentationTopic> _routines = [];
     private readonly Dictionary<ushort, AnalysisRoutineSummary?> _analyzed = [];
@@ -42,12 +45,17 @@ internal sealed class AnalysisContracts
     /// <param name="set">The instruction set the routines are in; routines in another are left out.</param>
     /// <param name="model">The model whose sections apply, such as <c>Enhanced</c>; empty for none.</param>
     /// <param name="others">Other modules' documentation, for <c>Inherit:</c>.</param>
+    /// <param name="map">
+    ///  What kind of memory each address is in the state the program runs in, such as a machine's at reset, or null:
+    ///  then memory holds where values came from but no bits of them.
+    /// </param>
     internal AnalysisContracts(
         AssemblyResult result,
         DocumentationSet documentation,
         InstructionSet set,
         string model = "",
-        IEnumerable<DocumentationSet>? others = null)
+        IEnumerable<DocumentationSet>? others = null,
+        MemoryMap? map = null)
     {
         _set = set;
         _documentation = documentation;
@@ -62,7 +70,21 @@ internal sealed class AnalysisContracts
             }
         }
 
-        _engine = new(set, _memory, _defined, Callee, RoutineAt, AnalysisEvaluator.For(set));
+        // The bytes the source assembles as data, as tables: only those of ROM read as constants. Code there may run
+        // elsewhere, as AppleSoft's character reader runs in page zero with its operand rewritten.
+        foreach (AssemblySourceMapEntry entry in result.SourceMap)
+        {
+            if (entry.Size == 0) { continue; }
+            if (entry.InstructionSet?.GetMnemonic(entry.Operation) >= 0)
+            {
+                _instructions.Add((ushort)entry.Address);
+                continue;
+            }
+
+            for (int offset = 0; offset < entry.Size; offset++) { _data[(entry.Address + offset) & 0xFFFF] = true; }
+        }
+
+        _engine = new(set, _memory, _defined, Callee, RoutineAt, AnalysisEvaluator.For(set), map, _data);
         IsaDescription description = set.Description;
         _general = _engine.Registers & ~AnalysisRoutineEngine.StackRegisters(set);
         foreach (string name in description.EffectRegisters)
@@ -178,7 +200,90 @@ internal sealed class AnalysisContracts
             }
         }
 
+        Unreached(conditions);
         return new(findings, count, unverified, skipped, conditions);
+    }
+
+    // A condition that went one way stays fixed only when the analysis reached everything that leads to it: walking
+    // back from it over fall-throughs and direct branches and jumps, through instructions the analysis reached, it
+    // meets none it did not. The walk stops at an address analyzed as a routine's start, whose analysis took any
+    // values there. Otherwise code no routine was followed through, as BBC BASIC's branch to NUMBER_TO_STRING_POINT,
+    // may arrive with other values, and the condition counts as going both ways.
+    private void Unreached(Dictionary<ushort, int> conditions)
+    {
+        HashSet<ushort> visited = [];
+        foreach (AnalysisRoutineSummary? analyzed in _analyzed.Values)
+        {
+            // An analysis that gave up, as at its step limit, may not have carried what it reached any further.
+            if (analyzed is { Incomplete: null }) { visited.UnionWith(analyzed.Visited); }
+        }
+
+        Dictionary<ushort, List<ushort>> predecessors = Predecessors();
+        foreach (ushort at in conditions.Keys.ToArray())
+        {
+            if (conditions[at] == 3) { continue; }
+            HashSet<ushort> seen = [at];
+            Queue<ushort> work = new([at]);
+            while (work.TryDequeue(out ushort address))
+            {
+                if (_analyzed.ContainsKey(address) || !predecessors.TryGetValue(address, out List<ushort>? before))
+                {
+                    continue;
+                }
+
+                foreach (ushort from in before)
+                {
+                    if (!visited.Contains(from))
+                    {
+                        conditions[at] = 3;
+                        work.Clear();
+                        break;
+                    }
+
+                    if (seen.Add(from)) { work.Enqueue(from); }
+                }
+            }
+        }
+    }
+
+    // Each instruction's predecessors among those the source assembles: the instruction before it, where that one
+    // can go on, and the branches and jumps that target it. A call's callee is entered as a routine of its own.
+    private Dictionary<ushort, List<ushort>> Predecessors()
+    {
+        Dictionary<ushort, List<ushort>> predecessors = [];
+        foreach (ushort address in _instructions)
+        {
+            if (!_engine.TryDecode(address, out DisassembledInstruction instruction)) { continue; }
+            ushort from = address;
+            ushort next = (ushort)(address + instruction.Size);
+            DisassemblyFlow flow = instruction.Flow;
+            if (GoesOn(flow)) { Add(next, from); }
+
+            if (flow is DisassemblyFlow.Jump or DisassemblyFlow.ConditionalBranch && instruction.DirectTarget is { } target)
+            {
+                Add(target, from);
+            }
+        }
+
+        return predecessors;
+
+        static bool GoesOn(DisassemblyFlow flow) => flow switch
+        {
+            DisassemblyFlow.Jump or DisassemblyFlow.IndirectJump or DisassemblyFlow.Return => false,
+            DisassemblyFlow.Break or DisassemblyFlow.Stop => false,
+            _ => true
+        };
+
+        void Add(ushort to, ushort from)
+        {
+            if (!predecessors.TryGetValue(to, out List<ushort>? list))
+            {
+                list = [];
+                predecessors[to] = list;
+            }
+
+            list.Add(from);
+        }
     }
 
     private static AnalysisContractFinding Finding(AnalysisContract contract, string item, AnalysisContractProblem kind, ushort? at) =>

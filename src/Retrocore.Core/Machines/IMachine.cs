@@ -75,6 +75,13 @@ public interface IMachine
     int MemoryArea(ushort address);
 
     /// <summary>
+    ///  Gets what kind of memory an area of <see cref="MemoryAreas"/> is: RAM, ROM, devices or nothing.
+    /// </summary>
+    /// <param name="area">An index into <see cref="MemoryAreas"/>.</param>
+    /// <returns>The kind.</returns>
+    MemoryKind AreaKind(int area);
+
+    /// <summary>
     ///  Presses a key, in the machine's own character code.
     /// </summary>
     /// <param name="code">The code.</param>

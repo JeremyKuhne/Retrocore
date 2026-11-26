@@ -123,6 +123,10 @@ internal sealed class AnalysisEvaluator
     ///  read them does not see.
     /// </param>
     /// <param name="written">The registers to receive the values of, by bit.</param>
+    /// <param name="known">
+    ///  The value of a byte of memory the caller knows, as a ROM's, or -1; reads of those do not take a value from
+    ///  <paramref name="reads"/> and are not counted.
+    /// </param>
     /// <returns>
     ///  Whether the instruction ran, with no more reads than <paramref name="reads"/> has and no port.
     /// </returns>
@@ -135,11 +139,12 @@ internal sealed class AnalysisEvaluator
         out int readCount,
         out ushort next,
         uint read = uint.MaxValue,
-        uint written = uint.MaxValue)
+        uint written = uint.MaxValue,
+        Func<ushort, int>? known = null)
     {
         next = pc;
         readCount = 0;
-        _bus.Start(pc, bytes, reads);
+        _bus.Start(pc, bytes, reads, known);
         try
         {
             for (int bit = 0; bit < _names.Length; bit++)

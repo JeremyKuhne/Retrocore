@@ -6,7 +6,10 @@ using Retrocore.Assembler;
 using Retrocore.Debug;
 using Retrocore.Documentation;
 using Retrocore.Isa;
+using Retrocore.Machines;
+using Retrocore.Machines.Acorn;
 using Retrocore.Machines.Apple2;
+using Retrocore.Machines.Coco;
 
 namespace Retrocore.Tests;
 
@@ -28,32 +31,38 @@ public class ContractAnalysisSdkTests
     {
         string acorn = Path.Join(s_inputs, "Acorn");
         Coco3Assembly coco = CocoSdkModules.AssembleCoco3(Path.Join(s_inputs, "Coco"));
-        (string Name, AssemblyResult Result, string Model)[] modules =
+        // Each map is the machine's in the state the module runs in.
+        MemoryMap enhanced = AppleMap(Apple2Model.IIeEnhanced, internalSlotRom: false);
+        MemoryMap enhancedFirmware = AppleMap(Apple2Model.IIeEnhanced, internalSlotRom: true);
+        MemoryMap originalFirmware = AppleMap(Apple2Model.IIe, internalSlotRom: true);
+        MemoryMap bbc = BbcMap();
+        MemoryMap coco3 = Coco3Map();
+        (string Name, AssemblyResult Result, string Model, MemoryMap Map)[] modules =
         [
-            ("Monitor", SdkModules.AssembleSystem(System("Monitor.asm"), SdkModules.MonitorOrigin, SdkModules.MonitorSize, Apple2Model.IIeEnhanced), "Enhanced"),
-            ("Firmware (Enhanced)", SdkModules.AssembleSystem(System("Firmware.Enhanced.asm"), SdkModules.FirmwareOrigin, SdkModules.FirmwareSize, Apple2Model.IIeEnhanced), "Enhanced"),
-            ("Firmware (Original)", SdkModules.AssembleSystem(System("Firmware.Original.asm"), SdkModules.FirmwareOrigin, SdkModules.FirmwareSize, Apple2Model.IIe), "Original"),
-            ("AppleSoft", SdkModules.AssembleAppleSoft(SdkModules.AppleSoftPath(s_inputs), Apple2Model.IIeEnhanced), "Enhanced"),
-            ("BBC MOS", BbcSdkModules.AssembleMos(acorn), ""),
-            ("BBC BASIC", BbcSdkModules.AssembleBasic(acorn), ""),
-            ("BBC DFS", BbcSdkModules.AssembleDnfs(acorn), ""),
-            ("CoCo Color BASIC", coco.ColorBasic, ""),
-            ("CoCo Extended BASIC", coco.ExtendedBasic, ""),
-            ("CoCo 3", coco.Coco3, ""),
-            ("Kaypro MBASIC", KayproSdkModules.AssembleMbasic(Path.Join(s_inputs, "Kaypro", KayproSdkModules.MbasicSource)), "")
+            ("Monitor", SdkModules.AssembleSystem(System("Monitor.asm"), SdkModules.MonitorOrigin, SdkModules.MonitorSize, Apple2Model.IIeEnhanced), "Enhanced", enhanced),
+            ("Firmware (Enhanced)", SdkModules.AssembleSystem(System("Firmware.Enhanced.asm"), SdkModules.FirmwareOrigin, SdkModules.FirmwareSize, Apple2Model.IIeEnhanced), "Enhanced", enhancedFirmware),
+            ("Firmware (Original)", SdkModules.AssembleSystem(System("Firmware.Original.asm"), SdkModules.FirmwareOrigin, SdkModules.FirmwareSize, Apple2Model.IIe), "Original", originalFirmware),
+            ("AppleSoft", SdkModules.AssembleAppleSoft(SdkModules.AppleSoftPath(s_inputs), Apple2Model.IIeEnhanced), "Enhanced", enhanced),
+            ("BBC MOS", BbcSdkModules.AssembleMos(acorn), "", bbc),
+            ("BBC BASIC", BbcSdkModules.AssembleBasic(acorn), "", bbc),
+            ("BBC DFS", BbcSdkModules.AssembleDnfs(acorn), "", bbc),
+            ("CoCo Color BASIC", coco.ColorBasic, "", coco3),
+            ("CoCo Extended BASIC", coco.ExtendedBasic, "", coco3),
+            ("CoCo 3", coco.Coco3, "", coco3),
+            ("Kaypro MBASIC", KayproSdkModules.AssembleMbasic(Path.Join(s_inputs, "Kaypro", KayproSdkModules.MbasicSource)), "", MemoryMap.AllRam)
         ];
 
         int findings = 0;
         int provedMarked = 0, provedUnmarked = 0, unprovedMarked = 0;
         int checkedRoutines = 0;
         int unverified = 0;
-        foreach ((string name, AssemblyResult result, string model) in modules)
+        foreach ((string name, AssemblyResult result, string model, MemoryMap map) in modules)
         {
             result.Diagnostics.Should().BeEmpty(name);
             DocumentationSet documentation = Set(result, name);
             foreach (InstructionSet set in Sets(documentation))
             {
-                AnalysisContractReport report = new AnalysisContracts(result, documentation, set, model).Check();
+                AnalysisContractReport report = new AnalysisContracts(result, documentation, set, model, map: map).Check();
                 IReadOnlyList<AnalysisContractFinding> found = report.Findings;
                 int count = report.Checked;
                 IReadOnlyList<string> skipped = report.Skipped;
@@ -120,6 +129,35 @@ public class ContractAnalysisSdkTests
         }
 
         return (marked, unmarked, unproved);
+    }
+
+    // An Apple IIe after reset: the Monitor and AppleSoft run there. The firmware's $C100-$CFFF runs with the
+    // internal ROM switched in over the slots, as SETINTCXROM does.
+    private static MemoryMap AppleMap(Apple2Model model, bool internalSlotRom)
+    {
+        Apple2Machine machine = new(model, new Apple2Roms(new byte[16384], new byte[4096]));
+        if (internalSlotRom) { machine.Bus.Write(0xC007, 0); }
+        return MemoryMap.Capture(machine);
+    }
+
+    // A Model B with ROMs in the sockets BASIC and the DFS use.
+    private static MemoryMap BbcMap()
+    {
+        BbcRoms roms = new(new byte[16384], new byte[960]);
+        roms.Fit(0, new byte[16384]);
+        roms.Fit(3, new byte[16384]);
+        return MemoryMap.Capture(new BbcMachine(roms));
+    }
+
+    // A CoCo 3 as its reset leaves it to run BASIC: copied into RAM, with the MMU on, 32K internal ROM mapped
+    // (INIT0 = COCO+MMUEN+MC3+MC1) and the SAM in all-RAM mode.
+    private static MemoryMap Coco3Map()
+    {
+        CocoConfiguration configuration = new() { Model = CocoModel.Coco3 };
+        CocoMachine machine = new(configuration, CocoRoms.ForCoco3(new byte[32768]));
+        machine.Bus.Write(0xFF90, 0xCA);
+        machine.Bus.Write(0xFFDF, 0);
+        return MemoryMap.Capture(machine);
     }
 
     // The instruction sets the documented routines are in.

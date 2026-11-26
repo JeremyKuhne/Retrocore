@@ -17,6 +17,7 @@ internal sealed class AnalysisEvaluationBus : IProcessorBus, IIoBus
     private int _length;
     private byte[] _reads = new byte[8];
     private int _readLength;
+    private Func<ushort, int>? _known;
 
     /// <summary>
     ///  Gets whether the instruction did something the analysis cannot follow: more reads than it was given values
@@ -35,8 +36,10 @@ internal sealed class AnalysisEvaluationBus : IProcessorBus, IIoBus
     /// <param name="pc">Where the instruction is.</param>
     /// <param name="bytes">Its bytes.</param>
     /// <param name="reads">The values its reads of other memory get, in the order it reads.</param>
-    internal void Start(ushort pc, ReadOnlySpan<byte> bytes, ReadOnlySpan<byte> reads)
+    /// <param name="known">The value of a byte the caller knows, or -1; such reads take no value from reads.</param>
+    internal void Start(ushort pc, ReadOnlySpan<byte> bytes, ReadOnlySpan<byte> reads, Func<ushort, int>? known)
     {
+        _known = known;
         _start = pc;
         _length = Math.Min(bytes.Length, _bytes.Length);
         bytes[.._length].CopyTo(_bytes);
@@ -52,6 +55,7 @@ internal sealed class AnalysisEvaluationBus : IProcessorBus, IIoBus
     {
         int offset = (ushort)(address - _start);
         if (offset < _length) { return _bytes[offset]; }
+        if (_known?.Invoke(address) is int value and >= 0) { return (byte)value; }
         int read = ReadCount++;
         if (read < _readLength) { return _reads[read]; }
         Failed = true;

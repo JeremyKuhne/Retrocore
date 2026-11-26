@@ -64,9 +64,15 @@ internal sealed class AnalysisRoutineState
     /// <returns>Whether they are the same.</returns>
     internal bool SameAs(AnalysisRoutineState other)
     {
-        if (StackLost != other.StackLost || !Slots.AsSpan().SequenceEqual(other.Slots))
+        if (StackLost != other.StackLost || !Slots.AsSpan().SequenceEqual(other.Slots) || Memory.Count != other.Memory.Count)
         {
             return false;
+        }
+
+        // Memory counts as much as registers: a join that changes only what a fixed address holds must be followed.
+        foreach ((int address, AnalysisValue value) in Memory)
+        {
+            if (!other.Memory.TryGetValue(address, out AnalysisValue theirs) || theirs != value) { return false; }
         }
 
         foreach ((int stack, List<AnalysisRoutineFrame> frames) in Stacks)

@@ -79,6 +79,11 @@ internal sealed record AnalysisRoutineSummary
     internal IReadOnlyDictionary<ushort, int> Conditions { get; init; } = new Dictionary<ushort, int>();
 
     /// <summary>
+    ///  Gets the addresses of the instructions the analysis reached.
+    /// </summary>
+    internal IReadOnlySet<ushort> Visited { get; init; } = new HashSet<ushort>();
+
+    /// <summary>
     ///  Gets the conditional branches, calls and returns that always go one way, by address: true for always taken,
     ///  false for never.
     /// </summary>

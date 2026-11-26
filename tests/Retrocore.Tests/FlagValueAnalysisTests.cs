@@ -4,6 +4,7 @@
 
 using Retrocore.Assembler;
 using Retrocore.Documentation;
+using Retrocore.Machines;
 
 namespace Retrocore.Tests;
 
@@ -263,10 +264,133 @@ public class FlagValueAnalysisTests
         Summary(contracts, 0x1000).FixedConditions.Should().Equal(new Dictionary<ushort, bool> { [0x1001] = false });
     }
 
+    /// <summary>
+    ///  With a memory map, a ROM table the source assembles reads as its bytes: an index known to be 0 to 3 picks
+    ///  entries that all have bit 7 set. Without a map, or where the bytes are code, nothing is known.
+    /// </summary>
+    [TestMethod]
+    public void RomTablesReadAsTheirBytes()
+    {
+        const string Source = """
+            ;; Looks an entry up in a table whose entries are all negative.
+            ;; Keeps: Y
+            Lookup:
+                txa
+                and #3
+                tax
+                lda Table,x
+                bmi Done
+                ldy #0
+            Done:
+                lda Lookup
+                bmi Change
+                rts
+            Change:
+                ldy #1
+                rts
+            Table:
+                .byte $80, $90, $A0, $FF
+            """;
+
+        MemoryMap rom = MemoryMap.FromRanges([(0x0000, 0x0FFF, MemoryKind.Ram), (0x1000, 0x1FFF, MemoryKind.Rom)]);
+        (List<string> findings, AnalysisContracts contracts) = Check(Source, "Mos6502", rom);
+
+        // The table decides its branch; the code byte at Lookup (TXA, $8A) does not decide the other.
+        findings.Should().Equal("Lookup ($1000) documents Keeps: Y, but Y is changed by the instruction at $1011.");
+        Summary(contracts, 0x1000).FixedConditions.Should().Equal(new Dictionary<ushort, bool> { [0x1007] = true });
+
+        (findings, contracts) = Check(Source, "Mos6502");
+        Summary(contracts, 0x1000).FixedConditions.Should().BeEmpty();
+    }
+
+    /// <summary>
+    ///  A value stored in RAM reads back, but not from a device, and not round a loop, which may be waiting for an
+    ///  interrupt to change it.
+    /// </summary>
+    [TestMethod]
+    public void RamKeepsWhatIsStoredButDevicesAndLoopsDoNot()
+    {
+        const string Stored = """
+            ;; Stores 1 and tests it.
+            ;; Keeps: X
+            Stored:
+                lda #1
+                sta $C000
+                lda #0
+                lda $C000
+                bne Done
+                ldx #0
+            Done:
+                rts
+            """;
+
+        MemoryMap ram = MemoryMap.AllRam;
+        MemoryMap device = MemoryMap.FromRanges([(0x0000, 0xBFFF, MemoryKind.Ram), (0xC000, 0xC0FF, MemoryKind.Io), (0x1000, 0x1FFF, MemoryKind.Rom)]);
+        (List<string> findings, AnalysisContracts contracts) = Check(Stored, "Mos6502", ram);
+        findings.Should().BeEmpty();
+        Summary(contracts, 0x1000).FixedConditions.Should().Equal(new Dictionary<ushort, bool> { [0x100A] = true });
+
+        (findings, contracts) = Check(Stored, "Mos6502", device);
+        findings.Should().HaveCount(1);
+        Summary(contracts, 0x1000).FixedConditions.Should().BeEmpty();
+
+        const string Waits = """
+            ;; Clears a flag and waits for an interrupt to set it.
+            ;; Keeps: X
+            Waits:
+                lda #0
+                sta $10
+            Wait:
+                lda $10
+                beq Wait
+                ldx #0
+                rts
+            """;
+
+        (findings, contracts) = Check(Waits, "Mos6502", ram);
+        findings.Should().Equal("Waits ($1000) documents Keeps: X, but X is changed by the instruction at $1008.");
+        Summary(contracts, 0x1000).FixedConditions.Should().BeEmpty();
+    }
+
+    /// <summary>
+    ///  Paths that meet with the same registers and flags but different memory are joined and followed again: the
+    ///  path that stores 0 reaches Common first, and the one that stores an unknown byte must still be seen there.
+    /// </summary>
+    [TestMethod]
+    public void JoinsThatChangeOnlyMemoryAreFollowed()
+    {
+        const string Source = """
+            ;; Stores 0 or an unknown byte, then tests it.
+            ;; Keeps: X
+            Joins:
+                lda $12
+                beq Known
+                lda $11
+                sta $10
+                lda #0
+                jmp Common
+            Known:
+                lda #0
+                sta $10
+                jmp Common
+            Common:
+                lda $10
+                bmi Change
+                rts
+            Change:
+                ldx #0
+                rts
+            """;
+
+        (List<string> findings, AnalysisContracts contracts) = Check(Source, "Mos6502", MemoryMap.AllRam);
+        findings.Should().HaveCount(1);
+        Summary(contracts, 0x1000).FixedConditions.Should().BeEmpty();
+    }
+
     private static AnalysisRoutineSummary Summary(AnalysisContracts contracts, ushort address) =>
         contracts.Analyzed(address) ?? throw new AssertFailedException($"No analysis at ${address:X4}.");
 
-    private static (List<string> Findings, AnalysisContracts Contracts) Check(string source, string cpu)
+    private static (List<string> Findings, AnalysisContracts Contracts) Check(string source, string cpu, MemoryMap? map = null)
     {
         string path = Path.Join(AppContext.BaseDirectory, $"FlagValues.{cpu}.asm");
         AssemblyResult result = new Retrocore.Assembler.Assembler().Assemble(
@@ -275,7 +399,7 @@ public class FlagValueAnalysisTests
 
         result.Diagnostics.Should().BeEmpty();
         DocumentationSet documentation = DocumentationSet.Create([DocumentationParser.Parse(source, path)], result);
-        AnalysisContracts contracts = new(result, documentation, CpuCatalog.Get(cpu));
+        AnalysisContracts contracts = new(result, documentation, CpuCatalog.Get(cpu), map: map);
         AnalysisContractReport report = contracts.Check();
         return ([.. report.Findings.Select(finding => finding.ToString())], contracts);
     }

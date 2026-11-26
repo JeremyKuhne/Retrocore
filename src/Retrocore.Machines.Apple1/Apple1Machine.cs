@@ -161,5 +161,14 @@ public sealed class Apple1Machine : IMachine
     int IMachine.MemoryArea(ushort address) => (int)Bus.Area(address);
 
     /// <inheritdoc/>
+    MemoryKind IMachine.AreaKind(int area) => (Apple1MemoryArea)area switch
+        {
+            Apple1MemoryArea.Unmapped => MemoryKind.None,
+            Apple1MemoryArea.Ram => MemoryKind.Ram,
+            Apple1MemoryArea.CassetteInterface or Apple1MemoryArea.Pia => MemoryKind.Io,
+            _ => MemoryKind.Rom
+        };
+
+    /// <inheritdoc/>
     void IMachine.QueueKey(byte code) => Bus.Keyboard.Type(code);
 }

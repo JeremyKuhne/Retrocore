@@ -193,5 +193,14 @@ public sealed class Trs80Machine : IMachine
     int IMachine.MemoryArea(ushort address) => (int)Bus.Area(address);
 
     /// <inheritdoc/>
+    MemoryKind IMachine.AreaKind(int area) => (Trs80MemoryArea)area switch
+        {
+            Trs80MemoryArea.Rom => MemoryKind.Rom,
+            Trs80MemoryArea.Unmapped => MemoryKind.None,
+            Trs80MemoryArea.ExpansionInterface or Trs80MemoryArea.Keyboard => MemoryKind.Io,
+            _ => MemoryKind.Ram
+        };
+
+    /// <inheritdoc/>
     void IMachine.QueueKey(byte code) => Bus.Keyboard.Type(code);
 }

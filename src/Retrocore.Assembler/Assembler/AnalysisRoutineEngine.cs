@@ -3,6 +3,7 @@
 // See LICENSE file in the project root for full license information
 
 using Retrocore.Isa;
+using Retrocore.Machines;
 
 namespace Retrocore.Assembler;
 
@@ -59,6 +60,11 @@ internal sealed class AnalysisRoutineEngine
     private readonly int[] _first;
     private readonly int[] _varying;
     private readonly int[] _widths;
+    private readonly MemoryMap? _map;
+    private readonly bool[]? _data;
+    private readonly int _directPage;
+    private readonly Func<ushort, int> _knownByte;
+    private AnalysisRoutineState? _evaluating;
 
     /// <summary>
     ///  Creates an engine over a 64 KiB image.
@@ -78,15 +84,28 @@ internal sealed class AnalysisRoutineEngine
     ///  Runs an instruction whose inputs are known on the CPU's core, for the values it leaves; null to follow no
     ///  constants but those the effects lines give.
     /// </param>
+    /// <param name="map">
+    ///  What kind of memory each address is in the state the program runs in, or null when it is not known: then a
+    ///  store and a load at a fixed address keep where a value came from, but no bits of it.
+    /// </param>
+    /// <param name="data">
+    ///  Which bytes of the image the source assembles as data; only those of ROM read as constants. Null for none.
+    /// </param>
     internal AnalysisRoutineEngine(
         InstructionSet set,
         byte[] memory,
         bool[] defined,
         Func<ushort, AnalysisRoutineSummary?> callee,
         Func<ushort, AnalysisRoutineSummary?> routineAt,
-        AnalysisEvaluator? evaluator = null)
+        AnalysisEvaluator? evaluator = null,
+        MemoryMap? map = null,
+        bool[]? data = null)
     {
+        _data = data;
         _evaluator = evaluator;
+        _map = map;
+        _knownByte = KnownByte;
+        _directPage = Bit(set.Description, "DP");
         _registers = new int[set.Description.EffectRegisters.Count];
         _first = new int[_registers.Length];
         _varying = new int[_registers.Length];
@@ -193,7 +212,11 @@ internal sealed class AnalysisRoutineEngine
             Step(state, instruction, pc);
         }
 
-        return Summarize(exit, incomplete, incompleteAt, changesCallerStack) with { Conditions = outcomes };
+        return Summarize(exit, incomplete, incompleteAt, changesCallerStack) with
+        {
+            Conditions = outcomes,
+            Visited = new HashSet<ushort>(states.Keys)
+        };
 
         void Step(AnalysisRoutineState state, DisassembledInstruction instruction, ushort pc)
         {
@@ -335,6 +358,9 @@ internal sealed class AnalysisRoutineEngine
 
         void Follow(ushort target, AnalysisRoutineState state, ushort from)
         {
+            // A loop may wait for an interrupt to change memory, so values in memory do not go round one.
+            if (target <= from) { StripMemory(state); }
+
             // Reaching the start of another routine with a contract is a tail call: its contract applies, then it
             // returns. With data on the stack the contract cannot stand for the code, which is followed instead.
             bool clear = !state.StackLost && !HasFrames(state);
@@ -365,6 +391,36 @@ internal sealed class AnalysisRoutineEngine
                 work.Enqueue(target);
             }
         }
+    }
+
+    // The address an instruction reads or writes with no index or pointer: its operand, or on the 6809 a direct
+    // page offset with DP known; -1 for any other.
+    private int FixedAddress(AnalysisRoutineState state, DisassembledInstruction instruction, InstructionEffects effects)
+    {
+        OperandForm form = instruction.Form;
+        if (form.Role != OperandRole.Memory || form.FieldCount < 1 || form.HasPostbyte) { return -1; }
+        if (_directPage < 0 || !effects.Reads(_directPage)) { return instruction.Operand; }
+        AnalysisValue page = state.Slots[_directPage];
+        return page.IsConstant(0xFF) ? ((page.Bits & 0xFF) << 8) | (instruction.Operand & 0xFF) : -1;
+    }
+
+    private static void StripMemory(AnalysisRoutineState state)
+    {
+        foreach (int address in state.Memory.Keys.ToArray())
+        {
+            AnalysisValue value = state.Memory[address];
+            if (value.Known != 0) { state.Memory[address] = value.WithoutBits; }
+        }
+    }
+
+    // A byte of memory the analysis knows, for the core: a ROM's byte the source assembles as data, or a RAM byte a
+    // store left whole; -1 for any other.
+    private int KnownByte(ushort address)
+    {
+        MemoryKind kind = _map?[address] ?? MemoryKind.None;
+        if (kind == MemoryKind.Rom) { return _defined[address] && _data?[address] == true ? _memory[address] : -1; }
+        if (kind != MemoryKind.Ram || _evaluating is null) { return -1; }
+        return _evaluating.Memory.TryGetValue(address, out AnalysisValue cell) && cell.IsConstant(0xFF) ? cell.Bits & 0xFF : -1;
     }
 
     // The flags whose values are known, and those values, as bits of the flags register.
@@ -400,7 +456,13 @@ internal sealed class AnalysisRoutineEngine
 
     private static bool HasFrames(AnalysisRoutineState state) => state.Stacks.Values.Any(frames => frames.Count != 0);
 
-    private bool TryDecode(ushort pc, out DisassembledInstruction instruction)
+    /// <summary>
+    ///  Decodes the instruction the image holds at an address.
+    /// </summary>
+    /// <param name="pc">The address.</param>
+    /// <param name="instruction">Receives the instruction.</param>
+    /// <returns>Whether the bytes there are an instruction the source assembles.</returns>
+    internal bool TryDecode(ushort pc, out DisassembledInstruction instruction)
     {
         Span<byte> bytes = stackalloc byte[8];
         int count = 0;
@@ -442,12 +504,17 @@ internal sealed class AnalysisRoutineEngine
 
         MemoryAccess access = _set.EncodingAccess(instruction.EncodingId);
         OperandForm form = instruction.Form;
-        bool direct = form.Role == OperandRole.Memory && form.FieldCount >= 1 && !form.HasPostbyte;
-        uint readLeaves = effects.RegistersRead & _leaves;
+        int address = FixedAddress(state, instruction, effects);
+        bool direct = address >= 0;
+        uint readLeaves = effects.RegistersRead & _leaves & ~(_directPage >= 0 ? 1u << _directPage : 0);
         if (access == MemoryAccess.Read && direct && readLeaves == 0 && OneBit(written & ~stackBit) is int loaded and >= 0)
         {
-            // A load from a fixed address gets what a store left there; anything else there is a new value.
-            results[loaded] = state.Memory.TryGetValue(instruction.Operand, out AnalysisValue value) ? value : AnalysisValue.Of(Changed(pc));
+            // A load from a fixed address gets what a store left there, where it is RAM or the map is not known;
+            // anything else there is a new value.
+            bool kept = _map is null || _map[(ushort)address] == MemoryKind.Ram;
+            results[loaded] = kept && state.Memory.TryGetValue(address, out AnalysisValue value)
+                ? value
+                : AnalysisValue.Of(Changed(pc));
         }
 
         if (effects.Pushed != 0)
@@ -466,15 +533,22 @@ internal sealed class AnalysisRoutineEngine
         // is a new value; a write through a pointer or an index may land on any, whose values become unknown.
         if (access != MemoryAccess.Read)
         {
-            if (direct && access == MemoryAccess.Write && OneBit(readLeaves) is int stored and >= 0)
+            MemoryKind kind = direct && _map is not null ? _map[(ushort)address] : MemoryKind.Ram;
+            if (direct && kind != MemoryKind.Ram)
             {
-                // Memory keeps where the value came from but not a constant: without the machine's memory map, a
-                // fixed address may be I/O, as the BBC's keyboard scan writes a VIA register and tests it.
-                state.Memory[instruction.Operand] = state.Slots[stored].WithoutBits;
+                // ROM keeps its bytes, and a device or nothing may not give back what was written.
+                state.Memory.Remove(address);
+            }
+            else if (direct && access == MemoryAccess.Write && OneBit(readLeaves) is int stored and >= 0)
+            {
+                // Without the machine's memory map a fixed address may be I/O, as the BBC's keyboard scan writes a
+                // VIA register and tests it, so memory then keeps where the value came from but no bits of it.
+                AnalysisValue value = state.Slots[stored];
+                state.Memory[address] = _map is null ? value.WithoutBits : value.WithBits(value.Known & 0xFF, value.Bits);
             }
             else if (direct)
             {
-                state.Memory[instruction.Operand] = AnalysisValue.Of(Changed(pc));
+                state.Memory[address] = AnalysisValue.Of(Changed(pc));
             }
             else
             {
@@ -584,7 +658,8 @@ internal sealed class AnalysisRoutineEngine
         _registers.CopyTo(_first, 0);
         int firstFlags = baseFlags;
         uint writtenRegisters = (effects.RegistersWritten | effects.RegistersMayWrite) & _leaves;
-        if (!_evaluator.TryRun(pc, bytes, _first, ref firstFlags, reads, out int readCount, out _, read, writtenRegisters))
+        _evaluating = state;
+        if (!_evaluator.TryRun(pc, bytes, _first, ref firstFlags, reads, out int readCount, out _, read, writtenRegisters, _knownByte))
         {
             return false;
         }
@@ -627,7 +702,18 @@ internal sealed class AnalysisRoutineEngine
                 reads[index] = (byte)(assignment >> (unknownCount + (index * 8)));
             }
 
-            bool ran = _evaluator.TryRun(pc, bytes, registers, ref flags, reads[..readCount], out int again, out _, read, writtenRegisters);
+            bool ran = _evaluator.TryRun(
+                pc,
+                bytes,
+                registers,
+                ref flags,
+                reads[..readCount],
+                out int again,
+                out _,
+                read,
+                writtenRegisters,
+                _knownByte);
+
             if (!ran || again != readCount) { return false; }
 
             bool all = true;

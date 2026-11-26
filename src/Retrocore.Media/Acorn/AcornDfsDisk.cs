@@ -25,8 +25,9 @@ namespace Retrocore.Media.Acorn;
 ///   Files are kept in order of start sector, the highest first. A file goes where <c>SAVE</c> would put it: in the
 ///   first gap that holds it, walking up from sector 2, and a file of the same name is deleted first. A removed file's
 ///   sectors are left as they were. Entries move in the catalogue as raw bytes, as the DFS moves them, so the files a
-///   change does not touch keep their bytes, and the bytes past the last entry stay as the DFS would leave them. An
-///   image read and written back unchanged comes back byte for byte.
+///   change does not touch keep their bytes, and a removal moves the bytes past the last entry down as the DFS does
+///   (but for a full catalogue's last slot of information, which the DFS takes from its workspace). An image read
+///   and written back unchanged comes back byte for byte.
 ///  </para>
 /// </remarks>
 public sealed class AcornDfsDisk
@@ -161,7 +162,7 @@ public sealed class AcornDfsDisk
     /// <returns>The disk.</returns>
     /// <exception cref="InvalidDataException">
     ///  The image is shorter than the catalogue or longer than 80 tracks, or its catalogue is broken: a size of fewer
-    ///  than 2 or more than 800 sectors, more than 31 files, or a file outside the disk.
+    ///  than 2 or more than 800 sectors, a file count that is not a multiple of 8, or a file outside the disk.
     /// </exception>
     public static AcornDfsDisk Read(ReadOnlySpan<byte> image)
     {

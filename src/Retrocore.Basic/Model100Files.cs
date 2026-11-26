@@ -22,10 +22,12 @@ namespace Retrocore.Basic;
 ///   Adding, replacing or removing a file moves every file after it, and the directory's addresses, the region
 ///   pointers and BASIC's program pointer that point past it move with them, as the ROM's own routines move
 ///   them. A change to the program BASIC has open, or to a file before it, clears BASIC's variables,
-///   strings, DATA pointer and <c>CONT</c>, as typing a line does; one past it keeps them, moving the variables with
+///   strings, DATA pointer and <c>CONT</c>, as typing a line does, as does any change when BASIC's program pointer
+///   is at no program; one past the open program keeps them, moving the variables with
 ///   the files, as the ROM's <c>OPEN</c>, <c>CLOSE</c> and <c>KILL</c> of another file do. A <c>.BA</c> file that
-///   moves is linked again for its new address. A <c>FOR</c> loop's frame on BASIC's stack keeps its variable's
-///   address, so a change made while a program is stopped inside one leaves <c>CONT</c> unsafe, as on the machine.
+///   moves is linked again for its new address. BASIC's stack is not changed: a <c>FOR</c> loop's frame keeps its
+///   variable's address, so after a change past the program made while it is stopped inside a loop, <c>CONT</c> may
+///   find the loop's variable moved.
 ///  </para>
 /// </remarks>
 public sealed class Model100Files
@@ -223,9 +225,15 @@ public sealed class Model100Files
             throw new InvalidOperationException($"BASIC has {file.Name} open, and the ROM's KILL refuses it too; open another program first.");
         }
 
+        // Measured first, so a file with no end is refused before RAM changes.
+        int length = Length(file.Type, file.Address);
         int entry = EntryOf(file.Address);
-        for (int index = 0; index < EntrySize; index++) { _memory.Write(entry + index, 0); }
-        Move(file.Address, Length(file.Type, file.Address), [], keep: -1);
+        for (int index = 0; index < EntrySize; index++)
+        {
+            _memory.Write(entry + index, 0);
+        }
+
+        Move(file.Address, length, [], keep: -1);
     }
 
     /// <summary>
@@ -280,8 +288,8 @@ public sealed class Model100Files
     private void Move(int at, int removed, ReadOnlySpan<byte> inserted, int keep)
     {
         int delta = inserted.Length - removed;
-        // Strings live above the stack top, between it and the memory top, and the stack grows down from it, so the
-        // stack's room below the stack top bounds the files and variables, kept strings or not.
+        // String space lies above the stack top, up to the memory top, and the stack grows down from the stack top, so
+        // keeping the files and variables a stack's room below the stack top keeps them out of the strings too.
         int end = Word(FreeStart);
         if (end + delta > Word(StackTop) - StackRoom)
         {

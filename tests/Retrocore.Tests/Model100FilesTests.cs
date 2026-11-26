@@ -180,7 +180,7 @@ public sealed class Model100FilesTests
         files.Write("PROG.BA", Parse("10 READ A\n20 DATA 7\n").ToImage());
         BasicProgram.WriteWord(memory, 0xF67C, 0x8001);
 
-        // Variables and arrays, their bytes taken as they are: seven of one and two of the other.
+        // Variables and arrays: any bytes do, seven for the variables and two for the arrays.
         int variables = Word(ram, 0xFBB2);
         byte[] variable = [0x04, 0x41, 0x00, 0x41, 0x70, 0x00, 0x00, 0x12, 0x34];
         variable.CopyTo(ram, variables);
@@ -203,7 +203,7 @@ public sealed class Model100FilesTests
         ram.AsSpan(variables, variable.Length).ToArray().Should().Equal(variable);
 
         // BASIC's unsaved program is past PROG.BA, so with it open, removing PROG.BA, before it, clears them, as does
-        // adding a .BA file in its place.
+        // adding a .BA file, which goes in front of it.
         int unsaved = 0xF962 + (5 * 11) + 1;
         BasicProgram.WriteWord(memory, 0xF67C, Word(ram, unsaved));
         files.Delete("PROG.BA");
@@ -215,6 +215,13 @@ public sealed class Model100FilesTests
         BasicProgram.WriteWord(memory, 0xFBB6, Word(ram, 0xFBB2) + variable.Length);
         files.Write("ZED.BA", Parse("10 END\n").ToImage());
         Word(ram, 0xFBB6).Should().Be(Word(ram, 0xFBB2), "the variables are cleared again");
+
+        // With BASIC's pointer at no program, as in an image taken before BASIC ran, a change clears them too.
+        variable.CopyTo(ram, Word(ram, 0xFBB2));
+        BasicProgram.WriteWord(memory, 0xFBB6, Word(ram, 0xFBB2) + variable.Length);
+        BasicProgram.WriteWord(memory, 0xF67C, 0);
+        files.Write("LAST.DO", "X"u8);
+        Word(ram, 0xFBB6).Should().Be(Word(ram, 0xFBB2), "with no program open, the variables are cleared");
     }
 
     /// <summary>

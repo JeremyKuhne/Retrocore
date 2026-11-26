@@ -139,8 +139,8 @@ public sealed class Model100FilesTests
 
     /// <summary>
     ///  A file of a name already in RAM is replaced in its place, BASIC's open program too, and RAM is changed only once
-    ///  the new one is known to fit; after any change BASIC's DATA pointer is before its program and CONT is cleared,
-    ///  as the ROM leaves them.
+    ///  the new one is known to fit; after a change to the open program BASIC's DATA pointer is before it and CONT is
+    ///  cleared, as the ROM leaves them.
     /// </summary>
     [TestMethod]
     public void ReplacingKeepsThePlaceAndChecksTheRoomFirst()
@@ -180,11 +180,11 @@ public sealed class Model100FilesTests
         files.Write("PROG.BA", Parse("10 READ A\n20 DATA 7\n").ToImage());
         BasicProgram.WriteWord(memory, 0xF67C, 0x8001);
 
-        // A variable, as BASIC keeps one: seven bytes from the variables' start.
+        // Variables and arrays, their bytes taken as they are: seven of one and two of the other.
         int variables = Word(ram, 0xFBB2);
-        byte[] variable = [0x04, 0x41, 0x00, 0x41, 0x70, 0x00, 0x00];
+        byte[] variable = [0x04, 0x41, 0x00, 0x41, 0x70, 0x00, 0x00, 0x12, 0x34];
         variable.CopyTo(ram, variables);
-        BasicProgram.WriteWord(memory, 0xFBB4, variables + variable.Length);
+        BasicProgram.WriteWord(memory, 0xFBB4, variables + 7);
         BasicProgram.WriteWord(memory, 0xFBB6, variables + variable.Length);
         BasicProgram.WriteWord(memory, 0xFBB8, 0x8008);
         BasicProgram.WriteWord(memory, 0xFBAC, 0x8006);
@@ -193,6 +193,7 @@ public sealed class Model100FilesTests
         int moved = Word(ram, 0xFBB2);
         moved.Should().Be(variables + 4, "the variables follow NOTE.DO's four bytes");
         ram.AsSpan(moved, variable.Length).ToArray().Should().Equal(variable);
+        Word(ram, 0xFBB4).Should().Be(moved + 7);
         Word(ram, 0xFBB6).Should().Be(moved + variable.Length);
         Word(ram, 0xFBB8).Should().Be(0x8008, "the DATA pointer is in the program, which did not move");
         Word(ram, 0xFBAC).Should().Be(0x8006);
@@ -201,11 +202,19 @@ public sealed class Model100FilesTests
         Word(ram, 0xFBB2).Should().Be(variables);
         ram.AsSpan(variables, variable.Length).ToArray().Should().Equal(variable);
 
-        // BASIC's unsaved program is past PROG.BA, so opening it and adding a .BA file before it clears them.
-        BasicProgram.WriteWord(memory, 0xF67C, Word(ram, 0xF962 + (5 * 11) + 1));
-        files.Write("ZED.BA", Parse("10 END\n").ToImage());
+        // BASIC's unsaved program is past PROG.BA, so with it open, removing PROG.BA, before it, clears them, as does
+        // adding a .BA file in its place.
+        int unsaved = 0xF962 + (5 * 11) + 1;
+        BasicProgram.WriteWord(memory, 0xF67C, Word(ram, unsaved));
+        files.Delete("PROG.BA");
         Word(ram, 0xFBB6).Should().Be(Word(ram, 0xFBB2), "the variables are cleared");
         Word(ram, 0xFBAC).Should().Be(0);
+        Word(ram, 0xF67C).Should().Be(Word(ram, unsaved), "BASIC's pointer moved with its program");
+        Word(ram, 0xFBB8).Should().Be(Word(ram, unsaved) - 1);
+        variable.CopyTo(ram, Word(ram, 0xFBB2));
+        BasicProgram.WriteWord(memory, 0xFBB6, Word(ram, 0xFBB2) + variable.Length);
+        files.Write("ZED.BA", Parse("10 END\n").ToImage());
+        Word(ram, 0xFBB6).Should().Be(Word(ram, 0xFBB2), "the variables are cleared again");
     }
 
     /// <summary>

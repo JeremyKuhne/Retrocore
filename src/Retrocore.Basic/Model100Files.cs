@@ -24,7 +24,8 @@ namespace Retrocore.Basic;
 ///   them. A change to the program BASIC has open, or to a file before it, clears BASIC's variables,
 ///   strings, DATA pointer and <c>CONT</c>, as typing a line does; one past it keeps them, moving the variables with
 ///   the files, as the ROM's <c>OPEN</c>, <c>CLOSE</c> and <c>KILL</c> of another file do. A <c>.BA</c> file that
-///   moves is linked again for its new address.
+///   moves is linked again for its new address. A <c>FOR</c> loop's frame on BASIC's stack keeps its variable's
+///   address, so a change made while a program is stopped inside one leaves <c>CONT</c> unsafe, as on the machine.
 ///  </para>
 /// </remarks>
 public sealed class Model100Files
@@ -118,6 +119,7 @@ public sealed class Model100Files
     /// <param name="name">The file's name and extension, such as <c>PROG.BA</c>; case does not matter.</param>
     /// <returns>The bytes.</returns>
     /// <exception cref="FileNotFoundException">There is no such file.</exception>
+    /// <exception cref="InvalidDataException">The file in RAM has no end.</exception>
     public byte[] Read(string name)
     {
         Model100File file = Find(name) ?? throw new FileNotFoundException($"There is no {name} in RAM.", name);
@@ -139,8 +141,8 @@ public sealed class Model100Files
     ///  <para>
     ///   A new file takes the first free directory entry and goes at the end of its kind's region; one that replaces
     ///   another takes its place and entry, so BASIC keeps a program it has open. RAM is changed only once the file
-    ///   is known to fit (and a <c>.BA</c> file in RAM whose lines do not end is found only as the files after it are
-    ///   linked again, once they have moved).
+    ///   is known to fit; but a <c>.BA</c> file already in RAM whose lines do not end is found only as the files are
+    ///   linked again, after they have moved, which leaves RAM changed.
     ///  </para>
     /// </remarks>
     /// <param name="name">
@@ -212,6 +214,7 @@ public sealed class Model100Files
     /// <exception cref="InvalidOperationException">
     ///  BASIC has the file open, which the ROM's <c>KILL</c> refuses too.
     /// </exception>
+    /// <exception cref="InvalidDataException">A file in RAM has no end.</exception>
     public void Delete(string name)
     {
         Model100File file = Find(name) ?? throw new FileNotFoundException($"There is no {name} in RAM.", name);
@@ -277,6 +280,8 @@ public sealed class Model100Files
     private void Move(int at, int removed, ReadOnlySpan<byte> inserted, int keep)
     {
         int delta = inserted.Length - removed;
+        // Strings live above the stack top, between it and the memory top, and the stack grows down from it, so the
+        // stack's room below the stack top bounds the files and variables, kept strings or not.
         int end = Word(FreeStart);
         if (end + delta > Word(StackTop) - StackRoom)
         {
@@ -305,13 +310,14 @@ public sealed class Model100Files
             }
         }
 
-        // A change to BASIC's open program, or before it, moves its text, which its variables may point into, so they
-        // are cleared, as typing a line clears them; one past it moves the variables with the files, as OPEN, CLOSE
-        // and KILL of another file leave them.
+        // A change to BASIC's open program, or before it, moves its text, which string variables set from a literal
+        // point into, so they are cleared, as typing a line clears them; one past it moves the variables with the
+        // files, as OPEN, CLOSE and KILL of another file leave them. With no program open, they are cleared.
         bool clears;
         try
         {
-            clears = at < BasicEnd(_memory, Word(ProgramPointer));
+            int program = Word(ProgramPointer);
+            clears = !HoldsProgram(program) || at < BasicEnd(_memory, program);
         }
         catch (InvalidDataException)
         {

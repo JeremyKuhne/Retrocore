@@ -1485,8 +1485,8 @@ Business BASIC, Level II BASIC, Level I BASIC, Color BASIC, MBASIC (BASIC-80 5.2
 100 BASIC, BBC BASIC and Atari BASIC. Business BASIC and MBASIC take a reserved word only between separators, so their
 highlighting leaves `PRINTER` a name, and their names count in full, dots included (MBASIC's to 40 characters). A Color
 BASIC file may use every word of Disk Extended Color BASIC; a machine without those ROMs stores the words they add as
-letters. A plain `.bas` file takes its dialect from a first line such as `REM retrocore applesoft` or `' retrocore
-level2`, else the `retrocore.basic.dialect` setting, else the BASIC of the machine being debugged.
+letters. A plain `.bas` file takes its dialect from a first line such as `REM retrocore applesoft` or
+`' retrocore level2`, else the `retrocore.basic.dialect` setting, else the BASIC of the machine being debugged.
 
 A file may leave out line numbers and use labels: a line of its own, `name:` or
 `@name`, names the line after it, and `GOTO name`, `GOSUB @name`, `THEN name` and

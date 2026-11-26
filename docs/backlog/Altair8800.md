@@ -71,7 +71,8 @@ Every program the Altair ran is copyrighted, so, as for the other machines, it i
 
 - The machine against SIMH's `altairz80` with the same keystroke-oracle approach the Model I and CoCo use.
 - The ACIA against the MC6850 data sheet's status and interrupt behaviour.
-- The boot PROMs pinned by digest, once their sources exist.
+- The boot PROMs pinned by digest. *Done:* `AltairDiskTests` check that DBL's and MBL's sources assemble to the
+  PROMs' digests, and, with the dumps, byte for byte.
 - A DAP script like the Model I's.
 
 Every download (SIMH, software images, ROM dumps) is approved first, as before.
@@ -129,14 +130,28 @@ Every download (SIMH, software images, ROM dumps) is approved first, as before.
 - **Index sync.** The FDC+ waits for the index pulse after a drive is selected before it shows sectors; here the
   sector position shows once the head is settled. Whether MITS's board waits too needs the manual.
 - **A drive picture.** Retro Devices shows the drives as text; there is no 8-inch drive image.
-
+- **The other disk images.** Disk BASIC 4.0, 4.1, 300-5-C and 300-5-F, Altair DOS 1.0 with Fortran, the 24K CP/M
+  2.2b and Burcon's 48K CP/M were downloaded with the rest (approved 2026-11-20) but have not been booted. Disk
+  BASIC 5.0 and Altair DOS are checked only as far as `MEMORY SIZE?`.
+- **SIMH for the disks.** CP/M, Disk BASIC and Altair DOS boot on SIMH's `altairz80` too, but that was checked by
+  hand; no test compares a disk session with SIMH, as the BASIC tests do.
+- **Loading a tape with MBL.** `proms` fits MBL, but a launch starts at its program, at DBL's `$FF00` or at `$0000`; to
+  load a tape, the program counter is set to `$FE00` in the debugger. A launch option to start at MBL would do it.
+- **DBL and MBL in the maintained style.** Both sources predate [ConvertingSources.md](../ConvertingSources.md) and
+  don't opt in to the strict style check; converting them would give them full names with the listings' names kept
+  as historical names, as the Apple II sources have.
+- **Trim erase and the head.** The FDC+ holds off a head unload until a write's trim erase ends; here the head
+  unloads at once. Nothing here can tell the difference.
+- **A missing PROM source.** A launch whose `sdkRoms` folder lacks `Dbl.asm` or `Mbl.asm` fails with a
+  file-not-found error, while the source map skips a missing file. Whether a launch should fall back to the SDK's
+  copy is open.
 - **The 1975 source listing** on gatesnotes.com, which the user named: its host is allowed now, but its CDN answers
   automated downloads with "Access Denied", so it needs downloading by hand.
 - **The 88-SIO's status bits** other than 0, 4 and 7 read 0 here; the board's manual would settle them.
-- **For phase 4: the disk format.** Reading the MITS Tapes disk worked out the layout CP/M uses on Altair 8-inch
-  disks in SIMH's 137-byte-sector images. Two system tracks, then 2 KB blocks, 16 records to a block, two blocks a
-  track. Tracks 0-5 have the 128 data bytes at offset 3 of each sector, tracks 6-76 at offset 7. A track's logical
-  record r is in the sector numbered h, where k = r mod 16 and h = 8(k mod 4) + 2(k div 4), plus 1 for r of 16 or
-  more. On tracks 0-5 that sector is image sector h; from track 6 it is image sector 17h mod 32, as the sector
+- **The CP/M disk format**, for CP/M's sources. Reading the MITS Tapes disk worked out the layout CP/M uses on Altair
+  8-inch disks in SIMH's 137-byte-sector images. Two system tracks, then 2 KB blocks, 16 records to a block, two
+  blocks a track. Tracks 0-5 have the 128 data bytes at offset 3 of each sector, tracks 6-76 at offset 7. A track's
+  logical record r is in the sector numbered h, where k = r mod 16 and h = 8(k mod 4) + 2(k div 4), plus 1 for r of 16
+  or more. On tracks 0-5 that sector is image sector h; from track 6 it is image sector 17h mod 32, as the sector
   headers' numbers show. Every record of the twelve tapes on that disk passes its checksum this way, and Extended
   BASIC 4.0's tape rebuilds SIMH's `exbas.bin` byte for byte.

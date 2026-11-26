@@ -82,7 +82,8 @@ internal static class Apple3SdkModules
     /// <param name="directory">The SDK ROM directory, or null for the copy beside the debug host.</param>
     /// <returns>The file's 22,016 bytes, which start with its label, <c>SOS KRNL</c>.</returns>
     /// <exception cref="FileNotFoundException">
-    ///  Neither the directory nor its <c>Apple3</c> folder has <c>Sos/SosKernel.asm</c>.
+    ///  The Apple III sources (the directory, or its <c>Apple3</c> folder when it has no <c>BootRom.asm</c>) have no
+    ///  <c>Sos/SosKernel.asm</c>.
     /// </exception>
     /// <exception cref="InvalidDataException">The source has errors.</exception>
     internal static byte[] BuildSosKernel(string? directory) =>
@@ -94,7 +95,8 @@ internal static class Apple3SdkModules
     /// <param name="directory">The SDK ROM directory, or null for the copy beside the debug host.</param>
     /// <returns>The block's 512 bytes.</returns>
     /// <exception cref="FileNotFoundException">
-    ///  Neither the directory nor its <c>Apple3</c> folder has <c>Sos/SosBoot.asm</c>.
+    ///  The Apple III sources (the directory, or its <c>Apple3</c> folder when it has no <c>BootRom.asm</c>) have no
+    ///  <c>Sos/SosBoot.asm</c>.
     /// </exception>
     /// <exception cref="InvalidDataException">The source has errors.</exception>
     internal static byte[] BuildSosBoot(string? directory) =>

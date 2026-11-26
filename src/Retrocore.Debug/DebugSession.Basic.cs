@@ -93,14 +93,29 @@ internal sealed partial class DebugSession
         }
 
         // Every tokenized program has zero bytes, which end its lines; a text file has none. Level I's lines end in a
-        // carriage return, so its image is told by its line numbers' bytes, which below line 8192 are control
-        // characters a text file does not hold.
+        // carriage return, so its image is told by its line numbers' bytes: below line 8192 their high byte is a control
+        // character, which a text file holds only as a tab, carriage return or line feed. An image with none of the
+        // others, its lines all from 2304 to 2815 or 3328 to 3583, is one when it has no line feed and reads as one.
         bool image = dialect is Level1Dialect
             ? bytes.Any(value => value is < (byte)' ' and not ((byte)'\t' or (byte)'\r' or (byte)'\n'))
+                || (!bytes.Contains((byte)'\n') && ReadsAsImage(dialect, bytes))
             : bytes.AsSpan().IndexOf((byte)0) >= 0;
 
         if (image) { return StoreBasic(BasicProgram.FromImage(dialect, bytes), []); }
         return WriteBasic(File.ReadAllText(path));
+    }
+
+    // Whether bytes read as a program image of the dialect.
+    private static bool ReadsAsImage(BasicDialect dialect, byte[] bytes)
+    {
+        try
+        {
+            return BasicProgram.FromImage(dialect, bytes).Lines.Count > 0;
+        }
+        catch (InvalidDataException)
+        {
+            return false;
+        }
     }
 
     private JsonObject ExportBasic(string path, string? format, string? name)

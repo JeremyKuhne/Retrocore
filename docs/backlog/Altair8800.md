@@ -25,7 +25,7 @@ and lights, and boards for serial terminals, cassette and 8-inch disks.
 | 88-DCDD | 8-inch disk controller and drives (77 tracks, 32 sectors of 137 bytes) | `$08`-`$0A` |
 | 88-DBL / MBL | The disk boot loader and multi-boot loader PROMs | `$FF00`, `$FE00` |
 
-The ACIA joins the shared chips in `Retrocore.Core` (`Machines/Chips`), as the 6821 and 6522 did.
+The ACIA is one of the shared chips in `Retrocore.Core` (`Machines/Chips/Acia6850.cs`), as the 6821 and 6522 are.
 
 ## Software
 
@@ -35,9 +35,9 @@ Every program the Altair ran is copyrighted, so, as for the other machines, it i
   memory directly. Its documented sense-switch settings choose the terminal board.
 - **CP/M 2.2 and Altair Disk BASIC** on 8-inch disk images in SIMH's format (77 tracks of 32 137-byte sectors,
   337,568 bytes).
-- **The boot PROMs** (88-DBL, MBL) become documented SDK sources rebuilt byte-identically to dumps the user
-  supplies, as the other machines' ROMs did. Until then the disk boots through a loader the debugger deposits,
-  as an operator keyed one in through the front panel.
+- **The boot PROMs** (88-DBL, MBL) are documented SDK sources that assemble to their pinned digests, and byte for
+  byte to the dumps the user supplies, as the other machines' ROMs do; a launch with disks boots through DBL by
+  default.
 
 ## The debug target
 
@@ -69,10 +69,15 @@ Every program the Altair ran is copyrighted, so, as for the other machines, it i
 
 ## Testing
 
-- The machine against SIMH's `altairz80` with the same keystroke-oracle approach the Model I and CoCo use.
-- The ACIA against the MC6850 data sheet's status and interrupt behaviour.
-- The boot PROMs pinned by digest, once their sources exist.
-- A DAP script like the Model I's.
+- The machine against SIMH's `altairz80` with the same keystroke-oracle approach the Model I and CoCo use. *Done*
+  for BASIC: `AltairBasicTests` check its banners and bytes free against SIMH's, and 8K BASIC's `CSAVE` tape; the
+  disks are open, as "SIMH for the disks" under Still open.
+- The ACIA against the MC6850 data sheet's status and interrupt behaviour. *Done:* `Acia6850Tests`, and the ACIA's
+  reset and overrun in `AltairMachineTests`.
+- The boot PROMs pinned by digest. *Done:* `AltairDiskTests` check that DBL's and MBL's sources assemble to the
+  PROMs' digests, and, with the dumps, byte for byte.
+- A DAP script like the Model I's. *Done:* `tools/Test-AltairDap.mjs`, which boots CP/M from a disk too when CP/M
+  2.2b's image is in the external test data.
 
 Every download (SIMH, software images, ROM dumps) is approved first, as before.
 
@@ -121,22 +126,40 @@ Every download (SIMH, software images, ROM dumps) is approved first, as before.
 
 ## Still open
 
-- **CP/M's sources**, the BIOS and boot sector, as SDK sources or documented disassemblies.
+- **CP/M's sources**, the BIOS and boot sector, as SDK sources or documented disassemblies. The BIOS and boot
+  sources of CP/M 2.2b and Burcon's CP/M (`BIOS.ASM`, `BOOT.ASM`) were downloaded with the images; Burcon's are
+  Mike Douglas's disassemblies of a memory dump, not Burcon's own source.
 - **The 88-MDS Minidisk** (5.25-inch, 16 sectors of 137 bytes on 35 tracks), and HDBL, MDBL and DBL 3.3.
 - **Sector interrupts.** The controller's interrupt at each sector's start is not modeled, as nothing here uses it.
 - **DBL's loader** runs from RAM at `$2C00`, which the PROM's source map does not cover, so stepping it shows
   disassembly.
 - **Index sync.** The FDC+ waits for the index pulse after a drive is selected before it shows sectors; here the
-  sector position shows once the head is settled. Whether MITS's board waits too needs the manual.
+  sector position shows once the head is settled. Whether MITS's board waits too needs the 88-DCDD manual, which is
+  downloaded but scanned, so it needs reading rather than searching.
 - **A drive picture.** Retro Devices shows the drives as text; there is no 8-inch drive image.
-
+- **The other disk images.** Disk BASIC 4.0, 4.1, 300-5-C and 300-5-F, Altair DOS 1.0 with Fortran, the 24K CP/M
+  2.2b and Burcon's 48K CP/M were downloaded with the rest (approved 2026-11-20) but have not been booted. Disk
+  BASIC 5.0 and Altair DOS are checked only as far as `MEMORY SIZE?`.
+- **SIMH for the disks.** CP/M, Disk BASIC and Altair DOS boot on SIMH's `altairz80` too, but that was checked by
+  hand; no test compares a disk session with SIMH, as the BASIC tests do.
+- **Loading a tape with MBL.** `proms` fits MBL, but a launch starts at its program, at DBL's `$FF00` or at `$0000`; to
+  load a tape, the program counter is set to `$FE00` in the debugger. A launch option to start at MBL would do it.
+- **DBL and MBL in the maintained style.** Both sources were written before the conversion rules in
+  [ConvertingSources.md](../ConvertingSources.md) and don't opt in to the strict style check; converting them would
+  give them full names with the listings' names kept as historical names, as the Apple II sources have.
+- **Trim erase and the head.** The FDC+ holds off a head unload until a write's trim erase ends; here the head
+  unloads at once. Nothing here can tell the difference.
+- **A missing PROM source.** A launch whose `sdkRoms` folder lacks the source of a PROM it fits, `Dbl.asm` or
+  `Mbl.asm`, fails with a file-not-found error, while the source map skips a missing file. Whether a launch should
+  fall back to the SDK's copy is open.
 - **The 1975 source listing** on gatesnotes.com, which the user named: its host is allowed now, but its CDN answers
   automated downloads with "Access Denied", so it needs downloading by hand.
-- **The 88-SIO's status bits** other than 0, 4 and 7 read 0 here; the board's manual would settle them.
-- **For phase 4: the disk format.** Reading the MITS Tapes disk worked out the layout CP/M uses on Altair 8-inch
-  disks in SIMH's 137-byte-sector images. Two system tracks, then 2 KB blocks, 16 records to a block, two blocks a
-  track. Tracks 0-5 have the 128 data bytes at offset 3 of each sector, tracks 6-76 at offset 7. A track's logical
-  record r is in the sector numbered h, where k = r mod 16 and h = 8(k mod 4) + 2(k div 4), plus 1 for r of 16 or
-  more. On tracks 0-5 that sector is image sector h; from track 6 it is image sector 17h mod 32, as the sector
+- **The 88-SIO's status bits** other than 0, 4 and 7 read 0 here; the board's manual would settle them. Its output
+  interrupt is not tested.
+- **The CP/M disk format**, for CP/M's sources. Reading the MITS Tapes disk worked out the layout CP/M uses on Altair
+  8-inch disks in SIMH's 137-byte-sector images. Two system tracks, then 2 KB blocks, 16 records to a block, two
+  blocks a track. Tracks 0-5 have the 128 data bytes at offset 3 of each sector, tracks 6-76 at offset 7. A track's
+  logical record r is in the sector numbered h, where k = r mod 16 and h = 8(k mod 4) + 2(k div 4), plus 1 for r of 16
+  or more. On tracks 0-5 that sector is image sector h; from track 6 it is image sector 17h mod 32, as the sector
   headers' numbers show. Every record of the twelve tapes on that disk passes its checksum this way, and Extended
   BASIC 4.0's tape rebuilds SIMH's `exbas.bin` byte for byte.

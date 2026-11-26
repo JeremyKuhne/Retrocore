@@ -21,9 +21,13 @@ comes in with the adapter below, in its own assembly; nothing depends on it toda
 
 Three layers, each usable without the ones above it:
 
-1. **Images.** A format reads and writes a container: WOZ, 2MG, DSK/DO/PO, NIB, JV1, JV3, DMK, CAS, WAV.
-   Formats are found by content first and extension second, report what they could not represent, and keep
-   unknown chunks so a round trip loses nothing.
+1. **Images.** A format reads and writes a container: WOZ, 2MG, DSK/DO/PO, NIB, JV1, JV3, DMK, CAS, WAV. Formats are
+   found by content first and extension second, report what they could not represent, and keep unknown chunks so a
+   round trip loses nothing. Teledisk (`.td0`) is still to read: TRSDOS-II 4.2 for the TRS-80 Model 16 comes only as
+   one (see [the Model II's DOSes](Trs80Model3AndModel2.md#stages), stage 2). Its sectors may be run-length encoded,
+   and an image whose signature is `td` rather than `TD` is packed whole with Teledisk's "advanced compression", LZSS
+   with adaptive Huffman coding, as the TRSDOS-II image is (version 2.1). Reading is enough, as images it reads can
+   be saved as IMD.
 2. **Physical media.** What a drive sees:
    - flux or bit tracks (`DiskTrack`);
    - sectored tracks with IDs, density, deleted marks and errors (`FloppyDisk`);

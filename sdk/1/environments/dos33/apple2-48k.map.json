@@ -14,6 +14,6 @@
     { "start": "$0800", "end": "$08FF", "why": "HELLO, the AppleSoft program from $0801 that starts the program, and its variables, which BASIC is still running as the program loads" },
     { "start": "$9600", "end": "$BFFF", "why": "DOS 3.3: its three file buffers from $9600, then its command interpreter, file manager and RWTS from $9D00" },
     { "start": "$C000", "end": "$CFFF", "why": "the soft switches, the I/O and the slots' ROMs" },
-    { "start": "$D000", "end": "$FFFF", "why": "the ROMs: AppleSoft, or Integer BASIC on the Apple II, and the Monitor" }
+    { "start": "$D000", "end": "$FFFF", "why": "the ROMs: AppleSoft and the Monitor" }
   ]
 }

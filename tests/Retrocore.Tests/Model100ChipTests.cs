@@ -56,6 +56,29 @@ public sealed class Model100ChipTests
     }
 
     /// <summary>
+    ///  A start command while a single square wave runs takes the new count and mode at its terminal count, rather
+    ///  than stopping there.
+    /// </summary>
+    [TestMethod]
+    public void StartWhileRunningReloadsAtTerminalCount()
+    {
+        Pio8155 pio = new();
+        pio.Write(4, 4);
+        pio.Write(5, 0x00);
+        pio.Write(0, 0xC0);
+        pio.Tick();
+        pio.Write(4, 6);
+        pio.Write(5, 0x40);
+        pio.Write(0, 0xC0);
+        for (int count = 0; count < 3; count++) { pio.Tick(); }
+        pio.TimerRunning.Should().BeTrue("the start took effect at terminal count");
+        pio.Peek(4).Should().Be(6);
+        pio.Peek(5).Should().Be(0x40);
+        for (int count = 0; count < 12; count++) { pio.Tick(); }
+        pio.TimerRunning.Should().BeTrue("the new mode is continuous");
+    }
+
+    /// <summary>
     ///  An odd count's square wave is high one count longer than it is low.
     /// </summary>
     [TestMethod]

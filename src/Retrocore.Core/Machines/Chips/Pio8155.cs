@@ -27,7 +27,7 @@ namespace Retrocore.Machines.Chips;
 ///   bits: 00 one square wave, 01 a continuous square wave, 10 one pulse at terminal count, 11 a pulse each terminal
 ///   count. A square wave of count n is high for the first n/2 counts, rounded up, and low for the rest; a pulse mode
 ///   holds TIMER OUT high but for the one count at terminal count. Counts below 2 are taken as 2. TIMER OUT is high
-///   while the timer is stopped. This is the timer as Intel's <i>MCS-80/85 Family User's Manual</i> describes it, but
+///   while the timer is stopped, but for a single pulse's last count. This is the timer as Intel's <i>MCS-80/85 Family User's Manual</i> describes it, but
 ///   for one thing: the chip counts down by twos, twice a cycle, so its count registers read an encoded value while
 ///   it runs; here they read the counts left.
 ///  </para>
@@ -227,7 +227,13 @@ public sealed class Pio8155
             _pulse = true;
         }
 
-        if (_stopAfterTerminal || _runMode is 0 or 2)
+        // A start while running takes effect at terminal count, whatever the mode, and over a stop after it.
+        if (_reload)
+        {
+            Load();
+            _stopAfterTerminal = false;
+        }
+        else if (_stopAfterTerminal || _runMode is 0 or 2)
         {
             _running = false;
             _stopAfterTerminal = false;
@@ -235,12 +241,12 @@ public sealed class Pio8155
             return;
         }
 
-        if (_reload) { Load(); }
         _remaining = _runCount;
-        if (_runMode == 1) { SetOutput(level: true); }
+        if (_runMode is 0 or 1) { SetOutput(level: true); }
     }
 
-    private int CurrentCount => _running ? _remaining : Count(_countLow, _countHigh);
+    // Running, the counts left; stopped, the count as written.
+    private int CurrentCount => _running ? _remaining : ((_countHigh & 0x3F) << 8) | _countLow;
 
     private static int Count(byte low, byte high) => Math.Max(2, ((high & 0x3F) << 8) | low);
 

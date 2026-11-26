@@ -185,8 +185,9 @@ schema from the web instead.
 
 **Lines the active target leaves out**, such as the other branch of an `.if RC_MODEL_...`
 block, are faded by the language server and shaded across the whole line, with a mark
-in the overview ruler; both move when you pick another target. The shade's color is
-`retrocore.inactiveCodeBackground`, and `retrocore.inactiveCode.shade` turns it off.
+in the overview ruler; both move when you pick another target. The colors are
+`retrocore.inactiveCodeBackground` and `retrocore.inactiveCodeOverviewRuler`, and
+`retrocore.inactiveCode.shade` turns the shading off.
 
 ## What is highlighted
 

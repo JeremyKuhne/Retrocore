@@ -31,15 +31,16 @@ export function rangeLines(range: { start: { line: number }; end: { line: number
 /**
  * Shades the lines a Retrocore assembly source's .if blocks leave out, from the language server's
  * retrocore/inactiveRanges, with the themable color retrocore.inactiveCodeBackground across the whole line, and marks
- * them in the overview ruler. The server also fades those lines' text, with Unnecessary hints. A document is asked
- * again each time the server publishes its diagnostics, which follow each analysis, and when the active target
- * changes; `retrocore.inactiveCode.shade` turns the shading off.
+ * them in the overview ruler with retrocore.inactiveCodeOverviewRuler. The server also fades those lines' text, with
+ * Unnecessary hints. A document is asked again each time the server publishes its diagnostics, which follow each
+ * analysis, and when the active target changes; when the server can't answer, as it stops, the shading goes with its
+ * fading. `retrocore.inactiveCode.shade` turns the shading off.
  */
 export function registerInactiveRanges(context: vscode.ExtensionContext, targets?: ActiveTargets): void {
     const decoration = vscode.window.createTextEditorDecorationType({
         isWholeLine: true,
         backgroundColor: new vscode.ThemeColor("retrocore.inactiveCodeBackground"),
-        overviewRulerColor: new vscode.ThemeColor("retrocore.inactiveCodeBackground"),
+        overviewRulerColor: new vscode.ThemeColor("retrocore.inactiveCodeOverviewRuler"),
         overviewRulerLane: vscode.OverviewRulerLane.Left
     });
 
@@ -69,11 +70,12 @@ export function registerInactiveRanges(context: vscode.ExtensionContext, targets
             try {
                 const result = await languageRequest<InactiveRangesResult>("retrocore/inactiveRanges", { textDocument: { uri: key } });
                 if (asked.get(key) !== request) return;
-                if (result.ranges === null) inactive.delete(key);
-                else inactive.set(key, result.ranges.flatMap(rangeLines));
+                // No analysis has opened the document yet: nothing is shaded until one publishes its diagnostics.
+                inactive.set(key, result.ranges === null ? [] : result.ranges.flatMap(rangeLines));
             } catch {
-                // No server, or it stopped; the shading stays as it was until the next answer.
-                return;
+                // No server, or it stopped, which clears its fading too: the shading goes until the next answer.
+                if (asked.get(key) !== request) return;
+                inactive.delete(key);
             }
             paint(document.uri);
         })();
@@ -96,8 +98,12 @@ export function registerInactiveRanges(context: vscode.ExtensionContext, targets
             }
         }),
         vscode.window.onDidChangeVisibleTextEditors(editors => {
+            const seen = new Set<string>();
             for (const editor of editors) {
-                if (inactive.has(editor.document.uri.toString())) paint(editor.document.uri);
+                const key = editor.document.uri.toString();
+                if (seen.has(key)) continue;
+                seen.add(key);
+                if (inactive.has(key)) paint(editor.document.uri);
                 else ask(editor.document);
             }
         }),
@@ -109,12 +115,14 @@ export function registerInactiveRanges(context: vscode.ExtensionContext, targets
             if (!event.affectsConfiguration("retrocore.inactiveCode.shade")) return;
             for (const editor of vscode.window.visibleTextEditors) paint(editor.document.uri);
         }),
+        // For tests and other extensions; not in the command palette.
         vscode.commands.registerCommand("retrocore.inactiveLines", (uri?: unknown): number[] | undefined => {
             const target = uri instanceof vscode.Uri ? uri : typeof uri === "string" ? vscode.Uri.parse(uri) : vscode.window.activeTextEditor?.document.uri;
             return target === undefined ? undefined : inactiveLines(target);
         }));
 
-    // The server reanalyzes after the target changes; asking now waits for that analysis.
+    // The server reanalyzes after the target changes. Asking now usually reaches it after the target, which the
+    // language client sends first; either way the new analysis publishes diagnostics, which asks again.
     if (targets !== undefined) context.subscriptions.push(targets.onDidChange(askVisible));
     askVisible();
 }

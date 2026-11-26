@@ -69,5 +69,5 @@ export async function testTargetDimming(workspace: vscode.WorkspaceFolder): Prom
     assert.deepEqual(await untilFaded(source, [capitals]), [capitals], "the IIe, which defines LOWERCASE, leaves out the capitals");
     assert.deepEqual(await untilShaded(source, [capitals]), [capitals], "the shading moves with the target");
     await vscode.commands.executeCommand("workbench.action.closeActiveEditor");
-    console.log("Isolated VS Code passed: the language server assembles a project's source for the active target, and its faded and shaded lines follow the target.");
+    console.log("Isolated VS Code passed: the language server assembles a project's source for the active target, and its faded lines, and the lines the extension shades, follow the target.");
 }

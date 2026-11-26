@@ -102,7 +102,7 @@ from Apple's disks. `Apple3SdkModules.BuildSosBootDisk` puts together:
 
 The program runs at a fixed address in the system bank, from `$2000` up to the kernel at `$B800`, and starts at its
 first byte. `SOS.INTERP` is `SOS NTRP`, a header count and that many bytes (usually none), the load address and
-length, and the code; nothing is relocated. SOS's loader places the drivers below the program. The disk's other files
+length, and the code; nothing is relocated. SOS's loader places the drivers below the program, or at the top of the bank below when there is no room. The disk's other files
 go on with the builder's `Add`. `SosBootDisk.Create` does the same from the four pieces' bytes.
 
 ## Debugging

@@ -206,7 +206,8 @@ internal static class Apple3SdkModules
     /// <param name="name">The volume's name: 1-15 letters, digits and periods, starting with a letter.</param>
     /// <param name="loadAddress">
     ///  Where the program runs, in the system bank, and its entry point: <c>$2000</c> or above, with the program
-    ///  ending at or below the kernel at <c>$B800</c>. SOS places the drivers below it.
+    ///  ending at or below the kernel at <c>$B800</c>. SOS places the drivers below it, or in the bank below when
+    ///  there is no room, as at <c>$2000</c>.
     /// </param>
     /// <param name="program">The program, assembled to run at the load address; nothing is relocated.</param>
     /// <param name="drives">The number of built-in floppy drives SOS is to configure, 1-4; by default 1, .D1.</param>

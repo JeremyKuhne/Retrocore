@@ -78,11 +78,14 @@ public sealed record SosInterpreterFile(int LoadAddress, byte[] Code, byte[] Hea
     ///  or below <see cref="KernelAddress"/>.
     /// </param>
     /// <param name="code">The code, assembled to run at the load address; at least one byte.</param>
-    /// <param name="header">The header the loader skips, or empty.</param>
+    /// <param name="header">
+    ///  The header the loader skips, or empty. Keep it small: SOS reads only the file's first 60K or so, into the
+    ///  memory below its own.
+    /// </param>
     /// <returns>The file's contents.</returns>
     /// <exception cref="ArgumentException">The code is empty, or the header is $10000 bytes or more.</exception>
     /// <exception cref="ArgumentOutOfRangeException">
-    ///  The code does not fit between the address and the kernel.
+    ///  The load address is below <see cref="LowestAddress"/>, or the code runs past <see cref="KernelAddress"/>.
     /// </exception>
     public static byte[] Write(int loadAddress, ReadOnlySpan<byte> code, ReadOnlySpan<byte> header = default)
     {

@@ -92,7 +92,8 @@ public sealed class SosInterpreterTests
 
     /// <summary>
     ///  The writer refuses code that is empty, starts below <c>$2000</c> or runs past the kernel at <c>$B800</c>; code
-    ///  that ends at the kernel fits.
+    ///  that ends at the kernel fits. The reader refuses another file's label, and a file cut short in its header or
+    ///  code.
     /// </summary>
     [TestMethod]
     public void WriterRefusesWhatDoesNotFit()
@@ -109,6 +110,8 @@ public sealed class SosInterpreterTests
         label.Should().Throw<InvalidDataException>();
         Action cut = () => SosInterpreterFile.Read([.. "SOS NTRP"u8, 0, 0, 0x00, 0x20, 9, 0, 0x60]);
         cut.Should().Throw<InvalidDataException>();
+        Action cutHeader = () => SosInterpreterFile.Read([.. "SOS NTRP"u8, 4, 0, 1, 2, 3]);
+        cutHeader.Should().Throw<InvalidDataException>();
     }
 
     /// <summary>

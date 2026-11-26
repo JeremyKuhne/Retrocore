@@ -9,8 +9,8 @@
 // building the same core with its machine's platform folder. It checks that what the engine writes matches the C#
 // reference engine's transcript in the matching .out file character for character. A watch on the console's Write's
 // store of A records each character the engine sends, and a logpoint on ReadLine marks where it reads a command, so
-// the commands can be put back where the screen shows them. The Apple II's, PET's and BBC's screens are checked for the game's end as well. The launches check Keeps:
-// contracts and fail on a broken one. A false Keeps: on the top-level LocateTables stops the run, but one on
+// the commands can be put back where the screen shows them. The Apple II's, PET's and BBC's screens are checked for
+// the game's end as well. The launches check Keeps: contracts and fail on a broken one. A false Keeps: on the top-level LocateTables stops the run, but one on
 // Numbers::NextRandom, inside a .scope, did not, so the engine's scoped contracts are checked by reading rather than
 // here. On the SDK's ROMs, so it needs no dumps. Give target names to play only those, such as
 // `node tools/Test-AdventureDap.mjs pet`.

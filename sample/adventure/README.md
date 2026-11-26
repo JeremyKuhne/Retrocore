@@ -75,9 +75,9 @@ engine itself writes it. `--columns` sets the screen's width, 40 by default.
 
 [`tools/Test-AdventureDap.mjs`](../../tools/Test-AdventureDap.mjs) plays both of Pirate Adventure's transcripts, the
 win from start to finish and the death, on the Apple-1 with 32K, the PET 4032, the Apple II and the BBC Micro, and the
-test game's three on `apple2-test` alone, under the debug adapter, through project launches, and checks that what the 6502
-engine writes matches the transcript's `.out`, character for character. Give target names to play only those, such
-as `node tools/Test-AdventureDap.mjs apple1 pet`.
+test game's three on `apple2-test` alone, under the debug adapter, through project launches, and checks that what the
+6502 engine writes matches the transcript's `.out`, character for character. Give target names to play only those,
+such as `node tools/Test-AdventureDap.mjs apple1 pet`.
 
 ## The platform layer
 

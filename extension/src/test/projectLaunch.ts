@@ -3,6 +3,7 @@
 // See LICENSE file in the project root for full license information
 
 import * as assert from "node:assert/strict";
+import * as fs from "node:fs";
 import * as path from "node:path";
 import * as vscode from "vscode";
 import { untilStopShown } from "./stops";
@@ -64,6 +65,51 @@ export async function testProjectLaunch(workspace: vscode.WorkspaceFolder): Prom
         assert.ok(await until(() => vscode.debug.activeDebugSession === undefined, 5000));
         console.log(`The off machines were: ${offModels.join(", ")}.`);
         console.log("Isolated VS Code passed: a project launch builds and debugs each target, its session names the target's machine, and the off machine it leaves is that target's.");
+
+        // The active target: picked by its project's file and name, as the status bar's quick pick does, named by
+        // retrocore.activeTarget, and launched through ${command:retrocore.activeTarget}.
+        const file = path.join(root, "sample", "project", "retrocore.json");
+        assert.equal(await vscode.commands.executeCommand("retrocore.pickTarget", file, "apple2-iiplus"), "hello/apple2-iiplus");
+        assert.equal(await vscode.commands.executeCommand("retrocore.activeTarget"), "hello/apple2-iiplus");
+        assert.equal(await vscode.commands.executeCommand("retrocore.pickTarget", file, "apple2-iie"), "hello/apple2-iie");
+        assert.equal(await vscode.commands.executeCommand("retrocore.activeTarget"), "hello/apple2-iie", "the pick is kept");
+        assert.deepEqual(await vscode.commands.executeCommand("retrocore.activeTarget.statusBar"),
+            { text: "$(target) hello · apple2-iie", command: "retrocore.pickTarget", visible: true }, "the status bar shows it");
+        const started = new Promise<vscode.DebugSession>(resolve => {
+            const listener = vscode.debug.onDidStartDebugSession(session => { listener.dispose(); resolve(session); });
+        });
+        assert.equal(await vscode.debug.startDebugging(workspace, {
+            type: "retrocore", request: "launch", name: "Active target", debugHost, sdkRoms,
+            project: "${workspaceFolder}/sample/project", target: "${command:retrocore.activeTarget}"
+        }), true, "the active target's launch starts");
+        const session = await started;
+        await untilStopShown(session, 30000);
+        assert.equal(session.configuration.target, "hello/apple2-iie");
+        assert.equal(session.configuration.model, "iie-enhanced");
+        await vscode.debug.stopDebugging(session);
+        assert.ok(await until(() => vscode.debug.activeDebugSession === undefined, 10000));
+        console.log("Isolated VS Code passed: the active target is picked, kept, named by retrocore.activeTarget and debugged through it.");
+
+        // The project file's schema checks a retrocore.json: here one with a field the schema lacks.
+        const folder = path.join(root, "artifacts", "schema-check");
+        fs.mkdirSync(folder, { recursive: true });
+        const checked = path.join(folder, "retrocore.json");
+        // A $schema line would make VS Code load the schema from its id, which it does not serve; the file's name is
+        // enough.
+        fs.writeFileSync(checked, `// A project file, with comments and a trailing comma.
+{ "sdk": "1", "name": "check", "cpu": "6502",
+  "sources": ["a.s"], "bogus": 1, "targets": { "a": { "machine": "pet4032", "environment": "bare" } }, }
+`);
+        const document = await vscode.workspace.openTextDocument(checked);
+        await vscode.window.showTextDocument(document);
+        const problems = (): vscode.Diagnostic[] => vscode.languages.getDiagnostics(document.uri);
+        assert.ok(await until(() => problems().some(problem => problem.message.includes("bogus")), 20000),
+            "the schema reports the unknown field: " + JSON.stringify(problems().map(problem => problem.message)));
+        assert.equal(document.languageId, "jsonc", "a project file is JSON with comments");
+        assert.deepEqual(problems().map(problem => problem.message).filter(message => !message.includes("bogus")), [],
+            "and only the unknown field is a problem");
+        await vscode.commands.executeCommand("workbench.action.closeActiveEditor");
+        console.log("Isolated VS Code passed: the project file's schema checks retrocore.json.");
     } finally {
         await vscode.debug.stopDebugging();
     }

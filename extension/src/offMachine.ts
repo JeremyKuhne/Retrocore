@@ -12,6 +12,7 @@ import { changesFrom, fitting } from "./hardware";
 import type { Device } from "./drives";
 import { languageRequest } from "./languageClient";
 import { catalogMachine, isLevel1, launchConfiguration, machineById, machines, startsWithDisks, withSetting, type Machine, type MachineChoice } from "./machines";
+import { activeTargetRead, withActiveTarget } from "./activeTarget";
 import { withProjectMachine } from "./project";
 import type { SavedMachines } from "./savedMachine";
 import { crowdsCartridge, describeSetup, driveOptions, isUsable, refusal, setupConfiguration, setupFromConfiguration, startOrigin, withOption, type Setup } from "./startFlow";
@@ -398,7 +399,9 @@ export class OffMachine {
             items.push({ label: "$(history) " + describeSetup(setup), detail: "What Start Machine started last",
                 target: { configuration: setupConfiguration(setup), source: { kind: "setup", setup } } });
         }
-        // Each folder's launch.json, resolved against that folder, as a multi-root workspace has one in each.
+        // Each folder's launch.json, resolved against that folder, as a multi-root workspace has one in each; an
+        // entry whose target is the active target's gets it once the workspace's projects are read.
+        await activeTargetRead();
         const folders = vscode.workspace.workspaceFolders ?? [];
         for (const workspace of folders) {
             const launches = launchConfigurations(workspace);
@@ -406,7 +409,7 @@ export class OffMachine {
             items.push({ label: folders.length > 1 ? `launch.json: ${workspace.name}` : "launch.json", kind: vscode.QuickPickItemKind.Separator });
             for (const entry of launches) {
                 const name = String(entry.name);
-                const configuration = withProjectMachine(resolveVariables(entry, workspace.uri.fsPath));
+                const configuration = withProjectMachine(withActiveTarget(resolveVariables(entry, workspace.uri.fsPath)));
                 items.push({ label: name, description: String(configuration.machine ?? ""),
                     target: { configuration, source: { kind: "launch", name, folder: workspace.uri.toString() } } });
             }

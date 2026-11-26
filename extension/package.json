@@ -15,13 +15,15 @@
   "main": "./out/extension.js",
   "activationEvents": [
     "onDebugResolve:retrocore",
+    "workspaceContains:retrocore.json",
+    "workspaceContains:**/retrocore.json",
     "onDebugDynamicConfigurations:retrocore",
     "onFileSystem:retrocore-basic",
     "onFileSystem:retrocore-basic-file"
   ],
   "scripts": {
     "generate:grammar": "node scripts/generate-grammar.mjs && node scripts/generate-basic-grammar.mjs",
-    "compile": "npm run generate:grammar && tsc -p .",
+    "compile": "npm run generate:grammar && node scripts/copy-schema.mjs && tsc -p .",
     "check:grammar": "node scripts/generate-grammar.mjs --check && node scripts/generate-basic-grammar.mjs --check",
     "test:grammar": "npm run check:grammar && node --test out/test/grammar.test.js out/test/basicGrammar.test.js out/test/pascalGrammar.test.js out/test/display.test.js out/test/pictures.test.js out/test/hardware.test.js out/test/machines.test.js out/test/startFlow.test.js out/test/favorite.test.js out/test/memory.test.js out/test/drives.test.js out/test/cycles.test.js out/test/project.test.js",
     "test:language": "node out/test/runTest.js --language-only",
@@ -43,7 +45,19 @@
     "vscode-textmate": "9.2.0"
   },
   "contributes": {
+    "jsonValidation": [
+      {
+        "fileMatch": "retrocore.json",
+        "url": "./out/schemas/project-1.schema.json"
+      }
+    ],
     "languages": [
+      {
+        "id": "jsonc",
+        "filenames": [
+          "retrocore.json"
+        ]
+      },
       {
         "id": "retrocore-asm",
         "aliases": [
@@ -914,6 +928,10 @@
       ],
       "commandPalette": [
         {
+          "command": "retrocore.activeTarget",
+          "when": "false"
+        },
+        {
           "command": "retrocore.display.paste",
           "when": "false"
         },
@@ -1166,6 +1184,15 @@
       ]
     },
     "commands": [
+      {
+        "command": "retrocore.pickTarget",
+        "title": "Retrocore: Pick Target...",
+        "icon": "$(target)"
+      },
+      {
+        "command": "retrocore.activeTarget",
+        "title": "Retrocore: Active Target"
+      },
       {
         "command": "retrocore.clearCycles",
         "title": "Retrocore: Clear Source Cycle Counts"

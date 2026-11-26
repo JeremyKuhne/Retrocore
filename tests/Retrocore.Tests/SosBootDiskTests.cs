@@ -15,7 +15,7 @@ namespace Retrocore.Tests;
 /// </summary>
 /// <remarks>
 ///  <para>
-///   The emulation tests need the Apple III's boot ROM dump (<c>RETROCORE_APPLE3_ROMS</c>) and are inconclusive without
+///   The emulation test needs the Apple III's boot ROM dump (<c>RETROCORE_APPLE3_ROMS</c>) and is inconclusive without
 ///   it; the rest need nothing outside the repository.
 ///  </para>
 /// </remarks>

@@ -81,7 +81,9 @@ internal static class Apple3SdkModules
     /// </summary>
     /// <param name="directory">The SDK ROM directory, or null for the copy beside the debug host.</param>
     /// <returns>The file's 22,016 bytes, which start with its label, <c>SOS KRNL</c>.</returns>
-    /// <exception cref="FileNotFoundException">The directory has no <c>Sos/SosKernel.asm</c>.</exception>
+    /// <exception cref="FileNotFoundException">
+    ///  Neither the directory nor its <c>Apple3</c> folder has <c>Sos/SosKernel.asm</c>.
+    /// </exception>
     /// <exception cref="InvalidDataException">The source has errors.</exception>
     internal static byte[] BuildSosKernel(string? directory) =>
         AssembleSosKernel(SourcePath(directory, "SosKernel.asm")).Sections[0].Bytes.ToArray();
@@ -91,7 +93,9 @@ internal static class Apple3SdkModules
     /// </summary>
     /// <param name="directory">The SDK ROM directory, or null for the copy beside the debug host.</param>
     /// <returns>The block's 512 bytes.</returns>
-    /// <exception cref="FileNotFoundException">The directory has no <c>Sos/SosBoot.asm</c>.</exception>
+    /// <exception cref="FileNotFoundException">
+    ///  Neither the directory nor its <c>Apple3</c> folder has <c>Sos/SosBoot.asm</c>.
+    /// </exception>
     /// <exception cref="InvalidDataException">The source has errors.</exception>
     internal static byte[] BuildSosBoot(string? directory) =>
         AssembleSosBoot(SourcePath(directory, "SosBoot.asm"), "").Sections[0].Bytes.ToArray();

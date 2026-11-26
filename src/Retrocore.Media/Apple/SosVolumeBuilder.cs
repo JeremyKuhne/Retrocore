@@ -66,7 +66,7 @@ public sealed class SosVolumeBuilder
     /// <summary>
     ///  Sets the boot loader from its bytes, such as SOS's bootstrap loader assembled from source, so the disk boots
     ///  SOS: block 0, and block 1 when given. SOS's loader is block 0 alone; the boot ROM reads only block 0, and the
-    ///  loader reads block 1 without using it, so a SOS disk's block 1 is zeros.
+    ///  loader reads block 1 without using it; Apple's SOS disks leave it zeros.
     /// </summary>
     /// <param name="loader">512 bytes for block 0, or 1,024 for blocks 0 and 1.</param>
     /// <exception cref="ArgumentException">The loader is not one or two blocks.</exception>

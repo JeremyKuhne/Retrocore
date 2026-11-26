@@ -37,13 +37,14 @@ against its keyboard's ROM; MAME's `cpu_fc86` Model II boot ROM, which needs a g
      main at `5c7ce12`. MAME 0.264 boots TRSDOS 1.2 and 2.0a from the same images to their logo, so the fault is
      ours, probably in the DMA or the FD1791's single-density track 0. Then check the DMA and the keyboard codes
      against TRSDOS. The keyboard codes also need checking against the Model II keyboard's ROM.
-   - **LS-DOS 6.3.1's screen stayed blank.** At PR #32's head (`a5086f3`) it booted to its welcome screen; on main
-     at `5c7ce12` the screen was still blank after 60 seconds. LS-DOS puts the PIO's port A in bit control mode to
-     take the FD1791's INTRQ as an interrupt, so the PIO reads port A at every T-state, and port A's bit 1 asks the
-     selected disk whether it is two-sided. `FloppyDisk.Sides` became a sort of all the disk's tracks in #49
-     (`2901dbc`), about 5 KB allocated at each T-state, which slowed the machine until nothing showed. A disk now
-     keeps its geometry as its tracks change (`Trs80Model2Tests.PioWatchingTheControllerDoesNotAllocate`). Still to
-     confirm with the image: the welcome screen, the date, the prompt and a directory listing.
+   - **LS-DOS 6.3.1 boots.** Done: from its DMK image it shows its welcome screen, takes the date and lists its
+     directory (`Trs80Model2Tests.BootsLsDos`). Its boot had slowed from about 13 seconds to the date prompt to 151
+     at full speed, so a launch watched for less looked blank. By the date LS-DOS has the PIO's port A in bit
+     control mode, taking the FD1791's INTRQ as an interrupt, so the PIO reads port A at every T-state, and port
+     A's bit 1 asks the selected disk whether it is two-sided. #49 (`2901dbc`, found by bisecting) made
+     `FloppyDisk.Sides` sort all the disk's tracks, about 5 KB allocated each time; a disk now keeps its geometry
+     as its tracks change (`Trs80Model2Tests.PioWatchingTheControllerDoesNotAllocate`). Still open: comparing it
+     with MAME's `trs80m2`.
    - **Teledisk.** TRSDOS-II 4.2 is a Teledisk (`.td0`) image, which the media library does not read; see the
      [media backlog](Media.md).
 3. **An oracle.** Done: `Trs80Model3OracleTests` compares video RAM with MAME's `trs80m3`, `trs80m4` and `trs80m2`

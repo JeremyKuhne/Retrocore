@@ -33,7 +33,8 @@ each one's address and bank. After the conversion, 591 definitions carry 731 old
   second `ORG $D000`).
   - A code label is cited where his address column gives it at the address and bank the build gives the definition.
   - A label is a label even when named like an instruction (`INC LDY #1`, `EQU LDA #1`, his handlers' names). One
-    with no address of its own, on a line that assembles nothing in 1.1's build (`LOD RDAUX`) or above a conditional,
+    with no address of its own, on a line that assembles nothing in 1.1's build (`LOD RDAUX`), above a conditional or
+    inside one 1.1's build skips (JXEM1, which labels the same JMP in every build),
     takes the next assembled line's, unless another label or a data map comes first; a data map's (`DSECT`) labels
     have no address, and are cited only through the instructions that use them.
   - His names at addresses where this source defines nothing (`SETHP`, `IMM2`, `IMM3`, `STESCF`, `JSRLST`, `JUOKX`,

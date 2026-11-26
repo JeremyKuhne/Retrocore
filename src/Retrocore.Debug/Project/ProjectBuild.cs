@@ -15,8 +15,9 @@ namespace Retrocore.Debug.Project;
 /// </summary>
 /// <remarks>
 ///  <para>
-///   <c>retrocore build</c> and a <c>project</c> launch both build through here, so the bytes the debugger loads are
-///   the bytes CI builds. Only the <c>bare</c> environment builds yet: a raw binary loaded straight into RAM.
+///   <c>retrocore build</c> builds through here, and a <c>project</c> launch is to as well, so that the bytes the
+///   debugger loads are the bytes CI builds. Only the <c>bare</c> environment builds yet: a raw binary loaded
+///   straight into RAM, so the sections that emit bytes must make one block, with no gap between them.
 ///  </para>
 ///  <para>
 ///   The build starts at the target's CPU (its <c>cpu</c>, or the project's), as a <c>source</c> launch starts at the
@@ -37,9 +38,11 @@ internal static class ProjectBuild
     /// <param name="target">The target.</param>
     /// <returns>The build.</returns>
     /// <exception cref="ProjectException">
-    ///  The target uses what is not supported yet, its sources are missing or have errors, or it names a CPU its
-    ///  machine lacks.
+    ///  The target uses what is not supported yet, its sources are missing or have errors, it names a CPU its
+    ///  machine lacks, or its bytes are not one block.
     /// </exception>
+    /// <exception cref="IOException">The output cannot be written.</exception>
+    /// <exception cref="UnauthorizedAccessException">The output cannot be written.</exception>
     internal static TargetBuild Build(ProjectTarget target)
     {
         TargetBuild build = Assemble(target);
@@ -85,6 +88,8 @@ internal static class ProjectBuild
             throw new ProjectException($"{target.Project.File}: target {target.Name}: the sources emit no bytes.");
         }
 
+        RequireOneBlock(target, segments);
+
         int entry = segments[0].Address;
         if (target.Project.Entry is { } label)
         {
@@ -106,16 +111,14 @@ internal static class ProjectBuild
     }
 
     /// <summary>
-    ///  Gets a target's load image: the linker's single output file, or every emitted segment from the lowest
-    ///  address to the end of the highest, with zeros between.
+    ///  Gets a target's load image: its emitted segments, which make one block, from the lowest address up. These
+    ///  are the bytes a launch loads, segment by segment.
     /// </summary>
     /// <param name="build">The build.</param>
     /// <returns>The load address and the bytes.</returns>
     internal static (int Address, byte[] Bytes) Image(TargetBuild build)
     {
         int start = build.Segments.Min(segment => segment.Address);
-        if (build.Result.Files.Count == 1) { return (start, build.Result.Files.Values.Single().ToArray()); }
-
         int end = build.Segments.Max(segment => segment.Address + segment.Bytes.Length);
         byte[] image = new byte[end - start];
         foreach ((int address, ReadOnlyMemory<byte> bytes) in build.Segments)
@@ -151,7 +154,8 @@ internal static class ProjectBuild
             .ThenBy(symbol => symbol.Name, StringComparer.Ordinal))
         {
             string kind = symbol.IsConstant ? "constant" : "label";
-            map.WriteFormatted($"  {symbol.Name,-24} ${symbol.Value:X4} {kind}\n");
+            string value = symbol.Value is >= 0 and <= 0xFFFF ? $"${symbol.Value:X4}" : symbol.Value.ToString(CultureInfo.InvariantCulture);
+            map.WriteFormatted($"  {symbol.Name,-24} {value} {kind}\n");
         }
 
         return map.ToString();
@@ -203,7 +207,24 @@ internal static class ProjectBuild
         File.WriteAllText(build.Record, record.ToJsonString(new() { WriteIndented = true }));
     }
 
-    // Every .cpu left after preprocessing must name a CPU the machine has.
+    // Every .cpu left after preprocessing that names one of the project CPUs must name one the machine has. The
+    // assembler judges the rest, such as Pcode, whose macros write p-code under the 6502.
+
+    // A bare binary is one block: each segment must start where the one below it ends.
+    private static void RequireOneBlock(ProjectTarget target, List<(int Address, ReadOnlyMemory<byte> Bytes)> segments)
+    {
+        List<(int Address, ReadOnlyMemory<byte> Bytes)> ordered = [.. segments.OrderBy(segment => segment.Address)];
+        for (int index = 1; index < ordered.Count; index++)
+        {
+            int end = ordered[index - 1].Address + ordered[index - 1].Bytes.Length;
+            if (ordered[index].Address != end)
+            {
+                throw new ProjectException(
+                    $"{target.Project.File}: target {target.Name}: a bare binary is one block, but its code and data end at ${end - 1:X4} and resume at ${ordered[index].Address:X4}.");
+            }
+        }
+    }
+
     private static void CheckCpus(ProjectTarget target, AssemblyProject project)
     {
         List<string> errors = [];
@@ -215,7 +236,7 @@ internal static class ProjectBuild
             if (ProjectCpu.Find(name) is not { } cpu || machine.Runs(cpu)) { continue; }
             string where = statement.Location is { } location ? $"{location.Path}({location.Line + 1}): " : "";
             errors.Add(
-                $"{where}.cpu {name} names a CPU target {target.Name} lacks: its machine, {target.Machine.Id}, has a {machine}.");
+                $"{where}.cpu {name} names a CPU target {target.Name} lacks: its machine, {target.Machine.Id}, runs {machine} code.");
         }
 
         if (errors.Count != 0)

@@ -249,6 +249,10 @@ internal sealed class RetrocoreProject
         {
             throw new ProjectException($"{file}: {exception.Message}");
         }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            throw new ProjectException($"{file} cannot be read: {exception.Message}");
+        }
         catch (ArgumentException exception)
         {
             throw new ProjectException($"{file}: a field is given twice ({exception.Message}).");

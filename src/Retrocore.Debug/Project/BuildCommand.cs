@@ -11,14 +11,15 @@ namespace Retrocore.Debug.Project;
 /// <remarks>
 ///  <para>
 ///   The project is the <c>retrocore.json</c> that <c>--project</c> names (a file or its folder), or else the nearest
-///   one in the current folder or above it. A root file builds its projects' targets. Without <c>--target</c> or
-///   <c>--all</c>, a project with one target builds it. Each target's line, or its errors, is printed as it builds;
-///   with <c>--all</c> the rest still build after one fails.
+///   one in the current folder or above it. A root file builds its projects' targets, and <c>--target</c> takes a
+///   target's name or <c>project/target</c>. Without <c>--target</c> or <c>--all</c>, the only target there is
+///   builds. Each target's line, or its errors, is printed as it builds; with <c>--all</c> the rest still build
+///   after one fails. <c>--sdk-roms</c>, which every command takes, builds against other SDK sources.
 ///  </para>
 /// </remarks>
 internal static class BuildCommand
 {
-    private const string Usage = "Usage: retrocore build [--target name|--all] [--project path]";
+    private const string Usage = "Usage: retrocore build [--target name|--all] [--project path] [--sdk-roms folder]";
 
     /// <summary>
     ///  Runs the command.
@@ -26,7 +27,10 @@ internal static class BuildCommand
     /// <param name="args">The arguments after <c>build</c>.</param>
     /// <param name="output">Where each built target's line goes.</param>
     /// <param name="error">Where errors go.</param>
-    /// <returns>0 when every target built, 1 when one failed, 2 for wrong arguments.</returns>
+    /// <returns>
+    ///  0 when every target built; 1 when one failed, or the project could not be read or the target chosen; 2 for
+    ///  wrong arguments.
+    /// </returns>
     internal static int Run(string[] args, TextWriter output, TextWriter error)
     {
         string? targetName = null;
@@ -73,8 +77,9 @@ internal static class BuildCommand
 
             targets = Select(RetrocoreProject.LoadAll(path), targetName, all);
         }
-        catch (ProjectException exception)
+        catch (Exception exception) when (exception is ProjectException or ArgumentException)
         {
+            // A path the system cannot take, such as one with '|' on Windows, is an ArgumentException.
             error.WriteLine(exception.Message);
             return 1;
         }
@@ -87,9 +92,10 @@ internal static class BuildCommand
                 TargetBuild build = ProjectBuild.Build(target);
                 (int start, byte[] bytes) = ProjectBuild.Image(build);
                 output.WriteLine(
-                    $"{target.Project.Name}/{target.Name}: {build.Binary} (${start:X4}-${start + bytes.Length - 1:X4}, {bytes.Length} bytes, entry ${build.Entry:X4})");
+                    $"{target.Project.Name}/{target.Name}: {build.Binary} (${start:X4}-${start + bytes.Length - 1:X4}, {bytes.Length} {(bytes.Length == 1 ? "byte" : "bytes")}, entry ${build.Entry:X4})");
             }
-            catch (Exception exception) when (exception is ProjectException or IOException or UnauthorizedAccessException)
+            catch (Exception exception)
+                when (exception is ProjectException or IOException or UnauthorizedAccessException or ArgumentException)
             {
                 error.WriteLine(exception.Message);
                 failed++;
@@ -135,7 +141,7 @@ internal static class BuildCommand
                 : throw new ProjectException($"Give --target name or --all; the targets are {names}.");
         }
 
-        List<ProjectTarget> named = [.. every.Where(target => target.Name == name)];
+        List<ProjectTarget> named = [.. every.Where(target => target.Name == name || Qualified(target) == name)];
         return named.Count switch
         {
             1 => named,

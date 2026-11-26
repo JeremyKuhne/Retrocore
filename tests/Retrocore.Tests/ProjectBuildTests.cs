@@ -148,11 +148,11 @@ public sealed class ProjectBuildTests
         RetrocoreProject project = RetrocoreProject.Load(_folder);
         File.ReadAllBytes(ProjectBuild.Build(project.Target("iie")).Binary).Should().Equal(0x64, 0x00, 0x60);
         Error(() => ProjectBuild.Build(project.Target("iiplus"))).Should().Contain(
-            "main.s(1): .cpu Rockwell65C02 names a CPU target iiplus lacks: its machine, apple2-iiplus, has a 6502.");
+            "main.s(1): .cpu Rockwell65C02 names a CPU target iiplus lacks: its machine, apple2-iiplus, runs 6502 code.");
 
         Write("main.s", ".cpu Z80\nret");
         Error(() => ProjectBuild.Build(project.Target("iie"))).Should().Contain(
-            ".cpu Z80 names a CPU target iie lacks: its machine, apple2-iie-enhanced, has a r65c02.");
+            ".cpu Z80 names a CPU target iie lacks: its machine, apple2-iie-enhanced, runs r65c02 code.");
     }
 
     /// <summary>
@@ -186,6 +186,24 @@ public sealed class ProjectBuildTests
         Write("src/end.s", "rts");
         File.ReadAllBytes(ProjectBuild.Build(RetrocoreProject.Load(_folder).Target("t")).Binary)
             .Should().Equal(0x20, 0x03, 0x60, 0xA9, 0x02, 0x60);
+    }
+
+    /// <summary>
+    ///  A bare binary is one block: code with a gap in it is an error, rather than a binary that fills the gap.
+    /// </summary>
+    [TestMethod]
+    public void BareBinaryIsOneBlock()
+    {
+        Write("retrocore.json", """
+            { "sdk": "1", "cpu": "6502", "sources": ["main.s"], "targets": { "t": { "machine": "apple2-iiplus", "environment": "bare" } } }
+            """);
+
+        Write("main.s", "rts\n.section Low, $5000, $10\nrts");
+        Error(() => ProjectBuild.Build(RetrocoreProject.Load(_folder).Target("t"))).Should().EndWith(
+            "target t: a bare binary is one block, but its code and data end at $5000 and resume at $6000.");
+
+        Write("main.s", "rts\n.section Below, $5FFF, 1\nrts");
+        File.ReadAllBytes(ProjectBuild.Build(RetrocoreProject.Load(_folder).Target("t")).Binary).Should().Equal(0x60, 0x60);
     }
 
     /// <summary>
@@ -230,7 +248,7 @@ public sealed class ProjectBuildTests
 
         (int code, string output, string error) = Run("--project", Path.Join(_folder, "game"), "--target", "pet");
         code.Should().Be(0, error);
-        output.Should().Be($"game/pet: {Path.Join(_folder, "game", "artifacts", "pet", "game.bin")} ($0800-$0800, 1 bytes, entry $0800)\n");
+        output.Should().Be($"game/pet: {Path.Join(_folder, "game", "artifacts", "pet", "game.bin")} ($0800-$0800, 1 byte, entry $0800)\n");
 
         Run("--project", _folder, "--target", "pet").Error.Should().Contain("The projects game and tool each have a target 'pet'; give --project.");
         Run("--project", _folder).Error.Should().Contain("Give --target name or --all; the targets are game/apple2, game/pet, tool/pet.");
@@ -244,6 +262,8 @@ public sealed class ProjectBuildTests
             .Should().Equal("game/apple2", "game/pet", "tool/pet");
 
         Run("--project", Path.Join(_folder, "tool")).Code.Should().Be(0);
+        Run("--project", _folder, "--target", "tool/pet").Output.Should().StartWith("tool/pet: ");
+        Run("--project", Path.Join(_folder, "missing")).Error.Should().Contain("does not exist");
         BuildCommand.Find(Path.Join(_folder, "game", "artifacts")).Should().Be(Path.Join(_folder, "game", "retrocore.json"));
 
         // With --all, the other targets still build after one fails.

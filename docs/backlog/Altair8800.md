@@ -1,6 +1,6 @@
 # Backlog: the MITS Altair 8800
 
-Status: **phases 1-3 built (2026-11-14)**; [the guide](../Altair8800.md) covers them. Phases 4 and 5 are next.
+Status: **phases 1-4 built (2026-11-20)**; [the guide](../Altair8800.md) covers them. Phase 5 is next.
 The first machine for the 8080 ([CPU backlog](I8080.md)), and the one that started personal computing: an S-100 bus, a front panel of switches
 and lights, and boards for serial terminals, cassette and 8-inch disks.
 
@@ -62,6 +62,9 @@ Every program the Altair ran is copyrighted, so, as for the other machines, it i
    byte-stream `.tap` tapes, and caps lock. Tests run 4K BASIC 3.2 and 4.0, 8K BASIC 4.0 and Extended BASIC 4.0
    against SIMH, and load MITS's own tapes through the front panel's bootstrap.
 4. **Disks.** The 88-DCDD and its drives, SIMH disk images, the boot loaders as SDK sources, and CP/M 2.2.
+   *Built:* the 88-DCDD with up to 16 FD-400 drives turning in real time, SIMH `.dsk` images that save back byte for
+   byte, DBL 4.1 and MBL as PROMs from SDK sources, and launches with `disks` that boot through DBL. Tests boot
+   CP/M 2.2b, Burcon CP/M, Disk BASIC 5.0 and Altair DOS, and write files under CP/M.
 5. **The front panel view** in the extension.
 
 ## Testing
@@ -100,7 +103,32 @@ Every download (SIMH, software images, ROM dumps) is approved first, as before.
 - **The cassette.** The 88-ACR has no motor control, so a tape plays from the moment it goes in, a byte each
   300-baud character time; recordings save on eject, as the Apple-1's do.
 
+## Decisions for phase 4 (agreed 2026-11-20)
+
+- **Scope.** The 88-DCDD and 8-inch drives, the boot PROMs as SDK sources, and CP/M 2.2 booting and running.
+  CP/M's own sources wait.
+- **Timing.** The disk turns in real time, with the sector, byte, step and settle times Mike Douglas's FDC+
+  firmware (1.8, `altair-8in.s`) gives the 88-DCDD. The Disk IO Timing paper agrees on the byte timing that MITS's
+  read loops rely on; the 88-DCDD manual and the "New Controller Timing (1978)" notes are scans, and were not
+  checked line by line. Software that polls the controller sees what it would on the
+  board, such as DBL's two-bytes-a-pass loop.
+- **PROMs.** DBL 4.1 follows Martin Eberhard's disassembly and MBL Geoff Harrison's; both assemble to the dumps
+  deramp.com has as HEX files. HDBL, MDBL and DBL 3.3, which the user also approved downloading, are not built.
+- **Software.** CP/M 2.2b, Burcon CP/M, Disk BASIC and Altair DOS images come from deramp.com and stay in the
+  external test data's `altair-disk` folder, with the PROM dumps.
+- **Launching.** A launch with `disks` fits the controller and DBL and starts at `$FF00`; the debug target has four
+  drives.
+
 ## Still open
+
+- **CP/M's sources**, the BIOS and boot sector, as SDK sources or documented disassemblies.
+- **The 88-MDS Minidisk** (5.25-inch, 16 sectors of 137 bytes on 35 tracks), and HDBL, MDBL and DBL 3.3.
+- **Sector interrupts.** The controller's interrupt at each sector's start is not modeled, as nothing here uses it.
+- **DBL's loader** runs from RAM at `$2C00`, which the PROM's source map does not cover, so stepping it shows
+  disassembly.
+- **Index sync.** The FDC+ waits for the index pulse after a drive is selected before it shows sectors; here the
+  sector position shows once the head is settled. Whether MITS's board waits too needs the manual.
+- **A drive picture.** Retro Devices shows the drives as text; there is no 8-inch drive image.
 
 - **The 1975 source listing** on gatesnotes.com, which the user named: its host is allowed now, but its CDN answers
   automated downloads with "Access Denied", so it needs downloading by hand.

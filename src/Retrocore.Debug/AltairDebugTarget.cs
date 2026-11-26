@@ -6,6 +6,7 @@ using Retrocore.Cpu.I8080;
 using Retrocore.Isa;
 using Retrocore.Machines.Altair;
 using Retrocore.Machines.Devices;
+using Retrocore.Media.Altair;
 using System.Text.Json.Nodes;
 using Touki;
 
@@ -84,10 +85,40 @@ internal sealed class AltairDebugTarget : DisposableBase, IDebugTarget, IRecordi
             UpperCase = args.Bool("upperCase") ?? false
         };
 
-        AltairDebugTarget target = new(new AltairMachine(configuration))
+        // The 88-DCDD, with four drives, is fitted when the launch gives disks or asks for it.
+        string?[] disks = args.ImagePaths("disks", "cpm.dsk");
+        bool controller = args.Bool("diskController") ?? disks.Length > 0;
+        if (!controller && disks.Length > 0)
+        {
+            throw new ArgumentException("Disks need the 88-DCDD (diskController).");
+        }
+
+        if (disks.Length > DiskDrives)
+        {
+            throw new ArgumentException($"The 88-DCDD has {DiskDrives} drives here.");
+        }
+
+        configuration.DiskDrives = controller ? DiskDrives : 0;
+
+        string? sdkRoms = args.String("sdkRoms") is { } roms ? Path.GetFullPath(roms) : null;
+        AltairMachine machine = new(configuration, Proms(args, controller, sdkRoms));
+        AltairDebugTarget target = new(machine)
         {
             FastCassette = args.Bool("fastCassette") ?? true
         };
+
+        for (int drive = 0; drive < disks.Length; drive++)
+        {
+            if (disks[drive] is { } path) { InsertDisk(target.Drives[drive], path); }
+        }
+
+        // With DBL, the machine starts as an operator boots it, from the PROM at $FF00, which waits for a disk in drive 0.
+        if (machine.Roms.Dbl is not null)
+        {
+            I8080Registers registers = machine.Processor.Registers;
+            registers.PC = AltairBus.DblAddress;
+            machine.Processor.Registers = registers;
+        }
 
         if (args.String("cassette") is { } tape)
         {
@@ -101,6 +132,16 @@ internal sealed class AltairDebugTarget : DisposableBase, IDebugTarget, IRecordi
 
         return target;
     }
+
+    /// <summary>
+    ///  The 88-DCDD's drives, when it is there.
+    /// </summary>
+    internal const int DiskDrives = 4;
+
+    /// <summary>
+    ///  Gets the 88-DCDD's drives, or none without it.
+    /// </summary>
+    internal IReadOnlyList<AltairDiskDrive> Drives => _machine.Bus.Disk?.Drives ?? [];
 
     /// <summary>
     ///  Gets or sets whether the machine runs as fast as it can while the cassette plays or records.
@@ -310,9 +351,22 @@ internal sealed class AltairDebugTarget : DisposableBase, IDebugTarget, IRecordi
     }
 
     /// <inheritdoc/>
+    /// <remarks>
+    ///  DBL's loader runs in RAM at $2C00 once it has copied itself there, which has no source map; the PROM's copy
+    ///  loop and all of MBL map to their sources.
+    /// </remarks>
     public void AddSdkModules(DebugInfo debug, string? directory)
     {
-        // The Altair has no ROM; its boot PROMs become SDK sources with the disk controller.
+        string folder = directory ?? AltairSdkModules.RomDirectory;
+        if (_machine.Roms.Dbl is not null && File.Exists(Path.Join(folder, AltairSdkModules.DblSource)))
+        {
+            debug.Add(new SourceMapModule(AltairSdkModules.AssembleDbl(Path.Join(folder, AltairSdkModules.DblSource)), AltairMemoryArea.Dbl));
+        }
+
+        if (_machine.Roms.Mbl is not null && File.Exists(Path.Join(folder, AltairSdkModules.MblSource)))
+        {
+            debug.Add(new SourceMapModule(AltairSdkModules.AssembleMbl(Path.Join(folder, AltairSdkModules.MblSource)), AltairMemoryArea.Mbl));
+        }
     }
 
     /// <inheritdoc/>
@@ -384,7 +438,11 @@ internal sealed class AltairDebugTarget : DisposableBase, IDebugTarget, IRecordi
         AltairConfiguration configuration = _machine.Configuration;
         return
         [
-            new("model", "Altair 8800", "8080 at 2 MHz", "MITS's S-100 computer; it has no ROM, so it starts at $0000 in RAM."),
+            new(
+                "model",
+                "Altair 8800",
+                "8080 at 2 MHz",
+                "MITS's S-100 computer; it has no ROM, so it starts at $0000 in RAM, or at DBL's $FF00 to boot a disk."),
             new("memory", "Memory", $"{configuration.RamKilobytes} KB at $0000", "The launch's ramKilobytes option: 1 to 64."),
             new(
                 "serial",
@@ -400,6 +458,18 @@ internal sealed class AltairDebugTarget : DisposableBase, IDebugTarget, IRecordi
                 configuration.CassetteInterface ? "Cassette interface at ports $06 and $07, 300 baud" : "none",
                 "The launch's cassetteInterface option: an 88-SIO with a modem for a cassette recorder; cassette loads a tape.",
                 _machine.Bus.Cassette is { } drive ? [drive.Id] : null),
+            new(
+                "disk",
+                "88-DCDD",
+                _machine.Bus.Disk is { } disk ? $"Floppy controller at ports $08-$0A, {disk.Drives.Count} 8-inch drives" : "none",
+                "The launch's diskController option and disks: Pertec FD-400 drives for SIMH .dsk images, 77 tracks of 32 "
+                    + "137-byte sectors.",
+                Drives.Count > 0 ? [.. Drives.Select(drive => drive.Id)] : null),
+            new(
+                "proms",
+                "Boot PROMs",
+                PromsValue(),
+                "The launch's proms option: DBL boots drive 0 from $FF00, MBL loads a tape from $FE00; both are SDK sources."),
             new(
                 "terminal",
                 "Terminal",
@@ -419,6 +489,15 @@ internal sealed class AltairDebugTarget : DisposableBase, IDebugTarget, IRecordi
         string? path = args.String("path");
         switch (device, action)
         {
+            case (AltairDiskDrive drive, "insert"):
+                InsertDisk(drive, path ?? throw new ArgumentException("path is required."));
+                break;
+            case (AltairDiskDrive drive, "eject"):
+                drive.Eject();
+                break;
+            case (AltairDiskDrive drive, "writeProtect"):
+                drive.SetWriteProtected(args.Bool("writeProtected") ?? throw new ArgumentException("writeProtected is required."));
+                break;
             case (AltairCassette, "insert"):
                 Insert(path ?? throw new ArgumentException("path is required."));
                 break;
@@ -461,17 +540,73 @@ internal sealed class AltairDebugTarget : DisposableBase, IDebugTarget, IRecordi
         ]
         : [];
 
-    // retro/media: inserts, records and ejects cassettes.
+    // retro/media: the 88-ACR's cassette (device cassette), and the 88-DCDD's disks, by device disk0-disk3 or by
+    // device disk with drive 0-3.
     private JsonObject Media(JsonObject args)
     {
         string action = args.String("action") ?? throw new ArgumentException("action is required.");
-        if ((args.String("device") ?? "cassette") != "cassette" || _machine.Bus.Cassette is not { } drive)
+        string id = args.String("device") ?? "cassette";
+        if (id == "cassette")
         {
-            throw new ArgumentException("The Altair's only media is the 88-ACR's cassette.");
+            AltairCassette cassette = _machine.Bus.Cassette ?? throw new ArgumentException("This Altair has no 88-ACR.");
+            DeviceAction(cassette, action, args);
+            return MediaState();
         }
 
-        DeviceAction(drive, action, args);
+        if (id == "disk") { id = $"disk{args.Int("drive") ?? 0}"; }
+        IDevice device = Drives.FirstOrDefault(drive => drive.Id == id)
+            ?? throw new ArgumentException("device must be cassette, or a drive of the 88-DCDD, such as disk0.");
+
+        // As retro/device does: the host saves and reverts, and keeps a changed disk that leaves for Undo.
+        if (MediaActions.Device(device, action, args, (what, with) => DeviceAction(device, what, with)) is { } answer)
+        {
+            return answer;
+        }
+
+        DeviceAction(device, action, args);
         return MediaState();
+    }
+
+    // The PROMs a launch fits: its proms option, or DBL with the 88-DCDD and none without, from the SDK's sources, or
+    // from sdkRoms, the folder AddSdkModules maps them from too.
+    private static AltairRoms Proms(JsonObject args, bool controller, string? directory)
+    {
+        string[] proms = args["proms"] switch
+        {
+            null => controller ? ["dbl"] : [],
+            JsonArray list => [.. list.Select(entry => entry is JsonValue value && value.TryGetValue(out string? name)
+                ? name
+                : throw new ArgumentException("proms lists dbl and mbl."))],
+            _ => throw new ArgumentException("proms lists dbl and mbl.")
+        };
+
+        if (proms.Any(prom => prom is not ("dbl" or "mbl")))
+        {
+            throw new ArgumentException("proms lists dbl and mbl.");
+        }
+
+        if (proms.Length == 0) { return new(); }
+        return AltairSdkModules.Build(directory, dbl: proms.Contains("dbl"), mbl: proms.Contains("mbl"));
+    }
+
+    private string PromsValue()
+    {
+        List<string> fitted = [];
+        if (_machine.Roms.Dbl is not null) { fitted.Add("DBL at $FF00"); }
+        if (_machine.Roms.Mbl is not null) { fitted.Add("MBL at $FE00"); }
+        return fitted.Count == 0 ? "none" : string.Join(", ", fitted);
+    }
+
+    // Puts a disk in a drive, a SIMH .dsk image, which saves back to its file. The image is read before the disk in the
+    // drive comes out, so a file that cannot be read leaves it in.
+    private static void InsertDisk(AltairDiskDrive drive, string path)
+    {
+        string full = Path.GetFullPath(path);
+        byte[] bytes = File.ReadAllBytes(full);
+        (AltairDisk disk, AltairDiskCodec codec) = AltairDiskCodec.Load(bytes);
+        drive.Eject();
+        drive.Insert(disk, full, codec.Format);
+        MediaActions.Register(disk, full, codec, bytes);
     }
 
     /// <summary>
@@ -522,16 +657,26 @@ internal sealed class AltairDebugTarget : DisposableBase, IDebugTarget, IRecordi
 
     private JsonObject MediaState()
     {
-        if (_machine.Bus.Cassette is not { } drive) { return new JsonObject { ["cassette"] = null }; }
+        JsonArray disks = Drives.Select(drive => (JsonNode)new JsonObject
+        {
+            ["drive"] = drive.Number,
+            ["path"] = drive.Media?.Label,
+            ["mounted"] = drive.Disk is not null,
+            ["writeProtected"] = drive.Disk?.IsWriteProtected ?? false,
+            ["cylinder"] = drive.Track,
+            ["selected"] = drive.Head.Selected
+        }).ToJsonArray();
+
+        if (_machine.Bus.Cassette is not { } tape) { return new JsonObject { ["cassette"] = null, ["disks"] = disks }; }
         JsonObject cassette = new()
         {
-            ["path"] = drive.Media?.Label,
+            ["path"] = tape.Media?.Label,
             ["recording"] = _recordingPath is not null,
-            ["motor"] = drive.Transport.Motor,
-            ["atEnd"] = drive.AtEnd
+            ["motor"] = tape.Transport.Motor,
+            ["atEnd"] = tape.AtEnd
         };
 
-        return new JsonObject { ["cassette"] = cassette };
+        return new JsonObject { ["cassette"] = cassette, ["disks"] = disks };
     }
 
     private JsonObject VideoState() => new JsonObject

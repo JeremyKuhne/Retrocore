@@ -45,12 +45,22 @@ public sealed class AltairConfiguration
     public bool UpperCase { get; set; }
 
     /// <summary>
+    ///  Gets or sets the 88-DCDD's drives, 0 to 16; with none, the controller is not there.
+    /// </summary>
+    public int DiskDrives { get; set; }
+
+    /// <summary>
     ///  Checks the settings.
     /// </summary>
     /// <exception cref="ArgumentException">A setting is out of range.</exception>
     public void Validate()
     {
         if (!Enum.IsDefined(Console)) { throw new ArgumentException("The console must be the 88-2SIO or the 88-SIO."); }
+        if (DiskDrives is < 0 or > AltairDiskController.MaximumDrives)
+        {
+            throw new ArgumentException("The 88-DCDD takes 0 to 16 drives.");
+        }
+
         if (RamKilobytes is < 1 or > 64) { throw new ArgumentException("RAM must be 1 to 64 KB."); }
         if (!BaudRates.Contains(BaudRate))
         {

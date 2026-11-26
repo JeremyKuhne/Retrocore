@@ -1025,9 +1025,13 @@ conditional calls, `RST` and interrupts. The machine is configured by:
 - `upperCase`: caps lock, so letters type as capitals, as Altair BASIC needs;
 - `cassetteInterface`: the 88-ACR at ports `$06` and `$07` (on by default), and
   `cassette`, a `.tap` tape that plays at 300 baud from the start;
-- `fastCassette`: run as fast as possible while a tape plays or records (on by default).
+- `fastCassette`: run as fast as possible while a tape plays or records (on by default);
+- `disks`: up to four SIMH `.dsk` 8-inch disk images, for drives 0 to 3 on the 88-DCDD;
+- `diskController`: the 88-DCDD at ports `$08` to `$0A` (on when `disks` are given);
+- `proms`: the boot PROMs, `dbl` (MITS's disk boot loader at `$FF00`, fitted with the
+  controller) and `mbl` (the multi-boot loader at `$FE00`).
 
-The Altair has no ROM. A program (`source` or `program`, loaded at `$0100` by default)
+The Altair has no ROM of its own. A program (`source` or `program`, loaded at `$0100` by default)
 starts there; on the 88-2SIO it sets up the first ACIA (`$03`, then `$15`, to port
 `$10`) and talks to the terminal through ports `$10` and `$11`. The panel shows the
 80x24 terminal, which follows the ADM-3A's controls. **Ctrl** with a letter types its
@@ -1040,6 +1044,10 @@ Altair BASIC runs from an image you supply: launch it as a `program` with
 `"loadAddress": 0`, `"entryAddress": 0` and `"upperCase": true`, and set the sense
 switches for the terminal's board. [The Altair guide](../docs/Altair8800.md) has the
 settings for each version, and covers the hardware.
+
+A launch with `disks` starts at DBL's `$FF00`, which boots the disk in drive 0, such as
+CP/M 2.2 (with `"upperCase": true`). The drives are in Retro Devices, where disks go in
+and out and a disk CP/M has changed is saved back to its image.
 
 ## Debugging on the TRS-80 Color Computer
 

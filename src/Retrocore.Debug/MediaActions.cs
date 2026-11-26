@@ -7,6 +7,7 @@ using Retrocore.Machines.Atari;
 using Retrocore.Machines.Devices;
 using Retrocore.Media;
 using Retrocore.Media.Acorn;
+using Retrocore.Media.Altair;
 using Retrocore.Media.Atari;
 using Retrocore.Media.Commodore;
 using Retrocore.Media.Floppy;
@@ -399,6 +400,7 @@ internal static partial class MediaActions
             FloppyDisk => FloppyImageCodec.For(extension, device.Info.SaveFormats),
             CommodoreTape => new CommodoreTapeCodec(extension.TrimStart('.').ToUpperInvariant()),
             CommodoreDisk => new CommodoreDiskCodec(extension.TrimStart('.').ToUpperInvariant()),
+            AltairDisk => new AltairDiskCodec(),
             AtariDisk => AtariDiskCodec.For(extension),
             AtariTape => new AtariTapeCodec(),
             _ => BlockImageCodec.For(extension),

@@ -112,7 +112,9 @@ summaries into generated C# XML documentation ([DocComments.md](docs/DocComments
 section keeps the names manuals and listings gave it, so code written with them still assembles and the editor
 offers the current name. Sources maintained by hand follow [the assembly style guide](docs/AssemblyStyle.md),
 which the SDK's ROM sources are being converted to, for developers new to the old machines, with the old names
-kept as a bridge to the original documents. [ConvertingSources.md](docs/ConvertingSources.md) is why and how, and
+kept as a bridge to the original documents; the SDK's Pascal sources follow
+[the Pascal style guide](docs/PascalStyle.md) in the same spirit. [ConvertingSources.md](docs/ConvertingSources.md)
+is why and how, and
 [the conversion logs](docs/conversions/README.md) record what was decided for each source converted.
 
 In VS Code, assembly files get syntax highlighting, live diagnostics as you type, go to definition, find all

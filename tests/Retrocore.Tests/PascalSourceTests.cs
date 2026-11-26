@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 // See LICENSE file in the project root for full license information
 
+using Retrocore.Media;
 using Retrocore.Pascal.Source;
 
 namespace Retrocore.Tests;
@@ -285,7 +286,7 @@ public sealed class PascalSourceTests
     }
 
     /// <summary>
-    ///  A file over the Editor's 18 pages, or a .TEXT file with a name a disk can't keep, is reported; a .pas file's
+    ///  A file over the strictest Editor's 16,348 bytes, or a .TEXT file with a name a disk can't keep, is reported; a .pas file's
     ///  name is the editor's own.
     /// </summary>
     [TestMethod]
@@ -350,6 +351,20 @@ public sealed class PascalSourceTests
         ];
 
         problems.Should().BeEmpty($"the lint found:{Environment.NewLine}{string.Join(Environment.NewLine, problems)}");
+    }
+
+    /// <summary>
+    ///  A file's size is its text as the disk stores it: leading blanks compressed, and no page's padding.
+    /// </summary>
+    [TestMethod]
+    public void StoredLengthIsWhatTheEditorReads()
+    {
+        string line = new string(' ', 30) + "X";
+        string text = string.Join("\n", Enumerable.Repeat(line, 100)) + "\n";
+
+        // Each line is DLE, the blanks' count, X and RETURN.
+        PascalLint.StoredLength(PascalTextFile.Write(text)).Should().Be(100 * 4);
+        PascalLint.StoredLength(PascalTextFile.Write("")).Should().Be(0);
     }
 
     private static PascalProgram Analyze()

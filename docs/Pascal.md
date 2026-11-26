@@ -481,6 +481,14 @@ Its p-code handlers are named for what they do, in the `Pcodes` scope, and its s
 what they point to (`LocalFrame` for MP, `InstructionPointer` for IPC). Its conversion log,
 [PascalInterpreter.md](conversions/PascalInterpreter.md), says where each name came from.
 
+## The SDK's Pascal sources
+
+The SDK's Pascal sources, Apple's system programs decompiled and named, follow [PascalStyle.md](PascalStyle.md):
+each compiles with its own Compiler back to the same segments, every file opens in every version's Editor, names
+say what things are, and `(** *)` comments document declarations, with the names Apple's and UCSD's documents gave
+them kept in `Also:`. In VS Code, a Pascal file gets the style's lint as you type, hover for its doc comments, and go
+to definition and the outline, by current or historical name, across the files its program includes.
+
 ## Testing
 
 - `PcodeTests`, `PascalListingTests` and `PascalMediaTests` need no files for most of their tests.

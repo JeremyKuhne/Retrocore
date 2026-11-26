@@ -19,9 +19,10 @@ public static class PascalLint
     public const int LineWidth = 80;
 
     /// <summary>
-    ///  The pages of text the Editor holds: Apple Pascal 1.0's and 1.1's largest file, 38 blocks with its header.
+    ///  The most text the strictest Editor loads: Apple Pascal 1.1's and 1.2's on a 64K Apple II, in bytes as the disk
+    ///  stores it, leading blanks compressed and each page's padding left out (measured; see docs/PascalStyle.md).
     /// </summary>
-    public const int EditorPages = 18;
+    public const int EditorBytes = 16_348;
 
     /// <summary>
     ///  The longest a file's name may be, its suffix included.
@@ -91,15 +92,16 @@ public static class PascalLint
             Add(0, 0, 0, "file-name", "Name the file as the disk does, in capitals ending .TEXT.");
         }
 
-        int pages = (PascalTextFile.Write(file.Text).Length / PageSize) - 1;
-        if (pages > EditorPages)
+        int stored = StoredLength(PascalTextFile.Write(file.Text));
+        if (stored > EditorBytes)
         {
             Add(
                 0,
                 0,
                 0,
                 "file-size",
-                $"The file is {pages} pages; the Editor holds {EditorPages}. Move procedures to another (*$I*) file.");
+                $"The file is {stored:N0} bytes on a disk; Apple Pascal 1.1's Editor holds {EditorBytes:N0}. "
+                    + "Move procedures to another (*$I*) file.");
         }
 
         foreach (PascalToken token in file.Tokens.Where(token => token.Kind == PascalTokenKind.BraceComment))
@@ -110,6 +112,24 @@ public static class PascalLint
 
         void Add(int line, int column, int end, string rule, string message) =>
             problems.Add(new(path, line, column, end, IsError: false, rule, message));
+    }
+
+    /// <summary>
+    ///  Gets the bytes of text a <c>.TEXT</c> file holds, as the Editor reads them: each page after the header, without
+    ///  the padding that ends it.
+    /// </summary>
+    /// <param name="file">The file, as <see cref="PascalTextFile.Write"/> makes it.</param>
+    /// <returns>The bytes.</returns>
+    public static int StoredLength(ReadOnlySpan<byte> file)
+    {
+        int total = 0;
+        for (int page = PageSize; page < file.Length; page += PageSize)
+        {
+            ReadOnlySpan<byte> text = file[page..Math.Min(page + PageSize, file.Length)];
+            total += text.TrimEnd((byte)0).Length;
+        }
+
+        return total;
     }
 
     private static void CheckIncludes(PascalProgram program, List<PascalDiagnostic> problems)

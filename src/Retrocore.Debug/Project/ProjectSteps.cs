@@ -279,20 +279,30 @@ internal static class ProjectSteps
     // A tool project's files: everything in its folder but what builds write there (its bin/ and obj/, the retrocore
     // project's output and intermediate folders, and every step's outputs, should the tool sit beside retrocore.json)
     // and folders whose names start with '.', such as .git/ and .vs/, which change as the repository is used.
-    private static IEnumerable<string> ProjectFolderFiles(RetrocoreProject project, string folder)
+    // The walk does not go into the folders it leaves out, so a large .git/ costs nothing.
+    private static List<string> ProjectFolderFiles(RetrocoreProject project, string folder)
     {
-        if (!Directory.Exists(folder)) { return []; }
-        string[] skipped =
+        List<string> files = [];
+        if (!Directory.Exists(folder)) { return files; }
+        HashSet<string> skipped =
         [
+            with(ProjectGlob.FileNames),
             .. new[] { Path.Join(folder, "bin"), Path.Join(folder, "obj"), project.Output, project.Intermediate }
-                .Select(path => Path.TrimEndingDirectorySeparator(Path.GetFullPath(path)) + Path.DirectorySeparatorChar)
+                .Select(path => Path.TrimEndingDirectorySeparator(Path.GetFullPath(path)))
         ];
 
         HashSet<string> outputs = [with(ProjectGlob.FileNames), .. project.Steps.SelectMany(step => step.Outputs)];
-        return Directory.EnumerateFiles(folder, "*", SearchOption.AllDirectories)
-            .Where(file => !skipped.Any(prefix => file.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
-                && !outputs.Contains(file)
-                && !Path.GetRelativePath(folder, file).Split(['/', '\\']).Any(part => part.StartsWith('.')));
+        void Walk(string current)
+        {
+            files.AddRange(Directory.EnumerateFiles(current).Where(file => !outputs.Contains(file)));
+            foreach (string child in Directory.EnumerateDirectories(current))
+            {
+                if (!Path.GetFileName(child).StartsWith('.') && !skipped.Contains(child)) { Walk(child); }
+            }
+        }
+
+        Walk(Path.TrimEndingDirectorySeparator(Path.GetFullPath(folder)));
+        return files;
     }
 
     // A directive's path with '/' between folders, as dotnet takes it on every system.

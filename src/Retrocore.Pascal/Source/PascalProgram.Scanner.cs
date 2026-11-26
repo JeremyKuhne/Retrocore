@@ -309,6 +309,7 @@ public sealed partial class PascalProgram
             if (earlier is not null && !interfacePart)
             {
                 routine = earlier;
+                _declared.TryAdd(name, routine);
                 body = earlier.Body ?? new(scope, routine, isRecord: false);
                 routine.IsHeadingOnly = false;
                 _program.References.Add(new(name, scope, AfterDot: false));
@@ -640,27 +641,39 @@ public sealed partial class PascalProgram
         }
 
         // The undocumented declarations of the statement a trailing comment ends, at its own level: back to the ";",
-        // BEGIN or declaration keyword that starts the statement, not inside a "(" or RECORD the comment is outside of,
+        // BEGIN or declaration keyword that starts the statement (past a directive's heading ";", and to a variant
+        // part's OF only when the comment follows it), not inside a "(", RECORD or BEGIN the comment is outside of,
         // and not past one it is inside of.
         private List<PascalDeclaration> StatementBefore(PascalToken doc)
         {
-            const int Reach = 500;
+            // Far enough for any statement; a bound only for text with no statement start at all.
+            const int Reach = 5000;
             List<PascalDeclaration> found = [];
             int level = 0;
+            bool first = true;
+            bool directive = false;
             for (int index = _at - 1; index >= 0 && index >= _at - Reach; index--)
             {
                 PascalToken token = _tokens[index];
                 if (token.File != doc.File) { break; }
                 if (token.Kind == PascalTokenKind.DocComment) { continue; }
+                bool last = first;
+                first = false;
                 if (token.IsSymbol(")") || token.Is("END")) { level++; }
                 else if (token.IsSymbol("(") || token.Is("RECORD"))
                 {
                     if (--level < 0) { break; }
                 }
-                else if (level == 0 && StartsStatement(token)) { break; }
-                else if (level == 0
-                    && _declared.TryGetValue(token, out PascalDeclaration? declaration)
-                    && declaration.Doc is null)
+                else if (token.Is("BEGIN") && level > 0) { level--; }
+                else if (level != 0) { continue; }
+                else if (token.Is("FORWARD") || token.Is("EXTERNAL")) { directive = true; }
+                else if (token.IsSymbol(";") && directive && found.Count == 0)
+                {
+                    // The heading's ";" before its directive: the comment is the routine's.
+                    directive = false;
+                }
+                else if (StartsStatement(token) || (token.Is("OF") && !last)) { break; }
+                else if (_declared.TryGetValue(token, out PascalDeclaration? declaration) && declaration.Doc is null)
                 {
                     found.Add(declaration);
                 }
@@ -675,6 +688,7 @@ public sealed partial class PascalProgram
                 || StartsBlock(token)
                 || token.Is("PROGRAM")
                 || token.Is("UNIT")
+                || token.Is("SEPARATE")
                 || token.Is("INTERFACE");
 
         // Whether the token is the last, as a program's final "." is.

@@ -536,7 +536,10 @@ public sealed class PascalSourceTests
                 + "  R = RECORD\n    Inner: RECORD Z: INTEGER END; Last: INTEGER (** last *)\n  END (** r *);\n"
                 + "VAR A: INTEGER; B: INTEGER (** b *);\n  C,\n  D: INTEGER (** cd *);\n"
                 + "PROCEDURE Q(\n  E: INTEGER) (** q *);\nBEGIN E := 1; (** stray *) END;\n"
-                + "PROCEDURE T BEGIN (** none *) END;\nBEGIN END.");
+                + "PROCEDURE T BEGIN (** none *) END;\n"
+                + "PROCEDURE U; FORWARD (** u *);\nPROCEDURE V(F: INTEGER); FORWARD;\nPROCEDURE V(F: INTEGER) (** v *);\n"
+                + "BEGIN END;\nPROCEDURE U;\nBEGIN END;\n"
+                + "TYPE W = RECORD CASE Tag: INTEGER OF 1: (G: INTEGER) (** variant *) END;\nBEGIN END.");
 
         PascalDeclaration Find(string name) => program.Declarations.Single(declaration => declaration.Name == name);
         (Find("Kind").Doc?.Summary).Should().Be("k");
@@ -554,7 +557,10 @@ public sealed class PascalSourceTests
         (Find("Q").Doc?.Summary).Should().Be("q");
         Find("E").Doc.Should().BeNull();
         Find("T").Doc.Should().BeNull();
-        program.StrayDocs.Select(doc => doc.Summary).Should().BeEquivalentTo(["stray", "none"]);
+        (Find("U").Doc?.Summary).Should().Be("u");
+        (Find("V").Doc?.Summary).Should().Be("v");
+        Find("Tag").Doc.Should().BeNull();
+        program.StrayDocs.Select(doc => doc.Summary).Should().BeEquivalentTo(["stray", "none", "variant"]);
     }
 
     /// <summary>

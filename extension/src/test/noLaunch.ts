@@ -8,9 +8,9 @@ import * as vscode from "vscode";
 import { untilStopShown } from "./stops";
 
 /**
- * In a folder whose only Retrocore file is its retrocore.json (sample/project, opened by itself), with no launch.json,
- * the status bar picks a target and F5 builds and debugs it. The extension starts for the folder's retrocore.json, and
- * finds the repository's debug host above the folder.
+ * In a project folder with no launch.json (sample/project, opened by itself), the status bar picks a target and F5
+ * builds and debugs it. The extension starts for the folder's retrocore.json, and finds the repository's debug host
+ * above the folder.
  */
 export async function testNoLaunchJson(workspace: vscode.WorkspaceFolder): Promise<void> {
     const file = path.join(workspace.uri.fsPath, "retrocore.json");

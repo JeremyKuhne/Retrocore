@@ -21,8 +21,9 @@ export function bundledHost(context: vscode.ExtensionContext): string | undefine
 
 /**
  * The Release build in an open workspace folder, such as this repository's, or in a folder above one up to its
- * repository's root (the first with a .git), as when one of the repository's samples is opened as the workspace. Each
- * folder's own build comes before any folder's above it, and a worktree's root stops the search at its own build.
+ * repository's root (the first with a .git; with none, up to the drive's), as when one of the repository's samples
+ * is opened as the workspace. Each folder's own build comes before any folder's above it, and a worktree's root stops
+ * the search at its own build.
  */
 export function workspaceHost(): string | undefined {
     const build = (directory: string): string | undefined => {

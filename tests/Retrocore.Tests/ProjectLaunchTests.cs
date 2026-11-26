@@ -308,6 +308,7 @@ public sealed class ProjectLaunchTests
     [DataRow("boot", "false", false)]
     [DataRow("diskInterface", "true", true)]
     [DataRow("bootSeconds", "1", false)]
+    [DataRow("bootSeconds", "1", true)]
     public void DfsLaunchRefusesWhatItsDiskDecides(string option, string value, bool inTarget)
     {
         string options = inTarget ? $$""", "options": { "{{option}}": {{value}} }""" : "";

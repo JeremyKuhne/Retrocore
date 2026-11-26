@@ -157,8 +157,8 @@ internal sealed class DfsEnvironment : TargetEnvironment
     }
 
     /// <summary>
-    ///  Gets the files a target's tape holds: the disk's, each named <c>D.NAME</c>, or <c>NAME</c> in <c>$</c>, so a
-    ///  program loads one under <c>*TAPE</c> by the name it gives the DFS.
+    ///  Gets the files a target's tape holds: the disk's, each named <c>D.NAME</c>, or the bare <c>NAME</c> for one in
+    ///  <c>$</c>, so a program loads one under <c>*TAPE</c> by that name.
     /// </summary>
     /// <param name="files">The disk's files.</param>
     /// <returns>The tape's files.</returns>

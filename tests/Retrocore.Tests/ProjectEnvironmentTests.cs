@@ -306,7 +306,7 @@ public sealed class ProjectEnvironmentTests
 
     /// <summary>
     ///  A file whose name the DFS cannot take, or that another file on the disk has in any case, fails the build naming
-    ///  it, as does a file too long for the disk. (A program cannot be <c>!BOOT</c>: a project's name has no <c>!</c>.)
+    ///  it, as does a file too long for the disk.
     /// </summary>
     [TestMethod]
     public void DfsRefusesBadNames()

@@ -169,9 +169,10 @@ A target's fields for its media, which an environment that has no use for one re
   `${obj}` for its `obj/`, so a step's output can go on the disk) or `{ "path", "name", "address" }`, giving its name
   on the disk and the load address the disk records. Neither `bare` nor `wozmon` has a disk. On a `dos33` disk each
   is a B file, named by `name` or its file name in capitals, at `address` or `$0000`, which a program loads where it
-  wants with `BLOAD` and `,A`. On a `dfs` disk each is `D.NAME`, in directory `D`, or `NAME` in `$`, by `name` or its
-  file name without its extension in capitals, at `address` or `&0000`, which a program loads where it wants with
-  OSFILE. On its tape the name is `D.NAME` too, or `NAME` for `$`, so OSFILE finds it under `*TAPE` by the same name.
+  wants with `BLOAD` and `,A`. On a `dfs` disk each is `D.NAME`, in directory `D`, or `NAME` in `$`, by `name` as given,
+  or its file name without its extension in capitals, at `address` or `&0000`, which a program loads where it wants
+  with OSFILE. On its tape the name is `D.NAME` too, and the bare `NAME` for `$`, so OSFILE finds it under `*TAPE` by
+  that name.
 - **`image`**: `false` leaves the image out (the `wozmon` tape), and `{ "template": "<disk>" }` starts it from a
   disk where the environment can.
 - **`bootImage`**: boot media that is not an SDK source, for an environment that needs some.

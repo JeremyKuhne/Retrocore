@@ -23,6 +23,7 @@ import type { HardwareRow } from "../hardware";
 import { openMemory, type MemoryBank } from "../memory";
 import { testMemorySubscriptions } from "./memorySubscriptions";
 import { testMemoryRestart } from "./memoryRestart";
+import { testProjectLaunch } from "./projectLaunch";
 
 export async function run(): Promise<void> {
     const workspace = vscode.workspace.workspaceFolders?.[0];
@@ -42,6 +43,7 @@ export async function run(): Promise<void> {
     await testDrivesView(workspace);
     await testMemorySubscriptions(workspace);
     await testMemoryRestart(workspace);
+    await testProjectLaunch(workspace);
     const romDirectory = process.env.RETROCORE_IIE_ROMS;
     const root = workspace.uri.fsPath;
     const stops: { reason: string }[] = [];

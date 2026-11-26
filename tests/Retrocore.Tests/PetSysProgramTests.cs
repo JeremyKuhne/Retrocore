@@ -55,9 +55,9 @@ public class PetSysProgramTests
     [TestMethod]
     public void OutOfRangeIsRefused()
     {
-        FluentActions.Invoking(() => PetSysProgram.Build([0x60], 0x040C)).Should().Throw<ArgumentException>();
-        FluentActions.Invoking(() => PetSysProgram.Build([0x60, 0x60], 0xFFFF)).Should().Throw<ArgumentException>();
-        FluentActions.Invoking(() => PetSysProgram.Build([])).Should().Throw<ArgumentException>();
+        FluentActions.Invoking(() => PetSysProgram.Build([0x60], 0x040C)).Should().ThrowExactly<ArgumentException>();
+        FluentActions.Invoking(() => PetSysProgram.Build([0x60, 0x60], 0xFFFF)).Should().ThrowExactly<ArgumentException>();
+        FluentActions.Invoking(() => PetSysProgram.Build([])).Should().ThrowExactly<ArgumentException>();
         FluentActions.Invoking(() => PetSysProgram.Build([0x60], lineNumber: 64000)).Should().Throw<ArgumentOutOfRangeException>();
         FluentActions.Invoking(() => PetSysProgram.Stub(0x10000)).Should().Throw<ArgumentOutOfRangeException>();
         PetSysProgram.Build([0x60], 0xFFFF).Length.Should().Be(2 + 0x10000 - 0x0401);

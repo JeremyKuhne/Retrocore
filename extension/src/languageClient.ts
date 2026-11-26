@@ -13,6 +13,10 @@ import { activeTargetParams } from "./project";
 let client: LanguageClient | undefined;
 // The current client's start, which requests wait for.
 let starting: Promise<void> | undefined;
+const stopped = new vscode.EventEmitter<void>();
+
+/** Fires when the language server is stopped, as it is before a restart, so what it reported can be cleared. */
+export const onDidStopLanguageClient = stopped.event;
 
 /** The Retrocore.Debug host: the setting, or the packaged host or the workspace's build (see host.ts). */
 export function hostPath(context: vscode.ExtensionContext): string | undefined {
@@ -210,5 +214,6 @@ export async function languageRequest<T>(method: string, params: unknown): Promi
 export async function stopLanguageClient(): Promise<void> {
     const running = client;
     client = undefined;
+    if (running !== undefined) stopped.fire();
     await running?.stop();
 }

@@ -4,7 +4,7 @@
 
 import * as vscode from "vscode";
 import type { ActiveTargets } from "./activeTarget";
-import { languageRequest } from "./languageClient";
+import { languageRequest, onDidStopLanguageClient } from "./languageClient";
 
 /** The server's answer to retrocore/inactiveRanges: whole lines, each range ending at the start of the line after it. */
 interface InactiveRangesResult {
@@ -15,8 +15,9 @@ interface InactiveRangesResult {
 const inactive = new Map<string, number[]>();
 
 /**
- * The lines, 0-based, that the last answer for a document left out, or undefined before it has one: a .if block's
- * other branch, for the target the source is assembled for.
+ * The lines, 0-based, that the last answer for a document left out, or undefined before it has one or after the
+ * server stopped: a .if block's other branch, for the target the source is assembled for. A document no analysis has
+ * opened yet has none.
  */
 export function inactiveLines(uri: vscode.Uri): number[] | undefined {
     return inactive.get(uri.toString());
@@ -110,6 +111,13 @@ export function registerInactiveRanges(context: vscode.ExtensionContext, targets
         vscode.workspace.onDidCloseTextDocument(document => {
             inactive.delete(document.uri.toString());
             asked.delete(document.uri.toString());
+        }),
+        // A stopped server's fading is gone, so its shading goes too; its next start publishes again, which asks again.
+        onDidStopLanguageClient(() => {
+            const shaded = [...inactive.keys()];
+            inactive.clear();
+            asked.clear();
+            for (const key of shaded) paint(vscode.Uri.parse(key));
         }),
         vscode.workspace.onDidChangeConfiguration(event => {
             if (!event.affectsConfiguration("retrocore.inactiveCode.shade")) return;

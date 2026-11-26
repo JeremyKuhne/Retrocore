@@ -17,7 +17,7 @@ namespace Retrocore.Debug.Project;
 /// </remarks>
 internal abstract class TargetEnvironment
 {
-    private static readonly TargetEnvironment[] s_built = [new BareEnvironment(), new WozmonEnvironment(), new Dos33Environment(), new DfsEnvironment()];
+    private static readonly TargetEnvironment[] s_built = [new BareEnvironment(), new WozmonEnvironment(), new Dos33Environment(), new DfsEnvironment(), new BasicEnvironment()];
 
     /// <summary>
     ///  Gets the environment's name, one of <see cref="ProjectTarget.Environments"/>.
@@ -33,6 +33,12 @@ internal abstract class TargetEnvironment
     ///  Gets whether the environment builds an image, which a target's <c>"image": false</c> leaves out.
     /// </summary>
     internal virtual bool BuildsImage => false;
+
+    /// <summary>
+    ///  Gets the images the environment can boot, which a target's <c>image.boot</c> chooses from, the first by
+    ///  default; empty when it builds one image or none.
+    /// </summary>
+    internal virtual IReadOnlyList<string> Boots => [];
 
     /// <summary>
     ///  Gets whether the environment can start its image from a template disk, a target's <c>image.template</c>.
@@ -79,7 +85,7 @@ internal abstract class TargetEnvironment
     internal static IEnumerable<string> Built => s_built.Select(environment => environment.Name);
 
     /// <summary>
-    ///  Gets the environments that build, by name, as a phrase: <c>'bare', 'wozmon', 'dos33' and 'dfs'</c>.
+    ///  Gets the environments that build, by name, as a phrase: <c>'bare', 'wozmon', 'dos33', 'dfs' and 'basic'</c>.
     /// </summary>
     internal static string BuiltPhrase
     {
@@ -127,9 +133,19 @@ internal abstract class TargetEnvironment
         {
             yield return $"the '{Name}' environment builds no image, so it takes no 'image'";
         }
-        else if (target.ImageTemplate is not null && !TakesTemplate)
+        else
         {
-            yield return $"the '{Name}' environment's image does not start from a template";
+            if (target.ImageTemplate is not null && !TakesTemplate)
+            {
+                yield return $"the '{Name}' environment's image does not start from a template";
+            }
+
+            if (target.ImageBoot is { } boot && !Boots.Contains(boot))
+            {
+                yield return Boots.Count == 0
+                    ? $"the '{Name}' environment boots one image, so its image takes no 'boot'"
+                    : $"the '{Name}' environment boots {string.Join(" or ", Boots.Select(name => $"'{name}'"))}, not '{boot}'";
+            }
         }
 
         if (target.BootImage is not null && !TakesBootImage)

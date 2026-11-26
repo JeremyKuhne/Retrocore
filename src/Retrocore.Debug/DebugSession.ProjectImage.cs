@@ -4,7 +4,9 @@
 
 using Retrocore.Debug.Project;
 using Retrocore.Media;
+using Retrocore.Machines.Commodore;
 using Retrocore.Media.Acorn;
+using Retrocore.Media.Commodore;
 using Retrocore.Media.Floppy;
 
 namespace Retrocore.Debug;
@@ -56,6 +58,9 @@ internal sealed partial class DebugSession
                 MediaActions.KeepReplaced(bbc.BootDrive, $"the build's {build.Media.ImageKind} took its place");
                 bbc.BootDrive.Insert(floppy, label, "SSD");
                 break;
+            case PetDebugTarget pet:
+                BootPet(build, pet, bytes, label);
+                return;
             default:
                 throw new ProjectException($"{target.Project.File}: target {target.Name}: {target.Machine.Id} cannot boot the '{target.Environment}' environment's image yet.");
         }
@@ -63,14 +68,79 @@ internal sealed partial class DebugSession
         RunToEntry(build);
     }
 
+    // Boots a PET from a basic target's tape, in cassette 1 with PLAY down, or its disk, in unit 8: at BASIC's prompt
+    // the launch types LOAD, or LOAD"<NAME>",8, then RUN once the program is in memory and the tape or the drive has
+    // stopped, so the keys are not typed while the load has the keyboard's interrupt.
+    private void BootPet(TargetBuild build, PetDebugTarget pet, byte[] bytes, string label)
+    {
+        ProjectTarget target = build.Target;
+        string name = BasicEnvironment.ProgramName(target);
+        Machines.Devices.IDevice drive;
+        string load;
+        if (target.ImageBoot == "disk")
+        {
+            CommodoreDisk disk = CbmDosDisk.FromD64(bytes).ToDisk();
+            CommodoreFloppyDrive floppy = pet.BootDiskDrive;
+            MediaActions.KeepReplaced(floppy, $"the build's {build.Media.ImageKind} took its place");
+            floppy.Insert(disk, label, "D64");
+            drive = floppy;
+            load = $"LOAD\"{name}\",8\r";
+        }
+        else
+        {
+            (CommodoreTape tape, _) = CommodoreTapeCodec.Load(bytes);
+            PetDatasette deck = pet.BootDeck;
+            MediaActions.KeepReplaced(deck, $"the build's {build.Media.ImageKind} took its place");
+            deck.Insert(tape, label, "TAP");
+            deck.Play();
+            drive = deck;
+            load = "LOAD\r";
+        }
+
+        (int start, byte[] program) = ProjectBuild.Image(build);
+        ForgetBoundaries();
+        long limit = (long)(target.Built?.BootSeconds ?? 0) * Target.ClockHertz;
+        long used = 0;
+        RunUntil(build, () => pet.ShowsReady, "BASIC's READY prompt", limit, ref used);
+        foreach (char key in load) { pet.Key(key); }
+        RunUntil(build, () => Loaded(start, program) && drive.Activity == Machines.Devices.DeviceActivity.Idle, "the program loaded", limit, ref used);
+        foreach (char key in "RUN\r") { pet.Key(key); }
+        RunToEntry(build, limit - used);
+    }
+
+    // Runs the machine one cycle at a time until a condition holds at an instruction's start, counting the cycles it
+    // takes against the boot's limit. The condition, which may read the screen or the program's bytes, is tested about
+    // every millisecond of the machine's time, not at every instruction.
+    private void RunUntil(TargetBuild build, Func<bool> done, string what, long limit, ref long used)
+    {
+        const int Interval = 4096;
+        for (long tested = used - Interval; ; used++)
+        {
+            if (used - tested >= Interval && Target.IsInstructionBoundary)
+            {
+                tested = used;
+                if (done()) { return; }
+            }
+
+            if (used >= limit)
+            {
+                ProjectTarget target = build.Target;
+                throw new ProjectException(
+                    $"{target.Project.File}: target {target.Name}: booted from its {build.Media.ImageKind}, the machine did not reach {what} within {target.Built?.BootSeconds} seconds.");
+            }
+
+            Target.StepCycle();
+        }
+    }
+
     // Runs the machine from power-on until an instruction starts at the program's entry with its bytes in memory, for
     // as long as the environment takes to boot.
-    private void RunToEntry(TargetBuild build)
+    private void RunToEntry(TargetBuild build, long? cycles = null)
     {
         (int start, byte[] bytes) = ProjectBuild.Image(build);
-        ForgetBoundaries();
+        if (cycles is null) { ForgetBoundaries(); }
         int seconds = build.Target.Built?.BootSeconds ?? 0;
-        long limit = (long)seconds * Target.ClockHertz;
+        long limit = cycles ?? ((long)seconds * Target.ClockHertz);
         for (long cycle = 0; ; cycle++)
         {
             if (Target.IsInstructionBoundary && Target.ProgramCounter == build.Entry && Loaded(start, bytes)) { break; }

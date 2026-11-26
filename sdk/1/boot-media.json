@@ -1,0 +1,20 @@
+{
+  "description": "The boot media and device dumps the SDK's environments use that are not SDK sources, each identified by the SHA-1 its usual source publishes. The build and a launch find a set's files by hash, whatever they are named, in a target's bootImage folder, the machine's ROM folder variable, and RETROCORE_CACHE.",
+  "media": [
+    {
+      "id": "c4040",
+      "title": "The Commodore 4040 dual drive's ROMs: DOS 2.0 revision 2, the controller's and the GCR PROM",
+      "for": "booting a PET basic target from its 4040 disk",
+      "source": "MAME's c4040 set, with the GCR PROM from its c2040_fdc set",
+      "variable": "RETROCORE_PET_ROMS",
+      "folder": "c4040",
+      "files": [
+        { "name": "901468-14.uj1", "size": 4096, "sha1": "ffb992b82ec913ddff7be964d7527aca3e21580c" },
+        { "name": "901468-15.ul1", "size": 4096, "sha1": "f702d6917fe8a798740ba4d467b500944ae7b70a" },
+        { "name": "901468-16.uh1", "size": 4096, "sha1": "04b918cf4adeee8015b43383d3cea7288a7d0aa8" },
+        { "name": "901466-04.uk3", "size": 1024, "sha1": "6645fa40b81be1ff7d1384e9b52df06a26ab0bfb" },
+        { "name": "901467.uk6", "size": 2048, "sha1": "97df576397608455616331f8e837cb3404363fa2" }
+      ]
+    }
+  ]
+}

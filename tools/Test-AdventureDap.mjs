@@ -33,6 +33,7 @@ const plays = {
     apple1: { family: "apple1", transcripts: ["pirate-win", "pirate-die"] },
     "apple1-wozmon": { family: "apple1", transcripts: ["pirate-win"], hex: true },
     pet: { family: "pet", transcripts: ["pirate-win", "pirate-die"] },
+    "pet-basic": { family: "pet", transcripts: ["pirate-win", "pirate-die"] },
     apple2: { family: "apple2", transcripts: ["pirate-win", "pirate-die"] },
     "apple2-dos": { family: "apple2", transcripts: ["pirate-win", "pirate-die"] },
     bbc: { family: "bbc", transcripts: ["pirate-win", "pirate-die"] },

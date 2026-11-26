@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: MIT
 // See LICENSE file in the project root for full license information
 
-using System.Text.Json.Nodes;
 using Retrocore.Debug;
 using Retrocore.Machines.Commodore;
 using Retrocore.Media.Commodore;
@@ -89,7 +88,7 @@ public class PetSysProgramTests
     /// <summary>
     ///  The file, launched as a debug session launches a <c>.prg</c>, runs its code.
     /// </summary>
-    /// <param name="model">The launch's model.</param>
+    /// <param name="model">The model, by its launch name.</param>
     /// <param name="address">The code's address, or 0 for right after the line.</param>
     [TestMethod]
     [DataRow("pet2001-basic2", 0)]
@@ -99,7 +98,18 @@ public class PetSysProgramTests
     [DataRow("pet2001", 0)]
     public void LaunchedFileRuns(string model, int address)
     {
-        PetDebugTarget target = PetDebugTarget.Launch(new JsonObject { ["model"] = model, ["sdkRoms"] = PetSources });
+        // Built here rather than by Launch, which takes RETROCORE_PET_ROMS's dumps when it is set.
+        PetModel pet = model switch
+        {
+            "pet4032" => PetModel.Pet4032,
+            "pet2001" => PetModel.Pet2001,
+            _ => PetModel.Pet2001Basic2
+        };
+
+        PetMachine machine = new(PetSdkModules.BuildRoms(pet, PetSources), pet, pet == PetModel.Pet4032 ? 32 : 8);
+        PetDebugTarget target = new(machine);
+        target.SetBasicSymbols(PetSdkModules.AssembleBasic(PetSources, pet).SymbolsWithHistoricalNames);
+        machine.Run(7);
         target.Boot(3);
         target.LoadPrg(Program(address), run: true, entry: null);
         PetTapeTests.WaitForReady(target.Machine);

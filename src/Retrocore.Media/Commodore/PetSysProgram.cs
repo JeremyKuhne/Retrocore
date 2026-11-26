@@ -45,7 +45,7 @@ public static class PetSysProgram
     /// <param name="lineNumber">The BASIC line's number, 0-63999.</param>
     /// <returns>The file's bytes: the load address, <c>$0401</c>, low byte first, then the program.</returns>
     /// <exception cref="ArgumentException">
-    ///  The code is empty, would overlap the BASIC line, or would pass <c>$FFFF</c>.
+    ///  The code is empty, starts before the BASIC program's end, or would pass <c>$FFFF</c>.
     /// </exception>
     /// <exception cref="ArgumentOutOfRangeException">The address or line number is out of range.</exception>
     public static byte[] Build(ReadOnlySpan<byte> code, int? address = null, int lineNumber = 10)
@@ -56,7 +56,7 @@ public static class PetSysProgram
         if (start < stubEnd)
         {
             throw new ArgumentException(
-                $"The code at ${start:X4} would overlap the BASIC program, which ends at ${stubEnd - 1:X4}.",
+                $"The code at ${start:X4} must be at or past ${stubEnd:X4}, after the BASIC program.",
                 nameof(address));
         }
 

@@ -110,6 +110,32 @@ internal sealed class ProjectTarget
     internal string? LinkerConfiguration { get; init; }
 
     /// <summary>
+    ///  Gets the target's <c>memoryMap</c>, the changes it makes to its machine's memory map, or null for none.
+    /// </summary>
+    internal JsonObject? MemoryMapOverride { get; init; }
+
+    /// <summary>
+    ///  Gets the target's memory map: the SDK's for its machine, environment and RAM (<see cref="MemoryMap.Find"/>),
+    ///  with its <c>memoryMap</c> applied.
+    /// </summary>
+    /// <param name="sdk">The SDK's root.</param>
+    /// <returns>The map, or null when the SDK has none for the machine.</returns>
+    /// <exception cref="ProjectException">
+    ///  The map is missing for the target's RAM or malformed, or the target changes a map its machine does not have.
+    /// </exception>
+    internal MemoryMap? MemoryMap(string sdk)
+    {
+        MemoryMap? map = global::Retrocore.Debug.Project.MemoryMap.Find(this, sdk);
+        if (map is null && MemoryMapOverride is not null)
+        {
+            throw new ProjectException(
+                $"{Project.File}: target {Name} gives 'memoryMap', but the SDK has no memory map for {Machine.Id} in the '{Environment}' environment to change.");
+        }
+
+        return map?.With(this);
+    }
+
+    /// <summary>
     ///  Gets the fields the target gives that are not supported yet, such as <c>files</c>.
     /// </summary>
     internal IReadOnlyList<string> Unsupported { get; init; } = [];

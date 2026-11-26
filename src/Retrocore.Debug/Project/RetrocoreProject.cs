@@ -57,10 +57,10 @@ internal sealed class RetrocoreProject
     internal static readonly string[] SourceFields = ["path", "dialect", "kind"];
 
     /// <summary>
-    ///  The fields that are accepted but not supported yet: a target's <c>memoryMap</c>, <c>files</c>, <c>image</c>
-    ///  and <c>bootImage</c>.
+    ///  The fields that are accepted but not supported yet: a target's <c>files</c>, <c>image</c> and
+    ///  <c>bootImage</c>.
     /// </summary>
-    internal static readonly string[] UnsupportedFields = ["memoryMap", "files", "image", "bootImage"];
+    internal static readonly string[] UnsupportedFields = ["files", "image", "bootImage"];
 
     /// <summary>
     ///  The dialects a source object can name.
@@ -408,6 +408,7 @@ internal sealed class RetrocoreProject
             Cards = cards,
             Defines = json["defines"] is { } defines ? ReadDefines(file, where, defines) : [],
             Sources = json["sources"] is { } sources ? ReadSources(file, where, sources) : [],
+            MemoryMapOverride = json["memoryMap"] is { } memoryMap ? MemoryMap.ReadOverride(file, where, memoryMap) : null,
             LinkerConfiguration = json["linkerConfiguration"] is { } linker
                 ? Path.GetFullPath(Text(file, $"{where}'s 'linkerConfiguration'", linker), project.Directory)
                 : null,

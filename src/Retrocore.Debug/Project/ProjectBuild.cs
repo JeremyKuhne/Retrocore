@@ -48,7 +48,18 @@ internal static partial class ProjectBuild
     internal static TargetBuild Build(ProjectTarget target)
     {
         target.RequireSupported();
+
+        // The configuration made from the memory map is written before the assembly, so it is there to read when the
+        // assembly or the memory check fails.
+        if (target.LinkerConfiguration is null && target.MemoryMap(SdkModules.SdkDirectory) is { } map)
+        {
+            string made = MadeConfigurationPath(target);
+            Directory.CreateDirectory(Path.GetDirectoryName(made) ?? target.Project.Intermediate);
+            File.WriteAllText(made, map.LinkerConfiguration(target));
+        }
+
         List<StepResult> steps = ProjectSteps.Run(target.Project);
+
         TargetBuild build = Assemble(target) with { Steps = steps };
         Write(build);
         return build;
@@ -64,10 +75,12 @@ internal static partial class ProjectBuild
     {
         target.RequireSupported();
         List<TargetSourceFile> files = target.SourceFiles();
+        MemoryMap? map = target.MemoryMap(SdkModules.SdkDirectory);
         AssemblyOptions options = Options(
             target,
             new OverlayBaseResolver(OverlayBaseResolver.SdkFallback),
-            target.LinkerConfiguration is { } linker ? new(Read(target, linker, "linker configuration"), linker) : null);
+            target.LinkerConfiguration is { } linker ? new(Read(target, linker, "linker configuration"), linker) : null,
+            map);
 
         List<AssemblySource> sources =
             [.. files.Select(file => new AssemblySource(Read(target, file.Path, "source"), file.Path, file.Dialect))];
@@ -79,6 +92,7 @@ internal static partial class ProjectBuild
         AssemblyResult result = new Assembler.Assembler().Assemble(parsed.Project, options);
         if (!result.Success) { throw Errors(target, result.Diagnostics); }
         CheckReservedNames(target, result, sources);
+        map?.Check(target, result);
 
         List<(int Address, ReadOnlyMemory<byte> Bytes)> segments = [.. SourceBuild.Emitted(result)];
         if (segments.Count == 0)
@@ -101,6 +115,7 @@ internal static partial class ProjectBuild
         string name = target.Project.Name;
         return new(target, result, files, segments, entry)
         {
+            Map = map,
             Binary = Path.Join(output, name + ".bin"),
             DebugFile = Path.Join(output, name + ".dbg"),
             MapFile = Path.Join(output, name + ".map"),
@@ -110,16 +125,29 @@ internal static partial class ProjectBuild
 
     /// <summary>
     ///  Gets the options a target assembles with: its CPU and load address, the native dialect, its headers' folders
-    ///  on the SDK paths, and its defines, the SDK's with the project's and its own. The build and the language server
-    ///  both assemble with them, so a source chooses the same code in each.
+    ///  on the SDK paths, its defines, the SDK's with the project's and its own, and its linker configuration, or one
+    ///  made from its memory map. The build and the language server both assemble with them, so a source chooses the
+    ///  same code in each.
     /// </summary>
     /// <param name="target">The target.</param>
     /// <param name="resolver">Reads the sources' includes.</param>
     /// <param name="linkerConfiguration">The target's linker configuration's text, or null for none.</param>
     /// <returns>The options.</returns>
-    internal static AssemblyOptions Options(ProjectTarget target, IAssemblySourceResolver resolver, AssemblySource? linkerConfiguration)
+    /// <exception cref="ProjectException">The target's memory map is missing for its RAM, or malformed.</exception>
+    internal static AssemblyOptions Options(ProjectTarget target, IAssemblySourceResolver resolver, AssemblySource? linkerConfiguration) =>
+        Options(target, resolver, linkerConfiguration, target.MemoryMap(SdkModules.SdkDirectory));
+
+    // The options, with the target's memory map, or null when its machine has none: the program loads at the map's
+    // load address, and with no linker configuration of its own, links by the map's
+    // (MemoryMap.LinkerConfiguration), which the build writes to obj/<target>/memory.cfg.
+    private static AssemblyOptions Options(ProjectTarget target, IAssemblySourceResolver resolver, AssemblySource? linkerConfiguration, MemoryMap? map)
     {
-        int origin = target.Machine.LoadAddress;
+        int origin = map?.Load ?? target.Machine.LoadAddress;
+        if (linkerConfiguration is null && map is not null)
+        {
+            linkerConfiguration = new(map.LinkerConfiguration(target), MadeConfigurationPath(target));
+        }
+
         return new(target.Cpu.AssemblerName, origin, 0x10000 - origin)
         {
             Dialect = AssemblyDialect.Native,
@@ -199,6 +227,10 @@ internal static partial class ProjectBuild
             }
         }
     }
+
+    // Where the build writes the linker configuration it made from the memory map.
+    private static string MadeConfigurationPath(ProjectTarget target) =>
+        Path.Join(target.Project.Intermediate, target.Name, "memory.cfg");
 
     private static void Write(TargetBuild build)
     {

@@ -8,6 +8,21 @@
     { "$ref": "#/definitions/project" }
   ],
   "definitions": {
+    "address": {
+      "type": "string",
+      "pattern": "^\\$[0-9A-Fa-f]{1,4}$",
+      "description": "An address, such as \"$0800\"."
+    },
+    "memoryArea": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["start", "end"],
+      "properties": {
+        "start": { "$ref": "#/definitions/address", "description": "The first address." },
+        "end": { "$ref": "#/definitions/address", "description": "The last address." },
+        "why": { "type": "string", "pattern": "\\S", "description": "What the machine keeps there, for a reserved area." }
+      }
+    },
     "step": {
       "type": "object",
       "description": "A host-side tool run before assembly, started in the project's folder. Paths are relative to the project's folder, and ${obj} in an input, an output or an argument is its intermediate folder, obj/.",
@@ -153,7 +168,33 @@
         },
         "memoryMap": {
           "type": "object",
-          "description": "Overrides of the target's memory map. Not yet supported: a build that has it fails."
+          "description": "Changes to the SDK's memory map for the target's machine, environment and RAM (Sdk/1/environments/<environment>/<name>.map.json, the name being the first the SDK has of <catalog id>-<RAM>k, <catalog id>, <family>-<RAM>k and <family>), which the build makes its linker configuration from when the target gives none, and checks every section against.",
+          "additionalProperties": false,
+          "properties": {
+            "load": {
+              "$ref": "#/definitions/address",
+              "description": "Where the program loads, in free RAM, instead of the map's."
+            },
+            "free": {
+              "type": "array",
+              "description": "Areas to use as free RAM, taken out of the reserved areas they overlap, such as hi-res page 1 for a game that draws there.",
+              "items": { "$ref": "#/definitions/memoryArea" }
+            },
+            "reserved": {
+              "type": "array",
+              "description": "Areas the program must leave alone, taken out of free RAM, each with the reason.",
+              "items": {
+                "allOf": [{ "$ref": "#/definitions/memoryArea" }],
+                "required": ["start", "end", "why"]
+              }
+            },
+            "zeroPage": {
+              "type": "array",
+              "description": "The zero-page bytes the program may use, instead of the map's: each a byte or a run, such as \"$06-$09\".",
+              "minItems": 1,
+              "items": { "type": "string", "pattern": "^\\$[0-9A-Fa-f]{1,4}(-\\$[0-9A-Fa-f]{1,4})?$" }
+            }
+          }
         },
         "files": {
           "type": "array",

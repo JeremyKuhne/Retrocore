@@ -16,7 +16,7 @@ sample/adventure/
   retrocore.json              the project: the core's sources, the steps that pack the games, and the targets
   src/core/                   the engine, which uses no machine's addresses
   src/linked-game.s           the packed game, linked in as Game: Pirate Adventure, or the test game
-  src/platform/<family>/      console.s, the machine's screen and keyboard, and bare.cfg, its linker configuration
+  src/platform/<family>/      console.s, the machine's screen and keyboard
   tools/packer.cs             .dat to the packed format, and the C# reference engine
   games/test.dat              a small test adventure of our own, MIT
   games/test-*.in, *.out      its transcripts: the commands, and what the screen shows
@@ -28,10 +28,10 @@ sample/adventure/
 | Target | Machine | Console | Loads at |
 | --- | --- | --- | --- |
 | `apple1` | Apple-1, 32K | the Woz Monitor's ECHO, and the PIA's keyboard | `$0300` |
-| `apple2` | Apple II Plus | the Monitor's COUT and GETLN1 | `$0800` |
-| `apple2-test` | Apple II Plus, the test game | the Monitor's COUT and GETLN1 | `$0800` |
+| `apple2` | Apple II Plus | the Monitor's COUT and GETLN1 | `$6000` |
+| `apple2-test` | Apple II Plus, the test game | the Monitor's COUT and GETLN1 | `$6000` |
 | `apple3` | Apple III | its own text page 1 and keyboard routines | `$2000` |
-| `pet` | PET 4032 | the kernal's jump table | `$0400` |
+| `pet` | PET 4032 | the kernal's jump table | `$0800` |
 | `bbc` | BBC Micro model B | the MOS's OSWRCH and OSWORD 0 | `$2000` |
 
 Each console includes the SDK's `<machine.inc>` for its machine's names, and takes the screen's width from the
@@ -96,9 +96,12 @@ constants are known where the core sizes its buffers. Each provides:
 | `Console::Finish` | Stops at the game's end; it need not return |
 
 `src/linked-game.s` puts the packed game at `Game`, and the project's `entry` is `Engine::Start`. The engine's state
-is in the `BSS` section, which it clears itself, so each target's linker configuration defines `__BSS_RUN__` and
-`__BSS_SIZE__`. It clears the console's `BSS` too, just after `Console::Start` returns, so anything `Console::Start`
-sets in `BSS` is cleared.
+is in the `BSS` section, which it clears itself, from `__BSS_RUN__` and `__BSS_SIZE__`. It clears the console's `BSS`
+too, just after `Console::Start` returns, so anything `Console::Start` sets in `BSS` is cleared.
+
+The targets give no linker configuration of their own. The build makes one from the SDK's memory map for each
+machine, which places `CODE`, `RODATA` and `BSS` from the map's load address and defines those two symbols, and it
+fails if they reach anything the machine keeps ([sdk/1/README.md](../../sdk/1/README.md#memory-maps)).
 
 ## Pirate Adventure
 

@@ -47,6 +47,9 @@ internal sealed partial class SourceAnalysis
     // Definitions found only in the text, such as in a branch the assembly skipped.
     private readonly HashSet<SymbolSite> _textOnly = [];
 
+    // The members a project target's analysis reports on, decided once (Owns).
+    private HashSet<string>? _owned;
+
     // Built once under the lock, as requests run in parallel with each other and with the publishing of diagnostics,
     // and the resolver, the lint and a hover's link compare sets by reference: every caller gets the same instance.
     private DocumentationSet? _documentation;
@@ -316,6 +319,61 @@ internal sealed partial class SourceAnalysis
     internal AssemblyResult Result { get; }
 
     /// <summary>
+    ///  Gets whether the analysis is a project target's (<see cref="ProjectSources"/>).
+    /// </summary>
+    internal bool IsTarget => Root.EndsWith(ProjectSources.Extension, StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    ///  Tests whether the analysis reports on a file: shows its diagnostics and owns it for requests.
+    /// </summary>
+    /// <remarks>
+    ///  <para>
+    ///   An analysis that is not a project target's reports on every file. A target reports on the project's sources
+    ///   the project prefers it for (the active target, or the first that lists them), on the project's files those
+    ///   include, and on files outside the project, such as the SDK's headers. So a source two targets assemble shows
+    ///   one target's diagnostics, whichever finishes last. The members are decided once, as the analysis is first
+    ///   asked; a file that is not a member is reported on unless the project prefers another target for it.
+    ///  </para>
+    /// </remarks>
+    /// <param name="path">The file's full path.</param>
+    /// <returns>Whether it reports on it.</returns>
+    internal bool Owns(string path)
+    {
+        if (!IsTarget) { return true; }
+        if (Members.Contains(path))
+        {
+            return LazyInitializer.EnsureInitialized(ref _owned, OwnedMembers).Contains(path);
+        }
+
+        return ProjectSources.RootOf(path) is not { } preferred || string.Equals(preferred, Root, StringComparison.OrdinalIgnoreCase);
+    }
+
+    // The members a target reports on: outside the project's folder, all; a source the project lists, when it prefers
+    // this target; a file a source includes, when this target reports on one of the files that include it.
+    private HashSet<string> OwnedMembers()
+    {
+        string folder = (Path.GetDirectoryName(Root) ?? "") + Path.DirectorySeparatorChar;
+        Dictionary<string, bool> decided = [with(StringComparer.OrdinalIgnoreCase)];
+        bool Owned(string path)
+        {
+            if (decided.TryGetValue(path, out bool known)) { return known; }
+
+            // A file that includes itself, through others, is not its own reason to be reported on.
+            decided[path] = false;
+            bool owned = !path.StartsWith(folder, StringComparison.OrdinalIgnoreCase)
+                || (ProjectSources.RootOf(path) is { } preferred
+                    ? string.Equals(preferred, Root, StringComparison.OrdinalIgnoreCase)
+                    : !_includedFrom.TryGetValue(path, out List<(string Path, int Line)>? sites)
+                        || sites.Count == 0
+                        || sites.Any(site => Owned(site.Path)));
+
+            return decided[path] = owned;
+        }
+
+        return [with(StringComparer.OrdinalIgnoreCase), .. Members.Where(Owned)];
+    }
+
+    /// <summary>
     ///  Gets the root and every file it included.
     /// </summary>
     internal HashSet<string> Members { get; }
@@ -455,7 +513,8 @@ internal sealed partial class SourceAnalysis
         catch (Exception exception) when (exception is ProjectException or IOException or UnauthorizedAccessException)
         {
             string file = target?.Project.File ?? ProjectSources.FileOf(root) ?? root;
-            AssemblyDiagnostic error = new(exception.Message, new AssemblyLocation(file, line: 0));
+            string message = target is null && ProjectSources.ErrorOf(root) is { } unreadable ? unreadable : exception.Message;
+            AssemblyDiagnostic error = new(message, new AssemblyLocation(file, line: 0));
             AssemblyProject empty = new(0);
             return new(root, Assembler.Assembler.Failed(new(empty, [error])), empty, [file], TextOf(openText), _ => []);
         }

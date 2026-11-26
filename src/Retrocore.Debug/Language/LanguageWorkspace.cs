@@ -165,9 +165,15 @@ internal sealed partial class LanguageWorkspace
         }
 
         // Every target analyzed before is analyzed again, for workspace search, as is each open source's, which may be
-        // another target now; scheduling a root again cancels an attempt still running.
-        // A target the project no longer has is gone, with its diagnostics, rather than analyzed into an error.
-        List<string> roots = [.. dropped.Where(root => ProjectSources.Target(root) is not null), .. _open.Keys.Where(InProject).Select(RootOf)];
+        // another target now; scheduling a root again cancels an attempt still running. A target the project no longer
+        // has is gone, with its diagnostics, rather than analyzed into an error; while the project file cannot be read,
+        // as in the middle of an edit, its targets are kept, showing why.
+        List<string> roots =
+        [
+            .. dropped.Where(root => ProjectSources.Target(root) is not null || ProjectSources.ErrorOf(root) is not null),
+            .. _open.Keys.Where(InProject).Select(RootOf)
+        ];
+
         foreach (string root in roots.Distinct(StringComparer.OrdinalIgnoreCase))
         {
             Schedule(root);
@@ -180,14 +186,17 @@ internal sealed partial class LanguageWorkspace
     /// <param name="path">The file's full path.</param>
     /// <param name="cancellation">Cancels the wait for its analysis.</param>
     /// <returns>
-    ///  The runs of lines left out, or null when no analysis opened the file, so nothing says which lines are.
+    ///  The runs of lines left out, or null when no project target's analysis opened the file, so nothing says which
+    ///  lines its build leaves out, as for <see cref="InactiveHints"/>.
     /// </returns>
     internal async Task<IReadOnlyList<AssemblyLineRange>?> InactiveLinesAsync(string path, CancellationToken cancellation)
     {
         await AnalysisOfAsync(path, cancellation).ConfigureAwait(continueOnCapturedContext: false);
 
         // The latest analysis, as its hints are the ones published, of the root the file belongs to after the wait.
-        if (!_analyses.TryGetValue(RootOf(path), out SourceAnalysis? latest) || latest.Result.SkippedLines is not { } skipped)
+        if (!_analyses.TryGetValue(RootOf(path), out SourceAnalysis? latest)
+            || !latest.IsTarget
+            || latest.Result.SkippedLines is not { } skipped)
         {
             return null;
         }
@@ -377,28 +386,13 @@ internal sealed partial class LanguageWorkspace
 
         // A project's source in several targets belongs only to the one it prefers: the active target, or the first
         // that assembles it.
-        foreach (string member in analysis.Members.Where(member => Owns(root, member)))
+        foreach (string member in analysis.Members.Where(analysis.Owns))
         {
             _owners[member] = root;
         }
 
         Release(root);
         Publish(analysis);
-    }
-
-    // Whether a root owns a file it analyzed: any root but a project's target owns its members; a target owns the
-    // project's files that prefer it, the sources its project prefers it for and the files those include (the active
-    // target, or the first that lists them), so the owner does not depend on which analysis finishes first. A target
-    // that cannot list its sources reports its error on the project file. Files outside the project, such as the SDK's
-    // headers, belong to each target that includes them.
-    private static bool Owns(string root, string path)
-    {
-        if (!root.EndsWith(ProjectSources.Extension, StringComparison.OrdinalIgnoreCase)) { return true; }
-        string folder = (Path.GetDirectoryName(root) ?? "") + Path.DirectorySeparatorChar;
-        if (!path.StartsWith(folder, StringComparison.OrdinalIgnoreCase)) { return true; }
-        string preferred = SourceIncludes.RootOf(path);
-        return !preferred.EndsWith(ProjectSources.Extension, StringComparison.OrdinalIgnoreCase)
-            || string.Equals(preferred, root, StringComparison.OrdinalIgnoreCase);
     }
 
     private void Publish(SourceAnalysis analysis)
@@ -438,14 +432,14 @@ internal sealed partial class LanguageWorkspace
         }
 
         // A target reports only on the sources it owns, so a source two targets assemble shows its own target's.
-        foreach (string path in byFile.Keys.Where(path => !Owns(analysis.Root, path)).ToList()) { byFile.Remove(path); }
+        foreach (string path in byFile.Keys.Where(path => !analysis.Owns(path)).ToList()) { byFile.Remove(path); }
 
         // Files this root reported before but no longer includes get their diagnostics cleared.
         HashSet<string> previous = _published.GetOrAdd(analysis.Root, _ => [with(StringComparer.OrdinalIgnoreCase)]);
         lock (previous)
         {
             // A file that another target owns now is that target's to report on, so it is not cleared here.
-            foreach (string stale in previous.Where(path => !byFile.ContainsKey(path) && Owns(analysis.Root, path)).ToList())
+            foreach (string stale in previous.Where(path => !byFile.ContainsKey(path) && analysis.Owns(path)).ToList())
             {
                 byFile[stale] = [];
             }
@@ -471,7 +465,7 @@ internal sealed partial class LanguageWorkspace
     /// <returns>The hints, none when the file had nothing left out or the analysis is not a target's.</returns>
     internal static IEnumerable<Diagnostic> InactiveHints(SourceAnalysis analysis, string path)
     {
-        if (!analysis.Root.EndsWith(ProjectSources.Extension, StringComparison.OrdinalIgnoreCase)
+        if (!analysis.IsTarget
             || analysis.Result.SkippedLines is not { } skipped
             || !skipped.Skipped.TryGetValue(path, out IReadOnlyList<AssemblyLineRange>? lines))
         {

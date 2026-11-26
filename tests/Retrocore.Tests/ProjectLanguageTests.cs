@@ -114,8 +114,8 @@ public sealed class ProjectLanguageTests
     }
 
     /// <summary>
-    ///  A file the project's sources include follows the target the source prefers: the active one, whichever
-    ///  target's analysis finishes last.
+    ///  A file the project's sources include follows the target the source prefers, the active one: its dimming and
+    ///  its owner are that target's, though the other target analyzed it too.
     /// </summary>
     /// <returns>A task.</returns>
     [TestMethod]
@@ -132,25 +132,28 @@ public sealed class ProjectLanguageTests
         string shared = Path.Join(_folder, "src", "shared.inc");
         File.WriteAllText(main, ".include \"shared.inc\"\n    rts\n");
         File.WriteAllText(shared, ".if .defined(RC_CPU_65C02)\n    stz $00\n.else\n    lda #0\n.endif\n");
-        LanguageWorkspace workspace = new(new RecordingLanguageClient());
-        LanguageHost.ActiveTargetChanged(workspace, new JsonObject
+        RecordingLanguageClient client = new();
+        LanguageWorkspace workspace = new(client);
+        DocumentUri uri = DocumentUri.FromFileSystemPath(shared);
+        async Task Activate(string target, int dimmed)
         {
-            ["project"] = _folder, ["target"] = "iie"
-        });
-
-        workspace.Update(main, File.ReadAllText(main));
-        workspace.Update(shared, File.ReadAllText(shared));
-        for (int round = 0; round < 3; round++)
-        {
-            // Both targets analyze both files again; the shared file stays the active target's.
-            LanguageHost.ActiveTargetChanged(workspace, new JsonObject
+            LanguageHost.ActiveTargetChanged(workspace, new JsonObject { ["project"] = _folder, ["target"] = target });
+            workspace.Update(main, File.ReadAllText(main));
+            workspace.Update(shared, File.ReadAllText(shared));
+            foreach (string name in (string[])["iiplus", "iie"])
             {
-                ["project"] = _folder, ["target"] = "iie"
-            });
+                await workspace.IdleAsync(Path.Join(_folder, $"{Path.GetFileName(_folder)}.{name}{ProjectSources.Extension}"), CancellationToken.None);
+            }
 
             await workspace.IdleAsync(main, CancellationToken.None);
-            (await workspace.InactiveLinesAsync(shared, CancellationToken.None)).Should().Equal(new AssemblyLineRange(3, 1));
+            (await workspace.InactiveLinesAsync(shared, CancellationToken.None)).Should().Equal([new AssemblyLineRange(dimmed, 1)], target);
+            client.Inactive(uri).Should().ContainSingle(target).Which.Range.Start.Line.Should().Be(dimmed);
         }
+
+        // Each target has analyzed the shared file once the second is active; what shows is the active target's.
+        await Activate("iiplus", 1);
+        await Activate("iie", 3);
+        await Activate("iiplus", 1);
     }
 
     /// <summary>

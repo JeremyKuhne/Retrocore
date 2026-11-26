@@ -21,9 +21,9 @@ namespace Retrocore.Debug.Language;
 ///   them.
 ///  </para>
 ///  <para>
-///   The client tells the server of a change to a project file by sending <c>retrocore/activeTarget</c> again, or by
-///   a watched-files change; either analyzes the project's targets again. A project file is read again when it changes
-///   on disk; each target's source list is kept for a second, so a
+///   The client is to tell the server of a change to a project file by sending <c>retrocore/activeTarget</c> again,
+///   or by a watched-files change for it; either analyzes the project's targets again. A project file is read again
+///   when it changes on disk; each target's source list is kept for a second, so a
 ///   source added to a folder a pattern names is found soon after.
 ///  </para>
 /// </remarks>
@@ -43,7 +43,7 @@ internal static class ProjectSources
         RecurseSubdirectories = true
     };
 
-    private static readonly ConcurrentDictionary<string, (DateTime Written, IReadOnlyList<RetrocoreProject>? Projects)> s_projects =
+    private static readonly ConcurrentDictionary<string, (DateTime Written, IReadOnlyList<RetrocoreProject>? Projects, string? Error)> s_projects =
         new(StringComparer.OrdinalIgnoreCase);
 
     private static readonly ConcurrentDictionary<string, (string File, string Target)> s_roots = new(StringComparer.OrdinalIgnoreCase);
@@ -103,6 +103,18 @@ internal static class ProjectSources
         {
             if (key.File.StartsWith(folder, StringComparison.OrdinalIgnoreCase)) { s_sources.TryRemove(key, out _); }
         }
+    }
+
+    /// <summary>
+    ///  Gets why a target root's project file cannot be read.
+    /// </summary>
+    /// <param name="root">The target root.</param>
+    /// <returns>The error, or null when the file reads, or the path is not a target root.</returns>
+    internal static string? ErrorOf(string root)
+    {
+        if (FileOf(root) is not { } file) { return null; }
+        _ = Projects(file);
+        return s_projects.TryGetValue(file, out var known) ? known.Error : null;
     }
 
     /// <summary>
@@ -239,17 +251,18 @@ internal static class ProjectSources
         }
 
         if (s_projects.TryGetValue(file, out var known) && known.Written == written) { return known.Projects; }
-        IReadOnlyList<RetrocoreProject>? projects;
+        IReadOnlyList<RetrocoreProject>? projects = null;
+        string? error = null;
         try
         {
             projects = RetrocoreProject.LoadAll(file);
         }
         catch (Exception exception) when (exception is ProjectException or IOException or UnauthorizedAccessException or ArgumentException)
         {
-            projects = null;
+            error = exception.Message;
         }
 
-        s_projects[file] = (written, projects);
+        s_projects[file] = (written, projects, error);
         return projects;
     }
 }

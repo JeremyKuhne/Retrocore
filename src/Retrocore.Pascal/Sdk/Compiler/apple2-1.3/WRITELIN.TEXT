@@ -1,0 +1,225 @@
+(** WRITELIN.TEXT: WRITELIN, segment 16: the Linker's information.
+
+    Included by COMPILER.TEXT after BODYPART4B.TEXT and before UNITPART.TEXT.
+
+    Procedures here, nested ones indented:
+      WRITELIN (segment)
+        EmitReferences
+          ReadNextBlock
+        EmitEntries *)
+
+  (** Writes the linker information after the segment's code: each global and
+      external identifier with the places that refer to it, from
+      ReferenceFile.
+      Also: WRITELINKERINFO (UCSD20) *)
+  SEGMENT PROCEDURE WRITELIN;
+    VAR
+      (** The block of ReferenceFile read. *)
+      LoadedBlock: INTEGER;
+      (** Words of an entry. *)
+      EntryWords: INTEGER;
+      (** The identifier whose references follow, or -9999. *)
+      EntryTarget: INTEGER;
+      (** Where its entry starts. *)
+      EntryStart: INTEGER;
+      (** An entry's kind. *)
+      EntryKind: INTEGER;
+      (** A variable of another unit's. *)
+      InOtherUnit: BOOLEAN;
+
+    (** Writes the places that refer to identifier TokenName, and their
+        count.
+        Also: GETREFS (UCSD20) *)
+    PROCEDURE EmitReferences(TargetSought: INTEGER);
+      VAR
+        (** CodeCounter after them. *)
+        SavedCodeCounter: INTEGER;
+        (** Where their count goes. *)
+        CountPosition: INTEGER;
+        (** Their count. *)
+        FoundCount: INTEGER;
+        (** A block of ReferenceFile. *)
+        BlockNumber: INTEGER;
+        (** The references in it. *)
+        InBlock: INTEGER;
+        (** One of them. *)
+        PendingIndex: INTEGER;
+
+      (** Reads ReferenceFile's next block, round to the first after the
+          last.
+          Also: GETNEXTBLOCK (UCSD20) *)
+      PROCEDURE ReadNextBlock;
+      BEGIN
+        LoadedBlock := LoadedBlock + 1;
+        IF LoadedBlock > NextReferenceBlock THEN
+          LoadedBlock := 0;
+        IF BLOCKREAD(ReferenceFile, PendingReferences^, 1, LoadedBlock) <> 1
+            THEN
+          Error(404)
+      END;
+
+    BEGIN
+      FoundCount := 0;
+      CountPosition := CodeCounter - 4;
+      IF (PendingCount <> 1) OR (NextReferenceBlock <> 0) THEN
+        FOR BlockNumber := 0 TO NextReferenceBlock DO
+        BEGIN
+          IF LoadedBlock < NextReferenceBlock THEN
+            InBlock := 128
+          ELSE
+            InBlock := PendingCount - 1;
+          FOR PendingIndex := 1 TO InBlock DO
+            IF TargetSought = PendingReferences^[PendingIndex].Target THEN
+            BEGIN
+              EmitWord(PendingReferences^[PendingIndex].Offset);
+              FoundCount := FoundCount + 1
+            END;
+          IF BlockNumber < NextReferenceBlock THEN
+            ReadNextBlock
+        END;
+      IF FoundCount = 0 THEN
+        CodeCounter := CodeCounter - 16
+      ELSE
+      BEGIN
+        SavedCodeCounter := CodeCounter;
+        CodeCounter := CountPosition;
+        EmitWord(FoundCount);
+        CodeCounter := SavedCodeCounter
+      END;
+      FOR PendingIndex := 1 TO (8 - FoundCount MOD 8) MOD 8 DO
+        EmitWord(0)
+    END;
+
+    (** Writes the entries of a tree's identifiers, in order.
+        Also: GLOBALSEARCH (UCSD20) *)
+    PROCEDURE EmitEntries(Root: Identifier);
+    BEGIN
+      EntryTarget := -9999;
+      EntryStart := CodeCounter;
+      IF Root <> NIL THEN
+      BEGIN
+        WITH Root^ DO
+          IF Class IN [ConstantClass..ActualClass,
+              ProperProcedureClass..ModuleClass] THEN
+          BEGIN
+            MOVELEFT(Name, CodeBuffer^[CodeCounter], 8);
+            CodeCounter := CodeCounter + 8;
+            CASE Class OF
+              ConstantClass:
+                IF (DataType^.Size = 1) AND NOT InUnit THEN
+                BEGIN
+                  EmitWord(8);
+                  EmitWord(StaticLevel);
+                  EmitWord(0);
+                  EmitWord(0)
+                END
+                ELSE
+                  CodeCounter := EntryStart;
+              FormalClass, ActualClass:
+              BEGIN
+                InOtherUnit := StaticLevel < 0;
+                IF InOtherUnit OR InIntrinsicUnit OR NOT InUnit THEN
+                  IF InIntrinsicUnit AND (-StaticLevel <> DataSegment) OR
+                      InOtherUnit AND NOT InIntrinsicUnit THEN
+                    CodeCounter := EntryStart
+                  ELSE
+                  BEGIN
+                    EmitWord(7);
+                    EmitWord(Offset);
+                    EmitWord(0);
+                    EmitWord(0)
+                  END
+                ELSE
+                BEGIN
+                  IF ODD(RoutineNumber) THEN
+                  BEGIN
+                    EmitWord(3);
+                    EntryWords := 0
+                  END
+                  ELSE
+                  BEGIN
+                    EmitWord(4);
+                    IF Class = FormalClass THEN
+                      EntryWords := 1
+                    ELSE
+                      EntryWords := TypeAsFile^.Size
+                  END;
+                  EmitWord(2);
+                  EmitWord(0);
+                  EmitWord(EntryWords);
+                  EntryTarget := Offset + 63 + 1
+                END
+              END;
+              ProperProcedureClass, ValueFunctionClass:
+              BEGIN
+                IF StaticLevel = 1 THEN
+                  IF RoutineKind = 0 THEN
+                    IF Class = ProperProcedureClass THEN
+                      IF IsExternal THEN
+                        EntryKind := 9
+                      ELSE
+                        CodeCounter := EntryStart
+                    ELSE
+                      IF IsExternal THEN
+                        EntryKind := 10
+                      ELSE
+                        CodeCounter := EntryStart
+                  ELSE
+                    CodeCounter := EntryStart
+                ELSE
+                  CodeCounter := EntryStart;
+                IF EntryStart <> CodeCounter THEN
+                BEGIN
+                  EmitWord(EntryKind);
+                  EntryWords := LocalsStart - 1 - 2 * ORD(Class =
+                      ValueFunctionClass);
+                  IF EntryKind IN [9, 10] THEN
+                  BEGIN
+                    EmitWord(RoutineNumber);
+                    EmitWord(EntryWords);
+                    EmitWord(ORD(NIL))
+                  END
+                END
+              END;
+              ModuleClass:
+                IF InUnit AND NOT InIntrinsicUnit AND ODD(Offset) AND
+                    ODD(RoutineNumber) THEN
+                BEGIN
+                  EmitWord(1);
+                  EmitWord(1);
+                  EmitWord(0);
+                  EmitWord(0);
+                  EntryTarget := StaticLevel
+                END
+                ELSE
+                  CodeCounter := EntryStart
+            END;
+            IF EntryTarget <> -9999 THEN
+              EmitReferences(EntryTarget)
+          END;
+        IF CodeCounter >= 1024 THEN
+        BEGIN
+          WriteCode(FALSE);
+          CodeCounter := 0
+        END;
+        EmitEntries(Root^.Left.Entry);
+        EmitEntries(Root^.Right.Entry)
+      END
+    END;
+
+  BEGIN
+    CodeCounter := 0;
+    IF SegmentHasCode THEN
+      Error(399);
+    IF InUnit THEN
+      LoadedBlock := NextReferenceBlock;
+    EmitEntries(Display[GlobalLevel].Tree.Entry);
+    FOR TokenLength := 1 TO 8 DO
+      EmitByte(32);
+    EmitWord(0);
+    EmitWord(HighestDataCounter);
+    EmitWord(DataSegment);
+    EmitWord(0);
+    WriteCode(TRUE);
+    NeedsLinker := FALSE
+  END;

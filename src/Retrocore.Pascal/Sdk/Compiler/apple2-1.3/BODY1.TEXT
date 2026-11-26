@@ -1,0 +1,76 @@
+(** BODY1.TEXT: BODY1, segment 14: a body's start.
+
+    Included by COMPILER.TEXT after BODYPART2.TEXT and before BODY3.TEXT.
+
+    Procedures here, nested ones indented:
+      BODY1 (segment) *)
+
+      (** CompileRoutineBody's start: copies value parameters, makes the
+          labels, and starts a program's units.
+
+          UCSD Pascal II.0 calls it BODY (UCSD20). *)
+      SEGMENT PROCEDURE BODY1;
+      BEGIN
+        NextJumpSlot := 1;
+        IsMainBody := FALSE;
+        IF Level = 1 THEN
+          IF NOT CompilingSystem THEN
+            IF NOT InUnit THEN
+              IsMainBody := TRUE;
+        IF BodyRoutine <> NIL THEN
+        BEGIN
+          CopyOffset := BodyRoutine^.LocalsStart;
+          Current.Entry := BodyRoutine^.Next.Entry;
+          WHILE Current.Entry <> NIL DO
+            WITH Current.Entry^ DO
+            BEGIN
+              IF DataType <> NIL THEN
+                IF Class = ActualClass THEN
+                  IF DataType^.Form > SetForm THEN
+                  BEGIN
+                    CopyOffset := CopyOffset - 1;
+                    EmitTwoOperands(OuterAddressCode, Level, Offset);
+                    EmitTwoOperands(LoadOuterCode, Level, CopyOffset);
+                    IF IsPackedChars(DataType) THEN
+                      WITH DataType^ DO
+                        IF ArrayIsString THEN
+                          EmitOneOperand(AssignStringCode, Capacity)
+                        ELSE
+                          IF BaseType <> NIL THEN
+                          BEGIN
+                            GetBounds(BaseType, Lowest, Highest);
+                            EmitOneOperand(MoveWordsCode, (Highest - Lowest + 1
+                                + 1) DIV 2)
+                          END
+                          ELSE
+                          BEGIN
+                          END
+                    ELSE
+                      EmitOneOperand(MoveWordsCode, TypeAsFile^.Size)
+                  END
+                  ELSE
+                    CopyOffset := CopyOffset - TypeAsFile^.Size
+                ELSE
+                  IF Class = FormalClass THEN
+                    CopyOffset := CopyOffset - 1;
+              Current.Entry := Next.Entry
+            END
+        END;
+        LinesAtStart := LinesRead;
+        HighestDataCounter := DataCounter;
+        UserLabel.Entry := Display[DisplayTop].Labels.Entry;
+        WHILE UserLabel.Entry <> NIL DO
+        BEGIN
+          NewJump(UserLabel.Entry^.Target);
+          UserLabel.Entry := UserLabel.Entry^.Next.Entry
+        END;
+        ResidentList.Entry := SegmentsMadeResident.Entry;
+        IF (ResidentList.Entry <> NIL) OR IsMainBody THEN
+        BEGIN
+          Preamble := CodeCounter;
+          EmitByte(215);
+          EmitByte(215);
+          NewJump(StartJump);
+          PlaceJump(StartJump)
+        END
+      END;

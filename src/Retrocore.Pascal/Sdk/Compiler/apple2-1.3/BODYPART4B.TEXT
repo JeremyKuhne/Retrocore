@@ -1,0 +1,235 @@
+(** BODYPART4B.TEXT: BODYPART's expressions and body, continued.
+
+    Included by COMPILER.TEXT after BODYPART4A.TEXT and before WRITELIN.TEXT.
+
+    Procedures here, nested ones indented:
+        MakePackedArray
+      KeepRoutineResident *)
+
+      (** Makes a string or a character a packed array of characters, for one
+          compared or assigned to it.
+          Also: MAKEPA (UCSD20) *)
+      PROCEDURE MakePackedArray(VAR StringConstantType: Structure;
+          ArrayStructure: Structure);
+        VAR
+          (** UCSD Pascal II.0 calls it LMAX (UCSD20). *)
+          Highest: INTEGER;
+          (** UCSD Pascal II.0 calls it LMIN (UCSD20). *)
+          Lowest: INTEGER;
+          (** The packed array's type. *)
+          IndexSubrange: ShortStructure;
+      BEGIN
+        IF ArrayStructure <> ByteStreamStructure THEN
+        BEGIN
+          IF ArrayStructure^.BaseType <> NIL THEN
+          BEGIN
+            GetBounds(ArrayStructure^.BaseType, Lowest, Highest);
+            IF Highest - Lowest + 1 <> StringConstantType^.Capacity THEN
+              Error(129)
+          END;
+          StringConstantType := ArrayStructure
+        END
+        ELSE
+          WITH StringConstantType^ DO
+          BEGIN
+            NEW(IndexSubrange);
+            WITH IndexSubrange^ DO
+            BEGIN
+              Form := SubrangeForm;
+              BaseType := IntegerStructure;
+              Minimum := 1;
+              Maximum := StringConstantType^.Capacity
+            END;
+            ComponentType := IndexSubrange;
+            ArrayIsString := FALSE
+          END
+      END;
+
+    BEGIN
+      CompileSimpleExpression(Followers + [RelationalToken]);
+      IF Token = RelationalToken THEN
+      BEGIN
+        LeftIsString := (Operand.Kind = KnownValueOperand) AND
+            (IsString(Operand.DataType) OR (Operand.DataType = CharStructure));
+        IF Operand.DataType <> NIL THEN
+          IF Operand.DataType^.Form <= SetForm THEN
+          BEGIN
+            PushOperand;
+            IF Operator = InOperator THEN
+              MaskBoolean
+          END
+          ELSE
+            PushAddress;
+        LeftOperand := Operand;
+        Comparison := Operator;
+        LeftStringOffset := LastStringOffset;
+        NextToken;
+        CompileSimpleExpression(Followers);
+        RightIsString := (Operand.Kind = KnownValueOperand) AND
+            (IsString(Operand.DataType) OR (Operand.DataType = CharStructure));
+        IF Operand.DataType <> NIL THEN
+          IF Operand.DataType^.Form <= SetForm THEN
+            PushOperand
+          ELSE
+            PushAddress;
+        IF (LeftOperand.DataType <> NIL) AND (Operand.DataType <> NIL) THEN
+          IF Comparison = InOperator THEN
+            IF Operand.DataType^.Form = SetForm THEN
+              IF CompatibleTypes(LeftOperand.DataType,
+                  Operand.DataType^.BaseType) THEN
+                EmitOpcode(SetMembershipCode)
+              ELSE
+              BEGIN
+                Error(129);
+                Operand.DataType := NIL
+              END
+            ELSE
+            BEGIN
+              Error(130);
+              Operand.DataType := NIL
+            END
+          ELSE
+          BEGIN
+            IF LeftOperand.DataType <> Operand.DataType THEN
+            BEGIN
+              FloatOperands(LeftOperand, FALSE);
+              WidenOperands(LeftOperand.DataType)
+            END;
+            IF LeftIsString THEN
+            BEGIN
+              IF IsPackedChars(Operand.DataType) THEN
+                IF NOT Operand.DataType^.ArrayIsString THEN
+                BEGIN
+                  PackStringConstant(LeftStringOffset);
+                  MakePackedArray(LeftOperand.DataType, Operand.DataType)
+                END
+            END
+            ELSE
+              IF RightIsString THEN
+                IF IsPackedChars(LeftOperand.DataType) THEN
+                  IF NOT LeftOperand.DataType^.ArrayIsString THEN
+                  BEGIN
+                    PackStringConstant(LastStringOffset);
+                    MakePackedArray(Operand.DataType, LeftOperand.DataType)
+                  END;
+            IF LeftIsString AND IsString(Operand.DataType) OR RightIsString AND
+                IsString(LeftOperand.DataType) THEN
+              GOTO 1;
+            IF CompatibleTypes(LeftOperand.DataType, Operand.DataType) THEN
+            BEGIN
+              CompareSize := LeftOperand.DataType^.Size;
+              CASE LeftOperand.DataType^.Form OF
+                ScalarForm:
+                  IF LeftOperand.DataType = RealStructure THEN
+                    CompareKind := 1
+                  ELSE
+                    IF LeftOperand.DataType = BooleanStructure THEN
+                      CompareKind := 3
+                    ELSE
+                      CompareKind := 0;
+                PointerForm:
+                BEGIN
+                  IF Comparison IN [LessOperator..GreaterOperator] THEN
+                    Error(131);
+                  CompareKind := 0
+                END;
+                LongIntegerForm:
+                  CompareKind := 7;
+                SetForm:
+                BEGIN
+                  IF Comparison IN [LessOperator, GreaterOperator] THEN
+                    Error(132);
+                  CompareKind := 4
+                END;
+                ArrayForm:
+                BEGIN
+                  CompareKind := 6;
+                  IF IsPackedChars(LeftOperand.DataType) THEN
+                    IF LeftOperand.DataType^.ArrayIsString THEN
+                    BEGIN
+                      1:
+                      CompareKind := 2
+                    END
+                    ELSE
+                    BEGIN
+                      CompareKind := 5;
+                      IF LeftOperand.DataType = ByteStreamStructure THEN
+                        IF Operand.DataType = ByteStreamStructure THEN
+                          Error(129)
+                        ELSE
+                          LeftOperand.DataType := Operand.DataType;
+                      IF LeftOperand.DataType^.BaseType <> NIL THEN
+                      BEGIN
+                        GetBounds(LeftOperand.DataType^.BaseType, Lowest,
+                            Highest);
+                        CompareSize := Highest - Lowest + 1
+                      END
+                    END
+                  ELSE
+                  BEGIN
+                    IF LeftOperand.DataType = WordStreamStructure THEN
+                      IF Operand.DataType = WordStreamStructure THEN
+                        Error(129)
+                      ELSE
+                      BEGIN
+                        LeftOperand.DataType := Operand.DataType;
+                        CompareSize := LeftOperand.DataType^.Size
+                      END;
+                    IF Comparison IN [LessOperator..GreaterOperator] THEN
+                      Error(131)
+                  END
+                END;
+                RecordForm:
+                BEGIN
+                  IF Comparison IN [LessOperator..GreaterOperator] THEN
+                    Error(131);
+                  CompareKind := 6
+                END;
+                FileForm:
+                BEGIN
+                  Error(133);
+                  CompareKind := 0
+                END
+              END;
+              IF CompareKind = 7 THEN
+              BEGIN
+                EmitConstant(Comparison);
+                EmitConstant(16);
+                EmitExternalCall(30, 4)
+              END
+              ELSE
+                CASE Comparison OF
+                  LessOperator:
+                    EmitTwoOperands(LessCode, CompareKind, CompareSize);
+                  AtMostOperator:
+                    EmitTwoOperands(AtMostCode, CompareKind, CompareSize);
+                  GreaterOperator:
+                    EmitTwoOperands(GreaterCode, CompareKind, CompareSize);
+                  AtLeastOperator:
+                    EmitTwoOperands(AtLeastCode, CompareKind, CompareSize);
+                  UnequalOperator:
+                    EmitTwoOperands(UnequalCode, CompareKind, CompareSize);
+                  EqualOperator:
+                    EmitTwoOperands(EqualCode, CompareKind, CompareSize)
+                END
+            END
+            ELSE
+              Error(129)
+          END;
+        Operand.DataType := BooleanStructure;
+        Operand.Kind := StackOperand
+      END
+    END;
+
+    (** CompileRoutineBody with ROUTINE resident. *)
+    PROCEDURE KeepRoutineResident;
+    BEGIN (*$R ROUTINE*)
+      CompileRoutineBody
+    END;
+
+  BEGIN
+    IF NOT Swapping OR SwapMore THEN
+      CompileRoutineBody
+    ELSE
+      KeepRoutineResident
+  END;

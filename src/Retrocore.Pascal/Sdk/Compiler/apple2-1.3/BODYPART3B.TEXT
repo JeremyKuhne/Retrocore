@@ -1,0 +1,644 @@
+(** BODYPART3B.TEXT: BODYPART's code generator, continued.
+
+    Included by COMPILER.TEXT after BODYPART3A.TEXT and before BODYPART3C.TEXT.
+
+    Procedures here, nested ones indented:
+      EmitBigOperand
+      EmitOneOperand
+      EmitTwoOperands
+      EmitExternalCall
+      MaskBoolean
+      EmitJump
+      EmitFalseJump
+      NewJump
+      PlaceJump
+      PushOperand
+      StoreOperand
+      PushAddress
+      PushByteAddress
+      PackStringConstant
+      ApplySelectors *)
+
+    (** Generates a big operand: one byte to 127, else two, the high one with
+        bit 7 set.
+        Also: GENBIG (UCSD20) *)
+    PROCEDURE EmitBigOperand(Value: INTEGER);
+    BEGIN
+      IF Value <= 127 THEN
+        EmitByte(Value)
+      ELSE
+      BEGIN
+        EmitByte(128 + Value DIV 256);
+        EmitByte(Value MOD 256)
+      END
+    END;
+
+    (* Generates an instruction of one operand, in its short forms where
+       there are *)
+    PROCEDURE EmitOneOperand;
+      LABEL 1;
+      VAR
+        (** A constant's word. *)
+        WordIndex: INTEGER;
+        (** Its words. *)
+        WordTotal: INTEGER;
+    BEGIN
+      EmitByte(Opcode + 128);
+      IF Opcode = LoadConstantCode THEN
+      BEGIN
+        IF Argument = 2 THEN
+          WordTotal := 2
+        ELSE
+        BEGIN
+          WordTotal := 8;
+          WHILE WordTotal > 0 DO
+            IF Operand.Literal.Entry^.Words[WordTotal] <> 0 THEN
+              GOTO 1
+            ELSE
+              WordTotal := WordTotal - 1
+        END;
+        1:
+        Operand.DataType^.Size := WordTotal;
+        IF WordTotal > 1 THEN
+        BEGIN
+          EmitByte(WordTotal);
+          FOR WordIndex := WordTotal DOWNTO 1 DO
+            EmitWord(Operand.Literal.Entry^.Words[WordIndex])
+        END
+        ELSE
+        BEGIN
+          CodeCounter := CodeCounter - 1;
+          IF WordTotal = 1 THEN
+            EmitConstant(Operand.Literal.Entry^.Words[1])
+        END
+      END
+      ELSE
+        IF Opcode IN [CallStandardCode, AdjustSetCode, AssignStringCode,
+            ReturnCode, CallOuterCode, LoadWordsCode, StoreWordsCode,
+            ReturnBaseCode, CallBaseCode, CallLocalCode, CallGlobalCode] THEN
+          EmitByte(Argument)
+        ELSE
+          IF InUnit AND (Opcode IN [GlobalAddressCode, LoadGlobalCode,
+              StoreGlobalCode]) THEN
+          BEGIN
+            AddLinkerReference(3, Argument, CodeCounter);
+            EmitByte(128);
+            EmitByte(0)
+          END
+          ELSE
+            IF ((Opcode = LoadLocalCode) OR (Opcode = LoadGlobalCode)) AND
+                (Argument <= 16) THEN
+            BEGIN
+              CodeCounter := CodeCounter - 1;
+              IF Opcode = LoadGlobalCode THEN
+                EmitByte(231 + Argument)
+              ELSE
+                EmitByte(215 + Argument)
+            END
+            ELSE
+              IF (Opcode = LoadIndirectCode) AND (Argument <= 7) THEN
+              BEGIN
+                CodeCounter := CodeCounter - 1;
+                EmitByte(248 + Argument)
+              END
+              ELSE
+                EmitBigOperand(Argument)
+    END;
+
+    (* Generates an instruction of two operands, a level and a word, in its
+       short forms *)
+    PROCEDURE EmitTwoOperands;
+    BEGIN
+      IF (Opcode = IndexPackedCode) OR (Opcode = CallExternalCode) THEN
+      BEGIN
+        EmitByte(Opcode + 128);
+        EmitByte(FirstArgument);
+        EmitByte(SecondArgument)
+      END
+      ELSE
+        IF Opcode IN [EqualCode..GreaterCode, AtMostCode, LessCode,
+            UnequalCode] THEN
+          IF FirstArgument = 0 THEN
+            EmitOpcode(Opcode + 20)
+          ELSE
+          BEGIN
+            EmitOneOperand(Opcode, FirstArgument + FirstArgument);
+            IF FirstArgument > 4 THEN
+              EmitBigOperand(SecondArgument)
+          END
+        ELSE
+          IF FirstArgument = 1 THEN
+            EmitOneOperand(Opcode - 13, SecondArgument)
+          ELSE
+            IF FirstArgument = Level THEN
+              EmitOneOperand(Opcode + 20, SecondArgument)
+            ELSE
+              IF FirstArgument < 0 THEN
+              BEGIN
+                IF Opcode = LoadOuterCode THEN
+                  EmitByte(157)
+                ELSE
+                  IF Opcode = StoreOuterCode THEN
+                    EmitByte(209)
+                  ELSE
+                    EmitByte(167);
+                EmitByte(-FirstArgument);
+                EmitBigOperand(SecondArgument)
+              END
+              ELSE
+              BEGIN
+                EmitByte(Opcode + 128);
+                EmitByte(Level - FirstArgument);
+                EmitBigOperand(SecondArgument)
+              END
+    END;
+
+    (* Calls procedure PROCNUM of segment Number (CXP), noting the segment as
+       needed (II.0: GENNR's) *)
+    PROCEDURE EmitExternalCall;
+    BEGIN
+      LibrarySegments := LibrarySegments + [CalledSegment];
+      EmitTwoOperands(CallExternalCode, CalledSegment, CalledRoutine)
+    END;
+
+    (* After a BOOLEAN's load, keeps its low bit: SLDC 1, LAND *)
+    PROCEDURE MaskBoolean;
+    BEGIN
+      IF Operand.DataType = BooleanStructure THEN
+      BEGIN
+        EmitByte(1);
+        EmitByte(132)
+      END
+    END;
+
+    (* Generates a jump to a label: back by its offset, or through the jump
+       table; forward, linking it to the label's
+       other jumps to fix later *)
+    PROCEDURE EmitJump;
+      VAR
+        (** The jump's distance. *)
+        Distance: INTEGER;
+    BEGIN
+      WITH Destination^ DO
+        IF IsDefined THEN
+        BEGIN
+          EmitByte(Opcode + 128);
+          Distance := Offset - CodeCounter - 1;
+          IF (Distance >= 0) AND (Distance <= 127) THEN
+            EmitByte(Distance)
+          ELSE
+          BEGIN
+            IF TableIndex = 0 THEN
+            BEGIN
+              TableIndex := NextJumpSlot;
+              IF NextJumpSlot = 36 THEN
+                Error(254)
+              ELSE
+                NextJumpSlot := NextJumpSlot + 1;
+              JumpTable[TableIndex] := Offset
+            END;
+            Distance := -TableIndex;
+            EmitByte(248 - TableIndex - TableIndex)
+          END
+        END
+        ELSE
+        BEGIN
+          MOVELEFT(Offset, CodeBuffer^[CodeCounter], 2);
+          IF Opcode = JumpCode THEN
+            Distance := CodeCounter + 4096
+          ELSE
+            Distance := CodeCounter;
+          Offset := Distance;
+          CodeCounter := CodeCounter + 2
+        END
+    END;
+
+    (* Loads a BOOLEAN and jumps on false *)
+    PROCEDURE EmitFalseJump;
+    BEGIN
+      PushOperand;
+      IF (Operand.DataType <> BooleanStructure) AND (Operand.DataType <> NIL)
+          THEN
+        Error(135);
+      EmitJump(JumpFalseCode, Destination)
+    END;
+
+    (* A new label, not yet placed *)
+    PROCEDURE NewJump;
+    BEGIN
+      NEW(Created);
+      WITH Created^ DO
+      BEGIN
+        IsDefined := FALSE;
+        Offset := 28000
+      END
+    END;
+
+    (* Places a label here, fixing the jumps to it *)
+    PROCEDURE PlaceJump;
+      VAR
+        (** A jump to fix. *)
+        Pending: INTEGER;
+        (** Its opcode. *)
+        Opcode: INTEGER;
+    BEGIN
+      WITH Placed^ DO
+      BEGIN
+        Pending := Offset;
+        IsDefined := TRUE;
+        Offset := CodeCounter;
+        TableIndex := 0;
+        WHILE Pending < 28000 DO
+        BEGIN
+          IF Pending >= 4096 THEN
+          BEGIN
+            Pending := Pending - 4096;
+            Opcode := 57
+          END
+          ELSE
+            Opcode := 33;
+          CodeCounter := Pending;
+          MOVELEFT(CodeBuffer^[CodeCounter], Pending, 2);
+          EmitJump(Opcode, Placed)
+        END;
+        CodeCounter := Offset
+      END
+    END;
+
+    (* Loads Operand onto the stack *)
+    PROCEDURE PushOperand;
+      VAR
+        (** A long integer constant's power of ten. *)
+        PowerOfTen: INTEGER;
+        (** Its word. *)
+        WordIndex: INTEGER;
+    BEGIN
+      IF Operand.DataType <> NIL THEN
+      BEGIN
+        CASE Operand.Kind OF
+          KnownValueOperand:
+            IF Operand.DataType^.Form = LongIntegerForm THEN
+              WITH Operand.Literal.Entry^ DO
+              BEGIN
+                PowerOfTen := 10000;
+                EmitConstant(DigitGroups[1]);
+                EmitConstant(18);
+                EmitExternalCall(30, 4);
+                FOR WordIndex := 2 TO WordCount DO
+                BEGIN
+                  IF WordIndex = WordCount THEN
+                    PowerOfTen := TRUNC(PWROFTEN(StringLength));
+                  EmitConstant(PowerOfTen);
+                  EmitConstant(18);
+                  EmitExternalCall(30, 4);
+                  EmitConstant(8);
+                  EmitExternalCall(30, 4);
+                  EmitConstant(DigitGroups[WordIndex]);
+                  EmitConstant(18);
+                  EmitExternalCall(30, 4);
+                  EmitConstant(2);
+                  EmitExternalCall(30, 4)
+                END
+              END
+            ELSE
+              IF (Operand.DataType^.Form = ScalarForm) AND (Operand.DataType <>
+                  RealStructure) THEN
+                EmitConstant(Operand.Literal.Ordinal)
+              ELSE
+                IF Operand.DataType = NilStructure THEN
+                  EmitOpcode(LoadNilCode)
+                ELSE
+                  IF Operand.DataType = RealStructure THEN
+                    EmitOneOperand(LoadConstantCode, 2)
+                  ELSE
+                    EmitOneOperand(LoadConstantCode, 5);
+          MemoryOperand:
+            CASE Operand.Literal.Ordinal OF
+              DirectAccess:
+                EmitTwoOperands(LoadOuterCode, Operand.StaticLevel,
+                    Operand.Offset);
+              IndirectAccess:
+                EmitOneOperand(LoadIndirectCode, Operand.StaticLevel);
+              PackedAccess:
+                EmitOpcode(LoadPackedCode);
+              MultipleAccess:
+                EmitOneOperand(LoadWordsCode, Operand.DataType^.Size);
+              ByteAccess:
+                EmitOpcode(LoadByteCode)
+            END;
+          StackOperand:
+          BEGIN
+          END
+        END;
+        WITH Operand.DataType^ DO
+          IF ((Form = SetForm) OR (Form = LongIntegerForm) AND (Operand.Kind <>
+              KnownValueOperand)) AND (Operand.Kind <> StackOperand) THEN
+            EmitConstant(Operand.DataType^.Size);
+        Operand.Kind := StackOperand
+      END
+    END;
+
+    (* Stores the stack into a variable *)
+    PROCEDURE StoreOperand;
+    BEGIN
+      WITH Destination DO
+        IF DataType <> NIL THEN
+          CASE Access OF
+            DirectAccess:
+              EmitTwoOperands(StoreOuterCode, StaticLevel, Offset);
+            IndirectAccess:
+              IF StaticLevel <> 0 THEN
+                Error(409)
+              ELSE
+                EmitOpcode(StoreIndirectCode);
+            PackedAccess:
+              EmitOpcode(StorePackedCode);
+            MultipleAccess:
+              EmitOneOperand(StoreWordsCode, DataType^.Size);
+            ByteAccess:
+              EmitOpcode(StoreByteCode)
+          END
+    END;
+
+    (* Loads Operand's address *)
+    PROCEDURE PushAddress;
+    BEGIN
+      IF Operand.DataType <> NIL THEN
+      BEGIN
+        CASE Operand.Kind OF
+          KnownValueOperand:
+            IF IsString(Operand.DataType) THEN
+              EmitOpcode(StringAddressCode)
+            ELSE
+              Error(409);
+          MemoryOperand:
+            CASE Operand.Literal.Ordinal OF
+              DirectAccess:
+                EmitTwoOperands(OuterAddressCode, Operand.StaticLevel,
+                    Operand.Offset);
+              IndirectAccess:
+                IF Operand.StaticLevel <> 0 THEN
+                  EmitOneOperand(AddOffsetCode, Operand.StaticLevel);
+              PackedAccess:
+                Error(103)
+            END
+        END;
+        Operand.Kind := MemoryOperand;
+        Operand.Literal.Ordinal := IndirectAccess;
+        Operand.StaticLevel := 0
+      END
+    END;
+
+    (* Loads a byte's address: a word's, and the byte's offset *)
+    PROCEDURE PushByteAddress;
+    BEGIN
+      IF Operand.DataType <> NIL THEN
+      BEGIN
+        CASE Operand.Kind OF
+          KnownValueOperand:
+            IF IsString(Operand.DataType) THEN
+              EmitOpcode(StringAddressCode)
+            ELSE
+              Error(409);
+          MemoryOperand:
+            CASE Operand.Literal.Ordinal OF
+              DirectAccess:
+                EmitTwoOperands(OuterAddressCode, Operand.StaticLevel,
+                    Operand.Offset);
+              IndirectAccess:
+                IF Operand.StaticLevel <> 0 THEN
+                  EmitOneOperand(AddOffsetCode, Operand.StaticLevel);
+              PackedAccess:
+                Error(103)
+            END
+        END;
+        IF Operand.Kind <> MemoryOperand THEN
+        BEGIN
+          Operand.Kind := MemoryOperand;
+          EmitConstant(0)
+        END
+        ELSE
+          IF Operand.Literal.Ordinal <> ByteAccess THEN
+            EmitConstant(0);
+        Operand.Literal.Ordinal := ByteAccess
+      END
+    END;
+
+    (* Makes the string constant at StringOffset in the code a packed array
+       of characters, without its length *)
+    PROCEDURE PackStringConstant;
+    BEGIN
+      IF ODD(StringOffset) THEN
+      BEGIN
+        MOVERIGHT(CodeBuffer^[StringOffset + 1], CodeBuffer^[StringOffset + 2],
+            ORD(CodeBuffer^[StringOffset + 1]) + 1);
+        CodeBuffer^[StringOffset] := CHR(215);
+        CodeBuffer^[StringOffset + 1] := CHR(208)
+      END
+      ELSE
+      BEGIN
+        MOVELEFT(CodeBuffer^[StringOffset + 2], CodeBuffer^[StringOffset + 1],
+            ORD(CodeBuffer^[StringOffset + 2]) + 1);
+        CodeBuffer^[StringOffset] := CHR(208);
+        CodeBuffer^[StringOffset + ORD(CodeBuffer^[StringOffset + 1]) + 2] :=
+            CHR(215)
+      END
+    END;
+
+    (* Compiles a variable's selectors, [ ], . and ^ *)
+    PROCEDURE ApplySelectors;
+      VAR
+        (** UCSD Pascal II.0 calls it LATTR (UCSD20). *)
+        Indexed: OperandEntry;
+        (** UCSD Pascal II.0 calls it LCP (UCSD20). *)
+        Field: SymbolLink;
+        (** UCSD Pascal II.0 calls it LMIN (UCSD20). *)
+        Highest: INTEGER;
+        (** UCSD Pascal II.0 calls it LMAX (UCSD20). *)
+        Lowest: INTEGER;
+    BEGIN
+      WITH Named^ DO
+      BEGIN
+        Operand.DataType := DataType;
+        Operand.Kind := MemoryOperand;
+        CASE Class OF
+          ActualClass:
+          BEGIN
+            Operand.StaticLevel := StaticLevel;
+            Operand.Offset := Offset;
+            Operand.Literal.Ordinal := DirectAccess;
+            IF InUnit THEN
+              IF Operand.DataType <> NIL THEN
+                IF (StaticLevel = 1) AND (Operand.DataType^.Form = RecordForm)
+                    THEN
+                  PushAddress
+          END;
+          FormalClass:
+          BEGIN
+            EmitTwoOperands(LoadOuterCode, StaticLevel, Offset);
+            Operand.Literal.Ordinal := IndirectAccess;
+            Operand.StaticLevel := 0
+          END;
+          FieldClass:
+          BEGIN
+            WITH Display[FoundLevel] DO
+              IF Kind = WithDirectScope THEN
+              BEGIN
+                Operand.Literal.Ordinal := DirectAccess;
+                Operand.StaticLevel := Files.Word;
+                Operand.Offset := Labels.Word + StaticLevel
+              END
+              ELSE
+              BEGIN
+                EmitTwoOperands(LoadOuterCode, Level, Files.Word);
+                Operand.Literal.Ordinal := IndirectAccess;
+                Operand.StaticLevel := StaticLevel
+              END;
+            IF ODD(Offset) THEN
+            BEGIN
+              PushAddress;
+              Operand.Literal.Ordinal := PackedAccess;
+              EmitConstant(RoutineNumber);
+              EmitConstant(CodeSegment)
+            END
+          END;
+          ValueFunctionClass:
+            IF StaticLevel <> 1 THEN
+              Error(150)
+            ELSE
+              IF NOT IsOpen THEN
+                Error(103)
+              ELSE
+              BEGIN
+                Operand.Literal.Ordinal := DirectAccess;
+                Operand.StaticLevel := Offset + 1;
+                Operand.Offset := 1
+              END
+        END
+      END;
+      IF Operand.DataType <> NIL THEN
+        IF (Operand.DataType^.Form <= SetForm) AND (Operand.DataType^.Size > 1)
+            THEN
+        BEGIN
+          PushAddress;
+          Operand.Literal.Ordinal := MultipleAccess
+        END;
+      IF NOT (Token IN SelectionStarters + Followers) THEN
+      BEGIN
+        Error(59);
+        SkipTokens(SelectionStarters + Followers)
+      END;
+      WHILE Token IN SelectionStarters DO
+      BEGIN
+        IF Token = LeftBracketToken THEN
+        BEGIN
+          REPEAT
+            Indexed := Operand;
+            IF Indexed.DataType <> NIL THEN
+              IF Indexed.DataType^.Form <> ArrayForm THEN
+              BEGIN
+                Error(138);
+                Indexed.DataType := NIL
+              END;
+            PushAddress;
+            NextToken;
+            CompileExpression(Followers + [CommaToken, RightBracketToken]);
+            PushOperand;
+            MaskBoolean;
+            IF Operand.DataType <> NIL THEN
+              IF Operand.DataType^.Form <> ScalarForm THEN
+                Error(113);
+            IF Indexed.DataType <> NIL THEN
+              WITH Indexed.DataType^ DO
+              BEGIN
+                IF CompatibleTypes(BaseType, Operand.DataType) THEN
+                BEGIN
+                  IF (BaseType <> NIL) AND NOT IsString(Indexed.DataType) THEN
+                  BEGIN
+                    GetBounds(BaseType, Lowest, Highest);
+                    IF CheckRanges THEN
+                    BEGIN
+                      EmitConstant(Lowest);
+                      EmitConstant(Highest);
+                      EmitOpcode(RangeCheckCode)
+                    END;
+                    IF Lowest <> 0 THEN
+                    BEGIN
+                      EmitConstant(ABS(Lowest));
+                      IF Lowest > 0 THEN
+                        EmitOpcode(SubtractIntegersCode)
+                      ELSE
+                        EmitOpcode(AddIntegersCode)
+                    END
+                  END
+                END
+                ELSE
+                  Error(139);
+                Operand.DataType := ElementType;
+                Operand.Kind := MemoryOperand;
+                Operand.Literal.Ordinal := IndirectAccess;
+                Operand.StaticLevel := 0;
+                IF Operand.DataType <> NIL THEN
+                  IF ArrayIsPacked THEN
+                    IF ElementBits = 8 THEN
+                    BEGIN
+                      Operand.Literal.Ordinal := ByteAccess;
+                      IF IsString(Indexed.DataType) AND CheckRanges THEN
+                        EmitOpcode(IndexStringCode)
+                      ELSE
+                      BEGIN
+                      END
+                    END
+                    ELSE
+                    BEGIN
+                      Operand.Literal.Ordinal := PackedAccess;
+                      EmitTwoOperands(IndexPackedCode, ElementsPerWord,
+                          ElementBits)
+                    END
+                  ELSE
+                  BEGIN
+                    EmitOneOperand(IndexArrayCode, Operand.DataType^.Size);
+                    IF (Operand.DataType^.Form <= SetForm) AND
+                        (Operand.DataType^.Size > 1) THEN
+                      Operand.Literal.Ordinal := MultipleAccess
+                  END
+              END
+          UNTIL Token <> CommaToken;
+          IF Token = RightBracketToken THEN
+            NextToken
+          ELSE
+            Error(12)
+        END
+        ELSE
+          IF Token = PeriodToken THEN
+          BEGIN
+            IF Operand.DataType <> NIL THEN
+              IF Operand.DataType^.Form <> RecordForm THEN
+              BEGIN
+                Error(140);
+                Operand.DataType := NIL
+              END;
+            NextToken;
+            IF Token = NameToken THEN
+            BEGIN
+              IF Operand.DataType <> NIL THEN
+              BEGIN
+                FindInTree(Operand.DataType^.FirstField.Entry, Field);
+                IF Field.Entry = NIL THEN
+                BEGIN
+                  Error(152);
+                  Operand.DataType := NIL
+                END
+                ELSE
+                BEGIN
+                  WITH Field.Entry^ DO
+                  BEGIN
+                    Operand.DataType := DataType;
+                    CASE Operand.Literal.Ordinal OF
+                      DirectAccess:
+                        Operand.Offset := Operand.Offset + StaticLevel;
+                      IndirectAccess:
+                        Operand.StaticLevel := Operand.StaticLevel +
+                            StaticLevel;
+                      PackedAccess, MultipleAccess, ByteAccess:
+                        Error(409)

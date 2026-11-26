@@ -1,0 +1,275 @@
+(** COMPINIT2.TEXT: COMPINIT, segment 7: starting a compile, continued.
+
+    Included by COMPILER.TEXT after COMPINIT1.TEXT and before DECLARAT1.TEXT.
+
+    Procedures here, nested ones indented:
+      SetGlobals
+      MakeTokenSets
+      CheckSystemVersion *)
+
+    (** Sets the Compiler's globals and options as they start.
+        Also: INITSCALARS (UCSD20) *)
+    PROCEDURE SetGlobals;
+    BEGIN
+      IF (MEMAVAIL < 0) OR (MEMAVAIL > 9950) THEN
+        Swapping := FALSE
+      ELSE
+        Swapping := TRUE;
+      SwapMore := FALSE;
+      ForwardPointers.Entry := NIL;
+      CompiledUnits.Entry := NIL;
+      ComparedPairs := NIL;
+      LineStart := 0;
+      ListedCounter := 1;
+      Listing := FALSE;
+      SourceBlock := 2;
+      LinesRead := 0;
+      LinesAtStart := 0;
+      FOR CurrentSegment := 0 TO 15 DO
+        WITH SegmentDictionary[CurrentSegment] DO
+        BEGIN
+          FirstBlock := 0;
+          CodeLength := 0;
+          NameOfSegment := '        ';
+          Kind := LinkedSegment;
+          TextBlock := 0;
+          Number := 0
+        END;
+      UsedUnits.Entry := NIL;
+      LibraryName := '*';
+      DataCounter := 1;
+      CheckInputOutput := TRUE;
+      InDeclarations := TRUE;
+      LastSegmentSlot := 0;
+      SegmentOffset := 0;
+      NextJumpSlot := 1;
+      NextRoutine := 2;
+      CurrentRoutine := 1;
+      NEW(TokenConstant);
+      NEW(SourceBuffer);
+      CodeBuffer := NIL;
+      NeedsLinker := FALSE;
+      InIntrinsicUnit := FALSE;
+      UsesIntrinsic := FALSE;
+      CheckVarStrings := TRUE;
+      CurrentSegment := 1;
+      NextSegment := 7;
+      CodeFileBlock := 1;
+      BlockByte := 0;
+      Noisy := NOT SlowTerminal;
+      AllowUnitFiles := FALSE;
+      Debugging := FALSE;
+      BreakpointOnLine := FALSE;
+      InUnit := FALSE;
+      OmitUnitStartup := FALSE;
+      GotoAllowed := FALSE;
+      CheckRanges := TRUE;
+      CompilingSystem := FALSE;
+      Tiny := FALSE;
+      SegmentHasCode := FALSE;
+      ReportUndeclared := TRUE;
+      Including := FALSE;
+      ReadingInterface := FALSE;
+      Comment := NIL;
+      LibraryClosed := TRUE;
+      TakeNestingDepth := TRUE;
+      LineNestingDepth := 0;
+      FlipBytes := FALSE;
+      LibrarySegments := []
+    END;
+
+    (** Sets the symbol sets.
+        Also: INITSETS (UCSD20) *)
+    PROCEDURE MakeTokenSets;
+    BEGIN
+      SignedConstantStarters := [NameToken, IntegerToken..StringToken,
+          AdditiveToken, LongNumberToken];
+      SimpleStarters := [LeftParenthesisToken] + SignedConstantStarters;
+      TypeStarters := [ArrowToken, SetToken..FileToken] + SimpleStarters;
+      CompositeStarters := [SetToken, ArrayToken..FileToken];
+      BlockStarters := [BeginToken, LabelToken..ProgramToken, UsesToken];
+      SelectionStarters := [LeftBracketToken, ArrowToken, PeriodToken];
+      FactorStarters := [NameToken, LeftParenthesisToken, LeftBracketToken,
+          IntegerToken..NotToken, LongNumberToken];
+      StartersOfStatement := [BeginToken..GotoToken];
+      ClassesOfVariable := [FormalClass, ActualClass]
+    END;
+
+    (** Stops with 'Version 1.3 of SYSTEM.COMPILER cannot run with a non-1.3
+        version of SYSTEM.PASCAL' unless the system's byte at $BF21 is 4; and
+        reads its flag at $BF22. *)
+    PROCEDURE CheckSystemVersion;
+      VAR
+        (** The system's byte. *)
+        SystemByte: MemoryCell;
+    BEGIN
+      SystemByte.Address := -16607;
+      IF SystemByte.Bytes^[0] <> CHR(4) THEN
+      BEGIN
+        WRITELN(OUTPUT);
+        WRITELN(OUTPUT);
+        WRITELN('Version 1.3 of SYSTEM.COMPILER cannot run');
+        WRITELN('with a non-1.3 version of SYSTEM.PASCAL');
+        EXIT(PASCALCO)
+      END;
+      SystemByte.Address := -16606;
+      UnitsWithoutSwapping := SystemByte.Bits^[6]
+    END;
+
+  BEGIN
+    CheckSystemVersion;
+    SetGlobals;
+    MakeTokenSets;
+    Level := 0;
+    DisplayTop := 0;
+    ListingToConsole := FALSE;
+    ListingOpen := FALSE;
+    IF Noisy THEN
+      REPEAT
+        ListingChosen := TRUE;
+        WRITELN(OUTPUT);
+        WRITE('Listing file (<ret> for none or option in source): ');
+        READLN(ListingName);
+        IF ListingName <> '' THEN
+          IF ORD(ListingName[1]) = 16 THEN
+            DELETE(ListingName, 1, 2);
+        IF ListingName <> '' THEN
+        BEGIN
+          IF ORD(ListingName[1]) = 27 THEN
+            EXIT(PASCALCO);
+          PrepareTitle(ListingName, 1, 80);
+          NameLength := LENGTH(ListingName);
+          IF ORD(ListingName[NameLength]) = 58 THEN
+            FOR Position := 1 TO NameLength DO
+              IF ORD(ListingName[Position]) IN [97..122] THEN
+                ListingName[Position] := CHR(ORD(ListingName[Position]) - 32);
+          IF (ListingName = 'CONSOLE:') OR (ListingName = '#1:') THEN
+          BEGIN
+            Noisy := FALSE;
+            ListingToConsole := TRUE
+          END;
+          REWRITE(ListingFile, ListingName);
+          ListingChosen := IORESULT = 0;
+          IF ListingChosen THEN
+          BEGIN
+            ListingOpen := TRUE;
+            Listing := TRUE
+          END
+          ELSE
+          BEGIN
+            OpenError := IORESULT;
+            WRITELN(CHR(7), 'I/O Error #', OpenError,
+                ' occured while opening ', ListingName)
+          END
+        END
+        ELSE
+          ListingOpen := FALSE
+      UNTIL ListingChosen;
+    IF Noisy THEN
+    BEGIN
+      FOR CodeCounter := 1 TO 4 DO
+        WRITELN(OUTPUT);
+      WRITELN('Apple Pascal Compiler [1.3]');
+      WRITE('<   0>')
+    END;
+    WITH Display[0] DO
+    BEGIN
+      Tree.Entry := NIL;
+      Files.Entry := NIL;
+      Labels.Entry := NIL;
+      Kind := BlockScope
+    END;
+    LeastMemory := MEMAVAIL;
+    ReadSourcePage;
+    NextToken;
+    MakeStandardTypes;
+    EnterStandardNames;
+    MakeDummies;
+    EnterSpecialRoutines;
+    EnterSystemRoutines;
+    IF CompilingSystem THEN
+    BEGIN
+      ProgramIdentifier.Entry := NIL;
+      CurrentSegment := 0;
+      NextSegment := 1;
+      GlobalLevel := 1;
+      BlockStarters := BlockStarters + [UnitToken]
+    END
+    ELSE
+    BEGIN
+      DisplayTop := 1;
+      Level := 1;
+      WITH Display[1] DO
+      BEGIN
+        Tree.Entry := NIL;
+        Files.Entry := NIL;
+        Labels.Entry := NIL;
+        Kind := BlockScope
+      END;
+      DataCounter := DataCounter + 2;
+      GlobalLevel := 3;
+      SegmentDictionary[LastSegmentSlot].Number := CurrentSegment;
+      NEW(ProgramIdentifier.Entry, RoutineIdentifierSize);
+      WITH ProgramIdentifier.Entry^ DO
+      BEGIN
+        Next.Entry := NIL;
+        LocalsStart := DataCounter;
+        Name := 'PROGRAM ';
+        DataType := NIL;
+        Class := ProperProcedureClass;
+        StaticLevel := 1;
+        Offset := 0;
+        RoutineNumber := 1;
+        CodeSegment := CurrentSegment;
+        RoutineKind := 0;
+        IsForward := FALSE;
+        IsExternal := FALSE;
+        IsOpen := TRUE
+      END
+    END;
+    SlotOfSegment[CurrentSegment] := LastSegmentSlot;
+    IF Token = ProgramToken THEN
+    BEGIN
+      NextToken;
+      IF Token = NameToken THEN
+      BEGIN
+        SegmentDictionary[LastSegmentSlot].NameOfSegment := TokenName;
+        IF ProgramIdentifier.Entry <> NIL THEN
+        BEGIN
+          ProgramIdentifier.Entry^.Name := TokenName;
+          EnterIdentifier(ProgramIdentifier.Entry)
+        END
+      END
+      ELSE
+        Error(2);
+      NextToken;
+      IF Token = LeftParenthesisToken THEN
+      BEGIN
+        REPEAT
+          NextToken
+        UNTIL Token IN [SemicolonToken, RightParenthesisToken] + BlockStarters;
+        IF Token = RightParenthesisToken THEN
+          NextToken
+        ELSE
+          Error(4)
+      END;
+      IF Token = SemicolonToken THEN
+        NextToken
+      ELSE
+        Error(14)
+    END;
+    MARK(HeapMark);
+    NEW(LexicalStack);
+    WITH LexicalStack^ DO
+    BEGIN
+      OuterLevel := NIL;
+      EndingToken := PeriodToken;
+      RoutineEntry.Entry := ProgramIdentifier.Entry;
+      SavedDataCounter := DataCounter;
+      SavedLevel := Level;
+      SavedTop := DisplayTop;
+      SavedRoutine := CurrentRoutine;
+      IsSegment := FALSE;
+      ReleaseMark := HeapMark
+    END
+  END;

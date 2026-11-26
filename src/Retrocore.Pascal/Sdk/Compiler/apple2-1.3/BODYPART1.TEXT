@@ -1,0 +1,60 @@
+(** BODYPART1.TEXT: BODYPART, segment 9: its heading and FORWARD headings.
+
+    Included by COMPILER.TEXT after DECLARAT4.TEXT and before ROUTINE1.TEXT.
+
+    Procedures here, nested ones indented:
+      BODYPART (segment)
+        AddLinkerReference
+        EmitOpcode
+        EmitConstant
+        EmitOneOperand
+        EmitTwoOperands
+        EmitExternalCall
+        PushOperand
+        PushAddress
+        PushByteAddress
+        CompileExpression
+        CompileVariable
+        NumberExternalRoutine
+        PushVariableAddress
+        MaskBoolean
+        EmitJump
+        EmitFalseJump
+        NewJump
+        PlaceJump
+        StoreOperand
+        PackStringConstant
+        ApplySelectors
+        CompileCall *)
+
+  (** Compiles a procedure's body, from BEGIN to END, into p-code The GEN
+      procedures take p-code opcodes less 128, II.0's numbering, written as
+      the PCODE constants: 30 BigValue, 33 FJP, 35 IND, 50 LDA, 51 LDC, 54
+      LOD, 56 STR, 57 UJP, 77 CXP [II.0, PS]. *)
+  SEGMENT PROCEDURE BODYPART(Followers: TokenSet; BodyRoutine: Identifier);
+
+    PROCEDURE AddLinkerReference(TargetClass: INTEGER; TargetNumber: INTEGER;
+        CodeOffset: INTEGER); FORWARD;
+    PROCEDURE EmitOpcode(Opcode: INTEGER); FORWARD;
+    PROCEDURE EmitConstant(Value: INTEGER); FORWARD;
+    PROCEDURE EmitOneOperand(Opcode: INTEGER; Argument: INTEGER); FORWARD;
+    PROCEDURE EmitTwoOperands(Opcode: INTEGER; FirstArgument: INTEGER;
+        SecondArgument: INTEGER); FORWARD;
+    PROCEDURE EmitExternalCall(CalledSegment: INTEGER; CalledRoutine: INTEGER);
+        FORWARD;
+    PROCEDURE PushOperand; FORWARD;
+    PROCEDURE PushAddress; FORWARD;
+    PROCEDURE PushByteAddress; FORWARD;
+    PROCEDURE CompileExpression(Followers: TokenSet); FORWARD;
+    PROCEDURE CompileVariable(Followers: TokenSet); FORWARD;
+    PROCEDURE NumberExternalRoutine(VAR Unnumbered: Identifier); FORWARD;
+    PROCEDURE PushVariableAddress(Variable: Identifier); FORWARD;
+    PROCEDURE MaskBoolean; FORWARD;
+    PROCEDURE EmitJump(Opcode: INTEGER; Destination: Jump); FORWARD;
+    PROCEDURE EmitFalseJump(Destination: Jump); FORWARD;
+    PROCEDURE NewJump(VAR Created: Jump); FORWARD;
+    PROCEDURE PlaceJump(Placed: Jump); FORWARD;
+    PROCEDURE StoreOperand(VAR Destination: OperandEntry); FORWARD;
+    PROCEDURE PackStringConstant(StringOffset: INTEGER); FORWARD;
+    PROCEDURE ApplySelectors(Followers: TokenSet; Named: Identifier); FORWARD;
+    PROCEDURE CompileCall(Followers: TokenSet; Called: Identifier); FORWARD;

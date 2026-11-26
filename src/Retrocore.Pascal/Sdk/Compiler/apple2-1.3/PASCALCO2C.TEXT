@@ -1,0 +1,252 @@
+(** PASCALCO2C.TEXT: PASCALCO's procedures and body, continued.
+
+    Included by COMPILER.TEXT after PASCALCO2B.TEXT, last.
+
+    Procedures here, nested ones indented:
+      WriteCode
+      FinishSegment
+      CompileBlock
+        ForwardUndefined
+      CompileProgram
+      KeepPartsResident
+        KeepRoutineResident *)
+
+  (* Copies the code buffer to the code file through BlockBuffer; Flush
+     writes the last block too *)
+  PROCEDURE WriteCode;
+    VAR
+      (** Bytes to copy. *)
+      Chunk: INTEGER;
+      (** Bytes left. *)
+      Remaining: INTEGER;
+      (** Where in the code buffer. *)
+      Position: INTEGER;
+  BEGIN
+    Position := 0;
+    Remaining := CodeCounter;
+    REPEAT
+      Chunk := 512 - BlockByte;
+      IF Chunk > Remaining THEN
+        Chunk := Remaining;
+      MOVELEFT(CodeBuffer^[Position], BlockBuffer[BlockByte], Chunk);
+      Position := Position + Chunk;
+      BlockByte := BlockByte + Chunk;
+      IF (BlockByte = 512) OR Flush THEN
+      BEGIN
+        IF ErrorNumber = 0 THEN
+          IF BLOCKWRITE(WorkCodeFile^, BlockBuffer, 1, CodeFileBlock) <> 1 THEN
+            Error(402);
+        CodeFileBlock := CodeFileBlock + 1;
+        BlockByte := 0
+      END;
+      Remaining := Remaining - Chunk
+    UNTIL Remaining = 0
+  END;
+
+  (* Ends a segment: writes its procedure dictionary, its number and
+     procedures' count, and its length to SegmentDictionary (II.0: BLOCK's
+     end) *)
+  PROCEDURE FinishSegment;
+    VAR
+      (** A procedure. *)
+      ThisRoutine: INTEGER;
+  BEGIN
+    CodeCounter := 0;
+    FOR ThisRoutine := NextRoutine - 1 DOWNTO 1 DO
+      IF RoutineDictionary[ThisRoutine] = 0 THEN
+        EmitWord(0)
+      ELSE
+        EmitWord(SegmentOffset + CodeCounter - RoutineDictionary[ThisRoutine]);
+    EmitByte(CurrentSegment);
+    EmitByte(NextRoutine - 1);
+    SegmentDictionary[SlotOfSegment[CurrentSegment]].CodeLength :=
+        SegmentOffset + CodeCounter;
+    WriteCode(TRUE);
+    SegmentOffset := 0;
+    SegmentHasCode := FALSE
+  END;
+
+  (* Compiles a block and those in it: declarations with DECLARAT, each body
+     with BODYPART, units with UNITPART,
+     pushing the lexical stack as a procedure opens and popping it as it
+     closes *)
+  PROCEDURE CompileBlock;
+    LABEL 1;
+    VAR
+      (** The block ended with its symbol. *)
+      BlockDone: BOOLEAN;
+
+    (** Whether a scope's tree has a procedure declared FORWARD and never
+        defined, writing its name (II.0: BLOCK's check). *)
+    FUNCTION ForwardUndefined(Root: Identifier): BOOLEAN;
+    BEGIN
+      ForwardUndefined := FALSE;
+      IF Root <> NIL THEN
+        WITH Root^ DO
+        BEGIN
+          IF Class IN [ProperProcedureClass, ValueFunctionClass] THEN
+            IF StaticLevel = 1 THEN
+              IF RoutineKind = 0 THEN
+                IF IsForward THEN
+                BEGIN
+                  ForwardUndefined := TRUE;
+                  WRITELN(OUTPUT);
+                  WRITE(Name, ' undefined')
+                END;
+          IF ForwardUndefined(Right.Entry) OR ForwardUndefined(Left.Entry) THEN
+            ForwardUndefined := TRUE
+        END
+    END;
+
+  BEGIN
+    IF (Token = UnitToken) AND NOT InUnit THEN
+      IF Swapping OR UnitsWithoutSwapping THEN
+      BEGIN
+        UNITPART(Followers + [EndToken, UnitToken..UnitImplementationToken]);
+        IF Token = PeriodToken THEN
+          EXIT(CompileBlock)
+      END
+      ELSE
+        Error(408);
+    IsProgram := NOT InUnit;
+    NewBlock := TRUE;
+    REPEAT
+      IF NOT NewBlock THEN
+      BEGIN
+        InDeclarations := FALSE;
+        NestingDepth := 0;
+        CodeCounter := 0;
+        ListedCounter := 0;
+        IF NOT CompilingSystem OR (Level > 1) THEN
+          IF ForwardUndefined(Display[DisplayTop].Tree.Entry) THEN
+            Error(117);
+        IF InUnit THEN
+          IF LexicalStack^.OuterLevel^.RoutineEntry.Entry =
+              ProgramIdentifier.Entry THEN
+            IF Token IN [EndToken, BeginToken] THEN
+              EXIT(CompileBlock);
+        SegmentsMadeResident.Entry := NIL;
+        IF Token = BeginToken THEN
+          NextToken
+        ELSE
+          Error(17);
+        REPEAT
+          BODYPART(Followers + [CaseToken], LexicalStack^.RoutineEntry.Entry);
+          BlockDone := (Token = LexicalStack^.EndingToken) OR InUnit AND (Token
+              = EndToken);
+          IF NOT BlockDone THEN
+          BEGIN
+            IF LexicalStack^.EndingToken = SemicolonToken THEN
+              Error(14)
+            ELSE
+              Error(6);
+            SkipTokens(Followers + [LexicalStack^.EndingToken]);
+            BlockDone := (Token = LexicalStack^.EndingToken) OR InUnit AND
+                (Token = EndToken)
+          END
+        UNTIL BlockDone OR (Token IN BlockStarters);
+        IF NOT BlockDone THEN
+        BEGIN
+          IF LexicalStack^.EndingToken = SemicolonToken THEN
+            Error(14)
+          ELSE
+            Error(6);
+          DECLARAT(Followers)
+        END
+        ELSE
+        BEGIN
+          IF Token = SemicolonToken THEN
+            NextToken;
+          IF NOT (Token IN [BeginToken, KeywordProcedureToken..ProgramToken])
+              AND (LexicalStack^.EndingToken = SemicolonToken) THEN
+            IF NOT (InUnit AND (Token = EndToken)) THEN
+            BEGIN
+              Error(6);
+              SkipTokens(Followers);
+              DECLARAT(Followers)
+            END
+            ELSE
+              GOTO 1
+          ELSE
+          BEGIN
+            1:
+            WITH LexicalStack^ DO
+            BEGIN
+              IF RoutineEntry.Entry <> NIL THEN
+                RoutineEntry.Entry^.IsOpen := FALSE;
+              IF IsSegment THEN
+              BEGIN
+                IF SegmentHasCode THEN
+                  FinishSegment;
+                IF NeedsLinker AND (Level = 1) THEN
+                BEGIN
+                  SegmentDictionary[SlotOfSegment[CurrentSegment]].Kind :=
+                      HostSegment;
+                  WRITELIN
+                END;
+                NextRoutine := SavedNextRoutine;
+                CurrentSegment := SavedSegment
+              END;
+              Level := SavedLevel;
+              DisplayTop := SavedTop;
+              DataCounter := SavedDataCounter;
+              CurrentRoutine := SavedRoutine
+            END;
+            IF LexicalStack^.RoutineEntry.Entry <> ProgramIdentifier.Entry THEN
+              RELEASE(LexicalStack^.ReleaseMark);
+            LexicalStack := LexicalStack^.OuterLevel;
+            NewBlock := Token IN [KeywordProcedureToken..ProgramToken]
+          END
+        END
+      END
+      ELSE
+      BEGIN
+        DECLARAT(Followers);
+        IF Level = 0 THEN
+          IF Token = UnitToken THEN
+          BEGIN
+            UNITPART(Followers + [EndToken,
+                UnitToken..UnitImplementationToken]);
+            IF Token IN [KeywordProcedureToken..ProgramToken] THEN
+              DECLARAT(Followers)
+          END
+      END
+    UNTIL LexicalStack = NIL;
+    FinishSegment
+  END;
+
+  (* Takes the time, and compiles the program: CompileBlock(BlockStarters +
+     StartersOfStatement - [CaseToken]) (II.0: PASCALCOMPILER's body)
+     *)
+  PROCEDURE CompileProgram;
+  BEGIN
+    TIME(TokenLength, StartTime);
+    CompileBlock(BlockStarters + StartersOfStatement - [CaseToken])
+  END;
+
+  (** Compiles with DECLARAT, BODYPART, NUMSTRIN and others resident, for
+      speed without $S+. *)
+  PROCEDURE KeepPartsResident;
+
+    (** And ROUTINE too, without $S++. *)
+    PROCEDURE KeepRoutineResident;
+    BEGIN (*$R 10*)
+      CompileProgram
+    END;
+
+  BEGIN (*$R DECLARAT*)(*$R BODYPART*)(*$R NUMSTRIN*)(*$R 11*)(*$R 12*)(*$R
+      13*)(*$R 14*)(*$R 15*)
+    IF SwapMore THEN
+      CompileProgram
+    ELSE
+      KeepRoutineResident
+  END;
+
+BEGIN
+  COMPINIT;
+  IF NOT Swapping THEN
+    KeepPartsResident
+  ELSE
+    CompileProgram;
+  FINISHUP
+END;

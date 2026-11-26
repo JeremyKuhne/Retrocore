@@ -1,0 +1,72 @@
+(** PASCALCO1B.TEXT: PASCALCO, segment 1: its globals and FORWARD headings,
+    continued.
+
+    Included by COMPILER.TEXT after PASCALCO1A.TEXT and before COMPINIT1.TEXT.
+
+    Procedures here, nested ones indented:
+      ScanIdentifier
+      SearchTree
+      Error
+      ReadSourcePage
+      WriteListingLine
+      EnterIdentifier
+      NextToken
+      FindInTree
+      FindIdentifier
+      GetBounds
+      IncrementChecked
+      TakeSegmentSlot
+      EndLine
+      SegmentInformation
+      SkipTokens
+      IsPackedChars
+      IsString
+      DecimalSize
+      ReadConstant
+      CompatibleTypes
+      EmitByte
+      EmitWord
+      WriteCode
+      FinishSegment
+      CompileBlock *)
+
+  (** Assembled: scans the identifier at SourceBuffer^[SourceCursor] into
+      TokenName in capitals, and looks it up in the reserved words, setting
+      Token and Operator (II.0: IDSEARCH, here in 6502 code). *)
+  PROCEDURE ScanIdentifier(VAR Cursor: INTEGER; Buffer: SourceReference);
+    EXTERNAL;
+
+  (** Assembled: searches a scope's tree for a name; 0 found, 1 to go right,
+      -1 left, with the last node looked at (II.0: TREESEARCH, here in 6502
+      code; PS, TRS). *)
+  FUNCTION SearchTree(Root: Identifier; VAR Found: Identifier; VAR SoughtName:
+      Spelling): INTEGER;
+    EXTERNAL;
+
+  PROCEDURE Error(ErrorCode: INTEGER); FORWARD;
+  PROCEDURE ReadSourcePage; FORWARD;
+  PROCEDURE WriteListingLine; FORWARD;
+  PROCEDURE EnterIdentifier(Declared: Identifier); FORWARD;
+  PROCEDURE NextToken; FORWARD;
+  PROCEDURE FindInTree(Root: Identifier; VAR Found: SymbolLink); FORWARD;
+  PROCEDURE FindIdentifier(Classes: ClassSet; VAR Found: SymbolLink); FORWARD;
+  PROCEDURE GetBounds(Scalar: Structure; VAR Lowest: INTEGER; VAR Highest:
+      INTEGER); FORWARD;
+  PROCEDURE IncrementChecked(VAR Counter: INTEGER; Limit: INTEGER; LimitError:
+      INTEGER); FORWARD;
+  PROCEDURE TakeSegmentSlot(NewNumber: BOOLEAN); FORWARD;
+  PROCEDURE EndLine; FORWARD;
+  FUNCTION SegmentInformation(Slot: INTEGER): INTEGER; FORWARD;
+  PROCEDURE SkipTokens(Followers: TokenSet); FORWARD;
+  FUNCTION IsPackedChars(Tested: Structure): BOOLEAN; FORWARD;
+  FUNCTION IsString(Tested: Structure): BOOLEAN; FORWARD;
+  FUNCTION DecimalSize(Digits: INTEGER): INTEGER; FORWARD;
+  PROCEDURE ReadConstant(Followers: TokenSet; VAR ValueType: Structure; VAR
+      Value: WordValue); FORWARD;
+  FUNCTION CompatibleTypes(First: Structure; Second: Structure): BOOLEAN;
+      FORWARD;
+  PROCEDURE EmitByte(Byte: INTEGER); FORWARD;
+  PROCEDURE EmitWord(Word: INTEGER); FORWARD;
+  PROCEDURE WriteCode(Flush: BOOLEAN); FORWARD;
+  PROCEDURE FinishSegment; FORWARD;
+  PROCEDURE CompileBlock(Followers: TokenSet); FORWARD;

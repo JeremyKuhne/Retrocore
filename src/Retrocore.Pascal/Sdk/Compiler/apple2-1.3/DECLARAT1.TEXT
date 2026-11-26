@@ -1,0 +1,432 @@
+(** DECLARAT1.TEXT: DECLARAT, segment 8: declarations.
+
+    Included by COMPILER.TEXT after COMPINIT2.TEXT and before DECLARAT2.TEXT.
+
+    Procedures here, nested ones indented:
+      DECLARAT (segment)
+        CheckFollowers
+        CompileType
+          CompileSimpleType
+          IsPackable
+          CompileFields
+            PlaceField *)
+
+  (** Compiles a block's declarations: USES, LABEL, CONST, TYPE, VAR, and
+      procedures and functions [II.0 DECLARATIONPART].
+      Also: DECLARATIONPART (UCSD20) *)
+  SEGMENT PROCEDURE DECLARAT(Followers: TokenSet);
+    VAR
+      (** UCSD Pascal II.0 calls it LSY (UCSD20). *)
+      HeadingToken: INTEGER;
+      (** A procedure's body comes next: CompileBlock compiles it. *)
+      BodyNext: BOOLEAN;
+      (** A word DECLARAT never uses (II.0's DECLARATIONPART has its LSY and
+          a test here). *)
+      Unused: INTEGER;
+      (** Followers and an identifier. *)
+      NameFollowers: TokenSet;
+      (** Followers, comma and semicolon. *)
+      LabelFollowers: TokenSet;
+
+    (** Reports error 6 and skips to Followers where the symbol is not in it. *)
+    PROCEDURE CheckFollowers(Followers: TokenSet);
+    BEGIN
+      IF NOT (Token IN Followers) THEN
+      BEGIN
+        Error(6);
+        SkipTokens(Followers)
+      END
+    END;
+
+    (** Compiles a type: its structure and words.
+        Also: TYP (UCSD20) *)
+    PROCEDURE CompileType(Followers: TokenSet; VAR TypeMade: Structure; VAR
+        TypeSize: INTEGER);
+      VAR
+        (** UCSD Pascal II.0 calls it LSP2 (UCSD20). *)
+        IndexType: Structure;
+        (** UCSD Pascal II.0 calls it LSP1 (UCSD20). *)
+        Part: Structure;
+        (** UCSD Pascal II.0 calls it LSP (UCSD20). *)
+        Built: Structure;
+        (** Also: OLDTOP (UCSD20) *)
+        OldDisplayTop: INTEGER;
+        (** UCSD Pascal II.0 calls it LCP (UCSD20). *)
+        TargetName: SymbolLink;
+        (** The next field's word.
+            Also: DISPL (UCSD20) *)
+        NextWord: INTEGER;
+        (** UCSD Pascal II.0 calls it LSIZE (UCSD20). *)
+        PartSize: INTEGER;
+        (** UCSD Pascal II.0 calls it LMAX (UCSD20). *)
+        Highest: INTEGER;
+        (** UCSD Pascal II.0 calls it LMIN (UCSD20). *)
+        Lowest: INTEGER;
+        (** In a PACKED type. *)
+        Packing: BOOLEAN;
+        (** A packed field's bits.
+            Also: NUMBITS (UCSD20) *)
+        PackedBits: INTEGER;
+        (** The next free bit of the word. *)
+        NextBit: INTEGER;
+
+      (** Compiles a simple type: an enumeration, a subrange, a type's name,
+          STRING[n] or INTEGER[n].
+          Also: SIMPLETYPE (UCSD20) *)
+      PROCEDURE CompileSimpleType(Followers: TokenSet; VAR TypeMade: Structure;
+          VAR TypeSize: INTEGER);
+        VAR
+          (** UCSD Pascal II.0 calls it LSP1 (UCSD20). *)
+          BoundType: Structure;
+          (** UCSD Pascal II.0 calls it LSP (UCSD20). *)
+          Built: Structure;
+          (** UCSD Pascal II.0 calls it LCP1 (UCSD20). *)
+          PreviousConstant: SymbolLink;
+          (** UCSD Pascal II.0 calls it LCP (UCSD20). *)
+          Named: SymbolLink;
+          (** Also: TTOP (UCSD20) *)
+          OldDisplayTop: INTEGER;
+          (** Also: LCNT (UCSD20) *)
+          NextOrdinal: INTEGER;
+          (** UCSD Pascal II.0 calls it LVALU (UCSD20). *)
+          Value: WordValue;
+          (** Followers, comma and right parenthesis. *)
+          ItemFollowers: TokenSet;
+      BEGIN
+        TypeSize := 1;
+        ItemFollowers := Followers + [CommaToken, RightParenthesisToken];
+        IF NOT (Token IN SimpleStarters) THEN
+        BEGIN
+          Error(1);
+          SkipTokens(Followers + SimpleStarters)
+        END;
+        IF Token IN SimpleStarters THEN
+        BEGIN
+          IF Token = LeftParenthesisToken THEN
+          BEGIN
+            OldDisplayTop := DisplayTop;
+            WHILE Display[DisplayTop].Kind <> BlockScope DO
+              DisplayTop := DisplayTop - 1;
+            NEW(Built, EnumerationTypeSize);
+            WITH Built^ DO
+            BEGIN
+              Size := 1;
+              Form := ScalarForm;
+              ScalarKind := 1
+            END;
+            PreviousConstant.Entry := NIL;
+            NextOrdinal := 0;
+            REPEAT
+              NextToken;
+              IF Token = NameToken THEN
+              BEGIN
+                NEW(Named.Entry, ConstIdentifierSize);
+                WITH Named.Entry^ DO
+                BEGIN
+                  Name := TokenName;
+                  DataType := Built;
+                  Next.Entry := PreviousConstant.Entry;
+                  StaticLevel := NextOrdinal;
+                  Class := ConstantClass
+                END;
+                EnterIdentifier(Named.Entry);
+                NextOrdinal := NextOrdinal + 1;
+                PreviousConstant.Entry := Named.Entry;
+                NextToken
+              END
+              ELSE
+                Error(2);
+              CheckFollowers(ItemFollowers)
+            UNTIL Token <> CommaToken;
+            Built^.LastConstant.Entry := PreviousConstant.Entry;
+            DisplayTop := OldDisplayTop;
+            IF Token = RightParenthesisToken THEN
+              NextToken
+            ELSE
+              Error(4)
+          END
+          ELSE
+          BEGIN
+            IF Token = NameToken THEN
+            BEGIN
+              FindIdentifier([TypeClass, ConstantClass], Named);
+              IF Named.Entry^.Class = ConstantClass THEN
+              BEGIN
+                NEW(Built, ArrayTypeSize);
+                WITH Built^ DO
+                BEGIN
+                  WITH Named.Entry^ DO
+                  BEGIN
+                    ScalarKind := ORD(DataType);
+                    Form := SubrangeForm;
+                    IF IsString(BaseType) THEN
+                    BEGIN
+                      Error(148);
+                      BaseType := NIL
+                    END;
+                    Minimum := Literal
+                  END;
+                  Size := 1
+                END;
+                NextToken;
+                IF Token = ColonToken THEN
+                  NextToken
+                ELSE
+                  Error(5);
+                ReadConstant(Followers, BoundType, Value);
+                Built^.Maximum := Value;
+                IF Built^.BaseType <> BoundType THEN
+                  Error(107)
+              END
+              ELSE
+              BEGIN
+                Built := Named.Entry^.DataType;
+                IF Built = StringStructure THEN
+                BEGIN
+                  NextToken;
+                  IF Token = LeftBracketToken THEN
+                  BEGIN
+                    NextToken;
+                    ReadConstant(Followers + [RightBracketToken], BoundType,
+                        Value);
+                    IF BoundType = IntegerStructure THEN
+                    BEGIN
+                      IF (Value.Ordinal <= 0) OR (Value.Ordinal > 255) THEN
+                      BEGIN
+                        Error(203);
+                        Value.Ordinal := 80
+                      END;
+                      IF Value.Ordinal <> 80 THEN
+                      BEGIN
+                        NEW(Built, StringTypeSize);
+                        Built^.AllWords := StringStructure^.AllWords;
+                        WITH Built^ DO
+                        BEGIN
+                          LengthValue.Entry := Value.Entry;
+                          Size := (Value.Ordinal + 2) DIV 2
+                        END
+                      END
+                    END
+                    ELSE
+                      Error(15);
+                    IF Token = RightBracketToken THEN
+                      NextToken
+                    ELSE
+                      Error(12)
+                  END
+                END
+                ELSE
+                  IF Built = IntegerStructure THEN
+                  BEGIN
+                    NextToken;
+                    IF Token = LeftBracketToken THEN
+                    BEGIN
+                      NextToken;
+                      NEW(Built, LongTypeSize);
+                      Built^.AllWords := LongStructure^.AllWords;
+                      ReadConstant(Followers + [RightBracketToken], BoundType,
+                          Value);
+                      IF BoundType = IntegerStructure THEN
+                        IF (Value.Ordinal <= 0) OR (Value.Ordinal > 36) THEN
+                          Error(203)
+                        ELSE
+                          Built^.Size := DecimalSize(Value.Ordinal)
+                      ELSE
+                        Error(15);
+                      IF Token = RightBracketToken THEN
+                        NextToken
+                      ELSE
+                        Error(12)
+                    END
+                  END
+                  ELSE
+                  BEGIN
+                    IF (Built = ByteStreamStructure) OR (Built =
+                        WordStreamStructure) THEN
+                      Error(103)
+                    ELSE
+                      IF Built^.Form = FileForm THEN
+                        IF InUnit THEN
+                          IF NOT (InInterface OR AllowUnitFiles) THEN
+                            Error(191);
+                    NextToken
+                  END;
+                IF Built <> NIL THEN
+                  TypeSize := Built^.Size
+              END
+            END
+            ELSE
+            BEGIN
+              NEW(Built, ArrayTypeSize);
+              Built^.Form := SubrangeForm;
+              ReadConstant(Followers + [ColonToken], BoundType, Value);
+              IF IsString(BoundType) THEN
+              BEGIN
+                Error(148);
+                BoundType := NIL
+              END;
+              WITH Built^ DO
+              BEGIN
+                BaseType := BoundType;
+                Minimum := Value;
+                Size := 1
+              END;
+              IF Token = ColonToken THEN
+                NextToken
+              ELSE
+                Error(5);
+              ReadConstant(Followers, BoundType, Value);
+              Built^.Maximum := Value;
+              IF Built^.BaseType <> BoundType THEN
+                Error(107)
+            END;
+            IF Built <> NIL THEN
+              WITH Built^ DO
+                IF Form = SubrangeForm THEN
+                  IF BaseType <> NIL THEN
+                    IF BaseType = RealStructure THEN
+                      Error(399)
+                    ELSE
+                      IF ORD(ArrayIsPacked) > MaximumValue THEN
+                      BEGIN
+                        Error(102);
+                        MaximumValue := ORD(ArrayIsPacked)
+                      END
+          END;
+          TypeMade := Built;
+          CheckFollowers(Followers)
+        END
+        ELSE
+          TypeMade := NIL
+      END;
+
+      (** Whether a type fits in fewer than 16 bits, and how many, in
+          PackedBits.
+          Also: PACKABLE (UCSD20) *)
+      FUNCTION IsPackable(Tested: Structure): BOOLEAN;
+        VAR
+          (** UCSD Pascal II.0 calls it LMAX (UCSD20). *)
+          Highest: INTEGER;
+          (** UCSD Pascal II.0 calls it LMIN (UCSD20). *)
+          Lowest: INTEGER;
+      BEGIN
+        IsPackable := FALSE;
+        IF (Tested <> NIL) AND Packing THEN
+          WITH Tested^ DO
+            CASE Form OF
+              ScalarForm, SubrangeForm:
+                IF (Tested <> IntegerStructure) AND (Tested <> RealStructure)
+                    THEN
+                BEGIN
+                  GetBounds(Tested, Lowest, Highest);
+                  IF Lowest >= 0 THEN
+                  BEGIN
+                    IsPackable := TRUE;
+                    PackedBits := 1;
+                    Lowest := 1;
+                    WHILE Lowest < Highest DO
+                    BEGIN
+                      Lowest := Lowest + 1;
+                      Lowest := Lowest + Lowest - 1;
+                      PackedBits := PackedBits + 1
+                    END
+                  END
+                END;
+              SetForm:
+                IF IsPackable(BaseType) THEN
+                BEGIN
+                  GetBounds(BaseType, Lowest, Highest);
+                  Highest := Highest + 1;
+                  IF Highest < 16 THEN
+                  BEGIN
+                    IsPackable := TRUE;
+                    PackedBits := Highest
+                  END
+                END
+            END
+      END;
+
+      (** Compiles a record's fields and its variant part.
+          Also: FIELDLIST (UCSD20) *)
+      PROCEDURE CompileFields(Followers: TokenSet; VAR Variants: Structure);
+        VAR
+          (** Also: LAST (UCSD20) *)
+          LastField: SymbolLink;
+          (** Also: NXT1 (UCSD20) *)
+          PriorField: SymbolLink;
+          (** UCSD Pascal II.0 calls it NXT (UCSD20). *)
+          Field: SymbolLink;
+          (** UCSD Pascal II.0 calls it LCP1 (UCSD20). *)
+          FoundType: SymbolLink;
+          (** UCSD Pascal II.0 calls it LCP (UCSD20). *)
+          Declared: SymbolLink;
+          (** Also: LSP4 (UCSD20) *)
+          NextVariant: Structure;
+          (** Also: LSP3 (UCSD20) *)
+          Variant: Structure;
+          (** UCSD Pascal II.0 calls it LSP2 (UCSD20). *)
+          Nested: Structure;
+          (** UCSD Pascal II.0 calls it LSP1 (UCSD20). *)
+          VariantChain: Structure;
+          (** UCSD Pascal II.0 calls it LSP (UCSD20). *)
+          FieldType: Structure;
+          (** UCSD Pascal II.0 calls it LSIZE (UCSD20). *)
+          FieldSize: INTEGER;
+          (** Also: MAXSIZE (UCSD20) *)
+          LastWord: INTEGER;
+          (** Also: MINSIZE (UCSD20) *)
+          FirstWord: INTEGER;
+          (** UCSD Pascal II.0 calls it LVALU (UCSD20). *)
+          Value: WordValue;
+          (** Followers and a semicolon. *)
+          FieldFollowers: TokenSet;
+          (** The variant part's first bit. *)
+          FirstBit: INTEGER;
+          (** The longest variant's last bit. *)
+          LastBit: INTEGER;
+
+        (** Gives a field its word, and its bits in a packed record.
+            Also: ALLOCATE (UCSD20) *)
+        PROCEDURE PlaceField(Placed: Identifier);
+          VAR
+            (** The field starts a word. *)
+            StartsWord: BOOLEAN;
+        BEGIN
+          StartsWord := FALSE;
+          WITH Placed^ DO
+            IF IsPackable(DataType) THEN
+            BEGIN
+              IF PackedBits + NextBit > 16 THEN
+              BEGIN
+                NextWord := NextWord + 1;
+                NextBit := 0;
+                StartsWord := TRUE
+              END;
+              StaticLevel := NextWord;
+              Offset := 1;
+              RoutineNumber := PackedBits;
+              CodeSegment := NextBit;
+              NextBit := NextBit + PackedBits
+            END
+            ELSE
+            BEGIN
+              NextWord := NextWord + ORD(NextBit > 0);
+              NextBit := 0;
+              StartsWord := TRUE;
+              Offset := 0;
+              StaticLevel := NextWord;
+              IF DataType <> NIL THEN
+                NextWord := NextWord + TypeAsFile^.Size
+            END;
+          IF StartsWord AND (LastField.Entry <> NIL) THEN
+            WITH LastField.Entry^ DO
+              IF ODD(Offset) THEN
+                IF CodeSegment = 0 THEN
+                  Offset := 0
+                ELSE
+                  IF (RoutineNumber <= 8) AND (CodeSegment <= 8) THEN
+                  BEGIN
+                    RoutineNumber := 8;
+                    CodeSegment := 8
+                  END
+        END;

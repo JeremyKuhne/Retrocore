@@ -1,0 +1,309 @@
+(** CONSTANTS2.TEXT: the constants: tokens, operators, classes and forms, kinds,
+    the special standard routines' keys and the p-code's opcodes.
+
+    Included by COMPILER.TEXT after CONSTANTS1.TEXT and before TYPES1.TEXT. *)
+
+  (* The p-code's opcodes. *)
+  (** Also: ABI (A2POSRM) *)
+  IntegerAbsoluteCode = 0;
+  (** Also: ABR (A2POSRM) *)
+  RealAbsoluteCode = 1;
+  (** Also: ADI (A2POSRM) *)
+  AddIntegersCode = 2;
+  (** Also: ADR (A2POSRM) *)
+  AddRealsCode = 3;
+  (** Also: LAND (A2POSRM) *)
+  LogicalAndCode = 4;
+  (** Also: DIF (A2POSRM) *)
+  SetDifferenceCode = 5;
+  (** Also: DVI (A2POSRM) *)
+  DivideIntegersCode = 6;
+  (** Also: DVR (A2POSRM) *)
+  DivideRealsCode = 7;
+  (** Also: CHK (A2POSRM) *)
+  RangeCheckCode = 8;
+  (** Also: FLO (A2POSRM) *)
+  FloatSecondCode = 9;
+  (** Also: FLT (A2POSRM) *)
+  FloatTopCode = 10;
+  (** Also: INN (A2POSRM) *)
+  SetMembershipCode = 11;
+  (** Also: INT (A2POSRM) *)
+  SetIntersectionCode = 12;
+  (** Also: LOR (A2POSRM) *)
+  LogicalOrCode = 13;
+  (** Also: MODI (A2POSRM) *)
+  IntegerRemainderCode = 14;
+  (** Also: MPI (A2POSRM) *)
+  IntegerMultiplyCode = 15;
+  (** Also: MPR (A2POSRM) *)
+  RealMultiplyCode = 16;
+  (** Also: NGI (A2POSRM) *)
+  NegateIntegerCode = 17;
+  (** Also: NGR (A2POSRM) *)
+  NegateRealCode = 18;
+  (** Also: LNOT (A2POSRM) *)
+  LogicalNotCode = 19;
+  (** Also: SRS (A2POSRM) *)
+  BuildSubrangeSetCode = 20;
+  (** Also: SBI (A2POSRM) *)
+  SubtractIntegersCode = 21;
+  (** Also: SBR (A2POSRM) *)
+  RealSubtractCode = 22;
+  (** Also: SGS (A2POSRM) *)
+  BuildSingletonSetCode = 23;
+  (** Also: SQI (A2POSRM) *)
+  SquareIntegerCode = 24;
+  (** Apple's manual calls it SQR (A2POSRM). *)
+  SquareRealCode = 25;
+  (** Also: STO (A2POSRM) *)
+  StoreIndirectCode = 26;
+  (** Also: IXS (A2POSRM) *)
+  IndexStringCode = 27;
+  (** Also: UNI (A2POSRM) *)
+  SetUnionCode = 28;
+  (** Also: LDE (A2POSRM) *)
+  LoadUnitWordCode = 29;
+  (** Apple's manual calls it CSP (A2POSRM). *)
+  CallStandardCode = 30;
+  (** Also: LDCN (A2POSRM) *)
+  LoadNilCode = 31;
+  (** Also: ADJ (A2POSRM) *)
+  AdjustSetCode = 32;
+  (** Also: FJP (A2POSRM) *)
+  JumpFalseCode = 33;
+  (** Also: INC (A2POSRM) *)
+  AddOffsetCode = 34;
+  (** Also: IND (A2POSRM) *)
+  LoadIndirectCode = 35;
+  (** Also: IXA (A2POSRM) *)
+  IndexArrayCode = 36;
+  (** Also: LAO (A2POSRM) *)
+  GlobalAddressCode = 37;
+  (** Also: LSA (A2POSRM) *)
+  StringAddressCode = 38;
+  (** Also: LAE (A2POSRM) *)
+  UnitAddressCode = 39;
+  (** Also: MOV (A2POSRM) *)
+  MoveWordsCode = 40;
+  (** Also: LDO (A2POSRM) *)
+  LoadGlobalCode = 41;
+  (** Also: SAS (A2POSRM) *)
+  AssignStringCode = 42;
+  (** Also: SRO (A2POSRM) *)
+  StoreGlobalCode = 43;
+  (** Also: XJP (A2POSRM) *)
+  CaseJumpCode = 44;
+  (** Also: RNP (A2POSRM) *)
+  ReturnCode = 45;
+  (** Also: CIP (A2POSRM) *)
+  CallOuterCode = 46;
+  (** Also: EQU (A2POSRM) *)
+  EqualCode = 47;
+  (** Also: GEQ (A2POSRM) *)
+  AtLeastCode = 48;
+  (** Also: GRT (A2POSRM) *)
+  GreaterCode = 49;
+  (** Also: LDA (A2POSRM) *)
+  OuterAddressCode = 50;
+  (** Also: LDC (A2POSRM) *)
+  LoadConstantCode = 51;
+  (** Also: LEQ (A2POSRM) *)
+  AtMostCode = 52;
+  (** Also: LES (A2POSRM) *)
+  LessCode = 53;
+  (** Also: LOD (A2POSRM) *)
+  LoadOuterCode = 54;
+  (** Also: NEQ (A2POSRM) *)
+  UnequalCode = 55;
+  (** Apple's manual calls it STR (A2POSRM). *)
+  StoreOuterCode = 56;
+  (** Also: UJP (A2POSRM) *)
+  JumpCode = 57;
+  (** Also: LDP (A2POSRM) *)
+  LoadPackedCode = 58;
+  (** Apple's manual calls it STP (A2POSRM). *)
+  StorePackedCode = 59;
+  (** Also: LDM (A2POSRM) *)
+  LoadWordsCode = 60;
+  (** Also: STM (A2POSRM) *)
+  StoreWordsCode = 61;
+  (** Also: LDB (A2POSRM) *)
+  LoadByteCode = 62;
+  (** Also: STB (A2POSRM) *)
+  StoreByteCode = 63;
+  (** Also: IXP (A2POSRM) *)
+  IndexPackedCode = 64;
+  (** Also: RBP (A2POSRM) *)
+  ReturnBaseCode = 65;
+  (** Also: CBP (A2POSRM) *)
+  CallBaseCode = 66;
+  (** Also: EQUI (A2POSRM) *)
+  EqualIntegersCode = 67;
+  (** Also: GEQI (A2POSRM) *)
+  AtLeastIntegersCode = 68;
+  (** Also: GRTI (A2POSRM) *)
+  GreaterIntegersCode = 69;
+  (** Also: LLA (A2POSRM) *)
+  LocalAddressCode = 70;
+  (** Also: LDCI (A2POSRM) *)
+  LoadIntegerCode = 71;
+  (** Also: LEQI (A2POSRM) *)
+  AtMostIntegersCode = 72;
+  (** Also: LESI (A2POSRM) *)
+  LessIntegersCode = 73;
+  (** Also: LDL (A2POSRM) *)
+  LoadLocalCode = 74;
+  (** Also: NEQI (A2POSRM) *)
+  UnequalIntegersCode = 75;
+  (** Also: STL (A2POSRM) *)
+  StoreLocalCode = 76;
+  (** Also: CXP (A2POSRM) *)
+  CallExternalCode = 77;
+  (** Also: CLP (A2POSRM) *)
+  CallLocalCode = 78;
+  (** Also: CGP (A2POSRM) *)
+  CallGlobalCode = 79;
+  (** Also: LPA (A2POSRM) *)
+  PackedArrayAddressCode = 80;
+  (** Also: STE (A2POSRM) *)
+  StoreUnitWordCode = 81;
+  (** Also: NOP (A2POSRM) *)
+  UnusedNoOperationCode = 82;
+  (** Also: EFJ (A2POSRM) *)
+  JumpNotEqualCode = 83;
+  (** Also: NFJ (A2POSRM) *)
+  JumpEqualCode = 84;
+  (** Also: BPT (A2POSRM) *)
+  DebugBreakCode = 85;
+  (** Also: XIT (A2POSRM) *)
+  ExitSystemCode = 86;
+  (** Apple's manual calls it NOP 87 (A2POSRM). *)
+  NoOperationCode = 87;
+  (** Apple's manual calls it SLDL 1 (A2POSRM). *)
+  Local1LoadCode = 88;
+  (** Apple's manual calls it SLDL 2 (A2POSRM). *)
+  Local2LoadCode = 89;
+  (** Apple's manual calls it SLDL 3 (A2POSRM). *)
+  Local3LoadCode = 90;
+  (** Apple's manual calls it SLDL 4 (A2POSRM). *)
+  Local4LoadCode = 91;
+  (** Apple's manual calls it SLDL 5 (A2POSRM). *)
+  Local5LoadCode = 92;
+  (** Apple's manual calls it SLDL 6 (A2POSRM). *)
+  Local6LoadCode = 93;
+  (** Apple's manual calls it SLDL 7 (A2POSRM). *)
+  Local7LoadCode = 94;
+  (** Apple's manual calls it SLDL 8 (A2POSRM). *)
+  Local8LoadCode = 95;
+  (** Apple's manual calls it SLDL 9 (A2POSRM). *)
+  Local9LoadCode = 96;
+  (** Apple's manual calls it SLDL 10 (A2POSRM). *)
+  Local10LoadCode = 97;
+  (** Apple's manual calls it SLDL 11 (A2POSRM). *)
+  Local11LoadCode = 98;
+  (** Apple's manual calls it SLDL 12 (A2POSRM). *)
+  Local12LoadCode = 99;
+  (** Apple's manual calls it SLDL 13 (A2POSRM). *)
+  Local13LoadCode = 100;
+  (** Apple's manual calls it SLDL 14 (A2POSRM). *)
+  Local14LoadCode = 101;
+  (** Apple's manual calls it SLDL 15 (A2POSRM). *)
+  Local15LoadCode = 102;
+  (** Apple's manual calls it SLDL 16 (A2POSRM). *)
+  Local16LoadCode = 103;
+  (** Apple's manual calls it SLDO 1 (A2POSRM). *)
+  Global1LoadCode = 104;
+  (** Apple's manual calls it SLDO 2 (A2POSRM). *)
+  Global2LoadCode = 105;
+  (** Apple's manual calls it SLDO 3 (A2POSRM). *)
+  Global3LoadCode = 106;
+  (** Apple's manual calls it SLDO 4 (A2POSRM). *)
+  Global4LoadCode = 107;
+  (** Apple's manual calls it SLDO 5 (A2POSRM). *)
+  Global5LoadCode = 108;
+  (** Apple's manual calls it SLDO 6 (A2POSRM). *)
+  Global6LoadCode = 109;
+  (** Apple's manual calls it SLDO 7 (A2POSRM). *)
+  Global7LoadCode = 110;
+  (** Apple's manual calls it SLDO 8 (A2POSRM). *)
+  Global8LoadCode = 111;
+  (** Apple's manual calls it SLDO 9 (A2POSRM). *)
+  Global9LoadCode = 112;
+  (** Apple's manual calls it SLDO 10 (A2POSRM). *)
+  Global10LoadCode = 113;
+  (** Apple's manual calls it SLDO 11 (A2POSRM). *)
+  Global11LoadCode = 114;
+  (** Apple's manual calls it SLDO 12 (A2POSRM). *)
+  Global12LoadCode = 115;
+  (** Apple's manual calls it SLDO 13 (A2POSRM). *)
+  Global13LoadCode = 116;
+  (** Apple's manual calls it SLDO 14 (A2POSRM). *)
+  Global14LoadCode = 117;
+  (** Apple's manual calls it SLDO 15 (A2POSRM). *)
+  Global15LoadCode = 118;
+  (** Apple's manual calls it SLDO 16 (A2POSRM). *)
+  Global16LoadCode = 119;
+  (** Apple's manual calls it SIND 0 (A2POSRM). *)
+  Offset0LoadCode = 120;
+  (** Apple's manual calls it SIND 1 (A2POSRM). *)
+  Offset1LoadCode = 121;
+  (** Apple's manual calls it SIND 2 (A2POSRM). *)
+  Offset2LoadCode = 122;
+  (** Apple's manual calls it SIND 3 (A2POSRM). *)
+  Offset3LoadCode = 123;
+  (** Apple's manual calls it SIND 4 (A2POSRM). *)
+  Offset4LoadCode = 124;
+  (** Apple's manual calls it SIND 5 (A2POSRM). *)
+  Offset5LoadCode = 125;
+  (** Apple's manual calls it SIND 6 (A2POSRM). *)
+  Offset6LoadCode = 126;
+  (** Apple's manual calls it SIND 7 (A2POSRM). *)
+  Offset7LoadCode = 127;
+
+  (* How a variable operand is reached. *)
+  (** Also: DRCT (UCSD20) *)
+  DirectAccess = 0;
+  (** Also: INDRCT (UCSD20) *)
+  IndirectAccess = 1;
+  (** Also: PACKD (UCSD20) *)
+  PackedAccess = 2;
+  (** Also: MULTI (UCSD20) *)
+  MultipleAccess = 3;
+  (** UCSD Pascal II.0 calls it BYTE (UCSD20). *)
+  ByteAccess = 4;
+
+  (** ValueEntry's variants. *)
+  ValueFields = 0;
+  ValueSetView = 1;
+  ValueRealView = 2;
+  ValueMembersView = 3;
+  RealRecordSize = 103;
+  LongRecordSize = 112;
+
+  (** SymbolEntry's variants. *)
+  SymbolFields = 0;
+  SymbolValuesView = 1;
+  SymbolNextView = 2;
+  TypeIdentifierSize = 109;
+  ConstIdentifierSize = 110;
+  SimpleVariableSize = 111;
+  UnitVariableSize = 112;
+  PackedFieldSize = 113;
+  UnitIdentifierSize = 114;
+  RoutineIdentifierSize = 118;
+
+  (** TypeEntry's variants. *)
+  TypeFields = 0;
+  TypeStructuresView = 1;
+  TypeFileView = 2;
+  TypeRangeView = 3;
+  TypeRecordView = 4;
+  TypeVariantView = 5;
+  LongTypeSize = 102;
+  SetTypeSize = 103;
+  EnumerationTypeSize = 104;
+  ArrayTypeSize = 105;
+  PackedTypeSize = 108;
+  StringTypeSize = 109;
+  TypeCopyView = 209;

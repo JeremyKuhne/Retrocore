@@ -1,0 +1,567 @@
+(** DECLARAT4.TEXT: DECLARAT, segment 8: declarations, continued.
+
+    Included by COMPILER.TEXT after DECLARAT3.TEXT and before BODYPART1.TEXT.
+
+    Procedures here, nested ones indented:
+      DeclareParameters *)
+
+      (** Compiles the parameters, giving each its words.
+
+          UCSD Pascal II.0 calls it PARAMETERLIST (UCSD20). *)
+      PROCEDURE DeclareParameters(ListFollowers: TokenSet; VAR Parameters:
+          SymbolLink; Declared: Identifier);
+        VAR
+          (** UCSD Pascal II.0 calls it LCP1 (UCSD20). *)
+          GroupHead: SymbolLink;
+          (** UCSD Pascal II.0 calls it LCP2 (UCSD20). *)
+          Current: SymbolLink;
+          (** Also: LCP3 (UCSD20) *)
+          AllParameters: SymbolLink;
+          (** UCSD Pascal II.0 calls it LCP (UCSD20). *)
+          Entered: SymbolLink;
+          (** UCSD Pascal II.0 calls it LSP (UCSD20). *)
+          GroupType: Structure;
+          (** 1 for VAR.
+              Also: LKIND (UCSD20) *)
+          PassKind: INTEGER;
+          (** UCSD Pascal II.0 calls it LSIZE (UCSD20). *)
+          WordsEach: INTEGER;
+          (** Also: LLC (UCSD20) *)
+          LocalCounter: INTEGER;
+          (** The parameters in the list. *)
+          GroupCount: INTEGER;
+      BEGIN
+        AllParameters.Entry := NIL;
+        LocalCounter := DataCounter;
+        IF NOT (Token IN ListFollowers + [LeftParenthesisToken]) THEN
+        BEGIN
+          Error(7);
+          SkipTokens(Followers + ListFollowers + [LeftParenthesisToken])
+        END;
+        IF Token = LeftParenthesisToken THEN
+        BEGIN
+          IF WasForward THEN
+            Error(119);
+          NextToken;
+          IF NOT (Token IN [NameToken, VarToken]) THEN
+          BEGIN
+            Error(7);
+            SkipTokens(Followers + [NameToken, RightParenthesisToken])
+          END;
+          WHILE Token IN [NameToken, VarToken] DO
+          BEGIN
+            IF Token = VarToken THEN
+            BEGIN
+              PassKind := 1;
+              NextToken
+            END
+            ELSE
+              PassKind := 0;
+            Current.Entry := NIL;
+            GroupCount := 0;
+            REPEAT
+              IF Token <> NameToken THEN
+                Error(2)
+              ELSE
+              BEGIN
+                NEW(Entered.Entry, SimpleVariableSize);
+                WITH Entered.Entry^ DO
+                BEGIN
+                  Name := TokenName;
+                  DataType := NIL;
+                  Next.Entry := Current.Entry;
+                  IF PassKind = 1 THEN
+                    Class := FormalClass
+                  ELSE
+                    Class := ActualClass;
+                  StaticLevel := Level
+                END;
+                EnterIdentifier(Entered.Entry);
+                Current.Entry := Entered.Entry;
+                GroupCount := GroupCount + 1;
+                NextToken
+              END;
+              IF NOT (Token IN Followers + [CommaToken..SemicolonToken,
+                  RightParenthesisToken]) THEN
+              BEGIN
+                Error(7);
+                SkipTokens(Followers + [CommaToken..SemicolonToken,
+                    RightParenthesisToken])
+              END;
+              LoopDone := Token <> CommaToken;
+              IF NOT LoopDone THEN
+                NextToken
+            UNTIL LoopDone;
+            GroupType := NIL;
+            IF Token = ColonToken THEN
+            BEGIN
+              NextToken;
+              IF Token = NameToken THEN
+              BEGIN
+                FindIdentifier([TypeClass], Entered);
+                NextToken;
+                GroupType := Entered.Entry^.DataType;
+                WordsEach := 1;
+                IF GroupType <> NIL THEN
+                  IF PassKind = 0 THEN
+                    IF GroupType^.Form = FileForm THEN
+                      Error(121)
+                    ELSE
+                      IF (GroupType = ByteStreamStructure) OR (GroupType =
+                          WordStreamStructure) THEN
+                        Error(7)
+                      ELSE
+                        IF GroupType^.Form <= SetForm THEN
+                          WordsEach := GroupType^.Size;
+                DataCounter := DataCounter + GroupCount * WordsEach
+              END
+              ELSE
+                Error(2)
+            END
+            ELSE
+              IF PassKind = 1 THEN
+              BEGIN
+                Untyped := TRUE;
+                DataCounter := DataCounter + GroupCount * 1
+              END
+              ELSE
+                Error(5);
+            IF NOT (Token IN Followers + [SemicolonToken,
+                RightParenthesisToken]) THEN
+            BEGIN
+              Error(7);
+              SkipTokens(Followers + [SemicolonToken, RightParenthesisToken])
+            END;
+            GroupHead.Entry := Current.Entry;
+            Entered.Entry := NIL;
+            WHILE Current.Entry <> NIL DO
+            BEGIN
+              Entered.Entry := Current.Entry;
+              WITH Current.Entry^ DO
+              BEGIN
+                DataType := GroupType;
+                Current.Entry := Next.Entry
+              END
+            END;
+            IF Entered.Entry <> NIL THEN
+            BEGIN
+              Entered.Entry^.Next.Entry := AllParameters.Entry;
+              AllParameters.Entry := GroupHead.Entry
+            END;
+            IF Token = SemicolonToken THEN
+            BEGIN
+              NextToken;
+              IF NOT (Token IN Followers + [NameToken, VarToken]) THEN
+              BEGIN
+                Error(7);
+                SkipTokens(Followers + [NameToken, RightParenthesisToken])
+              END
+            END
+          END;
+          IF Token = RightParenthesisToken THEN
+          BEGIN
+            NextToken;
+            CheckFollowers(ListFollowers + Followers)
+          END
+          ELSE
+            Error(4);
+          Declared^.LocalsStart := DataCounter;
+          GroupHead.Entry := NIL;
+          WHILE AllParameters.Entry <> NIL DO
+          BEGIN
+            WITH AllParameters.Entry^ DO
+            BEGIN
+              Current.Entry := Next.Entry;
+              Next.Entry := GroupHead.Entry;
+              IF DataType <> NIL THEN
+                IF Class = FormalClass THEN
+                BEGIN
+                  Offset := LocalCounter;
+                  LocalCounter := LocalCounter + 1
+                END
+                ELSE
+                  IF Class = ActualClass THEN
+                    IF DataType^.Form <= SetForm THEN
+                    BEGIN
+                      Offset := LocalCounter;
+                      LocalCounter := LocalCounter + TypeAsFile^.Size
+                    END
+                    ELSE
+                    BEGIN
+                      Offset := DataCounter;
+                      DataCounter := DataCounter + TypeAsFile^.Size;
+                      LocalCounter := LocalCounter + 1
+                    END
+            END;
+            GroupHead.Entry := AllParameters.Entry;
+            AllParameters.Entry := Current.Entry
+          END;
+          Parameters.Entry := GroupHead.Entry
+        END
+        ELSE
+          Parameters.Entry := NIL
+      END;
+
+    BEGIN
+      IF AsSegment THEN
+      BEGIN
+        IF SegmentHasCode THEN
+        BEGIN
+          Error(399);
+          SegmentOffset := 0;
+          BlockByte := 0
+        END;
+        NewLexicalEntry.SavedSegment := CurrentSegment;
+        CurrentSegment := NextSegment;
+        NewLexicalEntry.SavedNextRoutine := NextRoutine;
+        NextRoutine := 1;
+        RoutineToken := Token;
+        IF Token IN [KeywordProcedureToken, KeywordFunctionToken] THEN
+          NextToken
+        ELSE
+        BEGIN
+          Error(399);
+          RoutineToken := KeywordProcedureToken
+        END;
+        HeadingToken := RoutineToken
+      END;
+      NewLexicalEntry.SavedDataCounter := DataCounter;
+      DataCounter := 1;
+      IF HeadingToken = KeywordFunctionToken THEN
+        DataCounter := DataCounter + 2;
+      ListedCounter := DataCounter;
+      InDeclarations := TRUE;
+      Untyped := FALSE;
+      IF Token = NameToken THEN
+      BEGIN
+        IF ReadingInterface OR InUnit AND InInterface THEN
+          WasForward := FALSE
+        ELSE
+        BEGIN
+          FindInTree(Display[DisplayTop].Tree.Entry, Declared);
+          IF Declared.Entry <> NIL THEN
+          BEGIN
+            IF Declared.Entry^.Class = ProperProcedureClass THEN
+              WasForward := Declared.Entry^.IsForward AND (HeadingToken =
+                  KeywordProcedureToken) AND (Declared.Entry^.RoutineKind = 0)
+            ELSE
+              IF Declared.Entry^.Class = ValueFunctionClass THEN
+                WasForward := Declared.Entry^.IsForward AND (HeadingToken =
+                    KeywordFunctionToken) AND (Declared.Entry^.RoutineKind = 0)
+              ELSE
+                WasForward := FALSE;
+            IF NOT WasForward THEN
+              Error(160)
+          END
+          ELSE
+            WasForward := FALSE
+        END;
+        IF NOT WasForward THEN
+        BEGIN
+          IF HeadingToken = KeywordProcedureToken THEN
+            IF InUnit THEN
+              NEW(Declared.Entry)
+            ELSE
+              NEW(Declared.Entry, RoutineIdentifierSize)
+          ELSE
+            IF InUnit THEN
+              NEW(Declared.Entry)
+            ELSE
+              NEW(Declared.Entry, RoutineIdentifierSize);
+          WITH Declared.Entry^ DO
+          BEGIN
+            Name := TokenName;
+            DataType := NIL;
+            LocalsStart := DataCounter;
+            StaticLevel := 1;
+            RoutineKind := 0;
+            IsOpen := FALSE;
+            Offset := Level;
+            RoutineNumber := NextRoutine;
+            CodeSegment := CurrentSegment;
+            RoutineDictionary[NextRoutine] := 0;
+            IsExternal := FALSE;
+            IF InUnit THEN
+              IsImported := NOT UsesIntrinsic AND ReadingInterface;
+            IF AsSegment THEN
+            BEGIN
+              TakeSegmentSlot(TRUE);
+              WITH SegmentDictionary[LastSegmentSlot] DO
+              BEGIN
+                NameOfSegment := TokenName;
+                Number := CurrentSegment
+              END
+            END;
+            IncrementChecked(NextRoutine, 254, 251);
+            IF HeadingToken = KeywordProcedureToken THEN
+              Class := ProperProcedureClass
+            ELSE
+              Class := ValueFunctionClass
+          END;
+          EnterIdentifier(Declared.Entry)
+        END
+        ELSE
+        BEGIN
+          Parameters.Entry := Declared.Entry^.Next.Entry;
+          WHILE Parameters.Entry <> NIL DO
+          BEGIN
+            WITH Parameters.Entry^ DO
+              IF DataType = NIL THEN
+                Untyped := TRUE
+              ELSE
+                IF Class = FormalClass THEN
+                BEGIN
+                  EndOfParameter := Offset + 1;
+                  IF EndOfParameter > DataCounter THEN
+                    DataCounter := EndOfParameter
+                END
+                ELSE
+                  IF Class = ActualClass THEN
+                  BEGIN
+                    EndOfParameter := Offset + TypeAsFile^.Size;
+                    IF EndOfParameter > DataCounter THEN
+                      DataCounter := EndOfParameter
+                  END;
+            Parameters.Entry := Parameters.Entry^.Next.Entry
+          END;
+          IF CurrentSegment <> Declared.Entry^.CodeSegment THEN
+          BEGIN
+            CurrentSegment := Declared.Entry^.CodeSegment;
+            NextRoutine := 2;
+            IF NOT AsSegment THEN
+              Error(399)
+          END
+        END;
+        NextToken
+      END
+      ELSE
+      BEGIN
+        Error(2);
+        Declared.Entry := DummyProcedure.Entry
+      END;
+      NewLexicalEntry.SavedLevel := Level;
+      NewLexicalEntry.SavedTop := DisplayTop;
+      NewLexicalEntry.SavedRoutine := CurrentRoutine;
+      NewLexicalEntry.RoutineEntry.Entry := Declared.Entry;
+      CurrentRoutine := Declared.Entry^.RoutineNumber;
+      IF Level < 8 THEN
+        Level := Level + 1
+      ELSE
+        Error(251);
+      IF DisplayTop < 12 THEN
+      BEGIN
+        DisplayTop := DisplayTop + 1;
+        WITH Display[DisplayTop] DO
+        BEGIN
+          IF WasForward THEN
+            Tree.Entry := Declared.Entry^.Next.Entry
+          ELSE
+            Tree.Entry := NIL;
+          Labels.Entry := NIL;
+          Files.Entry := NIL;
+          Kind := BlockScope
+        END
+      END
+      ELSE
+        Error(250);
+      IF HeadingToken = KeywordProcedureToken THEN
+      BEGIN
+        DeclareParameters([SemicolonToken], Parameters, Declared.Entry);
+        IF NOT WasForward THEN
+          Declared.Entry^.Next.Entry := Parameters.Entry
+      END
+      ELSE
+      BEGIN
+        DeclareParameters([ColonToken, SemicolonToken], Parameters,
+            Declared.Entry);
+        IF NOT WasForward THEN
+          Declared.Entry^.Next.Entry := Parameters.Entry;
+        IF Token = ColonToken THEN
+        BEGIN
+          NextToken;
+          IF Token = NameToken THEN
+          BEGIN
+            IF WasForward THEN
+              Error(122);
+            FindIdentifier([TypeClass], Parameters);
+            ResultType := Parameters.Entry^.DataType;
+            Declared.Entry^.DataType := ResultType;
+            IF ResultType <> NIL THEN
+              IF NOT (ResultType^.Form IN [ScalarForm..PointerForm]) THEN
+              BEGIN
+                Error(120);
+                Declared.Entry^.DataType := NIL
+              END;
+            NextToken
+          END
+          ELSE
+          BEGIN
+            Error(2);
+            SkipTokens(Followers + [SemicolonToken])
+          END
+        END
+        ELSE
+          IF NOT WasForward THEN
+            Error(123)
+      END;
+      IF Token = SemicolonToken THEN
+        NextToken
+      ELSE
+        Error(14);
+      IF Token = KeywordExternalToken THEN
+      BEGIN
+        IF Level <> 2 THEN
+          Error(183);
+        IF InUnit THEN
+          IF InInterface AND NOT ReadingInterface THEN
+            Error(184);
+        IF AsSegment THEN
+          Error(399);
+        WITH Declared.Entry^ DO
+        BEGIN
+          IsForward := FALSE;
+          WRITELN(OUTPUT);
+          WRITE(Name)
+        END;
+        WRITELN(' [', MEMAVAIL:5, ' words]');
+        WRITE('<', LinesRead:4, '>');
+        IF Token <> KeywordExternalToken THEN
+        BEGIN
+          NextRoutine := NextRoutine - 1;
+          Declared.Entry^.RoutineNumber := 0
+        END
+        ELSE
+        BEGIN
+          Declared.Entry^.IsExternal := TRUE;
+          NeedsLinker := TRUE;
+          NextToken;
+          IF Token = SemicolonToken THEN
+            NextToken
+          ELSE
+            Error(14);
+          CheckFollowers(Followers)
+        END
+      END
+      ELSE
+        IF ReadingInterface THEN
+          Declared.Entry^.IsForward := FALSE
+        ELSE
+          IF (Token = ForwardToken) OR InUnit AND InInterface THEN
+          BEGIN
+            IF WasForward THEN
+              Error(161)
+            ELSE
+              Declared.Entry^.IsForward := TRUE;
+            IF Token = ForwardToken THEN
+            BEGIN
+              NextToken;
+              IF Token = SemicolonToken THEN
+                NextToken
+              ELSE
+                Error(14)
+            END;
+            CheckFollowers(Followers)
+          END
+          ELSE
+          BEGIN
+            IF Untyped THEN
+              Error(7);
+            NewBlock := TRUE;
+            BodyNext := TRUE;
+            MARK(NewLexicalEntry.ReleaseMark);
+            WITH Declared.Entry^ DO
+            BEGIN
+              IsForward := FALSE;
+              IsOpen := TRUE;
+              IsExternal := FALSE
+            END;
+            NewLexicalEntry.EndingToken := SemicolonToken;
+            NewLexicalEntry.IsSegment := AsSegment;
+            NewLexicalEntry.OuterLevel := LexicalStack;
+            NEW(LexicalStack);
+            LexicalStack^ := NewLexicalEntry;
+            EXIT(DeclareRoutine)
+          END;
+      Level := NewLexicalEntry.SavedLevel;
+      DisplayTop := NewLexicalEntry.SavedTop;
+      DataCounter := NewLexicalEntry.SavedDataCounter;
+      CurrentRoutine := NewLexicalEntry.SavedRoutine;
+      IF AsSegment THEN
+      BEGIN
+        NextRoutine := NewLexicalEntry.SavedNextRoutine;
+        CurrentSegment := NewLexicalEntry.SavedSegment
+      END
+    END;
+
+  BEGIN
+    LabelFollowers := Followers + [CommaToken, SemicolonToken];
+    NameFollowers := Followers + [NameToken];
+    REPEAT
+      BodyNext := FALSE;
+      IF Token = UsesToken THEN
+      BEGIN
+        NextToken;
+        DeclareUses
+      END;
+      IF CodeBuffer = NIL THEN
+        NEW(CodeBuffer);
+      IF Token = LabelToken THEN
+      BEGIN
+        IF InUnit AND InInterface THEN
+        BEGIN
+          Error(186);
+          SkipTokens(Followers - [LabelToken])
+        END
+        ELSE
+          NextToken;
+        DeclareLabels
+      END;
+      IF Token = ConstToken THEN
+      BEGIN
+        NextToken;
+        DeclareConstants
+      END;
+      IF Token = TypeToken THEN
+      BEGIN
+        NextToken;
+        DeclareTypes
+      END;
+      IF Token = VarToken THEN
+      BEGIN
+        NextToken;
+        DeclareVariables
+      END;
+      IF Level = 1 THEN
+        GlobalLevel := DisplayTop;
+      IF Token IN [KeywordProcedureToken..ProgramToken] THEN
+      BEGIN
+        IF InUnit THEN
+          IF InInterface AND NOT ReadingInterface THEN
+            PublicRoutines := TRUE;
+        REPEAT
+          HeadingToken := Token;
+          NextToken;
+          IF HeadingToken = ProgramToken THEN
+            IF InUnit THEN
+            BEGIN
+              Error(185);
+              DeclareRoutine(KeywordProcedureToken, FALSE)
+            END
+            ELSE
+              DeclareRoutine(HeadingToken, TRUE)
+          ELSE
+            DeclareRoutine(HeadingToken, FALSE)
+        UNTIL NOT (Token IN [KeywordProcedureToken..ProgramToken])
+      END;
+      IF Token <> BeginToken THEN
+        IF NOT ((ReadingInterface OR InUnit) AND (Token IN [EndToken,
+            UnitImplementationToken])) AND (Token <> UnitToken) THEN
+          IF NOT (Including OR BodyNext) OR NOT (Token IN BlockStarters) THEN
+          BEGIN
+            Error(18);
+            SkipTokens(Followers - [UnitToken, UnitInterfaceToken])
+          END
+    UNTIL Token IN StartersOfStatement + [EndToken, UnitToken,
+        UnitImplementationToken];
+    NewBlock := FALSE
+  END;

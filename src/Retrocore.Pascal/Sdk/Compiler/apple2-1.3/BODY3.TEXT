@@ -1,0 +1,186 @@
+(** BODY3.TEXT: BODY3, segment 15: a body's end.
+
+    Included by COMPILER.TEXT after BODY1.TEXT and before BODYPART3A.TEXT.
+
+    Procedures here, nested ones indented:
+      BODY3 (segment)
+        EmitUnitCode *)
+
+      (** CompileRoutineBody's end: closes the block's files, ends the units,
+          writes the jump table and the procedure's attributes, and the code.
+
+          UCSD Pascal II.0 calls it BODY (UCSD20). *)
+      SEGMENT PROCEDURE BODY3;
+
+        (** The code that starts and ends the used units and the resident
+            segments, jumped around at the start. *)
+        PROCEDURE EmitUnitCode;
+        BEGIN
+          Current.Entry := ResidentList.Entry;
+          Reversed.Entry := NIL;
+          WHILE Current.Entry <> NIL DO
+          BEGIN
+            EmitConstant(Current.Entry^.StaticLevel);
+            EmitOneOperand(CallStandardCode, 22);
+            IF ODD(Current.Entry^.RoutineNumber) THEN
+              AddLinkerReference(5, Current.Entry^.StaticLevel, CodeCounter -
+                  3);
+            Following.Entry := Current.Entry^.Next.Entry;
+            Current.Entry^.Next.Entry := Reversed.Entry;
+            Reversed.Entry := Current.Entry;
+            Current.Entry := Following.Entry
+          END;
+          ResidentList.Entry := Reversed.Entry;
+          IF IsMainBody THEN
+          BEGIN
+            Current.Entry := UsedUnits.Entry;
+            Reversed.Entry := NIL;
+            WHILE Current.Entry <> NIL DO
+            BEGIN
+              IF ODD(Current.Entry^.Offset) AND NOT OmitUnitStartup THEN
+              BEGIN
+                EmitConstant(Current.Entry^.StaticLevel);
+                EmitOneOperand(CallStandardCode, 22)
+              END;
+              IF ODD(Current.Entry^.CodeSegment) THEN
+              BEGIN
+                EmitConstant(Current.Entry^.RoutineKind);
+                EmitOneOperand(CallStandardCode, 22)
+              END;
+              Following.Entry := Current.Entry^.Next.Entry;
+              Current.Entry^.Next.Entry := Reversed.Entry;
+              Reversed.Entry := Current.Entry;
+              Current.Entry := Following.Entry
+            END;
+            UsedUnits.Entry := Reversed.Entry;
+            FOR SystemSegment := 31 DOWNTO 30 DO
+              IF SystemSegment IN LibrarySegments THEN
+              BEGIN
+                EmitConstant(SystemSegment);
+                EmitOneOperand(CallStandardCode, 22)
+              END
+          END;
+          NewJump(ExitJump);
+          EmitJump(JumpCode, ExitJump);
+          NewJump(OverJump);
+          PlaceJump(OverJump);
+          SavedCodeCounter := CodeCounter;
+          CodeCounter := Preamble;
+          EmitJump(JumpCode, OverJump);
+          CodeCounter := SavedCodeCounter;
+          IF IsMainBody THEN
+          BEGIN
+            FOR SystemSegment := 30 TO 31 DO
+              IF SystemSegment IN LibrarySegments THEN
+              BEGIN
+                EmitConstant(SystemSegment);
+                EmitOneOperand(CallStandardCode, 21)
+              END;
+            Current.Entry := UsedUnits.Entry;
+            WHILE Current.Entry <> NIL DO
+            BEGIN
+              IF ODD(Current.Entry^.CodeSegment) THEN
+              BEGIN
+                EmitConstant(Current.Entry^.RoutineKind);
+                EmitOneOperand(CallStandardCode, 21)
+              END;
+              IF ODD(Current.Entry^.Offset) AND NOT OmitUnitStartup THEN
+              BEGIN
+                EmitConstant(Current.Entry^.StaticLevel);
+                EmitOneOperand(CallStandardCode, 21)
+              END;
+              Current.Entry := Current.Entry^.Next.Entry
+            END;
+            Current.Entry := ResidentList.Entry
+          END;
+          Current.Entry := ResidentList.Entry;
+          WHILE Current.Entry <> NIL DO
+          BEGIN
+            EmitConstant(Current.Entry^.StaticLevel);
+            EmitOneOperand(CallStandardCode, 21);
+            IF ODD(Current.Entry^.RoutineNumber) THEN
+              AddLinkerReference(5, Current.Entry^.StaticLevel, CodeCounter -
+                  3);
+            Current.Entry := Current.Entry^.Next.Entry
+          END;
+          EmitJump(JumpCode, StartJump);
+          PlaceJump(ExitJump)
+        END;
+
+      BEGIN
+        IF Token = EndToken THEN
+          NextToken
+        ELSE
+          Error(13);
+        EntryPoint := CodeCounter;
+        IF NOT InUnit THEN
+        BEGIN
+          Current.Entry := Display[DisplayTop].Files.Entry;
+          WHILE Current.Entry <> NIL DO
+            WITH Current.Entry^ DO
+            BEGIN
+              EmitTwoOperands(OuterAddressCode, StaticLevel, Offset);
+              EmitConstant(0);
+              EmitTwoOperands(CallExternalCode, 0, 6);
+              Current.Entry := Next.Entry
+            END
+        END;
+        IF (ResidentList.Entry <> NIL) OR IsMainBody AND ((LibrarySegments <>
+            []) OR NOT OmitUnitStartup AND (UsedUnits.Entry <> NIL)) THEN
+          EmitUnitCode;
+        IF BodyRoutine = NIL THEN
+          EmitOpcode(ExitSystemCode)
+        ELSE
+        BEGIN
+          IF BodyRoutine^.Offset = 0 THEN
+            ReturnOpcode := 65
+          ELSE
+            ReturnOpcode := 45;
+          IF BodyRoutine^.DataType = NIL THEN
+            EmitOneOperand(ReturnOpcode, 0)
+          ELSE
+            EmitOneOperand(ReturnOpcode, BodyRoutine^.TypeAsFile^.Size)
+        END;
+        UserLabel.Entry := Display[DisplayTop].Labels.Entry;
+        WHILE UserLabel.Entry <> NIL DO
+          WITH UserLabel.Entry^ DO
+          BEGIN
+            WITH Target^ DO
+              IF NOT IsDefined THEN
+                IF Offset <> 28000 THEN
+                  Error(168);
+            UserLabel.Entry := Next.Entry
+          END;
+        JumpIndex := NextJumpSlot - 1;
+        IF ODD(CodeCounter) THEN
+          EmitByte(0);
+        WHILE JumpIndex > 0 DO
+        BEGIN
+          EmitWord(CodeCounter - JumpTable[JumpIndex]);
+          JumpIndex := JumpIndex - 1
+        END;
+        IF BodyRoutine = NIL THEN
+        BEGIN
+          EmitWord((HighestDataCounter - 1) * 2);
+          EmitWord(0)
+        END
+        ELSE
+          WITH BodyRoutine^ DO
+          BEGIN
+            EmitWord((HighestDataCounter - LocalsStart) * 2);
+            EmitWord((LocalsStart - 1) * 2)
+          END;
+        EmitWord(CodeCounter - EntryPoint);
+        EmitWord(CodeCounter);
+        EmitByte(CurrentRoutine);
+        EmitByte(Level - 1);
+        IF NOT SegmentHasCode THEN
+        BEGIN
+          SegmentHasCode := TRUE;
+          SegmentDictionary[SlotOfSegment[CurrentSegment]].FirstBlock :=
+              CodeFileBlock
+        END;
+        WriteCode(FALSE);
+        SegmentOffset := SegmentOffset + CodeCounter;
+        RoutineDictionary[CurrentRoutine] := SegmentOffset - 2
+      END;

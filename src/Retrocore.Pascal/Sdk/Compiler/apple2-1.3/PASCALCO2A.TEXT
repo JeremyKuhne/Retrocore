@@ -1,0 +1,288 @@
+(** PASCALCO2A.TEXT: PASCALCO's procedures and body.
+
+    Included by COMPILER.TEXT after FINISHUP.TEXT and before PASCALCO2B.TEXT.
+
+    Procedures here, nested ones indented:
+      Error
+      ReadSourcePage
+      WriteListingLine
+      EnterIdentifier
+      EndLine
+      CompileProgram
+      NextToken *)
+
+  (* Reports error ErrorCode at the current line: shows the line and asks
+     whether to continue, stop or edit;
+     a fatal error (above 400) or <esc> stops the Compiler, and E goes to the
+     Editor at the error *)
+  PROCEDURE Error;
+    VAR
+      (** The key pressed.
+          Also: CH (UCSD20) *)
+      Key: CHAR;
+      (** Where the line shown starts. *)
+      ShownStart: INTEGER;
+      (** The line. *)
+      Line: ErrorLine;
+  BEGIN
+    IF (ErrorOffset <> SourceCursor) OR (ErrorBlock <> SourceBlock) THEN
+    BEGIN
+      ErrorBlock := SourceBlock;
+      ErrorOffset := SourceCursor;
+      ErrorNumber := ErrorCode;
+      IF EditOnError THEN
+        Key := 'E'
+      ELSE
+      BEGIN
+        IF Noisy THEN
+          WRITELN(OUTPUT)
+        ELSE
+          IF Listing AND NOT ListingToConsole AND (ErrorCode <= 400) THEN
+            EXIT(Error);
+        IF LineStart = 0 THEN
+        BEGIN
+          WRITE(SourceBuffer^:SourceCursor)
+        END
+        ELSE
+        BEGIN
+          ShownStart := SCAN(-(LineStart - 1), = CHR(13),
+              SourceBuffer^[LineStart - 2]) + LineStart - 1;
+          MOVELEFT(SourceBuffer^[ShownStart], Line, SourceCursor - ShownStart);
+          WRITE(Line:SourceCursor - ShownStart)
+        END;
+        WRITELN(' <<<<');
+        WRITE('Line ', LinesRead, ', error ', ErrorCode, ':',
+            ' <sp>(continue), <esc>(terminate), E(dit', CHR(7));
+        REPEAT
+          READ(KEYBOARD, Key)
+        UNTIL (Key = ' ') OR (Key = 'E') OR (Key = 'e') OR (Key = CHR(27))
+      END;
+      IF (Key = 'E') OR (Key = 'e') THEN
+      BEGIN
+        ErrorBlock := SourceBlock - 2;
+        EXIT(PASCALCO)
+      END;
+      IF (ErrorCode > 400) OR (Key = CHR(27)) THEN
+      BEGIN
+        ErrorBlock := 0;
+        CLOSE(ListingFile, LOCK);
+        EXIT(PASCALCO)
+      END;
+      WRITELN(OUTPUT);
+      IF Noisy THEN
+      BEGIN
+        WRITE('<', LinesRead:4, '>')
+      END
+    END
+  END;
+
+  (* Reads the source's next page, two blocks, into SourceBuffer: from a
+     unit's interface, an include file or the
+     source; in a unit's interface, first writes the page's interface text to
+     the code file *)
+  PROCEDURE ReadSourcePage;
+    VAR
+      (** Not used. *)
+      Unused: INTEGER;
+  BEGIN
+    SourceCursor := 0;
+    LineStart := 0;
+    IF InUnit THEN
+      IF InInterface AND NOT ReadingInterface THEN
+      BEGIN
+        MOVELEFT(SourceBuffer^[StartOfInterface], CodeBuffer^, 1024);
+        WriteCode(TRUE);
+        StartOfInterface := 0
+      END;
+    IF ReadingInterface THEN
+    BEGIN
+      IF UnitFile = WorkUnitFile THEN
+      BEGIN
+        IF BLOCKREAD(WorkCodeFile^, SourceBuffer^, 2, SourceBlock) <> 2 THEN
+          ReadingInterface := FALSE
+      END
+      ELSE
+        IF BLOCKREAD(LibraryFile, SourceBuffer^, 2, SourceBlock) <> 2 THEN
+          ReadingInterface := FALSE;
+      IF ReadingInterface THEN
+      BEGIN
+      END
+      ELSE
+      BEGIN
+        SourceBlock := UsesBlock;
+        SourceCursor := UsesCursor;
+        LineStart := UsesLineStart
+      END
+    END;
+    IF NOT ReadingInterface THEN
+      IF Including THEN
+        IF BLOCKREAD(IncludeFile, SourceBuffer^, 2, SourceBlock) <> 2 THEN
+        BEGIN
+          IF IORESULT <> 0 THEN
+            Error(403);
+          CLOSE(IncludeFile);
+          Including := FALSE;
+          SourceBlock := IncludeBlock;
+          SourceCursor := IncludeCursor;
+          LineStart := IncludeLineStart
+        END;
+    IF NOT (Including OR ReadingInterface) THEN
+      IF BLOCKREAD(WorkTextFile^, SourceBuffer^, 2, SourceBlock) <> 2 THEN
+        Error(401);
+    IF SourceCursor = 0 THEN
+      IF SourceBuffer^[0] = CHR(16) THEN
+        SourceCursor := 2;
+    SourceBlock := SourceBlock + 2
+  END;
+
+  (* Writes the line to the listing, with its line number, segment,
+     procedure, level, and DataCounter or CodeCounter *)
+  PROCEDURE WriteListingLine;
+    VAR
+      (** * on a line with a breakpoint, else :
+          Also: STARORC (UCSD20) *)
+      Marker: CHAR;
+      (** D in declarations, else the statement level.
+          Also: DORLEV (UCSD20) *)
+      LevelMark: INTEGER;
+      (** Also: LENG (UCSD20) *)
+      LineLength: INTEGER;
+      (** The line.
+          Also: A (UCSD20) *)
+      Line: ListingLine;
+  BEGIN
+    Marker := ':';
+    IF InDeclarations THEN
+      LevelMark := 68
+    ELSE
+      LevelMark := LineNestingDepth MOD 10 + 48;
+    IF BreakpointOnLine THEN
+      Marker := '*';
+    (*$I+*)  (* I/O checks on again: an I/O error stops the program. *)
+    WRITE(ListingFile, LinesRead:6, CurrentSegment:4, CurrentRoutine:5, Marker,
+        CHR(LevelMark), ListedCounter:6, ' ');
+    LineLength := SourceCursor - LineStart;
+    IF LineLength > 100 THEN
+      LineLength := 100;
+    MOVELEFT(SourceBuffer^[LineStart], Line, LineLength);
+    IF Line[0] = CHR(16) THEN
+    BEGIN
+      IF Line[1] > ' ' THEN
+      BEGIN
+        WRITE(ListingFile, ' ':ORD(Line[1]) - 32)
+      END;
+      LineLength := LineLength - 2;
+      MOVELEFT(Line[2], Line, LineLength)
+    END;
+    Line[LineLength - 1] := CHR(13);
+    WRITE(ListingFile, Line:LineLength);
+    IF (ErrorBlock = SourceBlock) AND (ErrorOffset > LineStart) THEN
+    BEGIN
+      WRITELN(ListingFile, '>>>>>> Error # ', ErrorNumber)
+    END
+  END;
+
+  (* Enters an identifier in the innermost scope's tree; error 101 for one
+     already there *)
+  PROCEDURE EnterIdentifier;
+    VAR
+      (** UCSD Pascal II.0 calls it LCP1 (UCSD20). *)
+      Node: SymbolLink;
+      (** UCSD Pascal II.0 calls it LCP (UCSD20). *)
+      Root: SymbolLink;
+      (** SearchTree's answer.
+          Also: I (UCSD20) *)
+      Direction: INTEGER;
+  BEGIN
+    Root.Entry := Display[DisplayTop].Tree.Entry;
+    IF Root.Entry = NIL THEN
+      Display[DisplayTop].Tree.Entry := Declared
+    ELSE
+    BEGIN
+      Direction := SearchTree(Root.Entry, Node.Entry, Declared^.Name);
+      WHILE Direction = 0 DO
+      BEGIN
+        Error(101);
+        IF Node.Entry^.Right.Entry = NIL THEN
+          Direction := 1
+        ELSE
+          Direction := SearchTree(Node.Entry^.Right.Entry, Node.Entry,
+              Declared^.Name)
+      END;
+      IF Direction = 1 THEN
+        Node.Entry^.Right.Entry := Declared
+      ELSE
+        Node.Entry^.Left.Entry := Declared
+    END;
+    Declared^.Left.Entry := NIL;
+    Declared^.Right.Entry := NIL
+  END;
+
+  (* Ends a line: counts it, shows a dot, lists it, and reads the next page
+     at the page's end (II.0: INSYMBOL's
+     CHECKEND) *)
+  PROCEDURE EndLine;
+  BEGIN
+    LinesRead := LinesRead + 1;
+    SourceCursor := SourceCursor + 1;
+    IF Noisy THEN
+    BEGIN
+      (*$I-*)  (* I/O checks off: errors are left for IORESULT. *)
+      WRITE('.');
+      IF (LinesRead - LinesAtStart) MOD 50 = 0 THEN
+      BEGIN
+        WRITELN(OUTPUT);
+        WRITE('<', LinesRead:4, '>')
+      END
+    END;
+    IF Listing THEN
+      WriteListingLine;
+    BreakpointOnLine := FALSE;
+    IF SourceBuffer^[SourceCursor] = CHR(0) THEN
+    BEGIN
+      IF NOT ReadingInterface THEN
+      BEGIN
+        SourceCursor := SCAN(1024 - SourceCursor, <> CHR(0),
+            SourceBuffer^[SourceCursor]) + SourceCursor;
+        IF SourceCursor <> 1024 THEN
+          Error(400)
+      END;
+      ReadSourcePage
+    END
+    ELSE
+      LineStart := SourceCursor;
+    IF SourceBuffer^[SourceCursor] = CHR(12) THEN
+      SourceCursor := SourceCursor + 1;
+    IF SourceBuffer^[SourceCursor] = CHR(16) THEN
+      SourceCursor := SourceCursor + 2
+    ELSE
+    BEGIN
+      SourceCursor := SourceCursor + SCAN(80, <> CHR(9),
+          SourceBuffer^[SourceCursor]);
+      SourceCursor := SourceCursor + SCAN(80, <> ' ',
+          SourceBuffer^[SourceCursor])
+    END;
+    IF InDeclarations THEN
+      ListedCounter := DataCounter
+    ELSE
+      ListedCounter := CodeCounter
+  END;
+
+  PROCEDURE CompileProgram; FORWARD;
+
+  (* The scanner: reads the next symbol into Token, and Operator, TokenName,
+     TokenValue or TokenLength, skipping blanks and comments, and
+     reading the options in a comment with COMPOPTI *)
+  PROCEDURE NextToken;
+    LABEL 1;
+    VAR
+      (** UCSD Pascal II.0 calls it LVP (UCSD20). *)
+      Kept: ScannedValue;
+      (** Not used. *)
+      Unused: INTEGER;
+      (** A short integer's value. *)
+      ShortValue: INTEGER;
+      (** Its digits. *)
+      Digits: INTEGER;
+      (** The next character. *)
+      Character: INTEGER;

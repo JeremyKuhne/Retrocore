@@ -1,0 +1,411 @@
+(** PASCALCO1A.TEXT: PASCALCO, segment 1: its globals and FORWARD headings.
+
+    Included by COMPILER.TEXT after SYSGLOBALS.TEXT and before PASCALCO1B.TEXT.
+
+    Procedures here, nested ones indented:
+      PASCALCO (segment) *)
+
+(** Apple Pascal 1.3's Compiler, SYSTEM.COMPILER: segment 1 of the system,
+    called with its source and code buffers. It is UCSD Pascal II.0's
+    Compiler grown: more segments, units, long integers, a 6502 host.
+    COMPINIT reads the options and enters the standard names; CompileBlock
+    compiles the program, with DECLARAT for the declarations and BODYPART for
+    the statements (which it splits further into ROUTINE, STATEMEN and
+    others); FINISHUP writes the segment dictionary. Apple's manuals describe
+    the p-code it writes.
+    Also: PASCALCOMPILER (UCSD20) *)
+SEGMENT PROCEDURE PASCALCO(CodeBuffer: CodeReference; SourceBuffer:
+    SourceReference);
+  VAR
+    (** What the expression just compiled is.
+        Also: GATTR (UCSD20) *)
+    Operand: OperandEntry;
+    (** The top of the display: the innermost scope.
+        Also: TOP (UCSD20) *)
+    DisplayTop: INTEGER;
+    (** The instruction counter: the next byte of the code buffer.
+        Also: IC (UCSD20) *)
+    CodeCounter: INTEGER;
+    (** The location counter: the next word of the procedure's data.
+        Also: LC (UCSD20) *)
+    DataCounter: INTEGER;
+    (** A loop's end test.
+        Also: TEST (UCSD20) *)
+    LoopDone: BOOLEAN;
+    (** INTEGER's structure.
+        Also: INTPTR (UCSD20) *)
+    IntegerStructure: Structure;
+    (** The current segment's number.
+        Also: SEG (UCSD20) *)
+    CurrentSegment: INTEGER;
+    (** Where the scanner is in SourceBuffer; with Token, Operator and
+        TokenName, in the order ScanIdentifier wants them.
+        Also: SYMCURSOR (UCSD20) *)
+    SourceCursor: INTEGER;
+    (** The symbol NextToken found: 0 NameToken, 1 CommaToken, 2 ColonToken
+        (also ..), 3 SemicolonToken, 4 LeftParenthesisToken, 5
+        RightParenthesisToken, 6 DoToken, 7 ToToken, 8 DowntoToken, 9
+        EndToken, 10 UntilToken, 11 OfToken, 12 ThenToken, 13 ElseToken, 14
+        BecomesToken, 15 LeftBracketToken, 16 RightBracketToken, 17
+        ArrowToken, 18 PeriodToken, 19 BeginToken, 20 IfToken, 21 CaseToken,
+        22 RepeatToken, 23 WhileToken, 24 ForToken, 25 WithToken, 26
+        GotoToken, 27 LabelToken, 28 ConstToken, 29 TypeToken, 30 VarToken,
+        31 KeywordProcedureToken, 32 KeywordFunctionToken, 33 ProgramToken
+        (and SEGMENT), 34 ForwardToken, 35 IntegerToken, 36 RealToken, 37
+        StringToken, 38 NotToken, 39 MultiplicativeToken, 40 AdditiveToken,
+        41 RelationalToken, 42 SetToken, 43 PackedToken, 44 ArrayToken, 45
+        RecordToken, 46 FileToken, 47 OtherToken, 48 LongNumberToken, 49
+        UsesToken, 50 UnitToken, 51 UnitInterfaceToken, 52
+        UnitImplementationToken, 53 KeywordExternalToken, 54 CaseElseToken
+        (II.0's SEPARATSY: OTHERWISE in 1.3).
+        Also: SYMBOL (UCSD20) *)
+    Token: INTEGER;
+    (** The operator of a MultiplicativeToken, AdditiveToken or
+        RelationalToken: 0 MultiplyOperator, 1 DivideOperator, 2 AndOperator,
+        3 IntegerDivideOperator, 4 ModuloOperator, 5 PlusOperator, 6
+        MinusOperator, 7 OrOperator, 8 LessOperator, 9 AtMostOperator, 10
+        AtLeastOperator, 11 GreaterOperator, 12 UnequalOperator, 13
+        EqualOperator, 14 InOperator, 15 NoneOperator. *)
+    Operator: INTEGER;
+    (** The identifier found, in capitals, eight letters.
+        Also: ID (UCSD20) *)
+    TokenName: Spelling;
+    (** The last slot of the segment dictionary taken: 1.3 numbers segments 0
+        to 63, apart from their 16 slots. *)
+    LastSegmentSlot: INTEGER;
+    (** The last string constant's length, or a long integer's digits.
+        Also: LGTH (UCSD20) *)
+    TokenLength: INTEGER;
+    (** The last constant's value.
+        Also: VAL (UCSD20) *)
+    TokenValue: WordValue;
+    (** The level FindIdentifier found the identifier at.
+        Also: DISX (UCSD20) *)
+    FoundLevel: INTEGER;
+    (** The highest location counter: the data words the procedure needs.
+        Also: LCMAX (UCSD20) *)
+    HighestDataCounter: INTEGER;
+    (** Take the statement level for the listing at the next symbol.
+        Also: GETSTMTLEV (UCSD20) *)
+    TakeNestingDepth: BOOLEAN;
+    (** A unit's interface has procedures.
+        Also: PUBLICPROCS (UCSD20) *)
+    PublicRoutines: BOOLEAN;
+    (** $U-: compiling part of the system.
+        Also: SYSCOMP (UCSD20) *)
+    CompilingSystem: BOOLEAN;
+    (** The library is not open yet.
+        Also: LIBNOTOPEN (UCSD20) *)
+    LibraryClosed: BOOLEAN;
+    (** $F+: words with their high byte first, for another machine. *)
+    FlipBytes: BOOLEAN;
+    (** A program, not a unit, whose code file lists the intrinsic units it
+        needs (FINISHUP). *)
+    IsProgram: BOOLEAN;
+    (** In a unit's interface part. *)
+    InInterface: BOOLEAN;
+    (** Compiling a unit.
+        Also: INMODULE (UCSD20) *)
+    InUnit: BOOLEAN;
+    (** $S++: swap even more of the Compiler's segments, for room (Apple
+        Pascal 1.3 notes; COMPOPTI). *)
+    SwapMore: BOOLEAN;
+    (** $S+: swap the Compiler's segments, for room for more symbols; on
+        where memory is short (COMPINIT) [II.0 NOSWAP's opposite]. *)
+    Swapping: BOOLEAN;
+    (** $N+, which only the option sets: leaves out the code that starts and
+        ends the units the program uses (from its uses). *)
+    OmitUnitStartup: BOOLEAN;
+    (** Reading a unit's interface text.
+        Also: USING (UCSD20) *)
+    ReadingInterface: BOOLEAN;
+    (** Reading an include file. *)
+    Including: BOOLEAN;
+    (** In declarations, not statements: the listing shows DataCounter, not
+        CodeCounter.
+        Also: DP (UCSD20) *)
+    InDeclarations: BOOLEAN;
+    (** $V+: a VAR string parameter's length is checked (Apple Pascal 1.1
+        manual). *)
+    CheckVarStrings: BOOLEAN;
+    (** Using an intrinsic unit (DeclareUses). *)
+    UsesIntrinsic: BOOLEAN;
+    (** Compiling an intrinsic unit (UNITPART). *)
+    InIntrinsicUnit: BOOLEAN;
+    (** $T+: leave some standard procedures out. *)
+    Tiny: BOOLEAN;
+    (** $L+: write a listing.
+        Also: LIST (UCSD20) *)
+    Listing: BOOLEAN;
+    (** Write linker information: the code file needs the Linker.
+        Also: DLINKERINFO (UCSD20) *)
+    NeedsLinker: BOOLEAN;
+    (** $E+, which only the option sets: allows files in a unit's
+        implementation (from its uses). *)
+    AllowUnitFiles: BOOLEAN;
+    (** A breakpoint is on the line, which the listing marks *.
+        Also: BPTONLINE (UCSD20) *)
+    BreakpointOnLine: BOOLEAN;
+    (** $I+: check I/O.
+        Also: IOCHECK (UCSD20) *)
+    CheckInputOutput: BOOLEAN;
+    (** The segment has code to write.
+        Also: CODEINSEG (UCSD20) *)
+    SegmentHasCode: BOOLEAN;
+    (** Show progress, procedure names and a dot a line; $Q+ turns it off. *)
+    Noisy: BOOLEAN;
+    (** $D+. *)
+    Debugging: BOOLEAN;
+    (** $R+: check ranges.
+
+        UCSD Pascal II.0 calls it RANGECHECK (UCSD20). *)
+    CheckRanges: BOOLEAN;
+    (** $G+: GOTO allowed.
+        Also: GOTOOK (UCSD20) *)
+    GotoAllowed: BOOLEAN;
+    (** Report an identifier FindIdentifier does not find.
+        Also: PRTERR (UCSD20) *)
+    ReportUndeclared: BOOLEAN;
+    (** STRING's structure.
+        Also: STRGPTR (UCSD20) *)
+    StringStructure: Structure;
+    (** INTERACTIVE's structure.
+        Also: INTRACTVPTR (UCSD20) *)
+    TextInteractiveStructure: Structure;
+    (** The type of a byte-stream parameter, BYTESTRE in COMPINIT, as
+        MOVELEFT's. *)
+    ByteStreamStructure: Structure;
+    (** A word stream's, WORDSTRE. *)
+    WordStreamStructure: Structure;
+    (** NIL's structure.
+        Also: NILPTR (UCSD20) *)
+    NilStructure: Structure;
+    (** TEXT's structure.
+        Also: TEXTPTR (UCSD20) *)
+    TextFileStructure: FileStructure;
+    (** BOOLEAN's structure.
+        Also: BOOLPTR (UCSD20) *)
+    BooleanStructure: Structure;
+    (** CHAR's structure.
+        Also: CHARPTR (UCSD20) *)
+    CharStructure: Structure;
+    (** A long integer's structure.
+        Also: LONGINTPTR (UCSD20) *)
+    LongStructure: Structure;
+    (** REAL's structure.
+        Also: REALPTR (UCSD20) *)
+    RealStructure: Structure;
+    (** The segments $R makes resident in the next procedure: entries whose
+        Literal is a segment (COMPOPTI). *)
+    SegmentsMadeResident: SymbolLink;
+    (** The units the program uses.
+        Also: USINGLIST (UCSD20) *)
+    UsedUnits: SymbolLink;
+    (** Pointer types declared before their targets, to fix up.
+        Also: FWPTR (UCSD20) *)
+    ForwardPointers: SymbolLink;
+    (** The program's identifier.
+        Also: OUTERBLOCK (UCSD20) *)
+    ProgramIdentifier: SymbolLink;
+    (** OUTPUT's identifier.
+        Also: OUTPUTPTR (UCSD20) *)
+    OutputIdentifier: SymbolLink;
+    (** INPUT's identifier.
+        Also: INPUTPTR (UCSD20) *)
+    InputIdentifier: SymbolLink;
+    (** The units this source compiles (UNITPART). *)
+    CompiledUnits: SymbolLink;
+    (** What an undeclared function's name finds.
+        Also: UFCTPTR (UCSD20) *)
+    DummyFunction: SymbolLink;
+    (** An undeclared procedure's.
+        Also: UPRCPTR (UCSD20) *)
+    DummyProcedure: SymbolLink;
+    (** An undeclared field's.
+        Also: UFLDPTR (UCSD20) *)
+    DummyField: SymbolLink;
+    (** A Identifier in the list of undeclared names' identifiers, between
+        DummyVariable and DummyField, that 1.3 never uses. *)
+    UnusedIdentifier: INTEGER;
+    (** An undeclared variable's.
+        Also: UVARPTR (UCSD20) *)
+    DummyVariable: SymbolLink;
+    (** An undeclared constant's.
+        Also: UCSTPTR (UCSD20) *)
+    DummyConstant: SymbolLink;
+    (** An undeclared type's.
+        Also: UTYPPTR (UCSD20) *)
+    DummyType: SymbolLink;
+    (** The pairs of pointer types CompatibleTypes is comparing.
+        Also: GLOBTESTP (UCSD20) *)
+    ComparedPairs: TypePair;
+    (** The current static level. *)
+    Level: INTEGER;
+    (** The statement nesting level.
+        Also: STMTLEV (UCSD20) *)
+    NestingDepth: INTEGER;
+    (** The statement level at the line's start, for the listing.
+        Also: BEGSTMTLEV (UCSD20) *)
+    LineNestingDepth: INTEGER;
+    (** The heap mark released at the end.
+        Also: MARKP (UCSD20) *)
+    HeapMark: BlockMark;
+    (** The top of the lexical stack.
+        Also: TOS (UCSD20) *)
+    LexicalStack: LexicalLevel;
+    (** The display level of the program's globals.
+        Also: GLEV (UCSD20) *)
+    GlobalLevel: INTEGER;
+    (** A new block is to be compiled. *)
+    NewBlock: BOOLEAN;
+    (** The data segment's number of the intrinsic unit being compiled or
+        used. *)
+    DataSegment: INTEGER;
+    (** The next segment number for a segment procedure.
+        Also: NEXTSEG (UCSD20) *)
+    NextSegment: INTEGER;
+    (** The segment's code written so far: the offset of the current
+        procedure's.
+        Also: SEGINX (UCSD20) *)
+    SegmentOffset: INTEGER;
+    (** The ValueEntry NextToken's string or number goes in.
+        Also: SCONST (UCSD20) *)
+    TokenConstant: BigValue;
+    (** Where the last string constant is in the code.
+        Also: STRGCSTIC (UCSD20) *)
+    LastStringOffset: INTEGER;
+    (** The least MEMAVAIL seen.
+        Also: SMALLESTSPACE (UCSD20) *)
+    LeastMemory: INTEGER;
+    (** The source's next block.
+        Also: SYMBLK (UCSD20) *)
+    SourceBlock: INTEGER;
+    (** LinesRead where the procedure started; the time at the end.
+        Also: STARTDOTS (UCSD20) *)
+    LinesAtStart: INTEGER;
+    (** The lines read.
+        Also: SCREENDOTS (UCSD20) *)
+    LinesRead: INTEGER;
+    (** DataCounter or CodeCounter for the listing.
+        Also: LINEINFO (UCSD20) *)
+    ListedCounter: INTEGER;
+    (** The time at the start, then the time taken.
+        Also: LOWTIME (UCSD20) *)
+    StartTime: INTEGER;
+    (** Where the line starts in SourceBuffer. *)
+    LineStart: INTEGER;
+    (** The next procedure number.
+        Also: NEXTPROC (UCSD20) *)
+    NextRoutine: INTEGER;
+    (** The current procedure's number.
+        Also: CURPROC (UCSD20) *)
+    CurrentRoutine: INTEGER;
+    (** ARRAY, RECORD, SET, FILE.
+        Also: TYPEDELS (UCSD20) *)
+    CompositeStarters: TokenSet;
+    (** The symbols that start a statement.
+        Also: STATBEGSYS (UCSD20) *)
+    StartersOfStatement: TokenSet;
+    (** That start a factor.
+        Also: FACBEGSYS (UCSD20) *)
+    FactorStarters: TokenSet;
+    (** That select: [, ., ^.
+        Also: SELECTSYS (UCSD20) *)
+    SelectionStarters: TokenSet;
+    (** That start a block's declarations.
+        Also: BLOCKBEGSYS (UCSD20) *)
+    BlockStarters: TokenSet;
+    (** That start a type.
+        Also: TYPEBEGSYS (UCSD20) *)
+    TypeStarters: TokenSet;
+    (** That start a simple type.
+        Also: SIMPTYPEBEGSYS (UCSD20) *)
+    SimpleStarters: TokenSet;
+    (** That start a constant.
+        Also: CONSTBEGSYS (UCSD20) *)
+    SignedConstantStarters: TokenSet;
+    (** FormalClass and ActualClass.
+        Also: VARS (UCSD20) *)
+    ClassesOfVariable: ClassSet;
+    (** The scopes, innermost at DisplayTop. *)
+    Display: DisplayStack;
+    (** The intrinsic units' segments the program needs, for the segment
+        dictionary. *)
+    LibrarySegments: SegmentNumbers;
+    (** Each procedure's entry, for the segment's procedure dictionary.
+
+        UCSD Pascal II.0 calls it PROCTABLE (UCSD20). *)
+    RoutineDictionary: RoutineOffsets;
+    (** The code file's segment dictionary.
+
+        UCSD Pascal II.0 calls it SEGTABLE (UCSD20). *)
+    SegmentDictionary: SegmentTable;
+    (** The slot of each segment number in SegmentDictionary. *)
+    SlotOfSegment: SlotTable;
+    (** $C: the code file's comment. *)
+    Comment: StringReference;
+    (** The library's name, by $U.
+        Also: SYSTEMLIB (UCSD20) *)
+    LibraryName: STRING[40];
+    (** The jump table's next entry.
+        Also: NEXTJTAB (UCSD20) *)
+    NextJumpSlot: INTEGER;
+    (** The jump table: places too far back for a short jump.
+
+        UCSD Pascal II.0 calls it JTAB (UCSD20). *)
+    JumpTable: JumpOffsets;
+    (** The linker's references.
+        Also: REFFILE (UCSD20) *)
+    ReferenceFile: FILE;
+    (** ReferenceFile's next block.
+        Also: REFBLK (UCSD20) *)
+    NextReferenceBlock: INTEGER;
+    (** The references in the block.
+        Also: NREFS (UCSD20) *)
+    PendingCount: INTEGER;
+    (** The block of references.
+        Also: REFLIST (UCSD20) *)
+    PendingReferences: LinkerBuffer;
+    (** Where in SourceBuffer the unit's interface text started. *)
+    StartOfInterface: INTEGER;
+    (** SourceBlock before reading a unit's interface.
+        Also: PREVSYMBLK (UCSD20) *)
+    UsesBlock: INTEGER;
+    (** SourceBlock before an include file.
+        Also: OLDSYMBLK (UCSD20) *)
+    IncludeBlock: INTEGER;
+    (** Also: PREVLINESTART (UCSD20) *)
+    UsesLineStart: INTEGER;
+    (** Also: PREVSYMCURSOR (UCSD20) *)
+    UsesCursor: INTEGER;
+    (** Also: OLDLINESTART (UCSD20) *)
+    IncludeLineStart: INTEGER;
+    (** Also: OLDSYMCURSOR (UCSD20) *)
+    IncludeCursor: INTEGER;
+    (** Where a unit's interface is read from: 0 the work code file, 1 the
+        system library, 2 $U's. *)
+    UnitFile: INTEGER;
+    IncludeFile, LibraryFile: FILE;  (** The include file being read, and the
+        library a unit's interface is read from.
+
+        UCSD Pascal II.0 calls them INCLFILE and LIBRARY (UCSD20). *)
+    (** The listing.
+        Also: LP (UCSD20) *)
+    ListingFile: TEXT;
+    (** The code file's next block.
+        Also: CURBLK (UCSD20) *)
+    CodeFileBlock: INTEGER;
+    (** BlockBuffer's next byte.
+        Also: CURBYTE (UCSD20) *)
+    BlockByte: INTEGER;
+    (** A block of the code file.
+
+        UCSD Pascal II.0 calls it DISKBUF (UCSD20). *)
+    BlockBuffer: DiskBlock;
+    (** The system's byte at $BF22, bit 6: allows a unit without $S+
+        (COMPINIT). *)
+    UnitsWithoutSwapping: BOOLEAN;
+    (** The listing goes to the console. *)
+    ListingToConsole: BOOLEAN;
+    (** The listing file the prompt named is open. *)
+    ListingOpen: BOOLEAN;

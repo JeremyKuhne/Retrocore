@@ -1,0 +1,158 @@
+(** BODYPART3A.TEXT: BODYPART's code generator.
+
+    Included by COMPILER.TEXT after BODY3.TEXT and before BODYPART3B.TEXT.
+
+    Procedures here, nested ones indented:
+        CompileStatements
+          StartUnits
+        KeepStatementsResident
+      AddLinkerReference
+      EmitOpcode
+      EmitConstant *)
+
+      (** Compiles the statements, after the code that starts the block's
+          files and units (II.0: BODY's). *)
+      PROCEDURE CompileStatements;
+
+        (** Calls each used unit's initialization, in order. *)
+        PROCEDURE StartUnits(VAR Units: Identifier);
+        BEGIN
+          IF Units <> NIL THEN
+          BEGIN
+            StartUnits(Units^.Next.Entry);
+            IF ODD(Units^.Offset) THEN
+              EmitTwoOperands(CallExternalCode, Units^.StaticLevel, 1)
+          END
+        END;
+
+      BEGIN
+        IF Noisy THEN
+        BEGIN
+          WRITELN(OUTPUT);
+          FreeMemory[0] := MEMAVAIL;
+          IF FreeMemory[0] < LeastMemory THEN
+            LeastMemory := FreeMemory[0];
+          IF BodyRoutine <> NIL THEN
+          BEGIN
+            WRITELN(BodyRoutine^.Name, ' [', FreeMemory[0]:5, ' words]')
+          END;
+          WRITE('<', LinesRead:4, '>')
+        END;
+        IF NOT InUnit OR AllowUnitFiles THEN
+        BEGIN
+          Current.Entry := Display[DisplayTop].Files.Entry;
+          WHILE Current.Entry <> NIL DO
+            WITH Current.Entry^ DO
+            BEGIN
+              WITH DataType^ DO
+              BEGIN
+                EmitTwoOperands(OuterAddressCode, StaticLevel, Offset);
+                EmitTwoOperands(OuterAddressCode, StaticLevel, Offset + 300);
+                IF BaseType = NIL THEN
+                  EmitConstant(-1)
+                ELSE
+                  IF DataType = TextInteractiveStructure THEN
+                    EmitConstant(0)
+                  ELSE
+                    IF BaseType = CharStructure THEN
+                      EmitConstant(-2)
+                    ELSE
+                      EmitConstant(ComponentType^.Size)
+              END;
+              EmitTwoOperands(CallExternalCode, 0, 3);
+              Current.Entry := Next.Entry
+            END
+        END;
+        IF IsMainBody THEN
+          StartUnits(UsedUnits.Entry);
+        REPEAT
+          REPEAT
+            STATEMEN(Followers + [SemicolonToken, EndToken])
+          UNTIL NOT (Token IN StartersOfStatement);
+          LoopDone := Token <> SemicolonToken;
+          IF NOT LoopDone THEN
+            NextToken
+        UNTIL LoopDone
+      END;
+
+      (** CompileStatements with STATEMEN resident. *)
+      PROCEDURE KeepStatementsResident;
+      BEGIN (*$R STATEMEN*)
+        CompileStatements
+      END;
+
+    BEGIN
+      BODY1;
+      IF Swapping THEN
+        KeepStatementsResident
+      ELSE
+        CompileStatements;
+      BODY3
+    END;
+
+    (* Records a reference for the linker: a unit's global, or a procedure in
+       another segment *)
+    PROCEDURE AddLinkerReference;
+    BEGIN
+      IF PendingCount > 128 THEN
+      BEGIN
+        IF BLOCKWRITE(ReferenceFile, PendingReferences^, 1, NextReferenceBlock)
+            <> 1 THEN
+          Error(402);
+        NextReferenceBlock := NextReferenceBlock + 1;
+        PendingCount := 1
+      END;
+      WITH PendingReferences^[PendingCount] DO
+      BEGIN
+        IF TargetClass IN ClassesOfVariable THEN
+          Target := TargetNumber + 63 + 1
+        ELSE
+          Target := TargetNumber;
+        Offset := SegmentOffset + CodeOffset
+      END;
+      PendingCount := PendingCount + 1
+    END;
+
+    (* Generates an instruction of no operands; for LSA, 38, the string
+       constant after it *)
+    PROCEDURE EmitOpcode;
+      VAR
+        (** A character. *)
+        Index: INTEGER;
+        (** Where the LSA starts. *)
+        StringOffset: INTEGER;
+    BEGIN
+      IF Opcode <> StringAddressCode THEN
+        EmitByte(Opcode + 128)
+      ELSE
+      BEGIN
+        StringOffset := CodeCounter;
+        LastStringOffset := CodeCounter;
+        IF NOT ODD(StringOffset) THEN
+          EmitByte(215);
+        EmitByte(166);
+        WITH Operand.Literal.Entry^ DO
+        BEGIN
+          EmitByte(StringLength);
+          FOR Index := 1 TO StringLength DO
+            EmitByte(ORD(Contents[Index - 1]))
+        END;
+        IF ODD(StringOffset) THEN
+          EmitByte(215)
+      END
+    END;
+
+    (* Generates a constant's load: SLDC, or LDCI *)
+    PROCEDURE EmitConstant;
+    BEGIN
+      IF (Value >= 0) AND (Value <= 127) THEN
+        EmitByte(Value)
+      ELSE
+      BEGIN
+        EmitByte(51 + 148);
+        EmitByte(ABS(Value) MOD 256);
+        EmitByte(ABS(Value) DIV 256);
+        IF Value < 0 THEN
+          EmitOpcode(NegateIntegerCode)
+      END
+    END;

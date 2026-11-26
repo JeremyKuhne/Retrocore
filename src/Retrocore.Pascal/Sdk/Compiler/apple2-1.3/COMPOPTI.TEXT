@@ -1,0 +1,289 @@
+(** COMPOPTI.TEXT: COMPOPTI, segment 18: options.
+
+    Included by COMPILER.TEXT after UNITPART.TEXT and before NUMSTRIN.TEXT.
+
+    Procedures here, nested ones indented:
+      COMPOPTI (segment)
+        EndOptions
+        ScanOptionName
+        MakeResident
+          AddResident *)
+
+  (** Reads the options at the start of a comment, ($ and letters with + or -
+      or a name), and says whether the comment goes on; EndCharacter is } or
+      * (II.0: INSYMBOL's options). *)
+  SEGMENT FUNCTION COMPOPTI(EndCharacter: INTEGER): BOOLEAN;
+    VAR
+      (** The character after the option's sign: a comma for another. *)
+      AfterSign: INTEGER;
+      (** The option's sign, + or -. *)
+      OptionSign: INTEGER;
+      (** The option's letter. *)
+      OptionLetter: INTEGER;
+      (** A file name or number after the option. *)
+      OptionName: STRING[40];
+      (** $NS's segment. *)
+      SegmentGiven: INTEGER;
+      (** Its digits. *)
+      DigitCount: INTEGER;
+      (** A digit. *)
+      Digit: INTEGER;
+
+    (** The comment has no more options. *)
+    PROCEDURE EndOptions;
+    BEGIN
+      COMPOPTI := FALSE;
+      EXIT(COMPOPTI)
+    END;
+
+    (** Reads an option's name, to the comment's end. *)
+    PROCEDURE ScanOptionName(VAR Result: STRING; MaximumLength: INTEGER);
+      VAR
+        (** Blanks after it. *)
+        TrailingBlanks: INTEGER;
+        (** Blanks before it. *)
+        LeadingBlanks: INTEGER;
+        (** Its length. *)
+        ResultLength: INTEGER;
+    BEGIN
+      SourceCursor := SourceCursor + 2;
+      LeadingBlanks := SCAN(MaximumLength, <> ' ', SourceBuffer^[SourceCursor]);
+      ResultLength := LeadingBlanks + SCAN(MaximumLength - LeadingBlanks, =
+          CHR(EndCharacter), SourceBuffer^[SourceCursor + LeadingBlanks]);
+      IF EndCharacter = 42 THEN
+        WHILE (SourceBuffer^[SourceCursor + ResultLength + 1] <> ')') AND
+            (MaximumLength - ResultLength > 0) DO
+        BEGIN
+          ResultLength := ResultLength + 1;
+          ResultLength := ResultLength + SCAN(MaximumLength - ResultLength, =
+              CHR(EndCharacter), SourceBuffer^[SourceCursor + ResultLength])
+        END;
+      TrailingBlanks := -SCAN(-ResultLength, <> ' ', SourceBuffer^[SourceCursor
+          + ResultLength]);
+      ResultLength := ResultLength - LeadingBlanks - TrailingBlanks;
+      Result[0] := CHR(ResultLength);
+      MOVELEFT(SourceBuffer^[SourceCursor + LeadingBlanks], Result[1],
+          ResultLength);
+      SourceCursor := SourceCursor + ResultLength + LeadingBlanks +
+          TrailingBlanks + 1
+    END;
+
+    (** $R with names: the segments, by their units' or segment procedures'
+        names, or numbers, to keep resident. *)
+    PROCEDURE MakeResident;
+      VAR
+        (** Unused. *)
+        Unused: INTEGER;
+        (** A unit or procedure named. *)
+        Named: SymbolLink;
+        (** The list ended. *)
+        ListEnded: BOOLEAN;
+
+      (** Adds a segment to SegmentsMadeResident. *)
+      PROCEDURE AddResident(SegmentValue: OptionValue);
+        VAR
+          (** The new entry. *)
+          NewEntry: SymbolLink;
+      BEGIN
+        NEW(NewEntry.Entry, PackedFieldSize);
+        WITH NewEntry.Entry^ DO
+        BEGIN
+          Literal.Entry := SegmentValue;
+          Next.Entry := SegmentsMadeResident.Entry;
+          RoutineNumber := ORD((Token = NameToken) AND InUnit AND NOT
+              InIntrinsicUnit)
+        END;
+        SegmentsMadeResident.Entry := NewEntry.Entry
+      END;
+
+    BEGIN
+      SourceCursor := SourceCursor + 2;
+      ListEnded := FALSE;
+      REPEAT
+        SourceCursor := SourceCursor + SCAN(80, <> ' ',
+            SourceBuffer^[SourceCursor]);
+        IF ORD(SourceBuffer^[SourceCursor]) = EndCharacter THEN
+          ListEnded := TRUE
+        ELSE
+        BEGIN
+          NextToken;
+          IF Token = IntegerToken THEN
+            AddResident(TokenValue.Entry)
+          ELSE
+            IF Token <> NameToken THEN
+              ListEnded := TRUE
+            ELSE
+            BEGIN
+              ReportUndeclared := FALSE;
+              FindIdentifier([ProperProcedureClass..ModuleClass], Named);
+              ReportUndeclared := TRUE;
+              IF Named.Entry <> NIL THEN
+                WITH Named.Entry^ DO
+                  IF Class = ModuleClass THEN
+                  BEGIN
+                    IF ODD(Offset) THEN
+                      AddResident(Literal.Entry)
+                  END
+                  ELSE
+                    AddResident(UnitValue.Entry)
+              ELSE
+                Error(273)
+            END;
+          IF SourceBuffer^[SourceCursor] = ',' THEN
+            SourceCursor := SourceCursor + 1
+        END
+      UNTIL ListEnded;
+      SourceCursor := SourceCursor + SCAN(80, = CHR(EndCharacter),
+          SourceBuffer^[SourceCursor]) + 1;
+      EndOptions
+    END;
+
+  BEGIN
+    COMPOPTI := TRUE;
+    IF ORD(SourceBuffer^[SourceCursor + 1]) <> EndCharacter THEN
+      REPEAT
+        OptionLetter := ORD(SourceBuffer^[SourceCursor + 1]);
+        OptionSign := ORD(SourceBuffer^[SourceCursor + 2]);
+        AfterSign := ORD(SourceBuffer^[SourceCursor + 3]);
+        IF (OptionSign = 44) OR (OptionSign = EndCharacter) THEN
+          IF NOT ((EndCharacter = 42) AND (OptionSign = EndCharacter) AND
+              (AfterSign <> 41)) THEN
+          BEGIN
+            AfterSign := OptionSign;
+            OptionSign := 43;
+            SourceCursor := SourceCursor - 1
+          END;
+        IF OptionLetter > 96 THEN
+          OptionLetter := OptionLetter - 32;
+        CASE OptionLetter OF
+          67:
+          BEGIN
+            IF Level > 1 THEN
+              Error(194);
+            NEW(Comment);
+            ScanOptionName(Comment^, 80);
+            EndOptions
+          END;
+          68:
+            Debugging := OptionSign = 43;
+          69:
+            AllowUnitFiles := OptionSign = 43;
+          70:
+            FlipBytes := OptionSign = 43;
+          71:
+            GotoAllowed := OptionSign = 43;
+          73:
+            IF (OptionSign = 43) OR (OptionSign = 45) THEN
+              CheckInputOutput := OptionSign = 43
+            ELSE
+            BEGIN
+              ScanOptionName(OptionName, 40);
+              IF EndCharacter = 42 THEN
+                SourceCursor := SourceCursor + 1;
+              IF Listing THEN
+              BEGIN
+                SourceCursor := SourceCursor + 1;
+                WriteListingLine;
+                SourceCursor := SourceCursor - 1
+              END;
+              IF Including OR InUnit AND InInterface THEN
+                Error(406);
+              PrepareTitle(OptionName, 1, 40);
+              RESET(IncludeFile, OptionName);
+              IF IORESULT <> 0 THEN
+                Error(403);
+              Including := TRUE;
+              IncludeCursor := SourceCursor;
+              IncludeLineStart := LineStart;
+              IncludeBlock := SourceBlock - 2;
+              SourceBlock := 2;
+              ReadSourcePage;
+              NextToken;
+              EXIT(NextToken)
+            END;
+          76:
+            IF (OptionSign = 43) OR (OptionSign = 45) THEN
+            BEGIN
+              Listing := OptionSign = 43;
+              IF Listing AND NOT ListingOpen THEN
+                REWRITE(ListingFile, '*SYSTEM.LST.TEXT[*]')
+            END
+            ELSE
+            BEGIN
+              ScanOptionName(OptionName, 40);
+              IF NOT ListingOpen THEN
+              BEGIN
+                PrepareTitle(OptionName, 1, 40);
+                REWRITE(ListingFile, OptionName);
+                Listing := IORESULT = 0
+              END;
+              EndOptions
+            END;
+          78:
+            IF (OptionSign = 83) OR (OptionSign = 115) THEN
+            BEGIN
+              SourceCursor := SourceCursor + 1;
+              ScanOptionName(OptionName, 40);
+              SegmentGiven := 0;
+              DigitCount := LENGTH(OptionName);
+              IF DigitCount > 2 THEN
+                DigitCount := 2;
+              FOR Digit := 1 TO DigitCount DO
+                SegmentGiven := SegmentGiven * 10 + (ORD(OptionName[Digit]) -
+                    48);
+              IF (SegmentGiven > NextSegment) AND (SegmentGiven < 63) THEN
+                NextSegment := SegmentGiven;
+              EndOptions
+            END
+            ELSE
+              OmitUnitStartup := OptionSign = 43;
+          81:
+            Noisy := NOT ListingToConsole AND (OptionSign = 45);
+          80:
+            IF Listing THEN
+            BEGIN
+              WRITE(ListingFile, CHR(12))
+            END;
+          82:
+            IF (OptionSign = 43) OR (OptionSign = 45) THEN
+              CheckRanges := OptionSign = 43
+            ELSE
+              MakeResident;
+          83:
+          BEGIN
+            Swapping := OptionSign = 43;
+            SwapMore := AfterSign = 43;
+            IF AfterSign IN [43, 45] THEN
+            BEGIN
+              SourceCursor := SourceCursor + 1;
+              AfterSign := ORD(SourceBuffer^[SourceCursor + 3])
+            END
+          END;
+          84:
+            Tiny := OptionSign = 43;
+          85:
+            IF (OptionSign = 43) OR (OptionSign = 45) THEN
+            BEGIN
+              CompilingSystem := OptionSign = 45;
+              CheckRanges := NOT CompilingSystem;
+              CheckInputOutput := CheckRanges;
+              CheckVarStrings := CheckRanges;
+              GotoAllowed := CompilingSystem
+            END
+            ELSE
+              IF NOT ReadingInterface THEN
+              BEGIN
+                CLOSE(LibraryFile);
+                LibraryClosed := TRUE;
+                ScanOptionName(LibraryName, 40);
+                RESET(LibraryFile, LibraryName);
+                IF IORESULT <> 0 THEN
+                  Error(187);
+                EndOptions
+              END;
+          86:
+            CheckVarStrings := OptionSign = 43
+        END;
+        SourceCursor := SourceCursor + 3
+      UNTIL AfterSign <> 44
+  END;

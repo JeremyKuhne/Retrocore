@@ -1,0 +1,309 @@
+(** TYPES1.TEXT: the types: the symbol table's entries, types and constants,
+    operands, scopes, labels and the code file's records.
+
+    Included by COMPILER.TEXT after CONSTANTS2.TEXT and before TYPES2.TEXT. *)
+
+TYPE
+  (** An identifier's eight letters.
+      Also: ALPHA (UCSD20) *)
+  Spelling = PACKED ARRAY[0..7] OF CHAR;
+
+  (** A Identifier that is also used as a word (I) [the decompiler's variant
+      record for it]. *)
+  SymbolLink = RECORD CASE BOOLEAN OF TRUE: (Word: INTEGER); FALSE: (Entry:
+      ^SymbolEntry) END;
+
+  (** A pointer to a type's structure.
+
+      UCSD Pascal II.0 calls it STP (UCSD20). *)
+  Structure = ^TypeEntry;
+
+  (** A file type's structure: Size, Form, FILTYPE. *)
+  FileEntry = RECORD
+      (** Size. *)
+      Size: INTEGER;
+      (** Form, 7 FileForm. *)
+      Form: INTEGER;
+      (** FILTYPE. *)
+      BaseType: Structure
+    END;
+
+  (** A pointer to the TEXT type's structure. *)
+  FileStructure = ^FileEntry;
+
+  (** The next parameter. *)
+  NextFormal = ^INTEGER;
+
+  (** What it points to. *)
+  PointedTo = ^INTEGER;
+
+  (** Its structure: Size, Form, BaseType. *)
+  PointerEntry = RECORD
+      (** Size.
+          Also: PSIZE (UCSD20) *)
+      Size: INTEGER;
+      (** Form, 2 PointerForm. *)
+      Form: INTEGER;
+      (** BaseType. *)
+      BaseType: PointedTo
+    END;
+
+  (** A pointer to a pointer type made for a standard function. *)
+  PointerStructure = ^PointerEntry;
+
+  (** A standard function's parameter, an identifier's DataType, Next and
+      Class words (COMPINIT). *)
+  FormalEntry = RECORD
+      (** The identifier's first six words: Name, Right, Left. *)
+      Head: ARRAY[1..6] OF INTEGER;
+      CASE INTEGER OF
+        (** The parameter's type.
+
+            UCSD Pascal II.0 calls it IDTYPE (UCSD20). *)
+        0: (DataType: Structure;
+           (** The next parameter. *)
+           Next: NextFormal;
+           (** Its class: 2 FormalClass, 3 ActualClass.
+               Also: KLASS (UCSD20) *)
+           Class: INTEGER;
+           (** Words 9 and 10, which a parameter's description has no use
+               for. *)
+           Padding: ARRAY[1..2] OF INTEGER);
+        (** A pointer parameter's type. *)
+        1: (PointerDataType: PointerStructure)
+    END;
+
+  (** A pointer to a standard function's parameter description. *)
+  StandardFormal = ^FormalEntry;
+
+  (** A pointer to an identifier seen from Next. *)
+  LinkedSymbol = ^LinkedEntry;
+
+  (** A string constant's first two characters. *)
+  StringHead = PACKED ARRAY[0..1] OF CHAR;
+
+  (** A long integer's words. *)
+  DigitWords = ARRAY[1..127] OF INTEGER;
+
+  (** A set constant's words. *)
+  SetWords = ARRAY[1..1] OF INTEGER;
+
+  (** A set constant's value. *)
+  SetValue = SET OF 0..127;
+
+  (** A constant too long for a word, by Kind (0 RealKind, 1 SetKind, 2
+      StringKind, 3 WordsKind, 4 LongKind).
+      Also: CONSTREC (UCSD20) *)
+  ValueEntry = RECORD
+      (** Its kind.
+          Also: CSTCLASS (UCSD20) *)
+      Kind: INTEGER;
+      CASE INTEGER OF
+        (** A string's length; a long integer's LLAST, its last word's
+            digits.
+            Also: SLGTH (UCSD20) *)
+        ValueFields: (StringLength: INTEGER;
+           (** A string's characters.
+               Also: SVAL (UCSD20) *)
+           Contents: StringHead;
+           (** A long integer's words of four digits.
+               Also: LONGVAL (UCSD20) *)
+           DigitGroups: DigitWords);
+        (** A set constant's words.
+            Also: CSTVAL (UCSD20) *)
+        ValueSetView: (Words: SetWords;
+           (** A long integer's words.
+               Also: LLENG (UCSD20) *)
+           WordCount: INTEGER);
+        (** A real.
+            Also: RVAL (UCSD20) *)
+        ValueRealView: (RealNumber: REAL);
+        (** A set.
+            Also: PVAL (UCSD20) *)
+        ValueMembersView: (Members: SetValue);
+        (** A real's words. *)
+        RealRecordSize: (RealWords: ARRAY[1..2] OF INTEGER);
+        (** A long integer's. *)
+        LongRecordSize: (LongWords: ARRAY[1..11] OF INTEGER)
+    END;
+
+  (** A constant's value: an integer (I, Ordinal) or a pointer to a
+      ValueEntry (P, Entry).
+      Also: VALU (UCSD20) *)
+  WordValue = RECORD CASE BOOLEAN OF TRUE: (Ordinal: INTEGER); FALSE: (Entry:
+      ^ValueEntry) END;
+
+  (** An identifier in the symbol table, a binary tree by name in each scope.
+      Its variant part, by Class (0 TypeClass, 1 ConstantClass, 2
+      FormalClass, 3 ActualClass, 4 FieldClass, 5 ProperProcedureClass, 6
+      ValueFunctionClass, 7 ModuleClass), reuses the same words, so each
+      field here is named for its most common use: word 9: StaticLevel
+      (vars), FLDADDR (fields), PFDECKIND (procedures: 0 standard, 1
+      declared, 2 special), SEGID (units); word 10: Offset (vars), FISPACKD
+      (fields), PFLEV or Target/CSPNUM (procedures); words 11-18: FLDWIDTH
+      and FLDRBIT (fields), RoutineNumber, CodeSegment, RoutineKind,
+      LocalsStart, IsForward, IsExternal, IsOpen, IsImported (procedures).
+
+      UCSD Pascal II.0 calls it IDENTIFIER (UCSD20). *)
+  SymbolEntry = RECORD
+      (** Its name, eight letters. *)
+      Name: Spelling;
+      (** The names after it in its scope's tree.
+          Also: RLINK (UCSD20) *)
+      Right: SymbolLink;
+      (** The names before it.
+          Also: LLINK (UCSD20) *)
+      Left: SymbolLink;
+      CASE INTEGER OF
+        (** Its type.
+
+            UCSD Pascal II.0 calls it IDTYPE (UCSD20). *)
+        SymbolFields: (DataType: Structure;
+           (** The next in a list: of an enumeration's constants, a record's
+               fields, a procedure's parameters. *)
+           Next: SymbolLink;
+           (** What it is: 0 TypeClass, 1 ConstantClass, 2 FormalClass, 3
+               ActualClass, 4 FieldClass, 5 ProperProcedureClass, 6
+               ValueFunctionClass, 7 ModuleClass [II.0 IDCLASS].
+               Also: IDCLASS (UCSD20) *)
+           Class: INTEGER;
+           (** StaticLevel, a variable's level; FLDADDR, a field's word;
+               PFDECKIND, a procedure's kind (0 standard, 1 declared, 2
+               special); a unit's segment.
+               Also: VLEV (UCSD20) *)
+           StaticLevel: INTEGER;
+           (** Offset, a variable's word; FISPACKD, whether a field is
+               packed; PFLEV, a procedure's level, or Target, a standard
+               one's number.
+               Also: VADDR (UCSD20) *)
+           Offset: INTEGER;
+           (** RoutineNumber, a procedure's number; FLDWIDTH, a packed
+               field's bits; a variable's PUBLIC in a unit's interface.
+               Also: PFNAME (UCSD20) *)
+           RoutineNumber: INTEGER;
+           (** CodeSegment, a procedure's segment; FLDRBIT, a packed field's
+               first bit; whether a unit has a data segment.
+               Also: PFSEG (UCSD20) *)
+           CodeSegment: INTEGER;
+           (** RoutineKind, 0 ACTUAL or 1 FORMAL; a unit's data segment.
+               Also: PFKIND (UCSD20) *)
+           RoutineKind: INTEGER;
+           (** The procedure's parameters' and variables' words, where its
+               locals start.
+               Also: LOCALLC (UCSD20) *)
+           LocalsStart: INTEGER;
+           (** Declared FORWARD, not yet defined.
+               Also: FORWDECL (UCSD20) *)
+           IsForward: BOOLEAN;
+           (** Declared EXTERNAL, or in another segment and called by CXP.
+               Also: EXTURNAL (UCSD20) *)
+           IsExternal: BOOLEAN;
+           (** Being compiled: its body is open.
+               Also: INSCOPE (UCSD20) *)
+           IsOpen: BOOLEAN;
+           (** Taken from a unit's interface.
+               Also: IMPORTED (UCSD20) *)
+           IsImported: BOOLEAN);
+        (** DataType seen as a TEXT file's structure (Size, Form, FILTYPE). *)
+        SymbolValuesView: (TypeAsFile: FileStructure;
+           (** Next of a standard function: the list of its parameters'
+               descriptions (COMPINIT). *)
+           Formals: StandardFormal;
+           (** Class, in the variant that views words 6 and 7 as other
+               pointers. *)
+           ViewClass: INTEGER;
+           (** A constant's value.
+               Also: VALUES (UCSD20) *)
+           Literal: WordValue;
+           (** Offset and RoutineNumber, in that variant. *)
+           OffsetWords: ARRAY[1..2] OF INTEGER;
+           (** A unit's word 12 seen as a value, for the $R list. *)
+           UnitValue: WordValue);
+        (** DataType, in the variant that views Next as a pointer to another
+            identifier. *)
+        SymbolNextView: (TypeWord: INTEGER;
+           (** Next seen as a pointer to another identifier. *)
+           NextEntry: LinkedSymbol);
+        (** A type's words after Name..Class: none, padding for the variant's
+            size. *)
+        TypeIdentifierSize: (PadType: ARRAY[1..3] OF INTEGER);
+        (** A constant's. *)
+        ConstIdentifierSize: (PadConstant: ARRAY[1..4] OF INTEGER);
+        (** A variable's. *)
+        SimpleVariableSize: (PadVariable: ARRAY[1..5] OF INTEGER);
+        (** A unit variable's. *)
+        UnitVariableSize: (PadUnitVariable: ARRAY[1..6] OF INTEGER);
+        (** A packed field's. *)
+        PackedFieldSize: (PadPackedField: ARRAY[1..7] OF INTEGER);
+        (** A unit's. *)
+        UnitIdentifierSize: (PadUnit: ARRAY[1..8] OF INTEGER);
+        (** A procedure's. *)
+        RoutineIdentifierSize: (PadRoutine: ARRAY[1..12] OF INTEGER)
+    END;
+
+  (** A pointer to an identifier.
+      Also: CTP (UCSD20) *)
+  Identifier = ^SymbolEntry;
+
+  (** A structure's first words. *)
+  ShortTypeEntry = RECORD
+      (** Size. *)
+      Size: INTEGER;
+      (** Form. *)
+      Form: INTEGER;
+      (** BaseType. *)
+      BaseType: Structure;
+      (** Maximum, a subrange's highest value. *)
+      Maximum: INTEGER;
+      (** Minimum, its lowest. *)
+      Minimum: INTEGER;
+      (** Words 5 to 8: an array's ElementBits, ElementsPerWord,
+          ArrayIsString, Capacity. *)
+      Rest: ARRAY[1..4] OF INTEGER
+    END;
+
+  (** A pointer to a structure, seen with its first five words. *)
+  ShortStructure = ^ShortTypeEntry;
+
+  (** A subrange: Size, Form, RANGETYPE, Maximum, Minimum. *)
+  RangeEntry = RECORD
+      (** Size. *)
+      Size: INTEGER;
+      (** Form, 1 SubrangeForm. *)
+      Form: INTEGER;
+      (** RANGETYPE. *)
+      BaseType: Structure;
+      (** Maximum. *)
+      Maximum: INTEGER;
+      (** Minimum. *)
+      Minimum: INTEGER
+    END;
+
+  (** A pointer to a subrange's structure. *)
+  RangeStructure = ^RangeEntry;
+
+  (** A tag field's identifier, to its DataType. *)
+  TagSymbolEntry = RECORD
+      (** The tag field's identifier's first six words: Name, Right, Left. *)
+      Head: ARRAY[1..6] OF INTEGER;
+      (** The tag field's DataType. *)
+      DataType: Structure
+    END;
+
+  (** A pointer to a tag field's identifier. *)
+  TagIdentifier = ^TagSymbolEntry;
+
+  (** A tag field: Size, Form, TAGFIELDP, FSTVAR. *)
+  TagEntry = RECORD
+      (** Size. *)
+      Size: INTEGER;
+      (** Form, 8 TagFieldForm. *)
+      Form: INTEGER;
+      (** TAGFIELDP. *)
+      Tag: TagIdentifier;
+      (** FSTVAR. *)
+      FirstVariant: Structure
+    END;
+
+  (** A pointer to a tag field's structure. *)
+  TagStructure = ^TagEntry;

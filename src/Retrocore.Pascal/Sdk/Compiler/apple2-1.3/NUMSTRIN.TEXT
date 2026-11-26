@@ -1,0 +1,247 @@
+(** NUMSTRIN.TEXT: NUMSTRIN, segment 19: number and string constants.
+
+    Included by COMPILER.TEXT after COMPOPTI.TEXT and before FINISHUP.TEXT.
+
+    Procedures here, nested ones indented:
+      NUMSTRIN (segment)
+        ScanString
+        ScanNumber *)
+
+  (** Scans a string or number constant: IsNumber says which; a number may be
+      a REAL or a long integer [II.0 NextToken's]. *)
+  SEGMENT PROCEDURE NUMSTRIN(IsNumber: BOOLEAN; VAR BigConstant: ScannedValue);
+
+    (** Scans a string constant into TokenConstant, or a character into
+        TokenValue (II.0: INSYMBOL's). *)
+    PROCEDURE ScanString;
+      LABEL 1;
+      VAR
+        (** Its characters. *)
+        Characters: StringCharacters;
+        (** Its length. *)
+        Count: INTEGER;
+        (** After a quote, which a second quote doubles. *)
+        AfterQuote: BOOLEAN;
+        (** It is too long, reported once. *)
+        TooLong: BOOLEAN;
+    BEGIN
+      TooLong := FALSE;
+      AfterQuote := FALSE;
+      Count := 0;
+      REPEAT
+        IF AfterQuote THEN
+          SourceCursor := SourceCursor + 1;
+        REPEAT
+          SourceCursor := SourceCursor + 1;
+          Count := Count + 1;
+          IF SourceBuffer^[SourceCursor] = CHR(13) THEN
+          BEGIN
+            Error(202);
+            EndLine;
+            GOTO 1
+          END;
+          IF Count <= 80 THEN
+            Characters[Count - 1] := SourceBuffer^[SourceCursor]
+          ELSE
+          BEGIN
+            IF NOT TooLong THEN
+              Error(277);
+            TooLong := TRUE
+          END
+        UNTIL SourceBuffer^[SourceCursor] = '''';
+        AfterQuote := TRUE
+      UNTIL SourceBuffer^[SourceCursor + 1] <> '''';
+      1:
+      TooLong := FALSE;
+      Count := Count - 1;
+      Token := StringToken;
+      Operator := NoneOperator;
+      TokenLength := Count;
+      IF Count = 1 THEN
+        TokenValue.Ordinal := ORD(Characters[1 - 1])
+      ELSE
+      BEGIN
+        WITH TokenConstant^ DO
+        BEGIN
+          Kind := StringKind;
+          StringLength := Count;
+          MOVELEFT(Characters[1 - 1], Contents[1 - 1], Count)
+        END;
+        TokenValue.Entry := TokenConstant
+      END
+    END;
+
+    (** Scans a number: an integer, a long integer or a REAL (II.0:
+        INSYMBOL's). *)
+    PROCEDURE ScanNumber;
+      VAR
+        (** The integer's value. *)
+        IntegerValue: INTEGER;
+        (** Where the exponent's digits start, or 9999. *)
+        StartOfExponent: INTEGER;
+        (** Where the fraction starts, or 9999. *)
+        StartOfFraction: INTEGER;
+        (** Where the number starts. *)
+        StartOfNumber: INTEGER;
+        (** The exponent's sign. *)
+        SignOfExponent: INTEGER;
+        (** Where the exponent's digits end. *)
+        EndOfExponent: INTEGER;
+        (** Where the fraction ends. *)
+        EndOfFraction: INTEGER;
+        (** Where the integer part ends. *)
+        EndOfInteger: INTEGER;
+        (** The exponent. *)
+        Exponent: INTEGER;
+        (** 1 for an integer, 0 with a fraction or an exponent. *)
+        IsInteger: INTEGER;
+        (** A real's value. *)
+        RealValue: REAL;
+        (** It fits in a word. *)
+        FitsInWord: BOOLEAN;
+        (** A digit's place. *)
+        DigitPlace: INTEGER;
+        (** The first digit that makes it a long integer. *)
+        LongDigit: INTEGER;
+    BEGIN
+      IsInteger := 1;
+      EndOfFraction := 0;
+      EndOfExponent := 0;
+      SignOfExponent := 1;
+      FitsInWord := TRUE;
+      StartOfExponent := 9999;
+      StartOfFraction := 9999;
+      StartOfNumber := SourceCursor;
+      REPEAT
+        SourceCursor := SourceCursor + 1
+      UNTIL (SourceBuffer^[SourceCursor] < '0') OR (SourceBuffer^[SourceCursor]
+          > '9');
+      EndOfInteger := SourceCursor - 1;
+      IF SourceBuffer^[SourceCursor] = '.' THEN
+        IF SourceBuffer^[SourceCursor + 1] <> '.' THEN
+        BEGIN
+          IsInteger := 0;
+          SourceCursor := SourceCursor + 1;
+          StartOfFraction := SourceCursor;
+          WHILE (SourceBuffer^[SourceCursor] >= '0') AND
+              (SourceBuffer^[SourceCursor] <= '9') DO
+            SourceCursor := SourceCursor + 1;
+          IF SourceCursor = StartOfFraction THEN
+            Error(201);
+          EndOfFraction := SourceCursor - 1
+        END;
+      IF (SourceBuffer^[SourceCursor] = 'E') OR (SourceBuffer^[SourceCursor] =
+          'e') THEN
+      BEGIN
+        IsInteger := 0;
+        SourceCursor := SourceCursor + 1;
+        IF SourceBuffer^[SourceCursor] = '-' THEN
+        BEGIN
+          SourceCursor := SourceCursor + 1;
+          SignOfExponent := -1
+        END
+        ELSE
+          IF SourceBuffer^[SourceCursor] = '+' THEN
+            SourceCursor := SourceCursor + 1;
+        StartOfExponent := SourceCursor;
+        WHILE (SourceBuffer^[SourceCursor] >= '0') AND
+            (SourceBuffer^[SourceCursor] <= '9') DO
+          SourceCursor := SourceCursor + 1;
+        EndOfExponent := SourceCursor - 1;
+        IF EndOfExponent < StartOfExponent THEN
+          Error(201)
+      END;
+      IF IsInteger = 1 THEN
+      BEGIN
+        IntegerValue := 0;
+        FOR DigitPlace := StartOfNumber TO EndOfInteger DO
+          IF (IntegerValue > 32767 DIV 10) OR (IntegerValue = 32767 DIV 10) AND
+              (ORD(SourceBuffer^[DigitPlace]) - 48 > 32767 MOD 10) THEN
+          BEGIN
+            FitsInWord := FALSE;
+            LongDigit := DigitPlace;
+            DigitPlace := EndOfInteger
+          END
+          ELSE
+            IntegerValue := IntegerValue * 10 + (ORD(SourceBuffer^[DigitPlace])
+                - 48);
+        IF FitsInWord THEN
+        BEGIN
+          Token := IntegerToken;
+          Operator := NoneOperator;
+          TokenValue.Ordinal := IntegerValue
+        END
+        ELSE
+        BEGIN
+          IF EndOfInteger - StartOfNumber >= 36 THEN
+          BEGIN
+            Error(203);
+            StartOfNumber := EndOfInteger;
+            LongDigit := EndOfInteger
+          END;
+          NEW(BigConstant, LongRecordSize);
+          WITH BigConstant^ DO
+          BEGIN
+            Kind := LongKind;
+            DigitPlace := 4;
+            WordCount := 0;
+            WHILE LongDigit <= EndOfInteger DO
+            BEGIN
+              IF DigitPlace = 4 THEN
+              BEGIN
+                WordCount := WordCount + 1;
+                DigitGroups[WordCount] := IntegerValue;
+                IntegerValue := 0;
+                DigitPlace := 0
+              END;
+              IntegerValue := IntegerValue * 10 + ORD(SourceBuffer^[LongDigit])
+                  - 48;
+              LongDigit := LongDigit + 1;
+              DigitPlace := DigitPlace + 1
+            END;
+            StringLength := DigitPlace;
+            IF DigitPlace > 0 THEN
+            BEGIN
+              WordCount := WordCount + 1;
+              DigitGroups[WordCount] := IntegerValue
+            END
+          END;
+          Token := LongNumberToken;
+          Operator := NoneOperator;
+          TokenLength := EndOfInteger - StartOfNumber + 1;
+          TokenValue.Entry := BigConstant
+        END
+      END
+      ELSE
+      BEGIN
+        RealValue := 0;
+        FOR DigitPlace := StartOfNumber TO EndOfInteger DO
+          RealValue := RealValue * 10 + (ORD(SourceBuffer^[DigitPlace]) - 48);
+        FOR DigitPlace := StartOfFraction TO EndOfFraction DO
+          RealValue := RealValue * 10 + (ORD(SourceBuffer^[DigitPlace]) - 48);
+        Exponent := 0;
+        FOR DigitPlace := StartOfExponent TO EndOfExponent DO
+          Exponent := Exponent * 10 + ORD(SourceBuffer^[DigitPlace]) - 48;
+        Exponent := SignOfExponent * Exponent;
+        IF StartOfFraction <> 9999 THEN
+          Exponent := Exponent + StartOfFraction - EndOfFraction - 1;
+        IF Exponent < 0 THEN
+          RealValue := RealValue / PWROFTEN(-Exponent)
+        ELSE
+          RealValue := RealValue * PWROFTEN(Exponent);
+        Token := RealToken;
+        Operator := NoneOperator;
+        NEW(BigConstant, RealRecordSize);
+        BigConstant^.Kind := RealKind;
+        BigConstant^.RealNumber := RealValue;
+        TokenValue.Entry := BigConstant
+      END;
+      SourceCursor := SourceCursor - 1
+    END;
+
+  BEGIN
+    IF IsNumber THEN
+      ScanNumber
+    ELSE
+      ScanString
+  END;

@@ -1,0 +1,579 @@
+(** COMPINIT1.TEXT: COMPINIT, segment 7: starting a compile.
+
+    Included by COMPILER.TEXT after PASCALCO1B.TEXT and before COMPINIT2.TEXT.
+
+    Procedures here, nested ones indented:
+      COMPINIT (segment)
+        MakeStandardTypes
+        EnterStandardNames
+        MakeDummies
+        AddNames
+        NextName
+        EnterSpecialRoutines
+        EnterSystemRoutines *)
+
+  (*$NS 7*)  (* The next segment is numbered 7. *)
+  (** Starts the Compiler: checks the system's version, sets the options and
+      the symbol sets, asks for the listing file, enters the standard types
+      and names, and reads the PROGRAM heading. *)
+  SEGMENT PROCEDURE COMPINIT;
+    VAR
+      (** The standard names, separated by periods. *)
+      NamesBuffer: NamesText;
+      (** The next name in NamesBuffer. *)
+      NamesCursor: INTEGER;
+      (** The end of the names in NamesBuffer. *)
+      NamesEnd: INTEGER;
+      (** The listing file's name, as typed. *)
+      ListingName: STRING;
+      (** The listing file opened, or none was wanted. *)
+      ListingChosen: BOOLEAN;
+      (** Why it did not open. *)
+      OpenError: INTEGER;
+      (** Its name's length. *)
+      NameLength: INTEGER;
+      (** A character of it. *)
+      Position: INTEGER;
+
+    (** Makes the standard types' structures: INTEGER, REAL, a long integer,
+        CHAR, BOOLEAN, NIL's, TEXT, INTERACTIVE, STRING, and the byte and
+        word streams.
+        Also: ENTSTDTYPES (UCSD20) *)
+    PROCEDURE MakeStandardTypes;
+      VAR
+        (** The index type of the streams, 1..32767. *)
+        StreamRange: RangeStructure;
+    BEGIN
+      NEW(IntegerStructure, SetTypeSize);
+      WITH IntegerStructure^ DO
+      BEGIN
+        Size := 1;
+        Form := ScalarForm;
+        ScalarKind := 0
+      END;
+      NEW(RealStructure, SetTypeSize);
+      WITH RealStructure^ DO
+      BEGIN
+        Size := 2;
+        Form := ScalarForm;
+        ScalarKind := 0
+      END;
+      NEW(LongStructure, LongTypeSize);
+      WITH LongStructure^ DO
+      BEGIN
+        Size := DecimalSize((16 - 1) * 100 DIV 332 + 1);
+        Form := LongIntegerForm
+      END;
+      NEW(CharStructure, SetTypeSize);
+      WITH CharStructure^ DO
+      BEGIN
+        Size := 1;
+        Form := ScalarForm;
+        ScalarKind := 0
+      END;
+      NEW(BooleanStructure, EnumerationTypeSize);
+      WITH BooleanStructure^ DO
+      BEGIN
+        Size := 1;
+        Form := ScalarForm;
+        ScalarKind := 1
+      END;
+      NEW(NilStructure, SetTypeSize);
+      WITH NilStructure^ DO
+      BEGIN
+        Size := 1;
+        Form := PointerForm;
+        BaseType := NIL
+      END;
+      NEW(TextFileStructure);
+      WITH TextFileStructure^ DO
+      BEGIN
+        Size := 300 + 1;
+        Form := FileForm;
+        BaseType := CharStructure
+      END;
+      NEW(TextInteractiveStructure, SetTypeSize);
+      WITH TextInteractiveStructure^ DO
+      BEGIN
+        Size := 300 + 1;
+        Form := FileForm;
+        BaseType := CharStructure
+      END;
+      NEW(StringStructure, StringTypeSize);
+      WITH StringStructure^ DO
+      BEGIN
+        Form := ArrayForm;
+        Size := (80 + 2) DIV 2;
+        ArrayIsPacked := TRUE;
+        ArrayIsString := TRUE;
+        BaseType := IntegerStructure;
+        ElementBits := 8;
+        ElementsPerWord := 2;
+        ElementType := CharStructure;
+        Capacity := 80
+      END;
+      NEW(StreamRange);
+      WITH StreamRange^ DO
+      BEGIN
+        Form := SubrangeForm;
+        Size := 1;
+        BaseType := IntegerStructure;
+        Minimum := 0;
+        Maximum := 32767
+      END;
+      NEW(ByteStreamStructure, PackedTypeSize);
+      WITH ByteStreamStructure^ DO
+      BEGIN
+        Form := ArrayForm;
+        Size := 1;
+        ArrayIsPacked := TRUE;
+        ArrayIsString := FALSE;
+        IndexRange := StreamRange;
+        ElementBits := 8;
+        ElementsPerWord := 2;
+        ElementType := CharStructure
+      END;
+      NEW(WordStreamStructure, ArrayTypeSize);
+      WITH WordStreamStructure^ DO
+      BEGIN
+        Form := ArrayForm;
+        Size := 1;
+        ArrayIsPacked := FALSE;
+        IndexRange := StreamRange;
+        ElementType := IntegerStructure
+      END
+    END;
+
+    (** Enters the standard types' names, INPUT, OUTPUT and KEYBOARD, FALSE,
+        TRUE, NIL and MAXINT.
+        Also: ENTSTDNAMES (UCSD20) *)
+    PROCEDURE EnterStandardNames;
+      VAR
+        (** The constant before, for BOOLEAN's list. *)
+        PreviousConstant: SymbolLink;
+        (** The identifier being entered. *)
+        Entered: SymbolLink;
+        (** 0 for FALSE, 1 for TRUE. *)
+        TruthValue: INTEGER;
+    BEGIN
+      NEW(Entered.Entry, TypeIdentifierSize);
+      WITH Entered.Entry^ DO
+      BEGIN
+        Name := 'INTEGER ';
+        DataType := IntegerStructure;
+        Class := TypeClass
+      END;
+      EnterIdentifier(Entered.Entry);
+      NEW(Entered.Entry, TypeIdentifierSize);
+      WITH Entered.Entry^ DO
+      BEGIN
+        Name := 'REAL    ';
+        DataType := RealStructure;
+        Class := TypeClass
+      END;
+      EnterIdentifier(Entered.Entry);
+      NEW(Entered.Entry, TypeIdentifierSize);
+      WITH Entered.Entry^ DO
+      BEGIN
+        Name := 'CHAR    ';
+        DataType := CharStructure;
+        Class := TypeClass
+      END;
+      EnterIdentifier(Entered.Entry);
+      NEW(Entered.Entry, TypeIdentifierSize);
+      WITH Entered.Entry^ DO
+      BEGIN
+        Name := 'BOOLEAN ';
+        DataType := BooleanStructure;
+        Class := TypeClass
+      END;
+      EnterIdentifier(Entered.Entry);
+      NEW(Entered.Entry, TypeIdentifierSize);
+      WITH Entered.Entry^ DO
+      BEGIN
+        Name := 'STRING  ';
+        DataType := StringStructure;
+        Class := TypeClass
+      END;
+      EnterIdentifier(Entered.Entry);
+      NEW(Entered.Entry, TypeIdentifierSize);
+      WITH Entered.Entry^ DO
+      BEGIN
+        Name := 'TEXT    ';
+        TypeAsFile := TextFileStructure;
+        Class := TypeClass
+      END;
+      EnterIdentifier(Entered.Entry);
+      NEW(Entered.Entry, TypeIdentifierSize);
+      WITH Entered.Entry^ DO
+      BEGIN
+        Name := 'INTERACT';
+        DataType := TextInteractiveStructure;
+        Class := TypeClass
+      END;
+      EnterIdentifier(Entered.Entry);
+      NEW(InputIdentifier.Entry, SimpleVariableSize);
+      WITH InputIdentifier.Entry^ DO
+      BEGIN
+        Name := 'INPUT   ';
+        TypeAsFile := TextFileStructure;
+        Class := FormalClass;
+        StaticLevel := 0;
+        Offset := 2
+      END;
+      EnterIdentifier(InputIdentifier.Entry);
+      NEW(OutputIdentifier.Entry, SimpleVariableSize);
+      WITH OutputIdentifier.Entry^ DO
+      BEGIN
+        Name := 'OUTPUT  ';
+        TypeAsFile := TextFileStructure;
+        Class := FormalClass;
+        StaticLevel := 0;
+        Offset := 3
+      END;
+      EnterIdentifier(OutputIdentifier.Entry);
+      NEW(Entered.Entry, SimpleVariableSize);
+      WITH Entered.Entry^ DO
+      BEGIN
+        Name := 'KEYBOARD';
+        TypeAsFile := TextFileStructure;
+        Class := FormalClass;
+        StaticLevel := 0;
+        Offset := 4
+      END;
+      EnterIdentifier(Entered.Entry);
+      PreviousConstant.Entry := NIL;
+      FOR TruthValue := 0 TO 1 DO
+      BEGIN
+        NEW(Entered.Entry, ConstIdentifierSize);
+        WITH Entered.Entry^ DO
+        BEGIN
+          DataType := BooleanStructure;
+          IF TruthValue = 0 THEN
+            Name := 'FALSE   '
+          ELSE
+            Name := 'TRUE    ';
+          Next.Entry := PreviousConstant.Entry;
+          StaticLevel := TruthValue;
+          Class := ConstantClass
+        END;
+        EnterIdentifier(Entered.Entry);
+        PreviousConstant.Entry := Entered.Entry
+      END;
+      BooleanStructure^.LastConstant.Entry := Entered.Entry;
+      NEW(Entered.Entry, ConstIdentifierSize);
+      WITH Entered.Entry^ DO
+      BEGIN
+        Name := 'NIL     ';
+        DataType := NilStructure;
+        Next.Entry := NIL;
+        StaticLevel := 0;
+        Class := ConstantClass
+      END;
+      EnterIdentifier(Entered.Entry);
+      NEW(Entered.Entry, ConstIdentifierSize);
+      WITH Entered.Entry^ DO
+      BEGIN
+        Name := 'MAXINT  ';
+        DataType := IntegerStructure;
+        Class := ConstantClass;
+        StaticLevel := 32767
+      END;
+      EnterIdentifier(Entered.Entry);
+      NEW(Entered.Entry, TypeIdentifierSize);
+      WITH Entered.Entry^ DO
+      BEGIN
+        Name := 'BYTESTRE';
+        DataType := ByteStreamStructure;
+        Next.Entry := NIL;
+        Class := TypeClass
+      END;
+      EnterIdentifier(Entered.Entry);
+      NEW(Entered.Entry, TypeIdentifierSize);
+      WITH Entered.Entry^ DO
+      BEGIN
+        Name := 'WORDSTRE';
+        DataType := WordStreamStructure;
+        Next.Entry := NIL;
+        Class := TypeClass
+      END;
+      EnterIdentifier(Entered.Entry)
+    END;
+
+    (** Makes the identifiers an undeclared name stands for, DummyType to
+        DummyFunction.
+        Also: ENTUNDECL (UCSD20) *)
+    PROCEDURE MakeDummies;
+      VAR
+        (** Eight blanks. *)
+        Blanks: Spelling;
+    BEGIN
+      Blanks := '        ';
+      NEW(DummyType.Entry, TypeIdentifierSize);
+      WITH DummyType.Entry^ DO
+      BEGIN
+        Name := Blanks;
+        DataType := NIL;
+        Class := TypeClass
+      END;
+      NEW(DummyConstant.Entry, ConstIdentifierSize);
+      WITH DummyConstant.Entry^ DO
+      BEGIN
+        Name := Blanks;
+        DataType := NIL;
+        Next.Entry := NIL;
+        StaticLevel := 0;
+        Class := ConstantClass
+      END;
+      NEW(DummyVariable.Entry, SimpleVariableSize);
+      WITH DummyVariable.Entry^ DO
+      BEGIN
+        Name := Blanks;
+        DataType := NIL;
+        Next.Entry := NIL;
+        StaticLevel := 0;
+        Offset := 0;
+        Class := ActualClass
+      END;
+      NEW(DummyField.Entry, PackedFieldSize);
+      WITH DummyField.Entry^ DO
+      BEGIN
+        Name := Blanks;
+        DataType := NIL;
+        Next.Entry := NIL;
+        StaticLevel := 0;
+        Class := FieldClass
+      END;
+      NEW(DummyProcedure.Entry, RoutineIdentifierSize);
+      WITH DummyProcedure.Entry^ DO
+      BEGIN
+        Name := Blanks;
+        DataType := NIL;
+        IsForward := FALSE;
+        Next.Entry := NIL;
+        IsOpen := FALSE;
+        LocalsStart := 0;
+        IsExternal := FALSE;
+        Offset := 0;
+        RoutineNumber := 0;
+        CodeSegment := 0;
+        Class := ProperProcedureClass;
+        StaticLevel := 1;
+        RoutineKind := 0
+      END;
+      NEW(DummyFunction.Entry, RoutineIdentifierSize);
+      WITH DummyFunction.Entry^ DO
+      BEGIN
+        Name := Blanks;
+        DataType := NIL;
+        Next.Entry := NIL;
+        IsForward := FALSE;
+        IsExternal := FALSE;
+        IsOpen := FALSE;
+        LocalsStart := 0;
+        Offset := 0;
+        RoutineNumber := 0;
+        CodeSegment := 0;
+        Class := ValueFunctionClass;
+        StaticLevel := 1;
+        RoutineKind := 0
+      END
+    END;
+
+    (** Adds names to NamesBuffer. *)
+    PROCEDURE AddNames(Names: STRING);
+    BEGIN
+      IF NamesEnd + LENGTH(Names) < 511 THEN
+        MOVELEFT(Names[1], NamesBuffer[NamesEnd], LENGTH(Names));
+      NamesEnd := NamesEnd + LENGTH(Names)
+    END;
+
+    (** The next name of NamesBuffer. *)
+    PROCEDURE NextName(VAR NameSpelling: Spelling);
+      VAR
+        (** Its length. *)
+        Letters: INTEGER;
+    BEGIN
+      NameSpelling := '        ';
+      Letters := SCAN(8, = '.', NamesBuffer[NamesCursor]);
+      MOVELEFT(NamesBuffer[NamesCursor], NameSpelling, Letters);
+      NamesCursor := NamesCursor + Letters + 1
+    END;
+
+    (** Enters the special procedures, which the Compiler compiles itself
+        (ROUTINE), each with its Target.
+        Also: ENTSPCPROCS (UCSD20) *)
+    PROCEDURE EnterSpecialRoutines;
+      LABEL 1;
+      VAR
+        (** The identifier. *)
+        Entered: SymbolLink;
+        (** Its number. *)
+        Key: INTEGER;
+        (** It is a function. *)
+        IsFunction: BOOLEAN;
+        (** Its name. *)
+        RoutineSpelling: Spelling;
+    BEGIN
+      NamesEnd := 0;
+      AddNames('READ.READLN.WRITE.WRITELN.EOF.EOLN.PRED.SUCC.ORD.SQR.ABS.NEW.');
+      AddNames('UNITREAD.UNITWRIT.CONCAT.LENGTH.INSERT.DELETE.COPY.POS.');
+      AddNames('MOVELEFT.MOVERIGH.EXIT.IDSEARCH.TREESEAR.TIME.FILLCHAR.');
+      AddNames('OPENNEW.OPENOLD.REWRITE.CLOSE.SEEK.RESET.GET.PUT.SCAN.');
+      AddNames('BLOCKREA.BLOCKWRI.TRUNC.PAGE.SIZEOF.STR.GOTOXY.UNITSTAT.');
+      NamesCursor := 0;
+      Key := 0;
+      WHILE NamesCursor < NamesEnd DO
+      BEGIN
+        NextName(RoutineSpelling);
+        Key := Key + 1;
+        IF Tiny THEN
+          IF Key IN [2, 7, 10, 13, 17..20, 32, 34, 35, 40, 42..44] THEN
+            GOTO 1;
+        IsFunction := Key IN [5..11, 15, 16, 19, 20, 25, 36..39, 41];
+        IF IsFunction THEN
+          NEW(Entered.Entry, SimpleVariableSize)
+        ELSE
+          NEW(Entered.Entry, SimpleVariableSize);
+        WITH Entered.Entry^ DO
+        BEGIN
+          Name := RoutineSpelling;
+          Next.Entry := NIL;
+          DataType := NIL;
+          IF IsFunction THEN
+            Class := ValueFunctionClass
+          ELSE
+            Class := ProperProcedureClass;
+          StaticLevel := 2;
+          Offset := Key
+        END;
+        EnterIdentifier(Entered.Entry);
+        1:
+      END
+    END;
+
+    (** Enters the standard procedures and functions that are calls of the
+        system's (BigValue), with their parameters.
+        Also: ENTSTDPROCS (UCSD20) *)
+    PROCEDURE EnterSystemRoutines;
+      LABEL 1;
+      VAR
+        (** Its parameters' descriptions. *)
+        FormalList: StandardFormal;
+        (** The identifier. *)
+        Entered: SymbolLink;
+        (** A function's type. *)
+        ResultType: Structure;
+        (** A pointer type for MARK and RELEASE. *)
+        AnyPointer: PointerStructure;
+        (** Its number. *)
+        CallNumber: INTEGER;
+        (** It is a procedure. *)
+        IsProcedure: BOOLEAN;
+        (** Its name. *)
+        RoutineSpelling: Spelling;
+    BEGIN
+      NamesEnd := 0;
+      AddNames('ODD.CHR.XXX.ROUND.MARK.RELEASE.');
+      AddNames('IORESULT.UNITBUSY.PWROFTEN.UNITWAIT.UNITCLEA.HALT.MEMAVAIL.');
+      NamesCursor := 0;
+      CallNumber := 0;
+      WHILE NamesCursor < NamesEnd DO
+      BEGIN
+        NextName(RoutineSpelling);
+        CallNumber := CallNumber + 1;
+        IsProcedure := CallNumber IN [5, 6, 10..12];
+        CASE CallNumber OF
+          1:
+          BEGIN
+            ResultType := BooleanStructure;
+            NEW(FormalList);
+            WITH FormalList^ DO
+            BEGIN
+              DataType := IntegerStructure;
+              Class := ActualClass
+            END
+          END;
+          2:
+            ResultType := CharStructure;
+          3:
+            GOTO 1;
+          4:
+          BEGIN
+            ResultType := IntegerStructure;
+            NEW(FormalList);
+            WITH FormalList^ DO
+            BEGIN
+              DataType := RealStructure;
+              Class := ActualClass
+            END
+          END;
+          5:
+          BEGIN
+            ResultType := NIL;
+            NEW(FormalList);
+            NEW(AnyPointer);
+            WITH AnyPointer^ DO
+            BEGIN
+              Size := 1;
+              Form := PointerForm;
+              BaseType := NIL
+            END;
+            WITH FormalList^ DO
+            BEGIN
+              PointerDataType := AnyPointer;
+              Class := FormalClass
+            END
+          END;
+          7:
+          BEGIN
+            ResultType := IntegerStructure;
+            FormalList := NIL
+          END;
+          8:
+          BEGIN
+            ResultType := BooleanStructure;
+            NEW(FormalList);
+            WITH FormalList^ DO
+            BEGIN
+              DataType := IntegerStructure;
+              Class := ActualClass
+            END
+          END;
+          9:
+            ResultType := RealStructure;
+          10:
+            ResultType := NIL;
+          12:
+          BEGIN
+            ResultType := NIL;
+            FormalList := NIL
+          END;
+          13:
+            ResultType := IntegerStructure
+        END;
+        IF IsProcedure THEN
+          NEW(Entered.Entry, SimpleVariableSize)
+        ELSE
+          NEW(Entered.Entry, SimpleVariableSize);
+        WITH Entered.Entry^ DO
+        BEGIN
+          Name := RoutineSpelling;
+          StaticLevel := 0;
+          IF CallNumber < 5 THEN
+            Offset := CallNumber + 20
+          ELSE
+            Offset := CallNumber + 27;
+          IF IsProcedure THEN
+            Class := ProperProcedureClass
+          ELSE
+            Class := ValueFunctionClass;
+          IF FormalList <> NIL THEN
+            FormalList^.Next := NIL;
+          DataType := ResultType;
+          Formals := FormalList
+        END;
+        EnterIdentifier(Entered.Entry);
+        1:
+      END
+    END;

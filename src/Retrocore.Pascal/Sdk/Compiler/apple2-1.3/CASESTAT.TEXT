@@ -1,0 +1,175 @@
+(** CASESTAT.TEXT: CASESTAT, segment 12: CASE.
+
+    Included by COMPILER.TEXT after STATEMEN1.TEXT and before FORSTATE.TEXT.
+
+    Procedures here, nested ones indented:
+      CASESTAT (segment) *)
+
+      (** Compiles CASE: the selector, each case's code, and the jump table.
+          Also: CASESTATEMENT (UCSD20) *)
+      SEGMENT PROCEDURE CASESTAT;
+        LABEL 1;
+        VAR
+          (** A case label's type.
+
+              UCSD Pascal II.0 calls it LSP1 (UCSD20). *)
+          TypeOfLabel: Structure;
+          (** The selector's type.
+
+              UCSD Pascal II.0 calls it LSP (UCSD20). *)
+          TypeOfSelector: Structure;
+          (** A new label. *)
+          NewCase: CaseLabel;
+          (** The label before it, in order. *)
+          PreviousCase: CaseLabel;
+          (** The label looked at. *)
+          ThisCase: CaseLabel;
+          (** The first label. *)
+          FirstCase: CaseLabel;
+          (** A case label's value.
+              Also: LVAL (UCSD20) *)
+          LabelValue: WordValue;
+          (** After the cases' code: the XJP and its table, which the
+              selector's code jumps to. *)
+          TableJump: Jump;
+          (** After the table and OTHERWISE: where each case's code jumps to
+              when it ends. *)
+          EndJump: Jump;
+          (** After the XJP: where a selector outside the table goes,
+              OTHERWISE's code or the end. *)
+          DefaultJump: Jump;
+          (** The highest label.
+
+              UCSD Pascal II.0 calls it LMAX (UCSD20). *)
+          HighestLabel: INTEGER;
+          (** The lowest label, then each one's place in the table as it is
+              made.
+
+              UCSD Pascal II.0 calls it LMIN (UCSD20). *)
+          LowestLabel: INTEGER;
+          (** Where the jump table starts. *)
+          TableStart: INTEGER;
+      BEGIN
+        CompileExpression(Followers + [CommaToken, ColonToken, OfToken]);
+        PushOperand;
+        MaskBoolean;
+        NewJump(TableJump);
+        EmitJump(JumpCode, TableJump);
+        TypeOfSelector := Operand.DataType;
+        IF TypeOfSelector <> NIL THEN
+          IF (TypeOfSelector^.Form <> ScalarForm) OR (TypeOfSelector =
+              RealStructure) THEN
+          BEGIN
+            Error(144);
+            TypeOfSelector := NIL
+          END;
+        IF Token = OfToken THEN
+          NextToken
+        ELSE
+          Error(8);
+        FirstCase := NIL;
+        NewJump(EndJump);
+        NewJump(DefaultJump);
+        REPEAT
+          NewCase := NIL;
+          REPEAT
+            ReadConstant(Followers + [CommaToken, ColonToken], TypeOfLabel,
+                LabelValue);
+            IF TypeOfSelector <> NIL THEN
+              IF CompatibleTypes(TypeOfSelector, TypeOfLabel) THEN
+              BEGIN
+                ThisCase := FirstCase;
+                PreviousCase := NIL;
+                WHILE ThisCase <> NIL DO
+                  WITH ThisCase^ DO
+                  BEGIN
+                    IF Ordinal <= LabelValue.Ordinal THEN
+                    BEGIN
+                      IF Literal.Entry = LabelValue.Entry THEN
+                        Error(156);
+                      GOTO 1
+                    END;
+                    PreviousCase := ThisCase;
+                    ThisCase := Next
+                  END;
+                1:
+                NEW(NewCase);
+                WITH NewCase^ DO
+                BEGIN
+                  Next := ThisCase;
+                  Literal.Entry := LabelValue.Entry;
+                  CodeStart := CodeCounter
+                END;
+                IF PreviousCase = NIL THEN
+                  FirstCase := NewCase
+                ELSE
+                  PreviousCase^.Next := NewCase
+              END
+              ELSE
+                Error(147);
+            LoopDone := Token <> CommaToken;
+            IF NOT LoopDone THEN
+              NextToken
+          UNTIL LoopDone;
+          IF Token = ColonToken THEN
+            NextToken
+          ELSE
+            Error(5);
+          REPEAT
+            STATEMEN(Followers + [SemicolonToken, CaseElseToken])
+          UNTIL NOT (Token IN StartersOfStatement);
+          IF NewCase <> NIL THEN
+            EmitJump(JumpCode, EndJump);
+          LoopDone := Token <> SemicolonToken;
+          IF NOT LoopDone THEN
+            NextToken
+        UNTIL LoopDone OR (Token = EndToken) OR (Token = CaseElseToken);
+        PlaceJump(TableJump);
+        IF FirstCase <> NIL THEN
+        BEGIN
+          HighestLabel := FirstCase^.Ordinal;
+          ThisCase := FirstCase;
+          FirstCase := NIL;
+          REPEAT
+            PreviousCase := ThisCase^.Next;
+            ThisCase^.Next := FirstCase;
+            FirstCase := ThisCase;
+            ThisCase := PreviousCase
+          UNTIL ThisCase = NIL;
+          LowestLabel := FirstCase^.Ordinal;
+          EmitOpcode(CaseJumpCode);
+          EmitWord(LowestLabel);
+          EmitWord(HighestLabel);
+          TableStart := CodeCounter;
+          EmitJump(JumpCode, DefaultJump);
+          IF CodeCounter + (HighestLabel - LowestLabel) * 2 >= 1999 THEN
+            Error(302)
+          ELSE
+            REPEAT
+              WITH FirstCase^ DO
+              BEGIN
+                WHILE Ordinal > LowestLabel DO
+                BEGIN
+                  EmitWord(CodeCounter - TableStart);
+                  LowestLabel := LowestLabel + 1
+                END;
+                EmitWord(CodeCounter - CodeStart);
+                FirstCase := Next
+              END;
+              LowestLabel := LowestLabel + 1
+            UNTIL FirstCase = NIL;
+          PlaceJump(DefaultJump);
+          IF Token = CaseElseToken THEN
+          BEGIN
+            NextToken;
+            STATEMEN(Followers + [SemicolonToken]);
+            IF Token = SemicolonToken THEN
+              NextToken
+          END;
+          PlaceJump(EndJump)
+        END;
+        IF Token = EndToken THEN
+          NextToken
+        ELSE
+          Error(13)
+      END;

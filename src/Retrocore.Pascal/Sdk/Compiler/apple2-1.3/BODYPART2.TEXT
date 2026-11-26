@@ -1,0 +1,51 @@
+(** BODYPART2.TEXT: BODYPART's CompileRoutineBody: its heading.
+
+    Included by COMPILER.TEXT after STATEMEN2.TEXT and before BODY1.TEXT.
+
+    Procedures here, nested ones indented:
+      CompileRoutineBody *)
+
+    (** Compiles the body: BODY1 starts it, CompileStatements compiles the
+        statements, BODY3 ends it.
+
+        UCSD Pascal II.0 calls it BODY (UCSD20). *)
+    PROCEDURE CompileRoutineBody;
+      VAR
+        (** Where the procedure's code starts. *)
+        EntryPoint: INTEGER;
+        (** Where its value parameters' copies go. *)
+        CopyOffset: INTEGER;
+        (** The segments to make resident. *)
+        ResidentList: SymbolLink;
+        (** A list being reversed. *)
+        Reversed: SymbolLink;
+        (** The next of the list. *)
+        Following: SymbolLink;
+        (** UCSD Pascal II.0 calls it LCP (UCSD20). *)
+        Current: SymbolLink;
+        (** RNP or RBP, to return. *)
+        ReturnOpcode: INTEGER;
+        (** The program's own body, which starts and ends its units. *)
+        IsMainBody: BOOLEAN;
+        (** UCSD Pascal II.0 calls it LLP (UCSD20). *)
+        UserLabel: LabelLink;
+        (** An entry of the jump table. *)
+        JumpIndex: INTEGER;
+        (** UCSD Pascal II.0 calls it LMAX (UCSD20). *)
+        Highest: INTEGER;
+        (** UCSD Pascal II.0 calls it LMIN (UCSD20). *)
+        Lowest: INTEGER;
+        (** CodeCounter while BODY3 goes back. *)
+        SavedCodeCounter: INTEGER;
+        (** Where the jump around the units' start is. *)
+        Preamble: INTEGER;
+        (** A segment. *)
+        SystemSegment: INTEGER;
+        (** The label of the code that ends the units. *)
+        ExitJump: Jump;
+        (** The label past it. *)
+        OverJump: Jump;
+        (** The label of the code that starts them. *)
+        StartJump: Jump;
+        (** MEMAVAIL. *)
+        FreeMemory: AvailableWords;

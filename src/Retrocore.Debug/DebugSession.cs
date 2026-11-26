@@ -944,7 +944,7 @@ internal sealed partial class DebugSession
     // starts from an instruction boundary.
     private void Boot(double seconds)
     {
-        if (seconds is < 0 or > 60) { throw new ArgumentException("bootSeconds must be from 0 to 60."); }
+        if (!(seconds is >= 0 and <= 60)) { throw new ArgumentException("bootSeconds must be from 0 to 60."); }
         Target.RunCycles((int)(seconds * Target.ClockHertz));
         while (!Target.IsInstructionBoundary) { Target.StepCycle(); }
         Target.CallStack.Reset();
@@ -962,7 +962,9 @@ internal sealed partial class DebugSession
 
         foreach ((string slot, JsonNode? card) in cards)
         {
-            if ((string?)card is "diskII" or "blockStorage")
+            if (card?.GetValueKind() == JsonValueKind.String
+                && card.GetValue<string>() is { } name
+                && (name.StartsWith("diskII", StringComparison.Ordinal) || name == "blockStorage"))
             {
                 throw new ProjectException(
                     $"{target.Project.File}: target {target.Name}: slot {slot}'s {card} comes with its media from the target's options, such as diskImage, not from its cards.");
@@ -1023,8 +1025,9 @@ internal sealed partial class DebugSession
         };
 
         // A bare program calls the ROM's routines, such as COUT, which the Apple II's Monitor sets up as it resets, so
-        // the ROM runs first, as the other machines' ROMs do before a program loads: before a target's cards or a saved
-        // machine's disks go in, so it boots no disk.
+        // the ROM runs first, as the other machines' ROMs do before a program loads. It runs before the target's cards
+        // and a saved machine's cards and disks go in; a disk the target's own options insert is in the drive from the
+        // start, and the ROM starts booting it for that time, which bootSeconds: 0 leaves out.
         if (built is not null && Target is Apple2DebugTarget) { Boot(args.Double("bootSeconds") ?? 0.25); }
 
         if (args.String("screen") is { } screen) { Target.Screen = screen; }

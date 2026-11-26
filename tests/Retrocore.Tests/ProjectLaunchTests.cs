@@ -172,6 +172,7 @@ public sealed class ProjectLaunchTests
                 "apple1": { "machine": "apple1", "environment": "bare", "cards": { "1": "mockingboard" } },
                 "iiplus": { "machine": "apple2-iiplus", "environment": "bare" },
                 "disk": { "machine": "apple2-iiplus", "environment": "bare", "cards": { "6": "diskII" } },
+                "disk16": { "machine": "apple2-iiplus", "environment": "bare", "cards": { "6": "diskII16" } },
                 "dos": { "machine": "apple2-iiplus", "environment": "dos33" } } }
             """);
 
@@ -191,6 +192,13 @@ public sealed class ProjectLaunchTests
         client.Fails("launch", Launch("apple1")).Should().EndWith("target apple1: apple1 has no slots for its cards.");
         client.Fails("launch", Launch("disk")).Should().EndWith(
             "target disk: slot 6's diskII comes with its media from the target's options, such as diskImage, not from its cards.");
+
+        JsonObject sixteenSector = Launch("disk16");
+        client.Fails("launch", sixteenSector).Should().Contain("slot 6's diskII16 comes with its media");
+
+        JsonObject longBoot = Launch("iiplus");
+        longBoot["bootSeconds"] = 61;
+        client.Fails("launch", longBoot).Should().Be("bootSeconds must be from 0 to 60.");
 
         JsonObject withExecutable = Launch("iiplus");
         withExecutable["executable"] = Path.Join(_folder, "game.xex");

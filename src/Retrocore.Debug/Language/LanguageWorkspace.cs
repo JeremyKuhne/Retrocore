@@ -383,11 +383,13 @@ internal sealed partial class LanguageWorkspace
     }
 
     // Whether a root owns a file it analyzed: any root but a project's target owns its members; a target owns those
-    // that prefer no other target.
-    private static bool Owns(string root, string path) =>
+    // that prefer no other target, or whose preferred target's last analysis left them out, as one that failed before
+    // assembling does. A file a target only includes prefers none, so each target that includes it reports on it.
+    private bool Owns(string root, string path) =>
         !root.EndsWith(ProjectSources.Extension, StringComparison.OrdinalIgnoreCase)
             || ProjectSources.RootOf(path) is not { } preferred
-            || string.Equals(preferred, root, StringComparison.OrdinalIgnoreCase);
+            || string.Equals(preferred, root, StringComparison.OrdinalIgnoreCase)
+            || (_analyses.TryGetValue(preferred, out SourceAnalysis? other) && !other.Members.Contains(path));
 
     private void Publish(SourceAnalysis analysis)
     {

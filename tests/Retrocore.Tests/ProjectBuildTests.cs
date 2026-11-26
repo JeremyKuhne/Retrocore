@@ -190,6 +190,22 @@ public sealed class ProjectBuildTests
     }
 
     /// <summary>
+    ///  With no entry named, a target starts at the first byte the project's own sources emit, not at the platform
+    ///  folders' code, which assembles before them.
+    /// </summary>
+    [TestMethod]
+    public void DefaultEntryIsTheProjectsOwnCode()
+    {
+        Write("retrocore.json", """
+            { "sdk": "1", "cpu": "6502", "sources": ["src/main.s"], "targets": { "t": { "machine": "apple2-iiplus", "environment": "bare" } } }
+            """);
+
+        Write("src/platform/apple2/console.s", "PUT: rts");
+        Write("src/main.s", "    jsr PUT\n    rts");
+        ProjectBuild.Build(RetrocoreProject.Load(_folder).Target("t")).Entry.Should().Be(0x6001);
+    }
+
+    /// <summary>
     ///  A bare binary is one block: code with a gap in it is an error, rather than a binary that fills the gap.
     /// </summary>
     [TestMethod]

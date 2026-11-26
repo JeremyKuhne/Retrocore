@@ -167,7 +167,7 @@ public sealed partial class ProjectHeaderTests
             { "sdk": "1", "cpu": "6502", "sources": ["main.s"], "targets": { "t": { "machine": "apple2-iiplus", "environment": "bare" } } }
             """);
 
-        Write("main.s", "    nop\n" + source);
+        Write("main.s", "    nop\n" + source + "\n.if 0\n.define RC_OFF 1\n.endif");
         Error(() => ProjectBuild.Build(RetrocoreProject.Load(_folder).Target("t")))
             .Should().MatchRegex(@"main\.s\([23]\): [A-Za-z_:]*(RC_|rc_)").And.Contain("names starting with RC_ are the SDK's");
     }

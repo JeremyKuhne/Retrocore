@@ -92,4 +92,27 @@ public class DebugLineCyclesTests
         lines.Last.Should().HaveCount(40);
         lines.Last[("file39", 1)].Should().Be(47UL);
     }
+
+    /// <summary>
+    ///  The lines' order follows lines added after it was read, and starts over when the counts are forgotten;
+    ///  paths that differ only in case stay in the order they were first counted.
+    /// </summary>
+    [TestMethod]
+    public void OrderFollowsAddedLines()
+    {
+        DebugLineCycles lines = new();
+        lines.Update(("b", 2), 1, entered: true, track: false);
+        lines.Update(("a", 1), 1, entered: true, track: false);
+        lines.Ordered.Should().Equal(("a", 1), ("b", 2));
+
+        lines.Update(("a", 1), 5, entered: false, track: false);
+        lines.Update(("B", 1), 1, entered: true, track: false);
+        lines.Update(("b", 1), 1, entered: true, track: false);
+        lines.Ordered.Should().Equal(("a", 1), ("B", 1), ("b", 1), ("b", 2));
+
+        lines.Clear();
+        lines.Ordered.Should().BeEmpty();
+        lines.Update(("c", 3), 1, entered: true, track: false);
+        lines.Ordered.Should().Equal(("c", 3));
+    }
 }

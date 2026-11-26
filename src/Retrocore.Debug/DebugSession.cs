@@ -2489,12 +2489,12 @@ internal sealed partial class DebugSession
 
     private JsonObject SourceCyclesJson() => new JsonObject
     {
-        ["lines"] = _lineCycles.Last.OrderBy(pair => pair.Key.Path, StringComparer.OrdinalIgnoreCase).ThenBy(pair => pair.Key.Line)
-            .Select(pair => new JsonObject
+        ["lines"] = _lineCycles.Ordered
+            .Select(line => new JsonObject
             {
-                ["path"] = pair.Key.Path,
-                ["line"] = pair.Key.Line,
-                ["cycles"] = pair.Value
+                ["path"] = line.Path,
+                ["line"] = line.Line,
+                ["cycles"] = _lineCycles.Last[line]
             }).ToJsonArray(),
 
         // Each calling line's latest completed call, counting the call, the subroutine and its return.

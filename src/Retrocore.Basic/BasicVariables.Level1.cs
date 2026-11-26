@@ -11,7 +11,7 @@ namespace Retrocore.Basic;
 // Its FOR loop is kept in LOPVAR and the words before it, and each loop it is inside, and the loop of each GOSUB's
 // caller, in the frames PUSHA puts on the Z80's stack: the variable's address, 0 for none, then, for a loop, its
 // STEP, limit, line and text pointer. A GOSUB's own frame, from STKGOS, is the previous GOSUB's frame, the calling
-// line and the text after the GOSUB.
+// line and the text it returns to.
 public sealed partial class BasicVariables
 {
     private const int Level1Letters = 26;

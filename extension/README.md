@@ -1378,8 +1378,8 @@ statement that called it; it shows **BASIC: ready** at the prompt.
   **Handled BASIC errors** at those they will; and **BASIC program end** at STOP,
   END, the end of the program and Ctrl-C or BREAK. Integer BASIC and Color BASIC
   have no error handler, so their errors, such as `*** BAD BRANCH ERR` or `?UL ERROR`,
-  always stop. Neither has Level I, whose HOW?, WHAT? and SORRY stop as BASIC errors, but
-  INPUT asks again after a mistyped answer, so that error counts as handled.
+  always stop. Level I has none either: its HOW?, WHAT? and SORRY stop as BASIC errors,
+  except a mistyped answer to INPUT, which INPUT asks for again, so it counts as handled.
 - **Variables:** a BASIC frame has **Variables**, **Arrays** (each expanding to its
   elements), **Functions** (AppleSoft's DEF FN), **Loops** (the FOR loops in
   progress) and **Program** (where the program, variables, arrays and strings are).
@@ -1414,9 +1414,9 @@ statement that called it; it shows **BASIC: ready** at the prompt.
 
 ### BASIC files
 
-`.applesoft.bas`, `.integer.bas`, `.apple1.bas`, `.business.bas`, `.level2.bas`,
+`.applesoft.bas`, `.integer.bas`, `.apple1.bas`, `.business.bas`, `.level2.bas`, `.level1.bas`,
 `.colorbasic.bas`, `.mbasic.bas`, `.bbcbasic.bas` and `.atari.bas` files are AppleSoft, Integer BASIC, Apple-1 BASIC,
-Business BASIC, Level II BASIC, Color BASIC, MBASIC (BASIC-80 5.21, the Kaypro II's
+Business BASIC, Level II BASIC, Level I BASIC, Color BASIC, MBASIC (BASIC-80 5.21, the Kaypro II's
 CP/M BASIC), BBC BASIC and Atari BASIC. Business BASIC and MBASIC take a reserved word only between separators,
 so their highlighting leaves `PRINTER` a name, and their names count in full, dots
 included (MBASIC's to 40 characters). A Color BASIC file may use every word of Disk Extended Color BASIC; a

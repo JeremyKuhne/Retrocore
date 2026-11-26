@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: MIT
 // See LICENSE file in the project root for full license information
 
+using System.Globalization;
+
 namespace Retrocore.Basic;
 
 /// <summary>
@@ -75,9 +77,21 @@ internal static class Level1Numbers
     }
 
     /// <summary>
-    ///  Writes a number as PRINT does, without the leading space for a positive number.
+    ///  Writes a number as PRINT does, without the leading space for a positive number: in six digits, and in E
+    ///  notation from 1E6 up and below 0.1 (<c>FP_PRINT_FORMAT</c>), where the other BASICs' PRINT goes on to 0.01.
     /// </summary>
     /// <param name="value">The value.</param>
     /// <returns>The text.</returns>
-    internal static string Format(double value) => BasicNumbers.Format(value, 6);
+    internal static string Format(double value)
+    {
+        string text = BasicNumbers.Format(value, 6);
+        if (value == 0 || Math.Abs(double.Parse(text, CultureInfo.InvariantCulture)) >= 0.1) { return text; }
+
+        // From 0.01 up the others write .05; Level I writes 5E-02.
+        string scientific = value.ToString("E5", CultureInfo.InvariantCulture);
+        int e = scientific.IndexOf('E');
+        string mantissa = scientific[..e].TrimEnd('0').TrimEnd('.');
+        int exponent = int.Parse(scientific[(e + 1)..], CultureInfo.InvariantCulture);
+        return $"{mantissa}E-{-exponent:D2}";
+    }
 }

@@ -180,8 +180,8 @@ Level I ROM), the Model 4's, the 4P's boot ROM and the Model II's newest boot RO
 copy of the sources.
 
 **Level I.** A Model III with `"rom": "level1"` runs Level I BASIC from its 4K ROM, the ROM space above it empty, with
-250 baud tapes (`CSAVE` and `CLOAD`) and `LPRINT` and `LLIST` on the printer. It has the BASIC thread, as Level I on the
-[Model I](Trs80ModelI.md#debugging) does, from the symbols of `Level1.asm`'s Model III build. Neither ROM reads the other's tapes; a tape recorded for the other one still goes in, and the debug
+250 baud tapes (`CSAVE` and `CLOAD`) and `LPRINT` and `LLIST` on the printer. It has the BASIC thread, as Level I on
+the [Model I](Trs80ModelI.md#debugging) does, from the symbols of `Level1.asm`'s Model III build. Neither ROM reads the other's tapes; a tape recorded for the other one still goes in, and the debug
 console and the Drives view say so, as on the [Model I](Trs80ModelI.md#the-machine). The Model 4 has only the Model III
 ROM, so its warning for a Level I tape names the machines that play one.
 
@@ -232,8 +232,9 @@ resets the Z80. The Retro Devices view shows the cassette and drives.
 
 The call stack, registers, ports, memory and breakpoints work as on the Model I. When the running ROM is one the SDK's
 sources build (whether from the sources or a dump), its source debugs as a ROM module, so stepping into the ROM shows
-`Model3.asm`, `Level2.asm`, `Model4PBoot.asm` or `Model2Boot.asm`. The Model III's and Model 4's BASIC is Level II's,
-at Level II's addresses, so they have the BASIC thread as the Model I has.
+`Model3.asm`, `Level2.asm`, `Model4PBoot.asm`, `Model2Boot.asm` or `Level1.asm`. The Model III's and Model 4's BASIC is
+Level II's, at Level II's addresses, so they have the BASIC thread as the Model I has; with `rom` `level1`, the Model III
+has Level I's, as [above](#level-i).
 
 ## Testing
 

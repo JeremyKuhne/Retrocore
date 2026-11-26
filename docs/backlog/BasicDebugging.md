@@ -1,7 +1,7 @@
 # Backlog: debugging BASIC programs
 
-Status: **Level I, disk images, Color BASIC's tapes and the CoCo 3 left.** AppleSoft, Integer BASIC, Apple-1 BASIC,
-Level II, Color BASIC on the CoCo 1 and 2, Business BASIC, PET BASIC, BBC BASIC and MBASIC are done, each with some or
+Status: **Level I's `basic` launch, disk images, Color BASIC's tapes and the CoCo 3 left.** AppleSoft, Integer BASIC,
+Apple-1 BASIC, Level II, Level I, Color BASIC on the CoCo 1 and 2, Business BASIC, PET BASIC, BBC BASIC and MBASIC are done, each with some or
 all of: the library ([`Retrocore.Basic`](../../src/Retrocore.Basic)), the command line, the machine-program editor
 with import and export, the language support, the BASIC thread, BASIC variables, and workspace files with labels and
 the `basic` launch. The [extension README](../../extension/README.md) describes them. Each dialect is a class
@@ -10,21 +10,13 @@ debugger or the editor.
 
 ## Level I
 
-Level I BASIC is the Model I's first ROM, Palo Alto Tiny BASIC, with an SDK source
-([`Level1.asm`](../../src/Retrocore.Machines.Trs80/Roms/Level1.asm)). It keeps a program differently from the
-Microsoft BASICs: lines are stored as text, with the abbreviations as typed (`P.` for `PRINT`), and the variables
-are fixed (`A` to `Z`, `A$`, `B$` and one array). Today the `retrocore-level1` language id and the `.level1.bas`
-extension exist, but a Level I document only says it is not supported yet.
+Level I BASIC, on the Model I and the Model III, has its dialect (`Level1Dialect`), the machine-program editor with
+import and export of listings and its tapes, the language support, the BASIC thread and its variables, from the
+symbols of [`Level1.asm`](../../src/Retrocore.Machines.Trs80/Roms/Level1.asm)'s build for each model.
 
-What it takes:
-
-- **The dialect:** reading and writing the program image (a line number and the line's text), the keywords and
-  their abbreviations for highlighting and help, and the hooks (statement start, current line, GOSUB and FOR
-  stacks, errors) named from `Level1.asm`.
-- **The editor and files:** the machine-program editor, text import and export, and Level I's `CSAVE` tapes.
-- **The BASIC thread and variables:** stops, steps and GOSUB frames as the other dialects have them; its scopes
-  are the fixed variables, `A$`, `B$` and the array.
-- **Language support:** a grammar, diagnostics, navigation, hover, completion and renumber, as Level II has.
+What is left: the **`basic` launch** of a `.level1.bas` file. The debug host can load one, but Start Machine and the
+Machine view refuse a BASIC file on Level I, and their refusal of a change of ROM assumes the file is Level II's; it
+should follow the file's dialect, so a Level I file refuses a change to Level II.
 
 ## Disk images
 

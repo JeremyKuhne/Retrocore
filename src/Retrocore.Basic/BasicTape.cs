@@ -34,7 +34,7 @@ public static class BasicTape
     /// <param name="program">The program, Level II or Level I.</param>
     /// <param name="name">The file name: one character, as CSAVE keeps only the first; Level I's tape has none.</param>
     /// <returns>The tape's bytes.</returns>
-    /// <exception cref="ArgumentException">The program is neither Level, or the name is not printable.</exception>
+    /// <exception cref="ArgumentException">The program is of neither Level, or the name is not printable.</exception>
     public static byte[] Write(BasicProgram program, char name)
     {
         ArgumentNullException.ThrowIfNull(program);
@@ -105,7 +105,13 @@ public static class BasicTape
         ReadOnlySpan<byte> program = block.Slice(Level1HeaderLength, length);
         int sum = block[Level1HeaderLength + length];
         foreach (byte value in program) { sum += value; }
-        if ((sum & 0xFF) != 0) { return null; }
+        if ((sum & 0xFF) != 0)
+        {
+            return start == Level1Dialect.ProgramStart
+                ? throw new InvalidDataException("The Level I tape's checksum is wrong: the program did not record or copy whole.")
+                : null;
+        }
+
         if (start != Level1Dialect.ProgramStart)
         {
             throw new InvalidDataException(

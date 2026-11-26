@@ -829,7 +829,7 @@ CATALOG|p|CATALOG [Ddrive] [ON Uunit]|BASIC 4: lists a disk's directory without 
 RENAME|p|RENAME [Ddrive,] "old" TO "new" [ON Uunit]|BASIC 4: renames a disk file.
 SCRATCH|p|SCRATCH [Ddrive,] "name" [ON Uunit]|BASIC 4: deletes disk files, after ARE YOU SURE? in direct mode; the name may hold the wild cards ? and *.
 DIRECTORY|p|DIRECTORY [Ddrive] [ON Uunit]|BASIC 4: lists a disk's directory without touching the program in memory. DS and DS$ then hold the drive's status.
-# Level I BASIC: Tiny BASIC numbers, the variables A to Z, the strings A$ and B$ of 16 characters, the one array A(n), and words that can be cut short with a period, as P. for PRINT.
+# Level I BASIC: Radio Shack's floating point numbers, the variables A to Z, the strings A$ and B$ of 16 characters, the one array A(n), and words that can be cut short with a period, as P. for PRINT.
 LIST|1|LIST [line]|Lists the program from its first line, or from the line given; L. is short for it typed as a command.
 LLIST|1|LLIST [line]|The Model III's Level I: lists the program on the printer.
 RUN|1|RUN [line]|Forgets the GOSUBs, FOR loops and READ's place, and runs the program from its first line or the line given; R. is short for it typed as a command.
@@ -837,7 +837,7 @@ NEW|1|NEW|Erases the program and clears the screen.
 CONT|1|CONT|Continues after STOP or BREAK, at the statement after the one that stopped; C. is short for it.
 CLOAD|1|CLOAD|Loads a program from tape at 250 baud, in place of the one in memory.
 CSAVE|1|CSAVE|Saves the program to tape at 250 baud.
-NEXT|1|NEXT v|Ends a FOR loop: adds the STEP to v and goes back after the FOR while v has not passed the limit; N. is short for it.
+NEXT|1|NEXT v|Ends a FOR loop: adds the STEP to v and goes back after the FOR while v has not passed the limit; N. is short for it in a program, where NEW is not a word.
 LET|1|[LET] v = expression|Assigns a number to one of A to Z or an element A(n), or text to A$ or B$; LET can be left out.
 INPUT|1|INPUT ["prompt";] v [, v ...] / INPUT # v [, v ...]|Reads values typed after a question mark, or from tape after #; a value that is not a number asks again. I. is short for it.
 IF|1|IF condition [THEN] statement / IF condition THEN line|Runs the rest of the line when the condition is not zero, else goes on with the next line; THEN can be left out before a statement.

@@ -115,7 +115,8 @@ internal sealed class Level1Dialect : BasicDialect
     private const int DataPointer = 0x40A1;
 
     // The statements a program runs (TABLE1 from NEXT, TABLE1_PROGRAM), in the table's order, which an abbreviation
-    // takes the first of; then those typed only as commands. LPRINT is the Model III's.
+    // takes the first of; then those typed only as commands. LPRINT and LLIST are the Model III's: one dialect serves
+    // both models, so it takes them on the Model I too, where the ROM answers WHAT?.
     private static readonly string[] s_statements =
     [
         "NEXT", "LET", "INPUT", "IF", "ON", "GOTO", "GOSUB", "RESET", "RETURN", "READ", "RESTORE", "REM", "DATA", "FOR",
@@ -291,6 +292,11 @@ internal sealed class Level1Dialect : BasicDialect
     ///   whose bytes read as a negative line number, so that an error in what is typed asks again (<c>INPERR</c>);
     ///   the line running is kept on the stack <c>SCRATCH</c> points at.
     ///  </para>
+    ///  <para>
+    ///   While READ stores a DATA item, <c>CURRNT</c> is 0 (<c>ST_READ_1</c>), and the line is only on the stack under
+    ///   the call, so BASIC reads as in direct mode then: an error in a DATA item is reported, as the ROM reports it,
+    ///   with no line.
+    ///  </para>
     /// </remarks>
     /// <param name="memory">The memory.</param>
     /// <returns>The line's address.</returns>
@@ -299,6 +305,14 @@ internal sealed class Level1Dialect : BasicDialect
         int line = BasicProgram.Word(memory, CurrentLine);
         return line is 0 or >= ProgramStart ? line : BasicProgram.Word(memory, BasicProgram.Word(memory, Scratch));
     }
+
+    /// <summary>
+    ///  Gets the number of the line running, or 0 in direct mode.
+    /// </summary>
+    /// <param name="memory">The memory.</param>
+    /// <returns>The line number.</returns>
+    internal static int CurrentLineNumber(IBasicMemory memory) =>
+        LineAddress(memory) is not 0 and var line ? BasicProgram.Word(memory, line) : 0;
 
     /// <summary>
     ///  Gets whether INPUT has its stand-in in <c>CURRNT</c>, so an error asks for the input again.
@@ -562,8 +576,10 @@ internal sealed class Level1Dialect : BasicDialect
                 output.Add(Token(inner), x);
                 x = after;
 
-                // THEN is followed by a line number, which is a GOTO, or a statement.
+                // THEN is followed by a line number, which is a GOTO, or a statement; IF's condition can be followed
+                // by a statement without THEN, whose own words are looked up after it.
                 if (inner == "THEN") { start = true; }
+                else if (statement == "IF" && s_statements.Contains(inner)) { statement = inner; }
                 continue;
             }
 

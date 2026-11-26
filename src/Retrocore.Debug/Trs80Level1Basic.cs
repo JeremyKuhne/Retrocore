@@ -20,7 +20,7 @@ namespace Retrocore.Debug;
 ///  </para>
 ///  <para>
 ///   A GOSUB's frame on the Z80's stack, from <c>STKGOS</c>, is the previous frame, the calling line's address and the
-///   text after the GOSUB's line number. Level I's errors are three messages, HOW?, WHAT? and SORRY, which
+///   text after the GOSUB's line number, or for ON GOSUB the end of its statement. Level I's errors are three messages, HOW?, WHAT? and SORRY, which
 ///   <c>ERROR</c> is given in DE; an error in what INPUT reads asks for it again, so INPUT takes it as a handler would.
 ///  </para>
 /// </remarks>
@@ -34,7 +34,8 @@ internal sealed class Trs80Level1Basic
     private readonly Func<Z80Registers> _registers;
     private readonly Action<Z80Registers> _setRegisters;
     private readonly Action _resetCalls;
-    private readonly Dictionary<ushort, string> _errors;
+    private readonly Dictionary<ushort, (int Code, string Message)> _errors;
+    private readonly ushort _ready;
 
     private Trs80Level1Basic(
         IDebugTarget target,
@@ -42,13 +43,15 @@ internal sealed class Trs80Level1Basic
         Action<Z80Registers> setRegisters,
         Action resetCalls,
         BasicRom rom,
-        Dictionary<ushort, string> errors)
+        ushort ready,
+        Dictionary<ushort, (int Code, string Message)> errors)
     {
         _target = target;
         _registers = registers;
         _setRegisters = setRegisters;
         _resetCalls = resetCalls;
         Rom = rom;
+        _ready = ready;
         _errors = errors;
     }
 
@@ -75,7 +78,7 @@ internal sealed class Trs80Level1Basic
     {
         string[] names =
         [
-            "ST_RUN_4", "RSTART", "ERROR", "ST_RUN", "ST_CONT", "ST_STOP", "ST_END", "HOW_MSG", "WHAT_MSG", "SORRY_MSG"
+            "ST_RUN_4", "RSTART", "RSTART_2", "ERROR", "ST_RUN", "ST_CONT", "ST_STOP", "ST_END", "HOW_MSG", "WHAT_MSG", "SORRY_MSG"
         ];
 
         if (names.Any(name => !symbols.ContainsKey(name))) { return null; }
@@ -83,11 +86,12 @@ internal sealed class Trs80Level1Basic
         ushort statement = Address("ST_RUN_4");
 
         // STOP and BREAK both stop at ST_STOP; END runs into ST_NEW_2 and RSTART, which a program that runs off its
-        // last line reaches too, by ST_NEW_2 or, from a false IF or a REM, straight from FNDSKP.
+        // last line reaches too, by ST_NEW_2 or, from a false IF or a REM, straight from FNDSKP. Every way back to
+        // reading lines, STOP's included, which prints no READY, comes to RSTART_2.
         BasicRom rom = new(
             StatementStart: statement,
             Gone: statement,
-            Prompt: Address("RSTART"),
+            Prompt: Address("RSTART_2"),
             Error: Address("ERROR"),
             Run: Address("ST_RUN"),
             Continue: Address("ST_CONT"),
@@ -98,14 +102,15 @@ internal sealed class Trs80Level1Basic
                 [Address("RSTART")] = "PRGEND"
             });
 
-        Dictionary<ushort, string> errors = new()
+        // Level I's errors have no codes; they are numbered here in the order the ROM keeps their messages.
+        Dictionary<ushort, (int, string)> errors = new()
         {
-            [Address("HOW_MSG")] = "HOW?",
-            [Address("WHAT_MSG")] = "WHAT?",
-            [Address("SORRY_MSG")] = "SORRY"
+            [Address("HOW_MSG")] = (1, "HOW?"),
+            [Address("WHAT_MSG")] = (2, "WHAT?"),
+            [Address("SORRY_MSG")] = (3, "SORRY")
         };
 
-        return new(target, registers, setRegisters, resetCalls, rom, errors);
+        return new(target, registers, setRegisters, resetCalls, rom, Address("RSTART"), errors);
     }
 
     private TargetBasicMemory Memory => new(_target);
@@ -113,7 +118,7 @@ internal sealed class Trs80Level1Basic
     /// <summary>
     ///  Gets the number of the line running, or 0 in direct mode.
     /// </summary>
-    internal int CurrentLine => Level1Dialect.LineAddress(Memory) is not 0 and var line ? Word(line) : 0;
+    internal int CurrentLine => Level1Dialect.CurrentLineNumber(Memory);
 
     /// <summary>
     ///  Gets DE less one: the text pointer before the statement at <c>ST_RUN_4</c>.
@@ -146,8 +151,8 @@ internal sealed class Trs80Level1Basic
     }
 
     /// <summary>
-    ///  Gets the GOSUBs in progress, most recent first: the calling line and the address before the text after the
-    ///  GOSUB's line number.
+    ///  Gets the GOSUBs in progress, most recent first: the calling line and the address before the text the GOSUB
+    ///  returns to, after its line number, or for ON GOSUB the end of its statement.
     /// </summary>
     internal IReadOnlyList<(int Line, int TextPointer)> Gosubs
     {
@@ -170,12 +175,17 @@ internal sealed class Trs80Level1Basic
     /// <summary>
     ///  Describes the error <c>ERROR</c> is reporting: its message, by the address DE gives it.
     /// </summary>
-    /// <returns>The message's address, the message, and whether INPUT will ask again.</returns>
+    /// <returns>
+    ///  The error's number, 1 for HOW?, 2 for WHAT? and 3 for SORRY; the message; and whether INPUT will ask again.
+    /// </returns>
     internal (int Code, string Message, bool Handled) Error()
     {
         int message = _registers().DE;
-        string text = _errors.TryGetValue((ushort)message, out string? known) ? known : $"error at ${message:X4}";
-        return (message, text, Level1Dialect.InputWaiting(Memory));
+        (int code, string text) = _errors.TryGetValue((ushort)message, out (int, string) known)
+            ? known
+            : (0, $"the message at ${message:X4}");
+
+        return (code, text, Level1Dialect.InputWaiting(Memory));
     }
 
     /// <summary>
@@ -206,7 +216,8 @@ internal sealed class Trs80Level1Basic
     }
 
     /// <summary>
-    ///  Puts BASIC at READY, as an error does: direct mode, the stack at <c>$4200</c>, at <c>RSTART</c>.
+    ///  Puts BASIC at READY, as an error does: direct mode, the stack at <c>$4200</c>, at <c>RSTART</c>, which prints
+    ///  READY.
     /// </summary>
     internal void EnterPrompt()
     {
@@ -214,7 +225,7 @@ internal sealed class Trs80Level1Basic
         _target.Poke(Level1Dialect.CurrentLine + 1, 0);
         Z80Registers registers = _registers();
         registers.SP = StackTop;
-        registers.PC = Rom.Prompt;
+        registers.PC = _ready;
         _setRegisters(registers);
         _resetCalls();
     }

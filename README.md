@@ -236,7 +236,7 @@ verify them—and also compare against your chip dumps byte for byte when dumps 
 | [`Retrocore.Cpu.M6809`](src/Retrocore.Cpu.M6809) | Cycle-exact Motorola MC6809 with indexed postbytes, interrupts, `SYNC`/`CWAI`, and its [instruction set](src/Retrocore.Cpu.M6809/M6809Isa.txt). |
 | [`Retrocore.Cpu.Z80`](src/Retrocore.Cpu.Z80) | T-state-exact Z80 with undocumented flags and MEMPTR, and its [instruction set](src/Retrocore.Cpu.Z80/Z80Isa.txt). |
 | [`Retrocore.Assembler`](src/Retrocore.Assembler) | Multi-dialect assembler (native, ca65, Merlin, MACRO-10), disassembler, flow analysis, and `;;` documentation parser. |
-| [`Retrocore.Basic`](src/Retrocore.Basic) | AppleSoft, Integer BASIC, and Level II BASIC: tokenizers, listings, label-based source compilation, diagnostics, expression evaluation, renumbering, tokenized files, and Model I tapes. |
+| [`Retrocore.Basic`](src/Retrocore.Basic) | The Apple, TRS-80, Color Computer, PET, BBC Micro, Atari and CP/M BASICs, Level I among them: tokenizers, listings, label-based source compilation, diagnostics, expression evaluation, renumbering, tokenized files, and Model I tapes. |
 | [`Retrocore.Media`](src/Retrocore.Media) | Disk, tape, and block media: WOZ, DOS 3.3 and 3.2 (`.dsk`, `.do`, `.d13`), ProDOS block images, SOS and Apple Pascal volumes and code files, sector floppies (DMK, IMD and raw Kaypro images in `Floppy`; JV1, JV3 and JVC), and CAS tapes. |
 | [`Retrocore.Pascal`](src/Retrocore.Pascal) | Apple Pascal's p-code and its disassembler, and the p-machine's state as its interpreters keep it on the Apple II and Apple III. |
 | [`Retrocore.Input`](src/Retrocore.Input) | SDL3 game controller discovery and polling, mapped to emulated joysticks and paddles. |
@@ -378,7 +378,7 @@ execution under Native AOT, and [`tests/Retrocore.Perf`](tests/Retrocore.Perf) h
 
 Design notes for upcoming work live in [`docs/backlog`](docs/backlog):
 
-- [debugging BASIC programs](docs/backlog/BasicDebugging.md): Level I BASIC and disk-image import/export;
+- [debugging BASIC programs](docs/backlog/BasicDebugging.md): Level I's `basic` launch and disk-image import/export;
 - [choosing and starting a machine, next round](docs/backlog/MachineLaunch.md);
 - [CPU core and machine loop speed](docs/backlog/CoreOptimization.md), including what .NET 11 might offer;
 - [the language server's SDK index speed](docs/backlog/SdkIndexOptimization.md), with every change measured;

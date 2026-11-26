@@ -360,8 +360,8 @@ const petBasic = keywords("PetBasicDialect.cs");
 const atari = keywords("AtariBasicDialect.cs");
 // Level I's words in the order EXEC tries them: the statements a program runs, the commands, then the words inside
 // statements and the functions; an abbreviation, as P. for PRINT, is the first word with those letters.
-const level1 = [...keywords("Level1Dialect.cs", "s_statements"), ...keywords("Level1Dialect.cs", "s_commands"),
-    "THEN", "TO", "STEP", "TAB", "AT", ...keywords("Level1Dialect.cs", "s_functions")];
+const level1 = ["s_statements", "s_commands", "s_ifWords", "s_forWords", "s_printWords", "s_functions"]
+    .flatMap(table => keywords("Level1Dialect.cs", table));
 const union = [...appleSoft, ...level2.filter(word => !appleSoft.includes(word))];
 const outputs = [
     ["applesoft.tmLanguage.json", grammar("applesoft", "AppleSoft BASIC", appleSoft)],

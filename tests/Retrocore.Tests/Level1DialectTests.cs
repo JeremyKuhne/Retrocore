@@ -75,7 +75,8 @@ public class Level1DialectTests
         BasicVariable text = Found(variables.Find("A$"));
         variables.Read(text.Kind, text.ValueAddress).Text.Should().Equal("HELLO"u8.ToArray());
 
-        // What the ROM stored is what the debugger writes; the ROM's zero keeps whatever mantissa it had.
+        // What the ROM stored is what the debugger writes. C, zero, is left out: the ROM's zero keeps whatever mantissa
+        // it had.
         foreach (string name in (string[])["A", "B", "D"])
         {
             BasicVariable variable = Found(variables.Find(name));
@@ -173,6 +174,29 @@ public class Level1DialectTests
         byte[] memory = [.. new byte[128], 0xA5, 0x41, 0xFE, 0x42, 0x03, .. code, checksum];
         FluentActions.Invoking(() => BasicTape.Read(memory, out _)).Should().Throw<InvalidDataException>()
             .WithMessage("This Level I tape loads $41FE-$4202, not a BASIC program from $4200*");
+    }
+
+    /// <summary>
+    ///  The debugger writes numbers as the ROM's PRINT does, E notation below 0.1 and from a million up.
+    /// </summary>
+    [TestMethod]
+    public void NumbersPrintAsTheRomPrintsThem()
+    {
+        Trs80Machine machine = Boot();
+        double[] values = [0.05, 0.5, 123.5, -7, 0.001234, 1234567];
+        Type(machine, "CLS\r");
+        Type(machine, $"P. {string.Join(";", values.Select(value => value.ToString("R", System.Globalization.CultureInfo.InvariantCulture)))}\r");
+        Run(machine, 1);
+        string printed = Screen(machine);
+        foreach (double value in values)
+        {
+            printed.Should().Contain($" {Level1Numbers.Format(value)} ", $"the ROM prints {value} so");
+        }
+
+        // A statement after IF's condition, without THEN, has its own words.
+        BasicSource source = BasicSource.Analyze("10 IF A FOR I=1 TO 5\n", BasicDialect.Level1);
+        string[] words = [.. source.Sites.Where(site => site.Kind == BasicSiteKind.Keyword).Select(site => site.Word)];
+        words.Should().Equal("IF", "FOR", "TO");
     }
 
     /// <summary>

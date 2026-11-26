@@ -12,17 +12,19 @@ namespace Retrocore.Basic;
 /// </summary>
 /// <remarks>
 ///  <para>
-///   As Level I's <c>EXPR</c>: one comparison at most, 1 when it holds and 0 when not, of sums of products of
-///   factors, each a number, one of A to Z, an element <c>A(n)</c>, ABS or INT of an expression in parentheses, or
-///   an expression in parentheses. A$ and B$ read as their text, and compare with <c>=</c> and <c>&lt;&gt;</c>.
-///   RND, MEM and POINT, which read the machine's state, are refused.
+///   As Level I's <c>EXPR</c>: one comparison at most (<c>=</c>, <c>&lt;</c>, <c>&gt;</c>, <c>&lt;=</c>, <c>&gt;=</c>
+///   or <c>&lt;&gt;</c>, as <c>TABLE7</c> and its handlers read them), 1 when it holds and 0 when not, of sums of
+///   products of factors, each a number, one of A to Z, an element <c>A(n)</c>, ABS or INT of an expression in
+///   parentheses, or an expression in parentheses. RND, MEM and POINT, which read the machine's state, are refused.
+///   Level I's expressions have no strings; for the debugger, A$ and B$ read as their text, and compare with
+///   <c>=</c> and <c>&lt;&gt;</c>.
 ///  </para>
 /// </remarks>
 internal sealed class Level1BasicExpression
 {
     private const int MaximumDepth = 32;
 
-    private static readonly string[] s_symbols = ["<>", "><", ">=", "=>", "<=", "=<", "=", "<", ">", "+", "-", "*", "/", "(", ")"];
+    private static readonly string[] s_symbols = ["<>", ">=", "<=", "=", "<", ">", "+", "-", "*", "/", "(", ")"];
     private static readonly HashSet<string> s_refused = ["RND", "MEM", "POINT"];
 
     private readonly BasicVariables _variables;
@@ -63,7 +65,7 @@ internal sealed class Level1BasicExpression
     private BasicValue Relation()
     {
         BasicValue left = Sum();
-        if (Peek() is not ("=" or "<>" or "><" or "<" or ">" or "<=" or "=<" or ">=" or "=>")) { return left; }
+        if (Peek() is not ("=" or "<>" or "<" or ">" or "<=" or ">=")) { return left; }
         string relation = _tokens[_at++];
         BasicValue right = Sum();
         if (left.IsString != right.IsString) { throw Syntax("a string compares only with a string"); }
@@ -71,7 +73,7 @@ internal sealed class Level1BasicExpression
             ? left.Text.AsSpan().SequenceCompareTo(right.Text.AsSpan())
             : left.Number.CompareTo(right.Number);
 
-        if (left.IsString && relation is not ("=" or "<>" or "><"))
+        if (left.IsString && relation is not ("=" or "<>"))
         {
             throw Syntax("strings compare only with = and <>");
         }
@@ -79,10 +81,10 @@ internal sealed class Level1BasicExpression
         bool holds = relation switch
         {
             "=" => order == 0,
-            "<>" or "><" => order != 0,
+            "<>" => order != 0,
             "<" => order < 0,
             ">" => order > 0,
-            "<=" or "=<" => order <= 0,
+            "<=" => order <= 0,
             _ => order >= 0
         };
 

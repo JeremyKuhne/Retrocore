@@ -2,8 +2,9 @@
 // SPDX-License-Identifier: MIT
 // See LICENSE file in the project root for full license information
 
-// BASIC files in the workspace: which dialect each is, renumbering, and tokenized programs and Model I tapes opened
-// as listings through retrocore-basic-file://, which the language server lists and tokenizes back on save.
+// BASIC files in the workspace: which dialect each is, renumbering, and tokenized programs and Model I tapes, Level II's
+// and Level I's, opened as listings through retrocore-basic-file://, which the language server lists and tokenizes back
+// on save.
 
 import * as vscode from "vscode";
 import { basicLanguages, languageRequest } from "./languageClient";

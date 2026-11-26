@@ -357,7 +357,12 @@ internal sealed partial class Trs80Model3DebugTarget : IDebugTarget
     ///   Level II's current line is at <c>$40A2</c>, as on the Model I.
     ///  </para>
     /// </remarks>
-    public int BasicCurrentLine => _level1?.CurrentLine ?? (Peek(Level2CurrentLine) | (Peek((ushort)(Level2CurrentLine + 1)) << 8));
+    public int BasicCurrentLine => Basic switch
+    {
+        null => 0,
+        Level1Dialect => Level1Dialect.CurrentLineNumber(new TargetBasicMemory(this)),
+        _ => Peek(Level2CurrentLine) | (Peek((ushort)(Level2CurrentLine + 1)) << 8)
+    };
 
     /// <inheritdoc/>
     public (int Line, int Address)? BasicStatementStart(ushort pc)

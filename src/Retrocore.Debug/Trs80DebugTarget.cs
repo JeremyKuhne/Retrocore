@@ -322,7 +322,9 @@ internal sealed partial class Trs80DebugTarget : IDebugTarget
     public BasicRom? BasicRom => _level1?.Rom ?? _basicRom;
 
     /// <inheritdoc/>
-    public int BasicCurrentLine => _level1?.CurrentLine ?? (Peek(CurrentLine) | (Peek((ushort)(CurrentLine + 1)) << 8));
+    public int BasicCurrentLine => _machine.Configuration.Rom == Trs80Rom.Level1
+        ? Level1Dialect.CurrentLineNumber(new TargetBasicMemory(this))
+        : Peek(CurrentLine) | (Peek((ushort)(CurrentLine + 1)) << 8);
 
     /// <inheritdoc/>
     public (int Line, int Address)? BasicStatementStart(ushort pc)

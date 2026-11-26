@@ -256,7 +256,7 @@ Level I file.
 | --- | --- |
 | `Trs80MachineTests`, `Trs80DiskTests`, `Trs80CassetteTests` | The machine, with test ROMs assembled in the tests. |
 | `Trs80RomTests` | Level II and Level I boot. CSAVE and CLOAD round-trip, 1.3 takes typed lines, and NEWDOS/80 boots from JV1 and JV3. |
-| `Level1DialectTests` | Level I's program, as typed into the SDK's Level I ROM, read back and written in; its variables and numbers; its FOR loops from `LOPVAR` and the stack; and its statements, abbreviations and line references. |
+| `Level1DialectTests` | Level I's program, as typed into the SDK's Level I ROM, read back and written in; its variables and numbers, written as its PRINT writes them; its FOR loops from `LOPVAR` and the stack; its statements, abbreviations and line references; and its CSAVE tapes, a machine-code block refused. |
 | `Trs80TapeContentsTests` | Which BASIC a tape is for, from Level II's and Level I's own recordings, the cassette's warning for the other Level's tapes, and Level I's `PRINT MEM` in 4K and 16K. |
 | `Trs80OracleTests` (Conformance) | The same keystrokes on our machine and on MAME, through [`tools/Trs80Oracle.lua`](../tools/Trs80Oracle.lua). The screens must match, and so must the BASIC program bytes. |
 | `Trs80RomSourceTests` | The ROM sources, by digest and against the dumps. |

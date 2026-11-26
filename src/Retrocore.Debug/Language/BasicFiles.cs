@@ -101,7 +101,7 @@ internal static class BasicFiles
         if (file.Contains("#fa", StringComparison.OrdinalIgnoreCase)) { return BasicDialect.Integer; }
         return file.Contains("#fc", StringComparison.OrdinalIgnoreCase)
             ? BasicDialect.AppleSoft
-            : throw new ArgumentException($"Say which BASIC {file} is: applesoft, integer, apple1, level2, business, colorbasic, mbasic, petbasic, bbcbasic or atari.");
+            : throw new ArgumentException($"Say which BASIC {file} is: applesoft, integer, apple1, level2, level1, business, colorbasic, mbasic, petbasic, bbcbasic or atari.");
     }
 
     private static bool IsTape(string path) => path.EndsWith(".cas", StringComparison.OrdinalIgnoreCase);

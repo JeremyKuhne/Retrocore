@@ -8,7 +8,8 @@
 // while an interrupt comes in, on the SDK's ROMs or none, so it needs no dumps: a PET (6502, the kernal's 60 Hz
 // IRQ), a CoCo 2 (6809, the field sync IRQ), a TRS-80 Model III (Z80, its 30 Hz clock) and an Altair (8080, the
 // 88-2SIO's transmitter, which interrupts every run). On each, steps in, over and out and continuing cross an
-// interrupt taken at a breakpoint.
+// interrupt taken at a breakpoint, and a breakpoint set in the handler stops where it returns. On the Model III, a
+// logpoint after HALT logs once each time an interrupt wakes it.
 
 import { resolve, join } from "node:path";
 import { writeFileSync, existsSync, unlinkSync } from "node:fs";
@@ -179,6 +180,21 @@ const machines = [
         runs: 65536,
         entry: "$0038",
         interrupts: "[Irqs].w",
+        // HALT waits for each of ten clock interrupts, which return to Tick: halted, the Z80 refreshes every four
+        // T-states without leaving Tick's boundary, so Tick's logpoint logs once a wake.
+        idle: [
+            ".cpu Z80",
+            ".org $7000",
+            "        LD HL,Runs",
+            "        EI",
+            "Wait:   HALT",
+            "Tick:   INC [HL]",
+            "        LD A,[HL]",
+            "        CP 10",
+            "        JR NZ,Wait",
+            "Done:   JR Done",
+            "Runs:   .byte 0"
+        ],
         // For the steps, a loop that waits, with interrupts off, for the clock's active-low bit in the interrupt
         // status. EI turns them on after the NOP that follows it, so the interrupt is taken at Tick.
         steps: {
@@ -353,6 +369,23 @@ try {
         assert.equal(runs, machine.runs, `${machine.name}: the loop's logpoint logs once a run`);
         assert.equal(hits(set.breakpoints[0].id), machine.runs, `${machine.name}: the loop's logpoint counts a hit a run`);
         assert.equal(entries, interrupts, `${machine.name}: the handler's logpoint logs once an interrupt`);
+
+        if (machine.idle) {
+            at = `${machine.name}: waking from HALT`;
+            writeFileSync(source, [...machine.idle, ""].join("\n"));
+            const lineIn = label => machine.idle.findIndex(text => text.startsWith(`${label}:`)) + 1;
+            events.length = 0;
+            await request("launch", { ...machine.launch, source, stopOnEntry: true, speed: "max", sound: "off", logpointLimit: 0 });
+            await request("setExceptionBreakpoints", { filters: [] });
+            await request("setBreakpoints", { source: { path: source }, breakpoints: [
+                { line: lineIn("Tick"), logMessage: "woke" }, { line: lineIn("Done") }
+            ] });
+            await request("configurationDone");
+            assert.equal((await event("stopped")).reason, "entry");
+            assert.equal((await stop("continue")).reason, "breakpoint", `${machine.name}: the waits end at Done`);
+            assert.equal(await evaluate("[Runs]"), 10);
+            assert.equal(logged("woke"), 10, `${machine.name}: the logpoint after HALT logs once a wake`);
+        }
 
         if (machine.steps) {
             // A relaunch runs the steps' program, or the loop again from the start.

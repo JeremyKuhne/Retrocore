@@ -165,6 +165,14 @@ internal sealed class SoftCardDebugTarget : IDebugTarget
     public bool IsTakingInterrupt => Card.Processor.IsTakingInterrupt;
 
     /// <inheritdoc/>
+    /// <remarks>
+    ///  <para>
+    ///   A halted Z80 runs a refresh fetch every four T-states without leaving the instruction after its HALT.
+    ///  </para>
+    /// </remarks>
+    public bool IsIdle => Card.Processor.IsHalted;
+
+    /// <inheritdoc/>
     public bool InInstruction => !IsInstructionBoundary;
 
     /// <inheritdoc/>

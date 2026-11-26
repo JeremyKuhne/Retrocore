@@ -204,6 +204,7 @@ internal sealed partial class DebugSession
     // ends between instructions either way. Returns whether it got there.
     private bool ReachStatement(BasicRom rom)
     {
+        ForgetBoundaries();
         ulong end = Target.CycleCount + (ulong)(Target.ClockHertz * StatementWaitSeconds);
         while (true)
         {

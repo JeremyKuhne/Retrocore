@@ -946,6 +946,7 @@ internal sealed partial class DebugSession
     private void Boot(double seconds)
     {
         if (!(seconds is >= 0 and <= 60)) { throw new ArgumentException("bootSeconds must be from 0 to 60."); }
+        ForgetBoundaries();
         Target.RunCycles((int)(seconds * Target.ClockHertz));
         while (!Target.IsInstructionBoundary) { Target.StepCycle(); }
         Target.CallStack.Reset();
@@ -1836,7 +1837,7 @@ internal sealed partial class DebugSession
         bool atBoundary = !instruction && cpu.IsInstructionBoundary;
         bool met = atBoundary && _metBoundaries.Count != 0 && FindMet(cpu, cpu.ProgramCounter) >= 0;
         bool left = false;
-        if (!atBoundary) { LeftBoundary(cpu); }
+        if (!atBoundary && !cpu.IsIdle) { LeftBoundary(cpu); }
         IDebugTarget? host = cpu is SoftCardDebugTarget && !IsMachineCpu(cpu) ? Target : null;
 
         // An interrupt's response that fetches no opcode, as on the 6502 and 6809, is not an instruction.
@@ -1907,9 +1908,9 @@ internal sealed partial class DebugSession
 
             if (instruction && cpu.IsInstructionBoundary) { return _dataHits.Count == 0 || DataStop(cpu); }
 
-            // That response ends at the handler's first instruction, whose breakpoints the caller checks. The
-            // watchpoints its stacking hit stop now.
-            if (responding && cpu.IsInstructionBoundary) { return _dataHits.Count == 0 || DataStop(cpu); }
+            // That response, or a reset's, ends at the handler's first instruction, whose breakpoints the caller
+            // checks. The watchpoints its stacking hit stop now.
+            if ((responding || left) && cpu.IsInstructionBoundary) { return _dataHits.Count == 0 || DataStop(cpu); }
 
             // A Z80 that handed the bus back mid-instruction, as a 16-bit store to the switch does, waits there.
             if (cpu is SoftCardDebugTarget { Card.Running: false }) { return _dataHits.Count == 0 || DataStop(cpu); }
@@ -2330,7 +2331,6 @@ internal sealed partial class DebugSession
         int? threadId = null)
     {
         Invalidate();
-        _stopCount++;
         if (HasEjected()) { CheckpointSoon(); }
         int thread = threadId ?? (_target is null ? 1 : ThreadOf(Cpu));
         _stoppedThread = thread;

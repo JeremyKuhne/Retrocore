@@ -26,7 +26,9 @@ namespace Retrocore.Debug.Project;
 ///   marks and names Retrocore Memory keeps default to <c>&lt;name&gt;.&lt;target&gt;.hints.json</c> beside the
 ///   project file. Breakpoints, <c>stopOnEntry</c> and <c>checkContracts</c> stay the launch's. On the Apple II the
 ///   ROM runs for <c>bootSeconds</c> (a quarter of a second unless the launch says) as the machine is built,
-///   before the cards and a saved machine's media go in and before the program loads, so the Monitor has set up the routines a bare program calls, such as COUT.
+///   before the cards and a saved machine's media go in and before the program loads, so the Monitor has set up the
+///   routines a bare program calls, such as COUT. A target whose environment boots its image, such as <c>dos33</c>,
+///   loads nothing and takes no <c>bootSeconds</c>: the machine boots the image to the program's entry.
 ///  </para>
 /// </remarks>
 internal static class ProjectLaunch

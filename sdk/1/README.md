@@ -121,9 +121,11 @@ The `wozmon` maps, `apple1-4k` to `-32k`, are the bare Apple-1's but for their d
 program typed in as hex, or read from the cassette interface's tape, loads where a bare one does, and runs with the
 Woz Monitor as a bare one does.
 
-The `dos33` map, `apple2-48k`, is the bare one's with DOS 3.3 reserved from `$9600` (its three file buffers, then DOS
-itself from `$9D00`), as the SDK builds DOS for a 48K machine: a target with less RAM has no map. It loads at `$6000`
-and has the same zero page, which neither the Monitor nor DOS 3.3 uses.
+The `dos33` maps, `apple2-48k` and the Apple II's `apple2-ii-48k`, are the bare one's with DOS 3.3 reserved from
+`$9600` (its three file buffers, then DOS itself from `$9D00`), as the SDK builds DOS for a 48K machine: a target with
+less RAM has no map. They also reserve HELLO, which BASIC is still running as the program loads: AppleSoft's at
+`$0801` with its variables to `$08FF`, and on the II, Integer BASIC's variables there and its program below HIMEM,
+`$9500-$95FF`. They load at `$6000` and have the bare map's zero page, which neither the Monitor nor DOS 3.3 uses.
 
 A bare Apple III program runs before SOS, in the power-on state: its zero page is physically the system bank's
 `$FF00` page, whose `$FFCA-$FFCF` are the NMI and IRQ vectors, so the map leaves `$C0-$FF` to the machine. The

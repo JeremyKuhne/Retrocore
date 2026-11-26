@@ -1045,7 +1045,8 @@ internal sealed partial class DebugSession
         // A bare program calls the ROM's routines, such as COUT, which the Apple II's Monitor sets up as it resets, so
         // the ROM runs first, as the other machines' ROMs do before a program loads. It runs before the target's cards
         // and a saved machine's cards and disks go in; a disk the target's own options insert is in the drive from the
-        // start, and the ROM starts booting it for that time, which bootSeconds: 0 leaves out.
+        // start, and the ROM starts booting it for that time, which bootSeconds: 0 leaves out. A target whose environment
+        // boots its image is booted to its entry once its image is in (BootImage), so it takes no bootSeconds.
         bool booted = built?.Target.Built?.BootsImage == true;
         if (built is not null && !booted && Target is Apple2DebugTarget) { Boot(args.Double("bootSeconds") ?? 0.25); }
 

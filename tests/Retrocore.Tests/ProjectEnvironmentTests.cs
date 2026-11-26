@@ -182,6 +182,38 @@ public sealed class ProjectEnvironmentTests
         TargetBuild first = ProjectBuild.Build(RetrocoreProject.Load(_folder).Target("dos"));
         (first.Media.Image, first.Media.Note).Should().Be((null, "the binary is the B file MYGAME, which loads at its first address"));
         File.Exists(disk).Should().BeFalse("the earlier build's disk goes");
+
+        // With no entry, the first byte is the entry, and HELLO BRUNs the program.
+        Write("retrocore.json", """
+            { "sdk": "1", "name": "my-game", "cpu": "6502", "sources": ["main.s"],
+              "targets": { "dos": { "machine": "apple2-iiplus", "environment": "dos33" } } }
+            """);
+
+        ProjectBuild.Build(RetrocoreProject.Load(_folder).Target("dos"));
+        DosDisk.ReadFiles(File.ReadAllBytes(disk))[0].TryGetProgram(out hello).Should().BeTrue();
+        Basic.BasicProgram.FromImage(Basic.BasicDialect.AppleSoft, hello.Span).ToText().Should().Contain("CHR$(4);\"BRUN MYGAME\"").And.NotContain("CALL");
+    }
+
+    /// <summary>
+    ///  On the Apple II, HELLO is Integer BASIC's, its Ctrl-D in its string, and it CALLs an entry from <c>$8000</c>
+    ///  as the negative number Integer BASIC takes for it.
+    /// </summary>
+    [TestMethod]
+    public void Dos33HelloOnTheIIIsIntegerBasic()
+    {
+        Write("retrocore.json", """
+            { "sdk": "1", "name": "game", "cpu": "6502", "sources": ["main.s"], "entry": "START",
+              "targets": { "dos": { "machine": "apple2-ii", "environment": "dos33", "memoryMap": { "load": "$8000" } } } }
+            """);
+
+        Write("main.s", "DATA:\n    .byte 1\nSTART:\n    rts\n");
+        ProjectBuild.Build(RetrocoreProject.Load(_folder).Target("dos"));
+        DosFile hello = DosDisk.ReadFiles(File.ReadAllBytes(Path.Join(_folder, "artifacts", "dos", "game.dsk")))[0];
+        hello.Type.Should().Be(DosFileType.IntegerBasic);
+        hello.TryGetProgram(out ReadOnlyMemory<byte> program).Should().BeTrue();
+        string text = Basic.BasicProgram.FromImage(Basic.BasicDialect.Integer, program.Span).ToText();
+        text.Should().Contain("BLOAD GAME").And.Contain("CALL -32767");
+        program.ToArray().Should().Contain(0x84, "Ctrl-D, with its high bit, starts the string");
     }
 
     /// <summary>

@@ -1413,7 +1413,12 @@ internal sealed partial class Apple2DebugTarget : DisposableBase, IZ80CardHost
     /// <exception cref="ArgumentException">The image is not a 16-sector disk.</exception>
     /// <exception cref="InvalidOperationException">Slot 6 has no Disk II with its firmware.</exception>
     internal void InsertDisk(ReadOnlySpan<byte> image, string label) =>
-        _machine.Drives[0].Insert(SectorDiskConverter.Convert(image.ToArray(), proDosOrder: false), label, "DSK");
+        BootDrive.Insert(SectorDiskConverter.Convert(image.ToArray(), proDosOrder: false), label, "DSK");
+
+    /// <summary>
+    ///  Gets slot 6's drive 1, which the Disk II's firmware boots and <see cref="InsertDisk"/> puts a disk in.
+    /// </summary>
+    internal Apple2FloppyDrive BootDrive => _machine.Drives[0];
 
     /// <inheritdoc/>
     public IReadOnlyList<HardwareRow> Hardware()

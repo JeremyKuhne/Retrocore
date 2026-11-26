@@ -19,7 +19,8 @@ namespace Retrocore.Debug.Project;
 ///   address named for the project in capitals; and the target's <c>files</c>, each a B file at its <c>address</c>, or
 ///   <c>$0000</c> when it gives none, for a program to <c>BLOAD</c> with <c>,A</c>. <c>HELLO</c> <c>BRUN</c>s the
 ///   program when its entry is its first byte, and otherwise <c>BLOAD</c>s it and <c>CALL</c>s its entry.
-///   <c>"image": false</c> leaves the disk out; the binary is then the B file's contents. A launch boots the disk.
+///   <c>"image": false</c> leaves the disk out, and the binary holds what the B file would, the bytes from its load
+///   address. A launch boots the disk.
 ///  </para>
 /// </remarks>
 internal sealed class Dos33Environment : TargetEnvironment
@@ -40,6 +41,15 @@ internal sealed class Dos33Environment : TargetEnvironment
 
     /// <inheritdoc/>
     internal override bool BootsImage => true;
+
+    /// <inheritdoc/>
+    /// <remarks>
+    ///  <para>
+    ///   DOS boots in about 3 seconds and HELLO starts the program in about 1 more, as the SDK's DOS runs; a launch
+    ///   that does not start it in 30 has failed, such as at a DOS error.
+    ///  </para>
+    /// </remarks>
+    internal override int BootSeconds => 30;
 
     /// <inheritdoc/>
     internal override IReadOnlyList<string> Extensions { get; } = [".dsk"];
@@ -64,12 +74,13 @@ internal sealed class Dos33Environment : TargetEnvironment
             launch["monitor"] = "autostart";
         }
 
-        foreach (string option in (string[])["diskImage", "diskController", "diskBootRom", "diskSequencerRom"])
+        // The launch holds the target's options and the launch configuration's own attributes.
+        foreach (string option in (string[])["diskImage", "diskController", "diskBootRom", "diskSequencerRom", "sequencerLayout", "diskSectors"])
         {
-            if (target.Options.ContainsKey(option))
+            if (launch.ContainsKey(option))
             {
                 throw new ProjectException(
-                    $"{target.Project.File}: target {target.Name}: a dos33 target boots its own disk in slot 6's Disk II, so its options cannot give '{option}'.");
+                    $"{target.Project.File}: target {target.Name}: a dos33 target boots its own disk in slot 6's 16-sector Disk II, so its options and its launch cannot give '{option}'.");
             }
         }
 
@@ -115,7 +126,9 @@ internal sealed class Dos33Environment : TargetEnvironment
         // the string, as the escape {$84}.
         bool integer = target.Machine.Id == "apple2-ii";
         string command = build.Entry == start ? $"BRUN {program}" : $"BLOAD {program}";
-        string call = build.Entry == start ? "" : $":CALL {build.Entry}";
+        // Integer BASIC's numbers run to 32767, so CALL takes an address from $8000 as a negative one.
+        int address = integer && build.Entry > short.MaxValue ? build.Entry - 0x10000 : build.Entry;
+        string call = build.Entry == start ? "" : $":CALL {address}";
         string text = integer
             ? $"10 PRINT \"{{$84}}{command}\"{call}\n"
             : $"10 PRINT CHR$(4);\"{command}\"{call}\n";

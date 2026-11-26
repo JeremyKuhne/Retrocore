@@ -3,17 +3,11 @@
 // See LICENSE file in the project root for full license information
 
 using Retrocore.Debug.Project;
-using Retrocore.Machines.Devices;
-using Retrocore.Media;
 
 namespace Retrocore.Debug;
 
 internal sealed partial class DebugSession
 {
-    // The longest a project's image may take to boot and start its program, in the machine's own seconds: a PET's
-    // tape of the largest program its RAM holds plays for a few minutes.
-    private const int BootImageSeconds = 600;
-
     /// <summary>
     ///  Puts a project target's image in its drive and boots the machine from it, as a user would, until its
     ///  program's bytes are in memory and the CPU is at its entry.
@@ -41,13 +35,14 @@ internal sealed partial class DebugSession
         string image = build.Media.Image ?? throw new ProjectException(
             $"{target.Project.File}: target {target.Name}: the '{target.Environment}' environment boots its image, so its image cannot be false to launch it.");
 
-        IDevice drive = ImageDrive(target);
-        MediaActions.KeepReplaced(drive, $"the build's {build.Media.ImageKind} took its place");
         string label = $"{target.Project.Name}/{target.Name}: {Path.GetFileName(image)}, as built";
+        byte[] bytes = File.ReadAllBytes(image);
         switch (Target)
         {
             case Apple2DebugTarget apple2:
-                apple2.InsertDisk(File.ReadAllBytes(image), label);
+                // Slot 6's drive 1, which the Disk II's firmware boots.
+                MediaActions.KeepReplaced(apple2.BootDrive, $"the build's {build.Media.ImageKind} took its place");
+                apple2.InsertDisk(bytes, label);
                 break;
             default:
                 throw new ProjectException($"{target.Project.File}: target {target.Name}: {target.Machine.Id} cannot boot the '{target.Environment}' environment's image yet.");
@@ -56,17 +51,14 @@ internal sealed partial class DebugSession
         RunToEntry(build);
     }
 
-    // The drive a target's image goes in: the first drive of the machine's first disk controller.
-    private IDevice ImageDrive(ProjectTarget target) =>
-        Target.Devices.FirstOrDefault(device => device.Kind == DeviceKind.FloppyDrive && device is IMediumSlot)
-            ?? throw new ProjectException($"{target.Project.File}: target {target.Name}: {target.Machine.Id} has no disk drive for the '{target.Environment}' environment's disk.");
-
-    // Runs the machine from power-on until an instruction starts at the program's entry with its bytes in memory.
+    // Runs the machine from power-on until an instruction starts at the program's entry with its bytes in memory, for
+    // as long as the environment takes to boot.
     private void RunToEntry(TargetBuild build)
     {
         (int start, byte[] bytes) = ProjectBuild.Image(build);
         ForgetBoundaries();
-        long limit = (long)BootImageSeconds * Target.ClockHertz;
+        int seconds = build.Target.Built?.BootSeconds ?? 0;
+        long limit = (long)seconds * Target.ClockHertz;
         for (long cycle = 0; ; cycle++)
         {
             if (Target.IsInstructionBoundary && Target.ProgramCounter == build.Entry && Loaded(start, bytes)) { break; }
@@ -74,7 +66,7 @@ internal sealed partial class DebugSession
             {
                 ProjectTarget target = build.Target;
                 throw new ProjectException(
-                    $"{target.Project.File}: target {target.Name}: booted from its {build.Media.ImageKind}, the machine did not start the program at its entry, ${build.Entry:X4}, within {BootImageSeconds} seconds.");
+                    $"{target.Project.File}: target {target.Name}: booted from its {build.Media.ImageKind}, the machine did not start the program at its entry, ${build.Entry:X4}, within {seconds} seconds.");
             }
 
             Target.StepCycle();

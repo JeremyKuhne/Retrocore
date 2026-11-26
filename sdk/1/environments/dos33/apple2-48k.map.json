@@ -1,9 +1,9 @@
 {
-  "description": "The Apple II, II Plus and IIe with 48K, dos33: a B file on a DOS 3.3 disk, started by its HELLO, that calls the Monitor's routines and DOS 3.3.",
+  "description": "The Apple II Plus and IIe with 48K, dos33: a B file on a DOS 3.3 disk, started by its HELLO, that calls the Monitor's routines and DOS 3.3.",
   "load": "$6000",
   "free": [
     { "start": "$0300", "end": "$03CF" },
-    { "start": "$0800", "end": "$95FF" }
+    { "start": "$0900", "end": "$95FF" }
   ],
   "zeroPage": ["$06-$09", "$FA-$FD"],
   "reserved": [
@@ -11,6 +11,7 @@
     { "start": "$0200", "end": "$02FF", "why": "the Monitor's input buffer, which GETLN fills" },
     { "start": "$03D0", "end": "$03FF", "why": "the vectors: DOS's at $03D0, through which programs call it, and the Monitor's BRK, reset, NMI and IRQ vectors from $03F0" },
     { "start": "$0400", "end": "$07FF", "why": "text and lo-res page 1, the screen, with the screen holes the cards use" },
+    { "start": "$0800", "end": "$08FF", "why": "HELLO, the AppleSoft program from $0801 that starts the program, and its variables, which BASIC is still running as the program loads" },
     { "start": "$9600", "end": "$BFFF", "why": "DOS 3.3: its three file buffers from $9600, then its command interpreter, file manager and RWTS from $9D00" },
     { "start": "$C000", "end": "$CFFF", "why": "the soft switches, the I/O and the slots' ROMs" },
     { "start": "$D000", "end": "$FFFF", "why": "the ROMs: AppleSoft, or Integer BASIC on the Apple II, and the Monitor" }

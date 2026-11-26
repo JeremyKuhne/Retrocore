@@ -46,6 +46,12 @@ internal abstract class TargetEnvironment
     internal virtual bool BootsImage => false;
 
     /// <summary>
+    ///  Gets the most of the machine's own seconds booting the image takes, to the program's entry, beyond which a
+    ///  launch reports that it did not start.
+    /// </summary>
+    internal virtual int BootSeconds => 0;
+
+    /// <summary>
     ///  Gives a project launch's arguments what booting the environment's image needs, such as the drive it goes in.
     /// </summary>
     /// <param name="target">The target.</param>

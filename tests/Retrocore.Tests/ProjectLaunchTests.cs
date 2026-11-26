@@ -228,7 +228,7 @@ public sealed class ProjectLaunchTests
 
     /// <summary>
     ///  A <c>dos33</c> target's launch boots its disk in slot 6, from the SDK's Disk II firmware and DOS, on the II
-    ///  (with the Autostart ROM) with Integer BASIC's HELLO, and on the II Plus and the enhanced IIe with AppleSoft's, and stops at its entry
+    ///  (with the Autostart ROM) with Integer BASIC's HELLO, and on the II Plus and both IIe models with AppleSoft's, and stops at its entry
     ///  once HELLO has loaded the program: by BLOAD and CALL when the entry is past its first byte, by BRUN when it
     ///  is there. The program's data file is on the disk.
     /// </summary>
@@ -238,6 +238,7 @@ public sealed class ProjectLaunchTests
     [DataRow("apple2-ii", "START")]
     [DataRow("apple2-iiplus", "START")]
     [DataRow("apple2-iiplus", "DATA")]
+    [DataRow("apple2-iie", "START")]
     [DataRow("apple2-iie-enhanced", "START")]
     public void Dos33LaunchBootsItsDisk(string machine, string entry)
     {
@@ -268,8 +269,8 @@ public sealed class ProjectLaunchTests
     }
 
     /// <summary>
-    ///  A <c>dos33</c> target cannot give the options of the disk its launch boots, nor launch with its image off, nor
-    ///  on the Apple II's original Monitor, which boots no disk.
+    ///  A <c>dos33</c> target, or its launch, cannot give the options of the Disk II its launch boots, nor launch with its
+    ///  image off, nor on the Apple II's original Monitor, which boots no disk.
     /// </summary>
     [TestMethod]
     public void Dos33LaunchRefusesWhatItsDiskDecides()
@@ -285,7 +286,14 @@ public sealed class ProjectLaunchTests
         Write("src/main.s", "rts\n");
         using DapTestClient client = new();
         client.Request("initialize", []);
-        client.Fails("launch", Launch("image")).Should().EndWith("a dos33 target boots its own disk in slot 6's Disk II, so its options cannot give 'diskImage'.");
+        client.Fails("launch", Launch("image")).Should().EndWith(
+            "a dos33 target boots its own disk in slot 6's 16-sector Disk II, so its options and its launch cannot give 'diskImage'.");
+
+        JsonObject thirteen = Launch("none");
+        thirteen["diskSectors"] = 13;
+        client.Fails("launch", thirteen).Should().EndWith(
+            "a dos33 target boots its own disk in slot 6's 16-sector Disk II, so its options and its launch cannot give 'diskSectors'.");
+
         client.Fails("launch", Launch("none")).Should().EndWith("the 'dos33' environment boots its image, so its image cannot be false to launch it.");
         client.Fails("launch", Launch("original")).Should().EndWith(
             "a dos33 target boots its disk as the machine powers on, which the Apple II's original Monitor does not do; leave out 'monitor', or give 'autostart'.");

@@ -1,6 +1,6 @@
 # Backlog: the Model III family's and the Model II's ROMs and software
 
-The [Model III, 4, 4P, II, 12 and 16](../Trs80Model3And2.md) run the SDK's sources of every ROM of theirs with a
+The [Model III, 4, 4P, II, 12 and 16](../Trs80Model3And2.md) run the SDK's sources of their ROMs, every one with a
 known good dump, byte-identical to MAME's dumps, and boot to their prompts. This is what remains for them to match
 the Model I. Hardware beyond that, such as the RS-232 ports, hard disks and the Model 16's 68000, is out of its
 scope; the page's [What is not done yet](../Trs80Model3And2.md#what-is-not-done-yet) lists it.

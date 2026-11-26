@@ -4,8 +4,8 @@ Retrocore emulates and debugs 8-bit computers in one .NET codebase: cycle-exact 
 peripherals built around them, a multi-dialect assembler and disassembler, BASIC language and program tools, a
 source-level debugger for assembly and BASIC, and a VS Code extension.
 
-Every machine's ROMs are also maintained here as documented assembly sources that rebuild byte-identically to the
-original chips wherever a good dump of the chip is known. No external ROM dumps are needed to run or debug a
+Every ROM the machines run is also maintained here as documented assembly sources that rebuild byte-identically to
+the original chips wherever a good dump of the chip is known. No external ROM dumps are needed to run or debug a
 machine, and you can step from your own code straight into the ROM or DOS source.
 
 | Machine | CPU | ROMs (SDK sources, or dumps you supply) | Media and peripherals |

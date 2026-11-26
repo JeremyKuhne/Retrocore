@@ -16,15 +16,15 @@ namespace Retrocore.Tests;
 /// </summary>
 /// <remarks>
 ///  <para>
-///   A digest pins the build, so no disk is needed. With Apple Pascal 1.1's APPLE1 (<c>UCSD Pascal 1.1_1.dsk</c> in
-///   <c>RETROCORE_APPLE2_PASCAL_DISKS</c>), the build also compares byte for byte with its <c>SYSTEM.APPLE</c>, which
-///   names the first difference.
+///   A digest pins the build, so no disk is needed. With Apple Pascal 1.1's APPLE1 and APPLE3 (<c>UCSD Pascal
+///   1.1_1.dsk</c> and <c>1.1_3.dsk</c> in <c>RETROCORE_APPLE2_PASCAL_DISKS</c>), the build also compares byte for byte
+///   with their <c>SYSTEM.APPLE</c>, which names the first difference.
 ///  </para>
 /// </remarks>
 [TestClass]
 public sealed class PascalInterpreterSourceTests
 {
-    // The SHA-256 of SYSTEM.APPLE on Apple Pascal 1.1's APPLE1 (SHA-1 b87851c389c5325da55cfbea5f16401c4e881832).
+    // The SHA-256 of SYSTEM.APPLE on Apple Pascal 1.1's APPLE1 and APPLE3 (SHA-1 b87851c389c5325da55cfbea5f16401c4e881832).
     private const string InterpreterHash = "2443C23E7538EBFC0227525E4A80878DFAE0B96A8A445CB1C4B4332F433A8AE6";
 
     private const int InterpreterSize = 0x4000;
@@ -43,12 +43,16 @@ public sealed class PascalInterpreterSourceTests
     }
 
     /// <summary>
-    ///  With Apple Pascal 1.1's APPLE1, the source compares byte for byte with its SYSTEM.APPLE.
+    ///  With Apple Pascal 1.1's disks, the source compares byte for byte with SYSTEM.APPLE on APPLE1 and on APPLE3,
+    ///  which hold the same file.
     /// </summary>
+    /// <param name="volume">The disk's number: 1 for APPLE1, 3 for APPLE3.</param>
     [TestMethod]
-    public void InterpreterMatchesTheDisk()
+    [DataRow(1)]
+    [DataRow(3)]
+    public void InterpreterMatchesTheDisk(int volume)
     {
-        string disk = Path.Join(PascalMediaTests.Apple2Disks, "UCSD Pascal 1.1_1.dsk");
+        string disk = Path.Join(PascalMediaTests.Apple2Disks, $"UCSD Pascal 1.1_{volume}.dsk");
         if (!File.Exists(disk))
         {
             Assert.Inconclusive($"Set RETROCORE_APPLE2_PASCAL_DISKS to a folder with {Path.GetFileName(disk)}.");

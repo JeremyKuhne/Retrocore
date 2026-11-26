@@ -288,7 +288,6 @@ Width = Buffer
 WordAddress = ProcedureNumber
 
 ;; The word, with the field replaced.
-;; Also: NB8 (WK11)
 Word = Mark
 
     ; Pop the value, the bit number and the width.

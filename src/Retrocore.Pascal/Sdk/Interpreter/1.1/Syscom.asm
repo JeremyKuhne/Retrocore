@@ -1,12 +1,9 @@
 ; retrocore: style=strict
-;; SYSCOM: the record the interpreter and SYSTEM.PASCAL share, from $BDDE, and the memory around it.
+;; SYSCOM, the record the interpreter and SYSTEM.PASCAL share, from $BDDE, and the memory around it.
 
-; SYSCOM's layout.
-
-;; SYSCOM's layout: the system communication area, the record SYSTEM.PASCAL and the interpreter share, 288 bytes. It is
-;; UCSD's SYSCOMREC (UCSD20) up to the segment table, which Apple makes 32 entries long where UCSD's has 16. The
-;; interpreter reaches most of it by address, through <Syscom>'s words, and the console's keys by offset from
-;; <SyscomPointer>.
+;; SYSCOM's layout: the system communication area, 288 bytes. It is UCSD's SYSCOMREC (UCSD20) up to the segment table,
+;; which Apple makes 32 entries long where UCSD's has 16. The interpreter reaches most of it by address, through
+;; <Syscom>'s words, and the console's keys by offset from <SyscomPointer>.
 .struct SyscomRecord
     IO_RESULT .word                 ;; The last I/O call's result.
     ERROR_NUMBER .word              ;; The last execution error.

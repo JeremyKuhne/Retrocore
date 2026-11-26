@@ -114,7 +114,7 @@ Jump:
     sta InstructionPointer+1
     jmp Fetch::Next
 
-;; Runs the <UJP> after the table: the index is out of its range.
+;; Runs the <UJP> after the bounds: the index is out of their range.
 ;; Also: OUTBND (WK11)
 OutOfRange:
     lda InstructionPointer

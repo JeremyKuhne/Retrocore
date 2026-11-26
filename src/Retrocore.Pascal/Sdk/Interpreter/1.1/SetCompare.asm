@@ -24,7 +24,6 @@ SetsEqualOffset:
 LengthDifference = Work1
 
 ;; <SetsEqual>'s return address, less 1, which <SetsEqual> pulls from the stack and keeps here.
-;; Also: FPRETA (WK11)
 CallerReturn = Work4
 
     ; Compare a byte of the set on top, pulling it, with the set below's.

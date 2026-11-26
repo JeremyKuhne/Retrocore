@@ -378,7 +378,7 @@ AciaData = DiskWriteMode
 ;; Reads a character with a <CARD_PASCAL_FIRMWARE> card's read entry.
 ;; In: Y = the slot times 16
 ;; Out: A = the character
-;; Also: FREAD1 (A2PBIOS)
+;; Also: FREAD1 (A2PBIOS, WK11)
 .proc FirmwareRead
     jsr SelectCardRom
     pha

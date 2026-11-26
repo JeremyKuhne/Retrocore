@@ -84,7 +84,7 @@ SavedIoControl:
     UnitWriter UNIT_REMOTE_IN, 0
 
 ;; Each character unit's BIOS read call, a word a unit from unit 0, or 0 for none. Its unit 0 slot is <UnitWriters>'
-;; unit 8 entry.
+;; unit 8 entry. Apple's READTBL starts at unit 1, at UnitReaders+2.
 ;; Also: READTBL (A2PBIOS)
 UnitReaders:
     UnitWriter UNIT_REMOTE_OUT, BiosRemoteWrite
@@ -99,7 +99,7 @@ UnitReaders:
     ; The remote line's output cannot read.
     UnitReader UNIT_REMOTE_OUT, 0
 
-;; The unit calls and the I/O result's standard procedures.
+;; The unit calls' shared state and helpers, for <StandardProcedures>' unit calls and I/O results.
 .scope UnitIo
 
 ;; The request the call makes of the unit's driver: <REQUEST_READ>, <REQUEST_WRITE>, <REQUEST_CLEAR> or

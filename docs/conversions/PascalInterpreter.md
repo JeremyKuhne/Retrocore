@@ -6,11 +6,11 @@ configuration, `SYSTEM.APPLE.cfg`, and one build:
 
 | Build | Switches | Digest test |
 | --- | --- | --- |
-| `SYSTEM.APPLE` on Apple Pascal 1.1's APPLE1 (and APPLE3), 16,384 bytes | none | `PascalInterpreterSourceTests.InterpreterMatchesItsDigest` |
+| `SYSTEM.APPLE` on Apple Pascal 1.1's APPLE1 and APPLE3 (the same file), 16,384 bytes | none | `PascalInterpreterSourceTests.InterpreterMatchesItsDigest` |
 
 The file is the language card's 16K in three pieces, which the configuration writes in this order: bank 2 at `$D000`
-(the BIOS's drivers), `$E000`-`$FFFF`, and bank 1 at `$D000` (the core). Initialize runs at `$6800`-`$6BFF`, where
-Restart copies it from `$F275` (`.logicalorg`).
+(the BIOS's drivers), `$E000`-`$FFFF`, and bank 1 at `$D000` (the core). Restart copies itself and Initialize from
+`$F275`-`$F674` to `$6800`-`$6BFF`, and Initialize runs there, from `$6827` (`.logicalorg`).
 
 ## Where it came from
 
@@ -23,23 +23,24 @@ unchanged first (`b190b20`), so the bytes prove each step after.
 ## Sources and citations
 
 1,851 definitions (1,001 labels, 850 equates; 970 in scopes), listed by script from the assembler's debug output with
-each one's address and bank. After the conversion, 589 definitions carry 730 old names:
+each one's address and bank. After the conversion, 590 definitions carry 731 old names:
 
-- **WK11** (420): Willi Kusche's 292-page disassembly of 1.1, read from the PDF's text layer, a typed listing with
+- **WK11** (425): Willi Kusche's 292-page disassembly of 1.1, read from the PDF's text layer, a typed listing with
   addresses and bytes. Kusche had no original listing and merged in what he found; many of his BIOS names are
-  Apple's (A2PBIOS). His listing is conditional for five versions of the runtime and lists Initialize at its load
-  address, `$F275`, so `$F275`-`$F674` is mapped to `$6800`-`$6BFF`, and its line order gives the bank (bank 2 is its
+  Apple's (A2PBIOS). His listing is conditional for five versions of the runtime and lists Restart and Initialize
+  where they are loaded, so `$F275`-`$F674` is mapped to `$6800`-`$6BFF`, where they run, and its line order gives the bank (bank 2 is its
   second `ORG $D000`).
   - A code label is cited where his address column gives it at the address and bank the build gives the definition.
   - A label with no address of its own takes the next line's only when code follows it directly; a data map's
     (`DSECT`) labels have no address, and are cited only through the instructions that use them.
   - A name for a byte in zero page or memory is cited where his instruction and ours at the same address use it and
-    our symbol: his operand's value comes from the instruction's bytes. Where he gives one byte several names, each
-    goes on our alias for that use, else on the byte.
+    our symbol: his operand's value comes from the instruction's bytes, and our symbol is the one defined in the routine
+    that holds the instruction. Where he gives one byte several names, each goes on our alias for that use; where one
+    of his names serves several of our aliases, it goes on the byte.
   - Not cited: his generated names, the sequential `INTxx`, `INUxx`, `INVxx`, `INWxx`, `INXxx` and `INZxx`, `A` and an
-    address (`A62`, `ABDE0`, `AF21F`) and his macros' locals (`CLB`, `SBB`, `BB`, `BL`, `BNB`); `P0BASE`; and `ENDCCT`
+    address (`A62`, `ABDE0`, `AF21F`, `NBF11`, `S2A90`) and his macros' locals (`CLB`, `SBB`, `BB`, `BL`, `BNB`); `P0BASE`; and `ENDCCT`
     and `DOH1E`'s second definition, which his listing defines twice.
-- **A2POSRM** (193): Apple's *Operating System Reference Manual*, from the Internet Archive's OCR text, and the scan's
+- **A2POSRM** (191): Apple's *Operating System Reference Manual*, from the Internet Archive's OCR text, and the scan's
   pages where the OCR is illegible. The registers (Appendix A), SYSCOM's fields, the mark stack's fields (figure 6),
   the execution errors (XINVNDX ... XS2LONG), the procedure attributes, and the p-codes and standard procedures, each
   checked by its number against `Pcode.asm` and `OpcodeTable` or `CspTable`.
@@ -47,7 +48,7 @@ each one's address and bank. After the conversion, 589 definitions carry 730 old
   layer is clean. Its excerpts of Apple's BIOS source are matched to the build instruction for instruction (SAVERET is
   `BiosCall`, UDRWIS `AttachedDriver`, CONCK `ConsoleCheck`), and its equates by address (WPTR `$BF19` is
   `TypeAheadIn`). A name it gives only in prose or a comment is not cited.
-- **UCSD20** (156): UCSD's II.0 system source listings. SYSCOMREC's offsets are computed from its declaration,
+- **UCSD20** (154): UCSD's II.0 system source listings. SYSCOMREC's offsets are computed from its declaration,
   allocating each identifier list backward as its own comment says; the Compiler's p-code and standard-procedure
   comments by their numbers; the mark stack (MSCW), segment description and directory entry records by their fields.
 - **UCSD20IO** (31): UCSD's II.0 I/O System: the unit numbers, the unit calls and the BIOS entry points, matched by
@@ -62,8 +63,8 @@ where II.0's has 16 (288 bytes against 192); Apple's mark stack frame adds MSSP 
 locals; II.0 writes LCA, AND, MOD and NOT for LSA, LAND, MODI and LNOT; II.0 has one remote unit (8) and nothing at 3 or
 7, where Apple has graphics at 3 and splits remote into 7 and 8. The manual misprints five standard procedures'
 numbers (TNC 22, RND 23, MRK 31, RLS 32 and POT 35, where `CspTable`, `Pcode.asm` and II.0 agree on 23, 24, 32, 33 and
-36), GRTREAL as GTRREAL, and BOMBIPC as BOMIPC; the names are cited at their right values, and the misprint BOMIPC as
-the manual gives it.
+36), GRTREAL as GTRREAL, and BOMBIPC as BOMIPC. The standard procedures are cited at their right numbers; GTRREAL and
+BOMIPC are cited as the manual prints them, with BOMBIPC from UCSD20.
 
 ## Decisions
 
@@ -88,7 +89,8 @@ Settled by the owner on the rename table's review.
 - PI6. The mark stack frame is a `.struct MarkStack`, whose fields carry MSSTAT ... MSSP; MSCW, the record's own
   name, is in prose (an `Also:` on a named struct names nothing).
 - PI7. The execution errors' numbers are the `ERROR_*` constants, which carry XINVNDX ... XS2LONG; the reporting
-  entries cite nothing.
+  entries carry only Kusche's labels (ERR1, OOMERR ...). SYSTEM.PASCAL's handler, EXECERROR, is named in prose on
+  the call to it.
 - PI8. Only 1.1's documents and those of the system it descends from are cited. 1.2's device manual is added if 1.2's
   or 1.3's interpreter joins the SDK. The private conversion's names are not historical: no `Also:` keeps them.
 - PI9. The source is in `src/Retrocore.Pascal/Sdk/Interpreter/1.1`, its file names as they were; the private
@@ -113,6 +115,12 @@ Settled by the owner on the rename table's review.
   `WordsN` (A2PBIOS's label in `ConsoleCheck`), and A2PBIOS's CH, BAS2L and BAS2H, the Monitor's names in
   `IIeEquates.asm`. A2PBIOS's TEMP2 is `CardPointer`'s high byte, in prose. Old names on the shared `IIeEquates.asm`
   (Kusche's KBD, LCBNK1 ...) are not added there: those switches carry Apple's own documents' names.
+- **The review** found names placed by a local's bare name on another routine's local of the same name (HCKSUM,
+  FPRETA, NB8, PCDSIZ, TJTPTR, HSLOT1, SEGNO), and names a pattern for generated ones had dropped (BUFF6B, BUFF2B,
+  FREAD1, READAF, READDF). Each was placed again by the instruction that uses it. UCSD's MAXSEG is the last segment,
+  15, not the count, and Apple's DISKINFO the dictionary's entries, not an entry's size: both are in prose. Apple's
+  DISKNUM and READTBL start at unit 1, a word above ours, and SLTTYPS at a slot 0, a byte below ours; they stay on
+  our tables, as the rename table's review settled, with the difference in prose.
 - **Locals that a document names** got a `;;` summary to carry the `Also:`; where a step heading said what happens
   at the label, the summary replaces it.
 - **The lint** bounded a routine by the next documented routine above its address, so in banked code another bank's
@@ -147,8 +155,8 @@ The checks against the documents found:
 ## Verification
 
 - **Bytes:** `PascalInterpreterSourceTests.InterpreterMatchesItsDigest` (SHA-256 of the 16K, no disk needed) after
-  every step, and `InterpreterMatchesTheDisk` against `SYSTEM.APPLE` on `UCSD Pascal 1.1_1.dsk` in
-  `RETROCORE_APPLE2_PASCAL_DISKS` (Inconclusive without it).
+  every step, and `InterpreterMatchesTheDisk` against `SYSTEM.APPLE` on `UCSD Pascal 1.1_1.dsk` and `1.1_3.dsk` in
+  `RETROCORE_APPLE2_PASCAL_DISKS` (Inconclusive without them).
 - **Lint:** `InterpreterDocumentationIsClean`, with the IIe's SDK modules beside it for the links `IIeEquates.asm`
   makes, and `EveryRepositorySourceIsCleanInTheEditor`.
 - **Contracts:** not run. The debug host finds the interpreter in the language card by its fetch loop, and loads none

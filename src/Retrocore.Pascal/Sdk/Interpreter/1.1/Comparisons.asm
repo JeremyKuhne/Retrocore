@@ -146,7 +146,7 @@ NotSet:
     beq Bytes
     bne Words
 
-;; Compares two byte arrays, whose size in bytes follows the opcode as a big operand.
+;; Compares two byte arrays, whose size in bytes follows the opcode and its type byte, as a big operand.
 ;; Also: CMPBAR (WK11)
 Bytes:
     ldy #2

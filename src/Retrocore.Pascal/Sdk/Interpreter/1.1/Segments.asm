@@ -2,8 +2,6 @@
 ;; Segments: reading them in below <ProgramStackTop>, relocating their assembled procedures, counting their uses, and
 ;; giving them back.
 
-; Syscom::SegmentTable's entries, 6 bytes a segment, at these offsets.
-
 ; Units.
 
 ; Assembled procedures.
@@ -50,6 +48,7 @@ Amount = Work2
 CountHigh = Result + 4
 
 ;; The word being relocated.
+;; Also: NB8 (WK11)
 Word = Pointer
 
     ; The count: its low byte in X, plus 1 for the DEX that ends each pass.
@@ -110,6 +109,7 @@ CountEntry:
 .proc ReadSegment
 
 ;; The segment, while A is worked into its <Syscom::SegmentTable> offset; then the segment's size.
+;; Also: PCDSIZ (WK11)
 Size = Pointer
 
 ;; Where the code is read, for <LoadSegment>.
@@ -497,7 +497,7 @@ Done:
 .endproc
 
 ;; The standard procedures: the routine that runs each, as <CspTable> gives them for <Pcodes::CallStandardProcedure>.
-;; Each is named for what it does; the standard procedure's UCSD name is its old name.
+;; Each is named for what it does; the names the documents give the standard procedure are its old names.
 .scope StandardProcedures
 
 ;; <GSEG at StandardProcedures::GetSegment>: counts a use of the segment on the stack, reading it in if need be.

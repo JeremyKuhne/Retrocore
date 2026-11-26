@@ -140,7 +140,7 @@ BiosGraphicsWrite:
 BiosGraphicsInit:
     BiosStub 12, VectorGraphicsInit
 
-;; BIOS call 13: reserved, and does nothing.
+;; BIOS call 13: the printer's read, which does nothing.
 BiosReserved:
     BiosStub 13, VectorReserved
 

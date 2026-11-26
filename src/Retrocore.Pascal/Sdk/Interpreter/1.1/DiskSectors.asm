@@ -243,6 +243,7 @@ Now:
 ;; In: X = the slot times 16
 ;; Out: carry = set when no address field read correctly within about 770 disk bytes
 ;; Keeps: X
+;; Also: READAF (WK11)
 .proc ReadAddressField
 
 ;; The search's count of disk bytes, its high byte, with Y as its low byte.
@@ -254,6 +255,7 @@ SearchCount = DiskTemp2
 OddBits = DiskTemp2
 
 ;; The exclusive-or of the field's bytes so far.
+;; Also: HCKSUM (WK11)
 Checksum = DiskTemp
 
     ; Count the search's disk bytes.
@@ -587,14 +589,13 @@ WriteNibbles = FirstPairs + 3
 ;; Out: carry = set when no data field's prologue comes within about 30 disk bytes, or the checksum or the
 ;;     epilogue is bad
 ;; Keeps: X
+;; Also: READDF (WK11)
 .proc ReadSector
 
 ;; The slot times 16.
-;; Also: HSLOT1 (WK11)
 Slot = DiskTemp
 
 ;; The exclusive-or of the <TwoBitParts> nibbles so far.
-;; Also: HCKSUM (WK11)
 Checksum = DiskTemp2
 
     ; Patch the slot's data latch into the loops.

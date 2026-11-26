@@ -111,6 +111,7 @@ Mark = $7E
 Result = $80
 
 ;; A word of working storage.
+;; Also: SEGNO (WK11)
 Work1 = $86
 
 ;; A second word of working storage.
@@ -195,6 +196,7 @@ AddressTrack = $CC
 AddressVolume = $CD
 
 ;; A byte of the disk routines' working storage.
+;; Also: HSLOT1 (WK11)
 DiskTemp = $CE
 
 ;; A second byte of the disk routines' working storage.

@@ -128,8 +128,7 @@ Report:
 
     .cpu Pcode
 ;; The p-code <Report> runs: <CXP at Pcodes::CallExternalProcedure> 0,2, a call to SYSTEM.PASCAL's procedure 2, its
-;; execution error handler, which prints the message with its PRINTERR segment.
-;; Also: EXECERROR (A2POSRM, UCSD20)
+;; execution error handler, EXECERROR (A2POSRM, UCSD20), which prints the message with its PRINTERR segment.
 Call:
     CXP 0, 2
     .cpu Mos6502

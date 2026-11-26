@@ -3,7 +3,7 @@
 ;;
 ;; The first set is the one on top of the stack, and the second the one below it.
 
-; Opcodes.
+; Finding the sets.
 
 ;; Pops the first set's length for a set comparison, and finds both sets.
 ;;

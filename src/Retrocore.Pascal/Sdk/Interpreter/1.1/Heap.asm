@@ -11,7 +11,6 @@
 .proc New
 
 ;; The size, in words and then in bytes.
-;; Also: PCDSIZ (WK11)
 Size = Pointer
 
 ;; The pointer variable's address.

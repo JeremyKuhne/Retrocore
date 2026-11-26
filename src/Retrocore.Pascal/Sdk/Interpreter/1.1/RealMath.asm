@@ -62,6 +62,7 @@ Right = Pointer
 Left = Buffer
 
 ;; The return address of a routine that pulls or pushes a real under it, kept while it does.
+;; Also: FPRETA (WK11)
 CallerReturn = Work2
 
 ;; Pops a real and unpacks it: the sign in bit 7, the exponent, the mantissa with its hidden 1 restored, and a guard

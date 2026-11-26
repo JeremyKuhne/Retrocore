@@ -2,9 +2,6 @@
 ;; Procedure calls and returns: finding a procedure's attributes, building its mark stack frame, and the call and
 ;; return handlers.
 
-; Mark stack frames: what a call keeps in the frame it builds, at these offsets from the frame (MarkStack::STATIC_LINK,
-; at 0, is in Constants.asm). Each is a word but MarkStack::STACK_POINTER, a byte.
-
 ; A procedure's attributes, at these offsets from its JumpTable, at the end of its code. The words below JumpTable are
 ; self-relative: each holds how far below itself the address it means is.
 
@@ -363,9 +360,9 @@ Return:
     jmp (ReturnAddress)
 .endproc
 
-;; The p-code handlers: the routine that runs each opcode, as <OpcodeTable> gives them (and <Fetch>, which pushes an
-;; <SLDC> itself). Each is named for what its p-code does; the p-code's mnemonic, UCSD's and Apple's name for it, is its
-;; old name.
+;; The p-code handlers: the routine that runs each opcode, as <OpcodeTable> gives them, but for <Fetch>, which pushes an
+;; <SLDC> itself, <Jump>'s <FJP> and <UJP>, and <EFJ> and <NFJ>, which 1.1 doesn't implement. Each is named for what its
+;; p-code does; the mnemonics Apple's manual and UCSD's listings give the p-code are its old names.
 .scope Pcodes
 
 ;; <CIP at Pcodes::CallIntermediateProcedure>: calls an intermediate procedure, whose static link is the frame of the
@@ -382,6 +379,7 @@ OuterLevel = Result + 4
 CallerFrame = Work2
 
 ;; The <JumpTable> of <CallerFrame>'s caller.
+;; Also: TJTPTR (WK11)
 CallerJtab = Work4
 
     ; Find the procedure and build its frame.
@@ -487,7 +485,6 @@ CheckCaller:
 .proc CallExternalProcedure
 
 ;; The segment, for <LoadSegment> and <FindProcedureIn>.
-;; Also: SEGNO (WK11)
 Segment = Work1
 
     ; The procedure and the segment.

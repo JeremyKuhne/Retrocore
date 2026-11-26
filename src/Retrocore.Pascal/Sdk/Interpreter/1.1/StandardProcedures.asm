@@ -366,7 +366,6 @@ ExitSegment = Work1
 CallerFrame = Work2
 
 ;; The <JumpTable> of <CallerFrame>'s caller, then its exit word.
-;; Also: TJTPTR (WK11)
 CallerJtab = Pointer2
 
 ;; The current procedure's exit word, then <CallerFrame>'s caller's <ProcedureDictionary>.

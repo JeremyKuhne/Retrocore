@@ -52,7 +52,8 @@ Poll:
     bne ByCard
     inc PollCount+1
 
-;; Polls the console's card, if it has one. A <CARD_PASCAL_FIXED> card is read only by <ConsoleRead>.
+;; Polls the console's card, if it has one, or else the keyboard. A <CARD_PASCAL_FIXED> card is read only by
+;; <ConsoleRead>.
 ;; Also: RNDOK (A2PBIOS)
 ByCard:
     lda SlotTypes + CONSOLE_SLOT - 1
@@ -222,7 +223,7 @@ CaseKeys:
     ; ORA leaves A not 0, so this always branches; the lowered letter matches no ShiftKeysFrom entry.
     bne Shifted
 
-    ; A trampoline for NotCtrlW's branch, which cannot reach SystemKeys.
+    ; A trampoline for the Control-W test's branch (at NotCtrlE), which cannot reach SystemKeys.
 ToSystemKeys:
     jmp SystemKeys
 

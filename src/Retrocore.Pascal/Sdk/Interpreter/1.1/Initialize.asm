@@ -14,8 +14,8 @@ COPY_PAGES = 4
 
 ; SYSCOM.
 
-;; The bytes at <Syscom::Rest>, just after SYSCOM, that <Initialize> clears with it.
-SYSCOM_EXTRA_SIZE = $20
+;; The bytes at <Syscom::Rest>, SYSCOM's last, that <Initialize> clears after its first 256.
+SYSCOM_EXTRA_SIZE = .sizeof(SyscomRecord) - 256
 
 ; Reading SYSTEM.PASCAL.
 
@@ -38,7 +38,8 @@ DIRECTORY_SIZE = $0800
     LAST_BLOCK .word                ;; The block after its last.
     KIND .word                      ;; Its kind of file, with flags.
 
-    ;; Its name, as a Pascal string of up to 15 characters: the volume's in the first entry.
+    ;; Its name, as a Pascal string: a file's, of up to 15 characters, or in the first entry the volume's, of up to 7,
+    ;; which has fields of its own after it in place of these.
     ;; Also: DTID (UCSD20), DVID (UCSD20)
     NAME .res 16
 
@@ -55,12 +56,12 @@ DIRECTORY_ENTRIES_CHECKED = 77
 ;; sizes come first.
 DICTIONARY_READ_SIZE = $0100
 
-;; The segments a segment dictionary describes, 0-15.
-;; Also: MAXSEG (UCSD20)
+;; The segments a segment dictionary describes, 0-15. UCSD's MAXSEG (UCSD20) is the last of them, 15.
 DICTIONARY_SEGMENTS = 16
 
-;; The size of a dictionary entry: the segment's first block, counted from the file's start, then its size in bytes.
-;; Also: DISKINFO (A2POSRM), SEGDESC (UCSD20)
+;; The size of a dictionary entry: the segment's first block, counted from the file's start, then its size in bytes. The
+;; entries are Apple's DISKINFO (A2POSRM), which prints the two fields the other way round.
+;; Also: SEGDESC (UCSD20)
 DICTIONARY_ENTRY_SIZE = 4
 
 ;; What ends <NoSystemMessage>.

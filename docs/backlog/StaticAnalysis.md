@@ -1,8 +1,9 @@
 # Backlog: static analysis of assembly sources
 
-Status: **survey, with item 4's groundwork done for the 6502 family, the Z80 and the MC6809**. This note gathers what Retrocore already
-checks, what other assemblers and tools check, and where the two differ, as the starting point for a design. The
-[effects lines](#register-and-flag-effects) are decided; the analyses that would use them are not.
+Status: **survey, with item 4's groundwork done for every CPU: the 6502 family, the Z80, the MC6809, the 8080 and the
+8085**. This note gathers what Retrocore already checks, what other assemblers and tools check, and where the two
+differ, as the starting point for a design. The [effects lines](#register-and-flag-effects) are decided; the analyses
+that would use them are not.
 
 ## What Retrocore has
 
@@ -17,9 +18,8 @@ jump, branch, vector, indirect jump, read, write and read-write.
 
 What it knows of each CPU comes from the instruction-set descriptions (`OpcodeTables.txt`, `Z80Isa.txt`,
 `M6809Isa.txt`, `I8080Isa.txt`): the `flow` lines (`InstructionFlow`), the `access` lines (`MemoryAccess`), the
-vectors, the flags by word, and quirks such as `indirect-page-wrap Mos6502`. The 6502 family's, the Z80's and
-the 6809's descriptions also say which registers and flags each instruction reads and writes (the
-[effects lines](#register-and-flag-effects)); the 8080's does not yet.
+vectors, the flags by word, and quirks such as `indirect-page-wrap Mos6502`. Every description also says which
+registers and flags each instruction reads and writes (the [effects lines](#register-and-flag-effects)).
 
 Two features use it:
 
@@ -203,7 +203,7 @@ warnings, which most assemblers have.
 4. **`Keeps:` and `Uses:` without running.** The instruction-set descriptions say what each instruction reads
    and writes, and a per-routine dataflow over `AnalysisEngine`'s flow would take each callee's documented
    contract at a `JSR` or `CALL`. It would find the leftover-Y kind of problem and contracts the documentation
-   gets wrong. The first part is done for the 6502 family, the Z80 and the 6809: see
+   gets wrong. The first part is done for every CPU: see
    [Register and flag effects](#register-and-flag-effects). The dataflow is not.
 5. **Flag values,** as SourceGen carries them, to report branches never taken and the code only they reach.
 6. **Unreferenced code and fall-through:** what no entry point reaches, and a routine that runs into the next,
@@ -217,8 +217,8 @@ warnings, which most assemblers have.
 
 The groundwork for items 4 and 5: each instruction's register and flag effects, as data in the instruction-set
 description, checked against execution. Done for the 6502 family (`OpcodeTables.txt`: the NMOS 6502 with its
-undocumented opcodes, the WDC and Rockwell 65C02s, and the 65SC02 subset), the Z80 (`Z80Isa.txt`) and the MC6809
-(`M6809Isa.txt`), their undocumented opcodes included.
+undocumented opcodes, the WDC and Rockwell 65C02s, and the 65SC02 subset), the Z80 (`Z80Isa.txt`), the MC6809
+(`M6809Isa.txt`), and the 8080 and 8085 (`I8080Isa.txt`), their undocumented opcodes included.
 
 ### The format
 
@@ -258,6 +258,12 @@ effects PULU                    reads U                 writes $1 U             
 effects RTI                     reads S                 writes CC S     may-write A B DP X Y U  pull 3  may-pull 9
 ```
 
+The 8080 and 8085 share one description with a section each. Intel's syntax names a pair by its first register
+(`INX B` is BC), so those forms have `Instruction:Form` lines, and M, the byte at HL, is read through `:Form`
+lines such as `effects :M :A,M ... reads HL`. The description's lines are the 8080's, whose flag bits 5 and 3 read
+0 and bit 1 reads 1, so its PSW is A and the five flags; `effects in I8085` lines add the 8085's K and V, by name,
+to its arithmetic, K to `INX` and `DCX`, and the whole of F to PSW.
+
 - A line names instructions, then any of `reads`, `writes`, `may-write`, `push`, `pull`, `may-push` and
   `may-pull`, or `none` for an instruction that touches no register or flag.
 - `reads` lists what the instruction reads; `writes` what it assigns on every path, so the old value is dead
@@ -296,7 +302,8 @@ name a known set and be taken by some encoding, so a gap, a misspelling or a lin
 build at its line (`IsaDescriptionGenerator`, RCGEN010).
 
 Where an instruction's result does not depend on a register it reads, the data says so, for liveness: `XOR A`,
-`SUB A` and `SBC A,A` do not read A, and `SBC A,A` and `SBC HL,HL` keep the carry. The 6809's `SWI`, `CWAI` and
+`SUB A` and `SBC A,A` do not read A, and `SBC A,A` and `SBC HL,HL` keep the carry, as the 8080's `SUB A`, `XRA A`,
+`CMP A` and `SBB A` do. The 6809's `SWI`, `CWAI` and
 `X18` set or shift E before it is seen, so they do not read the old E, and `XADDD` and `XADDU` set the flags
 without writing D or U.
 
@@ -322,24 +329,26 @@ and the generator that builds the 6502 cores skips `[isa]`, so execution is unch
 
 ### How it is checked
 
-- `InstructionEffectsTests.M6502EffectsMatchExecution`, `Z80EffectsTests.Z80EffectsMatchExecution` and
-  `M6809EffectsTests.M6809EffectsMatchExecution` run every encoding on the core from random states, 64 each on the 6502
-  and Z80 and 1,024 on the 6809 with a random valid postbyte each, some at the values where rare changes happen (BC at
-  1, low halves at $FF and 0, A at a 16-bit immediate's high byte). What the data says is not written must keep its
-  value; constants must take theirs; a copied flag must be the operand's bit; the stack must move by the bytes pushed
-  and pulled. Then each register and flag is changed in turn: one the data says is not read must change nothing else,
-  neither the result nor any bus or port access. The data is also checked the other way: every register and flag it says
-  is read must make a difference, and every one it says is written must change, in some case. Writing a register with
-  its own value, as `LD B,B` and `AND A` do, is allowed. For a 6809 postbyte, the claims of all its cases are checked
-  together. The data matches exactly, so it says no more than the cores do, and no less; planted errors in each
-  description, and in the 6809 codec, were caught.
+- `InstructionEffectsTests.M6502EffectsMatchExecution`, `Z80EffectsTests.Z80EffectsMatchExecution`,
+  `M6809EffectsTests.M6809EffectsMatchExecution` and `I8080EffectsTests.I8080EffectsMatchExecution` (8080 and 8085) run
+  every encoding on the core from random states, 64 each on the 6502, Z80 and 8080 and 1,024 on the 6809 with a random
+  valid postbyte each, some at the values where rare changes happen (BC at 1, low halves at $FF and 0, A at a 16-bit
+  immediate's high byte). What the data says is not written must keep its value; constants must take theirs; a copied
+  flag must be the operand's bit; the stack must move by the bytes pushed and pulled. Then each register and flag is
+  changed in turn: one the data says is not read must change nothing else, neither the result nor any bus or port
+  access. The data is also checked the other way: every register and flag it says is read must make a difference, and
+  every one it says is written must change, in some case. Writing a register with its own value, as `LD B,B` and `AND A`
+  do, is allowed. For a 6809 postbyte, the claims of all its cases are checked together. The data matches exactly, so it
+  says no more than the cores do, and no less; planted errors in each description, and in the 6809 codec, were caught.
 - `M6502EffectsMatchSingleStepVectors` and `Z80EffectsMatchSingleStepVectors` (category `Conformance`) check the
   same unchanged, constant and stack claims against the SingleStepTests vectors the cores are certified against:
   7,660,000 for the 6502 family and the Z80's 1,604 files. They need the fixtures from
   `tools/Fetch-ProcessorTests.ps1` and `tools/Fetch-Z80Tests.ps1` and are inconclusive without them. The 6809
   has no such vectors; its core is checked by the functional, cycle and interrupt programs
   (`M6809ConformanceTests`, from `tools/Fetch-M6809Tests.ps1`) and `M6809UndocumentedTests`, so its effects are
-  as good as the core.
+  as good as the core. So are the 8080's: its core runs 8080PRE, TST8080, CPUTEST and 8080EXM
+  (`I8080ExerciserTests`, from `tools/Fetch-I8080Tests.ps1`), the 8085 the first two, and the 8085's K and V follow
+  Ken Shirriff's tracing of the silicon, which the core cites, more than any exerciser.
 - `InstructionFlagsTests.M6502HoverFlagsComeFromTheEffects`: the 6502 family's hover and inspector flags now come
   from the data, and match the strings the hover listed by hand before, kept as the test's expectations. B, only
   a bit of the byte `BRK` and `PHP` push, is no flag, so `BRK` shows I, and D I on the 65C02s.
@@ -361,10 +370,10 @@ Taken on the open questions this work raised:
 
 ### Follow-ups
 
-- **The 8080 and 8085,** in the Z80's form: `parts PSW=A,F BC=B,C DE=D,E HL=H,L`, and the 8085's `RIM` and `SIM`.
-- **The Z80 and 6809 hovers.** Their "Flags:" text and the inspector's special cases (`InstructionDocs.Z80.cs`,
-  `InstructionDocs.M6809.cs`, and `FlagsOf`'s for `EXG`, `PULS` and `TFR`) could come from the data as the
-  6502's now do.
+- **The Z80, 6809 and 8080 hovers.** Their "Flags:" text and the inspector's special cases
+  (`InstructionDocs.Z80.cs`, `InstructionDocs.M6809.cs`, `InstructionDocs.I8080.cs`, and `FlagsOf`'s for `EXG`,
+  `PULS`, `TFR` and `POP PSW`) could come from the data as the 6502's now do.
+- **The analyses themselves,** items 4 and 5, which this data was made for.
 
 ## Open questions
 

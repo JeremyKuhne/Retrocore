@@ -7,9 +7,9 @@ Retrocore runs the TRS-80's other Z80 machines beside the [Model I](Trs80ModelI.
 - [`Trs80Model2Machine`](../src/Retrocore.Machines.Trs80/Trs80Model2Machine.cs): the **Model II** and **Model 12**,
   and the Z80 side of the **Model 16, 16B and Tandy 6000**.
 
-The SDK has native sources for all of these machines' dumped ROMs, byte-identical to the chips (see [ROMs](#roms)),
-so they run with nothing external, or from dumps. The real ROMs boot to their prompts, and the Model III, 4 and 4P boot their
-DOSes from disk images (see [DOSes](#doses)); the Model II has not run one yet. See
+The SDK has native sources for every one of these machines' ROMs with a known good dump, byte-identical to the chips
+(see [ROMs](#roms)), so they run with nothing external, or from dumps. The real ROMs boot to their prompts, and the
+Model III, 4 and 4P boot their DOSes from disk images (see [DOSes](#doses)); the Model II has not run one yet. See
 [What is not done yet](#what-is-not-done-yet).
 
 ## The Model III, 4 and 4P
@@ -171,7 +171,7 @@ hand and assemble byte-identically to each chip:
 | [`Model3.asm`](../src/Retrocore.Machines.Trs80/Roms/Model3.asm) | The Model III's 14K ROM (`ROMC` `'C'` or `'B'` for ROM C's revision) and the Model 4's (`MODEL = 4`). It includes [`Level2.asm`](../src/Retrocore.Machines.Trs80/Roms/Level2.asm), whose `MODEL` blocks hold the Model III's changes to Level II, and [`Model3Equates.asm`](../src/Retrocore.Machines.Trs80/Roms/Model3Equates.asm). |
 | [`Level1.asm`](../src/Retrocore.Machines.Trs80/Roms/Level1.asm) | With `MODEL = 3`, the Model III's Level I ROM (`8040032`): the Model I's Level I with `LPRINT` and `LLIST`, the Model III's ports and NMI, and its restarts moved. |
 | [`Model4PBoot.asm`](../src/Retrocore.Machines.Trs80/Roms/Model4PBoot.asm) | The 4P's boot ROM. |
-| [`Model2Boot.asm`](../src/Retrocore.Machines.Trs80/Roms/Model2Boot.asm) | The Model II's boot ROMs: `VERSION` 1 (`8043216`), 2 (`8047316`), 3 (`cpu_2119`, or `cpu_11be` with `FILL_11BE`) and 5 (`u54`). Version 4 (`cpu_fc86`) has no good dump. |
+| [`Model2Boot.asm`](../src/Retrocore.Machines.Trs80/Roms/Model2Boot.asm) | The Model II's boot ROMs: `VERSION` 1 (`8043216`), 2 (`8047316`), 3 (`cpu_2119`, or `cpu_11be` with `FILL_11BE`) and 5 (`u54`). Version 4 (`cpu_fc86`) has no source, as no good dump of it is known. |
 | [`Model3CharacterGenerator.asm`](../src/Retrocore.Machines.Trs80/Roms/Model3CharacterGenerator.asm) | The Model III's and Model 4's character generator, and with `MODEL4P` the 4P's. |
 | [`Model2CharacterGenerator.asm`](../src/Retrocore.Machines.Trs80/Roms/Model2CharacterGenerator.asm) | The Model II's character generator. |
 

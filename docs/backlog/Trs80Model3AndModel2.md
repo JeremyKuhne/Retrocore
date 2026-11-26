@@ -1,12 +1,13 @@
 # Backlog: the Model III family's and the Model II's ROMs and software
 
-The [Model III, 4, 4P, II, 12 and 16](../Trs80Model3And2.md) run the SDK's sources of their ROMs, which are
-byte-identical to MAME's dumps, and boot to their prompts. This is what remains for them to match the Model I.
-Hardware beyond that, such as the RS-232 ports, hard disks and the Model 16's 68000, is out of its scope; the
-page's [What is not done yet](../Trs80Model3And2.md#what-is-not-done-yet) lists it.
+The [Model III, 4, 4P, II, 12 and 16](../Trs80Model3And2.md) run the SDK's sources of every ROM of theirs with a
+known good dump, byte-identical to MAME's dumps, and boot to their prompts. This is what remains for them to match
+the Model I. Hardware beyond that, such as the RS-232 ports, hard disks and the Model 16's 68000, is out of its
+scope; the page's [What is not done yet](../Trs80Model3And2.md#what-is-not-done-yet) lists it.
 
 **Status:** every stage is built; what each still lacks is listed with it: TRSDOS-II on the Model II, with its oracle
-and its DMA and keyboard codes, which need an image; MAME's `cpu_fc86` Model II boot ROM; and TRSDOS 1.3 writing.
+and its DMA and keyboard codes, which need an image; the Model II's keyboard codes against its keyboard's ROM; MAME's
+`cpu_fc86` Model II boot ROM, which needs a good dump; and TRSDOS 1.3 writing.
 
 ## Stages
 
@@ -25,8 +26,8 @@ and its DMA and keyboard codes, which need an image; MAME's `cpu_fc86` Model II 
    6.2 and LS-DOS 6.3 on the Model 4, and LS-DOS 6.3 on the 4P boot from DMK, JV3 and IMD images, take the date and
    list their directories (see [DOSes](../Trs80Model3And2.md#doses)). Booting them found that drive select's wait
    was only masked by INTRQ, so the ROM's NMI handler hung reading the status; INTRQ and DRQ now end it. Still open:
-   TRSDOS-II on the Model II, which needs an image, and its DMA and keyboard codes against it, the keyboard codes
-   also against its keyboard's ROM.
+   TRSDOS-II on the Model II, which needs an image, and its DMA and keyboard codes against it. The keyboard codes
+   also need checking against the Model II keyboard's ROM.
 3. **An oracle.** Done: `Trs80Model3OracleTests` compares video RAM with MAME's `trs80m3`, `trs80m4` and `trs80m2`
    after the same keystrokes. It covers BASIC on the Model III and 4, the five DOSes, from seven images, booting and
    listing their directories, and versions 1, 2, 3 and 5 of the Model II's boot ROM asking for a diskette (see
@@ -35,8 +36,8 @@ and its DMA and keyboard codes, which need an image; MAME's `cpu_fc86` Model II 
 4. **ROM sources.** Done: `Model3.asm` (sharing Level II's BASIC through `Level2.asm`), `Model4PBoot.asm`,
    `Model2Boot.asm` and the character generators, with each build's `Keeps:` contracts checked by its own `MODEL`.
    The Model III's Level I ROM (`8040032`) is `Level1.asm` with `MODEL = 3`, and a Model III launches with it. Still
-   open: MAME's `cpu_fc86` Model II boot ROM, version 4, which MAME lists with no good dump known, so it has no source
-   yet.
+   open: MAME's `cpu_fc86` Model II boot ROM, version 4, which MAME lists with no good dump known; its source can't be
+   written until there is one.
 5. **1500 baud cassettes.** Done: `CSAVE` and `CLOAD` at 1500 baud on the Model III and 4, timed as the ROM's source
    writes and reads, and high-speed CAS images.
 6. **Writing disk images back**, for every TRS-80, in their own formats. Done, with

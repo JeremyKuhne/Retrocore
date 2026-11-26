@@ -62,7 +62,8 @@ Delay = $FCA8
 ;; Also: IN (A2RM78, A2RM79, IIEROM82, IIETRM85)
 InputBuffer = $0200
 
-;; The character <GetLineNoPrompt> shows again after a line is cancelled, with Control-X or a backspace at its start.
+;; The character <GetLineNoPrompt> shows again after a line is cancelled: by Control-X, a backspace at its start, or
+;; a full buffer.
 ;; Also: PROMPT (A2RM78, A2RM79, IIEROM82, IIETRM85)
 PromptCharacter = $33
 
@@ -74,7 +75,8 @@ RETURN = $8D
 ;; The high bit the Apple II's screen and keyboard give characters.
 HIGH_BIT = $80
 
-;; The engine's prompt, as the Monitor shows it, with its high bit set.
+;; The engine's prompt, as the Monitor shows it after a cancelled line, with its high bit set: one character, so
+;; without the space the engine's own prompt has.
 ENGINE_PROMPT = '>' | HIGH_BIT
 
 ;; The bit that makes a lowercase letter a capital when cleared.

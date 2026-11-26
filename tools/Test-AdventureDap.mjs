@@ -7,9 +7,9 @@
 // sample/adventure/src/platform/apple2-bare.s as a source launch, and checks that what the engine writes matches the
 // C# reference engine's transcript in the matching .out file character for character. A logpoint on the console's
 // Write records each character the engine sends, and one on ReadLine marks where it reads a command, so the commands
-// can be put back where the screen shows them. The launches check Keeps: contracts and fail on a broken one, though the
-// debugger checks them only on routines outside a .scope, which in the engine is UseTable alone. On the SDK's ROMs, so
-// it needs no dumps.
+// can be put back where the screen shows them. The launches check Keeps: contracts and fail on a broken one. A false
+// Keeps: on the top-level LocateTables stops the run, but one on Numbers::NextRandom, inside a .scope, did not, so the
+// engine's scoped contracts are checked by reading rather than here. On the SDK's ROMs, so it needs no dumps.
 
 import { startDap } from "./DapClient.mjs";
 import { resolve, join } from "node:path";

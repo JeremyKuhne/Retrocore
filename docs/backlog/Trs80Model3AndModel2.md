@@ -38,13 +38,13 @@ against its keyboard's ROM; MAME's `cpu_fc86` Model II boot ROM, which needs a g
      ours, probably in the DMA or the FD1791's single-density track 0. Then check the DMA and the keyboard codes
      against TRSDOS. The keyboard codes also need checking against the Model II keyboard's ROM.
    - **LS-DOS 6.3.1 boots.** Done: from its DMK image it shows its welcome screen, takes the date and lists its
-     directory (`Trs80Model2Tests.BootsLsDos`). Its boot had slowed from about 13 seconds to the date prompt to 151
-     at full speed, so a launch watched for less looked blank. By the date LS-DOS has the PIO's port A in bit
-     control mode, taking the FD1791's INTRQ as an interrupt, so the PIO reads port A at every T-state, and port
-     A's bit 1 asks the selected disk whether it is two-sided. #49 (`2901dbc`, found by bisecting) made
-     `FloppyDisk.Sides` sort all the disk's tracks, about 5 KB allocated each time; a disk now keeps its geometry
-     as its tracks change (`Trs80Model2Tests.PioWatchingTheControllerDoesNotAllocate`). Still open: comparing it
-     with MAME's `trs80m2`.
+     directory (`Trs80Model2Tests.BootsLsDos`). Its boot had slowed: launched through the debug adapter at full speed,
+     it reached the date prompt in 13 seconds at #32 and in 151 on main, so a launch watched for less looked blank. By
+     the date LS-DOS has the PIO's port A in bit control mode, taking the FD1791's INTRQ as an interrupt, so the PIO
+     reads port A at every T-state, and port A's bit 1 asks the selected disk whether it is two-sided. #49 (`2901dbc`,
+     found by bisecting) made `FloppyDisk.Sides` sort all the disk's tracks, about 5 KB allocated each time; a disk now
+     keeps its geometry as its tracks change (`Trs80Model2Tests.PioWatchingTheControllerDoesNotAllocate`). Still open:
+     comparing it with MAME's `trs80m2`.
    - **Teledisk.** TRSDOS-II 4.2 is a Teledisk (`.td0`) image, which the media library does not read; see the
      [media backlog](Media.md).
 3. **An oracle.** Done: `Trs80Model3OracleTests` compares video RAM with MAME's `trs80m3`, `trs80m4` and `trs80m2`

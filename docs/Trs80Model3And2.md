@@ -314,11 +314,11 @@ What the comparison has to allow for:
 
 ## What is not done yet
 
-- **The Model II's DOSes.** TRSDOS 1.2, 2.0a and 2.0b stop at `BOOT ERROR DM 23`, LS-DOS 6.3.1 boots but is not
-  yet compared with MAME, and TRSDOS-II 4.2 is a Teledisk image, which the media library does not read (see the
-  [backlog](backlog/Trs80Model3AndModel2.md#stages), stage 2). The Model II's comparison with MAME covers only the
-  boot ROMs, and its DMA and keyboard codes are tested by real software only as far as LS-DOS takes them; the
-  keyboard codes also need checking against its keyboard's ROM ([the Model II](#the-model-ii-12-and-16)).
+- **The Model II's DOSes.** TRSDOS 1.2, 2.0a and 2.0b stop at `BOOT ERROR DM 23`, LS-DOS 6.3.1 boots but is not yet
+  compared with MAME, and TRSDOS-II 4.2 is a Teledisk image, which the media library does not read (see the
+  [backlog](backlog/Trs80Model3AndModel2.md#stages), stage 2). The Model II's comparison with MAME covers only the boot
+  ROMs, and its DMA and keyboard codes are untested by TRSDOS; the keyboard codes also need checking against its
+  keyboard's ROM ([the Model II](#the-model-ii-12-and-16)).
 - **The Model II's boot ROM version 4**, MAME's `cpu_fc86` of 1982-11-18, which MAME lists with no good dump known,
   so `Model2Boot.asm` has no source for it.
 - **The RS-232 ports**, the Model 4's sound beyond the speaker bit, its hi-res graphics board and hard disks, and the

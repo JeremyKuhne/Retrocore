@@ -52,7 +52,7 @@ The tables follow the header in that order.
 - **Where each item starts** is a byte for each item: a room, 0 for none, or 255 for carried.
 - **The noun GET and DROP know each item by** is a byte for each item, the noun its `.dat` description names between
   slashes at its end (`Lamp/LAMP/`), as the first of its synonyms, or 0 for an item they don't take: one with no
-  word, or a word that is no noun, which the packer warns of.
+  word, or one whose word is no noun, which the packer warns of.
 - **The treasures** are a bit for each item, item *n*'s in bit *n* mod 8 of byte *n* / 8: the items whose `.dat`
   description starts with `*`.
 

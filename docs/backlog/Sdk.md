@@ -188,7 +188,7 @@ make.
 | `sos` | the Apple III | SOS calls (`BRK`, a call number, its parameters) | a `SOS.INTERP` on a boot disk with the SDK's SOS 1.3 kernel and drivers |
 | `basic` | the PET | the Kernal and BASIC | a PRG with a BASIC `SYS` line, on a TAP tape; also on a 4040 disk when the drive's ROM dumps are found |
 | `dfs` | the BBC Micro | the MOS (`OSWRCH`, `OSRDCH`, `OSFILE`, …) | a `*RUN` file on a DFS disk (`.ssd`) whose `!BOOT` runs it; a UEF tape as an option |
-| `cpm` | the Apple II and IIe with a SoftCard, the Model 4, the Altair | the BDOS at `$0005` | a `.COM` file at `$0100` |
+| `cpm` | the Apple II and IIe with a SoftCard, the Model 4, the Altair, the Kaypro II | the BDOS at `$0005` | a `.COM` file at `$0100` |
 | `level2` | the Model I and III | Level II's routines | a SYSTEM tape (CAS) |
 | `trsdos` | the Model I, III and 4 | TRSDOS, LDOS and LS-DOS SVCs | a `/CMD` load module |
 | `colorbasic`, `diskbasic` | the Color Computer 1, 2 and 3 | Color BASIC's and Disk BASIC's routines | a DECB `.BIN` for `LOADM`, on a CAS tape or a JVC disk |

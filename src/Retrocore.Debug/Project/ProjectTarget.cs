@@ -18,7 +18,8 @@ internal sealed class ProjectTarget
         ["bare", "wozmon", "dos33", "prodos", "sos", "basic", "dfs", "cpm", "level2", "trsdos", "colorbasic", "diskbasic"];
 
     // The machines each environment runs on, by catalog id, as the SDK plan's targets table gives them; bare runs on
-    // every machine. CP/M runs on an Apple II with a SoftCard, which the build checks once cpm builds.
+    // every machine, and the Model 4P counts as a Model 4. What a machine also needs is not checked yet: ProDOS on
+    // a II Plus needs 64K, and CP/M on an Apple II needs a SoftCard.
     private static readonly Dictionary<string, string[]> s_machines = new()
     {
         ["wozmon"] = ["apple1"],

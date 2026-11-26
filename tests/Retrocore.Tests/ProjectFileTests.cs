@@ -204,6 +204,7 @@ public sealed class ProjectFileTests
     [DataRow("""{ "sdk": "1", "cpu": "6502", "sources": [{ "path": "a.s", "dialect": "tasm" }], "targets": { "t": { "machine": "apple1", "environment": "bare" } } }""", "there is no dialect 'tasm'")]
     [DataRow("""{ "sdk": "1", "cpu": "6502", "targets": { "t": { "machine": "apple1", "environment": "bare" } }, }x""", "retrocore.json: ")]
     [DataRow("""[1]""", "must hold a JSON object")]
+    [DataRow("""{ "sdk": "1", "cpu": "6502", "output": "a\u0000b", "targets": { "t": { "machine": "apple1", "environment": "bare" } } }""", "'output' must be text")]
     public void MalformedProjectsAreErrors(string json, string message)
     {
         Write("retrocore.json", json);

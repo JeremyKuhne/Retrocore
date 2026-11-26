@@ -501,7 +501,7 @@ internal sealed class RetrocoreProject
     private static string Text(string file, string what, JsonNode? node)
     {
         string? text = node?.GetValueKind() == JsonValueKind.String ? node.GetValue<string>() : null;
-        return !string.IsNullOrEmpty(text) && !text.Contains(' ') ? text : throw new ProjectException($"{file}: {what} must be text.");
+        return !string.IsNullOrEmpty(text) && !text.Contains('\0') ? text : throw new ProjectException($"{file}: {what} must be text.");
     }
 
     // A project's or target's name, which names files and folders the same way on every system.

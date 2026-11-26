@@ -135,7 +135,7 @@ internal sealed class Level1Dialect : BasicDialect
 
     private static readonly string[] s_keywords =
     [
-        .. s_commands, .. s_statements, "THEN", "TO", "STEP", "TAB", "AT", .. s_functions
+        .. s_commands, .. s_statements, .. s_ifWords, .. s_forWords, .. s_printWords, .. s_functions
     ];
 
     private Level1Dialect()
@@ -307,7 +307,8 @@ internal sealed class Level1Dialect : BasicDialect
     }
 
     /// <summary>
-    ///  Gets the number of the line running, or 0 in direct mode.
+    ///  Gets the number of the line running, or 0 in direct mode and while READ stores a DATA item
+    ///  (<see cref="LineAddress"/>).
     /// </summary>
     /// <param name="memory">The memory.</param>
     /// <returns>The line number.</returns>
@@ -560,12 +561,7 @@ internal sealed class Level1Dialect : BasicDialect
                     output.Add(Token(word), x);
                     x = end;
                     statement = word;
-                    if (word is "REM" or "DATA")
-                    {
-                        while (x < text.Length) { output.Add(text[x], x++); }
-                        break;
-                    }
-
+                    if (word is "REM" or "DATA") { break; }
                     continue;
                 }
             }
@@ -580,12 +576,15 @@ internal sealed class Level1Dialect : BasicDialect
                 // by a statement without THEN, whose own words are looked up after it.
                 if (inner == "THEN") { start = true; }
                 else if (statement == "IF" && s_statements.Contains(inner)) { statement = inner; }
+                if (statement is "REM" or "DATA") { break; }
                 continue;
             }
 
             output.Add(folded, x++);
         }
 
+        // REM and DATA skip the rest of the line, which is kept as it is.
+        while (x < text.Length) { output.Add(text[x], x++); }
         return output;
     }
 

@@ -101,7 +101,14 @@ public static class BasicTape
         int start = (block[0] << 8) | block[1];
         int end = (block[2] << 8) | block[3];
         int length = end - start;
-        if (length < 0 || block.Length < Level1HeaderLength + length + 1) { return null; }
+        if (length < 0) { return null; }
+        if (block.Length < Level1HeaderLength + length + 1)
+        {
+            return start == Level1Dialect.ProgramStart
+                ? throw new InvalidDataException("The Level I tape ends before the program does.")
+                : null;
+        }
+
         ReadOnlySpan<byte> program = block.Slice(Level1HeaderLength, length);
         int sum = block[Level1HeaderLength + length];
         foreach (byte value in program) { sum += value; }

@@ -20,8 +20,9 @@ namespace Retrocore.Debug;
 ///  </para>
 ///  <para>
 ///   A GOSUB's frame on the Z80's stack, from <c>STKGOS</c>, is the previous frame, the calling line's address and the
-///   text after the GOSUB's line number, or for ON GOSUB the end of its statement. Level I's errors are three messages, HOW?, WHAT? and SORRY, which
-///   <c>ERROR</c> is given in DE; an error in what INPUT reads asks for it again, so INPUT takes it as a handler would.
+///   text after the GOSUB's line number, or for ON GOSUB the end of its statement. Level I's errors are three messages,
+///   HOW?, WHAT? and SORRY, which <c>ERROR</c> is given in DE; an error in what INPUT reads asks for it again, so INPUT
+///   takes it as a handler would.
 ///  </para>
 /// </remarks>
 internal sealed class Trs80Level1Basic
@@ -78,7 +79,8 @@ internal sealed class Trs80Level1Basic
     {
         string[] names =
         [
-            "ST_RUN_4", "RSTART", "RSTART_2", "ERROR", "ST_RUN", "ST_CONT", "ST_STOP", "ST_END", "HOW_MSG", "WHAT_MSG", "SORRY_MSG"
+            "ST_RUN_4", "RSTART", "RSTART_2", "ERROR", "ST_RUN", "ST_CONT", "ST_STOP", "ST_END",
+            "HOW_MSG", "WHAT_MSG", "SORRY_MSG"
         ];
 
         if (names.Any(name => !symbols.ContainsKey(name))) { return null; }
@@ -114,11 +116,6 @@ internal sealed class Trs80Level1Basic
     }
 
     private TargetBasicMemory Memory => new(_target);
-
-    /// <summary>
-    ///  Gets the number of the line running, or 0 in direct mode.
-    /// </summary>
-    internal int CurrentLine => Level1Dialect.CurrentLineNumber(Memory);
 
     /// <summary>
     ///  Gets DE less one: the text pointer before the statement at <c>ST_RUN_4</c>.

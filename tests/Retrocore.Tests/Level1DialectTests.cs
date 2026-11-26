@@ -183,9 +183,10 @@ public class Level1DialectTests
     public void NumbersPrintAsTheRomPrintsThem()
     {
         Trs80Machine machine = Boot();
-        double[] values = [0.05, 0.5, 123.5, -7, 0.001234, 1234567];
+        double[] values = [0.05, 0.5, 0.1, 0.0999, 123.5, -7, 0.001234, 1234567];
+        string typed = string.Join(";", values.Select(value => value.ToString("R", System.Globalization.CultureInfo.InvariantCulture)));
         Type(machine, "CLS\r");
-        Type(machine, $"P. {string.Join(";", values.Select(value => value.ToString("R", System.Globalization.CultureInfo.InvariantCulture)))}\r");
+        Type(machine, $"P. {typed}\r");
         Run(machine, 1);
         string printed = Screen(machine);
         foreach (double value in values)
@@ -193,10 +194,10 @@ public class Level1DialectTests
             printed.Should().Contain($" {Level1Numbers.Format(value)} ", $"the ROM prints {value} so");
         }
 
-        // A statement after IF's condition, without THEN, has its own words.
-        BasicSource source = BasicSource.Analyze("10 IF A FOR I=1 TO 5\n", BasicDialect.Level1);
+        // A statement after IF's condition, without THEN, has its own words, and a REM or DATA there skips the rest.
+        BasicSource source = BasicSource.Analyze("10 IF A FOR I=1 TO 5\n20 IF A REM RND(1)\n", BasicDialect.Level1);
         string[] words = [.. source.Sites.Where(site => site.Kind == BasicSiteKind.Keyword).Select(site => site.Word)];
-        words.Should().Equal("IF", "FOR", "TO");
+        words.Should().Equal("IF", "FOR", "TO", "IF", "REM");
     }
 
     /// <summary>

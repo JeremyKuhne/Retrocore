@@ -8,7 +8,8 @@
 
 ; What the engine needs of every platform.
 
-;; The screen's width, which the engine wraps its text to: the SDK's, the terminal's 40 columns.
+;; The screen's width, the SDK's: the terminal's 40 columns. The engine's lines are a column narrower, so none fills
+;; a row.
 SCREEN_COLUMNS = RC_SCREEN_COLUMNS
 
 ;; The engine's pointer into the game's string it is writing. The four pointers are in $06-$0D, below the Woz

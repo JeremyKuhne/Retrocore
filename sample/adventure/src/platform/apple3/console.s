@@ -4,11 +4,13 @@
 ;; Each machine's platform folder gives the engine the same things: the screen's width, four zero-page pointers, and
 ;; the routines of the <Console> scope. The Apple III's boot ROM has no routines for a program to call, so this one
 ;; writes text page 1 and reads the keyboard itself, in 40-column text. The screen shows the character set in RAM,
-;; which SOS loads as it boots: a bare program shows its text once a character set is there.
+;; which SOS loads as it boots: a bare program shows its text once a character set is there. Where the text shows in
+;; colour, page 2 holds each character's colours, which <Console::Clear> sets to white on black; scrolling moves only
+;; the characters, as every row's colours are the same.
 
 ; What the engine needs of every platform.
 
-;; The screen's width, which the engine wraps its text to: the SDK's, 40 columns.
+;; The screen's width, the SDK's: 40 columns. The engine's lines are a column narrower, so none fills a row.
 SCREEN_COLUMNS = RC_SCREEN_COLUMNS
 
 ;; The engine's pointer into the game's string it is writing. The four pointers, and the console's own two, are in
@@ -27,7 +29,7 @@ WordPointer = $0C
 ;; The console's pointer to the screen row it is writing.
 RowPointer = $0E
 
-;; The console's pointer to the row it is scrolling up into <RowPointer>'s.
+;; The console's pointer to the row it is scrolling up into <RowPointer>'s, or to the colours of the row it clears.
 ScrollPointer = $10
 
 ; The Apple III's hardware.
@@ -53,6 +55,12 @@ HIGH_BIT = $80
 
 ;; A space, as the screen shows it.
 SCREEN_SPACE = ' ' | HIGH_BIT
+
+;; How far a row's colours on text page 2 are from its characters on page 1.
+COLOR_PAGE_OFFSET = $0400
+
+;; A character's colours where 40-column text shows in colour, as it does with VIA 1's PA6 set: white on black.
+WHITE_ON_BLACK = $F0
 
 ;; The bit that makes a lowercase letter a capital when cleared.
 LOWERCASE_BIT = $20
@@ -105,7 +113,7 @@ RowHigh:
 
 .section CODE
 
-;; Sets up the screen: 40-column text from page 1, cleared.
+;; Sets up the screen: 40-column text from page 1, cleared, white on black whether it shows in colour or not.
 .proc Start
     lda TXTMD
     lda COL40SW
@@ -153,8 +161,11 @@ NextKey:
     cmp #LEFT_ARROW
     bne Key
 
-    ; The left arrow takes back the last character, and its place on the screen.
+    ; The left arrow takes back the last character, and its place on the screen; not past the start of a row the
+    ; line has wrapped onto.
     cpx #0
+    beq NextKey
+    lda Column
     beq NextKey
     dex
     dec Column
@@ -174,7 +185,13 @@ Key:
 Done:
     lda #0
     sta InputLine,x
+
+    ; A line that just filled its row has already moved to the next.
+    lda Column
+    beq Ended
     jmp NextRow
+Ended:
+    rts
 .endproc
 
 ;; Makes a lowercase letter a capital.
@@ -251,15 +268,23 @@ NextCharacter:
     rts
 .endproc
 
-;; Fills a row with spaces.
+;; Fills a row with spaces, white on black.
 ;; In: X = the row
 ;; Keeps: X
 .proc ClearRow
     jsr PointAtRow
-    lda #SCREEN_SPACE
+    lda RowPointer
+    sta ScrollPointer
+    lda RowPointer + 1
+    clc
+    adc #>COLOR_PAGE_OFFSET
+    sta ScrollPointer + 1
     ldy #SCREEN_COLUMNS - 1
 NextColumn:
+    lda #SCREEN_SPACE
     sta (RowPointer),y
+    lda #WHITE_ON_BLACK
+    sta (ScrollPointer),y
     dey
     bpl NextColumn
     rts

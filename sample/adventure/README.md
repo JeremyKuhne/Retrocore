@@ -27,7 +27,7 @@ sample/adventure/
 | Target | Machine | Console | Loads at |
 | --- | --- | --- | --- |
 | `apple1` | Apple-1, 32K | the Woz Monitor's ECHO, and the PIA's keyboard | `$0300` |
-| `apple2` | Apple II Plus | the Monitor's COUT and GETLN | `$0800` |
+| `apple2` | Apple II Plus | the Monitor's COUT and GETLN1 | `$0800` |
 | `apple3` | Apple III | its own text page 1 and keyboard routines | `$2000` |
 | `pet` | PET 4032 | the kernal's jump table | `$0400` |
 | `bbc` | BBC Micro model B | the MOS's OSWRCH and OSWORD 0 | `$2000` |
@@ -84,7 +84,7 @@ constants are known where the core sizes its buffers. Each provides:
 
 | Name | What it is |
 | --- | --- |
-| `SCREEN_COLUMNS` | The screen's width, which the engine wraps its text to |
+| `SCREEN_COLUMNS` | The screen's width; the engine wraps its text a column short of it |
 | `TextPointer`, `TablePointer`, `ActionPointer`, `WordPointer` | Four two-byte pointers in zero page |
 | `Console::Start` | Sets up the screen and keyboard |
 | `Console::Write` | Writes the character in A, `$0A` for a new line; keeps A, X and Y |

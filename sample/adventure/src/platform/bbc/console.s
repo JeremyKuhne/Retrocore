@@ -8,7 +8,7 @@
 
 ; What the engine needs of every platform.
 
-;; The screen's width, which the engine wraps its text to: the SDK's, MODE 7's 40 columns.
+;; The screen's width, the SDK's: MODE 7's 40 columns. The engine's lines are a column narrower, so none fills a row.
 SCREEN_COLUMNS = RC_SCREEN_COLUMNS
 
 ;; The engine's pointer into the game's string it is writing. The four pointers are in $70-$77, of the bytes
@@ -41,9 +41,6 @@ OSBYTE_ACKNOWLEDGE_ESCAPE = $7E
 
 ;; The VDU code that clears the text window and homes the cursor.
 VDU_CLEAR = 12
-
-;; A Return, which ends the line <OSWORD> 0 reads.
-RETURN = $0D
 
 ;; The lowest character <OSWORD> 0 keeps in the line: a space.
 FIRST_CHARACTER = ' '

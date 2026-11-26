@@ -22,21 +22,24 @@ const root = resolve(import.meta.dirname, "..");
 const sample = join(root, "sample", "adventure");
 const transcripts = ["test-win", "test-fall", "test-drown"];
 
-// The targets played, each with its platform folder's console.
-const allTargets = { apple2: "apple2", pet: "pet", bbc: "bbc", apple1: "apple1" };
-const targets = process.argv.length > 2 ? process.argv.slice(2) : Object.keys(allTargets);
+// The targets played, each the name of its platform folder too. The Apple III's console is built but not played: a
+// bare Apple III has no character set loaded.
+const allTargets = ["apple2", "pet", "bbc", "apple1"];
+const targets = process.argv.length > 2 ? process.argv.slice(2) : allTargets;
 const gameOver = "The game is now over.\n";
 
 // The game, packed as the target's .incbin expects it.
 execFileSync("dotnet", ["run", join(sample, "tools", "packer.cs"), "--", "pack",
     join(sample, "games", "test.dat"), join(sample, "obj", "test.bin")], { stdio: "inherit" });
 
-// The line of the first instruction of a routine of a console.s, where A still holds what the routine was given.
+// The line of the first instruction of a routine of a console.s, which each call reaches once.
 function firstLine(consoleSource, routine) {
     const lines = readFileSync(consoleSource, "utf8").split(/\r?\n/);
     const start = lines.indexOf(`.proc ${routine}`);
     assert.ok(start >= 0, `${routine} is in ${consoleSource}`);
-    return start + 2;
+    const first = lines.findIndex((line, at) => at > start && line.trim() !== "" && !line.trim().startsWith(";"));
+    assert.ok(first > start, `${routine} has an instruction`);
+    return first + 1;
 }
 
 const { request, event, events, fail, close, failure } = startDap(root);
@@ -78,56 +81,54 @@ function address(target, symbol) {
 try {
     await request("initialize", { adapterID: "retrocore", linesStartAt1: true, columnsStartAt1: true });
     for (const target of targets) {
-    assert.ok(target in allTargets, `there is no target ${target}`);
-    const consoleSource = join(sample, "src", "platform", allTargets[target], "console.s");
-    const readLine = firstLine(consoleSource, "ReadLine");
-    for (const name of transcripts) {
-        const commands = readFileSync(join(sample, "games", `${name}.in`), "utf8").split(/\r?\n/);
-        if (commands.at(-1) === "") commands.pop();
-        const expected = readFileSync(join(sample, "games", `${name}.out`), "utf8").replace(/\r\n/g, "\n");
-        events.length = 0;
-        await request("launch", { project: sample, target, stopOnEntry: false, speed: "max", sound: "off",
-            logpointLimit: 0, checkContracts: "stop" });
-        const set = await request("setBreakpoints", { source: { path: consoleSource }, breakpoints: [
-            { line: readLine, logMessage: "READ" }
-        ] });
-        assert.ok(set.breakpoints.every(breakpoint => breakpoint.verified), "the console's logpoint maps to its source");
-        const watch = await request("setDataBreakpoints", { breakpoints: [
-            { dataId: `mem:${address(target, "Console::SavedA")}:1`, accessType: "write", logMessage: "{A,d}" }
-        ] });
-        assert.ok(watch.breakpoints.every(breakpoint => breakpoint.verified), "the console's SavedA can be watched");
-        await request("configurationDone");
-        await request("retro/type", { text: commands.map(command => `${command}\n`).join("") });
+        assert.ok(allTargets.includes(target), `there is no target ${target} to play`);
+        const consoleSource = join(sample, "src", "platform", target, "console.s");
+        const readLine = firstLine(consoleSource, "ReadLine");
+        for (const name of transcripts) {
+            const commands = readFileSync(join(sample, "games", `${name}.in`), "utf8").split(/\r?\n/);
+            if (commands.at(-1) === "") commands.pop();
+            const expected = readFileSync(join(sample, "games", `${name}.out`), "utf8").replace(/\r\n/g, "\n");
+            events.length = 0;
+            await request("launch", { project: sample, target, stopOnEntry: false, speed: "max", sound: "off",
+                logpointLimit: 0, checkContracts: "stop" });
+            const set = await request("setBreakpoints", { source: { path: consoleSource }, breakpoints: [
+                { line: readLine, logMessage: "READ" }
+            ] });
+            assert.ok(set.breakpoints.every(breakpoint => breakpoint.verified), "the console's logpoint maps to its source");
+            const watch = await request("setDataBreakpoints", { breakpoints: [
+                { dataId: `mem:${address(target, "Console::SavedA")}:1`, accessType: "write", logMessage: "{A,d}" }
+            ] });
+            assert.ok(watch.breakpoints.every(breakpoint => breakpoint.verified), "the console's SavedA can be watched");
+            await request("configurationDone");
+            await request("retro/type", { text: commands.map(command => `${command}\n`).join("") });
 
-        // The engine runs to the end of the game.
-        for (const end = performance.now() + 60000; performance.now() < end && !transcript(commands).endsWith(gameOver);) {
-            const broken = events.find(message => message.event === "stopped" && message.body.reason === "exception");
-            assert.ok(!broken, `${target} ${name}: the machine stopped: ${broken?.body.description}`);
-            await new Promise(done => setTimeout(done, 200));
-        }
+            // The engine runs to the end of the game.
+            for (const end = performance.now() + 60000; performance.now() < end && !transcript(commands).endsWith(gameOver);) {
+                const broken = events.find(message => message.event === "stopped" && message.body.reason === "exception");
+                assert.ok(!broken, `${target} ${name}: the machine stopped: ${broken?.body.description}`);
+                await new Promise(done => setTimeout(done, 200));
+            }
 
-        const stopped = events.find(message => message.event === "stopped" && message.body.reason === "exception");
-        assert.ok(!stopped, `${target} ${name}: the machine stopped: ${stopped?.body.description}`);
-        const played = transcript(commands);
-        let differs = 0;
-        while (differs < played.length && played[differs] === expected[differs]) differs++;
-        if (differs < Math.max(played.length, expected.length)) {
-            console.log(`${target} ${name}: differs at ${differs}: played
-${played.slice(Math.max(0, differs - 300), differs + 200)}
---- expected
-${expected.slice(Math.max(0, differs - 300), differs + 200)}`);
-        }
-        assert.equal(played, expected, `${target} ${name}: the 6502 engine's transcript matches the reference engine's`);
+            const stopped = events.find(message => message.event === "stopped" && message.body.reason === "exception");
+            assert.ok(!stopped, `${target} ${name}: the machine stopped: ${stopped?.body.description}`);
+            const played = transcript(commands);
+            let differs = 0;
+            while (differs < played.length && played[differs] === expected[differs]) differs++;
+            if (differs < Math.max(played.length, expected.length)) {
+                const around = text => text.slice(Math.max(0, differs - 300), differs + 200);
+                console.log(`${target} ${name}: differs at ${differs}: played\n${around(played)}\n--- expected\n${around(expected)}`);
+            }
+            assert.equal(played, expected, `${target} ${name}: the 6502 engine's transcript matches the reference engine's`);
 
-        // The Apple II's screen shows it in capitals, as the Apple II Plus has no lowercase.
-        if (target === "apple2") {
-            const screen = (await request("apple2/text")).rows.join("\n");
-            assert.match(screen, /^THE GAME IS NOW OVER\. *$/m, `${name}: the screen shows the game's end:\n${screen}`);
+            // The Apple II's screen shows it in capitals, as the Apple II Plus has no lowercase.
+            if (target === "apple2") {
+                const screen = (await request("apple2/text")).rows.join("\n");
+                assert.match(screen, /^THE GAME IS NOW OVER\. *$/m, `${name}: the screen shows the game's end:\n${screen}`);
+            }
+            await request("pause", { threadId: 1 });
+            await event("stopped");
+            console.log(`${target} ${name}: ${commands.length} commands, ${played.length} characters, as the reference engine plays them.`);
         }
-        await request("pause", { threadId: 1 });
-        await event("stopped");
-        console.log(`${target} ${name}: ${commands.length} commands, ${played.length} characters, as the reference engine plays them.`);
-    }
     }
 
     await request("disconnect");

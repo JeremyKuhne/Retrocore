@@ -8,7 +8,7 @@
 
 ; What the engine needs of every platform.
 
-;; The screen's width, which the engine wraps its text to: the SDK's, 40 columns.
+;; The screen's width, the SDK's: 40 columns. The engine's lines are a column narrower, so none fills a row.
 SCREEN_COLUMNS = RC_SCREEN_COLUMNS
 
 ;; The engine's pointer into the game's string it is writing. The four pointers are in BASIC's floating-point work
@@ -33,10 +33,10 @@ WordPointer = $5A
 ;; A Return, which ends a line on the screen and one the editor reads.
 RETURN = $0D
 
-;; The bit that makes a lowercase letter a capital when cleared, and that a shifted letter has set in PETSCII.
+;; The bit that makes an ASCII lowercase letter a capital when cleared.
 LOWERCASE_BIT = $20
 
-;; The bit PETSCII sets on a shifted letter, besides <LOWERCASE_BIT>.
+;; The bit PETSCII adds to a letter typed with SHIFT: shifted A is $C1.
 SHIFT_BIT = $80
 
 ;; The loops of 256 times 256 <Console::Pause> makes: each takes about 0.33 seconds at the PET's 1 MHz.

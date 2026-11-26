@@ -34,19 +34,22 @@ namespace Retrocore.Debug.Project;
 internal static partial class ProjectBuild
 {
     /// <summary>
-    ///  Assembles a target and writes its output.
+    ///  Runs the project's steps that are not up to date (<see cref="ProjectSteps"/>), then assembles a target and
+    ///  writes its output.
     /// </summary>
     /// <param name="target">The target.</param>
     /// <returns>The build.</returns>
     /// <exception cref="ProjectException">
-    ///  The target uses what is not supported yet, its sources are missing or have errors, it names a CPU its
-    ///  machine lacks, or its bytes are not one block.
+    ///  A step fails, the target uses what is not supported yet, its sources are missing or have errors, it names a
+    ///  CPU its machine lacks, or its bytes are not one block.
     /// </exception>
     /// <exception cref="IOException">The output cannot be written.</exception>
     /// <exception cref="UnauthorizedAccessException">The output cannot be written.</exception>
     internal static TargetBuild Build(ProjectTarget target)
     {
-        TargetBuild build = Assemble(target);
+        target.RequireSupported();
+        List<StepResult> steps = ProjectSteps.Run(target.Project);
+        TargetBuild build = Assemble(target) with { Steps = steps };
         Write(build);
         return build;
     }

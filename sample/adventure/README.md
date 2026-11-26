@@ -38,17 +38,14 @@ there shows text once a character set is loaded, which SOS does as it boots.
 
 ## Building and running
 
-From this folder, pack the test game, then build every target:
-
-```powershell
-dotnet run tools/packer.cs -- pack games/test.dat obj/test.bin
-```
+From this folder, build every target:
 
 ```powershell
 dotnet ../../artifacts/AnyCPU/Release/Retrocore.Debug/net11.0/Retrocore.Debug.dll build --all
 ```
 
-`pack` prints each part's size, and the build writes each target's binary, debug information and map to
+The project's `steps` pack each game with the packer into `obj/` first, printing each part's size, and are skipped
+while the packer and the games are unchanged. The build writes each target's binary, debug information and map to
 `artifacts/<target>/`. To debug a target, launch it as a `project`:
 
 ```jsonc
@@ -64,7 +61,8 @@ files open with their symbols and with the platform's names that target gives th
 
 ## Testing
 
-The reference engine plays a transcript and checks it against what the screen should show:
+Once a build has packed the games, the reference engine plays a transcript and checks it against what the screen
+should show:
 
 ```powershell
 dotnet run tools/packer.cs -- play obj/test.bin games/test-win.in --echo --expect games/test-win.out

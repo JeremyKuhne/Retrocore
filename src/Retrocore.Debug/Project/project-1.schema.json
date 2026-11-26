@@ -8,6 +8,38 @@
     { "$ref": "#/definitions/project" }
   ],
   "definitions": {
+    "step": {
+      "type": "object",
+      "description": "A host-side tool run before assembly, started in the project's folder. Paths are relative to the project's folder, and ${obj} in an input, an output or an argument is its intermediate folder, obj/.",
+      "additionalProperties": false,
+      "required": ["tool"],
+      "properties": {
+        "tool": {
+          "type": "string",
+          "pattern": "\\.([cC][sS]|[cC][sS][pP][rR][oO][jJ])$",
+          "description": "A C# file-based app (.cs), run as dotnet run <file> -- <args>, or a project (.csproj), run as dotnet run --project <file> -- <args>."
+        },
+        "args": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "description": "The tool's arguments. ${obj} is the intermediate folder; an argument that is exactly ${in} or ${out} stands for every input or output. Without args the tool gets the inputs, then the outputs."
+        },
+        "in": {
+          "allOf": [{ "$ref": "#/definitions/stepPaths" }],
+          "description": "The files the tool reads; a change to one runs the step again."
+        },
+        "out": {
+          "allOf": [{ "$ref": "#/definitions/stepPaths" }],
+          "description": "The files the tool writes, such as ${obj}/game.bin for an .incbin."
+        }
+      }
+    },
+    "stepPaths": {
+      "oneOf": [
+        { "type": "string", "minLength": 1 },
+        { "type": "array", "items": { "type": "string", "minLength": 1 } }
+      ]
+    },
     "root": {
       "type": "object",
       "description": "A repository's root file that lists its projects.",
@@ -48,7 +80,8 @@
         },
         "steps": {
           "type": "array",
-          "description": "Host-side build steps that run before assembly. Not yet supported: a build that has them fails."
+          "description": "Host-side build steps that run, in order, before any target assembles. A step whose tool and inputs are unchanged since it last ran, and whose outputs are as it left them, is skipped.",
+          "items": { "$ref": "#/definitions/step" }
         },
         "defines": {
           "$ref": "#/definitions/defines",

@@ -1,6 +1,6 @@
 // The adventure on five machines, each a bare target: the engine's core, the same on every one, and the machine's
-// platform folder, src/platform/<family>/, with its console and its linker configuration. Pack the game first
-// (dotnet run tools/packer.cs -- pack games/test.dat obj/test.bin), then build with `retrocore build --all`.
+// platform folder, src/platform/<family>/, with its console and its linker configuration. `retrocore build --all`
+// first packs the games with the packer, a step it skips while the packer and the games are unchanged.
 {
   "sdk": "1",
   "name": "adventure",
@@ -17,6 +17,10 @@
     "src/core/codes.s",
     "src/core/engine.s",
     "src/linked-game.s"
+  ],
+  "steps": [
+    { "tool": "tools/packer.cs", "args": ["pack", "${in}", "${out}"], "in": "games/test.dat", "out": "${obj}/test.bin" },
+    { "tool": "tools/packer.cs", "args": ["pack", "${in}", "${out}"], "in": "games/pirate.dat", "out": "${obj}/pirate.bin" }
   ],
   "entry": "Engine::Start",
   "targets": {

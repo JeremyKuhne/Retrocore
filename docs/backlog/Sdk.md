@@ -136,7 +136,7 @@ and validation in VS Code.
   "cpu": "6502",
   "sources": ["src/core/*.s"],
   "steps": [
-    { "tool": "tools/packer.cs", "in": "games/pirate.dat", "out": "${obj}/pirate.bin" }
+    { "tool": "tools/packer.cs", "args": ["pack", "${in}", "${out}"], "in": "games/pirate.dat", "out": "${obj}/pirate.bin" }
   ],
   "targets": {
     "apple1-wozmon": { "machine": "apple1", "environment": "wozmon", "options": { "ramKilobytes": 32 },
@@ -321,8 +321,14 @@ folders go in the package, as they go beside the host. The host is already AOT-c
 runtime the C# steps need anyway.
 
 **Steps.** A step runs a host-side tool before assembly, with declared inputs and outputs. The build skips it when the
-hashes of its inputs and its tool are unchanged. A tool is a C# file-based app (`dotnet run tools/packer.cs`) or a
-small project, so it needs only the .NET SDK, which the tool already needs. A tool can reference
+hashes of its inputs and its tool are unchanged. As built: a step gives `tool` (a `.cs` file-based app, run as
+`dotnet run <file> -- <args>`, or a `.csproj`, run with `--project`), `in` and `out` (a path or a list), and `args`.
+Paths start from the project's folder, `${obj}` in an input, output or argument is its `obj/`, and an argument that is exactly `${in}` or `${out}` stands for every input or
+output; without `args` the tool gets the inputs, then the outputs. The tool starts in the project's folder. Its
+record in `obj/steps/` holds the SHA-256 of what it read (the tool, the files its `#:include` and `#:project`
+directives bring in, or a project's folder, and the inputs) and of what it wrote, so a changed output runs it again
+too. A failing tool fails the build with what it printed. Either kind of tool needs only the .NET SDK, which the tool
+already needs. A tool can reference
 `Retrocore.Sdk.Tools`, which carries the media layer for disk and tape images and the assembler's symbols. A step's
 output is used by `.incbin` or by a target's `files`.
 

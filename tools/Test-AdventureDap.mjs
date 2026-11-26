@@ -2,9 +2,9 @@
 // SPDX-License-Identifier: MIT
 // See LICENSE file in the project root for full license information
 
-// The adventure sample's 6502 engine through the debug adapter, from its project file. It packs the test game with
-// the sample's packer, then plays each of the test game's transcripts on bare targets of
-// sample/adventure/retrocore.json through project launches, each building the same core with its machine's platform
+// The adventure sample's 6502 engine through the debug adapter, from its project file. It plays each of the test
+// game's transcripts on bare targets of sample/adventure/retrocore.json through project launches, each running the
+// project's steps, which pack the games with the sample's packer, and building the same core with its machine's platform
 // folder, and checks that what the engine writes matches the C# reference engine's transcript in the matching .out
 // file character for character. A watch on the console's Write's store of A records each character the engine sends,
 // and a logpoint on ReadLine marks where it reads a command, so the commands can be put back where the screen shows
@@ -17,7 +17,6 @@
 import { startDap } from "./DapClient.mjs";
 import { resolve, join } from "node:path";
 import { readFileSync } from "node:fs";
-import { execFileSync } from "node:child_process";
 import assert from "node:assert/strict";
 
 const root = resolve(import.meta.dirname, "..");
@@ -50,10 +49,6 @@ const screens = {
     }
 };
 const gameOver = "The game is now over.\n";
-
-// The game, packed as the target's .incbin expects it.
-execFileSync("dotnet", ["run", join(sample, "tools", "packer.cs"), "--", "pack",
-    join(sample, "games", "test.dat"), join(sample, "obj", "test.bin")], { stdio: "inherit" });
 
 // The line of the first instruction of a routine of a console.s, which each call reaches once.
 function firstLine(consoleSource, routine) {

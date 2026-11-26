@@ -31,14 +31,12 @@ downloaded and enjoyed though. They are shareware but the contribution is strict
 your own discretion." The repository's MIT license does **not** cover this file. If you enjoy the game, the notice
 invites a voluntary contribution to Scott Adams.
 
-`pirate-win.in` wins the game (both treasures stored in the flat) and `pirate-die.in` dies on the ledge. Pack the game
-first, then write each `.out` as for the test game:
+`pirate-win.in` wins the game (both treasures stored in the flat) and `pirate-die.in` dies on the ledge. Build the
+project, whose step packs the game into `../obj/pirate.bin`, then write each `.out` as for the test game:
 
 ```powershell
-dotnet run ../tools/packer.cs -- pack pirate.dat ../obj/pirate.bin
 dotnet run ../tools/packer.cs -- play ../obj/pirate.bin pirate-win.in --echo > pirate-win.out
 dotnet run ../tools/packer.cs -- play ../obj/pirate.bin pirate-die.in --echo > pirate-die.out
 ```
 
-CI does not play the Pirate transcripts yet: its step packs and plays only the test game's. Check them by hand with
-`dotnet run ../tools/packer.cs -- play ../obj/pirate.bin pirate-win.in --echo --expect pirate-win.out` (and `pirate-die.in` with `pirate-die.out`).
+CI plays both games' transcripts with `--expect` after it builds the project.

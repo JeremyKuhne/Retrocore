@@ -1876,11 +1876,11 @@ internal sealed partial class DebugSession
                 }
             }
 
-            // The 6502's stack has not moved on its response's first cycle, which pushes nothing.
             ushort? hostBoundary = host is { IsInstructionBoundary: true } ? host.ProgramCounter : null;
             instruction |= cpu.StepCycle();
             if (host is { IsInstructionBoundary: false, IsIdle: false } && hostBoundary is { } hostAddress)
             {
+                // The 6502's stack has not moved on its response's first cycle, which pushes nothing.
                 LeaveFor(host, hostAddress, host.Frame.StackPointer, host.IsTakingInterrupt, met: null);
             }
 

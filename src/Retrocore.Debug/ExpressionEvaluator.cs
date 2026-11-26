@@ -36,11 +36,41 @@ internal sealed partial class ExpressionEvaluator
         string expression,
         DebugFrame? registers = null,
         DebugMemoryBank? bank = null)
+        : this(target, symbols, Tokenize(expression), registers, bank)
+    {
+    }
+
+    /// <summary>
+    ///  Creates an evaluator for an expression already split by <see cref="Tokenize(string)"/>, so an expression
+    ///  evaluated again and again, such as a breakpoint's condition, is split once.
+    /// </summary>
+    /// <param name="target">The stopped machine.</param>
+    /// <param name="symbols">The session's debug modules, for labels.</param>
+    /// <param name="tokens">The expression's tokens, which the evaluator does not change.</param>
+    /// <param name="registers">Optional suspended caller registers.</param>
+    /// <param name="bank">The bank a reference named before the expression, whose hint names it reads first.</param>
+    internal ExpressionEvaluator(
+        IDebugTarget target,
+        DebugInfo symbols,
+        string[] tokens,
+        DebugFrame? registers = null,
+        DebugMemoryBank? bank = null)
     {
         _target = target;
         _symbols = symbols;
         _registers = registers ?? target.Frame;
         _space = bank?.Name ?? OwnSpace(target);
+        _tokens = tokens;
+    }
+
+    /// <summary>
+    ///  Splits an expression into its tokens.
+    /// </summary>
+    /// <param name="expression">The expression.</param>
+    /// <returns>The tokens.</returns>
+    /// <exception cref="FormatException">The expression has an invalid token or none.</exception>
+    internal static string[] Tokenize(string expression)
+    {
         List<string> tokens = [];
         int consumed = 0;
         foreach (Match match in ExpressionTokens().Matches(expression))
@@ -55,7 +85,7 @@ internal sealed partial class ExpressionEvaluator
             throw new FormatException("Invalid or empty expression.");
         }
 
-        _tokens = [.. tokens];
+        return [.. tokens];
     }
 
     /// <summary>

@@ -155,6 +155,34 @@ public sealed partial class DebugModuleTests
     }
 
     /// <summary>
+    ///  The first module added that describes an address applies, including modules added after the address was
+    ///  looked up.
+    /// </summary>
+    [TestMethod]
+    public void ModulesApplyInTheOrderAdded()
+    {
+        string directory = Directory.CreateTempSubdirectory("retrocore-module-").FullName;
+        try
+        {
+            (string path, Apple2Bus bus, AssemblyResult result) = Load(directory);
+            Apple2TestMemory memory = new(bus);
+            DebugInfo debug = new();
+            debug.Position(memory, 0x600A).Should().BeNull();
+
+            debug.Add(new SourceMapModule(result, Apple2MemoryArea.MainRam, collapseSingleStatementMacros: true));
+            debug.Position(memory, 0x600A)?.Chain.Should().Equal(new SourceLine(path, 15));
+            debug.Add(new SourceMapModule(result, Apple2MemoryArea.MainRam));
+            debug.Position(memory, 0x600A)?.Chain.Should().Equal(new SourceLine(path, 15));
+            debug.Position(memory, 0x6000)?.Chain.Should().HaveCount(3);
+            debug.Position(memory, 0x6100).Should().BeNull();
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    /// <summary>
     ///  The SDK's slot-seven firmware source describes the slot's ROM while it is mapped, and not internal ROM.
     /// </summary>
     [TestMethod]

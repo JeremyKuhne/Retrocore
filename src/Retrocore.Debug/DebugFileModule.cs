@@ -26,6 +26,9 @@ internal sealed class DebugFileModule(SymbolTable symbols, Enum? area = null) : 
     public Enum? Area => area;
 
     /// <inheritdoc/>
+    public bool Covers(ushort address) => symbols.Location(address) is not null;
+
+    /// <inheritdoc/>
     /// <remarks>
     ///  <para>
     ///   A position's statement is the smallest debug span covering the address; the file does not say which bytes

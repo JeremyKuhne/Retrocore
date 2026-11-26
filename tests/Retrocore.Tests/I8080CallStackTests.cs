@@ -120,7 +120,7 @@ public class I8080CallStackTests
         exit[s_registers.IndexOf("HL")] = 0x4000;
         exit[s_registers.IndexOf("C")] = 0x05;
         exit[s_registers.IndexOf("F")] = 0x02;
-        List<string> broken = contracts.Observe(exit, call: null, memory.Peek);
+        IReadOnlyList<string> broken = contracts.Observe(exit, call: null, memory.Peek);
         broken.Should().ContainSingle().Which.Should().Contain("carry changed");
     }
 

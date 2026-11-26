@@ -9,11 +9,21 @@ namespace Retrocore.Debug;
 /// <summary>
 ///  Records source-line cycle counts and their changes since the last event.
 /// </summary>
-internal sealed class DebugLineCycles
+internal sealed partial class DebugLineCycles
 {
-    private readonly Dictionary<(string Path, int Line), ulong> _last = [];
+    private readonly Dictionary<(string Path, int Line), ulong> _last;
     // Null means the line was absent from the last event, rather than present with a zero count.
-    private readonly Dictionary<(string Path, int Line), ulong?> _before = [];
+    private readonly Dictionary<(string Path, int Line), ulong?> _before;
+
+    /// <summary>
+    ///  Creates an empty record.
+    /// </summary>
+    internal DebugLineCycles()
+    {
+        LineComparer lines = new();
+        _last = [with(lines)];
+        _before = [with(lines)];
+    }
 
     /// <summary>
     ///  Gets each line's latest count.

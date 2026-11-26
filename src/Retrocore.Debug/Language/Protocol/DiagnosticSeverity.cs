@@ -22,5 +22,10 @@ internal enum DiagnosticSeverity
     /// <summary>
     ///  Something worth knowing that is not wrong, such as code written with a historical name.
     /// </summary>
-    Information = 3
+    Information = 3,
+
+    /// <summary>
+    ///  A hint, which an editor shows in the text but leaves out of its list of problems.
+    /// </summary>
+    Hint = 4
 }

@@ -47,7 +47,7 @@ and every ROM they run is an SDK source, except the PET's 4040 and 2040 disk dri
 | The linker | ld65's `MEMORY`, `SEGMENTS`, `SYMBOLS` and `FEATURES`, with `define` and `fill`. A segment that overflows its region and sections that overlap are errors. Nothing knows a machine's reserved areas. |
 | `.incbin` | Inserts a file's bytes, from a resolver that reads binary files. |
 | The SDK's ROM sources | Every ROM of every machine except the PET's disk drives: the Apple-1's, the Apple II's and IIe's, the Apple III's boot ROM and SOS 1.3, the PET's BASIC, editor and Kernal, the BBC Micro's MOS, BASIC II and DNFS, the TRS-80s', the Color Computer's, the Atari's, all with labels and `;;` contracts in the [maintained style](../AssemblyStyle.md). |
-| Entries and equates files | Already most of a header: [`MonitorEntries.asm`](../../src/Retrocore.Machines.Apple2/Roms/System/MonitorEntries.asm), [`IIeEquates.asm`](../../src/Retrocore.Machines.Apple2/Roms/System/IIeEquates.asm), [`FirmwareEquates.asm`](../../src/Retrocore.Machines.Apple2/Roms/System/FirmwareEquates.asm), [`Apple3Equates.asm`](../../src/Retrocore.Machines.Apple3/Roms/Apple3Equates.asm), [`BfmEquates.asm`](../../src/Retrocore.Machines.Apple3/Roms/Sos/Kernel/BfmEquates.asm), [`Commodore.Equates.asm`](../../src/Retrocore.Machines.Commodore/Roms/Basic/Commodore.Equates.asm), [`MosEntries.asm`](../../src/Retrocore.Machines.Acorn/Roms/MosEntries.asm) and [`MosEquates.asm`](../../src/Retrocore.Machines.Acorn/Roms/MosEquates.asm). An entries file's names inherit the ROM's documentation and repeat its `Also:` names ([ConvertingSources.md](../ConvertingSources.md)). They ship in the host's `Sdk/` folder. |
+| Entries and equates files | Already most of a header: [`MonitorEntries.asm`](../../src/Retrocore.Machines.Apple2/Roms/System/MonitorEntries.asm), [`IIeEquates.asm`](../../src/Retrocore.Machines.Apple2/Roms/System/IIeEquates.asm), [`FirmwareEquates.asm`](../../src/Retrocore.Machines.Apple2/Roms/System/FirmwareEquates.asm), [`Apple3Equates.asm`](../../src/Retrocore.Machines.Apple3/Roms/Apple3Equates.asm), [`BfmEquates.asm`](../../src/Retrocore.Machines.Apple3/Roms/Sos/Kernel/BfmEquates.asm), [`PetEquates.asm`](../../src/Retrocore.Machines.Commodore/Roms/PetEquates.asm), [`MosEntries.asm`](../../src/Retrocore.Machines.Acorn/Roms/MosEntries.asm) and [`MosEquates.asm`](../../src/Retrocore.Machines.Acorn/Roms/MosEquates.asm). An entries file's names inherit the ROM's documentation and repeat its `Also:` names ([ConvertingSources.md](../ConvertingSources.md)). They ship in the host's `Sdk/` folder. |
 | Historical and deprecated names | `;; Also:` lets an old name assemble as an alias of the new one, and a `Deprecated:` section makes the editor warn at each use. The command-line build prints no deprecation warnings. |
 | [`SdkModules`](../../src/Retrocore.Debug/SdkModules.cs) and the other SDK module classes | Assemble those sources in the debug host and map them onto whatever ROM is running. |
 | [`SdkIndex`](../../src/Retrocore.Debug/Language/SdkIndex.cs) | The language server's analysis of every SDK source, behind hover, completion and go to definition. It is global: one `Sdk/` root, with no per-target view. |
@@ -158,7 +158,7 @@ and validation in VS Code.
 | `steps` | Host-side build steps that run before assembly ([building](#building)). |
 | `defines` | Project-wide symbols, added to the SDK's own. |
 | `targets` | Named targets: `machine` (as Start Machine lists it), `environment`, and optionally `cpu`, `options` (the machine's launch options), `cards`, `defines`, `sources` added for this target only, `linkerConfiguration`, `memoryMap` overrides, `files` (data files put beside the program on its disk), `bootImage`, `image`, and `machineFile` once [machine files](MachineFiles.md) exist. |
-| `entry` | The entry point's label; defaults to the first section, as a `source` launch does today. |
+| `entry` | The entry point's label; defaults to the first byte the project's own sources emit, after the platform folders' code. |
 
 A target's `machine` is a machine as the extension's catalog names it ([`machines.ts`](../../extension/src/machines.ts)),
 the same names Start Machine and favorites use: `apple1`, `apple2-iiplus`, `apple3`, `pet2001-basic2`, `pet4032`,
@@ -166,8 +166,10 @@ the same names Start Machine and favorites use: `apple1`, `apple2-iiplus`, `appl
 
 **Sources for each target.** Besides `sources`, every target gets its family's folder `src/platform/<family>/`,
 then its model's folder `src/platform/<model>/`. A model's file replaces its family's file of the same name, so
-`platform/apple2-iie/console.s` replaces `platform/apple2/console.s` on IIe targets. A target's own `sources` are added
-after those. Most projects need no per-target lists.
+`platform/apple2-iie/console.s` replaces `platform/apple2/console.s` on IIe targets. The platform folders assemble
+first, then `sources`, then a target's own `sources`: the shared code builds on the platform, whose constants (a
+screen's width for a `.res`) and zero-page locations must be known before it. Most projects need no per-target
+lists.
 
 Build output goes to `artifacts/<target>/` and intermediate files to `obj/<target>/` (`${obj}`), unless `output` says
 otherwise.
@@ -226,7 +228,7 @@ thing on every machine that has it.
 
 - **ROM entry points come from the entries files the SDK already has.** At first a machine's header includes them:
   `MonitorEntries.asm` and `IIeEquates.asm` on the Apple II, `MosEntries.asm` and `MosEquates.asm` on the BBC Micro,
-  `Commodore.Equates.asm` on the PET, `Apple3Equates.asm` on the Apple III. Their names inherit the ROMs'
+  `PetEquates.asm` on the PET, `Apple3Equates.asm` on the Apple III. Their names inherit the ROMs'
   documentation, so hover in a project shows the Monitor's own documentation of `COUT`, and their `Also:` names
   keep the period names working.
 - **Generated headers come later**, where a machine has no entries file or its file covers too little. They reuse
@@ -250,13 +252,14 @@ thing on every machine that has it.
 | `RC_SDK` | `RC_SDK = 1` | the SDK's major version |
 | `RC_CPU_<cpu>` | `RC_CPU_65C02` | 1 for the target's CPU and every CPU it is a superset of |
 | `RC_MACHINE_<family>` | `RC_MACHINE_APPLE2` | 1 for the machine's family |
-| `RC_MODEL_<model>` | `RC_MODEL_IIE_ENHANCED` | 1 for the exact model |
+| `RC_MODEL_<machine>` | `RC_MODEL_APPLE2_IIE_ENHANCED` | 1 for the exact machine, by its catalog id |
 | `RC_ENV_<environment>` | `RC_ENV_SOS` | 1 for the environment |
 | `RC_RAM_KB` | `RC_RAM_KB = 32` | the target's RAM |
 | `RC_SCREEN_COLUMNS`, `RC_SCREEN_ROWS` | `RC_SCREEN_COLUMNS = 40` | the text screen the environment starts in |
 | `RC_TARGET` | `.define RC_TARGET "apple2-dos"` | the target's name, as a textual definition |
 
-Names a program defines itself may not start with `RC_`; the assembler reports any that do.
+Names a program defines itself may not start with `RC_`; the build reports any that do. [sdk/1/README.md](../../sdk/1/README.md)
+has the headers and defines as built, and where a target's includes are found.
 
 The `RC_` defines are build switches, so they follow
 [Builds and their switches](../ConvertingSources.md#builds-and-their-switches): a header that depends on one asserts

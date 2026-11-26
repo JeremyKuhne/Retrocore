@@ -5,6 +5,7 @@
 using Retrocore.Assembler;
 using System.Globalization;
 using System.Text.Json.Nodes;
+using System.Text.RegularExpressions;
 using Touki.Io;
 
 namespace Retrocore.Debug.Project;
@@ -30,7 +31,7 @@ namespace Retrocore.Debug.Project;
 ///   CPU and the defines.
 ///  </para>
 /// </remarks>
-internal static class ProjectBuild
+internal static partial class ProjectBuild
 {
     /// <summary>
     ///  Assembles a target and writes its output.
@@ -60,17 +61,10 @@ internal static class ProjectBuild
     {
         target.RequireSupported();
         List<TargetSourceFile> files = target.SourceFiles();
-        int origin = target.Machine.LoadAddress;
-        AssemblyOptions options = new(target.Cpu.AssemblerName, origin, 0x10000 - origin)
-        {
-            Dialect = AssemblyDialect.Native,
-            SourceResolver = new OverlayBaseResolver(OverlayBaseResolver.SdkFallback),
-            SdkPaths = [SdkModules.SdkDirectory],
-            PredefinedSymbols = target.Symbols(),
-            LinkerConfiguration = target.LinkerConfiguration is { } linker
-                ? new(Read(target, linker, "linker configuration"), linker)
-                : null
-        };
+        AssemblyOptions options = Options(
+            target,
+            new OverlayBaseResolver(OverlayBaseResolver.SdkFallback),
+            target.LinkerConfiguration is { } linker ? new(Read(target, linker, "linker configuration"), linker) : null);
 
         List<AssemblySource> sources =
             [.. files.Select(file => new AssemblySource(Read(target, file.Path, "source"), file.Path, file.Dialect))];
@@ -81,6 +75,7 @@ internal static class ProjectBuild
 
         AssemblyResult result = new Assembler.Assembler().Assemble(parsed.Project, options);
         if (!result.Success) { throw Errors(target, result.Diagnostics); }
+        CheckReservedNames(target, result, sources);
 
         List<(int Address, ReadOnlyMemory<byte> Bytes)> segments = [.. SourceBuild.Emitted(result)];
         if (segments.Count == 0)
@@ -90,7 +85,7 @@ internal static class ProjectBuild
 
         RequireOneBlock(target, segments);
 
-        int entry = segments[0].Address;
+        int entry = FirstOwnAddress(target, result, files) ?? segments[0].Address;
         if (target.Project.Entry is { } label)
         {
             entry = result.Symbols.TryGetValue(label, out long value) && value is >= 0 and <= 0xFFFF
@@ -107,6 +102,29 @@ internal static class ProjectBuild
             DebugFile = Path.Join(output, name + ".dbg"),
             MapFile = Path.Join(output, name + ".map"),
             Record = Path.Join(target.Project.Intermediate, target.Name, "build.json")
+        };
+    }
+
+    /// <summary>
+    ///  Gets the options a target assembles with: its CPU and load address, the native dialect, its headers' folders
+    ///  on the SDK paths, and its defines, the SDK's with the project's and its own. The build and the language server
+    ///  both assemble with them, so a source chooses the same code in each.
+    /// </summary>
+    /// <param name="target">The target.</param>
+    /// <param name="resolver">Reads the sources' includes.</param>
+    /// <param name="linkerConfiguration">The target's linker configuration's text, or null for none.</param>
+    /// <returns>The options.</returns>
+    internal static AssemblyOptions Options(ProjectTarget target, IAssemblySourceResolver resolver, AssemblySource? linkerConfiguration)
+    {
+        int origin = target.Machine.LoadAddress;
+        return new(target.Cpu.AssemblerName, origin, 0x10000 - origin)
+        {
+            Dialect = AssemblyDialect.Native,
+            SourceResolver = resolver,
+            SdkPaths = target.SdkPaths(SdkModules.SdkDirectory),
+            PredefinedSymbols = target.Symbols(),
+            PredefinedTexts = target.Texts(),
+            LinkerConfiguration = linkerConfiguration
         };
     }
 
@@ -242,6 +260,74 @@ internal static class ProjectBuild
         {
             throw new ProjectException($"{target.Project.File}: target {target.Name}:{Environment.NewLine}{string.Join(Environment.NewLine, errors)}");
         }
+    }
+
+    // Names starting with RC_, in any case, are the SDK's: the project's sources may use them but not define them, as a
+    // symbol at any scope, a textual definition or a macro. The predefined ones are defined at "<predefined>", not in a
+    // file, and the SDK's own headers may define more.
+    private static void CheckReservedNames(ProjectTarget target, AssemblyResult result, List<AssemblySource> sources)
+    {
+        string sdk = Path.GetFullPath(SdkModules.SdkDirectory) + Path.DirectorySeparatorChar;
+        bool Own(string path) => File.Exists(path) && !Path.GetFullPath(path).StartsWith(sdk, StringComparison.OrdinalIgnoreCase);
+
+        List<string> errors = [];
+        foreach (AssemblySymbol symbol in result.SymbolDefinitions)
+        {
+            if (Reserved(symbol.Name) && symbol.Location is { } location && Own(location.Path))
+            {
+                errors.Add($"{location.Path}({location.Line + 1}): {symbol.Name}: names starting with {TargetDefines.Prefix} are the SDK's; give it another name.");
+            }
+        }
+
+        // Textual definitions and macros are not symbols: their directives are found in the text of the sources and
+        // of the files they include, as the assembly opened them, on the lines it assembled, as the symbols are.
+        AssemblySkippedLines? skipped = result.SkippedLines;
+        IEnumerable<string> opened = skipped?.Skipped.Keys ?? [];
+        foreach (string path in sources.Select(source => source.Path).Concat(opened).Distinct(StringComparer.OrdinalIgnoreCase).Where(Own))
+        {
+            string[] lines = File.ReadAllLines(path);
+            for (int line = 0; line < lines.Length; line++)
+            {
+                if (skipped?.IsAssembled(path, line) == false) { continue; }
+                Match match = DefinitionLine().Match(lines[line]);
+                if (match.Success && Reserved(match.Groups["name"].Value))
+                {
+                    errors.Add($"{path}({line + 1}): {match.Groups["name"].Value}: names starting with {TargetDefines.Prefix} are the SDK's; give it another name.");
+                }
+            }
+        }
+
+        if (errors.Count != 0)
+        {
+            throw new ProjectException($"{target.Project.File}: target {target.Name}:{Environment.NewLine}{string.Join(Environment.NewLine, errors)}");
+        }
+    }
+
+    // Whether a name, or the last part of a scoped one, starts with RC_ in any case.
+    private static bool Reserved(string name)
+    {
+        int scope = name.LastIndexOf("::", StringComparison.Ordinal);
+        return name[(scope < 0 ? 0 : scope + 2)..].StartsWith(TargetDefines.Prefix, StringComparison.OrdinalIgnoreCase);
+    }
+
+    // A line that defines a textual definition or a macro, with an optional label before the directive.
+    [GeneratedRegex(@"^\s*(?:[A-Za-z_][A-Za-z0-9_]*:\s*)?\.(?:define|macro|mac)\s+(?<name>[A-Za-z_][A-Za-z0-9_]*)", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+    private static partial Regex DefinitionLine();
+
+    // Where a target starts when its project names no entry: the first byte its own sources emit, the project's and
+    // the target's rather than the platform folders', which assemble before them; null when they emit none.
+    private static int? FirstOwnAddress(ProjectTarget target, AssemblyResult result, List<TargetSourceFile> files)
+    {
+        HashSet<string> platform = [with(StringComparer.OrdinalIgnoreCase), .. target.PlatformFiles()];
+        HashSet<string> own = [with(StringComparer.OrdinalIgnoreCase), .. files.Select(file => file.Path).Where(path => !platform.Contains(path))];
+        foreach (AssemblySourceMapEntry entry in result.SourceMap)
+        {
+            if (entry.Size == 0 || entry.Location is not { } location) { continue; }
+            while (location.ExpandedFrom is { } outer) { location = outer; }
+            if (own.Contains(location.Path)) { return entry.Address; }
+        }
+
+        return null;
     }
 
     private static ProjectException Errors(ProjectTarget target, IEnumerable<AssemblyDiagnostic> diagnostics)

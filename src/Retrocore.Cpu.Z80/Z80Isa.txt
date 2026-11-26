@@ -42,6 +42,79 @@ flow wait HALT
 # How an instruction accesses a memory operand; the rest read it.
 access write LD:[nn],A LD:[nn],BC LD:[nn],DE LD:[nn],HL LD:[nn],SP LD:[nn],IX LD:[nn],IY
 
+# Register and flag effects, for analysis, in the 6502 description's form (see OpcodeTables.txt): reads,
+# writes and may-write list registers by name and flags by word, X and Y by name; F means every flag. $1, $2
+# and $3 are the operands of the form's name: a register operand is that register, and a bracketed one, such
+# as [HL] or [IX+d], reads its address register. A pair stands for its parts, so writing HL writes H and L. A
+# conditional call or return may write SP and may push or pull. PC, R's refresh count and the hidden state
+# (WZ, Q, IFF1, IFF2 and the interrupt mode) are left out; LD A,R and LD R,A name R.
+parts AF=A,F BC=B,C DE=D,E HL=H,L IX=IXH,IXL IY=IYH,IYL
+stack SP
+effects LD                      reads $2                writes $1
+effects LD:A,I LD:A,R           reads $2                writes A negative zero Y half-carry=0 X overflow subtract=0
+effects PUSH                    reads $1 SP             writes SP                       push 2
+effects POP                     reads SP                writes $1 SP                    pull 2
+effects EX                      reads $1 $2             writes $1 $2
+effects EXX                     reads BC DE HL BC' DE' HL'      writes BC DE HL BC' DE' HL'
+effects ADD                     reads $1 $2             writes $1 F subtract=0
+effects ADD:HL,BC ADD:HL,DE ADD:HL,HL ADD:HL,SP     reads $1 $2     writes $1 Y half-carry X subtract=0 carry
+effects ADD:IX,BC ADD:IX,DE ADD:IX,IX ADD:IX,SP     reads $1 $2     writes $1 Y half-carry X subtract=0 carry
+effects ADD:IY,BC ADD:IY,DE ADD:IY,IY ADD:IY,SP     reads $1 $2     writes $1 Y half-carry X subtract=0 carry
+effects ADC                     reads $1 $2 carry       writes $1 F subtract=0
+effects SBC                     reads $1 $2 carry       writes $1 F subtract=1
+effects SUB                     reads A $1              writes A F subtract=1
+effects CP                      reads A $1              writes F subtract=1
+# XOR A, SUB A and SBC A,A do not depend on A, so they end its life; SBC A,A and SBC HL,HL keep the carry.
+effects XOR:A writes A negative=0 zero=1 Y=0 half-carry=0 X=0 overflow=1 subtract=0 carry=0
+effects SUB:A writes A negative=0 zero=1 Y=0 half-carry=0 X=0 overflow=0 subtract=1 carry=0
+effects CP:A reads A writes F negative=0 zero=1 half-carry=0 overflow=0 subtract=1 carry=0
+effects SBC:A,A                 reads carry             writes A negative zero Y half-carry X overflow subtract=1
+effects SBC:HL,HL               reads carry             writes HL negative zero Y half-carry X overflow subtract=1
+effects AND                     reads A $1              writes A F half-carry=1 subtract=0 carry=0
+effects XOR OR                  reads A $1              writes A F half-carry=0 subtract=0 carry=0
+effects INC                     reads $1                writes $1 negative zero Y half-carry X overflow subtract=0
+effects DEC                     reads $1                writes $1 negative zero Y half-carry X overflow subtract=1
+effects INC:BC INC:DE INC:HL INC:SP INC:IX INC:IY  reads $1        writes $1
+effects DEC:BC DEC:DE DEC:HL DEC:SP DEC:IX DEC:IY  reads $1        writes $1
+effects RLC RRC SLA SRA SRL SLL reads $1                writes $1 $2 F half-carry=0 subtract=0
+effects RL RR                   reads $1 carry          writes $1 $2 F half-carry=0 subtract=0
+effects BIT                     reads $2                writes negative zero Y half-carry=1 X overflow subtract=0
+effects SET RES                 reads $2                writes $2 $3
+effects RLCA RRCA               reads A                 writes A Y half-carry=0 X subtract=0 carry
+effects RLA RRA                 reads A carry           writes A Y half-carry=0 X subtract=0 carry
+effects RLD RRD                 reads A HL              writes A negative zero Y half-carry=0 X overflow subtract=0
+effects DAA                     reads A half-carry subtract carry   writes A negative zero Y half-carry X overflow carry
+effects CPL                     reads A                 writes A Y half-carry=1 X subtract=1
+effects NEG                     reads A                 writes A F subtract=1
+effects SCF                     reads A X Y             writes Y half-carry=0 X subtract=0 carry=1
+effects CCF                     reads A X Y carry       writes Y half-carry X subtract=0 carry
+effects NOP DI EI IM HALT none
+effects JP JR none
+effects JP:[HL] JP:[IX] JP:[IY] reads $1
+effects JP:NZ,nn JP:Z,nn JR:NZ,rel JR:Z,rel reads zero
+effects JP:NC,nn JP:C,nn JR:NC,rel JR:C,rel reads carry
+effects JP:PO,nn JP:PE,nn       reads overflow
+effects JP:P,nn JP:M,nn         reads negative
+effects DJNZ                    reads B                 writes B
+effects CALL RST                reads SP                writes SP                       push 2
+effects CALL:NZ,nn CALL:Z,nn    reads zero SP           may-write SP                    may-push 2
+effects CALL:NC,nn CALL:C,nn    reads carry SP          may-write SP                    may-push 2
+effects CALL:PO,nn CALL:PE,nn   reads overflow SP       may-write SP                    may-push 2
+effects CALL:P,nn CALL:M,nn     reads negative SP       may-write SP                    may-push 2
+effects RET RETI RETN           reads SP                writes SP                       pull 2
+effects RET:NZ RET:Z            reads zero SP           may-write SP                    may-pull 2
+effects RET:NC RET:C            reads carry SP          may-write SP                    may-pull 2
+effects RET:PO RET:PE           reads overflow SP       may-write SP                    may-pull 2
+effects RET:P RET:M             reads negative SP       may-write SP                    may-pull 2
+effects IN                      reads B C               writes $1 negative zero Y half-carry=0 X overflow subtract=0
+effects IN:A,[n]                reads A                 writes A
+effects OUT                     reads B C $2
+effects OUT:[n],A               reads A
+effects LDI LDD LDIR LDDR       reads A BC DE HL        writes BC DE HL Y half-carry=0 X overflow subtract=0
+effects CPI CPD CPIR CPDR       reads A BC HL           writes BC HL negative zero Y half-carry X overflow subtract=1
+effects INI IND INIR INDR       reads B C HL            writes B HL F
+effects OUTI OUTD OTIR OTDR     reads B C HL            writes B HL F
+
 [forms]
 # Operand forms with expressions, in the order operands are matched; literal forms such as A,B match first,
 # when the mnemonic has them. A broader pattern, such as {},A, follows the narrower ones it would also match. A pattern is literal text with {} for each expression. Forms sharing a pattern

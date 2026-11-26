@@ -1,6 +1,6 @@
 # Backlog: static analysis of assembly sources
 
-Status: **survey, with item 4's groundwork done for the 6502 family**. This note gathers what Retrocore already
+Status: **survey, with item 4's groundwork done for the 6502 family and the Z80**. This note gathers what Retrocore already
 checks, what other assemblers and tools check, and where the two differ, as the starting point for a design. The
 [effects lines](#register-and-flag-effects) are decided; the analyses that would use them are not.
 
@@ -17,9 +17,9 @@ jump, branch, vector, indirect jump, read, write and read-write.
 
 What it knows of each CPU comes from the instruction-set descriptions (`OpcodeTables.txt`, `Z80Isa.txt`,
 `M6809Isa.txt`, `I8080Isa.txt`): the `flow` lines (`InstructionFlow`), the `access` lines (`MemoryAccess`), the
-vectors, the flags by word, and quirks such as `indirect-page-wrap Mos6502`. The 6502 family's description also
-says which registers and flags each instruction reads and writes (the [effects lines](#register-and-flag-effects));
-the other CPUs' do not yet, and their hovers' "flags it changes" is still text, not data an analysis can use.
+vectors, the flags by word, and quirks such as `indirect-page-wrap Mos6502`. The 6502 family's description
+and the Z80's also say which registers and flags each instruction reads and writes (the
+[effects lines](#register-and-flag-effects)); the 6809's and 8080's do not yet.
 
 Two features use it:
 
@@ -203,7 +203,7 @@ warnings, which most assemblers have.
 4. **`Keeps:` and `Uses:` without running.** The instruction-set descriptions say what each instruction reads
    and writes, and a per-routine dataflow over `AnalysisEngine`'s flow would take each callee's documented
    contract at a `JSR` or `CALL`. It would find the leftover-Y kind of problem and contracts the documentation
-   gets wrong. The first part is done for the 6502 family: see
+   gets wrong. The first part is done for the 6502 family and the Z80: see
    [Register and flag effects](#register-and-flag-effects). The dataflow is not.
 5. **Flag values,** as SourceGen carries them, to report branches never taken and the code only they reach.
 6. **Unreferenced code and fall-through:** what no entry point reaches, and a routine that runs into the next,
@@ -216,14 +216,16 @@ warnings, which most assemblers have.
 ## Register and flag effects
 
 The groundwork for items 4 and 5: each instruction's register and flag effects, as data in the instruction-set
-description, checked against execution. Done for the 6502 family (`OpcodeTables.txt`): the NMOS 6502 with its
-undocumented opcodes, the WDC and Rockwell 65C02s, and the 65SC02 subset.
+description, checked against execution. Done for the 6502 family (`OpcodeTables.txt`: the NMOS 6502 with its
+undocumented opcodes, the WDC and Rockwell 65C02s, and the 65SC02 subset) and the Z80 (`Z80Isa.txt`, its
+undocumented opcodes included).
 
 ### The format
 
 `effects` lines go in `[isa]`, after the `registers` and `flags` lines, beside `flow` and `access`:
 
 ```text
+stack S
 effects ADC SBC                 reads A carry decimal   writes A negative overflow zero carry
 effects BIT                     reads A                 writes negative=bit7 overflow=bit6 zero
 effects BIT:Immediate           reads A                 writes zero
@@ -234,67 +236,107 @@ effects :AbsoluteIndexedX :ZeroPageIndexedX :ZeroPageIndexedIndirect :AbsoluteIn
 effects BRA JMP NOP STZ BBR BBS RMB SMB WAI STP JAM none
 ```
 
-- A line names instructions, then any of `reads`, `writes`, `push n` and `pull n`, or `none` for an instruction
-  that touches no register or flag.
+and for the Z80:
+
+```text
+parts AF=A,F BC=B,C DE=D,E HL=H,L IX=IXH,IXL IY=IYH,IYL
+stack SP
+effects LD                      reads $2                writes $1
+effects RL RR                   reads $1 carry          writes $1 $2 F half-carry=0 subtract=0
+effects CALL:NZ,nn CALL:Z,nn    reads zero SP           may-write SP                    may-push 2
+effects XOR:A writes A negative=0 zero=1 Y=0 half-carry=0 X=0 overflow=1 subtract=0 carry=0
+```
+
+- A line names instructions, then any of `reads`, `writes`, `may-write`, `push`, `pull`, `may-push` and
+  `may-pull`, or `none` for an instruction that touches no register or flag.
 - `reads` lists what the instruction reads; `writes` what it assigns on every path, so the old value is dead
-  afterwards. What is not written keeps its value.
+  afterwards; `may-write` what it changes on some paths only, as a conditional call's SP. What is in none of them
+  keeps its value.
 - Registers go by name and flags by the word documentation uses (`carry`, not `C`), so the Z80's C register and
-  carry flag cannot be confused. A flag without a word, such as the Z80's undocumented X and Y, goes by its name.
-  The flags register by name (`P`) means every flag, as `PHP` pushes them and `PLP` pulls them.
+  carry flag cannot be confused. A flag without a word, the Z80's undocumented X and Y, goes by its name. The
+  flags register by name (`P`, `F`) means every flag, as `PHP` pushes them and `POP AF` pulls them.
 - In `writes`, `flag=0` and `flag=1` are constants, and `flag=bitN` is a copy of bit N of the memory operand.
-- `push n` and `pull n` move n bytes through the stack S points to; the line also lists S as read and written.
-- `Instruction:Form` replaces the instruction's own line, as `BIT:Immediate` changes only zero. A `:Form` line
-  adds to every instruction in that form, as the index register an address is formed from, and the accumulator
-  form's `reads A writes A` for the shifts, `INC` and `DEC`.
+- `parts Pair=Part,Part` makes a register stand for its parts: writing HL writes H and L, and the masks hold only
+  the parts. A part the registers line lacks, as the Z80's IXH, is added for effects alone, so the debugger's
+  frame, which holds the registers line, does not grow.
+- `stack S` names the register `push n` and `pull n` move n bytes through; `push U 2` names another, for the
+  6809's user stack. A line that pushes or pulls must read and write (or may-write) that register.
+- `$1` to `$8` are the operands of the encoding's form name, split at commas: in `LD A,[HL]`, `$1` is A and `$2`
+  is `[HL]`. A register operand is that register; a bracketed one is memory, and reads its address register
+  (HL, or IX for `[IX+d]`) wherever the line names it; anything else (`n`, `nn`, a bit number) is nothing.
+- `Instruction:Form` replaces the instruction's own line, as `BIT:Immediate` changes only zero and `JP:NZ,nn`
+  reads zero. A `:Form` line adds to every instruction in that form, as the index register an address is formed
+  from, and the accumulator form's `reads A writes A` for the shifts, `INC` and `DEC`.
 - `effects in Set` lines win over the description's in that set, the sets built on it (`[Rockwell65C02 :
   Wdc65C02]`) and its subsets (`65SC02`). Within a scope, `Instruction:Form` wins over `Instruction`.
-- PC is left to the `flow` lines and the memory operand to the `access` lines.
+- PC is left to the `flow` lines and the memory operand to the `access` lines. On the Z80 so are R's refresh
+  count and the state the registers line does not list: WZ, Q, IFF1 and IFF2, and the interrupt mode. `LD A,R`
+  and `LD R,A` name R.
 
 Once a description has any `effects` line, every encoding of every set must resolve to one, and every line must
-name a known set and an instruction or form some set has, so a gap or a misspelling fails the build at its line
-(`IsaDescriptionGenerator`, RCGEN010).
+name a known set and be taken by some encoding, so a gap, a misspelling or a line every set overrides fails the
+build at its line (`IsaDescriptionGenerator`, RCGEN010).
+
+Where an instruction's result does not depend on a register it reads, the data says so, for liveness: `XOR A`,
+`SUB A` and `SBC A,A` do not read A, and `SBC A,A` and `SBC HL,HL` keep the carry.
 
 ### The API
 
 `InstructionSet.Effects(encoding)` (and `DisassembledInstruction.Effects`) returns an `InstructionEffects` by
-reference into an array built with the set, so a lookup neither allocates nor copies. It holds the registers read and
-written as bits by index in `IsaDescription.Registers`; the flags read, written, set and cleared as bits of the
-flags register; the flags copied from the operand, with `OperandBit(flag)`; and the bytes pushed and pulled.
+reference into an array built with the set, so a lookup neither allocates nor copies. It holds the registers read,
+written and maybe written as bits by index in `IsaDescription.EffectRegisters`, which `RegisterMask(name)` gives
+for a name (a pair's parts' bits); the flags read, written, maybe written, set and cleared as bits of the flags
+register; the flags copied from the operand, with `OperandBit(flag)`; the bytes pushed and pulled, always and on
+some paths; and the stack register. `ReadsAny(mask)` and `ChangesAny(mask)` test a register or pair.
 `InstructionSet.HasEffects` says whether the description has them; without, `IsKnown` is false.
 
-What it costs, measured in Release on this change: a lookup about 1.3 ns, with nothing allocated; the tables 28
-bytes an encoding, about 29 KB for the four 6502 family sets, and nothing for a set whose description has no
-effects. Parsing the 6502 description, done once a process and only when first used, takes about 0.5 ms and
-290 KB of short-lived allocation more than without the lines (about 1.4 ms and 2.0 MB in all). The cores do not
-read the data, and the generator that builds them skips `[isa]`, so execution is unchanged.
+What it costs, measured in Release: a lookup about 1.3 ns, with nothing allocated; the tables 36 bytes an
+encoding, about 37 KB for the four 6502 family sets and 45 KB for the Z80's 1,255 encodings, and nothing for a
+set whose description has no effects. Parsing a description, done once a process and only when first used,
+allocates 260 KB (6502) and 395 KB (Z80) of short-lived memory more than without the lines, and takes roughly
+0.5 to 1 ms more. The cores do not read the data, and the generator that builds the 6502 cores skips `[isa]`, so
+execution is unchanged.
 
 ### How it is checked
 
-- `InstructionEffectsTests.M6502EffectsMatchExecution` runs every opcode of each CPU on the core from 64 random
-  states each. What the data says is not written must keep its value; constants must take theirs; a copied flag
-  must be the operand's bit; S must move by the bytes pushed and pulled, with a stack write per byte pushed. Then
-  each of A, X, Y, S and the six flags is changed in turn: one the data says is not read must change nothing else,
-  neither the result nor any bus cycle. The data is also checked the other way: every register and flag it says
-  is read must make a difference, and every one it says is written must change, in some case. The data matches
-  exactly, so it says no more than the core does, and no less.
-- `InstructionEffectsTests.M6502EffectsMatchSingleStepVectors` (category `Conformance`) checks the same unchanged,
-  constant, copied-bit and stack claims against all 7,660,000 SingleStepTests vectors, which the core is certified
-  against. It needs the fixtures from `tools/Fetch-ProcessorTests.ps1` and is inconclusive without them.
-- `InstructionFlagsTests.M6502AgreesWithTheEffects`: the memory inspector's hand-written flags for each
-  documented encoding are those the data says are written, B aside, which exists only in the pushed byte.
+- `InstructionEffectsTests.M6502EffectsMatchExecution` and `Z80EffectsTests.Z80EffectsMatchExecution` run every
+  encoding on the core from 64 random states each, some at the values where rare changes happen (BC at 1, low
+  halves at $FF and 0). What the data says is not written must keep its value; constants must take theirs; a
+  copied flag must be the operand's bit; the stack must move by the bytes pushed and pulled. Then each register
+  and flag is changed in turn: one the data says is not read must change nothing else, neither the result nor any
+  bus or port access. The data is also checked the other way: every register and flag it says is read must make
+  a difference, and every one it says is written must change, in some case. Writing a register with its own
+  value, as `LD B,B` and `AND A` do, is allowed. The data matches exactly, so it says no more than the cores do,
+  and no less; planted errors in either description were caught.
+- `M6502EffectsMatchSingleStepVectors` and `Z80EffectsMatchSingleStepVectors` (category `Conformance`) check the
+  same unchanged, constant and stack claims against the SingleStepTests vectors the cores are certified against:
+  7,660,000 for the 6502 family and the Z80's 1,604 files. They need the fixtures from
+  `tools/Fetch-ProcessorTests.ps1` and `tools/Fetch-Z80Tests.ps1` and are inconclusive without them.
+- `InstructionFlagsTests.M6502HoverFlagsComeFromTheEffects`: the 6502 family's hover and inspector flags now come
+  from the data, and match the strings the hover listed by hand before, kept as the test's expectations. B, only
+  a bit of the byte `BRK` and `PHP` push, is no flag, so `BRK` shows I, and D I on the 65C02s.
+
+### Decisions
+
+Taken on the open questions this work raised:
+
+- One-path changes get `may-write`, `may-push` and `may-pull`, rather than counting as written, which would make
+  liveness wrong after a conditional call.
+- Pairs declare their parts, and effects keep bits on the parts alone.
+- The undocumented IXH, IXL, IYH and IYL are IX's and IY's parts, so an instruction says exactly which half it
+  touches.
+- The Z80's X and Y flags are tracked, by name.
+- `stack` sets the description's stack register, and a push or pull may name another.
+- The 6502 hover's flags come from the data.
+- The 6809's `PSHS`, `PULS`, `TFR` and `EXG` will mark their effects as coming from the postbyte, and its
+  `PostbyteCodec` will supply the masks for a decoded instruction, with a lookup that takes the postbyte.
 
 ### Follow-ups
 
-- **The hover and inspector text.** The 6502 family's "Flags:" text (`InstructionDocs.cs`) could be derived from
-  the data, replacing its special cases for `BIT #` and `BRK`; the test above shows the two agree.
-- **The Z80.** The same form, with decisions the 6502 did not need: register pairs, which overlap their halves
-  (writing HL writes H and L) and so want a register to name its parts; the undocumented IXH, IXL, IYH and IYL,
-  which the registers line lacks; the X and Y flags; conditional calls and returns, whose pushes and pulls happen
-  on one path only; block instructions that repeat; and `EX`, `EXX` and the shadow registers. `Z80Isa.txt` has
-  about 1,400 opcode lines, and the oracle and FUSE tests would check it as the SingleStepTests check the 6502.
-- **The 8080 and the 6809.** The 6809's `PSHU` and `PULU` move the U stack, so `push` and `pull` would need to
-  name a stack register, and `PSHS`, `PULS`, `TFR` and `EXG` depend on their postbyte, which effects by form
-  cannot express.
+- **The 6809,** with the postbyte decision above, `stack S` and `push U n` for the user stack.
+- **The 8080 and 8085,** in the Z80's form: `parts PSW=A,F BC=B,C DE=D,E HL=H,L`, and the 8085's `RIM` and `SIM`.
+- **The Z80 hover.** Its "Flags:" text and the inspector's special cases (`InstructionDocs.Z80.cs`) could come
+  from the data as the 6502's now do.
 
 ## Open questions
 
@@ -302,7 +344,3 @@ read the data, and the generator that builds them skips `[isa]`, so execution is
 - How a source says what the hints file says for disassembly: entry points, calls that never return or take inline
   bytes, data. Perhaps `;;` sections, which documentation already uses for `Entry:`.
 - How `.if` builds are analyzed: once per build, as the documentation lint resolves each build's topics.
-- How the Z80, 8080 and 6809 descriptions take on effects (see the follow-ups under
-  [Register and flag effects](#register-and-flag-effects)).
-- Whether `writes` should also have a "may write" form, for an instruction that changes a register only on some
-  paths, such as a conditional call's push; no 6502 instruction needs one.

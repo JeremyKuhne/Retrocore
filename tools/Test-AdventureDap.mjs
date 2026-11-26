@@ -30,14 +30,24 @@ const allTargets = ["apple2", "pet", "bbc", "apple1"];
 const targets = process.argv.length > 2 ? process.argv.slice(2) : allTargets;
 
 // The screens kept in memory: the PET's 1,000 screen codes at $8000, where 1-26 are the capitals and 32-63 are as in
-// ASCII, in capitals as the console writes them; and MODE 7's 1,000 characters at $7C00, as the BBC writes them.
+// ASCII, in capitals as the console writes them; and MODE 7's 1K at $7C00, as the BBC writes the characters. MODE 7
+// scrolls by moving the screen's start through that 1K, so a row can run from its end to its start: its memory is
+// searched twice over, joined where it wraps.
 const screens = {
     pet: {
         address: 0x8000,
+        count: 1000,
+        wraps: false,
         text: code => String.fromCharCode((code & 0x7F) < 32 ? (code & 0x7F) + 64 : code & 0x7F),
         expected: "THE GAME IS NOW OVER."
     },
-    bbc: { address: 0x7C00, text: code => String.fromCharCode(code & 0x7F), expected: "The game is now over." }
+    bbc: {
+        address: 0x7C00,
+        count: 1024,
+        wraps: true,
+        text: code => String.fromCharCode(code & 0x7F),
+        expected: "The game is now over."
+    }
 };
 const gameOver = "The game is now over.\n";
 
@@ -143,14 +153,12 @@ try {
             // The PET's and BBC's screens show it too, so their consoles' output calls are checked as well as what the
             // engine hands them. The Apple-1's terminal keeps no screen in memory.
             if (screens[target]) {
-                const { address, text, expected: end } = screens[target];
-                const bytes = Buffer.from((await request("readMemory", {
-                    memoryReference: `0x${address.toString(16)}`, count: 1000
-                })).data, "base64");
+                const { address, count, wraps, text, expected: end } = screens[target];
+                const bytes = [...Buffer.from((await request("readMemory", {
+                    memoryReference: `0x${address.toString(16)}`, count
+                })).data, "base64")];
 
-                // MODE 7 scrolls by moving the screen's start, so its text may wrap from the end of its memory to the
-                // start: the memory is searched twice over.
-                const screen = [...bytes, ...bytes].map(text).join("");
+                const screen = (wraps ? [...bytes, ...bytes] : bytes).map(text).join("");
                 assert.ok(screen.includes(end), `${target} ${name}: the screen shows "${end}"`);
             }
             await request("pause", { threadId: 1 });

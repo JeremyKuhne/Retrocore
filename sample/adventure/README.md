@@ -95,8 +95,8 @@ constants are known where the core sizes its buffers. Each provides:
 
 `src/linked-game.s` puts the packed game at `Game`, and the project's `entry` is `Engine::Start`. The engine's state
 is in the `BSS` section, which it clears itself, so each target's linker configuration defines `__BSS_RUN__` and
-`__BSS_SIZE__`. It clears the console's `BSS` too, just after `Console::Start` returns, so a console keeps nothing it
-sets in `BSS` there.
+`__BSS_SIZE__`. It clears the console's `BSS` too, just after `Console::Start` returns, so `Console::Start` cannot
+leave values in `BSS`.
 
 ## Pirate Adventure
 

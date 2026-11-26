@@ -135,14 +135,16 @@ The sources are maintained by hand, and assemble byte for byte to the ROMs.
 ## Debugging
 
 Level II and Level I are in the Run and Debug dropdown, and **Retrocore: Start Machine…** starts either with a
-program or a tape, and Level II with a BASIC file or a disk too, all without a launch.json; the extension README's
+program, a tape or a BASIC file, and Level II with a disk too, all without a launch.json; the extension README's
 [Starting a machine](../extension/README.md#starting-a-machine) explains both.
 
 The ROM and the memory are settings of the machine, in Start Machine's options and the Machine view's **Settings**:
 
 - **ROM**: Level II BASIC 1.3 (the default), Level II BASIC 1.2 or Level I BASIC, the `rom` and `revision` options.
   Changed while the machine is off, the tape stays in; Level I, which has no disks, takes out the disks and the disk
-  controller; and the memory becomes the new ROM's unless a size was chosen. While it runs, the Machine view's ROM row
+  controller; and the memory becomes the new ROM's unless a size was chosen. A machine that starts from a disk keeps
+  Level II, and one that runs a BASIC file that names its dialect, by its name (`.level1.bas`) or its first line,
+  keeps the ROM whose BASIC that is; a plain `.bas` goes into whichever BASIC the ROM has. While it runs, the Machine view's ROM row
   (or the ROM setting) offers to change it: after asking, since what is only in the machine's memory is lost, it
   stops the session, sets the ROM as it would off, and starts the machine again with its tape.
 - **Memory**: 4, 16, 32 or 48 KB, `ramKilobytes`. 32 and 48 KB bring the Expansion Interface, and taking the
@@ -235,8 +237,10 @@ as the program lists. Its errors, HOW?, WHAT? and SORRY, stop as **BASIC errors*
 which asks again and counts as handled. An error in a DATA item that READ is taking does not stop: Level I has no
 current line while it reads the item, and reports the error with none. Not every Level I tape is a BASIC program: one whose block does not start at
 `$4200`, as the Eliza tape's starts at `$41FE` to load over CLOAD's return address and start its machine code, is
-memory, which Import refuses, and debugs at the Z80 level against `Level1.asm`. A `basic` launch does not yet run a
-Level I file.
+memory, which Import refuses, and debugs at the Z80 level against `Level1.asm`. A `basic` launch with `"rom":
+"level1"` takes a `.level1.bas` file (or one with `REM retrocore level1`, or a plain `.bas`), with optional labels in
+place of line numbers: Level I starts at `READY`, the program goes into memory, and RUN stops at its first statement
+with `stopOnEntry`. A Level II file is refused, as Level I cannot load it.
 
 **What the debugger knows about the Z80.**
 

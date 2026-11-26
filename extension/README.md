@@ -134,8 +134,9 @@ the Command Palette and on the **Machine** view's **...** menu. It asks three th
      and II Plus's memory and slot 0 card, the Mockingboard, the Model I's ROM, memory,
      Expansion Interface and lowercase, the Model III's ROM and memory, the Apple-1's memory and cassette interface, the PET's memory, sound and snow, and the Atari's BASIC revision, video standard, disk drives and sound. Each shows its current value; Esc goes back.
      The ROM picks Level I or Level II BASIC (and on the Model I, Level II 1.3 or 1.2), so
-     the Level I and Level II entries are the same machine with a different ROM; Level I
-     cannot start from a disk or run a BASIC file, so it is refused for those.
+     the Level I and Level II entries are the same machine with a different ROM. Level I
+     cannot start from a disk, so it is refused for one, and a BASIC file that names its
+     dialect, by its name or first line, keeps the ROM whose BASIC that is.
    - **Save as Launch Configuration** adds the setup to the workspace's launch.json,
      under a name you confirm, replacing one of the same name.
 
@@ -973,7 +974,8 @@ stack, cycle counts and `Keeps:` checks; a Z80 `CALL` or `RST` line shows its la
 call's cycles as a `JSR` line does. The machine is configured by:
 
 - `rom`: `level2` (the default) or `level1`, the **ROM** setting in the Machine view
-  and Start Machine's options;
+  and Start Machine's options; a `basic` launch takes that Level's files, `.level2.bas`
+  or `.level1.bas`;
 - `revision`: Level II `1.3` (the default) or `1.2`;
 - `ramKilobytes`, `expansionInterface`, `diskController`, `lowercase` and `doubler`
   (`percom` for NEWDOS/80's double density, `tandy` for Radio Shack's, or `both`);

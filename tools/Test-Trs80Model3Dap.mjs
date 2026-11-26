@@ -176,6 +176,15 @@ try {
     await request("pause", { threadId: 2 });
     await event("stopped");
     assert.equal((await request("stackTrace", { threadId: 2 })).stackFrames[0].name, "10: INPUT A");
+
+    // A basic launch of a Level I file loads it into the Model III's Level I and stops at its first statement.
+    const file = join(roms, "program.level1.bas");
+    writeFileSync(file, "10 A=5\n20 P. A*2\n");
+    await launch({ machine: "trs80-model3", rom: "level1", basic: file, stopOnEntry: true }, [], null);
+    const entry = await event("stopped");
+    assert.deepEqual([entry.threadId, entry.reason], [2, "entry"]);
+    const first = (await request("stackTrace", { threadId: 2 })).stackFrames[0];
+    assert.deepEqual([first.name, first.source?.path, first.line], ["10: A=5", file, 1]);
     await assert.rejects(request("launch", { machine: "trs80-model4", rom: "level1" }), /Only the Model III has Level I/);
 
     // A disks value that is not a list, or an entry that is neither a path nor null, is refused, rather than

@@ -6,6 +6,7 @@
 // launch configuration that starts it. Free of the vscode module, so the unit tests walk it. startMachine.ts shows the
 // quick picks.
 
+import { readFileSync } from "node:fs";
 import { catalogMachine, defaultValue, impliedValue, isLevel1, launchConfiguration, machineById, settingValue, withSetting, type Machine } from "./machines";
 
 /** The launch property Start Machine marks its launches with, so where a session came from is known; the debug host ignores it. */
@@ -112,6 +113,7 @@ function dialectName(dialect: string, machine: Machine): string {
         case "integer": return "Integer BASIC";
         case "apple1": return "Apple-1 BASIC";
         case "level2": return "Level II BASIC";
+        case "level1": return "Level I BASIC";
         case "business": return "Business BASIC";
         case "colorbasic": return "Color BASIC";
         case "mbasic": return "MBASIC";
@@ -125,6 +127,36 @@ function dialectName(dialect: string, machine: Machine): string {
         case "atari": return "Atari BASIC";
         default: return dialect;
     }
+}
+
+/**
+ * The dialect a BASIC file names, as the debug host reads it: its first line's pragma, such as REM retrocore level1,
+ * else its name's, as in game.level1.bas. A file that names none, or cannot be read, is the machine's BASIC.
+ */
+export function namedDialect(path: string): string | undefined {
+    let text = "";
+    try {
+        text = readFileSync(path, "utf8");
+    } catch {
+        // A file that cannot be read now is refused by the launch, which reads it again.
+    }
+
+    const first = text.split(/\r?\n/).find(line => line.trim().length !== 0);
+    const pragma = first === undefined ? undefined : /^\s*\d*\s*(?:REM|')\s*retrocore\s+(\S+)/i.exec(first)?.[1];
+    if (pragma !== undefined) return pragma.toLowerCase();
+    return /\.([^.]+)\.bas$/i.exec(fileName(path))?.[1]?.toLowerCase();
+}
+
+/**
+ * Why a launch that runs a BASIC file cannot change its ROM to a value, if it cannot: a Model I or Model III file that
+ * names its dialect keeps the ROM whose BASIC that is, as Level I cannot load Level II's file, nor Level II Level I's.
+ */
+export function basicRomRefusal(label: string, path: string, changed: Record<string, unknown>): string | undefined {
+    const named = namedDialect(path);
+    const machine = catalogMachine(changed);
+    if (named === undefined || machine === undefined || machine.basicDialects.includes(named)) return undefined;
+    const runs = machine.basicDialects.map(dialect => dialectName(dialect, machine)).join(" or ") || "its BASIC";
+    return `${label} runs ${fileName(path)}, which is ${dialectName(named, machine)}, and ${runs} cannot load it.`;
 }
 
 function fileName(path: string): string {
@@ -194,16 +226,17 @@ export function crowdsCartridge(configuration: Record<string, unknown>, option: 
 
 /**
  * Why a setup cannot take a change, if it cannot: a cartridge keeps BASIC out of its slot, one that starts from a
- * disk keeps its drives, and Level I, which has no disks and no BASIC launch, cannot run a disk or a BASIC file.
+ * disk keeps its drives, Level I, which has no disks, cannot run a disk, and a BASIC file that names its dialect keeps
+ * the ROM whose BASIC that is.
  */
 export function refusal(machine: Machine, setup: Setup, option: string, value: string | number | boolean): string | undefined {
     const choice = machine.choices.find(candidate => candidate.option === option);
     if (crowdsCartridge(setupConfiguration(setup), option, value)) return `${machine.label} starts with a cartridge in BASIC's slot, so BASIC stays out.`;
     if (removesDrives(setup, option, value)) return `${machine.label} starts from a disk, so it keeps its ${choice?.label.toLowerCase() ?? option}.`;
     if (choice === undefined || option !== "rom" || (setup.kind !== "disk" && setup.kind !== "basic")) return undefined;
-    if (!isLevel1(withSetting(setupConfiguration(setup), choice, value))) return undefined;
-    return setup.kind === "disk" ? `${machine.label} starts from a disk, which Level I cannot read.`
-        : `${machine.label} runs a BASIC file, which Level I cannot load.`;
+    const changed = withSetting(setupConfiguration(setup), choice, value);
+    if (setup.kind === "basic") return setup.path === undefined ? undefined : basicRomRefusal(machine.label, setup.path, changed);
+    return isLevel1(changed) ? `${machine.label} starts from a disk, which Level I cannot read.` : undefined;
 }
 
 /**

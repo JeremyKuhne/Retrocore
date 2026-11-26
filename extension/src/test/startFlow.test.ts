@@ -3,12 +3,13 @@
 // See LICENSE file in the project root for full license information
 
 import * as assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import * as path from "node:path";
 import { test } from "node:test";
 import { machineById, machines } from "../machines";
 import {
-    crowdsCartridge, describeSetup, isUsable, optionDefault, optionValue, refusal, removesDrives, runChoices, setupConfiguration, setupFromConfiguration, withOption,
+    basicRomRefusal, crowdsCartridge, describeSetup, isUsable, optionDefault, optionValue, refusal, removesDrives, runChoices, setupConfiguration, setupFromConfiguration, withOption,
     type Setup
 } from "../startFlow";
 
@@ -34,7 +35,9 @@ test("each machine offers what it can run: itself, sources and binaries, and its
     const kinds = (id: string) => runChoices(machine(id)).map(choice => choice.kind);
     assert.deepEqual(kinds("apple2-iie-enhanced"), ["machine", "source", "program", "basic", "disk", "dosSource"]);
     assert.deepEqual(kinds("trs80-model1-level2"), ["machine", "source", "program", "basic", "disk", "tape"]);
-    assert.deepEqual(kinds("trs80-model1-level1"), ["machine", "source", "program", "tape"], "Level I has no BASIC file launch or disks");
+    assert.deepEqual(kinds("trs80-model1-level1"), ["machine", "source", "program", "basic", "tape"], "Level I runs BASIC files, and has no disks");
+    assert.deepEqual(kinds("trs80-model3-level1"), ["machine", "source", "program", "basic", "tape"]);
+    assert.match(runChoices(machine("trs80-model1-level1")).find(choice => choice.kind === "basic")?.detail ?? "", /Level I BASIC/);
     assert.deepEqual(kinds("apple1"), ["machine", "source", "program", "basic", "tape"], "the Apple-1 loads BASIC, and has no disks");
     assert.deepEqual(kinds("coco2"), ["machine", "source", "program", "basic", "disk", "tape"]);
     assert.deepEqual(kinds("coco3"), ["machine", "source", "program", "disk", "tape"], "the CoCo 3's BASIC files do not launch yet");
@@ -184,14 +187,41 @@ test("a setup's ROM moves it between the Levels' machines, keeping what still fi
     assert.deepEqual(model3, { machineId: "trs80-model3-level1", kind: "machine", options: { ramKilobytes: 32 } });
 });
 
-test("Level I refuses a setup it cannot run: a disk, or a BASIC file", () => {
+test("Level I refuses a disk, and a BASIC file that names its dialect keeps the ROM whose BASIC that is", () => {
     const level2 = machine("trs80-model1-level2");
+    const level1 = machine("trs80-model1-level1");
+    const basic = (on: typeof level2, file: string): Setup => ({ machineId: on.id, kind: "basic", path: file, options: {} });
     assert.match(refusal(level2, { machineId: level2.id, kind: "disk", path: "C:\\ldos.dsk", options: {} }, "rom", "level1") ?? "", /Level I cannot read/);
-    assert.match(refusal(level2, { machineId: level2.id, kind: "basic", path: "C:\\a.bas", options: {} }, "rom", "level1") ?? "", /Level I cannot load/);
-    assert.equal(refusal(level2, { machineId: level2.id, kind: "basic", path: "C:\\a.bas", options: {} }, "rom", "level2-1.2"), undefined);
+    // A file that names no dialect is the machine's BASIC, so either ROM runs it.
+    assert.equal(refusal(level2, basic(level2, "C:\\a.bas"), "rom", "level1"), undefined);
+    assert.equal(refusal(level1, basic(level1, "C:\\a.bas"), "rom", "level2"), undefined);
+    assert.equal(refusal(level2, basic(level2, "C:\\a.level2.bas"), "rom", "level2-1.2"), undefined);
+    assert.equal(refusal(level2, basic(level2, "C:\\a.level2.bas"), "rom", "level1"),
+        "TRS-80 Model I (Level II) runs a.level2.bas, which is Level II BASIC, and Level I BASIC cannot load it.");
+    assert.match(refusal(level1, basic(level1, "C:\\a.level1.bas"), "rom", "level2") ?? "", /a\.level1\.bas, which is Level I BASIC, and Level II BASIC cannot load it/);
+    assert.equal(refusal(level1, basic(level1, "C:\\a.level1.bas"), "ramKilobytes", 16), undefined);
+    const model3 = machine("trs80-model3-level1");
+    assert.match(refusal(model3, basic(model3, "C:\\a.level1.bas"), "rom", "level2") ?? "", /Level II BASIC cannot load it/);
     assert.equal(refusal(level2, { machineId: level2.id, kind: "tape", path: "C:\\a.cas", options: {} }, "rom", "level1"), undefined);
     assert.match(refusal(level2, { machineId: level2.id, kind: "disk", path: "C:\\ldos.dsk", options: {} }, "expansionInterface", false) ?? "",
         /keeps its expansion interface/);
+});
+
+test("a BASIC file's pragma names its dialect before its name does, as the debug host reads it", () => {
+    const directory = mkdtempSync(path.join(tmpdir(), "retrocore-startflow-"));
+    try {
+        const file = path.join(directory, "game.level2.bas");
+        writeFileSync(file, "\r\n10 REM retrocore level1\r\n20 P. 1\r\n");
+        const level2 = { machine: "trs80-model1" };
+        assert.equal(basicRomRefusal("M", file, level2), "M runs game.level2.bas, which is Level I BASIC, and Level II BASIC cannot load it.");
+        assert.equal(basicRomRefusal("M", file, { machine: "trs80-model1", rom: "level1" }), undefined);
+        writeFileSync(file, "' RETROCORE Level2\n");
+        assert.equal(basicRomRefusal("M", file, level2), undefined, "the pragma is read in any case");
+        writeFileSync(file, "10 PRINT\n");
+        assert.equal(basicRomRefusal("M", file, level2), undefined, "with no pragma, the name says");
+    } finally {
+        rmSync(directory, { recursive: true, force: true });
+    }
 });
 
 test("a Model I launch configuration's memory and ROM become its setup's options", () => {

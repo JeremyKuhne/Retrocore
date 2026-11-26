@@ -378,7 +378,7 @@ execution under Native AOT, and [`tests/Retrocore.Perf`](tests/Retrocore.Perf) h
 
 Design notes for upcoming work live in [`docs/backlog`](docs/backlog):
 
-- [debugging BASIC programs](docs/backlog/BasicDebugging.md): Level I's `basic` launch and disk-image import/export;
+- [debugging BASIC programs](docs/backlog/BasicDebugging.md): disk-image import/export;
 - [choosing and starting a machine, next round](docs/backlog/MachineLaunch.md);
 - [CPU core and machine loop speed](docs/backlog/CoreOptimization.md), including what .NET 11 might offer;
 - [the language server's SDK index speed](docs/backlog/SdkIndexOptimization.md), with every change measured;

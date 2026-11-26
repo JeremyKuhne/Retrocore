@@ -108,6 +108,8 @@ async function consoleSays(pattern) {
 const cassette = join(tmpdir(), `retrocore-${process.pid}.cas`);
 const levelOneTape = join(tmpdir(), `retrocore-${process.pid}-level1.cas`);
 const levelOneImage = join(tmpdir(), `retrocore-${process.pid}-level1.bin`);
+const levelOneFile = join(tmpdir(), `retrocore-${process.pid}.level1.bas`);
+const levelTwoFile = join(tmpdir(), `retrocore-${process.pid}.level2.bas`);
 try {
     await request("initialize", { adapterID: "retrocore", linesStartAt1: true, columnsStartAt1: true });
     phase("initialized");
@@ -434,12 +436,22 @@ try {
     await request("retro/basic/import", { path: levelOneImage });
     assert.equal((await request("retro/basic/program")).text, numbered, "the image came back as Level I lines");
 
+    // A basic launch of a Level I file loads it into Level I and stops at its first statement, in the file; a Level
+    // II file is refused.
+    writeFileSync(levelOneFile, "10 A=5\n20 P. A*2\n30 END\n");
+    await launch({ rom: "level1", basic: levelOneFile, stopOnEntry: true });
+    const fileEntry = await stoppedAt("entry", 2, undefined);
+    assert.deepEqual([fileEntry.name, fileEntry.source?.path, fileEntry.line], ["10: A=5", levelOneFile, 1]);
+    writeFileSync(levelTwoFile, "10 PRINT 1\n");
+    await assert.rejects(request("launch", { machine: "trs80-model1", sdkRoms, rom: "level1", basic: levelTwoFile }),
+        /is Level II BASIC, and the machine runs Level I BASIC/);
+
     await request("disconnect");
     console.log("Model I DAP passed: boot to READY, a Level II source breakpoint with the Z80 call stack, a cassette round trip, RUN and CONT stops, the reset button, power-on and entry stops, 1x and 2x speed, stepping from a Z80 source into Level2.asm"
-        + (existsSync(dos) ? ", a NEWDOS/80 boot" : "") + ", a fast cassette load at real speed, tapes for the other Level warned of, and Level I's BASIC thread: RUN's start, steps, a line breakpoint in a GOSUB, its variables, STOP, and a Level I tape round trip.");
+        + (existsSync(dos) ? ", a NEWDOS/80 boot" : "") + ", a fast cassette load at real speed, tapes for the other Level warned of, and Level I's BASIC thread: RUN's start, steps, a line breakpoint in a GOSUB, its variables, STOP, and a Level I tape round trip, and a Level I file's basic launch.");
 } finally {
     clearTimeout(timeout);
     close();
-    for (const file of [cassette, levelOneTape, levelOneImage]) if (existsSync(file)) unlinkSync(file);
+    for (const file of [cassette, levelOneTape, levelOneImage, levelOneFile, levelTwoFile]) if (existsSync(file)) unlinkSync(file);
 }
 if (failure()) throw failure();

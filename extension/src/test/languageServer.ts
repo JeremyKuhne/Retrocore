@@ -23,7 +23,7 @@ const text = (hover: vscode.Hover): string =>
 
 /** Drives the retrocore language server through VS Code's own provider commands. */
 export async function testLanguageServer(root: string): Promise<void> {
-    for (const languageId of ["retrocore-asm", "retrocore-macro10", ...basicLanguages]) {
+    for (const languageId of ["retrocore-asm", "retrocore-macro10", "retrocore-pascal", ...basicLanguages]) {
         for (const scheme of ["file", "chat-editing-text-model", "chat-editing-snapshot-text-model", "retrocore-basic", "retrocore-basic-file", "untitled"]) {
             const document = { uri: vscode.Uri.from({ scheme, path: "/main.asm" }), languageId } as vscode.TextDocument;
             assert.equal(vscode.languages.match(documentSelector, document) > 0,

@@ -10,6 +10,12 @@ to the right definitions. Before writing, converting or disassembling assembly, 
 [native-assembly](.claude/skills/retrocore-native-assembly/SKILL.md) and
 [disassembly](.claude/skills/retrocore-disassembly/SKILL.md) skills.
 
+## Pascal sources
+
+The SDK's Apple Pascal sources follow [PascalStyle.md](docs/PascalStyle.md): each compiles back to Apple's segments,
+fits every version's Editor, and keeps historical names in `(** *)` comments' `Also:` sections. Read it before
+writing or converting one; `PascalSourceTests.SdkSourcesPassTheLint` checks the style.
+
 ## Native AOT PGO maintenance
 
 Windows x64 Release Desktop publishing uses a bundled application PGO profile. Before changing 6502

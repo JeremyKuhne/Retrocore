@@ -13,16 +13,19 @@ internal sealed class CompletionHandler
 {
     private readonly LanguageWorkspace _workspace;
     private readonly BasicDocuments _basic;
+    private readonly PascalDocuments? _pascal;
 
     /// <summary>
     ///  Creates the handler.
     /// </summary>
     /// <param name="workspace">The workspace.</param>
     /// <param name="basic">The open BASIC documents.</param>
-    public CompletionHandler(LanguageWorkspace workspace, BasicDocuments basic)
+    /// <param name="pascal">The open Pascal documents, or null for none.</param>
+    public CompletionHandler(LanguageWorkspace workspace, BasicDocuments basic, PascalDocuments? pascal = null)
     {
         _workspace = workspace;
         _basic = basic;
+        _pascal = pascal;
     }
 
     /// <summary>
@@ -38,6 +41,15 @@ internal sealed class CompletionHandler
         {
             if (ruleTrigger) { return Task.FromResult(new List<CompletionItem>()); }
             return Task.FromResult(BasicFeatures.Complete(basic, request.Position));
+        }
+
+        // Pascal has no completion yet, and the assembly's would be wrong for it.
+        if (_pascal?.IsOpen(request.TextDocument.Uri) is true) { return Task.FromResult(new List<CompletionItem>()); }
+
+        // Any other document that is not a file, such as an untitled one, has no assembly to complete.
+        if (!Uri.TryCreate(request.TextDocument.Uri.Text, UriKind.Absolute, out Uri? parsed) || !parsed.IsFile)
+        {
+            return Task.FromResult(new List<CompletionItem>());
         }
 
         string path = LanguageHost.PathOf(request.TextDocument.Uri);

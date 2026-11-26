@@ -82,10 +82,11 @@ an error.
   bare build loads where a `source` launch would.
 - **`free`** and **`reserved`** account for every address from `$0100` once. Each reserved area says why, as a phrase
   that follows "overlaps".
-- **`zeroPage`** gives the bytes a program may use; the rest of the zero page is the machine's.
+- **`zeroPage`** gives the bytes a program may use, at least one; the rest of the zero page is the machine's. Runs
+  that touch count as one.
 
-**The build.** With no `linkerConfiguration`, a target links by one made from its map, written to
-`obj/<target>/memory.cfg`: `CODE`, `RODATA`, `DATA` and `BSS` in that order from `load` (`BSS` defines `__BSS_RUN__`
+**The build.** With no `linkerConfiguration`, a target links by one made from its map, which `retrocore build` and a
+`project` launch write to `obj/<target>/memory.cfg` before they assemble, so it is there when a build fails: `CODE`, `RODATA`, `DATA` and `BSS` in that order from `load` (`BSS` defines `__BSS_RUN__`
 and `__BSS_SIZE__`), and `ZEROPAGE` in the largest run of free zero-page bytes. Code in no section goes in `CODE`.
 With a configuration or without, every section is checked against the map. One in zero page the map doesn't give, or
 overlapping a reserved area, fails the build:
@@ -93,6 +94,8 @@ overlapping a reserved area, fails the build:
 ```text
 <project>/retrocore.json: target t: apple1-4k.map.json:
 section CODE ($0300-$1396) overlaps addresses with no RAM, as the machine has 4K from $0000 ($1000-$BFFF) on target t.
+section RODATA ($1397-$2A9C) overlaps addresses with no RAM, as the machine has 4K from $0000 ($1000-$BFFF) on target t.
+section BSS ($2A9D-$2CA1) overlaps addresses with no RAM, as the machine has 4K from $0000 ($1000-$BFFF) on target t.
 The program does not fit: from $0300 its sections take 10658 bytes (CODE 4247, RODATA 5894, BSS 517), and the free RAM there ends at $0FFF, 3328 bytes, so it is 7330 bytes over.
 ```
 
@@ -111,4 +114,7 @@ The bare maps, from the ROM sources and the emulator (a test checks names from e
 | `bbc-32k` (model B), `bbc-16k` (model A) | `$2000` | from PAGE (`$1900` with the DFS, `$0E00`) to MODE 7's screen | `$70-$8F` |
 
 A bare Apple III program runs before SOS, in the power-on state: its zero page is physically the system bank's
-`$FF00` page, whose `$FFCA-$FFCF` are the NMI and IRQ vectors, so the map leaves `$C0-$FF` to the machine.
+`$FF00` page, whose `$FFCA-$FFCF` are the NMI and IRQ vectors, so the map leaves `$C0-$FF` to the machine. The
+Apple-1's Woz Monitor points IRQ and BRK at `$0000` and NMI at `$0F00`, so a program that takes an interrupt puts its
+handler there. The model B's free RAM starts at PAGE with its DFS fitted, `$1900`, as the emulator boots it (OSHWM at
+`$0244` reads `$19` once the MOS has started).

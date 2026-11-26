@@ -20,7 +20,7 @@
       "properties": {
         "start": { "$ref": "#/definitions/address", "description": "The first address." },
         "end": { "$ref": "#/definitions/address", "description": "The last address." },
-        "why": { "type": "string", "minLength": 1, "description": "What the machine keeps there, for a reserved area." }
+        "why": { "type": "string", "pattern": "\\S", "description": "What the machine keeps there, for a reserved area." }
       }
     },
     "step": {
@@ -168,7 +168,7 @@
         },
         "memoryMap": {
           "type": "object",
-          "description": "Changes to the SDK's memory map for the target's machine, environment and RAM (Sdk/1/environments/<environment>/<machine>-<RAM>k.map.json), which the build makes its linker configuration from when the target gives none, and checks every section against.",
+          "description": "Changes to the SDK's memory map for the target's machine, environment and RAM (Sdk/1/environments/<environment>/<name>.map.json, the name the first of <catalog id>-<RAM>k, <catalog id>, <family>-<RAM>k and <family> the SDK has), which the build makes its linker configuration from when the target gives none, and checks every section against.",
           "additionalProperties": false,
           "properties": {
             "load": {
@@ -191,7 +191,8 @@
             "zeroPage": {
               "type": "array",
               "description": "The zero-page bytes the program may use, instead of the map's: each a byte or a run, such as \"$06-$09\".",
-              "items": { "type": "string", "pattern": "^\\$[0-9A-Fa-f]{1,2}(-\\$[0-9A-Fa-f]{1,2})?$" }
+              "minItems": 1,
+              "items": { "type": "string", "pattern": "^\\$[0-9A-Fa-f]{1,4}(-\\$[0-9A-Fa-f]{1,4})?$" }
             }
           }
         },

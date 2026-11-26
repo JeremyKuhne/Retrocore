@@ -48,6 +48,15 @@ internal static partial class ProjectBuild
     internal static TargetBuild Build(ProjectTarget target)
     {
         target.RequireSupported();
+
+        // The configuration made from the memory map is written first, so it is there to read when the build fails.
+        if (target.LinkerConfiguration is null && target.MemoryMap(SdkModules.SdkDirectory) is { } map)
+        {
+            string made = MadeConfigurationPath(target);
+            Directory.CreateDirectory(Path.GetDirectoryName(made) ?? target.Project.Intermediate);
+            File.WriteAllText(made, map.LinkerConfiguration(target));
+        }
+
         List<StepResult> steps = ProjectSteps.Run(target.Project);
         TargetBuild build = Assemble(target) with { Steps = steps };
         Write(build);
@@ -230,7 +239,6 @@ internal static partial class ProjectBuild
         File.WriteAllBytes(build.Binary, Image(build).Bytes);
         File.WriteAllText(build.DebugFile, SourceBuild.DebugInfo(build.Result));
         File.WriteAllText(build.MapFile, Map(build));
-        if (build.MadeLinkerConfiguration is { } made) { File.WriteAllText(made.Path, made.Text); }
 
         JsonObject defines = [];
         foreach ((string name, long value) in build.Target.Symbols().OrderBy(pair => pair.Key, StringComparer.Ordinal))

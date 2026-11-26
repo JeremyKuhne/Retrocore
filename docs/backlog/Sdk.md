@@ -275,7 +275,7 @@ proven first.
 ## Memory maps
 
 Each machine × environment ships a memory map with RAM size variants: the free RAM regions, the zero-page bytes a
-program may use, and the reserved areas with the reason for each.
+program may use, and the reserved areas with the reason for each. (The design; the bare maps as built follow it.)
 
 ```jsonc
 // sdk/1/environments/dos33/apple2-48k.map.json

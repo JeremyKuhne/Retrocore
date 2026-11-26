@@ -9,9 +9,10 @@
     { "start": "$0100", "end": "$01FF", "why": "the stack" },
     { "start": "$0200", "end": "$027F", "why": "the Woz Monitor's input buffer" },
     { "start": "$8000", "end": "$BFFF", "why": "addresses with no RAM, as the machine has 32K from $0000" },
-    { "start": "$C000", "end": "$CFFF", "why": "the cassette interface's ROM and I/O" },
+    { "start": "$C000", "end": "$C1FF", "why": "the cassette interface's ROM and I/O, when it is fitted" },
+    { "start": "$C200", "end": "$CFFF", "why": "addresses no device answers" },
     { "start": "$D000", "end": "$DFFF", "why": "the keyboard and display PIA, repeated through the 4K" },
-    { "start": "$E000", "end": "$EFFF", "why": "the 4K at $E000, which holds Apple-1 BASIC" },
+    { "start": "$E000", "end": "$EFFF", "why": "the 4K bank at $E000, where Apple-1 BASIC loads by default" },
     { "start": "$F000", "end": "$FFFF", "why": "the Woz Monitor's ROM, repeated through the 4K" }
   ]
 }

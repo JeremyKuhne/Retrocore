@@ -12,7 +12,7 @@
     { "start": "$0400", "end": "$07FF", "why": "the current language's workspace: BASIC's" },
     { "start": "$0800", "end": "$0DFF", "why": "the MOS's sound, printer and RS-423 buffers, its soft keys and characters, and the NMI routine" },
     { "start": "$3C00", "end": "$3FFF", "why": "MODE 7's screen, above HIMEM" },
-    { "start": "$4000", "end": "$7FFF", "why": "addresses with no RAM, as the model A has 16K" },
+    { "start": "$4000", "end": "$7FFF", "why": "the model A's 16K again, which answers twice, so a write here changes the byte $4000 lower" },
     { "start": "$8000", "end": "$BFFF", "why": "the paged ROMs: BASIC, and the DFS on the model B" },
     { "start": "$C000", "end": "$FBFF", "why": "the MOS's ROM" },
     { "start": "$FC00", "end": "$FEFF", "why": "the I/O pages FRED, JIM and SHEILA" },

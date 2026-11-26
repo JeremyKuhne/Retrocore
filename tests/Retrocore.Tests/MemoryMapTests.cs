@@ -49,7 +49,7 @@ public sealed class MemoryMapTests
     [DataRow("apple2-iiplus", 48, "BreakVector", "the vectors")]
     [DataRow("apple2-iiplus", 48, "UserIrqVector", "the vectors")]
     [DataRow("apple2-iiplus", 48, "TextPage1", "text and lo-res page 1")]
-    [DataRow("apple2-iiplus", 48, "CharacterOut", "AppleSoft's and the Monitor's ROM")]
+    [DataRow("apple2-iiplus", 48, "CharacterOut", "the ROMs: AppleSoft")]
     [DataRow("apple1", 32, "InputBuffer", "the Woz Monitor's input buffer")]
     [DataRow("apple1", 4, "Keyboard", "the keyboard and display PIA")]
     [DataRow("apple1", 32, "CharacterOut", "the Woz Monitor's ROM")]
@@ -76,8 +76,8 @@ public sealed class MemoryMapTests
     }
 
     /// <summary>
-    ///  Each machine has a map for every RAM size it takes, whose free RAM is all RAM the size has, and at its default
-    ///  RAM the program loads where its launch loads one.
+    ///  Each machine has a map for every RAM size it takes, whose free RAM is within the RAM the size has, and at its
+    ///  default RAM the program loads where its launch loads one.
     /// </summary>
     /// <param name="machine">The catalog machine.</param>
     /// <param name="sizes">The RAM sizes its launch takes, the default first.</param>
@@ -205,6 +205,29 @@ public sealed class MemoryMapTests
     }
 
     /// <summary>
+    ///  A target's zero page merges runs that touch, so the made configuration's zero page is the largest of them; a
+    ///  zero page of nothing, or free areas in the zero page, are errors; and the made configuration is there when the
+    ///  build fails.
+    /// </summary>
+    [TestMethod]
+    public void ZeroPageOverridesMergeAndTheConfigurationOutlivesAFailure()
+    {
+        TargetBuild merged = Build("apple2-iiplus", 48, "    rts\n", "\"memoryMap\": { \"zeroPage\": [\"$06\", \"$07\", \"$08-$0B\", \"$0A\"] }");
+        merged.Map?.ZeroPage.Should().Equal(new MemoryArea(0x06, 0x0B));
+        File.ReadAllText(Path.Join(_folder, "obj", "t", "memory.cfg")).Should().Contain("ZP: start = $06, size = $06,");
+
+        Error(() => Build("apple2-iiplus", 48, "    rts\n", "\"memoryMap\": { \"zeroPage\": [] }")).Should().EndWith(
+            "'zeroPage' must give at least one byte a program may use.");
+
+        Error(() => Build("apple2-iiplus", 48, "    rts\n", "\"memoryMap\": { \"free\": [{ \"start\": \"$0050\", \"end\": \"$0060\" }] }"))
+            .Should().EndWith("the zero page is given by 'zeroPage', not as free or reserved areas.");
+
+        File.Delete(Path.Join(_folder, "obj", "t", "memory.cfg"));
+        _ = Error(() => Build("apple1", 4, ".section CODE\n    .res 3400\n"));
+        File.ReadAllText(Path.Join(_folder, "obj", "t", "memory.cfg")).Should().Contain("from apple1-4k.map.json");
+    }
+
+    /// <summary>
     ///  A machine whose family has maps but none for its RAM is an error; one with no maps builds as before.
     /// </summary>
     [TestMethod]
@@ -219,7 +242,8 @@ public sealed class MemoryMapTests
     }
 
     /// <summary>
-    ///  Every map the SDK ships reads, and accounts for every address from <c>$0100</c> once.
+    ///  Every map the SDK ships reads, which checks that it accounts for every address from <c>$0100</c> once, and
+    ///  gives a description and a zero page.
     /// </summary>
     [TestMethod]
     public void EveryShippedMapReads()

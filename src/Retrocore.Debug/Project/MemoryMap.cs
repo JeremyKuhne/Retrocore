@@ -154,7 +154,7 @@ internal sealed class MemoryMap
             : throw new ProjectException($"{file}: the memory map must give 'load'.");
 
         List<MemoryArea> free = Areas(file, "'free'", json["free"], why: false);
-        List<MemoryArea> zeroPage = ZeroPageAreas(file, json["zeroPage"]);
+        List<MemoryArea> zeroPage = ZeroPageAreas(file, "'zeroPage'", json["zeroPage"]);
         List<MemoryArea> reserved = Areas(file, "'reserved'", json["reserved"], why: true);
         MemoryMap map = new(file, description, load, Sorted(free), Sorted(zeroPage), Sorted(reserved));
         map.Validate(file);
@@ -180,7 +180,7 @@ internal sealed class MemoryMap
         Check(file, what, json, OverrideFields);
         if (json["load"] is { } load) { _ = Address(file, $"{what} 'load'", load); }
         _ = Areas(file, $"{what} 'free'", json["free"], why: false);
-        _ = ZeroPageAreas(file, json["zeroPage"]);
+        _ = ZeroPageAreas(file, $"{what} 'zeroPage'", json["zeroPage"]);
         _ = Areas(file, $"{what} 'reserved'", json["reserved"], why: true);
         return (JsonObject)json.DeepClone();
     }
@@ -212,7 +212,7 @@ internal sealed class MemoryMap
             reserved.Add(area);
         }
 
-        List<MemoryArea> zeroPage = json["zeroPage"] is { } zero ? ZeroPageAreas(file, zero) : [.. ZeroPage];
+        List<MemoryArea> zeroPage = json["zeroPage"] is { } zero ? ZeroPageAreas(file, $"{what} 'zeroPage'", zero) : [.. ZeroPage];
         int load = json["load"] is { } loadNode ? Address(file, $"{what} 'load'", loadNode) : Load;
         MemoryMap map = new(File, Description, load, Sorted(Merged(free)), Sorted(zeroPage), Sorted(reserved));
         if (!map.Free.Any(area => area.Contains(load)))
@@ -301,9 +301,18 @@ internal sealed class MemoryMap
 
         if (errors.Count == 0) { return; }
 
-        // How far over its free RAM the program runs, from the sections from its load address up.
+        // How far over its free RAM the program runs: the sections that run on from its load address, each starting
+        // where one before it ends, or within it.
         MemoryArea home = LoadArea;
-        List<(string Name, int Start, int End)> loaded = [.. sections.Where(section => section.Start >= Load)];
+        List<(string Name, int Start, int End)> loaded = [];
+        int reached = Load - 1;
+        foreach ((string Name, int Start, int End) section in sections.Where(section => section.Start >= Load).OrderBy(section => section.Start))
+        {
+            if (section.Start > reached + 1) { break; }
+            loaded.Add(section);
+            reached = Math.Max(reached, section.End);
+        }
+
         if (loaded.Count != 0 && loaded.Max(section => section.End) > home.End)
         {
             int used = loaded.Max(section => section.End) - Load + 1;
@@ -316,7 +325,8 @@ internal sealed class MemoryMap
             $"{target.Project.File}: target {target.Name}: {Path.GetFileName(File)}:{System.Environment.NewLine}{string.Join(System.Environment.NewLine, errors)}");
     }
 
-    // Every address from $0100 is free or reserved, not both; free RAM holds the load address; the zero page is in it.
+    // Every address from $0100 is free or reserved, not both; the zero page is given only by its bytes; free RAM, from
+    // $0100 up, holds the load address.
     private void Validate(string file)
     {
         List<MemoryArea> all = [.. Free.Concat(Reserved).Where(area => area.End >= 0x100).OrderBy(area => area.Start)];
@@ -342,9 +352,14 @@ internal sealed class MemoryMap
             throw new ProjectException($"{file}: ${next:X4}-$FFFF is neither free nor reserved.");
         }
 
-        if (Reserved.Any(area => area.Start < 0x100))
+        if (Reserved.Concat(Free).Any(area => area.Start < 0x100))
         {
-            throw new ProjectException($"{file}: the zero page is given by 'zeroPage', not as reserved areas.");
+            throw new ProjectException($"{file}: the zero page is given by 'zeroPage', not as free or reserved areas.");
+        }
+
+        if (ZeroPage.Count == 0)
+        {
+            throw new ProjectException($"{file}: 'zeroPage' must give at least one byte a program may use.");
         }
 
         if (!Free.Any(area => area.Contains(Load)))
@@ -391,12 +406,13 @@ internal sealed class MemoryMap
         return areas;
     }
 
-    private static List<MemoryArea> ZeroPageAreas(string file, JsonNode? node)
+    // The zero-page bytes a list gives, its runs merged where they touch or overlap.
+    private static List<MemoryArea> ZeroPageAreas(string file, string what, JsonNode? node)
     {
         if (node is null) { return []; }
         if (node is not JsonArray list)
         {
-            throw new ProjectException($"{file}: 'zeroPage' must be a list of bytes or runs, such as \"$06-$09\".");
+            throw new ProjectException($"{file}: {what} must be a list of bytes or runs, such as \"$06-$09\".");
         }
 
         List<MemoryArea> areas = [];
@@ -410,13 +426,13 @@ internal sealed class MemoryMap
                 || end < start
                 || end > 0xFF)
             {
-                throw new ProjectException($"{file}: the zero page's '{text}' must be a byte or a run of them, such as \"$06-$09\".");
+                throw new ProjectException($"{file}: {what}'s '{text}' must be a byte or a run of them, such as \"$06-$09\".");
             }
 
             areas.Add(new(start, end));
         }
 
-        return areas;
+        return Merged(areas);
     }
 
     private static int Address(string file, string what, JsonNode node)

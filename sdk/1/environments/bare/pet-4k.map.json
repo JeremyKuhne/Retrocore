@@ -10,11 +10,12 @@
     { "start": "$0200", "end": "$0279", "why": "the Kernal's and BASIC's workspace: the input buffer, the open files and the keyboard buffer" },
     { "start": "$027A", "end": "$0339", "why": "cassette 1's buffer" },
     { "start": "$033A", "end": "$03F9", "why": "cassette 2's buffer" },
-    { "start": "$03FA", "end": "$03FF", "why": "the Monitor's command vector" },
+    { "start": "$03FA", "end": "$03FF", "why": "the Monitor's command vector, and BASIC 4's IEEE-488 timeout flag" },
     { "start": "$1000", "end": "$7FFF", "why": "addresses with no RAM, as the machine has 4K" },
-    { "start": "$8000", "end": "$8FFF", "why": "the screen, repeated" },
+    { "start": "$8000", "end": "$87FF", "why": "the screen, repeated" },
+    { "start": "$8800", "end": "$8FFF", "why": "addresses no device answers" },
     { "start": "$9000", "end": "$AFFF", "why": "the option ROMs' sockets" },
-    { "start": "$B000", "end": "$E7FF", "why": "BASIC's and the screen editor's ROM" },
+    { "start": "$B000", "end": "$E7FF", "why": "BASIC's and the screen editor's ROM, with an option ROM's socket at $B000 before BASIC 4" },
     { "start": "$E800", "end": "$EFFF", "why": "the PIAs and the VIA" },
     { "start": "$F000", "end": "$FFFF", "why": "the Kernal's ROM" }
   ]

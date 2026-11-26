@@ -3,14 +3,16 @@
 // See LICENSE file in the project root for full license information
 
 // The adventure sample's 6502 engine through the debug adapter, from its project file. It packs the test game with
-// the sample's packer, then plays each of the test game's transcripts on bare targets of sample/adventure/retrocore.json
-// through project launches, each building the same core with its machine's platform folder, and checks that what the
-// engine writes matches the C# reference engine's transcript in the matching .out file character for character. A
-// watch on the console's Write's store of A records each character the engine sends, and a logpoint on ReadLine marks
-// where it reads a command, so the commands can be put back where the screen shows them. The launches check Keeps: contracts and fail
-// on a broken one. A false Keeps: on the top-level LocateTables stops the run, but one on Numbers::NextRandom, inside
-// a .scope, did not, so the engine's scoped contracts are checked by reading rather than here. On the SDK's ROMs, so it
-// needs no dumps. Give target names to play only those, such as `node tools/Test-AdventureDap.mjs pet`.
+// the sample's packer, then plays each of the test game's transcripts on bare targets of
+// sample/adventure/retrocore.json through project launches, each building the same core with its machine's platform
+// folder, and checks that what the engine writes matches the C# reference engine's transcript in the matching .out
+// file character for character. A watch on the console's Write's store of A records each character the engine sends,
+// and a logpoint on ReadLine marks where it reads a command, so the commands can be put back where the screen shows
+// them. The Apple II's, PET's and BBC's screens are checked for the game's end as well. The launches check Keeps:
+// contracts and fail on a broken one. A false Keeps: on the top-level LocateTables stops the run, but one on
+// Numbers::NextRandom, inside a .scope, did not, so the engine's scoped contracts are checked by reading rather than
+// here. On the SDK's ROMs, so it needs no dumps. Give target names to play only those, such as
+// `node tools/Test-AdventureDap.mjs pet`.
 
 import { startDap } from "./DapClient.mjs";
 import { resolve, join } from "node:path";
@@ -26,6 +28,17 @@ const transcripts = ["test-win", "test-fall", "test-drown"];
 // bare Apple III has no character set loaded.
 const allTargets = ["apple2", "pet", "bbc", "apple1"];
 const targets = process.argv.length > 2 ? process.argv.slice(2) : allTargets;
+
+// The screens kept in memory: the PET's 1,000 screen codes at $8000, where 1-26 are the capitals and 32-63 are as in
+// ASCII, in capitals as the console writes them; and MODE 7's 1,000 characters at $7C00, as the BBC writes them.
+const screens = {
+    pet: {
+        address: 0x8000,
+        text: code => String.fromCharCode((code & 0x7F) < 32 ? (code & 0x7F) + 64 : code & 0x7F),
+        expected: "THE GAME IS NOW OVER."
+    },
+    bbc: { address: 0x7C00, text: code => String.fromCharCode(code & 0x7F), expected: "The game is now over." }
+};
 const gameOver = "The game is now over.\n";
 
 // The game, packed as the target's .incbin expects it.
@@ -125,6 +138,20 @@ try {
             if (target === "apple2") {
                 const screen = (await request("apple2/text")).rows.join("\n");
                 assert.match(screen, /^THE GAME IS NOW OVER\. *$/m, `${name}: the screen shows the game's end:\n${screen}`);
+            }
+
+            // The PET's and BBC's screens show it too, so their consoles' output calls are checked as well as what the
+            // engine hands them. The Apple-1's terminal keeps no screen in memory.
+            if (screens[target]) {
+                const { address, text, expected: end } = screens[target];
+                const bytes = Buffer.from((await request("readMemory", {
+                    memoryReference: `0x${address.toString(16)}`, count: 1000
+                })).data, "base64");
+
+                // MODE 7 scrolls by moving the screen's start, so its text may wrap from the end of its memory to the
+                // start: the memory is searched twice over.
+                const screen = [...bytes, ...bytes].map(text).join("");
+                assert.ok(screen.includes(end), `${target} ${name}: the screen shows "${end}"`);
             }
             await request("pause", { threadId: 1 });
             await event("stopped");

@@ -181,7 +181,7 @@ public class CbmDosDiskTests
     {
         CbmDosDisk disk = CbmDosDisk.Format("names", "nm");
         disk.AddSequential("TAKEN", [1]);
-        FluentActions.Invoking(() => disk.AddSequential(name, [])).Should().ThrowExactly<ArgumentException>();
+        FluentActions.Invoking(() => disk.AddSequential(name, [1])).Should().ThrowExactly<ArgumentException>();
         FluentActions.Invoking(() => CbmDosDisk.Format("disk", "x")).Should().ThrowExactly<ArgumentException>();
         FluentActions.Invoking(() => disk.AddProgram("short", [1, 4])).Should().ThrowExactly<ArgumentException>();
         FluentActions.Invoking(() => disk.AddSequential("empty", [])).Should().ThrowExactly<ArgumentException>();

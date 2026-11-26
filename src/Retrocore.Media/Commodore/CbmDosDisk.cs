@@ -183,6 +183,7 @@ public sealed class CbmDosDisk
     /// <exception cref="IOException">The disk or its directory is full; the disk is unchanged.</exception>
     public void AddProgram(string name, ReadOnlySpan<byte> prg)
     {
+        ArgumentNullException.ThrowIfNull(name);
         if (prg.Length < 3)
         {
             throw new ArgumentException("A program file is its load address and at least a byte.", nameof(prg));
@@ -204,6 +205,7 @@ public sealed class CbmDosDisk
     /// <exception cref="IOException">The disk or its directory is full; the disk is unchanged.</exception>
     public void AddSequential(string name, ReadOnlySpan<byte> data)
     {
+        ArgumentNullException.ThrowIfNull(name);
         if (data.IsEmpty) { throw new ArgumentException("A file holds at least a byte.", nameof(data)); }
         Add(name, CbmDosFileType.Sequential, data);
     }
@@ -414,8 +416,9 @@ public sealed class CbmDosDisk
     private Span<byte> Sector(int track, int sector) =>
         _sectors.AsSpan((GcrLayout.FirstSector(track) + sector) * GcrLayout.SectorSize, GcrLayout.SectorSize);
 
-    // A name or ID as the DOS stores it: upper case, each character its PETSCII code, refusing the characters the DOS's
-    // command parser reads as punctuation or wildcards, a leading @ (save and replace) and a name of $ alone.
+    // A name or ID as the DOS stores it: upper case, each character its PETSCII code, refusing characters outside ASCII
+    // (some upper-case into it), the characters the DOS's command parser reads as punctuation or wildcards, a leading @
+    // (save and replace) and a name of $ alone.
     private static byte[] Petscii(string text, string parameter, int minimum, int maximum)
     {
         ArgumentNullException.ThrowIfNull(text, parameter);

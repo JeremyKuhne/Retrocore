@@ -34,5 +34,4 @@ internal sealed class PascalWithBody
     ///  Gets or sets the IFs in it still open to an ELSE, which then stays in the body.
     /// </summary>
     public int Ifs { get; set; }
-
 }

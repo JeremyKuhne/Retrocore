@@ -403,6 +403,7 @@ public sealed partial class PascalProgram
                 {
                     withs.RemoveAll(body => body.Depth >= depth);
                     depth--;
+                    while (repeats.TryPeek(out int unclosed) && unclosed > depth) { repeats.Pop(); }
                     Next();
                     if (depth == 0) { return; }
                     continue;

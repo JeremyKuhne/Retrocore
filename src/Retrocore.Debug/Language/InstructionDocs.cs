@@ -147,127 +147,128 @@ internal static partial class InstructionDocs
     internal static (string Summary, string Flags)? Brief(string mnemonic, InstructionSet set)
     {
         if (set.IsMacroOnly) { return null; }
-        Dictionary<string, (string Summary, string Flags)>? docs = null;
+        Dictionary<string, string> docs = s_docs;
+        string key = mnemonic;
         if (ReferenceEquals(set.Description, Z80Isa.Description)) { docs = s_z80; }
         else if (ReferenceEquals(set.Description, M6809Isa.Description)) { docs = s_m6809; }
         else if (ReferenceEquals(set.Description, I8080Isa.Description)) { docs = s_i8080; }
+        else if (mnemonic.Length == 4 && char.IsAsciiDigit(mnemonic[3])) { key = mnemonic[..3]; }
 
-        if (docs is not null)
-        {
-            return docs.TryGetValue(mnemonic, out (string Summary, string Flags) doc) ? doc : null;
-        }
-
-        string key = mnemonic.Length == 4 && char.IsAsciiDigit(mnemonic[3]) ? mnemonic[..3] : mnemonic;
-        return s_docs.TryGetValue(key, out string? summary) ? (summary, M6502Flags(mnemonic, set)) : null;
+        return docs.TryGetValue(key, out string? summary) ? (summary, MnemonicFlags(mnemonic, set).Text) : null;
     }
 
     /// <summary>
-    ///  Gets the flags one decoded instruction changes, where its mnemonic's depend on its operands, as ADD HL,BC
-    ///  changes only H, N and C, or BIT #$80 only Z.
+    ///  Gets the flags one decoded instruction changes, from the description's effects lines, so they follow its
+    ///  operands: ADD HL,BC changes only H, N and C, BIT #$80 only Z, and TFR A,CC every flag.
     /// </summary>
     /// <param name="instruction">The instruction.</param>
     /// <returns>The flags, or null where its mnemonic has no documentation.</returns>
     internal static string? FlagsOf(in DisassembledInstruction instruction)
     {
-        InstructionSet set = instruction.InstructionSet;
-
-        // The 6502 family's come from its effects lines, undocumented instructions' too.
-        if (ReferenceEquals(set.Description, M6502Isa.Description) && instruction.Effects is { IsKnown: true } effects)
-        {
-            return FlagText((byte)(effects.FlagsWritten | effects.FlagsMayWrite), set.Description);
-        }
-
-        if (Brief(instruction.Mnemonic, set) is not { } brief) { return null; }
-        string mnemonic = instruction.Mnemonic.ToUpperInvariant();
-        string text = instruction.ToString().ToUpperInvariant();
-        int space = text.IndexOf(' ', StringComparison.Ordinal);
-        string[] operands = space < 0 ? [] : [.. text[(space + 1)..].Split(',', StringSplitOptions.TrimEntries)];
-        string first = operands.Length > 0 ? operands[0] : "";
-        string second = operands.Length > 1 ? operands[1] : "";
-        bool pair = first is "BC" or "DE" or "HL" or "SP" or "IX" or "IY";
-        bool namesCc = operands.Contains("CC");
-        if (ReferenceEquals(set.Description, Z80Isa.Description))
-        {
-            return mnemonic switch
-            {
-                "ADD" => pair ? "H N C" : "S Z H PV N C",
-                "INC" or "DEC" => pair ? "none" : brief.Flags,
-                "EX" => first == "AF" ? "all (swapped with AF')" : "none",
-                "IN" => second.StartsWith('[') && second != "[C]" ? "none" : "S Z H PV N",
-                "LD" => first == "A" && second is "I" or "R" ? "S Z H PV N" : "none",
-                "POP" => first == "AF" ? "all" : "none",
-                _ => brief.Flags
-            };
-        }
-
-        if (ReferenceEquals(set.Description, I8080Isa.Description))
-        {
-            return mnemonic == "POP" ? first == "PSW" ? "all" : "none" : brief.Flags;
-        }
-
-        if (ReferenceEquals(set.Description, M6809Isa.Description))
-        {
-            return mnemonic switch
-            {
-                "EXG" or "PULS" or "PULU" => namesCc ? "all" : "none",
-                "TFR" => second == "CC" ? "all" : "none",
-                _ => brief.Flags
-            };
-        }
-
-        return brief.Flags;
+        // The effects lines say, with what a postbyte names, as the 6809's TFR A,CC.
+        InstructionEffects effects = instruction.Effects;
+        return effects.IsKnown
+            ? FlagText(Changed(effects), instruction.InstructionSet.Description)
+            : Brief(instruction.Mnemonic, instruction.InstructionSet)?.Flags;
     }
 
-    // The flags a 6502 family mnemonic's encodings change, from the effects lines: the set's, or where the set lacks
-    // the mnemonic, the first family set that has it, so a hover still says what it would do.
-    private static string M6502Flags(string mnemonic, InstructionSet set)
+    // The flags a mnemonic's encodings change, from the effects lines: the set's, or where the set lacks the
+    // mnemonic, another set of its description that has it, so a hover still says what it would do. Where the
+    // encodings or their postbytes change different flags, as ADD A,B and ADD HL,BC do, each possibility, fewest
+    // first: "H N C or S Z H PV N C, by operands".
+    private static (string Text, bool Varies) MnemonicFlags(string mnemonic, InstructionSet set)
     {
         int id = set.GetMnemonic(mnemonic);
-        if (id == InstructionSet.UnknownMnemonic)
+        foreach (InstructionSet other in set.Description.InstructionSets.Values)
         {
-            ReadOnlySpan<ProcessorVariant> variants = [ProcessorVariant.Mos6502, ProcessorVariant.Wdc65C02, ProcessorVariant.Rockwell65C02];
-            foreach (ProcessorVariant variant in variants)
-            {
-                set = M6502Isa.Get(variant);
-                id = set.GetMnemonic(mnemonic);
-                if (id != InstructionSet.UnknownMnemonic) { break; }
-            }
+            if (id != InstructionSet.UnknownMnemonic) { break; }
+            set = other;
+            id = set.GetMnemonic(mnemonic);
         }
 
-        byte flags = 0;
+        SortedSet<(int Count, byte Flags)> distinct = [];
         for (int encoding = 0; id != InstructionSet.UnknownMnemonic && encoding < set.Encodings.Count; encoding++)
         {
-            if (set.GetEncoding(encoding).Mnemonic != id) { continue; }
-            InstructionEffects effects = set.Effects(encoding);
-            flags |= (byte)(effects.FlagsWritten | effects.FlagsMayWrite);
+            if (set.GetEncoding(encoding).Mnemonic == id) { distinct.UnionWith(Choices(set, encoding)); }
         }
 
-        return FlagText(flags, set.Description);
+        if (distinct.Count == 0) { return ("none", false); }
+        string text = string.Join(" or ", distinct.Select(choice => FlagText(choice.Flags, set.Description)));
+        return distinct.Count == 1 ? (text, false) : ($"{text}, by operands", true);
     }
 
-    // Flag letters in the flags line's order, or "none" or "all"; B is no flag, only a bit of the byte BRK and PHP push.
+    // The flags one encoding changes, and where its postbyte decides, each it can: TFR's "none or all".
+    private static (string Text, byte Flags) EncodingFlags(InstructionSet set, int encoding)
+    {
+        SortedSet<(int Count, byte Flags)> choices = Choices(set, encoding);
+        byte union = 0;
+        foreach ((_, byte flags) in choices) { union |= flags; }
+        return (string.Join(" or ", choices.Select(choice => FlagText(choice.Flags, set.Description))), union);
+    }
+
+    // Each distinct set of documented flags an encoding can change, by its postbyte where it has one, fewest first.
+    private static SortedSet<(int Count, byte Flags)> Choices(InstructionSet set, int encoding)
+    {
+        byte documented = DocumentedFlags(set.Description);
+        ref readonly InstructionEffects effects = ref set.Effects(encoding);
+        SortedSet<(int Count, byte Flags)> distinct = [];
+        for (int postbyte = 0; postbyte < (effects.DependsOnPostbyte ? 256 : 1); postbyte++)
+        {
+            byte changed = (byte)(Changed(set.Effects(encoding, (byte)postbyte)) & documented);
+            distinct.Add((System.Numerics.BitOperations.PopCount(changed), changed));
+        }
+
+        return distinct;
+    }
+
+    private static byte Changed(in InstructionEffects effects) => (byte)(effects.FlagsWritten | effects.FlagsMayWrite);
+
+    // The flags documentation names by word; the hovers leave out the undocumented ones, the Z80's X and Y and
+    // the 8085's K and V.
+    private static byte DocumentedFlags(IsaDescription description)
+    {
+        byte documented = 0;
+        foreach (IsaFlag flag in description.Flags)
+        {
+            if (flag.Words.Count != 0) { documented |= (byte)(1 << flag.Bit); }
+        }
+
+        return documented;
+    }
+
+    // Documented flag letters in the flags line's order, P/V as PV, or "none" or "all"; B is no 6502 flag, only a
+    // bit of the byte BRK and PHP push.
     private static string FlagText(byte flags, IsaDescription description)
     {
-        byte all = 0;
+        byte documented = DocumentedFlags(description);
+        flags &= documented;
         List<string> letters = [];
         foreach (IsaFlag flag in description.Flags)
         {
-            all |= (byte)(1 << flag.Bit);
-            if ((flags & (1 << flag.Bit)) != 0) { letters.Add(flag.Name); }
+            if ((flags & (1 << flag.Bit)) != 0) { letters.Add(flag.Name.Replace("/", "", StringComparison.Ordinal)); }
         }
 
-        return flags == 0 ? "none" : flags == all ? "all" : string.Join(' ', letters);
+        return flags == 0 ? "none" : flags == documented ? "all" : string.Join(' ', letters);
     }
 
     private static string? DescribeM6502(string mnemonic, ProcessorVariant variant)
     {
         string key = mnemonic.Length == 4 && char.IsAsciiDigit(mnemonic[3]) ? mnemonic[..3] : mnemonic;
         if (!s_docs.TryGetValue(key, out string? summary)) { return null; }
-        (string Summary, string Flags) doc = (summary, M6502Flags(mnemonic, M6502Isa.Get(variant)));
-        List<string> modes = [.. Encodings(variant, mnemonic).Select(encoding => $"| {Syntax(encoding.Mode)} | ${encoding.Code:X2} |")];
+        InstructionSet set = M6502Isa.Get(variant);
+        List<string> modes = [];
+        foreach ((AddressMode mode, byte code) in Encodings(variant, mnemonic))
+        {
+            string flags = set.TryDecode([code], out int encoding) ? EncodingFlags(set, encoding).Text : "";
+            modes.Add($"| {Syntax(mode)} | ${code:X2} | {flags} |");
+        }
+
         string rows = string.Join('\n', modes);
-        string table = modes.Count == 0 ? $"\n\nNot an instruction of the {variant}." : $"\n\n| Mode | Opcode |\n| --- | --- |\n{rows}";
-        return $"**{mnemonic.ToUpperInvariant()}**: {doc.Summary}\n\nFlags: {doc.Flags}{table}";
+        string table = modes.Count == 0
+            ? $"\n\nNot an instruction of the {variant}."
+            : $"\n\n| Mode | Opcode | Flags |\n| --- | --- | --- |\n{rows}";
+
+        return $"**{mnemonic.ToUpperInvariant()}**: {summary}\n\nFlags: {MnemonicFlags(mnemonic, set).Text}{table}";
     }
 
     /// <summary>

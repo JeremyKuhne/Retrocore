@@ -9,77 +9,78 @@ namespace Retrocore.Debug.Language;
 
 internal static partial class InstructionDocs
 {
-    // What each Z80 instruction does, and the flags it changes (S Z H PV N C; Y and X follow the result).
-    private static readonly Dictionary<string, (string Summary, string Flags)> s_z80 = new(StringComparer.OrdinalIgnoreCase)
+    // What each Z80 instruction does; the flags it changes come from the description's effects lines, the
+    // undocumented Y and X left out.
+    private static readonly Dictionary<string, string> s_z80 = new(StringComparer.OrdinalIgnoreCase)
     {
-        ["ADC"] = ("Adds the operand and the carry to A, or a register pair and the carry to HL.", "S Z H PV N C"),
-        ["ADD"] = ("Adds the operand to A, or a register pair to HL, IX or IY.", "S Z H PV N C (pairs: H N C)"),
-        ["AND"] = ("ANDs the operand into A.", "S Z H PV N C"),
-        ["BIT"] = ("Tests a bit of a register or memory: Z is set when the bit is clear.", "S Z H PV N"),
-        ["CALL"] = ("Pushes the return address and jumps to a subroutine, optionally on a condition.", "none"),
-        ["CCF"] = ("Complements the carry; H takes the old carry.", "H N C"),
-        ["CP"] = ("Compares A with the operand (A - operand, result discarded).", "S Z H PV N C"),
-        ["CPD"] = ("Compares A with [HL], then decrements HL and BC.", "S Z H PV N"),
-        ["CPDR"] = ("Repeats CPD until A matches [HL] or BC is zero.", "S Z H PV N"),
-        ["CPI"] = ("Compares A with [HL], then increments HL and decrements BC.", "S Z H PV N"),
-        ["CPIR"] = ("Repeats CPI until A matches [HL] or BC is zero.", "S Z H PV N"),
-        ["CPL"] = ("Complements A.", "H N"),
-        ["DAA"] = ("Adjusts A to packed BCD after an addition or subtraction.", "S Z H PV C"),
-        ["DEC"] = ("Decrements a register, a register pair or memory; pairs change no flags.", "S Z H PV N"),
-        ["DI"] = ("Disables maskable interrupts.", "none"),
-        ["DJNZ"] = ("Decrements B and branches when it is not zero.", "none"),
-        ["EI"] = ("Enables maskable interrupts after the next instruction.", "none"),
-        ["EX"] = ("Exchanges DE with HL, AF with AF', or the top of the stack with HL, IX or IY.", "none (AF,AF' swaps them)"),
-        ["EXX"] = ("Exchanges BC, DE and HL with BC', DE' and HL'.", "none"),
-        ["HALT"] = ("Waits for an interrupt, executing NOPs.", "none"),
-        ["IM"] = ("Selects interrupt mode 0, 1 or 2.", "none"),
-        ["IN"] = ("Reads an I/O port into a register; IN [C] sets only the flags.", "S Z H PV N (none for IN A,[n])"),
-        ["INC"] = ("Increments a register, a register pair or memory; pairs change no flags.", "S Z H PV N"),
-        ["IND"] = ("Reads port C into [HL], then decrements HL and B.", "S Z H PV N C"),
-        ["INDR"] = ("Repeats IND until B is zero.", "S Z H PV N C"),
-        ["INI"] = ("Reads port C into [HL], then increments HL and decrements B.", "S Z H PV N C"),
-        ["INIR"] = ("Repeats INI until B is zero.", "S Z H PV N C"),
-        ["JP"] = ("Jumps to an address, optionally on a condition, or to HL, IX or IY.", "none"),
-        ["JR"] = ("Branches by a signed displacement, optionally on Z or C.", "none"),
-        ["LD"] = ("Copies the source operand to the destination; LD A,I and LD A,R set flags.", "none (LD A,I/R: S Z H PV N)"),
-        ["LDD"] = ("Copies [HL] to [DE], then decrements HL, DE and BC.", "H PV N"),
-        ["LDDR"] = ("Repeats LDD until BC is zero.", "H PV N"),
-        ["LDI"] = ("Copies [HL] to [DE], then increments HL and DE and decrements BC.", "H PV N"),
-        ["LDIR"] = ("Repeats LDI until BC is zero.", "H PV N"),
-        ["NEG"] = ("Negates A (0 - A).", "S Z H PV N C"),
-        ["NOP"] = ("Does nothing.", "none"),
-        ["OR"] = ("ORs the operand into A.", "S Z H PV N C"),
-        ["OTDR"] = ("Repeats OUTD until B is zero.", "S Z H PV N C"),
-        ["OTIR"] = ("Repeats OUTI until B is zero.", "S Z H PV N C"),
-        ["OUT"] = ("Writes a register, A or zero to an I/O port.", "none"),
-        ["OUTD"] = ("Decrements B, writes [HL] to port C, then decrements HL.", "S Z H PV N C"),
-        ["OUTI"] = ("Decrements B, writes [HL] to port C, then increments HL.", "S Z H PV N C"),
-        ["POP"] = ("Pulls a register pair from the stack.", "none (POP AF: all)"),
-        ["PUSH"] = ("Pushes a register pair onto the stack.", "none"),
-        ["RES"] = ("Clears a bit of a register or memory.", "none"),
-        ["RET"] = ("Returns from a subroutine, optionally on a condition.", "none"),
-        ["RETI"] = ("Returns from a maskable interrupt, signalling Z80 peripherals.", "none"),
-        ["RETN"] = ("Returns from a non-maskable interrupt, restoring IFF1 from IFF2.", "none"),
-        ["RL"] = ("Rotates left through the carry.", "S Z H PV N C"),
-        ["RLA"] = ("Rotates A left through the carry.", "H N C"),
-        ["RLC"] = ("Rotates left; bit 7 goes to the carry and bit 0.", "S Z H PV N C"),
-        ["RLCA"] = ("Rotates A left; bit 7 goes to the carry and bit 0.", "H N C"),
-        ["RLD"] = ("Rotates the BCD digits of A's low nibble and [HL] left.", "S Z H PV N"),
-        ["RR"] = ("Rotates right through the carry.", "S Z H PV N C"),
-        ["RRA"] = ("Rotates A right through the carry.", "H N C"),
-        ["RRC"] = ("Rotates right; bit 0 goes to the carry and bit 7.", "S Z H PV N C"),
-        ["RRCA"] = ("Rotates A right; bit 0 goes to the carry and bit 7.", "H N C"),
-        ["RRD"] = ("Rotates the BCD digits of A's low nibble and [HL] right.", "S Z H PV N"),
-        ["RST"] = ("Calls a restart address: $00, $08, $10, $18, $20, $28, $30 or $38.", "none"),
-        ["SBC"] = ("Subtracts the operand and the carry from A, or a register pair and the carry from HL.", "S Z H PV N C"),
-        ["SCF"] = ("Sets the carry.", "H N C"),
-        ["SET"] = ("Sets a bit of a register or memory.", "none"),
-        ["SLA"] = ("Shifts left; bit 7 goes to the carry and bit 0 is cleared.", "S Z H PV N C"),
-        ["SLL"] = ("Shifts left; bit 7 goes to the carry and bit 0 is set (undocumented).", "S Z H PV N C"),
-        ["SRA"] = ("Shifts right; bit 0 goes to the carry and bit 7 is kept.", "S Z H PV N C"),
-        ["SRL"] = ("Shifts right; bit 0 goes to the carry and bit 7 is cleared.", "S Z H PV N C"),
-        ["SUB"] = ("Subtracts the operand from A.", "S Z H PV N C"),
-        ["XOR"] = ("Exclusive-ORs the operand into A.", "S Z H PV N C")
+        ["ADC"] = "Adds the operand and the carry to A, or a register pair and the carry to HL.",
+        ["ADD"] = "Adds the operand to A, or a register pair to HL, IX or IY.",
+        ["AND"] = "ANDs the operand into A.",
+        ["BIT"] = "Tests a bit of a register or memory: Z is set when the bit is clear.",
+        ["CALL"] = "Pushes the return address and jumps to a subroutine, optionally on a condition.",
+        ["CCF"] = "Complements the carry; H takes the old carry.",
+        ["CP"] = "Compares A with the operand (A - operand, result discarded).",
+        ["CPD"] = "Compares A with [HL], then decrements HL and BC.",
+        ["CPDR"] = "Repeats CPD until A matches [HL] or BC is zero.",
+        ["CPI"] = "Compares A with [HL], then increments HL and decrements BC.",
+        ["CPIR"] = "Repeats CPI until A matches [HL] or BC is zero.",
+        ["CPL"] = "Complements A.",
+        ["DAA"] = "Adjusts A to packed BCD after an addition or subtraction.",
+        ["DEC"] = "Decrements a register, a register pair or memory; pairs change no flags.",
+        ["DI"] = "Disables maskable interrupts.",
+        ["DJNZ"] = "Decrements B and branches when it is not zero.",
+        ["EI"] = "Enables maskable interrupts after the next instruction.",
+        ["EX"] = "Exchanges DE with HL, AF with AF', or the top of the stack with HL, IX or IY.",
+        ["EXX"] = "Exchanges BC, DE and HL with BC', DE' and HL'.",
+        ["HALT"] = "Waits for an interrupt, executing NOPs.",
+        ["IM"] = "Selects interrupt mode 0, 1 or 2.",
+        ["IN"] = "Reads an I/O port into a register; IN [C] sets only the flags.",
+        ["INC"] = "Increments a register, a register pair or memory; pairs change no flags.",
+        ["IND"] = "Reads port C into [HL], then decrements HL and B.",
+        ["INDR"] = "Repeats IND until B is zero.",
+        ["INI"] = "Reads port C into [HL], then increments HL and decrements B.",
+        ["INIR"] = "Repeats INI until B is zero.",
+        ["JP"] = "Jumps to an address, optionally on a condition, or to HL, IX or IY.",
+        ["JR"] = "Branches by a signed displacement, optionally on Z or C.",
+        ["LD"] = "Copies the source operand to the destination; LD A,I and LD A,R set flags.",
+        ["LDD"] = "Copies [HL] to [DE], then decrements HL, DE and BC.",
+        ["LDDR"] = "Repeats LDD until BC is zero.",
+        ["LDI"] = "Copies [HL] to [DE], then increments HL and DE and decrements BC.",
+        ["LDIR"] = "Repeats LDI until BC is zero.",
+        ["NEG"] = "Negates A (0 - A).",
+        ["NOP"] = "Does nothing.",
+        ["OR"] = "ORs the operand into A.",
+        ["OTDR"] = "Repeats OUTD until B is zero.",
+        ["OTIR"] = "Repeats OUTI until B is zero.",
+        ["OUT"] = "Writes a register, A or zero to an I/O port.",
+        ["OUTD"] = "Decrements B, writes [HL] to port C, then decrements HL.",
+        ["OUTI"] = "Decrements B, writes [HL] to port C, then increments HL.",
+        ["POP"] = "Pulls a register pair from the stack.",
+        ["PUSH"] = "Pushes a register pair onto the stack.",
+        ["RES"] = "Clears a bit of a register or memory.",
+        ["RET"] = "Returns from a subroutine, optionally on a condition.",
+        ["RETI"] = "Returns from a maskable interrupt, signalling Z80 peripherals.",
+        ["RETN"] = "Returns from a non-maskable interrupt, restoring IFF1 from IFF2.",
+        ["RL"] = "Rotates left through the carry.",
+        ["RLA"] = "Rotates A left through the carry.",
+        ["RLC"] = "Rotates left; bit 7 goes to the carry and bit 0.",
+        ["RLCA"] = "Rotates A left; bit 7 goes to the carry and bit 0.",
+        ["RLD"] = "Rotates the BCD digits of A's low nibble and [HL] left.",
+        ["RR"] = "Rotates right through the carry.",
+        ["RRA"] = "Rotates A right through the carry.",
+        ["RRC"] = "Rotates right; bit 0 goes to the carry and bit 7.",
+        ["RRCA"] = "Rotates A right; bit 0 goes to the carry and bit 7.",
+        ["RRD"] = "Rotates the BCD digits of A's low nibble and [HL] right.",
+        ["RST"] = "Calls a restart address: $00, $08, $10, $18, $20, $28, $30 or $38.",
+        ["SBC"] = "Subtracts the operand and the carry from A, or a register pair and the carry from HL.",
+        ["SCF"] = "Sets the carry.",
+        ["SET"] = "Sets a bit of a register or memory.",
+        ["SLA"] = "Shifts left; bit 7 goes to the carry and bit 0 is cleared.",
+        ["SLL"] = "Shifts left; bit 7 goes to the carry and bit 0 is set (undocumented).",
+        ["SRA"] = "Shifts right; bit 0 goes to the carry and bit 7 is kept.",
+        ["SRL"] = "Shifts right; bit 0 goes to the carry and bit 7 is cleared.",
+        ["SUB"] = "Subtracts the operand from A.",
+        ["XOR"] = "Exclusive-ORs the operand into A."
     };
 
     // Lists a Z80 mnemonic's canonical encodings: its operands, opcode bytes with their fields, and T-states.
@@ -88,12 +89,12 @@ internal static partial class InstructionDocs
     // Lists a mnemonic's canonical encodings from an instruction-set description: its operands, opcode bytes with
     // their fields, and clock cycles.
     private static string? DescribeEncoded(
-        Dictionary<string, (string Summary, string Flags)> docs,
+        Dictionary<string, string> docs,
         string mnemonic,
         InstructionSet set,
         string cyclesHeading)
     {
-        if (!docs.TryGetValue(mnemonic, out (string Summary, string Flags) doc)) { return null; }
+        if (!docs.TryGetValue(mnemonic, out string? summary)) { return null; }
         int id = set.GetMnemonic(mnemonic);
         List<string> rows = [];
         for (int encoding = 0; encoding < set.Encodings.Count; encoding++)
@@ -111,12 +112,13 @@ internal static partial class InstructionDocs
                 : $"{value.CyclesTaken}/{value.Cycles}";
 
             string note = value.Undocumented ? " (undocumented)" : "";
-            rows.Add($"| `{mnemonic.ToUpperInvariant()}{operands}`{note} | `{Bytes(value, form)}` | {cycles} |");
+            string flags = EncodingFlags(set, encoding).Text;
+            rows.Add($"| `{mnemonic.ToUpperInvariant()}{operands}`{note} | `{Bytes(value, form)}` | {cycles} | {flags} |");
         }
 
-        string header = $"| Operands | Opcode | {cyclesHeading} |\n| --- | --- | --- |";
+        string header = $"| Operands | Opcode | {cyclesHeading} | Flags |\n| --- | --- | --- | --- |";
         string table = rows.Count == 0 ? "" : $"\n\n{header}\n{string.Join('\n', rows)}";
-        return $"**{mnemonic.ToUpperInvariant()}**: {doc.Summary}\n\nFlags: {doc.Flags}{table}";
+        return $"**{mnemonic.ToUpperInvariant()}**: {summary}\n\nFlags: {MnemonicFlags(mnemonic, set).Text}{table}";
     }
 
     // The opcode bytes in order with their operand fields: d a displacement, n a byte, nn a word, e a branch.

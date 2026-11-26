@@ -349,9 +349,13 @@ and the generator that builds the 6502 cores skips `[isa]`, so execution is unch
   as good as the core. So are the 8080's: its core runs 8080PRE, TST8080, CPUTEST and 8080EXM
   (`I8080ExerciserTests`, from `tools/Fetch-I8080Tests.ps1`), the 8085 the first two, and the 8085's K and V follow
   Ken Shirriff's tracing of the silicon, which the core cites, more than any exerciser.
-- `InstructionFlagsTests.M6502HoverFlagsComeFromTheEffects`: the 6502 family's hover and inspector flags now come
-  from the data, and match the strings the hover listed by hand before, kept as the test's expectations. B, only
-  a bit of the byte `BRK` and `PHP` push, is no flag, so `BRK` shows I, and D I on the 65C02s.
+- `InstructionFlagsTests`: every CPU's hover and inspector flags now come from the data, and change the flags the
+  hovers listed by hand before, kept as the tests' expectations (`M6502HoverFlagsComeFromTheEffects`,
+  `OtherHoverFlagsComeFromTheEffects`). Only documented flags are shown, so the Z80's X and Y and the 8085's K and V
+  are left out, and "all" means every documented flag. B, only a bit of the byte `BRK` and `PHP` push, is no flag,
+  so `BRK` shows I, and D I on the 65C02s. Each row of a hover's table has its encoding's flags, and where the
+  operands decide, the mnemonic's line lists each possibility, fewest first: `ADD` on the Z80 shows "H N C or all,
+  by operands", and `TFR`'s row "none or all", from its postbytes.
 
 ### Decisions
 
@@ -364,15 +368,12 @@ Taken on the open questions this work raised:
   touches.
 - The Z80's X and Y flags are tracked, by name.
 - `stack` sets the description's stack register, and a push or pull may name another.
-- The 6502 hover's flags come from the data.
+- Every CPU's hover flags come from the data.
 - The 6809's `PSHS`, `PULS`, `TFR` and `EXG`, and its indexed modes, take their registers from its
   `PostbyteCodec`, with a lookup that takes the postbyte.
 
 ### Follow-ups
 
-- **The Z80, 6809 and 8080 hovers.** Their "Flags:" text and the inspector's special cases
-  (`InstructionDocs.Z80.cs`, `InstructionDocs.M6809.cs`, `InstructionDocs.I8080.cs`, and `FlagsOf`'s for `EXG`,
-  `PULS`, `TFR` and `POP PSW`) could come from the data as the 6502's now do.
 - **The analyses themselves,** items 4 and 5, which this data was made for.
 
 ## Open questions

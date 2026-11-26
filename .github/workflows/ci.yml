@@ -99,6 +99,14 @@ jobs:
           node tools/Test-ProjectDap.mjs
           node tools/Test-OffMachine.mjs
 
+      # The host packed as the .NET tool retrocore, installed from that package into a local folder (it is published
+      # nowhere), builds and debugs the project sample as the host itself does.
+      - name: The retrocore tool
+        run: |
+          dotnet pack src/Retrocore.Debug/Retrocore.Debug.csproj -c Release --no-build -o artifacts/tool-package
+          dotnet tool install retrocore --tool-path artifacts/tool --add-source artifacts/tool-package --prerelease
+          RETROCORE_DAP_HOST="$PWD/artifacts/tool/retrocore" node tools/Test-ProjectDap.mjs
+
       - name: Extension tests
         working-directory: Retrocore/extension
         run: |

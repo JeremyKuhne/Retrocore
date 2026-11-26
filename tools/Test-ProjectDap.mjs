@@ -20,7 +20,7 @@ const source = join(project, "src", "hello.s");
 const binary = join(project, "artifacts", "apple2-iiplus", "hello.bin");
 const host = join(root, "artifacts", "AnyCPU", "Release", "Retrocore.Debug", "net11.0", "Retrocore.Debug.dll");
 const build = (...args) => process.env.RETROCORE_DAP_HOST
-    ? spawnSync(process.env.RETROCORE_DAP_HOST, ["build", ...args], { cwd: project, encoding: "utf8" })
+    ? spawnSync(resolve(process.env.RETROCORE_DAP_HOST), ["build", ...args], { cwd: project, encoding: "utf8" })
     : spawnSync("dotnet", [host, "build", ...args], { cwd: project, encoding: "utf8" });
 
 // retrocore build, from the project's folder.

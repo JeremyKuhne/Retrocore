@@ -199,4 +199,4 @@ internal static class BuildCommand
     }
 
     private static string Qualified(ProjectTarget target) => $"{target.Project.Name}/{target.Name}";
-}
+}

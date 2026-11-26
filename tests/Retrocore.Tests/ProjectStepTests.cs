@@ -232,13 +232,14 @@ public sealed class ProjectStepTests
     }
 
     /// <summary>
-    ///  A file-based app's directives count wherever its comments put them.
+    ///  A file-based app's directives count after a block comment, and lines after its code do not.
     /// </summary>
     [TestMethod]
     public void DirectivesAfterABlockCommentCount()
     {
         Project("""[{ "tool": "tools/pack.cs", "in": "game.dat", "out": "${obj}/game.bin" }]""");
-        Write("tools/pack.cs", "/*\n * A header.\n */\n#:include Part.cs\nConsole.WriteLine();\n");
+        Write("tools/pack.cs", "/*\n * A header.\n */\n#:include Part.cs\nConsole.WriteLine();\n#:include Later.cs\n");
+        Write("tools/Later.cs", "class Later;\n");
         Write("tools/Part.cs", "class Part;\n");
         RetrocoreProject project = RetrocoreProject.Load(_folder);
         ProjectSteps.ToolFiles(project, project.Steps[0]).Should().Equal(

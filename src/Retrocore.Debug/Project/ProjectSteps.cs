@@ -250,9 +250,18 @@ internal static class ProjectSteps
         if (!seen.Add(file) || !File.Exists(file)) { return; }
         files.Add(file);
         string folder = Path.GetDirectoryName(file) ?? "";
+        // Directives come before the code, after any comments.
+        bool inComment = false;
         foreach (string line in File.ReadLines(file))
         {
             string text = line.Trim();
+            if (inComment || text.StartsWith("/*", StringComparison.Ordinal))
+            {
+                int start = inComment ? 0 : 2;
+                inComment = !text.AsSpan(start).Contains("*/", StringComparison.Ordinal);
+                continue;
+            }
+
             if (text.StartsWith(IncludeDirective, StringComparison.Ordinal))
             {
                 string path = Separators(text[IncludeDirective.Length..].Trim());
@@ -267,6 +276,10 @@ internal static class ProjectSteps
                 string path = Path.GetFullPath(Separators(text[ProjectDirective.Length..].Trim()), folder);
                 string projectFolder = Directory.Exists(path) ? path : Path.GetDirectoryName(path) ?? "";
                 files.UnionWith(ProjectFolderFiles(project, projectFolder));
+            }
+            else if (text.Length != 0 && !text.StartsWith('#') && !text.StartsWith("//", StringComparison.Ordinal))
+            {
+                break;
             }
         }
     }
@@ -290,11 +303,13 @@ internal static class ProjectSteps
         HashSet<string> outputs = [with(ProjectGlob.FileNames), .. project.Steps.SelectMany(step => step.Outputs)];
         void Walk(string current)
         {
+            // A folder deleted since it was listed has no files.
+            if (!Directory.Exists(current)) { return; }
             files.AddRange(Directory.EnumerateFiles(current).Where(file => !outputs.Contains(file)));
             foreach (string child in Directory.EnumerateDirectories(current))
             {
                 // A symbolic link or junction is not followed, so one to a folder above cannot loop; other reparse
-                // points, such as cloud files' placeholders, are walked. A folder that has gone reads as no link.
+                // points, such as cloud files' placeholders, are walked.
                 if (!Path.GetFileName(child).StartsWith('.')
                     && !skipped.Contains(child)
                     && new DirectoryInfo(child).LinkTarget is null)

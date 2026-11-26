@@ -414,6 +414,47 @@ internal sealed class Level1Dialect : BasicDialect
     }
 
     /// <summary>
+    ///  Tests whether a file's bytes are a program as Level I keeps it rather than a text listing.
+    /// </summary>
+    /// <remarks>
+    ///  <para>
+    ///   An image holds no zero byte when its line numbers hold none, as from line 1000 up, so it is told by its line
+    ///   numbers: below line 8192 a line number's high byte is a control character. Bytes with a control character
+    ///   other than a tab, carriage return or line feed, which text holds, are an image; otherwise, they are one when
+    ///   they read as lines whose numbers are all below 8192, as a text line's second character, which would be the
+    ///   high byte, is not a control character. An image whose lines are all from 8192 up, with no control character
+    ///   in them, reads as text.
+    ///  </para>
+    /// </remarks>
+    /// <param name="bytes">The file's bytes.</param>
+    /// <returns>Whether they are an image.</returns>
+    internal static bool IsImage(ReadOnlySpan<byte> bytes)
+    {
+        foreach (byte value in bytes)
+        {
+            if (value is < (byte)' ' and not ((byte)'\t' or (byte)'\r' or (byte)'\n')) { return true; }
+        }
+
+        if (bytes.IsEmpty) { return false; }
+        for (int at = 0; at < bytes.Length;)
+        {
+            int end = at + Instance.LineHeader <= bytes.Length ? bytes[(at + Instance.LineHeader)..].IndexOf(EndOfLine) : -1;
+            if (end < 0 || bytes[at + 1] >= (byte)' ') { return false; }
+            at += Instance.LineHeader + end + 1;
+        }
+
+        try
+        {
+            Instance.FromImage(bytes);
+            return true;
+        }
+        catch (InvalidDataException)
+        {
+            return false;
+        }
+    }
+
+    /// <summary>
     ///  Gets a program as Level I keeps it from <c>$4200</c>.
     /// </summary>
     /// <param name="program">The program.</param>

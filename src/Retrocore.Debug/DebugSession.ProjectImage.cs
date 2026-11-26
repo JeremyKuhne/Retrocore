@@ -163,7 +163,7 @@ internal sealed partial class DebugSession
         Target.CallStack.Reset();
     }
 
-    // The memory areas a booted program's bytes are in as the CPU reads them, each once, in address order.
+    // The memory areas a booted program's bytes are in as the CPU reads them, each once, in the segments' order.
     private List<Enum> ProgramAreas(TargetBuild build)
     {
         List<Enum> areas = [];

@@ -247,6 +247,7 @@ verify them—and also compare against your chip dumps byte for byte when dumps 
 | [`Retrocore.Machines.Apple3`](src/Retrocore.Machines.Apple3) | The Apple III: banked bus and extended addressing, video, keyboard, clock, serial port, drives, and its SDK ROM source. |
 | [`Retrocore.Machines.Chips`](src/Retrocore.Machines.Chips) | Chips more than one machine uses: the Western Digital FD1771 and FD179x floppy disk controller and its drives, and the Z80 PIO, SIO, CTC and DMA. |
 | [`Retrocore.Machines.Trs80`](src/Retrocore.Machines.Trs80) | The TRS-80 Model I, Expansion Interface with its drive select and doublers, cassette, and SDK ROM sources; the Model III, 4 and 4P; and the Model II family. |
+| [`Retrocore.Machines.Trs80Model100`](src/Retrocore.Machines.Trs80Model100) | The TRS-80 Model 100 and Tandy 102: the 80C85's memory and ports, the LCD, keyboard and clock, and power. |
 | [`Retrocore.Machines.Kaypro`](src/Retrocore.Machines.Kaypro) | The Kaypro II: banked memory, the system PIO, serial keyboard, display and disks, and its SDK sources, MBASIC's included. |
 | [`Retrocore.Machines.Coco`](src/Retrocore.Machines.Coco) | The TRS-80 Color Computer 1, 2 and 3: SAM, VDG, GIME, PIAs, cassette, sound, cartridges, and the disk controller. |
 | [`Retrocore.Machines.Acorn`](src/Retrocore.Machines.Acorn) | The BBC Micro Model B and A: the paged ROMs, both VIAs, the video ULA and SAA5050, keyboard, sound, the serial ULA and cassette, the 8271, and SDK ROM sources. |
@@ -275,6 +276,7 @@ launch are invisible to Explorer, VS Code, and normal terminals.
 | `RETROCORE_IIPLUS_ROMS`, `RETROCORE_II_ROMS` | Apple II Plus and Apple II 2716 chip dumps (defaults `<cache>\apple2-roms\APPLE II+` and `<cache>\apple2-roms\APPLE II`); optional for debugging. |
 | `RETROCORE_DISKII_ROMS` | Disk II P5/P6 chip dumps under their `apple2.org.za` names (default `<cache>\disk2-roms`). |
 | `RETROCORE_APPLE1_ROMS` | Apple-1 Monitor, ACI and BASIC dumps, `wozmon.bin`, `aci.bin` and `basic.bin` (default `<cache>\apple1-roms` for the ROM source checks); optional for debugging. |
+| `RETROCORE_TRS80M100_ROMS` | The Model 100's and Tandy 102's ROMs (`m100rom.m12` and `m102rom.m12`, or `m100.bin` and `t102.bin`; default `<cache>\trs80m100-roms` for the tests); the debugger needs it, `romDirectory` or `rom` to run either, as Retrocore has no source for the ROMs yet. |
 | `RETROCORE_TRS80_ROMS` | TRS-80 ROM dumps under MAME's names (default `<cache>\trs80-roms\extract`); optional for every TRS-80, whose ROMs the SDK's sources build. |
 | `RETROCORE_APPLE3_ROMS` | MAME's `apple3` set unzipped (default `<cache>\apple3-roms\mame\apple3`); optional for debugging. |
 | `RETROCORE_APPLE3_DISKS` | SOS 1.3 disk images for the Apple III tests (default `<cache>\apple3-disks`). |

@@ -368,7 +368,7 @@ internal sealed partial class Trs80Model100DebugTarget : IDebugTarget, IRecordin
                 "model",
                 ModelName,
                 "OKI 80C85 at 2.4576 MHz",
-                "The launch's model option: 100 (the default) or 102; a ROM given as rom tells its model by its digest."),
+                "The launch's model option: 100 or 102; with none, a known ROM tells its model by its digest, and any other is a Model 100."),
             new(
                 "rom",
                 "ROM",

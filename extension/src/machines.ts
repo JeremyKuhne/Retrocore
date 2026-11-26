@@ -166,7 +166,7 @@ const model100Ram: MachineChoice = {
         { label: "32 KB", value: 32 },
         { label: "24 KB", value: 24 },
         { label: "16 KB", value: 16 },
-        { label: "8 KB", detail: "As the Model 100 came", value: 8 }
+        { label: "8 KB", detail: "The smallest Model 100", value: 8 }
     ],
     default: 32
 };

@@ -17,7 +17,7 @@ internal static class MachineCatalog
         new("32 KB", 32),
         new("24 KB", 24),
         new("16 KB", 16),
-        new("8 KB", 8, "As the Model 100 came"),
+        new("8 KB", 8, "The smallest Model 100"),
     ], 32);
 
     private static readonly MachineChoice s_sound = new("sound", "Sound",

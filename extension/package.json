@@ -1789,7 +1789,7 @@
               },
               "bootSeconds": {
                 "type": "number",
-                "description": "Model I, III, 4 and Color Computer: emulated seconds the ROM runs before a program loads, to set up its RAM; defaults to 1 on a Model I, III or 4 and 2 on a Color Computer or an Atari when loading a program. Model II and Kaypro II: 0 by default. Apple II project launches: 0.25 by default, so the Monitor is set up for a bare program."
+                "description": "Model I, III, 4 and Color Computer: emulated seconds the ROM runs before a program loads, to set up its RAM; defaults to 1 on a Model I, III or 4 and 2 on a Color Computer or an Atari when loading a program. Model 100 and Tandy 102: 3 when loading a program, else 0. Model II and Kaypro II: 0 by default. Apple II project launches: 0.25 by default, so the Monitor is set up for a bare program."
               },
               "command": {
                 "type": "string",
@@ -2262,7 +2262,7 @@
               },
               "loadAddress": {
                 "type": "number",
-                "description": "Load address of program, or origin of source when no linker configuration places it; defaults to $6000 on the IIe, $7000 on the Model I and $0800 on the PET."
+                "description": "Load address of program, or origin of source when no linker configuration places it; defaults to $6000 on the IIe, $7000 on the Model I, $0800 on the PET and $E000 on the Model 100."
               },
               "entryAddress": {
                 "type": "number",

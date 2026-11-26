@@ -253,7 +253,7 @@ Covington's names kept as historical names. Covington's map is a second set of n
   RAM (8-32 KB), the model (`100`, `102`), an option ROM, the clock's starting time (the host's by default), and a RAM
   image.
 - **The LCD** as the machine's screen, 240x64 at a chosen scale, with the gray-green panel; **the keyboard** mapped
-  from the host's, with F1-F8, PASTE, LABEL, PRINT, GRPH, CODE, NUM, PAUSE and BREAK.
+  from the host's, with F1-F8, PASTE, LABEL, PRINT, PAUSE and BREAK (GRPH, CODE and NUM are still to come).
 - **Assembling `source`** and loading `program` binaries, as `.CO` files placed in RAM's directory, so they appear
   on the menu; loading `.BA` and `.DO` files the same way.
 - **The call tracker** for `CALL`, `RST`, TRAP and RST 5.5-7.5; the register view with the 8085's flags and the
@@ -264,7 +264,7 @@ Covington's names kept as historical names. Covington's map is a second set of n
 
 ## Phases
 
-1. **The machine.** `Retrocore.Machines.Trs80Model100` (or in `Retrocore.Machines.Trs80`, to decide): the 80C85 at
+1. **The machine.** `Retrocore.Machines.Trs80Model100`: the 80C85 at
    2.4576 MHz, ROM and option ROM switching, RAM, and shared chips in `Retrocore.Core` for the 81C55, the HD44102
    and the uPD1990AC; the keyboard matrix, RST 7.5 from TP, power off. Tests boot the user's ROM to the menu and
    read its screen from the drivers' RAM.
@@ -277,7 +277,7 @@ Covington's names kept as historical names. Covington's map is a second set of n
    and TPDD-2 in file-access mode on `.pdd1` and `.pdd2` images, for TS-DOS.
 5. **The ROM as an SDK source**, byte-identical and documented in the maintained style, so the debugger steps
    through BASIC by name.
-6. **The relatives.** The Tandy 102 first (a ROM); then the Kyotronic 85 and M10; the Tandy 200 and PC-8201A as
+6. **The relatives.** The Tandy 102 is built with phases 1 and 2; next the Kyotronic 85 and M10; the Tandy 200 and PC-8201A as
    machine models of their own.
 
 ## Testing
@@ -359,6 +359,8 @@ by the user first, and stays out of the repository.
   count-by-twos and the LCD's busy times are not modelled. A longer timed comparison would settle it.
 - **The timer and beeper.** The 81C55's timer runs but drives nothing; the beeper and the UART's clock come with it.
 - **The ROM's source map**, once the ROM is an SDK source (phase 5).
+- **GRPH, CODE and NUM** have no key codes yet, so their characters cannot be typed from the debugger; the
+  machine's keyboard has the keys.
 
 ## Decisions (agreed 2026-11-26)
 

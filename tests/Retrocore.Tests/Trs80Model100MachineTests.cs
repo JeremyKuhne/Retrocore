@@ -128,8 +128,15 @@ public sealed class Trs80Model100MachineTests
         {
             machine.Keyboard.Type(code).Should().BeTrue();
 
-            // Past a modifier's 20 ms lead.
-            machine.RunSeconds(0.03);
+            // Within a modifier's 20 ms lead, the modifier alone is down; past it, the key too.
+            machine.RunSeconds(0.01);
+            if (modifier is { } held)
+            {
+                machine.Keyboard.IsPressed(held).Should().BeTrue();
+                machine.Keyboard.IsPressed(key).Should().BeFalse("the modifier goes down first");
+            }
+
+            machine.RunSeconds(0.02);
             machine.Keyboard.IsPressed(key).Should().BeTrue($"code {code} presses {key}");
             machine.Keyboard.IsPressed(Trs80Model100Key.Shift).Should().Be(modifier == Trs80Model100Key.Shift);
             machine.Keyboard.IsPressed(Trs80Model100Key.Control).Should().Be(modifier == Trs80Model100Key.Control);

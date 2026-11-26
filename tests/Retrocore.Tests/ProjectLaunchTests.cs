@@ -210,7 +210,7 @@ public sealed class ProjectLaunchTests
         JsonObject withExecutable = Launch("iiplus");
         withExecutable["executable"] = Path.Join(_folder, "game.xex");
         client.Fails("launch", withExecutable).Should().Contain("cannot give 'executable'");
-        client.Fails("launch", Launch("dos")).Should().EndWith("the 'prodos' environment is not yet supported; only 'bare', 'wozmon', 'dos33', 'dfs' and 'basic' build.");
+        client.Fails("launch", Launch("dos")).Should().EndWith("the 'prodos' environment is not yet supported; only 'bare', 'wozmon', 'dos33', 'dfs', 'basic' and 'sos' build.");
 
         Write("main.s", "stz $00");
         client.Fails("launch", Launch("iiplus")).Should().Contain("target iiplus:").And.Contain("main.s(1)");
@@ -444,6 +444,76 @@ public sealed class ProjectLaunchTests
         {
             ["expression"] = "PC"
         }).String("result").Should().StartWith("$411 ");
+    }
+
+    /// <summary>
+    ///  A <c>sos</c> program whose code runs past <c>$A000</c>, in the fixed system RAM above the switched bank SOS gives
+    ///  the interpreter below it, has its lines mapped there too: the launch stops at its entry there, and a breakpoint
+    ///  there stops.
+    /// </summary>
+    [TestMethod]
+    public void SosLaunchMapsLinesInEachBankTheProgramSpans()
+    {
+        Write("retrocore.json", """
+            { "sdk": "1", "name": "game", "cpu": "6502", "sources": ["src/*.s"], "entry": "START",
+              "targets": { "sos": { "machine": "apple3", "environment": "sos" } } }
+            """);
+
+        string main = Write("src/main.s", "    jmp START\n    .res $8000\nSTART:\n    lda #1\nLoop:\n    jmp Loop\n");
+        using DapTestClient client = new();
+        client.Request("initialize", []);
+        client.Request("launch", Launch("sos"))["project"]?["entry"]?.GetValue<int>().Should().Be(0xA003);
+        JsonObject set = client.Request("setBreakpoints", new JsonObject
+        {
+            ["source"] = new JsonObject { ["path"] = main },
+            ["breakpoints"] = new JsonArray(new JsonObject { ["line"] = 6 })
+        });
+
+        (set["breakpoints"]?[0]?["verified"]?.GetValue<bool>()).Should().BeTrue();
+        client.Request("configurationDone", []);
+        client.Event("stopped").String("reason").Should().Be("entry");
+        client.Request("continue", new JsonObject { ["threadId"] = 1 });
+        client.Event("stopped").String("reason").Should().Be("breakpoint", "the line above $A000 is mapped where SOS runs it");
+    }
+
+    /// <summary>
+    ///  A <c>sos</c> target's launch puts its boot disk in .D1, and the Apple III boots SOS from it, which starts the
+    ///  interpreter: the launch stops at its entry, past its first byte's <c>JMP</c>, with its lines mapped where SOS
+    ///  runs it, so a breakpoint in its source binds and stops. Its target cannot give the disks.
+    /// </summary>
+    [TestMethod]
+    public void SosLaunchBootsItsDisk()
+    {
+        Write("retrocore.json", """
+            { "sdk": "1", "name": "game", "cpu": "6502", "sources": ["src/*.s"], "entry": "START",
+              "targets": {
+                "sos": { "machine": "apple3", "environment": "sos" },
+                "disks": { "machine": "apple3", "environment": "sos", "options": { "disks": ["x.dsk"] } } } }
+            """);
+
+        string main = Write("src/main.s", "    jmp START\nSTART:\n    lda #1\nLoop:\n    jmp Loop\n");
+        using DapTestClient client = new();
+        client.Request("initialize", []);
+        client.Fails("launch", Launch("disks")).Should().EndWith(
+            "a sos target boots its own disk in .D1, so its options and its launch cannot give 'disks'.");
+
+        client.Request("launch", Launch("sos"))["project"]?["entry"]?.GetValue<int>().Should().Be(0x2003);
+        client.Request("evaluate", new JsonObject
+        {
+            ["expression"] = "PC"
+        }).String("result").Should().StartWith("$2003");
+
+        JsonObject set = client.Request("setBreakpoints", new JsonObject
+        {
+            ["source"] = new JsonObject { ["path"] = main },
+            ["breakpoints"] = new JsonArray(new JsonObject { ["line"] = 5 })
+        });
+
+        (set["breakpoints"]?[0]?["verified"]?.GetValue<bool>()).Should().BeTrue();
+        client.Request("configurationDone", []);
+        client.Event("stopped").String("reason").Should().Be("entry");
+        client.Request("continue", new JsonObject { ["threadId"] = 1 });
+        client.Event("stopped").String("reason").Should().Be("breakpoint", "the program's lines are mapped where SOS runs it");
     }
 
     /// <summary>

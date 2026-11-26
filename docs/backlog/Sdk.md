@@ -395,7 +395,13 @@ and 4: BASIC 1's IEEE-488 bug stops disk drives) needs the
 by the SHA-1s MAME publishes (the plan said SHA-256; MAME's sets give SHA-1), in `bootImage`, the launch's
 `romDirectory`, `RETROCORE_PET_ROMS` and `RETROCORE_CACHE`. The disk is written even without them, as the writer is the host's. The adventure's `pet-basic`
 target plays both Pirate transcripts from its tape; `pet-disk` plays from the disk with the dumps, and the DAP test
-reports it skipped without them. A target's `bootImage` names the folder its boot media is looked for in
+reports it skipped without them. `sos` writes the program as SOS.INTERP at `$2000` and a SOS 1.3 boot disk built from
+the SDK's sources (`Apple3SdkModules.BuildSosBootDisk`), with the target's `files` as BIN files; SOS starts the
+interpreter at its first byte, which is the entry or a `JMP`. A launch boots the disk in `.D1`, and maps the program's
+lines in the memory SOS runs it in, the switched bank below `$A000` and the system RAM above, not bank 0. SOS leaves bits set in the interpreter's X-bytes (`$1600`), so a
+program clears those of its pointers before using them. The adventure's `apple3-sos` target, with a console of its
+own over `.CONSOLE` (new-line mode; Return and line feed, as the console's automatic line feed is off), reads
+`PIRATE.DAT` from the disk and plays both transcripts: the Apple III is played at last. A target's `bootImage` names the folder its boot media is looked for in
 first, by hash, as the `basic` environment's 4040 disk, above, uses it.
 
 ## Debugging in VS Code
@@ -545,7 +551,7 @@ Apple Pascal comes after BASIC, with its own [plan](ApplePascal.md).
 | Media writers | Each writer's image reads back through the existing readers (`DosDisk`, `SosVolume`, the D64 and DFS readers, `TapFormat`, `UefFormat`) and boots under emulation: the DOS 3.3 disk on a II Plus as well as a IIe, the SOS disk with SOS 1.3 built from source, the DFS disk with `!BOOT`. |
 | The Apple-1's RAM | 16K and 32K boot the Woz Monitor and run a program above `$1FFF`; other sizes are still rejected. |
 | Dialects | ca65 and Merlin samples include the native headers and build byte-identically to their native twin. |
-| The adventure | It builds for all five targets. A scripted walkthrough of the test adventure, and an opening of Pirate Adventure, run on each target under the debug adapter, in the style of the `tools/Test-*Dap.mjs` scripts, and each transcript must match the packer's reference engine. As built in phase 3: Pirate Adventure's win, from start to finish, and its death play on the bare Apple-1, PET, Apple II and BBC Micro, and the test game's three transcripts on a second Apple II target; the Apple III builds but is not played until it has a character set. |
+| The adventure | It builds for all five targets. A scripted walkthrough of the test adventure, and an opening of Pirate Adventure, run on each target under the debug adapter, in the style of the `tools/Test-*Dap.mjs` scripts, and each transcript must match the packer's reference engine. As built in phase 3: Pirate Adventure's win, from start to finish, and its death play on the bare Apple-1, PET, Apple II and BBC Micro, and the test game's three transcripts on a second Apple II target; the Apple III builds but is not played until it has a character set. As built in phase 4: both play on each machine's own environment too, from its disk or tape, or its hex as typed in (`apple1-wozmon`, `apple2-dos`, `apple3-sos`, `pet-basic`, `bbc-dfs`), loading the game from the disk on the Apple II, the Apple III and the BBC Micro; the bare Apple III is still not played, and `pet-disk` plays only with the 4040's dumps, reported as skipped without them. |
 | VS Code | The active target picker, F5 without a launch.json, the `project` launch, and the language server switching targets. |
 | Versions | A project on the previous major builds with its deprecation warnings; a removed name fails on the current major. |
 

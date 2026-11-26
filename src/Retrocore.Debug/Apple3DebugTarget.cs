@@ -83,6 +83,11 @@ internal sealed partial class Apple3DebugTarget : IZ80CardHost
     /// </summary>
     internal Apple3Machine Machine => _machine;
 
+    /// <summary>
+    ///  Gets the built-in drive, .D1, which the boot ROM boots.
+    /// </summary>
+    internal Apple2FloppyDrive BootDrive => _machine.Drives[0];
+
     /// <inheritdoc/>
     /// <remarks>
     ///  <para>

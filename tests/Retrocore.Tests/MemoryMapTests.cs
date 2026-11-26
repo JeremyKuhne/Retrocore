@@ -268,7 +268,10 @@ public sealed class MemoryMapTests
             ["dfs"] = 2,
 
             // The PET at 4 sizes.
-            ["basic"] = 4
+            ["basic"] = 4,
+
+            // The Apple III.
+            ["sos"] = 1
         };
 
         string environments = Path.Join(SdkModules.SdkDirectory, "1", "environments");

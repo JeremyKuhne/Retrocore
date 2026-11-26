@@ -58,6 +58,12 @@ internal sealed partial class DebugSession
                 MediaActions.KeepReplaced(bbc.BootDrive, $"the build's {build.Media.ImageKind} took its place");
                 bbc.BootDrive.Insert(floppy, label, "SSD");
                 break;
+            case Apple3DebugTarget apple3:
+                // The built-in drive, .D1, which the boot ROM boots.
+                WozDisk sos = SectorDiskConverter.Convert(bytes, proDosOrder: false);
+                MediaActions.KeepReplaced(apple3.BootDrive, $"the build's {build.Media.ImageKind} took its place");
+                apple3.BootDrive.Insert(sos, label, "DSK");
+                break;
             case PetDebugTarget pet:
                 BootPet(build, pet, bytes, label);
                 return;
@@ -155,6 +161,25 @@ internal sealed partial class DebugSession
         }
 
         Target.CallStack.Reset();
+    }
+
+    // The memory areas a booted program's bytes are in as the CPU reads them, each once, in the segments' order.
+    private List<Enum> ProgramAreas(TargetBuild build)
+    {
+        List<Enum> areas = [];
+        foreach ((int address, ReadOnlyMemory<byte> bytes) in build.Segments)
+        {
+            for (int at = address; at < address + bytes.Length; at += 0x100)
+            {
+                Enum area = Target.ReadArea((ushort)at);
+                if (!areas.Contains(area)) { areas.Add(area); }
+            }
+
+            Enum last = Target.ReadArea((ushort)(address + bytes.Length - 1));
+            if (!areas.Contains(last)) { areas.Add(last); }
+        }
+
+        return areas;
     }
 
     // Whether memory holds a program's bytes from its start.

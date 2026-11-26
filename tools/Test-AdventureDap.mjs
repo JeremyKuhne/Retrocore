@@ -28,13 +28,14 @@ import assert from "node:assert/strict";
 const root = resolve(import.meta.dirname, "..");
 const sample = join(root, "sample", "adventure");
 
-// The targets played, each with its platform folder and the transcripts it plays. The Apple III's console is built
-// but not played: a bare Apple III has no character set loaded.
+// The targets played, each with its platform folder and the transcripts it plays. The bare Apple III's console is
+// built but not played: a bare Apple III has no character set loaded. Its sos target plays, with its own console.
 const plays = {
     apple1: { family: "apple1", transcripts: ["pirate-win", "pirate-die"] },
     "apple1-wozmon": { family: "apple1", transcripts: ["pirate-win"], hex: true },
     pet: { family: "pet", transcripts: ["pirate-win", "pirate-die"] },
     "pet-basic": { family: "pet", transcripts: ["pirate-win", "pirate-die"] },
+    "apple3-sos": { family: "apple3", folder: "sos", transcripts: ["pirate-win", "pirate-die"], typeAtPrompt: true },
     "pet-disk": { family: "pet", transcripts: ["pirate-win"], needs: "the 4040's ROMs" },
     apple2: { family: "apple2", transcripts: ["pirate-win", "pirate-die"] },
     "apple2-dos": { family: "apple2", transcripts: ["pirate-win", "pirate-die"] },
@@ -125,7 +126,7 @@ try {
     for (const target of targets) {
         assert.ok(allTargets.includes(target), `there is no target ${target} to play`);
         const { family, transcripts } = plays[target];
-        const consoleSource = join(sample, "src", "platform", family, "console.s");
+        const consoleSource = join(sample, "src", "platform", plays[target].folder ?? family, "console.s");
         const readLine = firstLine(consoleSource, "ReadLine");
         const write = firstLine(consoleSource, "Write");
         let skipped = false;
@@ -158,6 +159,16 @@ try {
             ] });
             assert.ok(set.breakpoints.every(breakpoint => breakpoint.verified), "the console's logpoints map to their source");
             await request("configurationDone");
+
+            // Under SOS, keys typed before the console driver is open are lost, so they go in once the engine first
+            // reads a line, as a user would type them.
+            if (plays[target].typeAtPrompt) {
+                for (const end = performance.now() + 60000; !events.some(message => message.event === "output" && message.body.output.trim() === "READ");) {
+                    assert.ok(performance.now() < end, `${target} ${name}: the engine reads a line`);
+                    await new Promise(done => setTimeout(done, 100));
+                }
+            }
+
             await request("retro/type", { text: commands.map(command => `${command}\n`).join("") });
 
             // The engine runs to the end of the game.
@@ -182,6 +193,13 @@ try {
             if (family === "apple2") {
                 const screen = (await request("apple2/text")).rows.join("\n");
                 assert.match(screen, /^THE GAME IS NOW OVER\. *$/m, `${name}: the screen shows the game's end:\n${screen}`);
+            }
+
+            // The Apple III's console under SOS shows it too, through the console driver, in the character set SOS
+            // loaded.
+            if (family === "apple3") {
+                const screen = (await request("retro/display")).rows.join("\n");
+                assert.match(screen, /^The game is now over\. *$/m, `${target} ${name}: the screen shows the game's end:\n${screen}`);
             }
 
             // The PET's and BBC's screens show it too, so their consoles' output calls are checked as well as what the

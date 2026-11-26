@@ -1144,8 +1144,12 @@ internal sealed partial class DebugSession
                 z80?.Begin();
             }
 
-            // MACRO-10 sources define instructions as macros, so a single-statement expansion debugs as its call.
-            _debug.Add(new SourceMapModule(result, loader.ProgramArea, loader.CollapsesMacros(dialect)));
+            // MACRO-10 sources define instructions as macros, so a single-statement expansion debugs as its call. A
+            // booted image's program is mapped once the machine is at its entry (BootImage), in the memory it runs in.
+            if (!booted)
+            {
+                _debug.Add(new SourceMapModule(result, loader.ProgramArea, loader.CollapsesMacros(dialect)));
+            }
         }
         else if (program is not null)
         {
@@ -1177,7 +1181,18 @@ internal sealed partial class DebugSession
         OpenJournal(args);
 
         // A project target whose environment boots its image boots it now, over them, to its program's entry.
-        if (built is not null && booted) { BootImage(built); }
+        if (built is not null && booted)
+        {
+            BootImage(built);
+
+            // Its program's lines apply in the memory the CPU reads them in once it is at the entry: under SOS, the
+            // switched bank SOS gives the interpreter below $A000 and the fixed system RAM above it, not bank 0. A
+            // module for each area the program spans.
+            foreach (Enum area in ProgramAreas(built))
+            {
+                _debug.Add(new SourceMapModule(built.Result, area, Target.CollapsesMacros(dialect: null)));
+            }
+        }
 
         // A Kaypro's command, or MBASIC for a BASIC file, is typed at CP/M's prompt from the disks the session mounts.
         if (Target is KayproDebugTarget kaypro

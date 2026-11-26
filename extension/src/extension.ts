@@ -20,6 +20,7 @@ import { registerBasic } from "./basic";
 import { registerBasicLanguage } from "./basicLanguage";
 import { registerActiveTarget } from "./activeTarget";
 import { registerProjectLanguage } from "./projectLanguage";
+import { registerInactiveRanges } from "./inactiveRanges";
 import { panelKeyCode, webviewHtml } from "./display";
 import { PictureCache } from "./pictures";
 import { groupCycleLines, type CycleLine } from "./cycles";
@@ -28,6 +29,7 @@ export function activate(context: vscode.ExtensionContext): void {
     const targets = registerActiveTarget(context);
     registerProjectLanguage(context, targets);
     void startLanguageClient(context, targets);
+    registerInactiveRanges(context, targets);
     registerLaunchBreakpoints(context);
     const basic = registerBasic(context);
     const saved = registerSavedMachines(context);

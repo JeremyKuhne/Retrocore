@@ -13,6 +13,17 @@ import { activeTargetParams } from "./project";
 let client: LanguageClient | undefined;
 // The current client's start, which requests wait for.
 let starting: Promise<void> | undefined;
+const stopped = new vscode.EventEmitter<void>();
+const startedEvent = new vscode.EventEmitter<void>();
+
+/** Fires when the language server is stopped, as it is before a restart, so what it reported can be cleared. */
+export const onDidStopLanguageClient = stopped.event;
+
+/**
+ * Fires when a language server has started and been sent the active target, after a restart as well as the first
+ * time, so it can be asked again.
+ */
+export const onDidStartLanguageClient = startedEvent.event;
 
 /** The Retrocore.Debug host: the setting, or the packaged host or the workspace's build (see host.ts). */
 export function hostPath(context: vscode.ExtensionContext): string | undefined {
@@ -64,6 +75,7 @@ export function shadowCopy(host: string, storage: string, folder = "language-ser
 export async function startLanguageClient(context: vscode.ExtensionContext, targets?: ActiveTargets): Promise<void> {
     const settings = vscode.workspace.getConfiguration("retrocore");
     if (!settings.get<boolean>("languageServer.enabled", true)) return;
+    context.subscriptions.push(stopped, startedEvent);
     const host = hostPath(context);
     if (host === undefined || !fs.existsSync(host)) {
         void vscode.window.showWarningMessage(
@@ -123,6 +135,8 @@ export async function startLanguageClient(context: vscode.ExtensionContext, targ
         updateWords();
         updateTarget();
         for (const document of vscode.workspace.textDocuments) opened(document);
+        // After the target, so what is asked now is answered for it.
+        startedEvent.fire();
     };
     await start();
 
@@ -210,5 +224,6 @@ export async function languageRequest<T>(method: string, params: unknown): Promi
 export async function stopLanguageClient(): Promise<void> {
     const running = client;
     client = undefined;
+    if (running !== undefined) stopped.fire();
     await running?.stop();
 }

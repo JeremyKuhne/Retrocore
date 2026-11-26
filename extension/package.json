@@ -45,6 +45,18 @@
     "vscode-textmate": "9.2.0"
   },
   "contributes": {
+    "colors": [
+      {
+        "id": "retrocore.inactiveCodeBackground",
+        "description": "The background of the lines a Retrocore assembly source's .if blocks leave out for the active target.",
+        "defaults": { "dark": "#8080801A", "light": "#8080801A", "highContrast": null, "highContrastLight": null }
+      },
+      {
+        "id": "retrocore.inactiveCodeOverviewRuler",
+        "description": "The overview ruler's mark for the lines a Retrocore assembly source's .if blocks leave out for the active target.",
+        "defaults": { "dark": "#808080B3", "light": "#808080B3", "highContrast": "#808080", "highContrastLight": "#808080" }
+      }
+    ],
     "jsonValidation": [
       {
         "fileMatch": "retrocore.json",
@@ -376,6 +388,11 @@
           "type": "string",
           "default": "",
           "description": "Path to Retrocore.Debug.dll. Empty uses the workspace build under artifacts/AnyCPU/Release/Retrocore.Debug/net11.0."
+        },
+        "retrocore.inactiveCode.shade": {
+          "type": "boolean",
+          "default": true,
+          "description": "Shade the lines of a Retrocore assembly source that the active target's .if blocks leave out, across the whole line and in the overview ruler, as the language server reports them. The server fades their text as well; the colors are retrocore.inactiveCodeBackground and retrocore.inactiveCodeOverviewRuler."
         },
         "retrocore.lint.unlinkedNameWords": {
           "type": "array",

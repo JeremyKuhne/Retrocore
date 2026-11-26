@@ -87,7 +87,7 @@ export async function startLanguageClient(context: vscode.ExtensionContext, targ
     // A project file's changes reach the server too, for its project support (phase 2) to analyze the sources again.
     const projects = vscode.workspace.createFileSystemWatcher("**/retrocore.json");
     // A Pascal file changed on disk, such as an include no editor has open, changes the programs that read it.
-    const pascal = vscode.workspace.createFileSystemWatcher("**/*.{text,TEXT,pas,pascal}");
+    const pascal = vscode.workspace.createFileSystemWatcher("**/*.{text,TEXT,Text,pas,PAS,Pas,pascal,PASCAL,Pascal}");
     const isConfiguration = (document: vscode.TextDocument): boolean =>
         document.uri.scheme === "file" && path.extname(document.uri.fsPath).toLowerCase() === ".cfg";
     const notify = (method: string, params: object): void => {

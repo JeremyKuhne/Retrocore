@@ -441,11 +441,14 @@ public sealed class PascalSourceTests
         PascalProgram program = Analyze(
             "PROGRAM P;\nTYPE R = RECORD Length: INTEGER END;\nVAR Item: R;\n"
                 + "BEGIN\n  WITH Item DO Length := 1;\n  WITH Item DO\n  BEGIN\n    Length := 2\n  END;\n"
+                + "  WITH Item DO IF Length > 0 THEN Length := 1 ELSE Length := 2;\n"
+                + "  REPEAT WITH Item DO Length := 4 UNTIL Length > 0;\n"
                 + "  Length := 3\nEND.");
 
-        PascalDiagnostic problem = PascalLint.Check(program, bibliography: null).Should().ContainSingle().Which;
-        problem.Rule.Should().Be("case");
-        problem.Line.Should().Be(9);
+        // UNTIL's Length, after the WITH's statement, and the last line's are the standard one's.
+        List<PascalDiagnostic> problems = PascalLint.Check(program, bibliography: null);
+        problems.Should().OnlyContain(problem => problem.Rule == "case");
+        problems.Select(problem => problem.Line).Should().Equal(10, 11);
     }
 
     /// <summary>

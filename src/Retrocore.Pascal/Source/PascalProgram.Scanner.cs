@@ -348,12 +348,13 @@ public sealed partial class PascalProgram
 
         // A compound statement: BEGIN to its END, each name used recorded in the scope.
         // A statement part, BEGIN to its END, noting the WITH statements whose bodies may name fields bare: a body
-        // that is a BEGIN ends at its END, any other at the ";", ELSE or END that ends the statement.
+        // that is a BEGIN ends at its END, any other at the ";", UNTIL or END that ends the statement, or an ELSE
+        // that isn't its own IF's.
         private void Compound(PascalScope scope)
         {
             int depth = 0;
             bool awaitingDo = false;
-            List<(int Depth, bool Block)> withs = [];
+            List<PascalWithBody> withs = [];
             while (Current is { } token)
             {
                 if (token.Is("WITH")) { awaitingDo = true; }
@@ -361,16 +362,35 @@ public sealed partial class PascalProgram
                 {
                     awaitingDo = false;
                     bool block = IsKeyword(1, "BEGIN");
-                    withs.Add((block ? depth + 1 : depth, block));
+                    withs.Add(new(block ? depth + 1 : depth, block));
                 }
                 else if (token.Is("BEGIN") || token.Is("CASE")) { depth++; }
-                else if (token.IsSymbol(";") || token.Is("ELSE"))
+                else if (token.Is("IF"))
                 {
-                    withs.RemoveAll(with => !with.Block && with.Depth == depth);
+                    foreach (PascalWithBody body in withs.Where(body => !body.Block && body.Depth == depth))
+                    {
+                        body.Ifs++;
+                    }
+
+                }
+                else if (token.Is("ELSE"))
+                {
+                    foreach (PascalWithBody body in withs.Where(body => !body.Block && body.Depth == depth && body.Ifs > 0))
+                    {
+                        body.Ifs--;
+                        body.Kept = true;
+                    }
+
+                    withs.RemoveAll(body => !body.Block && body.Depth == depth && !body.Kept);
+                    withs.ForEach(body => body.Kept = false);
+                }
+                else if (token.IsSymbol(";") || token.Is("UNTIL"))
+                {
+                    withs.RemoveAll(body => !body.Block && body.Depth == depth);
                 }
                 else if (token.Is("END"))
                 {
-                    withs.RemoveAll(with => with.Depth >= depth);
+                    withs.RemoveAll(body => body.Depth >= depth);
                     depth--;
                     Next();
                     if (depth == 0) { return; }

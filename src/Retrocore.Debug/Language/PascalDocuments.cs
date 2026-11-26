@@ -179,7 +179,14 @@ internal sealed class PascalDocuments
             if (analysis.Program.File(path) is not null) { return analysis.Program; }
         }
 
-        return Analyze(path).Program;
+        // A file no main file reads is its own program, kept by its own path.
+        if (!_programs.TryGetValue(path, out PascalAnalysis? alone) || !alone.IsCurrent())
+        {
+            alone = Analyze(path);
+            _programs[path] = alone;
+        }
+
+        return alone.Program;
     }
 
     private PascalAnalysis Analyze(string root)

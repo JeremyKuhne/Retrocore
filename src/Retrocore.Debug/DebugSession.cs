@@ -3,6 +3,7 @@
 // See LICENSE file in the project root for full license information
 
 using Retrocore.Assembler;
+using Retrocore.Debug.Project;
 using Retrocore.Documentation;
 using Retrocore.Isa;
 using Retrocore.Machines.Devices;
@@ -939,6 +940,56 @@ internal sealed partial class DebugSession
         return name.Length == 0 || !char.IsAsciiLetter(name[0]) ? "PROGRAM" : name[..Math.Min(name.Length, 30)];
     }
 
+    // Runs the machine for a time with nothing tracked, then to the end of its instruction, so a program loaded after
+    // starts from an instruction boundary.
+    private void Boot(double seconds)
+    {
+        if (!(seconds is >= 0 and <= 60)) { throw new ArgumentException("bootSeconds must be from 0 to 60."); }
+        Target.RunCycles((int)(seconds * Target.ClockHertz));
+        while (!Target.IsInstructionBoundary) { Target.StepCycle(); }
+        Target.CallStack.Reset();
+    }
+
+    // Puts a project target's cards in the machine's slots, as a saved machine's go in: every one must, or the launch
+    // fails naming the target. A Disk II and block storage come with their media from the launch's options, which
+    // a saved machine leaves to the launch, so they cannot be cards.
+    private void PutCards(ProjectTarget target, JsonObject cards)
+    {
+        if (Target.Cards() is null)
+        {
+            throw new ProjectException($"{target.Project.File}: target {target.Name}: {target.Machine.Id} has no slots for its cards.");
+        }
+
+        JsonObject? current = Target.Cards();
+        foreach ((string slot, JsonNode? card) in cards)
+        {
+            if (card?.GetValueKind() == JsonValueKind.String
+                && card.GetValue<string>() is { } name
+                && LaunchOwned(name))
+            {
+                throw new ProjectException(
+                    $"{target.Project.File}: target {target.Name}: slot {slot}'s {card} comes with its media from the target's options, such as diskImage, not from its cards.");
+            }
+
+            // A slot the options filled with a Disk II or block storage keeps it: a target that wants another card
+            // there, or none, leaves that option out.
+            if (current?[slot] is JsonValue held && held.GetValueKind() == JsonValueKind.String && LaunchOwned(held.GetValue<string>()))
+            {
+                throw new ProjectException(
+                    $"{target.Project.File}: target {target.Name}: slot {slot} holds the {held} its options give, so it cannot take {card}.");
+            }
+        }
+
+        List<string> problems = [.. Target.RestoreCards(cards)];
+        if (problems.Count != 0)
+        {
+            throw new ProjectException($"{target.Project.File}: target {target.Name}'s cards: {string.Join(" ", problems)}");
+        }
+    }
+
+    // The cards a launch's media options put in, which a saved machine and a target's cards leave to the launch.
+    private static bool LaunchOwned(string card) => card.StartsWith("diskII", StringComparison.Ordinal) || card == "blockStorage";
+
     private JsonObject Launch(JsonObject args)
     {
         // The launch takes a configurationDone that came before it, even if it fails.
@@ -947,6 +998,10 @@ internal sealed partial class DebugSession
         _launchAttempted = true;
         _launchReady = false;
         _run?.Cancel();
+        // A project launch builds its target, as retrocore build does, and launches the target's machine with the
+        // target's options, which the saved media then goes over as over any launch's.
+        TargetBuild? built = null;
+        if (args.ContainsKey("project")) { (args, built) = ProjectLaunch.Prepare(args); }
         args = LaunchMedia.WithSaved(args, args["machineState"]);
         string machine = DebugMachines.Require(args.String("machine"));
         string? sourceFile = args.String("source");
@@ -957,7 +1012,7 @@ internal sealed partial class DebugSession
             throw new ArgumentException("Give one of source, program and basic.");
         }
 
-        bool loads = sourceFile is not null || program is not null;
+        bool loads = sourceFile is not null || program is not null || built is not null;
 
         // The old machine's changed disks are kept and its recordings saved, and it is disposed before the new one is
         // built, as machines can share host resources, such as the game controllers SDL reads. A launch that then
@@ -981,7 +1036,16 @@ internal sealed partial class DebugSession
             _ => Apple2DebugTarget.Launch(args)
         };
 
+        // A bare program calls the ROM's routines, such as COUT, which the Apple II's Monitor sets up as it resets, so
+        // the ROM runs first, as the other machines' ROMs do before a program loads. It runs before the target's cards
+        // and a saved machine's cards and disks go in; a disk the target's own options insert is in the drive from the
+        // start, and the ROM starts booting it for that time, which bootSeconds: 0 leaves out.
+        if (built is not null && Target is Apple2DebugTarget) { Boot(args.Double("bootSeconds") ?? 0.25); }
+
         if (args.String("screen") is { } screen) { Target.Screen = screen; }
+
+        // A project target's cards go in its slots; a saved machine's, restored next, replace them.
+        if (built?.Target.Cards is { } cards) { PutCards(built.Target, cards); }
 
         // The cards and media the editor saved from the last session of this launch configuration replace the
         // launch's own; a DOS launch's disk, built below, still goes in drive 1.
@@ -1020,15 +1084,17 @@ internal sealed partial class DebugSession
         _debug = new();
         _firstSdkModule = int.MaxValue;
         LoadHints(args, sourceFile, program);
-        if (sourceFile is not null)
+        if (built is not null || sourceFile is not null)
         {
             // The retrocore assembler builds any dialect in place, and the debugger reads its source map directly.
-            AssemblyDialect? dialect = SourceBuild.Dialect(args.String("dialect"));
+            // A project's target is already built, each of its sources in its own dialect.
+            AssemblyDialect? dialect = built is null ? SourceBuild.Dialect(args.String("dialect")) : null;
 
             // A .cpu Z80 source on a machine with the SoftCard is the Z80's: it loads where the Z80's addresses reach,
-            // and the Z80 takes the bus at its entry.
+            // and the Z80 takes the bus at its entry. A bare project target is the machine's own CPU's.
             SoftCardDebugTarget? z80 = null;
-            if (Target.Coprocessor is SoftCardDebugTarget softCard
+            if (sourceFile is not null
+                && Target.Coprocessor is SoftCardDebugTarget softCard
                 && SourceBuild.DeclaresCpu(sourceFile, dialect, Target.Cpu, softCard.Cpu))
             {
                 z80 = softCard;
@@ -1037,14 +1103,14 @@ internal sealed partial class DebugSession
             // The build preprocesses as the check did, starting on the machine's CPU; the first .cpu that remains, which
             // made the source the Z80's, selects the Z80's instructions.
             IDebugTarget loader = z80 ?? Target;
-            AssemblyResult result = SourceBuild.Assemble(
-                sourceFile,
+            AssemblyResult result = built?.Result ?? SourceBuild.Assemble(
+                sourceFile ?? "",
                 dialect,
                 Target.Cpu,
                 args.Int("loadAddress") ?? loader.DefaultLoadAddress,
                 args.String("linkerConfiguration"));
 
-            if (z80 is null && Target is Apple2DebugTarget { Dos: not null } dosTarget)
+            if (sourceFile is not null && z80 is null && Target is Apple2DebugTarget { Dos: not null } dosTarget)
             {
                 LoadOnDosDisk(dosTarget, SourceBuild.Emitted(result), args.Int("entryAddress"), sourceFile);
             }
@@ -1058,7 +1124,7 @@ internal sealed partial class DebugSession
                 }
 
                 z80?.Card.TakeBus();
-                loader.ProgramCounter = checked((ushort)(args.Int("entryAddress") ?? first ?? loader.DefaultLoadAddress));
+                loader.ProgramCounter = checked((ushort)(built?.Entry ?? args.Int("entryAddress") ?? first ?? loader.DefaultLoadAddress));
                 z80?.Begin();
             }
 
@@ -1183,7 +1249,21 @@ internal sealed partial class DebugSession
             });
         }
 
-        return [];
+        // A project launch says which machine it started, which only the target said, for the editor to follow.
+        return built is null ? [] : new JsonObject
+        {
+            ["project"] = new JsonObject
+            {
+                ["file"] = built.Target.Project.File,
+                ["target"] = built.Target.Name,
+                ["catalogMachine"] = built.Target.Machine.Id,
+                ["machine"] = built.Target.Machine.Machine,
+                ["model"] = built.Target.Machine.Model,
+                ["rom"] = built.Target.Machine.Rom,
+                ["binary"] = built.Binary,
+                ["entry"] = built.Entry
+            }
+        };
     }
 
     // The Monitor sets up the PIA as it starts, so a loaded program's output through ECHO, and BASIC's own, reaches

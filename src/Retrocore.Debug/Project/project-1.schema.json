@@ -93,10 +93,10 @@
         },
         "options": {
           "type": "object",
-          "description": "The machine's launch options, such as ramKilobytes, as a launch configuration gives them. They cannot give what the project and its targets decide: type, request, name, project, target, machine, model, rom, source, program, basic, debugFile, dialect, linkerConfiguration, machineState, dos, loadAddress, entryAddress, executable or basicSource.",
+          "description": "The machine's launch options, such as ramKilobytes, as a launch configuration gives them. They cannot give what the project and its targets decide: type, request, name, project, target, machine, model, rom, source, program, basic, debugFile, dialect, linkerConfiguration, machineState, dos, loadAddress, entryAddress, executable or basicSource; stopOnEntry and checkContracts stay the launch's.",
           "propertyNames": {
             "not": {
-              "enum": ["type", "request", "name", "project", "target", "machine", "model", "rom", "source", "program", "basic", "debugFile", "dialect", "linkerConfiguration", "machineState", "dos", "loadAddress", "entryAddress", "executable", "basicSource"]
+              "enum": ["type", "request", "name", "project", "target", "machine", "model", "rom", "source", "program", "basic", "debugFile", "dialect", "linkerConfiguration", "machineState", "dos", "loadAddress", "entryAddress", "executable", "basicSource", "stopOnEntry", "checkContracts"]
             }
           }
         },

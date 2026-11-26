@@ -205,6 +205,7 @@ public class SdkDocumentationTests
         ["bbc"] = "Retrocore.Machines.Acorn",
         ["coco"] = "Retrocore.Machines.Coco",
         ["iie"] = "Retrocore.Machines.Apple2",
+        ["project"] = "Retrocore.Machines.Apple2",
         ["softcard"] = "Retrocore.Machines.Apple2",
         ["trs80"] = "Retrocore.Machines.Trs80"
     };

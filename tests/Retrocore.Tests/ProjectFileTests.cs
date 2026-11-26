@@ -186,6 +186,7 @@ public sealed class ProjectFileTests
     [DataRow("""{ "sdk": "1", "sdk": "1", "cpu": "6502", "targets": { "t": { "machine": "apple1", "environment": "bare" } } }""", "a field is given twice")]
     [DataRow("""{ "sdk": "1", "cpu": "6502", "entry": null, "targets": { "t": { "machine": "apple1", "environment": "bare" } } }""", "the project's 'entry' is null")]
     [DataRow("""{ "sdk": "1", "cpu": "6502", "targets": { "t": { "machine": "apple1", "environment": "bare", "options": { "entryAddress": 1 } } } }""", "cannot give 'entryAddress'")]
+    [DataRow("""{ "sdk": "1", "cpu": "6502", "targets": { "t": { "machine": "apple1", "environment": "bare", "options": { "stopOnEntry": false } } } }""", "cannot give 'stopOnEntry'")]
     [DataRow("""{ "sdk": "1", "cpu": "6502", "targets": { "..": { "machine": "apple1", "environment": "bare" } } }""", "the target name '..'")]
     [DataRow("""{ "sdk": "1", "cpu": "65c02", "targets": { "t": { "machine": "apple2-iiplus", "environment": "bare" } } }""", "apple2-iiplus's 6502 does not run 65c02 code")]
     [DataRow("""{ "sdk": "1", "cpu": "6502", "targets": { "t": { "machine": "apple2-iie-enhanced", "environment": "bare", "cpu": "w65c02" } } }""", "apple2-iie-enhanced's r65c02 does not run w65c02 code")]

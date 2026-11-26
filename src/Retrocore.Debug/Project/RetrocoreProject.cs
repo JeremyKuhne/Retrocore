@@ -79,7 +79,7 @@ internal sealed class RetrocoreProject
     [
         "type", "request", "name", "project", "target", "machine", "model", "rom", "source", "program", "basic",
         "debugFile", "dialect", "linkerConfiguration", "machineState", "dos", "loadAddress", "entryAddress",
-        "executable", "basicSource"
+        "executable", "basicSource", "stopOnEntry", "checkContracts"
     ];
 
     private static readonly JsonDocumentOptions s_json = new()

@@ -340,8 +340,8 @@ internal interface IDebugTarget : IDebugMemory
     /// <remarks>
     ///  <para>
     ///   The calls and statements <see cref="StepCycle"/> tracks are not followed, and the call stack is cleared
-    ///   after, so a debug session never runs this way: it is a third or more faster than stepping, at the cost
-    ///   of what only a debugger shows.
+    ///   after, so a debug session runs this way only before it starts, as a project launch boots the Apple II's
+    ///   ROM: it is a third or more faster than stepping, at the cost of what only a debugger shows.
     ///  </para>
     /// </remarks>
     /// <param name="cycles">The cycles to run.</param>

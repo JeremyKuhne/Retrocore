@@ -15,7 +15,7 @@ namespace Retrocore.Debug.Project;
 /// </summary>
 /// <remarks>
 ///  <para>
-///   <c>retrocore build</c> builds through here, and the <c>project</c> launch planned next will too, so that the
+///   <c>retrocore build</c> and a <c>project</c> launch (<see cref="ProjectLaunch"/>) both build through here, so the
 ///   bytes the debugger loads are the bytes CI builds. Only the <c>bare</c> environment builds yet: a raw binary loaded
 ///   straight into RAM, so the sections that emit bytes must make one block, with no gap between them.
 ///  </para>

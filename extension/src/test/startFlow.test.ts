@@ -219,6 +219,8 @@ test("a BASIC file's pragma names its dialect before its name does, as the debug
         assert.equal(basicRomRefusal("M", file, level2), undefined, "the pragma is read in any case");
         writeFileSync(file, "10 PRINT\n");
         assert.equal(basicRomRefusal("M", file, level2), undefined, "with no pragma, the name says");
+        assert.match(basicRomRefusal("M", file, { machine: "trs80-model1", rom: "level1" }) ?? "", /which is Level II BASIC/,
+            "so Level I refuses it");
     } finally {
         rmSync(directory, { recursive: true, force: true });
     }

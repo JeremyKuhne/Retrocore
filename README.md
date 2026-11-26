@@ -122,11 +122,10 @@ completions, document outlines, and workspace symbol search across your code and
 
 ## BASIC
 
-Retrocore supports **AppleSoft BASIC**, **Integer BASIC**, and **TRS-80 Level II BASIC** (Level I BASIC is
-[planned](docs/backlog/BasicDebugging.md)). **MBASIC** (Microsoft BASIC-80 5.21, the Kaypro II's CP/M BASIC) has
-`.mbasic.bas` source files with the same editing support:
+Retrocore supports **AppleSoft BASIC**, **Integer BASIC**, and **TRS-80 Level II and Level I BASIC**. **MBASIC**
+(Microsoft BASIC-80 5.21, the Kaypro II's CP/M BASIC) has `.mbasic.bas` source files with the same editing support:
 
-- **Source files with optional labels.** `.applesoft.bas`, `.integer.bas`, `.level2.bas`, `.mbasic.bas`, and `.bas` files can
+- **Source files with optional labels.** `.applesoft.bas`, `.integer.bas`, `.level2.bas`, `.level1.bas`, `.mbasic.bas`, and `.bas` files can
   omit line numbers, indent freely, and jump to `label:` or `@label` targets. They get dialect-accurate
   highlighting (finding reserved words inside identifiers where the ROMs do), diagnostics, keyword and variable
   hovers, go to definition, find all references, completions, outlines, and line renumbering.

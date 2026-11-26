@@ -150,11 +150,10 @@ the tokenizer stores lines as the ROM stores them when they are typed:
 tokenize` makes them from text, and renumbering follows `RESTORE`'s line, which the Model 100 takes. Hover help
 for its words is still to come.
 
-While BASIC is at its prompt (not at the menu, nor in TEXT or another program), **Retrocore: Open BASIC Program**
-edits the program BASIC has open as text: a `.BA` file
-after `LOAD`, or its unsaved program. Saving writes it back over that file, moving the files after it. A program
-can't yet be stepped through by its lines, and a `basic` launch is not offered: both follow the ROM's routines,
-which wait for the ROM as an SDK source.
+While BASIC is at its prompt, **Retrocore: Open BASIC Program** edits the program BASIC has open as text: a `.BA`
+file after `LOAD`, or its unsaved program. Saving writes it back over that file, moving the files after it; at the
+menu, in TEXT or while a program runs, it is refused. A program can't yet be stepped through by its lines, and a
+`basic` launch is not offered: both follow the ROM's routines, which wait for the ROM as an SDK source.
 
 ## Testing
 
@@ -175,6 +174,7 @@ which wait for the ROM as an SDK source.
   replacing them, programs moved and linked again, bad names and full RAM; and with the ROM, files written at the
   menu matched byte for byte against the ROM's own `SAVE`, `SAVEM` and `OPEN`, then run and read by BASIC.
 - `Model100CommandTests`: the `--model100` command on a RAM image, and host files read by kind.
-- [`tools/Test-Trs80Model100Dap.mjs`](../tools/Test-Trs80Model100Dap.mjs): a source's breakpoint, call stack,
-  registers and output, the menu, BASIC, POWER OFF and Reset, a RAM image resumed in a new session, a launch's
-  files on the menu, BASIC's program read and written, and the Tandy 102, through the debug adapter. Without the ROM it checks the missing-ROM messages and reports the rest skipped.
+- [`tools/Test-Trs80Model100Dap.mjs`](../tools/Test-Trs80Model100Dap.mjs): a source's breakpoint, call stack, registers
+  and output, the menu, BASIC, POWER OFF and Reset, a RAM image resumed in a new session, a launch's files on the menu,
+  BASIC's program read and written, and the Tandy 102, through the debug adapter. Without the ROM it checks the
+  missing-ROM messages and reports the rest skipped.

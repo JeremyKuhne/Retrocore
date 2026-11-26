@@ -168,6 +168,47 @@ public sealed class Model100FilesTests
     }
 
     /// <summary>
+    ///  A file written or removed past the program BASIC has open keeps BASIC's variables, DATA pointer and CONT,
+    ///  moving the variables with the files, as the ROM's OPEN and KILL do; one before it clears them.
+    /// </summary>
+    [TestMethod]
+    public void ChangesPastTheOpenProgramKeepItsVariables()
+    {
+        byte[] ram = ColdStart();
+        IBasicMemory memory = DelegateBasicMemory.Of(ram);
+        Model100Files files = new(memory);
+        files.Write("PROG.BA", Parse("10 READ A\n20 DATA 7\n").ToImage());
+        BasicProgram.WriteWord(memory, 0xF67C, 0x8001);
+
+        // A variable, as BASIC keeps one: seven bytes from the variables' start.
+        int variables = Word(ram, 0xFBB2);
+        byte[] variable = [0x04, 0x41, 0x00, 0x41, 0x70, 0x00, 0x00];
+        variable.CopyTo(ram, variables);
+        BasicProgram.WriteWord(memory, 0xFBB4, variables + variable.Length);
+        BasicProgram.WriteWord(memory, 0xFBB6, variables + variable.Length);
+        BasicProgram.WriteWord(memory, 0xFBB8, 0x8008);
+        BasicProgram.WriteWord(memory, 0xFBAC, 0x8006);
+
+        files.Write("NOTE.DO", "ABC"u8);
+        int moved = Word(ram, 0xFBB2);
+        moved.Should().Be(variables + 4, "the variables follow NOTE.DO's four bytes");
+        ram.AsSpan(moved, variable.Length).ToArray().Should().Equal(variable);
+        Word(ram, 0xFBB6).Should().Be(moved + variable.Length);
+        Word(ram, 0xFBB8).Should().Be(0x8008, "the DATA pointer is in the program, which did not move");
+        Word(ram, 0xFBAC).Should().Be(0x8006);
+
+        files.Delete("NOTE.DO");
+        Word(ram, 0xFBB2).Should().Be(variables);
+        ram.AsSpan(variables, variable.Length).ToArray().Should().Equal(variable);
+
+        // BASIC's unsaved program is past PROG.BA, so opening it and adding a .BA file before it clears them.
+        BasicProgram.WriteWord(memory, 0xF67C, Word(ram, 0xF962 + (5 * 11) + 1));
+        files.Write("ZED.BA", Parse("10 END\n").ToImage());
+        Word(ram, 0xFBB6).Should().Be(Word(ram, 0xFBB2), "the variables are cleared");
+        Word(ram, 0xFBAC).Should().Be(0);
+    }
+
+    /// <summary>
     ///  BASIC is at its prompt only when its current line is the direct mode's and BASIC is the program running, by
     ///  the name the ROM keeps at $FDD9; a program is written only over a .BA file or BASIC's unsaved program.
     /// </summary>

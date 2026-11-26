@@ -21,8 +21,10 @@ namespace Retrocore.Basic;
 ///  <para>
 ///   Adding, replacing or removing a file moves every file after it, and the directory's addresses, the region
 ///   pointers and BASIC's program pointer that point past it move with them, as the ROM's own routines move
-///   them. BASIC's variables, strings, DATA pointer and <c>CONT</c> are cleared, as typing a line clears them. A
-///   <c>.BA</c> file that moves is linked again for its new address.
+///   them. A change to the program BASIC has open, or to a file before it, clears BASIC's variables,
+///   strings, DATA pointer and <c>CONT</c>, as typing a line does; one past it keeps them, moving the variables with
+///   the files, as the ROM's <c>OPEN</c>, <c>CLOSE</c> and <c>KILL</c> of another file do. A <c>.BA</c> file that
+///   moves is linked again for its new address.
 ///  </para>
 /// </remarks>
 public sealed class Model100Files
@@ -68,6 +70,7 @@ public sealed class Model100Files
     private const int TextStart = 0xFBAE;
     private const int MachineStart = 0xFBB0;
     private const int VariableStart = 0xFBB2;
+    private const int ArrayStart = 0xFBB4;
     private const int FreeStart = 0xFBB6;
     private const int ProgramPointer = 0xF67C;
     private const int StackTop = 0xF678;
@@ -136,7 +139,8 @@ public sealed class Model100Files
     ///  <para>
     ///   A new file takes the first free directory entry and goes at the end of its kind's region; one that replaces
     ///   another takes its place and entry, so BASIC keeps a program it has open. RAM is changed only once the file
-    ///   is known to fit.
+    ///   is known to fit (and a <c>.BA</c> file in RAM whose lines do not end is found only as the files after it are
+    ///   linked again, once they have moved).
     ///  </para>
     /// </remarks>
     /// <param name="name">
@@ -301,7 +305,24 @@ public sealed class Model100Files
             }
         }
 
-        foreach (int pointer in (int[])[ProgramPointer, TextStart, MachineStart, VariableStart])
+        // A change to BASIC's open program, or before it, moves its text, which its variables may point into, so they
+        // are cleared, as typing a line clears them; one past it moves the variables with the files, as OPEN, CLOSE
+        // and KILL of another file leave them.
+        bool clears;
+        try
+        {
+            clears = at < BasicEnd(_memory, Word(ProgramPointer));
+        }
+        catch (InvalidDataException)
+        {
+            clears = true;
+        }
+
+        int[] pointers = clears
+            ? [ProgramPointer, TextStart, MachineStart, VariableStart]
+            : [ProgramPointer, TextStart, MachineStart, VariableStart, ArrayStart, FreeStart];
+
+        foreach (int pointer in pointers)
         {
             Check(pointer);
         }
@@ -330,9 +351,7 @@ public sealed class Model100Files
         foreach (int word in moved) { WriteWord(word, Word(word) + delta); }
 
         if (delta != 0) { Relink(); }
-
-        // BASIC's variables, strings, DATA pointer and CONT are cleared, as typing a line clears them.
-        Model100Dialect.Instance.Clear(_memory);
+        if (clears) { Model100Dialect.Instance.Clear(_memory); }
     }
 
     // Links each .BA file and BASIC's unsaved program for where it now is.

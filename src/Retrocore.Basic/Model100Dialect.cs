@@ -14,7 +14,7 @@ namespace Retrocore.Basic;
 ///   The keywords are the ROM's table at <c>$0080</c>, one token each from <c>$80</c> (<c>END</c>) to <c>$FF</c>
 ///   (<c>'</c>); numbers and line numbers stay as their digits. The tokenizer stores lines as the ROM does when they
 ///   are typed, checked against the Model 100's ROM: spaces are kept as typed, and only <c>GOTO</c> may have spaces
-///   inside it; lowercase letters become uppercase, but in strings, DATA and remarks; <c>?</c> is <c>PRINT</c>;
+///   inside it; lowercase letters become uppercase, except in strings, DATA and remarks; <c>?</c> is <c>PRINT</c>;
 ///   <c>ELSE</c> is stored with a colon before it, and an apostrophe remark as a colon, <c>REM</c> and the apostrophe
 ///   token; and one space after the line number is dropped.
 ///  </para>
@@ -72,7 +72,7 @@ internal sealed class Model100Dialect : BasicDialect
     /// <inheritdoc/>
     /// <remarks>
     ///  <para>
-    ///   The first file's address in a 32 KB machine. A smaller machine's file area starts lower; the ROM links a
+    ///   The first file's address in a 32 KB machine. A smaller machine's file area starts higher; the ROM links a
     ///   <c>.BA</c> file again where it goes, as Retrocore does when it writes one.
     ///  </para>
     /// </remarks>
@@ -176,7 +176,7 @@ internal sealed class Model100Dialect : BasicDialect
     ///  <para>
     ///   The current line is $FFFF at the menu and in the ROM's other programs too, so BASIC is at its prompt only
     ///   when it is also the program running: the name at <c>$FDD9</c> is BASIC's, or the <c>.BA</c> file it has
-    ///   open, where TEXT, TELCOM and ADDRSS put theirs and the menu a zero.
+    ///   open, where TEXT and TELCOM put theirs, ADDRSS <c>ADRS.DO</c>, and the menu a zero.
     ///  </para>
     /// </remarks>
     public override bool InDirectMode(IBasicMemory memory) => base.InDirectMode(memory) && InBasic(memory);
@@ -186,7 +186,10 @@ internal sealed class Model100Dialect : BasicDialect
     /// </summary>
     /// <param name="program">The program.</param>
     /// <param name="memory">The memory.</param>
-    /// <exception cref="InvalidOperationException">The program does not fit.</exception>
+    /// <exception cref="InvalidOperationException">
+    ///  The program does not fit, or BASIC's program pointer is not at a program.
+    /// </exception>
+    /// <exception cref="InvalidDataException">The program in RAM has a line with no end.</exception>
     internal void Write(BasicProgram program, IBasicMemory memory)
     {
         int start = BasicProgram.Word(memory, Pointers.ProgramStart);

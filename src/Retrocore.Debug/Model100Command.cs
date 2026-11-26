@@ -62,7 +62,8 @@ internal static class Model100Command
     ///  <para>
     ///   A <c>.ba</c>, <c>.do</c> or <c>.co</c> file is the Model 100's own; a <c>.bas</c> file is BASIC text,
     ///   tokenized as Model 100 BASIC into a <c>.BA</c> file; a <c>.txt</c> file is text for a <c>.DO</c> file, its
-    ///   lines ended with CR LF. The name is the file's own, without its extension, unless one is given.
+    ///   lines ended with CR LF. The name is the file's own, without its extension (and a <c>.bas</c> file's dialect,
+    ///   as in <c>game.model100.bas</c>), unless one is given.
     ///  </para>
     /// </remarks>
     /// <param name="path">The host file.</param>

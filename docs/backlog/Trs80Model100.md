@@ -358,11 +358,11 @@ and from a `CSAVE` MAME 0.264 recorded to WAV. No new downloads.
   `$FF` (`'`), one byte each; `$D0`-`$DE` are the operators `+ - * / ^ AND OR XOR EQV IMP MOD \ > = <`. Numbers and
   line numbers (after `GOTO` and `THEN` too) stay as ASCII digits. `'` is stored as `: REM '` (`3A 8E FF`), and
   `ELSE` with a `:` before it (`3A 91`), as in Microsoft's other BASICs.
-- **The directory** at `$F962`: 11-byte entries of a type, the file's address, and a six-character name and two-character
-  extension, padded with spaces. Types seen: `$B0` the ROM's own programs (BASIC, TEXT, TELCOM, ADDRSS, SCHEDL), `$80`
-  `.BA`, `$C0` `.DO`, `$A0` `.CO`, and `$88`, `$C8` and `$48` for the three hidden entries, "Suzuki" (BASIC's unsaved
-  program), "Hayashi" (the paste buffer) and "RickY". A new file takes the first free entry; the menu shows files in
-  the directory's order.
+- **The directory** at `$F962`: 11-byte entries of a type, the file's address, and a six-character name and
+  two-character extension, padded with spaces. Types seen: `$B0` the ROM's own programs (BASIC, TEXT, TELCOM, ADDRSS,
+  SCHEDL), `$80` `.BA`, `$C0` `.DO`, `$A0` `.CO`, and `$88`, `$C8` and `$48` for the three hidden entries, "Suzuki"
+  (BASIC's unsaved program), "Hayashi" (the paste buffer) and "RickY". A new file takes the first free entry; the menu
+  shows files in the directory's order.
 - **The file area** from `$8000` (a `$00` before the first file): the `.BA` files, then Suzuki's program; the `.DO`
   files from the pointer at `$FBAE`, then Hayashi's `$1A`; the `.CO` files from `$FBB0`; BASIC's variables from
   `$FBB2`. A `.BA` file is linked lines ending in `00 00`; a `.DO` file is CR LF lines ending in `$1A`; a `.CO` file

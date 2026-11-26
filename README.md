@@ -126,14 +126,14 @@ completions, document outlines, and workspace symbol search across your code and
 
 Retrocore supports **AppleSoft BASIC**, **Integer BASIC**, and **TRS-80 Level II and Level I BASIC**. **MBASIC**
 (Microsoft BASIC-80 5.21, the Kaypro II's CP/M BASIC) and **Model 100 BASIC** have `.mbasic.bas` and `.model100.bas`
-source files with the same editing support (but Model 100 BASIC's keyword hovers, still to come):
+source files with the same editing support (Model 100 BASIC's keyword hovers are still to come):
 
-- **Source files with optional labels.** `.applesoft.bas`, `.integer.bas`, `.level2.bas`, `.level1.bas`, `.mbasic.bas`, `.model100.bas`, and `.bas` files can
-  omit line numbers, indent freely, and jump to `label:` or `@label` targets. They get dialect-accurate
-  highlighting (finding reserved words inside identifiers where the ROMs do), diagnostics, keyword and variable
-  hovers, go to definition, find all references, completions, outlines, and line renumbering.
-- **Tokenized files and tapes.** **Retrocore: Open as BASIC Listing** opens tokenized programs (including
-  CiderPress2 `#fc` and `#fa` files), Model 100 `.ba` files and Model I `.cas` tapes as text and writes them back on save.
+- **Source files with optional labels.** `.applesoft.bas`, `.integer.bas`, `.level2.bas`, `.level1.bas`, `.mbasic.bas`,
+  `.model100.bas`, and `.bas` files can omit line numbers, indent freely, and jump to `label:` or `@label` targets. They
+  get dialect-accurate highlighting (finding reserved words inside identifiers where the ROMs do), diagnostics, keyword
+  and variable hovers, go to definition, find all references, completions, outlines, and line renumbering.
+- **Tokenized files and tapes.** **Retrocore: Open as BASIC Listing** opens tokenized programs (including CiderPress2
+  `#fc` and `#fa` files), Model 100 `.ba` files and Model I `.cas` tapes as text and writes them back on save.
 - **Live machine editing.** While a machine is running, **Retrocore: Open BASIC Program** edits the program
   currently in RAM as text, tracks `LOAD`, `CLOAD`, or lines typed on the emulated screen, and tokenizes changes
   back into memory on save ([BASIC programs](extension/README.md#basic-programs)).

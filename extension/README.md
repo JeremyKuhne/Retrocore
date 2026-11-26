@@ -146,6 +146,34 @@ A launch configuration is still the way to use options the picks don't offer, su
 as `breakpoints`, `speed` or your own ROM dumps. Saving a setup is a good start for
 one. The sections below describe each machine's launch options.
 
+## Projects
+
+A folder with a `retrocore.json` is a Retrocore project: its sources, defines and the
+machine targets it builds for (`retrocore build` builds them from a terminal). The
+status bar shows the **active target**, such as `hello · apple2-iie`; click it to pick
+another of the workspace's targets, grouped by project when there are several. The
+choice is kept for the workspace.
+
+**F5 with no launch.json** builds the active target and debugs it on its machine,
+stopping at the program's entry. To keep breakpoints or other launch options, or to
+debug one launch configuration on whichever target is active:
+
+```jsonc
+{
+  "type": "retrocore",
+  "request": "launch",
+  "name": "Debug project",
+  "project": "${workspaceFolder}",
+  "target": "${command:retrocore.activeTarget}"
+}
+```
+
+`project` is a `retrocore.json` or its folder, and `target` a target's name, or
+`project/target` where a root file's projects share one. Each target keeps its own
+saved machine and recovery journal. `retrocore.json` is checked against the project
+schema as you edit it; leave out a `$schema` line, which would make VS Code fetch the
+schema from the web instead.
+
 ## What is highlighted
 
 - All three current CPU maps: MOS 6502, WDC 65C02 and Rockwell 65C02, including

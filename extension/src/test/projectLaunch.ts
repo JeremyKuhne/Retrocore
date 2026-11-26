@@ -90,6 +90,23 @@ export async function testProjectLaunch(workspace: vscode.WorkspaceFolder): Prom
         assert.ok(await until(() => vscode.debug.activeDebugSession === undefined, 10000));
         console.log("Isolated VS Code passed: the active target is picked, kept, named by retrocore.activeTarget and debugged through it.");
 
+        // F5 with no launch.json sends an empty configuration, which debugs the active target.
+        const source = await vscode.workspace.openTextDocument(path.join(root, "sample", "project", "src", "hello.s"));
+        await vscode.window.showTextDocument(source);
+        const pressed = new Promise<vscode.DebugSession>(resolve => {
+            const listener = vscode.debug.onDidStartDebugSession(started => { listener.dispose(); resolve(started); });
+        });
+        assert.equal(await vscode.debug.startDebugging(workspace, {} as vscode.DebugConfiguration), true, "an empty launch starts");
+        const f5 = await pressed;
+        await untilStopShown(f5, 30000);
+        assert.equal(f5.configuration.name, "hello · apple2-iie (Retrocore)");
+        assert.equal(f5.configuration.project, file);
+        assert.equal(f5.configuration.target, "hello/apple2-iie");
+        assert.equal(f5.configuration.model, "iie-enhanced");
+        await vscode.debug.stopDebugging(f5);
+        assert.ok(await until(() => vscode.debug.activeDebugSession === undefined, 10000));
+        console.log("Isolated VS Code passed: a launch with no configuration, as F5 sends without a launch.json, debugs the active target.");
+
         // The project file's schema checks a retrocore.json: here one with a field the schema lacks.
         const folder = path.join(root, "artifacts", "schema-check");
         fs.mkdirSync(folder, { recursive: true });

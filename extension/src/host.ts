@@ -18,11 +18,17 @@ export function bundledHost(context: vscode.ExtensionContext): string | undefine
     return fs.existsSync(candidate) ? candidate : undefined;
 }
 
-/** The Release build in an open workspace folder, such as this repository's. */
+/**
+ * The Release build in an open workspace folder, such as this repository's, or in a folder above one, as when one of
+ * the repository's samples is opened as the workspace.
+ */
 export function workspaceHost(): string | undefined {
     for (const folder of vscode.workspace.workspaceFolders ?? []) {
-        const candidate = path.join(folder.uri.fsPath, "artifacts", "AnyCPU", "Release", "Retrocore.Debug", "net11.0", hostName);
-        if (fs.existsSync(candidate)) return candidate;
+        for (let directory = folder.uri.fsPath; ; directory = path.dirname(directory)) {
+            const candidate = path.join(directory, "artifacts", "AnyCPU", "Release", "Retrocore.Debug", "net11.0", hostName);
+            if (fs.existsSync(candidate)) return candidate;
+            if (path.dirname(directory) === directory) break;
+        }
     }
     return undefined;
 }

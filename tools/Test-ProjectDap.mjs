@@ -3,8 +3,8 @@
 // See LICENSE file in the project root for full license information
 
 // A Retrocore project through the command line and the debug adapter. sample/project's retrocore.json builds with
-// `retrocore build` for its bare II Plus target, and a launch that gives only its project and target builds the same
-// bytes, starts the target's machine on the ROMs built from the SDK's sources, stops at the program's entry in its
+// `retrocore build` for its bare II Plus target, and a launch that gives its project and target, and no machine or
+// program, builds the same bytes, starts the target's machine on the ROMs built from the SDK's sources, stops at the program's entry in its
 // source, stops at a breakpoint there, and prints the program's line on the screen. A launch naming a target the
 // project lacks fails, listing the targets it has.
 
@@ -19,11 +19,14 @@ const project = join(root, "sample", "project");
 const source = join(project, "src", "hello.s");
 const binary = join(project, "artifacts", "apple2-iiplus", "hello.bin");
 const host = join(root, "artifacts", "AnyCPU", "Release", "Retrocore.Debug", "net11.0", "Retrocore.Debug.dll");
+const build = (...args) => process.env.RETROCORE_DAP_HOST
+    ? spawnSync(process.env.RETROCORE_DAP_HOST, ["build", ...args], { cwd: project, encoding: "utf8" })
+    : spawnSync("dotnet", [host, "build", ...args], { cwd: project, encoding: "utf8" });
 
 // retrocore build, from the project's folder.
 rmSync(join(project, "artifacts"), { recursive: true, force: true });
 rmSync(join(project, "obj"), { recursive: true, force: true });
-const built = spawnSync("dotnet", [host, "build", "--target", "apple2-iiplus"], { cwd: project, encoding: "utf8" });
+const built = build("--target", "apple2-iiplus");
 assert.equal(built.status, 0, `retrocore build failed:\n${built.stdout}${built.stderr}`);
 assert.match(built.stdout, /^hello\/apple2-iiplus: .*hello\.bin \(\$6000-\$6026, 39 bytes, entry \$6000\)/m);
 const cli = readFileSync(binary);
@@ -47,7 +50,9 @@ try {
         /There is no target 'pet'; the targets are hello\/apple2-iiplus, hello\/apple2-iie\./);
 
     // The launch builds the target again, to the same bytes, and gives the machine the target's: a II Plus.
-    await request("launch", { project, target: "apple2-iiplus", stopOnEntry: true, speed: "max", sound: "off" });
+    const launched = await request("launch", { project, target: "apple2-iiplus", stopOnEntry: true, speed: "max", sound: "off" });
+    assert.equal(launched.project.machine, "apple2");
+    assert.equal(launched.project.model, "iiplus");
     assert.deepEqual(readFileSync(binary), cli, "the launch builds the bytes retrocore build does");
     const breakpoints = await request("setBreakpoints", { source: { path: source }, breakpoints: [{ line: 18 }] });
     assert.equal(breakpoints.breakpoints[0].verified, true, "a breakpoint at DONE binds in the project's source");

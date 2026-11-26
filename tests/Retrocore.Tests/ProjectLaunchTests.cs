@@ -78,8 +78,8 @@ public sealed class ProjectLaunchTests
     }
 
     /// <summary>
-    ///  Each catalog machine launches a bare target where the build loaded it, so the build's load addresses are the
-    ///  launch's, and the target's machine, model and ROM are the launch's.
+    ///  A bare target launches on a machine of each family at the address the build loaded it, and the launch says
+    ///  which machine it started.
     /// </summary>
     /// <param name="machine">The catalog machine.</param>
     /// <param name="cpu">The project's CPU.</param>
@@ -107,9 +107,15 @@ public sealed class ProjectLaunchTests
         CatalogMachine catalog = CatalogMachine.Find(machine) ?? throw new AssertFailedException(machine);
         using DapTestClient client = new();
         client.Request("initialize", []);
-        client.Request("launch", Launch("t"));
+        JsonObject launched = client.Request("launch", Launch("t"));
         client.Request("evaluate", new JsonObject { ["expression"] = "PC" }).String("result")
             .Should().StartWith($"${catalog.LoadAddress:X}");
+
+        ((string?)launched["project"]?["catalogMachine"]).Should().Be(machine);
+        ((string?)launched["project"]?["machine"]).Should().Be(catalog.Machine);
+        ((string?)launched["project"]?["model"]).Should().Be(catalog.Model);
+        ((string?)launched["project"]?["rom"]).Should().Be(catalog.Rom);
+        ((int?)launched["project"]?["entry"]).Should().Be(catalog.LoadAddress);
     }
 
     /// <summary>
@@ -165,6 +171,7 @@ public sealed class ProjectLaunchTests
             { "sdk": "1", "cpu": "6502", "sources": ["main.s"], "targets": {
                 "apple1": { "machine": "apple1", "environment": "bare", "cards": { "1": "mockingboard" } },
                 "iiplus": { "machine": "apple2-iiplus", "environment": "bare" },
+                "disk": { "machine": "apple2-iiplus", "environment": "bare", "cards": { "6": "diskII" } },
                 "dos": { "machine": "apple2-iiplus", "environment": "dos33" } } }
             """);
 
@@ -182,6 +189,12 @@ public sealed class ProjectLaunchTests
 
         client.Fails("launch", Launch("pet")).Should().Contain("There is no target 'pet'; the targets are");
         client.Fails("launch", Launch("apple1")).Should().EndWith("target apple1: apple1 has no slots for its cards.");
+        client.Fails("launch", Launch("disk")).Should().EndWith(
+            "target disk: slot 6's diskII comes with its media from the target's options, such as diskImage, not from its cards.");
+
+        JsonObject withExecutable = Launch("iiplus");
+        withExecutable["executable"] = Path.Join(_folder, "game.xex");
+        client.Fails("launch", withExecutable).Should().Contain("cannot give 'executable'");
         client.Fails("launch", Launch("dos")).Should().EndWith("the 'dos33' environment is not yet supported; only 'bare' builds.");
 
         Write("main.s", "stz $00");

@@ -14,17 +14,19 @@ namespace Retrocore.Debug.Project;
 ///  <para>
 ///   <c>project</c> is a <c>retrocore.json</c> or its folder, a root file's included, and <c>target</c> a target's
 ///   name, or <c>project/target</c> where a root file's projects share one. The project replaces <c>source</c>,
-///   <c>program</c>, <c>debugFile</c> and <c>basic</c>, and decides <c>dialect</c>, <c>linkerConfiguration</c>,
-///   <c>loadAddress</c>, <c>entryAddress</c> and <c>dos</c>, so the launch must leave all of them out.
+///   <c>program</c>, <c>debugFile</c>, <c>basic</c>, <c>executable</c> and <c>basicSource</c>, and decides
+///   <c>dialect</c>, <c>linkerConfiguration</c>, <c>loadAddress</c>, <c>entryAddress</c> and <c>dos</c>, so the
+///   launch must leave all of them out.
 ///  </para>
 ///  <para>
 ///   The target supplies the launch's <c>machine</c>, <c>model</c> and <c>rom</c>, which replace any the launch
 ///   gives, and its <c>options</c>, which the launch's own attributes of the same name override, so a launch
-///   configuration can still turn the sound off. Its <c>cards</c> go in after the machine is built. The memory
+///   configuration can still turn the sound off. Its <c>cards</c> go in after the machine is built,
+///   and a saved machine's over them. The launch's response gives the machine it started, as <c>project</c>. The memory
 ///   marks and names Retrocore Memory keeps default to <c>&lt;name&gt;.&lt;target&gt;.hints.json</c> beside the
 ///   project file. Breakpoints, <c>stopOnEntry</c> and <c>checkContracts</c> stay the launch's. On the Apple II the
-///   ROM runs for <c>bootSeconds</c> (a quarter of a second unless the launch says) before the program loads, so the
-///   Monitor has set up the routines a bare program calls, such as COUT.
+///   ROM runs for <c>bootSeconds</c> (a quarter of a second unless the launch says) as the machine is built,
+///   before any card or disk goes in and before the program loads, so the Monitor has set up the routines a bare program calls, such as COUT.
 ///  </para>
 /// </remarks>
 internal static class ProjectLaunch
@@ -33,7 +35,10 @@ internal static class ProjectLaunch
     ///  The launch attributes a project launch cannot give, as the project decides them.
     /// </summary>
     internal static readonly string[] Replaced =
-        ["source", "program", "debugFile", "basic", "dialect", "linkerConfiguration", "loadAddress", "entryAddress", "dos"];
+    [
+        "source", "program", "debugFile", "basic", "executable", "basicSource", "dialect", "linkerConfiguration",
+        "loadAddress", "entryAddress", "dos"
+    ];
 
     /// <summary>
     ///  Builds a project launch's target and gives the launch its machine and options.
@@ -54,14 +59,14 @@ internal static class ProjectLaunch
         }
 
         string name = args.String("target")
-            ?? throw new ProjectException("A project launch names its target: give target, such as \"${command:retrocore.activeTarget}\".");
+            ?? throw new ProjectException("A project launch names its target: give target, one of the targets its retrocore.json lists.");
 
         ProjectTarget target;
         try
         {
             target = BuildCommand.Select(RetrocoreProject.LoadAll(path), name, all: false)[0];
         }
-        catch (ArgumentException exception)
+        catch (Exception exception) when (exception is ArgumentException or IOException or UnauthorizedAccessException)
         {
             throw new ProjectException($"{path}: {exception.Message}");
         }

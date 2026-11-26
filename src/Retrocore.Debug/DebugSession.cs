@@ -944,18 +944,29 @@ internal sealed partial class DebugSession
     // starts from an instruction boundary.
     private void Boot(double seconds)
     {
-        Target.RunCycles(checked((int)(seconds * Target.ClockHertz)));
+        if (seconds is < 0 or > 60) { throw new ArgumentException("bootSeconds must be from 0 to 60."); }
+        Target.RunCycles((int)(seconds * Target.ClockHertz));
         while (!Target.IsInstructionBoundary) { Target.StepCycle(); }
         Target.CallStack.Reset();
     }
 
     // Puts a project target's cards in the machine's slots, as a saved machine's go in: every one must, or the launch
-    // fails naming the target.
+    // fails naming the target. A Disk II and block storage come with their media from the launch's options, which
+    // a saved machine leaves to the launch, so they cannot be cards.
     private void PutCards(ProjectTarget target, JsonObject cards)
     {
         if (Target.Cards() is null)
         {
             throw new ProjectException($"{target.Project.File}: target {target.Name}: {target.Machine.Id} has no slots for its cards.");
+        }
+
+        foreach ((string slot, JsonNode? card) in cards)
+        {
+            if ((string?)card is "diskII" or "blockStorage")
+            {
+                throw new ProjectException(
+                    $"{target.Project.File}: target {target.Name}: slot {slot}'s {card} comes with its media from the target's options, such as diskImage, not from its cards.");
+            }
         }
 
         List<string> problems = [.. Target.RestoreCards(cards)];
@@ -973,11 +984,11 @@ internal sealed partial class DebugSession
         _launchAttempted = true;
         _launchReady = false;
         _run?.Cancel();
-        args = LaunchMedia.WithSaved(args, args["machineState"]);
-
-        // A project launch builds its target, as retrocore build does, and launches the target's machine.
+        // A project launch builds its target, as retrocore build does, and launches the target's machine with the
+        // target's options, which the saved media then goes over as over any launch's.
         TargetBuild? built = null;
         if (args.ContainsKey("project")) { (args, built) = ProjectLaunch.Prepare(args); }
+        args = LaunchMedia.WithSaved(args, args["machineState"]);
         string machine = DebugMachines.Require(args.String("machine"));
         string? sourceFile = args.String("source");
         string? program = args.String("program");
@@ -1010,6 +1021,11 @@ internal sealed partial class DebugSession
             DebugMachines.Atari => LaunchAtari(args, loads),
             _ => Apple2DebugTarget.Launch(args)
         };
+
+        // A bare program calls the ROM's routines, such as COUT, which the Apple II's Monitor sets up as it resets, so
+        // the ROM runs first, as the other machines' ROMs do before a program loads: before a target's cards or a saved
+        // machine's disks go in, so it boots no disk.
+        if (built is not null && Target is Apple2DebugTarget) { Boot(args.Double("bootSeconds") ?? 0.25); }
 
         if (args.String("screen") is { } screen) { Target.Screen = screen; }
 
@@ -1072,10 +1088,6 @@ internal sealed partial class DebugSession
             // The build preprocesses as the check did, starting on the machine's CPU; the first .cpu that remains, which
             // made the source the Z80's, selects the Z80's instructions.
             IDebugTarget loader = z80 ?? Target;
-
-            // A bare program calls the ROM's routines, such as COUT, which the Apple II's Monitor sets up as it
-            // resets, so the ROM runs first, as the other machines' ROMs do before a program loads.
-            if (built is not null && Target is Apple2DebugTarget) { Boot(args.Double("bootSeconds") ?? 0.25); }
             AssemblyResult result = built?.Result ?? SourceBuild.Assemble(
                 sourceFile ?? "",
                 dialect,
@@ -1222,7 +1234,21 @@ internal sealed partial class DebugSession
             });
         }
 
-        return [];
+        // A project launch says which machine it started, which only the target said, for the editor to follow.
+        return built is null ? [] : new JsonObject
+        {
+            ["project"] = new JsonObject
+            {
+                ["file"] = built.Target.Project.File,
+                ["target"] = built.Target.Name,
+                ["catalogMachine"] = built.Target.Machine.Id,
+                ["machine"] = built.Target.Machine.Machine,
+                ["model"] = built.Target.Machine.Model,
+                ["rom"] = built.Target.Machine.Rom,
+                ["binary"] = built.Binary,
+                ["entry"] = built.Entry
+            }
+        };
     }
 
     // The Monitor sets up the PIA as it starts, so a loaded program's output through ECHO, and BASIC's own, reaches

@@ -149,7 +149,7 @@ internal static class BuildCommand
             1 => named,
             0 => throw new ProjectException($"There is no target '{name}'; the targets are {names}."),
             _ => throw new ProjectException(
-                $"The projects {string.Join(" and ", named.Select(target => target.Project.Name))} each have a target '{name}'; give project/target or --project.")
+                $"The projects {string.Join(" and ", named.Select(target => target.Project.Name))} each have a target '{name}'; name it as project/target.")
         };
     }
 

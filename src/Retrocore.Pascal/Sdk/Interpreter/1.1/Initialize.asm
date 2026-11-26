@@ -23,18 +23,22 @@ SYSCOM_EXTRA_SIZE = $20
 BOOT_BUFFER = $6000
 
 ;; The directory's first block.
+;; Also: DIRBLK (UCSD20)
 DIRECTORY_BLOCK = 2
 
 ;; The bytes of directory <Initialize> reads: 4 blocks.
 DIRECTORY_SIZE = $0800
 
 ;; The size of a directory entry. The first is the volume's own, and the files' follow it.
+;; Also: DIRENTRY (UCSD20)
 DIRECTORY_ENTRY_SIZE = 26
 
 ;; Where a directory entry keeps its first block.
+;; Also: DFIRSTBLK (UCSD20)
 DIRECTORY_FIRST_BLOCK = 0
 
 ;; Where a directory entry keeps its name, as a Pascal string.
+;; Also: DTID (UCSD20), DVID (UCSD20)
 DIRECTORY_NAME = 6
 
 ;; The directory entries <Initialize> checks for SYSTEM.PASCAL: the volume's own and the first 76 files'.
@@ -45,9 +49,11 @@ DIRECTORY_ENTRIES_CHECKED = 77
 DICTIONARY_READ_SIZE = $0100
 
 ;; The segments a segment dictionary describes, 0-15.
+;; Also: MAXSEG (UCSD20)
 DICTIONARY_SEGMENTS = 16
 
 ;; The size of a dictionary entry: the segment's first block, counted from the file's start, then its size in bytes.
+;; Also: DISKINFO (A2POSRM), SEGDESC (UCSD20)
 DICTIONARY_ENTRY_SIZE = 4
 
 ;; Where a <SegmentTable> entry keeps the segment's first block.
@@ -88,6 +94,7 @@ COPIED_TABLE_SIZE = 42
 .endmacro
 
 ;; Addresses <Initialize> reads, a word each. <UCLEAR at UnitIo::CspUCLEAR> reads <BootSyscom> too, as BootAddresses+4.
+;; Also: ADRHIM (WK11)
 BootAddresses:
 
 ;; <MemoryTop>'s address, where <KP> and <MP> start.
@@ -95,22 +102,27 @@ BootMemoryTop:
     .word MemoryTop
 
 ;; <SegmentTable>'s address.
+;; Also: ASYSPT (WK11)
 BootSegmentTable:
     .word SegmentTable
 
 ;; SYSCOM's address.
+;; Also: ADRIOR (WK11)
 BootSyscom:
     .word Syscom
 
 ;; <CspTable>'s address, whose high byte goes in <CspDispatch>'s JMP.
+;; Also: ACSPT (WK11)
 BootCspTable:
     .word CspTable
 
 ;; <OpcodeTable>'s address, whose high byte goes in <Dispatch>'s JMP.
+;; Also: APCT (WK11)
 BootOpcodeTable:
     .word OpcodeTable
 
 ;; <OpXIT>'s address, which <Initialize> puts in <ResetHandler>, so that RESET leaves the system.
+;; Also: ADRXIT (WK11)
 BootResetHandler:
     .word OpXIT
 
@@ -127,6 +139,7 @@ MessageIndex:
     .res 1
 
 ;; The file the system boots.
+;; Also: SYSPK (WK11)
 SystemFileName:
     PascalString "SYSTEM.PASCAL"
 
@@ -145,6 +158,7 @@ BootReadersPointer:
     .word UnitReaders+2
 
 ;; Where <Restart> copies from: <Restart> itself.
+;; Also: ACD2MV (WK11)
 RestartAddress:
     .word Restart
 
@@ -199,6 +213,7 @@ InitializeImage:
 Entry = Result
 
 ;; SYSTEM.PASCAL's first block, from its directory entry.
+;; Also: BLKNUM (WK11)
 FirstBlock = Buffer
 
 ;; The <SegmentTable> entry being filled.

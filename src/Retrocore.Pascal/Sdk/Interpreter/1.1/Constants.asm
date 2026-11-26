@@ -10,9 +10,11 @@ FIRST_TABLE_OPCODE = $80
 
 ;; The size of a mark stack frame, in bytes. A call places the procedure's frame this far, plus its data, below
 ;; <KP>, and its locals follow the frame.
+;; Also: MSCW (A2POSRM, UCSD20)
 MSCW_SIZE = 12
 
 ;; Where a mark stack frame keeps its static link: the frame of the procedure one lexical level out.
+;; Also: MSSTAT (A2POSRM), STATLINK (UCSD20)
 MSCW_STATIC_LINK = 0
 
 ;; The size of the word a call keeps the caller's <KP> in, just below the new frame.
@@ -22,39 +24,51 @@ KP_LINK_SIZE = 2
 ; 7 (NIL pointer reference), 14 (Programmed HALT) or 15 (Programmed break-point).
 
 ;; Execution error 1, which SYSTEM.PASCAL prints as "Value range error".
+;; Also: XINVNDX (A2POSRM)
 ERROR_VALUE_RANGE = 1
 
 ;; Execution error 2, "No proc in seg-table".
+;; Also: XNOPROC (A2POSRM)
 ERROR_NO_PROC_IN_SEG_TABLE = 2
 
 ;; Execution error 3, "Exit from uncalled proc".
+;; Also: XNOEXIT (A2POSRM)
 ERROR_EXIT_FROM_UNCALLED_PROC = 3
 
 ;; Execution error 4, "<Stack> overflow".
+;; Also: XSTKOVR (A2POSRM)
 ERROR_STACK_OVERFLOW = 4
 
 ;; Execution error 5, "<RealMath::PopIntegerAsReal::Integer> overflow".
+;; Also: XINTOVR (A2POSRM)
 ERROR_INTEGER_OVERFLOW = 5
 
 ;; Execution error 6, "<Divide> by zero".
+;; Also: XDIVZER (A2POSRM)
 ERROR_DIVIDE_BY_ZERO = 6
 
 ;; Execution error 8, "Program interrupted by user".
+;; Also: XUBREAK (A2POSRM)
 ERROR_INTERRUPTED = 8
 
 ;; Execution error 9, "System IO error".
+;; Also: XSYIOER (A2POSRM)
 ERROR_SYSTEM_IO = 9
 
 ;; Execution error 10, a user I/O error, which SYSTEM.PASCAL prints with the I/O result's own message.
+;; Also: XUIOERR (A2POSRM)
 ERROR_USER_IO = 10
 
 ;; Execution error 11, "<ExecutionError::Unimplemented> instruction".
+;; Also: XNOTIMP (A2POSRM)
 ERROR_UNIMPLEMENTED = 11
 
 ;; Execution error 12, "Floating point error".
+;; Also: XFPIERR (A2POSRM)
 ERROR_FLOATING_POINT = 12
 
 ;; Execution error 13, "String overflow".
+;; Also: XS2LONG (A2POSRM)
 ERROR_STRING_OVERFLOW = 13
 
 ; Memory.
@@ -115,9 +129,11 @@ ASCII_BS = $08
 ASCII_LF = $0A
 
 ;; Carriage return.
+;; Also: EOL (UCSD20)
 ASCII_CR = $0D
 
 ;; DLE, which with the count byte after it stands for a run of blanks.
+;; Also: DLE (UCSD20, UCSD20IO)
 ASCII_DLE = $10
 
 ;; Escape: drops the next character.
@@ -175,21 +191,26 @@ CTRL_UNDERSCORE = $1F
 FIRST_UNIT = 1
 
 ;; The console, which echoes what it reads: CONSOLE:.
+;; Also: CONSOLE (UCSD20IO)
 UNIT_CONSOLE = 1
 
 ;; The console without echo: SYSTERM:.
+;; Also: SYSTERM (UCSD20IO)
 UNIT_SYSTERM = 2
 
 ;; The graphics screen.
 UNIT_GRAPHICS = 3
 
 ;; The boot disk, slot 6's drive 1.
+;; Also: DISK0 (UCSD20IO)
 UNIT_BOOT_DISK = 4
 
 ;; The second disk, slot 6's drive 2.
+;; Also: DISK1 (UCSD20IO)
 UNIT_SECOND_DISK = 5
 
 ;; The printer.
+;; Also: PRINTER (UCSD20IO)
 UNIT_PRINTER = 6
 
 ;; The remote line's input.
@@ -197,9 +218,11 @@ UNIT_REMOTE_IN = 7
 
 ;; The remote line's output. <UNITCLEAR at UnitIo::CspUCLEAR> and <UNITSTATUS at UnitIo::CspUSTAT> take unit 7 as this
 ;; one.
+;; Also: REMOTE (UCSD20IO)
 UNIT_REMOTE_OUT = 8
 
 ;; The highest unit number: units 9 to 12 are disks in slots 4 and 5.
+;; Also: MAXUNIT (UCSD20)
 LAST_UNIT = 12
 
 ;; The units the interpreter has, 0-12: <UnitTable>'s entries, and the DLE states <Initialize> clears.
@@ -241,48 +264,62 @@ CHARACTER_DEVICE = $FFFF
 ; Mark stack frames, procedure attributes and segments.
 
 ;; Where a mark stack frame keeps its dynamic link: the caller's <MP>.
+;; Also: DYNLINK (UCSD20), MSDYN (A2POSRM)
 MSCW_DYNAMIC_LINK = 2
 
 ;; Where a mark stack frame keeps the caller's <JTAB>.
+;; Also: MSJTAB (A2POSRM, UCSD20)
 MSCW_JTAB = 4
 
 ;; Where a mark stack frame keeps the caller's <SEG>.
+;; Also: MSSEG (A2POSRM, UCSD20)
 MSCW_SEG = 6
 
 ;; Where a mark stack frame keeps the caller's <IPC>, the p-code after the call: where <RNP at OpRNP> returns to.
+;; Also: MSIPC (A2POSRM, UCSD20)
 MSCW_IPC = 8
 
 ;; Where a mark stack frame keeps the 6502 stack pointer once the call has pulled the parameters, for the return to
 ;; put back.
+;; Also: MSSP (A2POSRM)
 MSCW_STACK = 10
 
 ;; Where a procedure's attributes keep its number, a byte: 0 for an assembled procedure.
+;; Also: PROCEDURENUMBER (A2POSRM)
 ATTR_PROCEDURE_NUMBER = 0
 
 ;; Where a procedure's attributes keep its lexical level, a byte, negative for the system's outer block. An assembled
 ;; procedure keeps the number of its data segment here instead (see <LoadSegment>).
+;; Also: LEXLEVEL (A2POSRM)
 ATTR_LEXICAL_LEVEL = 1
 
 ;; Where a procedure's attributes keep a self-relative pointer to the code it starts at: the first p-code, or an
 ;; assembled procedure's first instruction.
+;; Also: ENTERIC (A2POSRM)
 ATTR_ENTER = -2
 
 ;; Where a procedure's attributes keep a self-relative pointer to its exit code, which <EXIT at CspEXIT> runs.
+;; Also: EXITIC (A2POSRM)
 ATTR_EXIT = -4
 
 ;; Where a procedure's attributes keep the size of its parameters, in bytes.
+;; Also: PARAMETERSIZE (A2POSRM)
 ATTR_PARAMETER_SIZE = -6
 
 ;; Where a procedure's attributes keep the size of its local data, in bytes, not counting the parameters.
+;; Also: DATASIZE (A2POSRM)
 ATTR_DATA_SIZE = -8
 
 ;; Where a <SegmentTable> entry keeps the segment's unit, a byte.
+;; Also: CODEUNIT (UCSD20)
 SEGMENT_UNIT = 0
 
 ;; Where a <SegmentTable> entry keeps the segment's first block, a word: 0 for a data segment, which is not on disk.
+;; Also: CODEDESC (UCSD20), DISKADDR (UCSD20)
 SEGMENT_BLOCK = 2
 
 ;; Where a <SegmentTable> entry keeps the segment's size in bytes, a word.
+;; Also: CODELENG (UCSD20)
 SEGMENT_SIZE = 4
 
 ;; The size of a <SegmentTable> entry: the segment's unit, its first block and its size in bytes, a word each.

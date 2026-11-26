@@ -5,31 +5,39 @@
 ; The p-machine's registers, with UCSD's names.
 
 ;; BASE: the outer block's mark stack frame, whose globals <LDO at OpLDO>, <SRO at OpSRO> and <LAO at OpLAO> reach.
+;; Also: BASE (A2POSRM), BASPTR (WK11)
 BASE = $50
 
 ;; MP: the current procedure's mark stack frame, whose locals <LDL at OpLDL>, <STL at OpSTL> and <LLA at OpLLA> reach.
+;; Also: MP (A2POSRM), MSPTR (WK11)
 MP = $52
 
 ;; JTAB: the current procedure's attributes, at the end of its code.
+;; Also: JTAB (A2POSRM), JTBPTR (WK11)
 JTAB = $54
 
 ;; SEG: the current segment's procedure dictionary, its last word.
+;; Also: SEG (A2POSRM), SEGPTR (WK11)
 SEG = $56
 
 ;; IPC: the next p-code.
+;; Also: IPC (A2POSRM), IPCPTR (WK11)
 IPC = $58
 
 ;; NP: the heap's top. <NEW at CspNEW> allocates up from it.
+;; Also: HPPTR (WK11), NP (A2POSRM)
 NP = $5A
 
 ;; KP: the program stack's bottom. Each call takes its frame below it, and the stack overflows when KP comes down
 ;; to <NP>.
+;; Also: KP (A2POSRM), PSKPTR (WK11)
 KP = $5C
 
 ; Dispatch. Initialize::StartSystem writes JMP indirect instructions here, and Fetch and OpCSP set their addresses'
 ; low bytes.
 
 ;; JMP (<OpcodeTable>): <Fetch> sets its address's low byte, <DispatchLow>, to the opcode times 2, and jumps here.
+;; Also: JMPPC (WK11)
 Dispatch = $6E
 
 ;; The low byte of <Dispatch>'s address.
@@ -37,6 +45,7 @@ DispatchLow = Dispatch + 1
 
 ;; JMP (<CspTable>): <OpCSP> sets its address's low byte, <CspDispatchLow>, to the standard procedure's number times 2,
 ;; and jumps here.
+;; Also: JMPCSP (WK11)
 CspDispatch = $71
 
 ;; The low byte of <CspDispatch>'s address.
@@ -46,12 +55,14 @@ CspDispatchLow = CspDispatch + 1
 ; scope, as Divisor = Work1 in division.
 
 ;; A big operand times 2, as <GetBig> leaves it: the byte offset of the word it numbers.
+;; Also: OPRND (WK11)
 Offset = $5E
 
 ;; The mark stack frame <FindFrame> finds.
 Frame = $62
 
 ;; A variable's address, as the load and store handlers work it out.
+;; Also: VARPTR (WK11)
 Address = $64
 
 ;; A byte of working storage.
@@ -61,12 +72,15 @@ Scratch = $66
 UnreadFlag = $67
 
 ;; Where a move copies from.
+;; Also: SRCPTR (WK11)
 Source = $68
 
 ;; Where a move copies to.
+;; Also: DSTPTR (WK11)
 Target = $6A
 
 ;; Which comparison the comparison handlers make, for the routines they share.
+;; Also: CMPTYP (WK11)
 Comparison = $6C
 
 ;; A pointer the handlers share.
@@ -76,18 +90,22 @@ Pointer = $74
 Pointer2 = $76
 
 ;; The number of the procedure a call is calling.
+;; Also: PROCNO (WK11)
 ProcedureNumber = $78
 
 ;; The buffer a unit call reads into or writes from.
+;; Also: DATAAREA (UCSD20IO)
 Buffer = $7A
 
 ;; The attributes of the procedure a call is calling.
 Procedure = $7C
 
 ;; The mark stack frame a call builds.
+;; Also: ARPTR (WK11)
 Mark = $7E
 
 ;; The floating-point routines' result, an unpacked real of 6 bytes (see <REAL_SIGN>).
+;; Also: FPREG3 (WK11)
 Result = $80
 
 ;; A word of working storage.
@@ -132,6 +150,7 @@ PartialBytes = $BE
 PagesLeft = $BF
 
 ;; <DiskTransfer>'s return address, kept while it pulls its parameters.
+;; Also: RETADR (WK11)
 DiskReturn = $C0
 
 ;; The block number's high byte, halved, which must be 0.
@@ -150,21 +169,27 @@ TrackSectors = $C6
 DriveIndex = $C7
 
 ;; <StepArm>'s slot times 16.
+;; Also: REQSLT (WK11)
 StepSlot = $C8
 
 ;; The half-track <StepArm> moves the arm to.
+;; Also: REQTRK (WK11)
 StepTarget = $C9
 
 ;; The last address field's checksum.
+;; Also: AFDATA (WK11)
 AddressChecksum = $CA
 
 ;; The last address field's sector. <TransferTrack> then keeps the sector to handle next here.
+;; Also: ACTSEC (WK11)
 AddressSector = $CB
 
 ;; The last address field's track.
+;; Also: ACTTRK (WK11)
 AddressTrack = $CC
 
 ;; The last address field's volume.
+;; Also: ACTVOL (WK11)
 AddressVolume = $CD
 
 ;; A byte of the disk routines' working storage.
@@ -180,9 +205,11 @@ SectorDone = $D0
 ; The BIOS's bytes.
 
 ;; A, kept while <BiosCall> switches banks.
+;; Also: TT1 (A2PBIOS)
 BiosSavedA = $D2
 
 ;; The vector <BiosCall> jumps through.
+;; Also: TT2 (A2PBIOS), TT3 (A2PBIOS)
 BiosVector = $D3
 
 ;; A status call's control word.
@@ -193,35 +220,50 @@ StatusRecord = $D8
 
 ;; Bit 7 set: <PutScreen> shows capital letters inverse. Output $12 and the keys Control-E and Control-W set it, and
 ;; output $14 clears it.
+;; Also: HSMODE (A2PBIOS)
 InverseCapitals = $E0
 
 ;; Bit 7 set: <ConsoleCheck> leaves letters in upper case, or else lowers them unless <Button2> shows shift; bit 6:
 ;; for the next key only. Startup and output $14 set $80, Control-E flips bit 7, and Control-W sets $C0.
+;; Also: HCMODE (A2PBIOS)
 KeyboardCase = $E1
 
 ;; <UnitReaders>+2, unit 1's entry, for attaching drivers.
+;; Also: RTPTR (A2PBIOS, WK11)
 ReadersPointer = $E4
 
 ;; <UnitWriters>+2, unit 1's entry, for attaching drivers.
+;; Also: WTPTR (A2PBIOS, WK11)
 WritersPointer = $E6
 
 ;; Startup's copy of <BiosPointers>, 8 bytes. Nothing in SYSTEM.APPLE reads it.
+;; Also: DISKNUMP (A2PBIOS), JVAFOLD (A2PBIOS), JVBFOLD (A2PBIOS), UDJVP (A2PBIOS, WK11)
 BiosPointersCopy = $E8
 
 ;; The cursor row's address in text page 1, which shows 40 of the 80 columns.
+;; Also: BAS1H (A2PBIOS), BAS1L (A2PBIOS), SLLPTR (WK11)
 TextLine = $F0
 
 ;; The cursor row's address in text page 2, which keeps the other 40 columns.
+;; Apple's BIOS document calls it BAS2L and its high byte BAS2H (A2PBIOS), the Monitor's names for its own.
+;; Also: SLRPTR (WK11)
 TextLine2 = $F2
 
 ;; The cursor's column, 0-79.
+;; Apple's BIOS document calls it CH (A2PBIOS), the Monitor's name for its own column.
+;; Also: HPOS (WK11)
 ConsoleColumn = $F4
 
 ;; The cursor's row, 0-23.
+;; Also: CV (A2PBIOS), VPOS (WK11)
 CursorRow = $F5
 
 ;; $Cn00 for the card being called, then the firmware entry <CallFirmware> jumps through.
+;; Apple's BIOS document calls its high byte TEMP2 (A2PBIOS).
+;; Also: TEMP (WK11), TEMP1 (A2PBIOS)
 CardPointer = $F6
 
 ;; SYSCOM's address, from <ConsoleInit>, for <ConsoleCheck> to read the console's keys from.
+;; Apple's BIOS document calls it SYSCOM (A2PBIOS), the name of the area it points to.
+;; Also: SYCPTR (WK11)
 SyscomPointer = $F8

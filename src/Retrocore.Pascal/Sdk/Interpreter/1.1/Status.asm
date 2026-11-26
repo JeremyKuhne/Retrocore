@@ -20,6 +20,7 @@ DISK_STATUS_TRACKS = 6
 ;; In: Stack = under PullStatusArgs's return address and <BiosCall>'s, the record's address, then the control word
 ;; Out: StatusRecord = the record's address, StatusControl = the control word
 ;; Keeps: X, Y
+;; Also: XARGOS (WK11)
 .proc PullStatusArgs
 
 ;; <PullStatusArgs>'s own return address, kept while it pulls the parameters.
@@ -54,6 +55,7 @@ OwnReturn = FirstSector
 ;; BIOS calls 15 and 17, the printer's and the remote units' status: put 0 in the record's first word.
 ;; In: Stack = the record's address and the control word, under the return address
 ;; Out: X = 0
+;; Also: STATPR (WK11), ZEROSTAT (A2PBIOS)
 .proc SerialStatus
     jsr PullStatusArgs
 
@@ -82,6 +84,7 @@ Done:
 ;; or else <TypeAheadIn> less <TypeAheadOut>, which is wrong once <TypeAhead> has wrapped round.
 ;; In: Stack = the record's address and the control word, under the return address
 ;; Out: X = 0
+;; Also: CSTAT (A2PBIOS), STATC (WK11)
 .proc ConsoleStatus
     jsr PullStatusArgs
 
@@ -103,6 +106,7 @@ Done:
 ;; <DISK_TRACKS>.
 ;; In: Stack = the record's address and the control word, under the return address
 ;; Out: X = 0
+;; Also: DSTATT (A2PBIOS), STATD (WK11)
 .proc DiskStatus
     jsr PullStatusArgs
 

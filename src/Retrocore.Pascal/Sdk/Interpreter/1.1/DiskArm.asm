@@ -15,12 +15,15 @@ WAIT_LOOP_COUNT = $11
 ;; In: A = the half-track, X = the slot times 16
 ;; Out: ArmPosition = the half-track
 ;; Keeps: X
+;; Also: SEEK (WK11)
 .proc StepArm
 
 ;; The half-track the arm is stepping from.
+;; Also: PRVTRK (WK11)
 OldPosition = DiskTemp
 
 ;; The steps taken so far.
+;; Also: LOOPC (WK11)
 StepsTaken = DiskTemp2
 
     ; Nothing to do if the arm is there.
@@ -31,7 +34,8 @@ StepsTaken = DiskTemp2
     lda #0
     sta StepsTaken
 
-    ; Step a half-track nearer, unless there.
+;; Steps the arm a half-track nearer, unless it is there.
+;; Also: SEEKLP (WK11)
 NextStep:
     lda ArmPosition
     sta OldPosition
@@ -78,6 +82,7 @@ Arrived:
 ;; Turns the phase for <ArmPosition>'s half-track on or off.
 ;; In: carry = set for on, StepSlot = the slot times 16
 ;; Out: X = <StepSlot>
+;; Also: ONPH (WK11)
 SwitchArmPhase:
     lda ArmPosition
 
@@ -91,6 +96,9 @@ SwitchPhase:
     tax
     lda DiskPhase0Off,x
     ldx StepSlot
+
+;; Returns once the arm is on the track.
+;; Also: SEEKEX (WK11)
 Return:
     rts
 .endproc
@@ -99,6 +107,7 @@ Return:
 ;; In: A = the units to wait, 0 for 256
 ;; Out: A = 0, X = 0
 ;; Keeps: Y
+;; Also: DELAY (WK11)
 .proc DiskWait
     ; Wait a unit.
     ldx #WAIT_LOOP_COUNT
@@ -119,11 +128,13 @@ Counted:
 
 ;; The <DiskWait> units <StepArm> holds a new phase on before it turns the old one off, by its steps from the move's
 ;; start or end.
+;; Also: AMDTB1 (WK11)
 StepOnTimes:
     .byte $01, $30, $28, $24, $20, $1E, $1D, $1C
     .assert * - StepOnTimes = STEP_RAMP, "StepOnTimes has an entry for each step of the ramp."
 
 ;; The <DiskWait> units <StepArm> waits after turning the old phase off, by the same steps.
+;; Also: AMDTB2 (WK11)
 StepOffTimes:
     .byte $70, $2C, $26, $22, $1F, $1E, $1D, $1C
     .assert * - StepOffTimes = STEP_RAMP, "StepOffTimes has an entry for each step of the ramp."
@@ -168,6 +179,7 @@ NextByte:
 .endproc
 
 ;; The slot times 16 for each pair of drive numbers: drives 0-1 are in slot 6, 2-3 in slot 5 and 4-5 in slot 4.
+;; Also: SLTTBL (WK11)
 DriveSlots:
     .byte 6 * 16, 5 * 16, 4 * 16
     .assert * - DriveSlots = DRIVE_PAIRS, "DriveSlots has a slot for each drive pair."
@@ -176,6 +188,7 @@ DriveSlots:
 ;; In: A = the drive number
 ;; Out: X = 0 and zero = set when it does, or else X = <DISK_ERROR_NO_DRIVE>
 ;; Keeps: Y
+;; Also: DINIT (A2PBIOS, WK11)
 .proc DiskInit
     ; The drive pair.
     lsr a

@@ -37,6 +37,7 @@ BIOS_VECTOR_OFFSET = $5A
 ;; Where the console's break key goes, from bank 2: switches bank 1 in and jumps through <ConsoleBreakVector>, which
 ;; <ConsoleInit> takes from its caller (<UCLEAR at UnitIo::CspUCLEAR> and <Initialize>'s NoSystemFile give it
 ;; <ExecutionError::Interrupted>).
+;; Also: TOBREAK (A2PBIOS), TOBRK (WK11)
 .proc BreakJump
     lda LCBANK1
     jmp (ConsoleBreakVector)
@@ -44,6 +45,7 @@ BIOS_VECTOR_OFFSET = $5A
 
 ;; Switches bank 2 in and goes to <Startup>, which starts the system from the beginning. <Initialize>'s NoSystemFile
 ;; puts this address in the reset vector, so that RESET boots again once a boot disk is in.
+;; Also: NOTOST (WK11)
 .proc Boot
     lda LCBANK2
     jmp Startup
@@ -57,6 +59,7 @@ BIOS_VECTOR_OFFSET = $5A
 .endproc
 
 ;; Where <Startup> ends: switches bank 1 in and goes to <Restart>, through <RestartJump> in bank 1.
+;; Also: JPASCAL (A2PBIOS), OST (WK11)
 .proc EnterRestart
     lda LCBANK1
     jmp RestartJump
@@ -65,6 +68,7 @@ BIOS_VECTOR_OFFSET = $5A
 ;; Has <PutScreen> show capital letters inverse.
 ;; Out: A = <INVERSE_CAPITALS>, zero = clear
 ;; Keeps: X, Y
+;; Also: DOH12 (WK11)
 .proc InverseCapitalsOn
     lda #INVERSE_CAPITALS
     sta InverseCapitals
@@ -72,54 +76,67 @@ BIOS_VECTOR_OFFSET = $5A
 .endproc
 
 ;; BIOS call 0: reads a character from the console, with <ConsoleRead>.
+;; Also: BIOS (A2PBIOS, WK11), BIOSTBL (A2PBIOS), CONSOLEREAD (UCSD20IO), JCREAD (WK11)
 BiosConsoleRead:
     BiosStub 0, VectorConsoleRead
 
 ;; BIOS call 1: writes a character to the console, with <ConsoleWrite>.
+;; Also: CONSOLEWRITE (UCSD20IO), JCWRT (WK11)
 BiosConsoleWrite:
     BiosStub 1, VectorConsoleWrite
 
 ;; BIOS call 2: initializes the console, with <ConsoleInit>.
+;; Also: CONSOLEINIT (UCSD20IO), JCINIT (WK11)
 BiosConsoleInit:
     BiosStub 2, VectorConsoleInit
 
 ;; BIOS call 3: writes a character to the printer, with <PrinterWrite>.
+;; Also: JPRTW (WK11), PRINTERWRITE (UCSD20IO)
 BiosPrinterWrite:
     BiosStub 3, VectorPrinterWrite
 
 ;; BIOS call 4: initializes the printer, with <PrinterInit>.
+;; Also: JPRTI (WK11), PRINTERINIT (UCSD20IO)
 BiosPrinterInit:
     BiosStub 4, VectorPrinterInit
 
 ;; BIOS call 5: writes blocks to a Disk II drive, with <DiskWrite>.
+;; Also: DISKWRITE (UCSD20IO), JDWRT (WK11)
 BiosDiskWrite:
     BiosStub 5, VectorDiskWrite
 
 ;; BIOS call 6: reads blocks from a Disk II drive, with <DiskRead>.
+;; Also: DISKREAD (UCSD20IO), JDREAD (WK11)
 BiosDiskRead:
     BiosStub 6, VectorDiskRead
 
 ;; BIOS call 7: checks a Disk II drive's slot, with <DiskInit>.
+;; Also: DISKINIT (UCSD20IO), JDINIT (WK11)
 BiosDiskInit:
     BiosStub 7, VectorDiskInit
 
 ;; BIOS call 8: reads a character from the remote unit, with <RemoteRead>.
+;; Also: JREMR (WK11), REMOTEREAD (UCSD20IO)
 BiosRemoteRead:
     BiosStub 8, VectorRemoteRead
 
 ;; BIOS call 9: writes a character to the remote unit, with <RemoteWrite>.
+;; Also: JREMW (WK11), REMOTEWRITE (UCSD20IO)
 BiosRemoteWrite:
     BiosStub 9, VectorRemoteWrite
 
 ;; BIOS call 10: initializes the remote unit, with <RemoteInit>.
+;; Also: JREMI (WK11), REMOTEINIT (UCSD20IO)
 BiosRemoteInit:
     BiosStub 10, VectorRemoteInit
 
 ;; BIOS call 11: graphics write, which does nothing.
+;; Also: JGRAFW (WK11)
 BiosGraphicsWrite:
     BiosStub 11, VectorGraphicsWrite
 
 ;; BIOS call 12: graphics init, which shows text, with <GraphicsInit>.
+;; Also: JGRAFI (WK11)
 BiosGraphicsInit:
     BiosStub 12, VectorGraphicsInit
 
@@ -128,34 +145,42 @@ BiosReserved:
     BiosStub 13, VectorReserved
 
 ;; BIOS call 14: the console's status, with <ConsoleStatus>.
+;; Also: JCONS (WK11)
 BiosConsoleStatus:
     BiosStub 14, VectorConsoleStatus
 
 ;; BIOS call 15: the printer's status, with <SerialStatus>.
+;; Also: JPRTS (WK11)
 BiosPrinterStatus:
     BiosStub 15, VectorPrinterStatus
 
 ;; BIOS call 16: a disk's status, with <DiskStatus>.
+;; Also: JDSKS (WK11)
 BiosDiskStatus:
     BiosStub 16, VectorDiskStatus
 
 ;; BIOS call 17: the remote unit's status, with <SerialStatus>.
+;; Also: JREMS (WK11)
 BiosRemoteStatus:
     BiosStub 17, VectorRemoteStatus
 
 ;; BIOS call 18: polls the console's keys, with <ConsoleCheck>.
+;; Also: KCONCK (A2PBIOS)
 BiosConsoleCheck:
     BiosStub 18, VectorConsoleCheck
 
 ;; BIOS call 19: runs an attached unit's driver from <AttachedDrivers>, with <AttachedDriver>.
+;; Also: JUSER (WK11)
 BiosAttachedDriver:
     BiosStub 19, VectorAttachedDriver
 
 ;; BIOS call 20: runs a unit's driver from <UnitTable>, with <UnitDriver>.
+;; Also: JUDDRV (WK11)
 BiosUnitDriver:
     BiosStub 20, VectorUnitDriver
 
 ;; BIOS call 21: the Compiler's identifier search, with <IdSearch>.
+;; Also: JTREE (WK11)
 BiosIdSearch:
     BiosStub 21, VectorIdSearch
 
@@ -164,6 +189,7 @@ BiosIdSearch:
 ;; In:
 ;;   Y = the unit times 2
 ;;   A, X, Stack = for the driver
+;; Also: PSUBDR (A2PBIOS, WK11)
 .proc UnitDriver
     ; Push the driver's address less 1, which RTS goes to, keeping A for it.
     sta BiosSavedA
@@ -178,6 +204,7 @@ BiosIdSearch:
 ;; Locks the keyboard in upper case and has <PutScreen> show capital letters normally, as output $14 does.
 ;; Out: A = 0
 ;; Keeps: X, Y
+;; Also: DOH14 (WK11)
 .proc UpperCaseLock
     lda #KEYBOARD_UPPER
     sta KeyboardCase
@@ -193,16 +220,19 @@ BiosIdSearch:
 
 ;; What BIOS calls 11 and 13, graphics write and the reserved call, run: returns at once.
 ;; Keeps: A, X, Y
+;; Also: IORTS (A2PBIOS)
 .proc IgnoreCall
     rts
 .endproc
 
 ;; A vector before call 0's, where a stub at $FEFD would find it. None is there, and nothing in SYSTEM.APPLE jumps
 ;; here.
+;; Also: JCONCK (WK11)
 VectorUnused:
     VectorTo ConsoleCheck
 
 ;; BIOS call 0's vector.
+;; Also: BIOSAF (A2PBIOS, WK11)
 VectorConsoleRead:
     VectorTo ConsoleRead
 
@@ -296,6 +326,7 @@ VectorIdSearch:
 ;;   A, X, Y = the call's
 ;;   Stack = the stub's return address, over its caller's and the call's arguments
 ;; Out: A, X, Y, carry = as the call's routine leaves them
+;; Also: SAVERET (A2PBIOS), SAVRET (WK11)
 .proc BiosCall
     ; The vector is BIOS_VECTOR_OFFSET past the stub's return address.
     sta BiosSavedA
@@ -322,6 +353,7 @@ VectorIdSearch:
 ;; routines, which drop their return address, come here with JMP.
 ;; In: A = the call's result
 ;; Out: A, X, Y, carry = as the routine left them
+;; Also: GOBACK (A2PBIOS)
 Return:
     sta BiosSavedA
     lda BiosCaller+1
@@ -333,16 +365,19 @@ Return:
     rts
 
 ;; Jumps through the vector <BiosCall> worked out.
+;; Also: SAVRET2 (A2PBIOS)
 Jump:
     jmp (BiosVector)
 .endproc
 
 ;; The keys <ConsoleCheck> turns into others, by <ShiftKeysTo>, while the shift key is held: the keyboard's Shift-M,
 ;; Shift-N and Shift-P (], ^ and @), and its Control-Shift-M, N and P.
+;; Also: XLTIN (WK11)
 ShiftKeysFrom:
     .byte ']', '^', '@', CTRL_RIGHT_BRACKET, CTRL_CARET, CTRL_AT
 
 ;; What <ConsoleCheck> turns each of <ShiftKeysFrom> into: M, N and P, and ], ^ and @.
+;; Also: XLTOUT (WK11)
 ShiftKeysTo:
     .byte 'M', 'N', 'P', ']', '^', '@'
 
@@ -351,6 +386,7 @@ ShiftKeysTo:
 
 ;; Moves the view to the other half: to the left half when <ViewLeft> is at the middle of the right or beyond, or else
 ;; to the right half.
+;; Also: HTAB (A2PBIOS, WK11)
 Toggle:
     lda ViewLeft
     cmp #PAGE_COLUMNS / 2
@@ -362,6 +398,7 @@ ShowRight:
     bne Scroll
 
 ;; Moves the view to the left half, columns 0-39.
+;; Also: TAB3 (A2PBIOS, WK11)
 ShowLeft:
     lda #0
 

@@ -14,36 +14,47 @@ Button2 = $C063
 ; are PHASEOFF, PHASEON, Q6L, Q6H, Q7L and Q7H.
 
 ;; Turns stepper phase 0 off. Phase n's switch is 2n above, and the next address turns it on.
+;; Also: DRVSM0 (WK11)
 DiskPhase0Off = $C080
 
 ;; Turns stepper phase 1 off.
+;; Also: DRVSM2 (WK11)
 DiskPhase1Off = $C082
 
 ;; Turns stepper phase 2 off.
+;; Also: DRVSM4 (WK11)
 DiskPhase2Off = $C084
 
 ;; Turns stepper phase 3 off.
+;; Also: DRVSM6 (WK11)
 DiskPhase3Off = $C086
 
 ;; Turns the drive's motor off, after the drive's own delay of about a second.
+;; Also: DRVOFF (WK11)
 DiskMotorOff = $C088
 
 ;; Turns the drive's motor on.
+;; Also: DRVON (WK11)
 DiskMotorOn = $C089
 
 ;; Selects drive 1. The next address selects drive 2.
+;; Also: DRVSL1 (WK11)
 DiskSelect1 = $C08A
 
 ;; Reads the data latch (Q6 off), and shifts a loaded byte out when writing.
+;; Also: DRVRD (WK11)
 DiskLatch = $C08C
 
 ;; Q6 on: senses write protection, with <DiskReadMode>, or loads the write latch.
+;; Also: DRVWR (WK11)
 DiskLoad = $C08D
 
 ;; Q7 off: reading. On a communications card, the same address is its ACIA's status and control register.
+;; Also: DRVRDM (WK11)
 DiskReadMode = $C08E
 
 ;; Q7 on: writing. On a communications card, the same address is its ACIA's data register.
+;; Also: DRVWRM (WK11)
 DiskWriteMode = $C08F
 
 ; Cards at fixed slots.

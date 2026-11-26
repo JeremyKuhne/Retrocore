@@ -22,6 +22,7 @@ OPCODE_SIND0 = $F8
 VARIABLE_BIAS = MSCW_SIZE - 2
 
 ;; <LDCN at OpLDCN>: pushes NIL, 0.
+;; Also: LDCN (A2POSRM, UCSD20, WK11)
 .proc OpLDCN
     lda #0
     pha
@@ -30,6 +31,7 @@ VARIABLE_BIAS = MSCW_SIZE - 2
 .endproc
 
 ;; <LDCI at OpLDCI>: pushes the word that follows the opcode.
+;; Also: LDCI (A2POSRM, WK11)
 .proc OpLDCI
     ldy #2
     lda (IPC),y
@@ -42,6 +44,7 @@ VARIABLE_BIAS = MSCW_SIZE - 2
 
 ;; <SLDL at OpSLDL> 1-16: pushes local 1-16, as the opcode gives it.
 ;; In: A = the opcode times 2, less 256, and carry = set, as <Fetch> leaves them
+;; Also: SLDL (A2POSRM, WK11)
 .proc OpSLDL
     ; The opcode gives the local's number: A less 2 times (SLDL 1's opcode less 1) is the number times 2.
     sbc #<(2 * (OPCODE_SLDL1 - 1)) - VARIABLE_BIAS - 1
@@ -57,6 +60,7 @@ VARIABLE_BIAS = MSCW_SIZE - 2
 .endproc
 
 ;; <LDL at OpLDL>: pushes the local the big operand numbers.
+;; Also: LDL (A2POSRM, UCSD20, WK11)
 .proc OpLDL
     ; Find it.
     ldy #1
@@ -80,6 +84,7 @@ VARIABLE_BIAS = MSCW_SIZE - 2
 .endproc
 
 ;; <LLA at OpLLA>: pushes the address of the local the big operand numbers.
+;; Also: LLA (A2POSRM, WK11)
 .proc OpLLA
     ; Work out its address.
     ldy #1
@@ -108,6 +113,7 @@ Push:
 .endproc
 
 ;; <STL at OpSTL>: pops a word into the local the big operand numbers.
+;; Also: STL (A2POSRM, WK11)
 .proc OpSTL
     ; Find it.
     ldy #1
@@ -132,6 +138,7 @@ Push:
 
 ;; <SLDO at OpSLDO> 1-16: pushes global 1-16, as the opcode gives it.
 ;; In: A = the opcode times 2, less 256, and carry = set, as <Fetch> leaves them
+;; Also: SLDO (A2POSRM, WK11)
 .proc OpSLDO
     ; The opcode gives the global's number: A less 2 times (SLDO 1's opcode less 1) is the number times 2.
     sbc #<(2 * (OPCODE_SLDO1 - 1)) - VARIABLE_BIAS - 1
@@ -147,6 +154,7 @@ Push:
 .endproc
 
 ;; <LDO at OpLDO>: pushes the global the big operand numbers.
+;; Also: LDO (A2POSRM, UCSD20, WK11)
 .proc OpLDO
     ; Find it.
     ldy #1
@@ -170,6 +178,7 @@ Push:
 .endproc
 
 ;; <LAO at OpLAO>: pushes the address of the global the big operand numbers.
+;; Also: LAO (A2POSRM, UCSD20, WK11)
 .proc OpLAO
     ; Work out its address.
     ldy #1
@@ -198,6 +207,7 @@ Push:
 .endproc
 
 ;; <SRO at OpSRO>: pops a word into the global the big operand numbers.
+;; Also: SRO (A2POSRM, UCSD20, WK11)
 .proc OpSRO
     ; Find it.
     ldy #1
@@ -222,6 +232,7 @@ Push:
 
 ;; <LOD at OpLOD>: pushes an intermediate variable: the first operand gives how many lexical levels out its procedure
 ;; is, and the big operand after it the variable.
+;; Also: LOD (A2POSRM, UCSD20)
 .proc OpLOD
     ; Find the procedure's frame, and the variable in it.
     ldy #1
@@ -249,6 +260,7 @@ Push:
 .endproc
 
 ;; LDA: pushes the address of an intermediate variable, given as <LOD at OpLOD> gives it.
+;; Also: LDA (A2POSRM, UCSD20)
 .proc OpLDA
     ; Find the procedure's frame, and work out the variable's address in it.
     ldy #1
@@ -281,6 +293,7 @@ Push:
 .endproc
 
 ;; <STR at OpSTR>: pops a word into an intermediate variable, given as <LOD at OpLOD> gives it.
+;; Also: STR (A2POSRM, UCSD20)
 .proc OpSTR
     ; Find the procedure's frame, and the variable in it.
     ldy #1
@@ -309,6 +322,7 @@ Push:
 
 ;; <LDE at OpLDE>: pushes a word of a data segment: the first operand gives the segment, and the big operand after it
 ;; the word, n at 2n bytes above the segment's <SegmentAddresses> entry.
+;; Also: LDE (A2POSRM)
 .proc OpLDE
 
 ;; The word's address.
@@ -340,6 +354,7 @@ Word = Pointer
 .endproc
 
 ;; <STE at OpSTE>: pops a word into a data segment's word, given as <LDE at OpLDE> gives it.
+;; Also: STE (A2POSRM)
 .proc OpSTE
 
 ;; The word's address.
@@ -371,6 +386,7 @@ Word = Pointer
 .endproc
 
 ;; <LAE at OpLAE>: pushes the address of a data segment's word, given as <LDE at OpLDE> gives it.
+;; Also: LAE (A2POSRM)
 .proc OpLAE
     ; Work out its address, and push it.
     ldy #1
@@ -394,6 +410,7 @@ Word = Pointer
 ;; <SIND at OpSIND> 0-7: pops an address, and pushes the word at an offset from it: 0 for <SIND at OpSIND> 0, and for
 ;; <SIND at OpSIND> 1-7 the opcode's number, in words.
 ;; In: A = the opcode times 2, less 256, carry = set, and Y = 0, as <Fetch> leaves them
+;; Also: SIND (A2POSRM, WK11)
 .proc OpSIND
     ; SIND 1-7: the opcode gives the offset. A less 2 times SIND 0's opcode is the offset in bytes.
     sbc #<(2 * OPCODE_SIND0)
@@ -401,6 +418,7 @@ Word = Pointer
 
 ;; <SIND at OpSIND> 0, which <Fetch> reaches with Y = 0: the word at the address itself.
 ;; In: Y = the offset in bytes
+;; Also: SIND0 (WK11)
 Zero:
     ; Pop the address, and push the word.
     pla
@@ -417,6 +435,7 @@ Zero:
 .endproc
 
 ;; <STO at OpSTO>: pops a word, then an address, and stores the word there.
+;; Also: STO (A2POSRM, UCSD20, WK11)
 .proc OpSTO
 
 ;; The word.

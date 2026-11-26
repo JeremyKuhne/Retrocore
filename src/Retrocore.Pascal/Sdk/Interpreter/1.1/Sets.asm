@@ -62,6 +62,7 @@ WORD_BIT_MASK = $0F
 ;;   Y = the stack index of the lower set's first byte
 ;;   LowerSet = the same
 ;;   S = just below the top set's first byte, so PLA pulls it
+;; Also: FIXSET (WK11)
 .proc PopSetOperands
 
 ;; The return address, less 1, as JSR pushed it.
@@ -113,6 +114,7 @@ Jump:
 .endproc
 
 ;; <INT at OpINT>: pops two sets and pushes their intersection, as long as the lower set.
+;; Also: INT (A2POSRM, UCSD20, WK11)
 .proc OpINT
 
 ;; How many of the lower set's bytes are past the top set's, which become 0.
@@ -166,6 +168,7 @@ Done:
 .endproc
 
 ;; <DIF at OpDIF>: pops two sets and pushes the lower one without the top one's elements, as long as the lower set.
+;; Also: DIF (A2POSRM, WK11)
 .proc OpDIF
     jsr PopSetOperands
 
@@ -195,6 +198,7 @@ Done:
 .endproc
 
 ;; <UNI at OpUNI>: pops two sets and pushes their union, as long as the longer of the two.
+;; Also: UNI (A2POSRM, UCSD20, WK11)
 .proc OpUNI
 
 ;; The lower set's size in bytes, when it is the shorter.
@@ -284,6 +288,7 @@ MoveByte:
 
 ;; <ADJ at OpADJ>: pops a set's length and makes its bytes as many words as its operand says: cuts bytes off its end, or
 ;; adds zeros. The set stays on the stack without its length.
+;; Also: ADJ (A2POSRM, UCSD20)
 .proc OpADJ
 
 ;; The set's size in bytes.
@@ -383,6 +388,7 @@ StoreZero:
 .endproc
 
 ;; <INN at OpINN>: pops a set and the element below it, and pushes true when the element is in the set.
+;; Also: INN (A2POSRM, UCSD20, WK11)
 .proc OpINN
 
 ;; The set's size in bytes.
@@ -392,6 +398,7 @@ SetSize = Result+2
 Element = Procedure
 
 ;; The stack pointer once the set and the element are popped.
+;; Also: SPTEMP (WK11)
 SavedStack = Scratch
 
 ;; The element's byte in the set.
@@ -469,6 +476,7 @@ NotIn:
 .endproc
 
 ;; A byte with each bit set, for <INN at OpINN>.
+;; Also: BITTBL (WK11)
 BitMasks:
     BitMask 0
     BitMask 1
@@ -481,6 +489,7 @@ BitMasks:
 
 ;; <SGS at OpSGS>: pops an element and pushes the set of just that element, by pushing it twice and going on into
 ;; <OpSRS>.
+;; Also: SGS (A2POSRM, UCSD20, WK11)
 .proc OpSGS
 
 ;; The element.
@@ -504,6 +513,7 @@ Element = Result
 ;; <SRS at OpSRS>: pops an upper and a lower bound, and pushes the set of the elements from one to the other, or the
 ;; empty set when the lower is the greater. A negative lower bound, or an upper one above 511, pushes the empty set and
 ;; reports <ERROR_VALUE_RANGE>.
+;; Also: SRS (A2POSRM, UCSD20, WK11)
 .proc OpSRS
 
 ;; The upper bound, which was on top.

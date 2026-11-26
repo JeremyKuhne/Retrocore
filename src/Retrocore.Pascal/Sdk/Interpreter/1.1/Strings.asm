@@ -5,6 +5,7 @@
 ;; <LPA at OpLPA>: pushes the address of the characters in its operand, a length byte and that many characters, and
 ;; steps <IPC> past them.
 ;; In: Y = 0, as <Fetch::Next> leaves it
+;; Also: LPA (A2POSRM)
 .proc OpLPA
     ; Step past the opcode, and read the length.
     inc IPC
@@ -30,6 +31,7 @@ PushAddress:
 ;; steps <IPC> past it.
 ;; In: Y = 0, as <Fetch::Next> leaves it
 ;; Entry: SkipCharacters = steps <IPC> past X characters and runs the next p-code
+;; Also: LCA (UCSD20), LSA (A2POSRM)
 .proc OpLSA
     ; Step past the opcode, and push the string's address.
     inc IPC
@@ -66,6 +68,7 @@ Next:
 ;; string reports <ERROR_STRING_OVERFLOW>.
 ;;
 ;; A character is pushed as a word whose high byte is 0, which no string's address has.
+;; Also: SAS (A2POSRM, UCSD20, WK11)
 .proc OpSAS
     ; Pop the string and the variable, and read the largest length.
     pla
@@ -109,12 +112,15 @@ CountDown:
     bne CopyByte
     jmp Fetch::Skip2
 
+;; Reports a string overflow: the source is longer than the destination's size.
+;; Also: JERR13 (WK11)
 Overflow:
     jmp ExecutionError::StringOverflow
 .endproc
 
 ;; <IXS at OpIXS>: checks the index on top of the stack against the string whose address is below it, leaving both
 ;; there, and reports <ERROR_VALUE_RANGE> unless the index is from 1 to the string's length.
+;; Also: IXS (A2POSRM, UCSD20, WK11)
 .proc OpIXS
 
 ;; The string.

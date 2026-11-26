@@ -52,9 +52,11 @@ POWERS_OF_TEN = 39
 
 ;; The right operand, unpacked: the real on top of the stack, which a handler pops first. It is the only operand of
 ;; <SQR at RealMath::OpSQR>, <TNC at RealMath::CspTNC> and <RND at RealMath::CspRND>.
+;; Also: FPREG1 (WK11)
 Right = Pointer
 
 ;; The left operand, unpacked: the real below the right one.
+;; Also: FPREG2 (WK11)
 Left = Buffer
 
 ;; The return address of a routine that pulls or pushes a real under it, kept while it does.
@@ -64,6 +66,7 @@ CallerReturn = Work2
 ;; byte of 0.
 ;; In: X = the unpacked real to fill: <Right>, <Left> or <Result>
 ;; Keeps: X, Y
+;; Also: PULLFP (WK11)
 .proc PopReal
     ; Take the return address off the stack, to reach the real under it.
     pla
@@ -112,6 +115,7 @@ Return:
 ;; must already be rounded.
 ;; In: X = the unpacked real: <Right>, <Left> or <Result>
 ;; Keeps: X, Y
+;; Also: PUSHFP (WK11)
 .proc PushReal
     ; Take the return address off the stack, to push the real under it.
     pla
@@ -311,6 +315,7 @@ Done:
 
 ;; Adds <Right>'s and <Left>'s magnitudes into <Result>, and rounds it. The caller sets <Result>'s sign.
 ;; Keeps: Y
+;; Also: FADD (WK11)
 .proc AddMantissas
     ; Align them, and add.
     jsr AlignReals
@@ -338,6 +343,7 @@ Done:
 ;; Subtracts <Right>'s magnitude from <Left>'s, which must be no smaller, into <Result>, and normalizes and rounds it. A
 ;; difference whose mantissa is 0 is 0.0. The caller sets <Result>'s sign otherwise.
 ;; Keeps: Y
+;; Also: FSUB (WK11)
 .proc SubtractMantissas
     ; Align them, and subtract.
     jsr AlignReals
@@ -380,6 +386,7 @@ NotZero:
 ;; Out:
 ;;   A = the sign of the operand whose magnitude is larger (<Left>'s when they are equal)
 ;;   carry = set when they were not swapped
+;; Also: FCMP (WK11)
 .proc OrderOperands
     ; Compare the magnitudes: the exponents, then the mantissas from the top.
     lda Right+REAL_EXPONENT
@@ -433,6 +440,7 @@ Swap:
 .endproc
 
 ;; <ADR at RealMath::OpADR>: pops two reals and pushes their sum.
+;; Also: ADR (A2POSRM, WK11)
 .proc OpADR
     ; Pop the right operand, then the left.
     ldx #Right
@@ -476,6 +484,7 @@ SignsDiffer:
 .endproc
 
 ;; <SBR at RealMath::OpSBR>: pops two reals and pushes the left one minus the right one.
+;; Also: SBR (A2POSRM, WK11)
 .proc OpSBR
     ; Pop the right operand, then the left.
     ldx #Right
@@ -528,6 +537,7 @@ SetSign:
 .endproc
 
 ;; <DVR at RealMath::OpDVR>: pops two reals and pushes the left one divided by the right one.
+;; Also: DVR (A2POSRM, UCSD20, WK11)
 .proc OpDVR
 
 ;; The trial difference's mantissa low byte, and at Difference+1 its guard byte, kept until the subtraction is known
@@ -718,6 +728,7 @@ Round:
 .endproc
 
 ;; <MPR at RealMath::OpMPR>: pops two reals and pushes their product.
+;; Also: MPR (A2POSRM, WK11)
 .proc OpMPR
     ; Pop the right operand, then the left.
     ldx #Right
@@ -748,6 +759,7 @@ Multiply:
 .endproc
 
 ;; <SQR at RealMath::OpSQR>: pops a real and pushes its square.
+;; Also: SQR (A2POSRM, UCSD20, WK11)
 .proc OpSQR
     ; Pop it. The square of 0.0 is 0.0.
     ldx #Right
@@ -782,6 +794,7 @@ NotZero:
 .endproc
 
 ;; <ABR at RealMath::OpABR>: clears the sign bit of the real on top of the stack, making it its absolute value.
+;; Also: ABR (A2POSRM, UCSD20, WK11)
 .proc OpABR
     ; Point X at the real's high byte, TOP_REAL_SIGN past S.
     tsx
@@ -797,6 +810,7 @@ NotZero:
 .endproc
 
 ;; <NGR at RealMath::OpNGR>: flips the sign bit of the real on top of the stack, unless it is 0.0.
+;; Also: NGR (A2POSRM, UCSD20, WK11)
 .proc OpNGR
 
 ;; The real's high word's low byte: the exponent's low bit, then the mantissa's top 7 bits.
@@ -832,6 +846,7 @@ Done:
 ;; -32768: its magnitude, $8000, already has bit 15 set, and the normalizing loop shifts before it tests, so it
 ;; shifts the bit out and loops on 0.
 ;; Out: Result = the integer, as a real
+;; Also: FLOAT (WK11)
 .proc PopIntegerAsReal
 
 ;; The integer, then its magnitude, shifted up until its top bit is 1.
@@ -906,6 +921,7 @@ JumpBack:
 .endproc
 
 ;; <FLO at RealMath::OpFLO>: converts the integer under the real on top of the stack to a real.
+;; Also: FLO (A2POSRM, UCSD20, WK11)
 .proc OpFLO
 
 ;; The real on top of the stack, its 4 bytes as they were pulled from the top, kept while the integer under it is
@@ -940,6 +956,7 @@ SavedReal = Pointer2
 .endproc
 
 ;; <FLT at RealMath::OpFLT>: converts the integer on top of the stack to a real.
+;; Also: FLT (A2POSRM, UCSD20, WK11)
 .proc OpFLT
     jsr PopIntegerAsReal
     ldx #Result
@@ -954,6 +971,7 @@ SavedReal = Pointer2
 ;; Out:
 ;;   IntegerHigh = the integer's high byte
 ;;   IntegerLow = its low byte
+;; Also: FIX (WK11)
 .proc TruncateReal
 
 ;; Whether to round: not 0 to round, 0 to truncate.
@@ -1031,6 +1049,7 @@ Done:
 
 ;; <RND at RealMath::CspRND>, the standard procedure ROUND: pops a real and pushes the integer nearest it, half away
 ;; from 0.
+;; Also: RND (A2POSRM, WK11), ROUND (UCSD20)
 .proc CspRND
     lda #1
     sta TruncateReal::Rounding
@@ -1045,6 +1064,7 @@ Done:
 .endproc
 
 ;; <TNC at RealMath::CspTNC>, the standard procedure TRUNC: pops a real and pushes its integer part.
+;; Also: TNC (A2POSRM, WK11), TRUNC (UCSD20)
 .proc CspTNC
     lda #0
     sta TruncateReal::Rounding
@@ -1060,6 +1080,7 @@ Done:
 
 ;; <POT at RealMath::CspPOT>, the standard procedure PWROFTEN: pops an integer, 0 to <POWERS_OF_TEN> - 1, and pushes ten
 ;; to that power, from <PowersOfTen>.
+;; Also: POT (A2POSRM), PWR10 (WK11), PWROFTEN (UCSD20)
 .proc CspPOT
     ; Pop the power. Its high byte must be 0, and its low byte below POWERS_OF_TEN; BPL tests the difference's bit
     ; 7, so 167 to 255 pass too, and read entry n mod 64: a power for 192 to 230, and the bytes past PowersOfTen for
@@ -1097,6 +1118,7 @@ OutOfRange:
 .endproc
 
 ;; The reals 1.0E0 to 1.0E38, for <POT at RealMath::CspPOT>, each with its high word first.
+;; Also: P10TBL (WK11)
 PowersOfTen:
     PowerOfTen 0, $3F80, $0000
     PowerOfTen 1, $4120, $0000

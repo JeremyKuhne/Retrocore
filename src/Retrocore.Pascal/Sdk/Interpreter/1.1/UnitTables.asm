@@ -51,6 +51,7 @@ FreeStorage:
 
 ;; A JMP for each attached unit, 0-15, which attaching a driver fills in. <AttachedDriver> jumps to them, and
 ;; <UnitIo::CheckUnit> reads their addresses' high bytes. The last one's address is <UnitTable>'s unit 0 entry.
+;; Also: UDJMPV (WK11), UDJMPVEC (A2PBIOS)
 AttachedDrivers:
     DriverJump 0
     DriverJump 1
@@ -74,6 +75,7 @@ AttachedDrivers:
 
 ;; Each unit's device, a word a unit from unit 0: <CHARACTER_DEVICE>, a drive number (with a high byte of 0) for a Disk
 ;; II drive, or else the address, less 1, of a driver that <UnitDriver> runs.
+;; Also: DISKNUM (A2PBIOS)
 UnitTable:
     NoUnit 0
     CharacterUnit 1
@@ -98,6 +100,7 @@ UnitTable:
 ;; In:
 ;;   A = the unit, with <ATTACHED_UNIT> set
 ;;   X, Stack = for the driver
+;; Also: UDRWIS (A2PBIOS), URWIS (WK11)
 .proc AttachedDriver
     ; Work out the entry's address: BiosPointers's first word, plus the unit times DRIVER_JUMP_SIZE.
     sta BiosSavedA

@@ -10,12 +10,15 @@ ASCII_BITS = $7F
 ; The console's keys in SYSCOM, which ConsoleCheck reads through SyscomPointer.
 
 ;; The offset in SYSCOM of the flush key, which switches <ConsoleFlags>' <CONSOLE_FLUSHED> on or off.
+;; Also: CRTINFO_FLUSH (A2POSRM, UCSD20)
 SYSCOM_FLUSH_KEY = $53
 
 ;; The offset in SYSCOM of the break key, which runs the break handler.
+;; Also: CRTINFO_BREAK (A2POSRM, UCSD20)
 SYSCOM_BREAK_KEY = $54
 
 ;; The offset in SYSCOM of the stop key, which switches <ConsoleFlags>' <CONSOLE_STOPPED> on or off.
+;; Also: CRTINFO_STOP (A2POSRM, UCSD20)
 SYSCOM_STOP_KEY = $55
 
 ; ConsoleFlags' bits.
@@ -32,6 +35,7 @@ CONSOLE_FOLLOW = $01
 ; Type-ahead and the firmware.
 
 ;; The places in <TypeAhead>. It holds one key fewer: <ConsoleCheck> counts it full with one place left empty.
+;; Also: CBUFLEN (A2PBIOS)
 TYPE_AHEAD_SIZE = 78
 
 ;; <FirmwareStatus>'s request to a <CARD_PASCAL_FIRMWARE> card: is it ready for output?
@@ -46,6 +50,7 @@ FIRMWARE_ASK_INPUT = 1
 ;; <IoControl>'s bit 0 skips Control-K, Control-A, Control-Z and the case keys, and its bit 1 the stop, break and
 ;; flush keys, which then go into <TypeAhead> as they are. The break key does not return: it goes to <BreakJump>.
 ;; Keeps: A, X, Y, P
+;; Also: CONCK (A2PBIOS, WK11)
 .proc ConsoleCheck
     php
     pha
@@ -54,13 +59,15 @@ FIRMWARE_ASK_INPUT = 1
     tya
     pha
 
-    ; Count the poll.
+;; Counts the poll in PollCount.
+;; Also: RNDINC (A2PBIOS)
 Poll:
     inc PollCount
     bne ByCard
     inc PollCount+1
 
-    ; Poll the console's card, if it has one. A CARD_PASCAL_FIXED card is read only by ConsoleRead.
+;; Polls the console's card, if it has one. A CARD_PASCAL_FIXED card is read only by ConsoleRead.
+;; Also: RNDOK (A2PBIOS)
 ByCard:
     lda SlotTypes + CONSOLE_SLOT - 1
     cmp #CARD_SERIAL
@@ -88,7 +95,8 @@ ByCard:
     bne NotCtrlK
     lda #'['
 
-    ; Control-A: show the other half, and stop following the cursor.
+;; Control-A: shows the other half of the screen, and stops following the cursor.
+;; Also: NOTK (A2PBIOS)
 NotCtrlK:
     cmp #CTRL_A
     bne NotCtrlA
@@ -98,7 +106,8 @@ NotCtrlK:
     sta ConsoleFlags
     jmp CheckStopped
 
-    ; Control-Z: follow the cursor. ORA leaves A not 0, so this always branches.
+;; Control-Z: follows the cursor. ORA leaves A not 0, so its branch is always taken.
+;; Also: NTTAB (A2PBIOS)
 NotCtrlA:
     cmp #CTRL_Z
     bne CaseKeys
@@ -107,20 +116,28 @@ NotCtrlA:
     sta ConsoleFlags
     bne CheckStopped
 
-    ; A CARD_SERIAL card: take a key from its ACIA, if it has one.
+;; Takes a key from a CARD_SERIAL card's ACIA, if it has one.
+;; Also: COMCK (A2PBIOS, WK11)
 SerialKey:
     lda Slot3AciaStatus
     lsr a
     bcc CheckStopped
     lda Slot3AciaData
+
+;; Takes a key in A: strips it to seven bits.
+;; Also: GOTCH (WK11), GOTCHAR (A2PBIOS)
 StripKey:
     and #ASCII_BITS
 
-    ; Skip the stop, break and flush keys if IoControl's bit 1 says so.
+;; Skips the stop, break and flush keys if IoControl's bit 1 says so.
+;; Also: NOTFOL (A2PBIOS)
 SystemKeys:
     tax
     lda IoControl
     ror a
+
+;; Rotates IoControl's bit 1 into carry: set skips the stop, break and flush keys.
+;; Also: NOTFOLP2 (A2PBIOS)
 TestSystemKeys:
     ror a
     bcs StoreX
@@ -133,10 +150,14 @@ TestSystemKeys:
     lda ConsoleFlags
     eor #CONSOLE_STOPPED
     sta ConsoleFlags
+
+;; Goes on to poll again while output is stopped.
+;; Also: JDONCK (A2PBIOS)
 NoKey:
     jmp CheckStopped
 
-    ; A CARD_PASCAL_FIRMWARE card: take a key from it, if it has one.
+;; Takes a key from a CARD_PASCAL_FIRMWARE card, if it has one.
+;; Also: FIRMCK (A2PBIOS)
 FirmwareKey:
     lda #FIRMWARE_ASK_INPUT
     ldy #CONSOLE_SLOT * 16
@@ -145,7 +166,8 @@ FirmwareKey:
     jsr FirmwareRead
     jmp StripKey
 
-    ; The break key: start output again, stop flushing it, and run the break handler.
+;; The break key: starts output again, stops flushing it, and runs the break handler.
+;; Also: NOTSTOP (A2PBIOS)
 NotStop:
     .assert SYSCOM_BREAK_KEY = SYSCOM_STOP_KEY - 1, "ConsoleCheck steps Y down from the stop key to the break key."
     dey
@@ -156,7 +178,8 @@ NotStop:
     sta ConsoleFlags
     jmp BreakJump
 
-    ; The flush key: flush output, or stop flushing it.
+;; The flush key: flushes output, or stops flushing it.
+;; Also: NOTBRK (A2PBIOS, WK11)
 NotBreak:
     .assert SYSCOM_FLUSH_KEY = SYSCOM_BREAK_KEY - 1, "ConsoleCheck steps Y down from the break key to the flush key."
     dey
@@ -167,9 +190,13 @@ NotBreak:
     sta ConsoleFlags
     jmp CheckStopped
 
-    ; Store the key in TypeAhead, or beep if it is full.
+;; Stores the key in X in TypeAhead, or beeps if it is full.
+;; Also: NFMI1 (A2PBIOS)
 StoreX:
     txa
+
+;; Stores the key in A in TypeAhead, or beeps if it is full.
+;; Also: NOTFLUS (A2PBIOS)
 Store:
     ldx TypeAheadIn
     jsr NextTypeAhead
@@ -177,11 +204,15 @@ Store:
     bne Stored
     jsr Beep
     jmp CheckStopped
+
+;; Stores the key at the type-ahead's new write position.
+;; Also: BUFOK (A2PBIOS)
 Stored:
     stx TypeAheadIn
     sta TypeAhead,x
 
-    ; Poll again while output is stopped.
+;; Polls again while output is stopped.
+;; Also: DONECK (A2PBIOS)
 CheckStopped:
     bit ConsoleFlags
     bpl Return
@@ -251,6 +282,8 @@ SetCase:
     jsr InverseCapitalsOn
     bne CheckStopped
 
+;; Restores the registers and returns.
+;; Also: CKEXIT (A2PBIOS)
 Return:
     pla
     tay
@@ -265,11 +298,15 @@ Return:
 ;; In: X = the index
 ;; Out: X = the next index
 ;; Keeps: A, Y
+;; Also: BUMP (A2PBIOS), IXZE78 (WK11)
 .proc NextTypeAhead
     inx
     cpx #TYPE_AHEAD_SIZE
     bne Done
     ldx #0
+
+;; Returns with the position in X.
+;; Also: BMPRTS (A2PBIOS)
 Done:
     rts
 .endproc
@@ -278,6 +315,7 @@ Done:
 ;; <TypeAhead>, starts output again, stops flushing it and following the cursor, and shows the screen's left half.
 ;; In: Stack = under the return address, SYSCOM's address, then the break handler's
 ;; Out: X = <IO_OK>
+;; Also: CINIT (A2PBIOS, WK11), CONINIT (A2PBIOS)
 .proc ConsoleInit
 
 ;; The return address, kept while <ConsoleInit> pulls its arguments from under it.
@@ -317,6 +355,7 @@ Caller = CardPointer
 ;; The BIOS's console read: moves the view to the cursor if it follows it, and waits for a key in <TypeAhead>, or
 ;; reads one from a <CARD_PASCAL_FIXED> console card.
 ;; Out: A = the key, X = <IO_OK>
+;; Also: CREAD (A2PBIOS, WK11)
 .proc ConsoleRead
 Wait:
     jsr FollowCursor
@@ -330,7 +369,8 @@ Wait:
     and #ASCII_BITS
     rts
 
-    ; Poll until TypeAhead has a key, and take it.
+;; Polls until TypeAhead has a key, and takes it.
+;; Also: CREAD2 (A2PBIOS)
 FromTypeAhead:
     jsr ConsoleCheck
     ldx TypeAheadOut

@@ -2,11 +2,13 @@
 ;; The Disk II driver's variables at the end of bank 2.
 
 ;; <WriteSector>'s slot times 16, for reloading X in its loop over <ScratchBuffer>.
+;; Also: HSLOT2 (WK11)
 WriteSlot:
     .res 1
 
 ;; The arm's half-track while <StepArm> moves it; <SeekTrack> then halves it to the track that address fields should
 ;; show.
+;; Also: CURTRK (WK11)
 ArmPosition:
     .res 1
 

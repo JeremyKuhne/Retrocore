@@ -12,6 +12,7 @@ TRUE_BIT = 1
 Entry = Pointer
 
 ;; FJP: pops a boolean, and jumps by the offset when it is false.
+;; Also: FJP (A2POSRM, UCSD20, WK11)
 IfFalse:
     ; Pop the boolean. True: on to the next p-code.
     pla
@@ -24,6 +25,7 @@ IfFalse:
     ; False: jump, as UJP does.
 
 ;; UJP: jumps by the offset.
+;; Also: UJP (A2POSRM, UCSD20, WK11)
 Always:
     ; A positive offset counts from the next p-code: add it to IPC, and step over the UJP.
     clc

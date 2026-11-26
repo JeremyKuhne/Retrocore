@@ -17,6 +17,7 @@ XJP_TABLE = 7
 
 ;; <XJP at OpXJP>: pops a value and jumps to its case through the jump table, or runs the <UJP at Jump::Always> after
 ;; the bounds when the value is out of range. The bounds are signed.
+;; Also: XJP (A2POSRM, UCSD20)
 .proc OpXJP
 
 ;; The value.
@@ -110,7 +111,8 @@ Jump:
     sta IPC+1
     jmp Fetch::Next
 
-    ; Out of range: run the UJP.
+;; Runs the UJP after the table: the index is out of its range.
+;; Also: OUTBND (WK11)
 OutOfRange:
     lda IPC
     clc

@@ -3,6 +3,7 @@
 
 ;; The routine that runs each opcode from <FIRST_TABLE_OPCODE> ($80) up, in opcode order. Fetch reaches it
 ;; through <Dispatch>.
+;; Also: PCTBL (WK11)
 OpcodeTable:
     Opcode $80, OpABI
     Opcode $81, RealMath::OpABR
@@ -104,6 +105,7 @@ OpcodeTable:
 
 ;; The routine that runs each standard procedure, by the number <CSP at OpCSP> gives it. <OpCSP> reaches it through
 ;; <CspDispatch>.
+;; Also: CSPTBL (WK11)
 CspTable:
     StandardProcedure CSP::IOC, UnitIo::CspIOC
     StandardProcedure CSP::NEW, CspNEW

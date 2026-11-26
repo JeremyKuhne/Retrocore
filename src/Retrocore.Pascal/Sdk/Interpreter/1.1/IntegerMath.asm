@@ -4,6 +4,7 @@
 ;; share with the array handlers, and <CHK at OpCHK>, the range check.
 
 ;; <ABI at OpABI>: replaces the integer on top of the stack with its absolute value.
+;; Also: ABI (A2POSRM, UCSD20, WK11)
 .proc OpABI
     ; Pop the integer: X = its low byte, A = its high byte.
     pla
@@ -35,6 +36,7 @@ Negative:
 .endproc
 
 ;; <ADI at OpADI>: pops two integers and pushes their sum.
+;; Also: ADI (A2POSRM, UCSD20, WK11)
 .proc OpADI
 
 ;; The integer that was on top.
@@ -66,6 +68,7 @@ Addend = Pointer
 .endproc
 
 ;; <NGI at OpNGI>: replaces the integer on top of the stack with its two's complement.
+;; Also: NGI (A2POSRM, UCSD20, WK11)
 .proc OpNGI
     ; Negate the low byte, keeping it in X.
     pla
@@ -85,6 +88,7 @@ Addend = Pointer
 .endproc
 
 ;; <SBI at OpSBI>: pops two integers and pushes the lower one less the top one.
+;; Also: SBI (A2POSRM, UCSD20, WK11)
 .proc OpSBI
 
 ;; The integer that was on top, which is subtracted.
@@ -120,6 +124,7 @@ Subtrahend = Pointer
 ;; In: Multiplicand = one number, Multiplier = the other
 ;; Out: Product = the product's low word, ProductHigh = its high word, Multiplier = destroyed
 ;; Keeps: Y
+;; Also: MULSUB (WK11)
 .proc Multiply
 
 ;; The number added in for each 1 bit of <Multiplier>.
@@ -132,6 +137,7 @@ Multiplier = Work3
 Product = Work4
 
 ;; The product's high word, which the multiplicand is added to.
+;; Also: SUM (WK11)
 ProductHigh = Address
 
     ; Clear the high word. The low word's old bits are all shifted out.
@@ -168,6 +174,7 @@ Shift:
 ;;
 ;; The low word is the same for signed numbers as for unsigned ones, so it multiplies them as they are, except that
 ;; when both are negative it negates both first, which leaves the low word as it was.
+;; Also: MPI (A2POSRM, UCSD20), MULPLY (WK11)
 .proc OpMPI
     ; Pop the top integer as the multiplier. Is it negative?
     pla
@@ -223,6 +230,7 @@ Calculate:
 
 ;; <SQI at OpSQI>: replaces the integer on top of the stack with the low word of its square, by pushing a copy and
 ;; running <MPI at OpMPI>.
+;; Also: SQI (A2POSRM, UCSD20, WK11)
 .proc OpSQI
     ; Push a copy of the integer on top.
     tsx
@@ -242,6 +250,7 @@ Calculate:
 ;;   Remainder = the magnitudes' remainder
 ;;   QuotientSign = 0 when the quotient is positive, nonzero when it must be negated
 ;;   Divisor = destroyed
+;; Also: DIVIDE (WK11)
 .proc Divide
 
 ;; The divisor, made positive; then the high word of the 32-bit divisor that is shifted right.
@@ -384,6 +393,7 @@ QuotientBit:
 .endproc
 
 ;; <DVI at OpDVI>: pops a divisor and a dividend below it, and pushes their quotient, rounded toward 0.
+;; Also: DVI (A2POSRM, UCSD20, WK11)
 .proc OpDVI
     ; Pop the divisor and the dividend, and divide.
     pla
@@ -420,6 +430,7 @@ Push:
 
 ;; <MODI at OpMODI>: pops a divisor and a dividend below it, and pushes the remainder of their magnitudes, which is
 ;; never negative.
+;; Also: MOD (UCSD20), MODI (A2POSRM, WK11)
 .proc OpMODI
     ; Pop the divisor and the dividend, and divide.
     pla
@@ -442,6 +453,7 @@ Push:
 
 ;; <CHK at OpCHK>: pops an upper and a lower bound, and reports <ERROR_VALUE_RANGE> unless the integer below them, which
 ;; it leaves on the stack, is between them, the bounds included.
+;; Also: CHK (A2POSRM, UCSD20, WK11)
 .proc OpCHK
 
 ;; The upper bound, which was on top.
@@ -500,9 +512,13 @@ UpperSigns:
     lda Value+1
     bpl OutOfRange
 
+;; Goes on: the value is in range.
+;; Also: CHKOK (WK11)
 InRange:
     jmp Fetch::Skip1
 
+;; Reports a value range error.
+;; Also: CHKNG (WK11)
 OutOfRange:
     jmp ExecutionError::ValueRange
 .endproc

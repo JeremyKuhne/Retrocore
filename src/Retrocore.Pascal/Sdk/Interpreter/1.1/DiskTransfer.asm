@@ -27,12 +27,15 @@ DISK_ERROR_NOT_FOUND = $40
 ; The disk's layout.
 
 ;; The bytes in a sector: one 256-byte page.
+;; Also: BYTEPSEC (A2PBIOS)
 SECTOR_SIZE = 256
 
 ;; The sectors on a track. A track holds 8 of Pascal's 512-byte blocks.
+;; Also: SECPTRAK (A2PBIOS)
 SECTORS_PER_TRACK = 16
 
 ;; The tracks on a disk.
+;; Also: TRAKPDSK (A2PBIOS)
 DISK_TRACKS = 35
 
 ; The drives.
@@ -83,12 +86,14 @@ NO_PREPARED_SECTOR = $FF
 
 ;; The interrupt-disable flag of <DiskTransfer>'s caller, its P register AND <INTERRUPT_DISABLE>, kept while a
 ;; transfer runs with interrupts off so that <DiskPoll> can give it back.
+;; Also: SVFLGS (WK11)
 DiskSavedIrq:
     .res 1
 
 ;; Runs <ConsoleCheck> during a disk wait with the disk caller's interrupt-disable flag, then disables interrupts
 ;; again.
 ;; Keeps: A, X, Y, P
+;; Also: CCONCK (WK11)
 .proc DiskPoll
     ; Keep the flags and A.
     php
@@ -110,6 +115,7 @@ DiskSavedIrq:
 
 ;; Startup's disk setup: selects drive 1 in <MAIN_DISK_SLOT>, accepts any volume, records the slot's two arms at
 ;; track 0, and records drive 1 of the slot as the drive last used.
+;; Also: DRESET (A2PBIOS)
 .proc ResetDiskState
     ; Select drive 1.
     lda DiskSelect1 + MAIN_DISK_SLOT * 16
@@ -131,6 +137,7 @@ DiskSavedIrq:
 ;; BIOS call 5: writes blocks to a disk, with <DiskTransfer>.
 ;; In: Stack = <DiskTransfer>'s parameters, under the return address
 ;; Out: X = 0, or an error as <DiskTransfer> returns it
+;; Also: DWRITE (A2PBIOS, WK11)
 .proc DiskWrite
     ldy #DISK_WRITE
     bne DiskTransfer
@@ -139,6 +146,7 @@ DiskSavedIrq:
 ;; BIOS call 6: reads blocks from a disk, with <DiskTransfer>, which it falls into.
 ;; In: Stack = <DiskTransfer>'s parameters, under the return address
 ;; Out: X = 0, or an error as <DiskTransfer> returns it
+;; Also: DREAD (A2PBIOS, WK11)
 .proc DiskRead
     ldy #DISK_READ
 .endproc
@@ -578,17 +586,22 @@ Transferred:
     bne Continue
     plp
 
-    ; Leave with carry clear on success or set on an error, and the error in DiskError, turning the motor off.
+;; Leaves with carry clear on success (or, entered at Error, set, with the error in DiskError), turning the motor off.
+;; Also: WROK (WK11)
 Success:
     clc
     .byte $24                 ; BIT zero page: skips the next instruction for the code falling in
+
+;; Leaves with carry set and the error in DiskError, turning the motor off.
+;; Also: WRNG (WK11)
 Error:
     sec
     sta DiskError
     lda DiskMotorOff,x
     rts
 
-    ; Write the sector whose data is ready.
+;; Writes the sector whose data is ready.
+;; Also: WRSEC (WK11)
 Write:
     jsr WriteSector
     bcc Transferred

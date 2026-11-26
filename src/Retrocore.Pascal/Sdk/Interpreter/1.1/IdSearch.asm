@@ -86,6 +86,7 @@ WORD_SIZE = WORD_OPERATOR + 1
 ;; words all start with it. A letter with no words points at <NoWords>, whose count is 0: DEC takes the count to 255
 ;; before testing it, so IdSearch compares 256 entries of <WORD_SIZE> bytes from <NoWords> on, 3 bytes out of step with
 ;; the other letters' entries and on past the end of bank 2 to $E928, before it gives up.
+;; Apple's BIOS document jumps to it as IDS (A2PBIOS), the standard procedure's name.
 ;; In: Stack = under the return address, the buffer's address, then the record's
 .proc IdSearch
 
@@ -313,6 +314,7 @@ Return:
 
 ;; Where each letter's reserved words start, a word a letter from "A" to "Z": an entry of <WORD_SIZE> bytes a word,
 ;; the first leading with the letter's count of words.
+;; Also: RWREFS (WK11)
 ReservedWords:
     LetterWords 'A', WordsA
     LetterWords 'B', WordsB
@@ -343,37 +345,44 @@ ReservedWords:
 
 ;; Where the letters with no reserved words point: a count of 0, and two bytes with no known purpose. <IdSearch>
 ;; compares the second, and the next 6 bytes, as the first entry's word.
+;; Also: ATSK (WK11)
 NoWords:
     .byte 0
     .byte $40, $23
 
 ;; The reserved words that start with "A".
+;; Also: ANDK (WK11)
 WordsA:
     FirstReservedWord 2, "AND", $27, $02
     ReservedWord "ARRAY", $2C, $00
 
 ;; The reserved words that start with "B".
+;; Also: BEGK (WK11)
 WordsB:
     FirstReservedWord 1, "BEGIN", $13, $00
 
 ;; The reserved words that start with "C".
+;; Also: CASK (WK11)
 WordsC:
     FirstReservedWord 2, "CASE", $15, $00
     ReservedWord "CONST", $1C, $00
 
 ;; The reserved words that start with "D".
+;; Also: DIVK (WK11)
 WordsD:
     FirstReservedWord 3, "DIV", $27, $03
     ReservedWord "DO", $06, $00
     ReservedWord "DOWNTO", $08, $00
 
 ;; The reserved words that start with "E".
+;; Also: ENDK (WK11)
 WordsE:
     FirstReservedWord 3, "END", $09, $00
     ReservedWord "ELSE", $0D, $00
     ReservedWord "EXTERNAL", $35, $00
 
 ;; The reserved words that start with "F".
+;; Also: FORK (WK11)
 WordsF:
     FirstReservedWord 4, "FOR", $18, $00
     ReservedWord "FILE", $2E, $00
@@ -381,10 +390,12 @@ WordsF:
     ReservedWord "FUNCTION", $20, $00
 
 ;; The reserved words that start with "G".
+;; Also: GOTOK (WK11)
 WordsG:
     FirstReservedWord 1, "GOTO", $1A, $00
 
 ;; The reserved words that start with "I". IMPLEMENTATION and INTERFACE are kept to their first 8 characters.
+;; Also: IFK (WK11)
 WordsI:
     FirstReservedWord 4, "IF", $14, $00
     ReservedWord "IMPLEMEN", $34, $00
@@ -392,56 +403,67 @@ WordsI:
     ReservedWord "INTERFAC", $33, $00
 
 ;; The reserved words that start with "L".
+;; Also: LABK (WK11)
 WordsL:
     FirstReservedWord 1, "LABEL", $1B, $00
 
 ;; The reserved words that start with "M".
+;; Also: MODK (WK11)
 WordsM:
     FirstReservedWord 1, "MOD", $27, $04
 
 ;; The reserved words that start with "N".
+;; Kusche's listing calls it NOTK (WK11), the name Apple's BIOS gives a label in ConsoleCheck.
 WordsN:
     FirstReservedWord 1, "NOT", $26, $00
 
 ;; The reserved words that start with "O".
+;; Also: OFK (WK11)
 WordsO:
     FirstReservedWord 2, "OF", $0B, $00
     ReservedWord "OR", $28, $07
 
 ;; The reserved words that start with "P". PROCEDURE is kept to its first 8 characters.
+;; Also: PROCK (WK11)
 WordsP:
     FirstReservedWord 3, "PROCEDUR", $1F, $00
     ReservedWord "PROGRAM", $21, $00
     ReservedWord "PACKED", $2B, $00
 
 ;; The reserved words that start with "R".
+;; Also: REPK (WK11)
 WordsR:
     FirstReservedWord 2, "REPEAT", $16, $00
     ReservedWord "RECORD", $2D, $00
 
 ;; The reserved words that start with "S". SEGMENT has PROGRAM's token.
+;; Also: SETK (WK11)
 WordsS:
     FirstReservedWord 3, "SET", $2A, $00
     ReservedWord "SEGMENT", $21, $00
     ReservedWord "SEPARATE", $36, $00
 
 ;; The reserved words that start with "T".
+;; Also: THENK (WK11)
 WordsT:
     FirstReservedWord 3, "THEN", $0C, $00
     ReservedWord "TO", $07, $00
     ReservedWord "TYPE", $1D, $00
 
 ;; The reserved words that start with "U".
+;; Also: UNITK (WK11)
 WordsU:
     FirstReservedWord 3, "UNIT", $32, $00
     ReservedWord "UNTIL", $0A, $00
     ReservedWord "USES", $31, $00
 
 ;; The reserved words that start with "V".
+;; Also: VARK (WK11)
 WordsV:
     FirstReservedWord 1, "VAR", $1E, $00
 
 ;; The reserved words that start with "W".
+;; Also: WHILK (WK11)
 WordsW:
     FirstReservedWord 2, "WHILE", $17, $00
     ReservedWord "WITH", $19, $00

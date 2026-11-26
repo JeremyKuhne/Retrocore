@@ -24,6 +24,7 @@ TREE_LESS = $FF
 TREE_GREATER = 1
 
 ;; <CSP at OpCSP>: runs the standard procedure its operand numbers, through <CspDispatch> and <CspTable>.
+;; Also: CSP (A2POSRM, UCSD20)
 .proc OpCSP
     ldy #1
     lda (IPC),y
@@ -33,6 +34,7 @@ TREE_GREATER = 1
 .endproc
 
 ;; <IDS at CspIDS>: the Compiler's identifier search, which <IdSearch> runs in bank 2.
+;; Also: CSP7 (WK11), IDS (A2POSRM, UCSD20), IDSEARCH (A2POSRM, UCSD20)
 .proc CspIDS
     jsr BiosIdSearch
     jmp Fetch::Skip2
@@ -43,6 +45,7 @@ TREE_GREATER = 1
 ;;
 ;; Its parameters, from the top of the stack: the name's address, the variable to set to the last node it reached,
 ;; and the root node. The names compare a byte at a time, with BMI.
+;; Also: TREES (WK11), TREESEARCH (A2POSRM, UCSD20), TRS (A2POSRM, UCSD20)
 .proc CspTRS
 
 ;; The name to find.
@@ -142,6 +145,7 @@ SetFound:
 
 ;; <FLC at CspFLC>: fills bytes with a character. Its parameters, from the top of the stack: the character, the count,
 ;; and two words that add to the first byte's address, an address and an offset. A negative count fills nothing.
+;; Also: FILLC (WK11), FILLCHAR (A2POSRM, UCSD20), FLC (A2POSRM, UCSD20)
 .proc CspFLC
 
 ;; How many bytes to fill.
@@ -209,6 +213,7 @@ CountByte:
 ;; Its parameters, from the top of the stack: a word it ignores, two words that add to the start's address, the
 ;; character, the mode, and the limit, how far to go. A negative limit scans down. The byte at the limit is checked
 ;; too, so the result is the limit when no byte stops the scan.
+;; Also: SCAN (A2POSRM, UCSD20, WK11), SCN (A2POSRM, UCSD20)
 .proc CspSCN
 
 ;; The byte being checked.
@@ -336,6 +341,7 @@ Done:
 ;;
 ;; In the system's outer block, at a negative lexical level, it leaves the system through <OpXIT>. Reaching that block
 ;; without finding the procedure is <ExecutionError::ExitFromUncalledProc>.
+;; Also: EXIT (A2POSRM, UCSD20, WK11)
 .proc CspEXIT
 
 ;; The procedure to leave.
@@ -348,6 +354,7 @@ ExitSegment = Work1
 CallerFrame = Work2
 
 ;; The <JTAB> of <CallerFrame>'s caller, then its exit word.
+;; Also: TJTPTR (WK11)
 CallerJtab = Pointer2
 
 ;; The current procedure's exit word, then <CallerFrame>'s caller's <SEG>.
@@ -465,6 +472,7 @@ SetIpc:
 .endproc
 
 ;; <BPT at OpBPT>: a breakpoint, which SYSTEM.APPLE steps over with its big operand.
+;; Also: BPT (A2POSRM, UCSD20, WK11)
 .proc OpBPT
     ldy #1
     jsr GetBig
@@ -472,6 +480,7 @@ SetIpc:
 .endproc
 
 ;; <HLT at CspHLT>: steps <IPC> past the <CSP at OpCSP> and reports <ExecutionError::Interrupted>.
+;; Also: CSP39 (WK11), HALT (UCSD20)
 .proc CspHLT
     lda IPC
     clc
@@ -485,6 +494,7 @@ Report:
 
 ;; <TIM at CspTIM>: sets both of its variables, the time's two words, to 0, as the Apple II has no clock. Its
 ;; parameters, from the top of the stack: the two variables' addresses.
+;; Also: TIM (A2POSRM, UCSD20), TIME (A2POSRM, UCSD20, WK11)
 .proc CspTIM
 
 ;; The variable on top.
@@ -572,6 +582,8 @@ CountByte:
 ;; MVL and MVR: copy bytes, MVL with <MoveBytes> and MVR with <MoveBytesBackward>. Their parameters, from the top of the
 ;; stack: the count, two words that add to the target's address, and two that add to the source's. A negative count
 ;; copies nothing.
+;; Also: MOVELEFT (A2POSRM, UCSD20), MOVELR (WK11), MOVERIGHT (A2POSRM, UCSD20), MVL (A2POSRM, UCSD20),
+;;   MVR (A2POSRM, UCSD20)
 .proc CspMVL_MVR
 
 ;; How many bytes to copy.
@@ -665,6 +677,7 @@ CountByte:
 
 ;; <MEMA at CspMEMA>: pushes how many words are free between the heap and <KP>, counting SYSTEM.PASCAL's directory on
 ;; the heap as free.
+;; Also: FRE (WK11), MEMAVAIL (UCSD20)
 .proc CspMEMA
     ; KP less the directory, if there is one, or else less NP.
     sec

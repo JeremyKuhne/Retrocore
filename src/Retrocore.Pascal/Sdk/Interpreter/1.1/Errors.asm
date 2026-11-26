@@ -7,6 +7,7 @@
 ; Each entry's number is positive, so its BPL always goes to Report.
 
 ;; Reports <ERROR_VALUE_RANGE>.
+;; Also: ERR1 (WK11)
 ValueRange:
     lda #ERROR_VALUE_RANGE
     bpl Report
@@ -17,12 +18,14 @@ NoProcInSegTable:
     bpl Report
 
 ;; Reports <ERROR_EXIT_FROM_UNCALLED_PROC>.
+;; Also: ERR3 (WK11)
 ExitFromUncalledProc:
     lda #ERROR_EXIT_FROM_UNCALLED_PROC
     bpl Report
 
 ;; Makes room to report a stack overflow, and reports it: forgets the heap's directory, and moves <NP> to
 ;; <OVERFLOW_HEAP> and <KP> to <OVERFLOW_STACK>.
+;; Also: OOMERR (WK11)
 ResetForOverflow:
     .assert <OVERFLOW_HEAP = 0 && <OVERFLOW_STACK = 0, "ResetForOverflow stores one 0 as both low bytes."
 
@@ -50,38 +53,45 @@ IntegerOverflow:
     bpl Report
 
 ;; Reports <ERROR_DIVIDE_BY_ZERO>.
+;; Also: ERR6 (WK11)
 DivideByZero:
     lda #ERROR_DIVIDE_BY_ZERO
     bpl Report
 
 ;; Reports <ERROR_INTERRUPTED>. <UCLEAR at UnitIo::CspUCLEAR> gives the console driver this address, through
 ;; <BreakHandler>, for the break key.
+;; Also: ERR8 (WK11)
 Interrupted:
     lda #ERROR_INTERRUPTED
     bpl Report
 
 ;; Reports <ERROR_SYSTEM_IO>.
+;; Also: ERR9 (WK11)
 SystemIo:
     lda #ERROR_SYSTEM_IO
     bpl Report
 
 ;; Reports <ERROR_USER_IO>.
+;; Also: ERR10 (WK11)
 UserIo:
     lda #ERROR_USER_IO
     bpl Report
 
 ;; Reports <ERROR_UNIMPLEMENTED>: what EFJ, NFJ and the standard procedures SIN to SQT run, as 1.1 does not implement
 ;; them.
+;; Also: EFJ (A2POSRM), ERR11 (WK11), NFJ (A2POSRM)
 Unimplemented:
     lda #ERROR_UNIMPLEMENTED
     bpl Report
 
 ;; Reports <ERROR_FLOATING_POINT>.
+;; Also: ERR12 (WK11)
 FloatingPoint:
     lda #ERROR_FLOATING_POINT
     bpl Report
 
 ;; Reports <ERROR_STRING_OVERFLOW>.
+;; Also: ERR13 (WK11)
 StringOverflow:
     lda #ERROR_STRING_OVERFLOW
     bpl Report
@@ -119,6 +129,7 @@ Report:
     .cpu Pcode
 ;; The p-code <Report> runs: <CXP at OpCXP> 0,2, a call to SYSTEM.PASCAL's procedure 2, its execution error handler,
 ;; which prints the message with its PRINTERR segment.
+;; Also: EXECERROR (A2POSRM, UCSD20)
 Call:
     CXP 0, 2
     .cpu Mos6502

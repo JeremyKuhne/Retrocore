@@ -4,6 +4,7 @@
 .scope Fetch
 
 ;; Steps <IPC> past a 3-byte p-code and runs the next.
+;; Also: UPDBY3 (WK11)
 Skip3:
     lda IPC
     clc
@@ -16,6 +17,7 @@ Skip3:
     bcs Next
 
 ;; Steps <IPC> past a 2-byte p-code and runs the next.
+;; Also: UPDBY2 (WK11)
 Skip2:
     lda IPC
     clc
@@ -29,6 +31,7 @@ Skip2:
 
 ;; SLDC 0-127, which <Next> comes to itself: pushes the opcode, as a word.
 ;; In: A = the opcode, Y = 0
+;; Also: PSHLIT (WK11), SLDC (A2POSRM)
 SmallConstant:
     tax
     tya
@@ -37,12 +40,14 @@ SmallConstant:
     pha
 
 ;; Steps <IPC> past a 1-byte p-code and runs the next. NOP runs only this.
+;; Also: NOP (A2POSRM, UCSD20), UPDBY1 (WK11)
 Skip1:
     inc IPC
     bne Next
     inc IPC+1
 
 ;; Runs the p-code at <IPC>: SLDC 0-127 here, and the rest through <Dispatch> and <OpcodeTable>.
+;; Also: EXECPC (WK11)
 Next:
     ; Fetch the opcode.
     ldy #0

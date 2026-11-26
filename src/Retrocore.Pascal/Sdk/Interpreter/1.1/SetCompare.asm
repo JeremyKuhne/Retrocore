@@ -24,6 +24,7 @@ SetsEqualOffset:
 LengthDifference = Work1
 
 ;; <SetsEqual>'s return address, less 1, which <SetsEqual> pulls from the stack and keeps here.
+;; Also: FPRETA (WK11)
 CallerReturn = Work4
 
     ; Compare a byte of the set on top, pulling it, with the set below's.
@@ -67,6 +68,7 @@ JumpBack:
 ;; <COMPARISON_EQUAL>, <COMPARISON_NOT_EQUAL> and <COMPARISON_LESS_OR_EQUAL> is <GEQ at OpGEQ>, which tests that it is a
 ;; superset.
 ;; In: Comparison = the comparison, Stack = the two sets, each with its length in words on top of its bytes
+;; Also: CMPSET (WK11)
 .proc CompareSets
 
 ;; The stack pointer once both sets are dropped, which <PopSets> leaves here.
@@ -157,7 +159,8 @@ SupersetRest:
 False:
     clc
 
-    ; Drop both sets, and push carry as a boolean.
+;; Drops both sets, and pushes carry as a boolean.
+;; Also: STOANS (WK11)
 Push:
     ldx StackAfter
     txs

@@ -117,6 +117,7 @@ CONTROL_ROUTINES = 1
 .endmacro
 
 ;; The control characters <ScreenWrite> acts on, a byte each.
+;; Also: CCHTBL (WK11)
 ScreenControls:
     ScreenControlList CONTROL_CODES
 
@@ -128,6 +129,7 @@ ScreenControlRoutines:
 ;; Writes a character to the 80-column screen at the cursor, or acts on it as a control character or as part of an
 ;; <ASCII_ESC> or GOTOXY sequence.
 ;; In: Character = the character, Y = <ConsoleColumn>
+;; Also: VOUT2 (A2PBIOS, WK11)
 .proc ScreenWrite
 
 ;; The character <ConsoleWrite> gives <ScreenWrite> to write, which <PutScreen> also reads.
@@ -222,6 +224,7 @@ RunControl:
 
 ;; ESC: drops the next character.
 ;; Keeps: X, Y
+;; Also: DOESC (WK11)
 .proc ScreenEscape
     lda #ESCAPE_DROP
     sta EscapeState
@@ -230,6 +233,7 @@ RunControl:
 
 ;; GOTOXY: takes the next two characters as the column and the row.
 ;; Keeps: X, Y
+;; Also: DOH1E (WK11)
 .proc ScreenGotoxy
     lda #ESCAPE_COLUMN
     sta EscapeState
@@ -239,6 +243,7 @@ RunControl:
 ;; CR: moves the cursor to column 0.
 ;; Out: Y = 0
 ;; Keeps: A, X
+;; Also: DOCR (WK11)
 .proc CarriageReturn
     ldy #0
     sty ConsoleColumn
@@ -246,6 +251,7 @@ RunControl:
 .endproc
 
 ;; LF: moves the cursor down a row, or scrolls the screen up when it is on the bottom row.
+;; Also: DOLF (WK11)
 .proc LineFeed
     lda CursorRow
     cmp #SCREEN_ROWS - 1
@@ -304,6 +310,7 @@ CopyRow:
 ;; BEL: clicks the speaker 192 times, after a pause. <ConsoleCheck> also beeps when <TypeAhead> is full.
 ;; Out: Y = 0
 ;; Keeps: X
+;; Also: BELL (A2PBIOS), DOBEL (WK11)
 .proc Beep
 
     lda #BEEP_PAUSE
@@ -315,12 +322,16 @@ Click:
     lda SPKR
     dey
     bne Click
+
+;; Returns after the last click.
+;; Also: ANRTS (WK11)
 Done:
     rts
 .endproc
 
 ;; Control-_: moves the cursor up a row, unless it is on the top row.
 ;; Keeps: X, Y
+;; Also: CURSUP (WK11)
 .proc CursorUp
     lda CursorRow
     beq Beep::Done
@@ -331,6 +342,7 @@ Done:
 ;; BS: moves the cursor left, unless it is in column 0.
 ;; In: Y = <ConsoleColumn>
 ;; Keeps: A, X, Y
+;; Also: DOBS (WK11)
 .proc CursorLeft
     cpy #0
     beq Done
@@ -340,6 +352,7 @@ Done:
 .endproc
 
 ;; Control-L: moves the cursor to the top left and clears the screen.
+;; Also: DOFF (WK11), FORM (A2PBIOS)
 .proc ClearScreen
     jsr HomeCursor
     jmp ClearToScreenEnd
@@ -348,6 +361,7 @@ Done:
 ;; Control-Y: moves the cursor to row 0, column 0.
 ;; Out: Y = 0
 ;; Keeps: X
+;; Also: HOMEC (WK11)
 .proc HomeCursor
     ldy #0
     sty CursorRow
@@ -356,6 +370,7 @@ Done:
 .endproc
 
 ;; Control-K: clears from the cursor to the end of the screen; the cursor stays where it is.
+;; Also: DOVT (WK11)
 .proc ClearToScreenEnd
     lda ConsoleColumn
     pha
@@ -394,12 +409,14 @@ Clear:
 ;; In: A = the screen code
 ;; Out: carry = set when the cursor was in column 79, Y = <ConsoleColumn>
 ;; Keeps: X
+;; Also: WCADVC (WK11)
 .proc PutAndAdvance
     jsr PutScreen
 
 ;; Control-\: moves the cursor right, unless it is in column 79.
 ;; Out: carry = set when the cursor was in column 79, Y = <ConsoleColumn>
 ;; Keeps: A, X
+;; Also: ADVC (WK11)
 CursorRight:
     ldy ConsoleColumn
     cpy #SCREEN_COLUMNS - 1
@@ -414,6 +431,7 @@ Done:
 ;; A = 0 inverts the code there. While <InverseCapitals>' bit 7 is set, a capital letter goes in inverse.
 ;; In: A = the screen code, or 0 to invert, ScreenWrite::Character = the character, for the capital letter test
 ;; Keeps: X
+;; Also: WRCH2S (WK11)
 .proc PutScreen
     pha
 
@@ -472,6 +490,7 @@ Store2:
 
 ;; Inverts the screen code at the cursor, which shows or hides the cursor.
 ;; Keeps: X
+;; Also: INVERT (A2PBIOS, WK11)
 .proc FlipCursor
     lda #0
     jmp PutScreen
@@ -479,6 +498,7 @@ Store2:
 
 ;; Points <TextLine> and <TextLine2> at the cursor's row in text pages 1 and 2.
 ;; Keeps: X, Y
+;; Also: CVP2SP (WK11)
 .proc SetTextLine
     ; The page: the row's bits 1-2.
     lda CursorRow
@@ -602,6 +622,7 @@ Page2Column:
 ;; Moves the view to the cursor, when <ConsoleFlags>' <CONSOLE_FOLLOW> is set: to the left half for columns 0-19 and the
 ;; right half for 77-79; otherwise, when the cursor is left of the view, so that the view starts at it, and when it
 ;; is in or right of the view's column 37, so that it is in the view's column 36.
+;; Also: ADJUST (A2PBIOS)
 .proc FollowCursor
     lda ConsoleFlags
     lsr a

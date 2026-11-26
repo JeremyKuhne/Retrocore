@@ -21,6 +21,7 @@ NO_SEGMENT = $FF
 ;; Out:
 ;;   Procedure = its attributes, from <ATTR_DATA_SIZE>, for a p-code procedure
 ;;   Mark = its frame, as <MP>, with its static link still to set
+;; Also: CALLX (WK11)
 .proc FindProcedureIn
     ; Keep the return address, from over the parameters.
     pla
@@ -51,6 +52,7 @@ NO_SEGMENT = $FF
 ;; Out:
 ;;   Procedure = its attributes, from <ATTR_DATA_SIZE>
 ;;   Mark = its frame, as <MP>, with its static link still to set
+;; Also: CALAXX (WK11)
 .proc FindProcedure
 
 ;; The procedure's segment, or <NO_SEGMENT> for the current one.
@@ -243,6 +245,9 @@ BelowFrame:
     lda Mark+1
     sbc NP+1
     bcs Room
+
+;; Reports a stack overflow: the new frame would reach the heap.
+;; Also: JOOME1 (WK11)
 Overflow:
     jmp ExecutionError::ResetForOverflow
 
@@ -355,12 +360,15 @@ Return:
 
 ;; <CIP at OpCIP>: calls an intermediate procedure, whose static link is the frame of the latest active procedure one
 ;; lexical level out.
+;; Also: CIP (A2POSRM, UCSD20)
 .proc OpCIP
 
 ;; The lexical level of the procedure whose frame the static link must be.
+;; Also: MLEXLV (WK11)
 OuterLevel = Result + 4
 
 ;; A frame on the way back through the dynamic links, whose <JTAB> and dynamic link are its caller's.
+;; Also: TMSPTR (WK11)
 CallerFrame = Work2
 
 ;; The <JTAB> of <CallerFrame>'s caller.
@@ -374,6 +382,7 @@ CallerJtab = Work4
 
 ;; Where <OpCXP> goes for a procedure above lexical level 0.
 ;; In: Procedure = the attributes, from <ATTR_DATA_SIZE>, MP = Mark = the new frame
+;; Also: CPCOMA (WK11)
 FindStaticLink:
     ldy #ATTR_LEXICAL_LEVEL - ATTR_DATA_SIZE
     lda (Procedure),y
@@ -421,6 +430,7 @@ CheckCaller:
 .endproc
 
 ;; <CLP at OpCLP>: calls a procedure local to the current one, whose static link is the caller's frame.
+;; Also: CLP (A2POSRM, UCSD20)
 .proc OpCLP
     ; Find the procedure and build its frame.
     ldy #1
@@ -441,6 +451,7 @@ CheckCaller:
 .endproc
 
 ;; <CGP at OpCGP>: calls a global procedure, whose static link is <BASE>.
+;; Also: CGP (A2POSRM, UCSD20)
 .proc OpCGP
     ; Find the procedure and build its frame.
     ldy #1
@@ -461,9 +472,11 @@ CheckCaller:
 ;; <CXP at OpCXP>: calls a procedure of another segment, loading the segment first unless it is segment 0, the system's,
 ;; which stays in memory. A procedure at lexical level 0 or below is called as <CBP at OpCBP> calls one, and the others
 ;; as <CIP at OpCIP> does.
+;; Also: CXP (A2POSRM, UCSD20)
 .proc OpCXP
 
 ;; The segment, for <LoadSegment> and <FindProcedureIn>.
+;; Also: SEGNO (WK11)
 Segment = Work1
 
     ; The procedure and the segment.
@@ -494,6 +507,7 @@ Find:
 
 ;; <CBP at OpCBP>: calls a base procedure, an outer block, which becomes <BASE>. The old <BASE> is pushed before the
 ;; frame keeps the stack pointer, so <RBP at OpRBP> finds it on top once it puts the stack back.
+;; Also: CBP (A2POSRM, UCSD20)
 .proc OpCBP
     ; Find the procedure and build its frame.
     ldy #1
@@ -503,6 +517,7 @@ Find:
 
 ;; Where <OpCXP> goes for a procedure at lexical level 0 or below.
 ;; In: Mark = the new frame
+;; Also: CPCOMB (WK11)
 NewBase:
     ; Push the old BASE, and keep the stack pointer that leaves.
     lda BASE+1
@@ -534,6 +549,7 @@ NewBase:
 
 ;; <RBP at OpRBP>: returns from a base procedure, giving back the old <BASE> that <CBP at OpCBP> pushed, and then as
 ;; <RNP at OpRNP> does.
+;; Also: RBP (A2POSRM, UCSD20, WK11)
 .proc OpRBP
     ; Put the stack back, and pull the old BASE.
     ldy #MSCW_STACK
@@ -551,6 +567,7 @@ NewBase:
 
 ;; <RNP at OpRNP>: returns from a procedure, pushing as many words of its result as the operand says, and giving back
 ;; its segment when the caller's differs.
+;; Also: RNP (A2POSRM, UCSD20, WK11)
 .proc OpRNP
 
 ;; The word below the frame, which keeps the caller's <KP>.

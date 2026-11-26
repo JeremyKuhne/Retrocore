@@ -95,6 +95,7 @@ Jump:
 ;; Checks that the first set's bytes past the second's are 0, when the first is the longer.
 ;; In: X = the stack index of the first set's byte at the second's size
 ;; Out: carry = set when they are 0, or the first set is not the longer
+;; Also: SUPSET (WK11)
 .proc RestOfFirstEmpty
     ; Check as many bytes as the first set has more.
     lda #0
@@ -108,6 +109,7 @@ Jump:
 ;; In: X = the stack index of the second set's byte at the first's size
 ;; Out: carry = set when they are 0, or the second set is not the longer
 ;; Entry: CheckBytes = checks Y bytes from <Stack>+X, none when Y is 0 or negative
+;; Also: SUBSET (WK11)
 .proc RestOfSecondEmpty
     ; Check as many bytes as the second set has more.
     ldy PopSets::LowerExtra
@@ -138,6 +140,7 @@ Done:
 ;; The sets are under its return address, so it pulls that into Return for <PopSets>, and its rest returns by
 ;; jumping to it plus 1.
 ;; Out: carry = set when the sets are equal
+;; Also: SETEQ (WK11)
 .proc SetsEqual
 
 ;; The return address, less 1, as JSR pushed it.

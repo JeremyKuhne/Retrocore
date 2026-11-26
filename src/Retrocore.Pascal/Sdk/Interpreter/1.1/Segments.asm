@@ -21,6 +21,7 @@ SEG_PROCEDURE_COUNT = 1
 ;; In: Dictionary = the word's address
 ;; Out: Procedure = the address it means, Y = 1
 ;; Keeps: X
+;; Also: SETA7C (WK11)
 .proc FollowSelfRelative
     ldy #0
     sec
@@ -45,6 +46,7 @@ SEG_PROCEDURE_COUNT = 1
 Amount = Work2
 
 ;; The count's high byte, counted down.
+;; Also: LCNTH (WK11)
 CountHigh = Result + 4
 
 ;; The word being relocated.
@@ -103,6 +105,7 @@ CountEntry:
 ;; unit's <UnitTable> routine. A character device's is a system I/O error.
 ;; In: A = the segment
 ;; Out: KP = where the code was read, SegmentBase = the same
+;; Also: RDSEG (WK11)
 .proc ReadSegment
 
 ;; The segment, while A is worked into its <SegmentTable> offset; then the segment's size.
@@ -167,6 +170,9 @@ PushDrive:
     lda KP+1
     sbc NP+1
     bcs Room
+
+;; Reports a stack overflow: the segment would reach the heap.
+;; Also: JOOME2 (WK11)
 Overflow:
     jmp ExecutionError::ResetForOverflow
 
@@ -217,6 +223,7 @@ Done:
 ;; by <InterpAddress>, for .INTERP.
 ;; In: A = the segment
 ;; Out: Segment = the segment, where <FindProcedureIn> takes it
+;; Also: LODSEG (WK11)
 .proc LoadSegment
 
 ;; The segment.
@@ -459,6 +466,7 @@ Done:
 ;; Gives back a use of a segment: when its uses fall to 0, <KP> goes back to where it was before the segment was read.
 ;; Segment 0, the system's, is never given back.
 ;; In: A = the segment
+;; Also: UNLSEG (WK11)
 .proc ReleaseSegment
     asl a
     tax
@@ -487,6 +495,7 @@ Done:
 .endproc
 
 ;; <GSEG at CspGSEG>: counts a use of the segment on the stack, reading it in if need be.
+;; Also: CSP21 (WK11), GETSEG (UCSD20)
 .proc CspGSEG
     pla
     tax
@@ -497,6 +506,7 @@ Done:
 .endproc
 
 ;; <RSEG at CspRSEG>: gives back a use of the segment on the stack.
+;; Also: CSP22 (WK11), RELSEG (UCSD20)
 .proc CspRSEG
     pla
     tax

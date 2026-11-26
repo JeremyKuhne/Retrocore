@@ -3,6 +3,7 @@
 ;; reach through .INTERP.
 
 ;; Where <EnterRestart>, in $E000-$FFFF, arrives once it has switched bank 1 in: goes on to <Restart>.
+;; Also: JMOVIC (WK11)
 .proc RestartJump
     jmp Restart
 .endproc
@@ -13,6 +14,7 @@
 ;;   Offset = the operand times 2, the byte offset of the word it numbers
 ;;   IPC = one more when the operand took two bytes, so the caller's <Fetch::Skip2> or <Fetch::Skip3> steps over both
 ;; Keeps: X, Y
+;; Also: B (A2POSRM), EBIG2M (WK11)
 .proc GetBig
     ; One byte or two?
     lda (IPC),y

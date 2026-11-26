@@ -3,9 +3,11 @@
 
 ;; <NEW at CspNEW>: pops a size in words, then a pointer variable's address; points the variable at <NP> and allocates
 ;; the size there. Gives back the heap's directory first, and reports a stack overflow when <NP> passes <KP>.
+;; Also: NEW (A2POSRM, UCSD20, WK11)
 .proc CspNEW
 
 ;; The size, in words and then in bytes.
+;; Also: PCDSIZ (WK11)
 Size = Pointer
 
 ;; The pointer variable's address.
@@ -54,6 +56,7 @@ Done:
 .endproc
 
 ;; MARK: pops a pointer variable's address, and stores <NP> in it. Gives back the heap's directory first.
+;; Also: MARK (UCSD20), MRK (A2POSRM, WK11)
 .proc CspMRK
 
 ;; The pointer variable's address.
@@ -78,6 +81,7 @@ Variable = Pointer
 
 ;; RELEASE: pops a pointer variable's address, and moves <NP> back to where the variable points, forgetting the heap's
 ;; directory.
+;; Also: RELEASE (UCSD20), RLS (A2POSRM, WK11)
 .proc CspRLS
 
 ;; The pointer variable's address.

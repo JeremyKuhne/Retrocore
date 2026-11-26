@@ -99,6 +99,7 @@ DATA_SEARCH_BYTES = $20
 ;; In: X = the slot times 16
 ;; Out: carry = set when the disk is write-protected
 ;; Keeps: X
+;; Also: WRDF (WK11)
 .proc WriteSector
 
 ;; The slot times 16, for reloading X in 3 cycles. The loop over <ScratchBuffer> reloads it from <WriteSlot> instead,
@@ -128,6 +129,9 @@ LastTwoBits = DiskTemp2
     pla
     nop
     ldy #SYNC_COUNT
+
+;; Writes the sync bytes, Y of them.
+;; Also: AUTOLP (WK11)
 WriteSync:
     pha
     pla
@@ -147,8 +151,14 @@ WriteSync:
     tya
     ldy #TWO_BIT_BYTES
     bne FirstTwoBits
+
+;; Writes the next of TwoBitParts' nibbles, from its last byte down.
+;; Also: WRDAA (WK11)
 NextTwoBits:
     lda TwoBitParts,y
+
+;; Writes a TwoBitParts nibble exclusive-ored with the one before it.
+;; Also: WRDAB (WK11)
 FirstTwoBits:
     eor TwoBitParts-1,y
     tax
@@ -162,6 +172,9 @@ FirstTwoBits:
     ; ScratchBuffer, from its first byte up, each exclusive-ored with the one before it.
     lda LastTwoBits
     nop
+
+;; Writes the next of ScratchBuffer's nibbles, exclusive-ored with the one before it.
+;; Also: WRDAC (WK11)
 NextSixBits:
     eor ScratchBuffer,y
     tax
@@ -191,6 +204,9 @@ NextSixBits:
 
     ; Back to reading.
     lda DiskReadMode,x
+
+;; Switches the drive back to reading and returns.
+;; Also: WRDAD (WK11)
 Done:
     lda DiskLatch,x
     rts
@@ -200,12 +216,14 @@ Done:
 ;; In: A = the disk byte, X = the slot times 16
 ;; Out: carry = clear
 ;; Keeps: X, Y
+;; Also: WRCHE1 (WK11)
 .proc WriteNibble
     clc
 
 ;; <WriteNibble> without its CLC, 2 cycles shorter: with its caller's PHA and PLA, writes the 40-cycle sync bytes.
 ;; In: A = the disk byte, X = the slot times 16
 ;; Keeps: X, Y
+;; Also: WRCHE2 (WK11)
 Sync:
     pha
     pla
@@ -213,6 +231,7 @@ Sync:
 ;; Stores the disk byte in the write latch at once, when the caller has spent the time already.
 ;; In: A = the disk byte, X = the slot times 16
 ;; Keeps: X, Y
+;; Also: WRCHE3 (WK11)
 Now:
     sta DiskLoad,x
     ora DiskLatch,x
@@ -227,9 +246,11 @@ Now:
 .proc ReadAddressField
 
 ;; The search's count of disk bytes, its high byte, with Y as its low byte.
+;; Also: RETRYC (WK11)
 SearchCount = DiskTemp2
 
 ;; Each 4-and-4 byte's odd bits, from its first disk byte.
+;; Also: HODDB (WK11)
 OddBits = DiskTemp2
 
 ;; The exclusive-or of the field's bytes so far.
@@ -238,20 +259,30 @@ Checksum = DiskTemp
     ; Count the search's disk bytes.
     ldy #ADDRESS_SEARCH_START
     sty SearchCount
+
+;; Counts a disk byte of the search, and fails once there have been too many.
+;; Also: CHKTRY (WK11)
 NextByte:
     iny
     bne ReadByte
     inc SearchCount
     beq Fail
 
-    ; Look for the prologue.
+;; Looks for the prologue.
+;; Also: WAITA1 (WK11)
 ReadByte:
     lda DiskLatch,x
     bpl ReadByte
+
+;; Checks for the prologue's first byte.
+;; Also: CHKPB1 (WK11)
 CheckFirst:
     cmp #PROLOGUE_1
     bne NextByte
     nop
+
+;; Reads and checks the prologue's second byte.
+;; Also: WAITA2 (WK11)
 ReadSecond:
     lda DiskLatch,x
     bpl ReadSecond
@@ -259,6 +290,9 @@ ReadSecond:
     bne CheckFirst
     .assert AddressVolume = AddressChecksum + ADDRESS_FIELD_SIZE - 1, "The address field's bytes are stored down."
     ldy #ADDRESS_FIELD_SIZE - 1
+
+;; Reads and checks the address prologue's third byte.
+;; Also: WAITA3 (WK11)
 ReadThird:
     lda DiskLatch,x
     bpl ReadThird
@@ -269,11 +303,17 @@ ReadThird:
     lda #0
 NextField:
     sta Checksum
+
+;; Reads a field's first disk byte, its odd bits.
+;; Also: WAITA4 (WK11)
 ReadOdd:
     lda DiskLatch,x
     bpl ReadOdd
     rol a
     sta OddBits
+
+;; Reads a field's second disk byte, its even bits, and combines them.
+;; Also: WAITA5 (WK11)
 ReadEven:
     lda DiskLatch,x
     bpl ReadEven
@@ -287,13 +327,17 @@ ReadEven:
     tay
     bne Fail
 
-    ; Check the epilogue.
+;; Reads and checks the epilogue's first byte.
+;; Also: WAITA6 (WK11)
 ReadEpilogue1:
     lda DiskLatch,x
     bpl ReadEpilogue1
     cmp #EPILOGUE_1
     bne Fail
     nop
+
+;; Reads and checks the epilogue's second byte.
+;; Also: WAITA7 (WK11)
 ReadEpilogue2:
     lda DiskLatch,x
     bpl ReadEpilogue2
@@ -302,6 +346,8 @@ ReadEpilogue2:
     clc
     rts
 
+;; Returns with carry set: no good address field was found.
+;; Also: ERREX (WK11)
 Fail:
     sec
     rts
@@ -519,10 +565,12 @@ SecondPairs = FirstPairs + 1
 ThirdPairs = FirstPairs + 2
 
 ;; With X = a 6-bit value times 4: the disk byte it is written as.
+;; Also: WRXLTT (WK11)
 WriteNibbles = FirstPairs + 3
 
 ;; <ReadSector>'s exit when it finds no data field's prologue.
 ;; Out: carry = set
+;; Also: RDFNG1 (WK11)
 .proc NoDataField
     sec
     rts
@@ -542,9 +590,11 @@ WriteNibbles = FirstPairs + 3
 .proc ReadSector
 
 ;; The slot times 16.
+;; Also: HSLOT1 (WK11)
 Slot = DiskTemp
 
 ;; The exclusive-or of the <TwoBitParts> nibbles so far.
+;; Also: HCKSUM (WK11)
 Checksum = DiskTemp2
 
     ; Patch the slot's data latch into the loops.
@@ -582,6 +632,9 @@ SetBuffer1:
 NextByte:
     dey
     beq NoDataField
+
+;; Reads a disk byte of the search for the data prologue.
+;; Also: WAITD1 (WK11)
 ReadByte:
     lda DiskLatch,x
     bpl ReadByte
@@ -589,12 +642,18 @@ CheckFirst:
     eor #PROLOGUE_1
     bne NextByte
     nop
+
+;; Reads and checks the prologue's second byte.
+;; Also: WAITD2 (WK11)
 ReadSecond:
     lda DiskLatch,x
     bpl ReadSecond
     cmp #PROLOGUE_2
     bne CheckFirst
     nop
+
+;; Reads and checks the data prologue's third byte.
+;; Also: WAITD3 (WK11)
 ReadThird:
     lda DiskLatch,x
     bpl ReadThird
@@ -606,6 +665,9 @@ ReadThird:
     lda #0
 NextTwoBits:
     sta Checksum
+
+;; Reads a TwoBitParts nibble from the slot's data latch, patched into its LDX.
+;; Also: WAITD4 (WK11)
 ReadTwoBits:
     ldx DiskLatch + MAIN_DISK_SLOT * 16
 
@@ -624,6 +686,9 @@ ReadLatch1 = *-2
     ; the last, byte $55, is kept on the stack and stored at the end.
     ldy #TWO_BIT_PASS_START
     bne ReadFirst
+
+;; Stores a byte of the first pass, at an address patched into its STA.
+;; Also: IMM1 (WK11)
 StoreFirst:
     sta $1000,y
 
@@ -631,6 +696,8 @@ StoreFirst:
 ;; 1), for Y = $AB-$FF.
 ReadBuffer1 = *-2
 
+;; Reads a nibble of the first pass, bytes $00-$55.
+;; Also: WAITD5 (WK11)
 ReadFirst:
     ldx DiskLatch + MAIN_DISK_SLOT * 16
 
@@ -648,6 +715,9 @@ ReadLatch2 = *-2
     ; The second pass: bytes $56-$AB, with SecondPairs.
     and #HIGH_SIX_BITS
     ldy #TWO_BIT_PASS_START
+
+;; Reads a nibble of the second pass, bytes $56-$AB.
+;; Also: WAITD6 (WK11)
 ReadSecondPass:
     ldx DiskLatch + MAIN_DISK_SLOT * 16
 
@@ -667,7 +737,8 @@ ReadBuffer2 = *-2
     iny
     bne ReadSecondPass
 
-    ; The third pass: bytes $AC-$FF, with ThirdPairs.
+;; Reads the third pass's first nibble: bytes $AC-$FF, with ThirdPairs.
+;; Also: WAITD7 (WK11)
 ReadThirdFirst:
     ldx DiskLatch + MAIN_DISK_SLOT * 16
 
@@ -686,6 +757,8 @@ NextThird:
 ;; The address <ReadSector>'s third pass stores bytes $AC-$FF at, patched to <SectorPointer>.
 ReadBuffer3 = *-2
 
+;; Reads a nibble of the third pass, bytes $AC-$FF, and the checksum last.
+;; Also: WAITD8 (WK11)
 ReadThirdPass:
     ldx DiskLatch + MAIN_DISK_SLOT * 16
 
@@ -703,17 +776,22 @@ ReadLatch5 = *-2
     tay
     bne Bad
 
-    ; Check the epilogue's first byte.
+;; Reads and checks the epilogue's first byte.
+;; Also: WAITD9 (WK11)
 ReadEpilogue:
     lda DiskLatch,x
     bpl ReadEpilogue
     cmp #EPILOGUE_1
     beq Good
 
-    ; Leave with carry set when bad, or clear, storing byte $55 either way.
+;; Leaves with carry set when bad (or, entered at Good, clear), storing byte $55 either way.
+;; Also: RDFNG2 (WK11)
 Bad:
     sec
     .byte $24                 ; BIT zero page: skips the next instruction for the code falling in
+
+;; Leaves with carry clear: the sector is good.
+;; Also: RDFOK (WK11)
 Good:
     clc
     pla

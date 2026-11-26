@@ -38,6 +38,7 @@ ROM_ID_2 = $07
 ROM_FIRMWARE_ID = $0B
 
 ;; The byte at <ROM_FIRMWARE_ID> on a card with the firmware entries.
+;; Also: SIGVALUE (A2PBIOS)
 FIRMWARE_CARD_ID = 1
 
 ; The BIOS's results, which its calls return in X.
@@ -56,6 +57,7 @@ FIRMWARE_CARD_ID = 1
 
 ;; Four addresses <Startup> copies to <BiosPointersCopy>, where nothing reads them. The BIOS's attached-driver call
 ;; reads the first from here.
+;; Also: JVECTRS (A2PBIOS), JVECTS (WK11)
 BiosPointers:
     ; The attached drivers' JMPs, which the attached-driver call indexes.
     .word AttachedDrivers
@@ -68,15 +70,19 @@ BiosPointers:
 
 ;; Clears RAM $0000-$BFFF, records each slot's card type in <SlotTypes>, sets up the text screen, the disks and the
 ;; console's card, and goes on to <EnterRestart>, which switches bank 1 in and goes on to <Restart>.
+;; Also: CLRMEM (WK11), START (A2PBIOS)
 .proc Startup
 
 ;; The page <Startup> is clearing.
+;; Also: ZEROH (A2PBIOS), ZEROL (A2PBIOS)
 ClearPointer = FirstSector
 
 ;; $Cn00, the ROM of the slot <Startup> is identifying: <SumSlotRom> adds up the page it points at.
+;; Also: CKPTRH (A2PBIOS), CKPTRL (A2PBIOS)
 SlotRom = PartialDest + 1
 
 ;; The slot ROM's first sum, which the second must match.
+;; Also: CHECKH (A2PBIOS), CHECKL (A2PBIOS)
 RomSum = SectorDone
 
     cld
@@ -88,6 +94,9 @@ RomSum = SectorDone
     sta ClearPointer+1
     tay
     tax
+
+;; Clears a page of memory.
+;; Also: ZERLP (A2PBIOS)
 ClearPage:
     sta (ClearPointer),y
     iny
@@ -99,6 +108,9 @@ ClearPage:
 
     ; Identify the slots' cards from slot 7 down. SlotRom's low byte is 0, from the clearing.
     ldy #SLOT_ROM_BASE + LAST_SLOT
+
+;; Identifies the card in the next slot, from slot 7 down.
+;; Also: NXTCRD (A2PBIOS)
 NextSlot:
     sty SlotRom+1
 
@@ -118,6 +130,7 @@ NextSlot:
     beq Identify
 
 ;; The byte at <ROM_ID_1> in each card type's ROM, by type from <CARD_DISK_II>.
+;; Also: CN05BYTS (A2PBIOS), CN05T (WK11)
 CardId05:
     CardId CardId05, CARD_DISK_II, $03
     CardId CardId05, CARD_SERIAL, $18
@@ -125,15 +138,20 @@ CardId05:
     CardId CardId05, CARD_PARALLEL, $48
 
 ;; The byte at <ROM_ID_2> in each card type's ROM, by type from <CARD_DISK_II>.
+;; Also: CN07BYTS (A2PBIOS), CN07T (WK11)
 CardId07:
     CardId CardId07, CARD_DISK_II, $3C
     CardId CardId07, CARD_SERIAL, $38
     CardId CardId07, CARD_PASCAL_FIXED, $18
     CardId CardId07, CARD_PARALLEL, $48
 
-    ; Find the type whose two bytes the ROM has, from CARD_PARALLEL down; no match leaves X = CARD_UNKNOWN.
+;; Finds the type whose two bytes the ROM has, from CARD_PARALLEL down; no match leaves X = CARD_UNKNOWN.
+;; Also: SKIPIORTS (A2PBIOS)
 Identify:
     ldx #CARD_PARALLEL
+
+;; Compares the ROM's two identifying bytes with a card type's.
+;; Also: NXTYP (A2PBIOS)
 CompareType:
     ldy #ROM_ID_1
     lda (SlotRom),y
@@ -143,12 +161,16 @@ CompareType:
     lda (SlotRom),y
     cmp CardId07-CARD_DISK_II,x
     beq Matched
+
+;; Tries the next card type down.
+;; Also: TRYNXT (A2PBIOS)
 NextType:
     dex
     cpx #CARD_DISK_II
     bcs CompareType
 
-    ; A Pascal card with the firmware byte has the firmware entries.
+;; Takes a Pascal card with the firmware byte as one with the firmware entries.
+;; Also: STOR (A2PBIOS)
 Matched:
     cpx #CARD_PASCAL_FIXED
     bne Record
@@ -158,13 +180,15 @@ Matched:
     bne Record
     ldx #CARD_PASCAL_FIRMWARE
 
-    ; Record the type: slot n's is at SlotTypes + n - 1.
+;; Records the type: slot n's is at SlotTypes + n - 1.
+;; Also: STOR1 (A2PBIOS)
 Record:
     ldy SlotRom+1
     txa
     sta SlotTypes - SLOT_ROM_BASE - 1,y
 
-    ; Go on down to slot 1.
+;; Goes on down to slot 1.
+;; Also: NOPROM (A2PBIOS)
 SlotDone:
     ldy SlotRom+1
     dey
@@ -218,6 +242,9 @@ CopyPointers:
     bne Done
     lda #CONSOLE_CARD_READY
     sta ConsoleCardFlag
+
+;; Goes on to Restart.
+;; Also: STARTUP (A2PBIOS)
 Done:
     jmp EnterRestart
 .endproc
@@ -225,15 +252,22 @@ Done:
 ;; Adds up the 256 bytes of a slot's ROM.
 ;; In: Startup::SlotRom = $Cn00
 ;; Out: A = the sum's low byte, X = its high byte, Y = 0
+;; Also: CKPAGE (A2PBIOS, WK11)
 .proc SumSlotRom
     lda #0
     tax
     tay
+
+;; Adds a byte of the ROM.
+;; Also: CKNX (A2PBIOS, WK11)
 Add:
     clc
     adc (Startup::SlotRom),y
     bcc NoCarry
     inx
+
+;; Steps to the next byte.
+;; Also: NOCRY (A2PBIOS, WK11)
 NoCarry:
     iny
     bne Add
@@ -244,6 +278,7 @@ NoCarry:
 ;; In: A = the delay, 1-255, or 0 for 256
 ;; Out: A = 0
 ;; Keeps: X, Y
+;; Also: TDELAY (WK11)
 .proc Wait
     sec
 Outer:

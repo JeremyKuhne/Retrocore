@@ -2,6 +2,7 @@
 ;; Logical operations: <LAND at OpLAND>, <LOR at OpLOR> and <LNOT at OpLNOT>, on whole words.
 
 ;; <LAND at OpLAND>: pops two words and pushes their bitwise AND.
+;; Also: AND (UCSD20), LAND (A2POSRM)
 .proc OpLAND
 
 ;; The top word.
@@ -26,6 +27,7 @@ Operand = Pointer
 .endproc
 
 ;; <LOR at OpLOR>: pops two words and pushes their bitwise OR.
+;; Also: LOR (A2POSRM)
 .proc OpLOR
 
 ;; The top word.
@@ -50,6 +52,7 @@ Operand = Pointer
 .endproc
 
 ;; <LNOT at OpLNOT>: pops a word and pushes its bitwise complement.
+;; Also: LNOT (A2POSRM, WK11), NOT (UCSD20)
 .proc OpLNOT
     ; Complement both bytes.
     pla

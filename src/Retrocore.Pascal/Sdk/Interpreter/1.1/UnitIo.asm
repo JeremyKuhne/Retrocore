@@ -21,6 +21,7 @@ ATTACHED_DRIVERS = 16
 ; A UNITREAD or UNITWRITE control word's bits.
 
 ;; Raw transfer: no DLE expansion, and a read does not stop at the end-of-file character.
+;; Also: NOSPEC (UCSD20IO)
 CONTROL_RAW = $04
 
 ;; No line feed written after a carriage return.
@@ -63,6 +64,7 @@ BreakHandler:
 
 ;; Each character unit's BIOS write call, a word a unit from unit 0, or 0 for none. Its unit 0 slot is <BreakHandler>'s
 ;; high byte and <SavedIoControl>; its unit 8 entry is <UnitReaders>' unit 0 slot.
+;; Also: WRITTBL (A2PBIOS)
 UnitWriters = BreakHandler + 1
 
 ;; <IoControl> as it was before a <UNITREAD at UnitIo::CspUREAD> or <UNITWRITE at UnitIo::CspUWRITE>, put back when it
@@ -82,6 +84,7 @@ SavedIoControl:
 
 ;; Each character unit's BIOS read call, a word a unit from unit 0, or 0 for none. Its unit 0 slot is <UnitWriters>'
 ;; unit 8 entry.
+;; Also: READTBL (A2PBIOS)
 UnitReaders:
     UnitWriter UNIT_REMOTE_OUT, BiosRemoteWrite
     UnitReader UNIT_CONSOLE, BiosConsoleRead
@@ -109,15 +112,19 @@ Raw = Mark
 NoLineFeed = Result
 
 ;; The control word.
+;; Also: CONTROL (UCSD20IO)
 Control = Result + 2
 
 ;; A <UNITREAD at UnitIo::CspUREAD> or <UNITWRITE at UnitIo::CspUWRITE>'s unit number, its low byte.
+;; Also: UNITNUMBER (UCSD20IO)
 Unit = Result + 4
 
 ;; A <UNITREAD at UnitIo::CspUREAD> or <UNITWRITE at UnitIo::CspUWRITE>'s block number.
+;; Also: LOGICALBLOCK (UCSD20IO)
 Block = Pointer2
 
 ;; A <UNITREAD at UnitIo::CspUREAD> or <UNITWRITE at UnitIo::CspUWRITE>'s byte count, counted down.
+;; Also: BYTESTOTRANSFER (UCSD20IO)
 Count = ProcedureNumber
 
 ;; 0 when a character unit's read echoes what it reads, as <UNIT_CONSOLE>'s does, or 1.
@@ -134,6 +141,7 @@ Writer = Work3
 ;; In: A = X = the unit number's low byte (its high byte is not checked)
 ;; Out: A = X = the unit number; for an attached driver's unit, Y = the driver's number times 3
 ;; Keeps: X
+;; Also: VALVNO (WK11)
 .proc CheckUnit
 
 ;; The attached driver's number, while it is tripled.
@@ -176,6 +184,7 @@ Bad:
 .endproc
 
 ;; <IOR at UnitIo::CspIOR>, the standard procedure IORESULT: pushes the last I/O call's result.
+;; Also: IORESULT (UCSD20, UCSD20IO), PSHIOR (WK11)
 .proc CspIOR
     lda SysIoResult+1
     pha
@@ -186,6 +195,7 @@ Bad:
 
 ;; <IOC at UnitIo::CspIOC>, the I/O check the compiler puts after I/O: reports <ERROR_USER_IO> when the last I/O call's
 ;; result was not <IO_OK>.
+;; Also: CSP0 (WK11), IOC (UCSD20)
 .proc CspIOC
     lda SysIoResult
     beq Done
@@ -196,6 +206,7 @@ Done:
 
 ;; <UBUSY at UnitIo::CspUBUSY>, the standard procedure <UNITBUSY at UnitIo::CspUBUSY>: pops a unit number, checks it,
 ;; and pushes FALSE, as no unit is ever busy.
+;; Also: CSP35 (WK11), UNITBUSY (UCSD20, UCSD20IO)
 .proc CspUBUSY
     ; Pop the unit and check it.
     pla
@@ -213,6 +224,7 @@ Done:
 
 ;; <UWAIT at UnitIo::CspUWAIT>, the standard procedure <UNITWAIT at UnitIo::CspUWAIT>: pops a unit number and checks it.
 ;; Every transfer is done before its call returns, so there is nothing to wait for.
+;; Also: CSP37 (WK11), UNITWAIT (UCSD20, UCSD20IO)
 .proc CspUWAIT
     pla
     tax
@@ -225,6 +237,7 @@ Done:
 ;; <USTAT at UnitIo::CspUSTAT>, the standard procedure <UNITSTATUS at UnitIo::CspUSTAT>: pops the control word, the
 ;; status record's address (two words, added) and the unit, and has the unit's device fill the record. A character unit
 ;; with no status routine gets <IO_NO_DEVICE>.
+;; Also: CSP12 (WK11)
 .proc CspUSTAT
     ; Pop the control word.
     lda #REQUEST_STATUS
@@ -327,6 +340,7 @@ NoDevice:
 
 ;; <UCLEAR at UnitIo::CspUCLEAR>, the standard procedure <UNITCLEAR at UnitIo::CspUCLEAR>: pops a unit number and has
 ;; its device reset. The graphics screen is reset, but gets <IO_NO_DEVICE> all the same.
+;; Also: CSP38 (WK11), UNITCLEAR (UCSD20, UCSD20IO)
 .proc CspUCLEAR
     ; Pop the unit and check it.
     lda #REQUEST_CLEAR
@@ -433,12 +447,14 @@ NoDevice:
 ;; Ends a <UNITREAD at UnitIo::CspUREAD> or <UNITWRITE at UnitIo::CspUWRITE>: puts <IoControl> back, and ends the call
 ;; as <Finish> does.
 ;; In: X = the I/O result
+;; Also: UNTOKX (WK11)
 FinishRestoring:
     lda SavedIoControl
     sta IoControl
 
 ;; Ends a unit call: records its I/O result and runs the next p-code.
 ;; In: X = the I/O result
+;; Also: STOIOR (WK11)
 Finish:
     stx SysIoResult
     jmp Fetch::Skip2
@@ -494,6 +510,7 @@ FinishCharacters:
 
 ;; <UREAD at UnitIo::CspUREAD>, the standard procedure <UNITREAD at UnitIo::CspUREAD>: reads, as
 ;; <UWRITE at UnitIo::CspUWRITE> writes.
+;; Also: UNITRD (WK11), UNITREAD (UCSD20, UCSD20IO), URD (UCSD20)
 .proc CspUREAD
     lda #REQUEST_READ
     jmp CspUWRITE::Transfer
@@ -502,11 +519,13 @@ FinishCharacters:
 ;; <UWRITE at UnitIo::CspUWRITE>, the standard procedure <UNITWRITE at UnitIo::CspUWRITE>: pops the control word, the
 ;; block, the byte count, the buffer's address (two words, added) and the unit, and writes the buffer to the unit. A
 ;; count of 0 or less does nothing.
+;; Also: UNITWR (WK11), UNITWRITE (UCSD20, UCSD20IO), UWT (UCSD20)
 .proc CspUWRITE
     lda #REQUEST_WRITE
 
 ;; The transfer <UNITREAD at UnitIo::CspUREAD> and <UNITWRITE at UnitIo::CspUWRITE> share.
 ;; In: A = the request, <REQUEST_READ> or <REQUEST_WRITE>
+;; Also: UNITRW (WK11)
 Transfer:
     ; Keep the request, and IoControl to put back.
     sta Request
@@ -559,7 +578,8 @@ TakeHighByte:
     bmi NothingToDo
     jmp TakeBuffer
 
-    ; Nothing to do: drop the buffer's address and the unit, and end the call, leaving IoControl changed.
+;; Nothing to do: drops the buffer's address and the unit, and ends the call, leaving IoControl changed.
+;; Also: UNTERX (WK11)
 NothingToDo:
     pla
     pla

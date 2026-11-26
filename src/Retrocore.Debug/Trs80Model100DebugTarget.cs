@@ -111,6 +111,15 @@ internal sealed partial class Trs80Model100DebugTarget : IDebugTarget, IRecordin
     public bool IsIdle => _machine.IsPoweredOff;
 
     /// <inheritdoc/>
+    /// <remarks>
+    ///  <para>
+    ///   The 8085's TRAP and RST 5.5 to 7.5 as well as INTR's acknowledge: RST 7.5 comes every 3.9 ms, so an
+    ///   instruction it lands on is met once, when it runs after the handler returns.
+    ///  </para>
+    /// </remarks>
+    public bool IsTakingInterrupt => _machine.Processor.IsTakingInterrupt;
+
+    /// <inheritdoc/>
     public ulong CycleCount => _machine.Processor.CycleCount;
 
     /// <inheritdoc/>

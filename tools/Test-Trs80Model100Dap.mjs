@@ -6,7 +6,8 @@
 // external test data (RETROCORE_TRS80M100_ROMS, or the cache's trs80m100-roms folder), the ROM boots to its menu, and
 // an 8085 source loaded at $E000 prints through the ROM's RST 4 onto the LCD; it stops at a breakpoint in its Print
 // routine with the 80C85's call stack and registers, steps out to the caller, and shows the LCD's frames and the
-// hardware. Then a launch with no program boots to the menu, enters BASIC with ENTER, runs a line typed at it, and
+// hardware. A logpoint in a loop the ROM's RST 7.5 keeps interrupting logs once a run, and one at $003C once an
+// interrupt. Then a launch with no program boots to the menu, enters BASIC with ENTER, runs a line typed at it, and
 // turns the power off and back on with Reset. The Tandy 102's ROM, when present, boots to the menu too. Without the
 // ROM, everything after the first launch is skipped, which is not a pass.
 
@@ -45,6 +46,21 @@ const program = [
     ""
 ];
 const lineOf = label => program.findIndex(line => line.startsWith(`${label}:`)) + 1;
+
+// Counts down 30,000 times with interrupts on, so the ROM's RST 7.5 lands on the loop's instructions dozens of times.
+const counting = [
+    ".cpu I8085",
+    "Start:  ei",
+    "        lxi b,30000",
+    "Tick:   dcx b",
+    "        mov a,b",
+    "        ora c",
+    "        jnz Tick",
+    "Done:   jmp Done",
+    ""
+];
+const countingLine = label => counting.findIndex(line => line.startsWith(`${label}:`)) + 1;
+const logged = text => events.filter(message => message.event === "output" && message.body.output === `${text}\n`).length;
 
 // Forgets queued events of a kind, so a wait sees only what happens next.
 function drop(name) {
@@ -135,6 +151,28 @@ try {
         await request("continue", { threadId: 1 });
         await screen(screenText => screenText.includes("HELLO M100"), "the greeting");
 
+        // A logpoint in a loop RST 7.5 keeps interrupting logs once a run, though the interrupt is taken at its
+        // instruction first, and one on the handler's entry at $003C logs once an interrupt.
+        phase("counting through interrupts");
+        writeFileSync(source, counting.join("\n"));
+        events.length = 0;
+        await request("launch", { machine: "trs80-model100", romDirectory: roms, source, stopOnEntry: true, speed: "max", logpointLimit: 0 });
+        await request("setExceptionBreakpoints", { filters: [] });
+        await request("setBreakpoints", { source: { path: source }, breakpoints: [
+            { line: countingLine("Tick"), logMessage: "tick" }, { line: countingLine("Done") }
+        ] });
+        await request("setInstructionBreakpoints", { breakpoints: [{ instructionReference: "0x3c", logMessage: "interrupt" }] });
+        await request("configurationDone");
+        assert.equal((await event("stopped")).reason, "entry");
+        await request("continue", { threadId: 1 });
+        assert.equal((await event("stopped")).reason, "breakpoint");
+        assert.equal((await request("stackTrace", { threadId: 1 })).stackFrames[0].line, countingLine("Done"));
+        const interrupts = logged("interrupt");
+        assert.ok(interrupts >= 20, `the loop is interrupted (${interrupts} times)`);
+        assert.equal(logged("tick"), 30000, "the loop's logpoint logs once a run");
+        await request("setInstructionBreakpoints", { breakpoints: [] });
+        writeFileSync(source, program.join("\n"));
+
         // No program: the menu, then BASIC.
         phase("launching to the menu");
         events.length = 0;
@@ -200,7 +238,7 @@ try {
     if (failure()) throw failure();
     console.log(skipped.length === 0
         ? "Model 100 DAP integration passed: the missing-ROM messages, a source's breakpoint, call stack, registers, "
-            + "step out and LCD output, the menu, BASIC, POWER OFF and Reset, a RAM image resumed in a new session, and the "
+            + "step out and LCD output, a logpoint met once a run through RST 7.5, the menu, BASIC, POWER OFF and Reset, a RAM image resumed in a new session, and the "
             + "Tandy 102's menu."
         : `Model 100 DAP integration checked the missing-ROM messages${skipped.length === 1 && existsSync(model100) ? " and the Model 100" : ""}; `
             + `skipped (inconclusive, not passed): ${skipped.join("; ")}.`);

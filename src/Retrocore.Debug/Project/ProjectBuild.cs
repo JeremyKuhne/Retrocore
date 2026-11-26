@@ -43,7 +43,8 @@ internal static partial class ProjectBuild
     /// <returns>The build.</returns>
     /// <exception cref="ProjectException">
     ///  A step fails, the target uses what is not supported yet, its sources are missing or have errors, it names a
-    ///  CPU its machine lacks, or its bytes are not one block.
+    ///  CPU its machine lacks, its sections overlap its memory map's reserved areas or do not fit its free RAM, or its
+    ///  bytes are not one block.
     /// </exception>
     /// <exception cref="IOException">The output cannot be written.</exception>
     /// <exception cref="UnauthorizedAccessException">The output cannot be written.</exception>

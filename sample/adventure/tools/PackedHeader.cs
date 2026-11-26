@@ -3,8 +3,8 @@
 // See LICENSE file in the project root for full license information
 
 /// <summary>
-///  The offsets of the packed game's header fields, as <c>PackedFormat.md</c> and the 6502 engine's
-///  <c>Header</c> struct give them. Each table's field is its offset from the start of the packed game.
+///  The offsets of the packed game's header fields, as <c>PackedFormat.md</c> gives them. Each is a field's
+///  offset in the header. Each table's field is its offset from the start of the packed game.
 /// </summary>
 internal static class PackedHeader
 {
@@ -14,7 +14,7 @@ internal static class PackedHeader
     internal const int Magic = 0;
 
     /// <summary>
-    ///  The format's version, <see cref="CurrentVersion"/>.
+    ///  The format's version, which this packer writes as <see cref="CurrentVersion"/>.
     /// </summary>
     internal const int Version = 2;
 

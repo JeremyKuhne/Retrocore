@@ -47,8 +47,8 @@ The tables follow the header in that order.
   and down. Word 0 is never matched.
 - **The exits** are six bytes for each room, north to down: the room the way leads to, or 0 for none.
 - **The rooms' descriptions, the messages and the items' descriptions** are strings, each ending in 0. A room
-  description is shown as it is: the packer adds `I'm in a ` before each one the `.dat` doesn't start with `*`, and
-  takes the `*` off the others.
+  description is shown as it is: the packer adds `I'm in a ` before each one that isn't empty and doesn't start with
+  `*` in the `.dat`, and takes the `*` off the others.
 - **Where each item starts** is a byte for each item: a room, 0 for none, or 255 for carried.
 - **The noun GET and DROP know each item by** is a byte for each item, the noun its `.dat` description names between
   slashes at its end (`Lamp/LAMP/`), as the first of its synonyms, or 0 for an item they don't take.
@@ -109,7 +109,7 @@ The codes that need a value take the action's parameters in turn, 0 once there a
 | --- | --- |
 | 0 | Nothing |
 | 1 to 51 | Prints that message and ends its line |
-| 52 | Picks the item up, or says the player carries too much |
+| 52 | Picks the item up, or says `I can't carry any more.`; either way it takes its parameter |
 | 53 | Puts the item in the player's room |
 | 54 | Moves the player to the room |
 | 55, 59 | Puts the item in room 0 |
@@ -126,7 +126,7 @@ The codes that need a value take the action's parameters in turn, 0 once there a
 | 67 | Sets flag 0 |
 | 68 | Clears flag 0 |
 | 69 | Refills the light: its time is the header's again, the player carries it, and flag 16 is cleared |
-| 70 | Clears the screen |
+| 70 | Clears the screen; a transcript shows nothing for it, and goes on at a line's start |
 | 71 | Would save the game: this engine says it can't yet |
 | 72 | Swaps where the two items are |
 | 73 | Performs the actions after this one that continue it |
@@ -135,11 +135,11 @@ The codes that need a value take the action's parameters in turn, 0 once there a
 | 77 | Counts the counter down by 1, unless it is below 0 |
 | 78 | Writes the counter |
 | 79 | Sets the counter to the value |
-| 80 | Swaps the player's room with saved room 0 |
+| 80 | Swaps the player's room with a saved room of its own, apart from code 87's |
 | 81 | Swaps the counter with the counter the value names (its low four bits) |
 | 82 | Adds the value to the counter |
 | 83 | Takes the value from the counter, which goes no lower than -1 |
-| 84 | Writes the command's noun as it was typed |
+| 84 | Writes the command's second word in full, in capitals as the console gives it |
 | 85 | Writes the noun and ends the line |
 | 86 | Ends the line |
 | 87 | Swaps the player's room with the saved room the value names (its low four bits) |
@@ -147,7 +147,8 @@ The codes that need a value take the action's parameters in turn, 0 once there a
 | 89 to 101 | Nothing |
 | 102 to 149 | Prints message 52 to 99 and ends its line |
 
-There are 32 flags, a signed 16-bit counter with 16 more to swap it with, and 16 saved rooms. All start at 0.
+There are 32 flags, a signed 16-bit counter with 16 more to swap it with, code 80's saved room and 16 more for code
+87's. All start at 0.
 
 ## The rules
 
@@ -172,7 +173,9 @@ A command is the line's first two words, a verb and a noun; more are ignored. Ea
 
 - A word alone that is no verb but one of the directions' nouns, or N, S, E, W, U or D, is GO and that direction.
 - I alone is INVENTORY.
-- A word neither list knows gets `I don't know that word.`
+- The first word must be a verb: one the verbs don't hold gets `I don't know that word.` and takes no turn.
+- A second word that is no noun is noun 0, which only the actions with noun 0 answer. Code 84 still writes it, so
+  SAY can say anything.
 
 The command is performed:
 
@@ -181,9 +184,13 @@ The command is performed:
 2. Otherwise the actions are tried in order. An action answers the command when it has the command's verb, and its
    noun or noun 0. The first that answers and whose conditions hold is performed, with the actions that continue
    it, and the command is done.
-3. With none performed, GET and DROP take or put down the item the noun names, if it is here or carried.
+3. With none performed, GET and DROP take or put down the item the noun names, if it is here or carried. GET with no
+   noun says `What?`, then in the dark `It's too dark to see.`, then `I don't see it here.` for an item not here
+   (or a noun the game doesn't know), then `I can't carry any more.`, and otherwise takes it and says `OK`. DROP
+   says `What?`, then `I'm not carrying it.`, and otherwise `OK`.
 4. With none performed, an action that answered but whose conditions didn't hold gets `I can't do that yet.`; GO
-   with no direction, or a way with no action, gets a message of its own; and anything else `I don't understand.`
+   with no direction gets `Give me a direction too.`, and with a noun no action takes `I can't go that way.`; and
+   anything else `I don't understand.`
 
 ### What happens on its own
 
@@ -196,7 +203,7 @@ the same each time.
 ### The dark and the light
 
 It is dark while flag 15 is set and the light, item 9, is neither carried nor in the player's room. In the dark the
-room is `It's too dark to see.`, and GET can't find anything.
+room is `It's too dark to see.`, and so is GET.
 
 Each turn, the light burns while it is in play and has time left: its time counts down by one. At 0, flag 16 is set,
 and a light the player has says `My light has run out!`. It goes on giving light: the game's own actions decide what
@@ -220,5 +227,13 @@ A room with no exits has `Obvious exits: none.`, and one with no items no last l
 
 The text is wrapped at word boundaries to one column fewer than the screen, so no line fills the screen's width and
 makes the machine wrap it again. A word goes on the next line when it doesn't fit after the spaces before it, and
-those spaces are dropped. At most a line's width of spaces wait between words, and a word as wide as a line goes as
-it is.
+those spaces are dropped; at a line's start they are sent. At most a line's width of spaces wait between words, and
+a word as wide as a line goes as it is.
+
+### The engine's own text
+
+Besides the messages above, the engine says `I'm dead!` for code 61, `I can't save the game yet.` for code 71, and
+`The game is now over.` at the end. It lists what the player carries after `I'm carrying: `, or says
+`I'm carrying nothing.`. The score is `I've stored `, the count, ` treasures. On a scale of 0 to 100, that rates `,
+the count × 100 / the treasure count, and `.`, then `Well done!` when every treasure is stored. A list separates its
+exits or items with `, ` and ends in `.`. [`tools/ReferenceEngine.cs`](tools/ReferenceEngine.cs) holds each string.

@@ -5,8 +5,8 @@
 using System.Text;
 
 /// <summary>
-///  Wraps text at word boundaries to a screen's width, as the 6502 engine's <c>Printer</c> does, and keeps the
-///  characters it sends to the screen.
+///  Wraps text at word boundaries to a screen's width, by <c>PackedFormat.md</c>'s rule, and keeps the characters it
+///  sends to the screen.
 /// </summary>
 /// <remarks>
 ///  <para>

@@ -43,11 +43,14 @@ internal static class GamePacker
     ///  Packs a game.
     /// </summary>
     /// <param name="game">The game.</param>
-    /// <returns>The packed bytes and the size of each part.</returns>
+    /// <returns>
+    ///  The packed bytes, the size of each part, and warnings about what the game holds that can't be used.
+    /// </returns>
     /// <exception cref="InvalidDataException">The game does not fit the format.</exception>
-    internal static (byte[] Bytes, List<(string Part, int Size)> Sizes) Pack(ScottFreeGame game)
+    internal static (byte[] Bytes, List<(string Part, int Size)> Sizes, List<string> Warnings) Pack(ScottFreeGame game)
     {
         Check(game);
+        List<string> warnings = [];
 
         // Every string shares one dictionary.
         List<string> texts =
@@ -101,7 +104,7 @@ internal static class GamePacker
         Part(PackedHeader.RoomTexts, "room descriptions", () => Strings(roomTexts));
         Part(PackedHeader.Messages, "messages", () => Strings(messages));
         Part(PackedHeader.ItemLocations, "item locations", () => output.AddRange(game.Items.Select(item => (byte)item.Location)));
-        Part(PackedHeader.ItemNouns, "item nouns", () => output.AddRange(game.Items.Select(item => (byte)ItemNoun(game, item))));
+        Part(PackedHeader.ItemNouns, "item nouns", () => output.AddRange(game.Items.Select(item => (byte)ItemNoun(game, item, warnings))));
         Part(PackedHeader.Treasures, "treasures", () =>
         {
             byte[] bits = new byte[(game.Items.Count + 7) / 8];
@@ -120,7 +123,8 @@ internal static class GamePacker
         });
 
         sizes.Add(("total", output.Count));
-        return ([.. output], sizes);
+        Require(output.Count <= 0xFFFF, $"The packed game is {output.Count} bytes; the format's offsets reach 65535.");
+        return ([.. output], sizes, warnings);
 
         void SetWord(int offset, int value)
         {
@@ -181,8 +185,9 @@ internal static class GamePacker
         return slash >= 0 && description.EndsWith('/') && slash < description.Length - 1 ? description[..slash] : description;
     }
 
-    // The noun an item's /WORD/ names, as the first of its synonyms, or 0 for an item GET and DROP don't take.
-    private static int ItemNoun(ScottFreeGame game, GameItem item)
+    // The noun an item's /WORD/ names, as the first of its synonyms, or 0 for an item GET and DROP don't take: one with
+    // no word, or a word that is no noun, which can then never be typed as one.
+    private static int ItemNoun(ScottFreeGame game, GameItem item, List<string> warnings)
     {
         int slash = item.Description.IndexOf('/');
         if (slash < 0 || !item.Description.EndsWith('/') || slash == item.Description.Length - 1) { return 0; }
@@ -194,7 +199,8 @@ internal static class GamePacker
             if (noun > 0 && Word(game.Nouns[noun], game.WordLength) == word) { return first; }
         }
 
-        throw new InvalidDataException($"The item \"{item.Description}\" is known by \"{word}\", which is not a noun.");
+        warnings.Add($"The item \"{item.Description}\" is known by \"{word}\", which is not a noun, so GET and DROP can't take it.");
+        return 0;
     }
 
     // An action: its verb, its noun, a byte with its condition count above its code count, then two bytes for each
@@ -231,8 +237,8 @@ internal static class GamePacker
         Require(game.WordLength is >= 1 and <= 8, $"The word length is {game.WordLength}; the format takes 1 to 8.");
         Require(game.Actions.Count <= 0xFFFF, "The game has more than 65535 actions.");
         Require(game.LightTime is >= -1 and < PackedHeader.Endless, $"The light time {game.LightTime} is out of range.");
-        Require(game.StartRoom < game.Rooms.Count && game.TreasureRoom < game.Rooms.Count, "The start or treasure room is not a room.");
-        Require(game.CarryLimit <= 255 && game.TreasureCount <= 255, "The carry limit or treasure count is over 255.");
+        Require(game.StartRoom >= 0 && game.StartRoom < game.Rooms.Count && game.TreasureRoom >= 0 && game.TreasureRoom < game.Rooms.Count, "The start or treasure room is not a room.");
+        Require(game.CarryLimit is >= 0 and <= 255 && game.TreasureCount is >= 0 and <= 255, "The carry limit or treasure count is not 0 to 255.");
         foreach (string word in game.Verbs.Concat(game.Nouns))
         {
             Require(word.All(character => character is > ' ' and <= '~'), $"The word \"{word}\" holds a space or a character the format cannot store.");
@@ -251,7 +257,6 @@ internal static class GamePacker
         foreach (GameAction action in game.Actions)
         {
             Require(action.Verb < game.Verbs.Count && (action.Verb == 0 || action.Noun < game.Nouns.Count), $"An action's words are out of range: {action.Verb}, {action.Noun}.");
-            Require(action.Verb != 0 || action.Noun <= 100, $"An action happens {action.Noun} times in 100.");
             foreach (GameCondition condition in action.Conditions)
             {
                 Require(condition.Value is >= 0 and <= LargestValue, $"A condition's value {condition.Value} is out of range.");

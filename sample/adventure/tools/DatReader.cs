@@ -44,11 +44,25 @@ internal sealed class DatReader(string text)
             throw new InvalidDataException($"A quoted string was expected at line {Line(_position)}.");
         }
 
+        // Two quotation marks together inside a string are one; one alone ends it.
         int start = ++_position;
-        int end = text.IndexOf('"', start);
-        if (end < 0) { throw new InvalidDataException($"The string at line {Line(start)} has no closing quote."); }
+        int end;
+        while (true)
+        {
+            end = text.IndexOf('"', _position);
+            if (end < 0) { throw new InvalidDataException($"The string at line {Line(start)} has no closing quote."); }
+            if (end + 1 < text.Length && text[end + 1] == '"' && end > start)
+            {
+                _position = end + 2;
+                continue;
+            }
+
+            break;
+        }
+
         _position = end + 1;
-        return text[start..end].Replace("\r\n", "\n", StringComparison.Ordinal).Replace('\r', '\n').Replace('`', '"');
+        return text[start..end].Replace("\"\"", "\"", StringComparison.Ordinal).Replace("\r\n", "\n", StringComparison.Ordinal)
+            .Replace('\r', '\n').Replace('`', '"');
     }
 
     private void SkipSpace()

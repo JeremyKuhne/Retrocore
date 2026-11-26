@@ -9,10 +9,11 @@
   `.out` is what the screen shows, from the reference engine, with each command after its prompt.
 
 The commands and the `.out` files change together: after changing the game or the engines' rules, write each `.out`
-again with the packer's `play` and read the difference.
+again with the packer's `play` and read the difference. Windows PowerShell 5 redirects in UTF-16, so use PowerShell 7,
+which writes UTF-8.
 
 ```powershell
-dotnet run ../tools/packer.cs -- play ../obj/test.bin test-win.in --echo
+dotnet run ../tools/packer.cs -- play ../obj/test.bin test-win.in --echo > test-win.out
 ```
 
 Pirate Adventure is to be added here as `pirate.dat`, with where it is hosted and the terms given there.

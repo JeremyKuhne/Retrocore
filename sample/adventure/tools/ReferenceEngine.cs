@@ -68,6 +68,7 @@ internal sealed class ReferenceEngine(byte[] game, int columns)
     private short _counter;
     private readonly short[] _counters = new short[16];
     private readonly byte[] _savedRooms = new byte[16];
+    private byte _savedRoom;
     private int _room;
     private int _lightTime;
     private int _random = SeedState;
@@ -264,7 +265,7 @@ internal sealed class ReferenceEngine(byte[] game, int columns)
 
     private void Get(int noun)
     {
-        if (noun == 0) { Line(What); return; }
+        if (_nounText.Length == 0) { Line(What); return; }
         if (IsDark) { Line(TooDark); return; }
         int item = FindItem(noun, _room);
         if (item < 0) { Line(NotHere); return; }
@@ -275,16 +276,18 @@ internal sealed class ReferenceEngine(byte[] game, int columns)
 
     private void Drop(int noun)
     {
-        if (noun == 0) { Line(What); return; }
+        if (_nounText.Length == 0) { Line(What); return; }
         int item = FindItem(noun, Carried);
         if (item < 0) { Line(NotCarried); return; }
         _locations[item] = (byte)_room;
         Line(Done);
     }
 
-    // The first item at a location that GET and DROP know by the noun, or -1.
+    // The first item at a location that GET and DROP know by the noun, or -1; noun 0, a word the game doesn't know,
+    // names none.
     private int FindItem(int noun, int location)
     {
+        if (noun == 0) { return -1; }
         int nouns = Table(PackedHeader.ItemNouns);
         for (int item = 0; item < game[PackedHeader.ItemCount]; item++)
         {
@@ -311,7 +314,8 @@ internal sealed class ReferenceEngine(byte[] game, int columns)
 
     // Parsing.
 
-    // The verb and noun of a line, or null when the line has no command or a word the game doesn't know.
+    // The verb and noun of a line, or null when the line has no command or a verb the game doesn't know. A second
+    // word that is no noun is noun 0, as actions with noun 0 answer any.
     private (int Verb, int Noun)? Parse(string line)
     {
         string[] words = line.Split(' ', StringSplitOptions.RemoveEmptyEntries);
@@ -332,8 +336,8 @@ internal sealed class ReferenceEngine(byte[] game, int columns)
             return (VerbGo, direction);
         }
 
-        int noun = second is null ? 0 : Lookup(PackedHeader.Nouns, second);
-        if (verb < 0 || noun < 0)
+        int noun = second is null ? 0 : Math.Max(0, Lookup(PackedHeader.Nouns, second));
+        if (verb < 0)
         {
             Line(UnknownWord);
             return null;
@@ -563,7 +567,7 @@ internal sealed class ReferenceEngine(byte[] game, int columns)
             case 77: if (_counter >= 0) { _counter--; } break;
             case 78: Number(_counter); break;
             case 79: _counter = (short)parameter(); break;
-            case 80: (_room, _savedRooms[0]) = (_savedRooms[0], (byte)_room); _lookPending = true; break;
+            case 80: (_room, _savedRoom) = (_savedRoom, (byte)_room); _lookPending = true; break;
             case 81:
                 int slot = parameter() & 15;
                 (_counter, _counters[slot]) = (_counters[slot], _counter);

@@ -7,7 +7,7 @@
 // with the C# reference engine, which the 6502 engine's tests compare against.
 //
 //   dotnet run packer.cs -- pack game.dat game.bin
-//   dotnet run packer.cs -- play game.bin commands.txt [--echo] [--columns 40] [--expect expected.log]
+//   dotnet run packer.cs -- play game.bin commands.txt [--echo] [--columns 40] [--expect expected.out]
 //
 // pack prints the size of each part of the packed game. play writes what the engine sends to the screen, with each
 // command after its prompt when --echo is given; with --expect it compares that with a file instead, and fails when
@@ -46,15 +46,16 @@ catch (Exception exception) when (exception is InvalidDataException or IOExcepti
 
 static int Usage()
 {
-    Console.Error.WriteLine("Usage: pack game.dat game.bin");
-    Console.Error.WriteLine("       play game.bin commands.txt [--echo] [--columns 40] [--expect expected.log]");
+    Console.Error.WriteLine("Usage: dotnet run packer.cs -- pack game.dat game.bin");
+    Console.Error.WriteLine("       dotnet run packer.cs -- play game.bin commands.txt [--echo] [--columns 40] [--expect expected.out]");
     return 2;
 }
 
 static int Pack(string input, string output)
 {
     ScottFreeGame game = ScottFreeGame.Parse(File.ReadAllText(input));
-    (byte[] bytes, List<(string Part, int Size)> sizes) = GamePacker.Pack(game);
+    (byte[] bytes, List<(string Part, int Size)> sizes, List<string> warnings) = GamePacker.Pack(game);
+    foreach (string warning in warnings) { Console.Error.WriteLine($"Warning: {warning}"); }
     if (Path.GetDirectoryName(Path.GetFullPath(output)) is { } folder) { Directory.CreateDirectory(folder); }
     File.WriteAllBytes(output, bytes);
     foreach ((string part, int size) in sizes)
@@ -78,7 +79,11 @@ static int Play(string packed, string commands, string[] options)
                 echo = true;
                 break;
             case "--columns" when index + 1 < options.Length:
-                columns = int.Parse(options[++index], CultureInfo.InvariantCulture);
+                if (!int.TryParse(options[++index], CultureInfo.InvariantCulture, out columns) || columns < 2)
+                {
+                    return Usage();
+                }
+
                 break;
             case "--expect" when index + 1 < options.Length:
                 expected = options[++index];

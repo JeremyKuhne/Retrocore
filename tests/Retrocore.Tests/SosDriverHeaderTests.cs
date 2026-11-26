@@ -147,6 +147,11 @@ public sealed class SosDriverHeaderTests
     [DataRow("Rs232", "", Basic, ".RS232")]
     [DataRow("Grafix", "", Basic, ".GRAFIX")]
     [DataRow("Profile", "", Utilities, ".PROFILE")]
+    [DataRow("Printer", "", Basic, ".PRINTER")]
+    [DataRow("Audio", "", Basic, ".AUDIO")]
+    [DataRow("Silentype", "", Basic, ".SILENTYPE")]
+    [DataRow("Fmtd1", "", Utilities, ".FMTD1")]
+    [DataRow("Ram", "", Utilities, ".RAM")]
     public void BuiltDriverMatchesTheDisk(string folder, string define, string disk, string device)
     {
         SosDriver expected = SosDriverFile.Read(SosVolumeTests.Volume(disk).ReadFile("SOS.DRIVER")).Drivers.Single(driver => driver.Name == device);
@@ -204,9 +209,10 @@ public sealed class SosDriverHeaderTests
     }
 
     /// <summary>
-    ///  The writer refuses what SOS's loader cannot load: a short header, no drivers, code too short for the flags of
-    ///  each DIB along its chain (or, for a page-aligned driver, its DCB's length), a relocation outside the code; and,
-    ///  stricter than the loader, a drive count outside 1-4 and a comment that is not ASCII.
+    ///  The writer refuses what SOS's loader cannot load: a short header; no drivers; code too short for what the
+    ///  loader reads of each DIB along its chain (the flags; an active DIB's unit and device type; for a page-aligned
+    ///  driver, its DCB's length); a chain that comes back to a DIB; a relocation outside the code; and, stricter than
+    ///  the loader, a drive count outside 1-4 and a comment that is not ASCII.
     /// </summary>
     [TestMethod]
     public void WriterRefusesWhatSosCannotLoad()
@@ -244,7 +250,14 @@ public sealed class SosDriverHeaderTests
         Action pastCode = () => SosDriverFile.Write(header, [new SosDriver("", past, [])]);
         pastCode.Should().Throw<ArgumentException>().WithParameterName("drivers");
 
-        // The loader ends a chain only at a link of 0: a DIB that links to itself, or a loop, never ends.
+        // An active DIB's unit and device type, at $16 and $17, must be in the code.
+        byte[] active = new byte[0x17];
+        active[0x14] = 0x80;
+        Action noType = () => SosDriverFile.Write(header, [new SosDriver("", active, [])]);
+        noType.Should().Throw<ArgumentException>().WithParameterName("drivers");
+
+        // The loader's walk of the file ends a chain only at a link of 0: a DIB that links to itself, or a loop, never
+        // ends.
         byte[] chain = new byte[0x30];
         chain[0] = 0x10;
         SosDriverFile.Read(SosDriverFile.Write(header, [new SosDriver("", chain, [])])).Drivers.Should().ContainSingle();

@@ -108,6 +108,12 @@ public sealed class SosDriverFile
     /// <summary>
     ///  Reads a driver file.
     /// </summary>
+    /// <remarks>
+    ///  <para>
+    ///   It reads the fields without checking the drivers' DIBs, so it reads a file that <see cref="Write"/> would
+    ///   refuse, such as one whose chain of DIBs never ends.
+    ///  </para>
+    /// </remarks>
     /// <param name="data">The file's contents.</param>
     /// <returns>Its header and drivers.</returns>
     /// <exception cref="InvalidDataException">The data is not a driver file.</exception>
@@ -152,8 +158,8 @@ public sealed class SosDriverFile
     /// <exception cref="ArgumentException">
     ///  The header is short, $8000 bytes or more, or its drive count is not 1-4 (stricter than the loader, which
     ///  takes 0 as 1 and more than 4 as 4); there are no drivers; or a driver's comment is not ASCII, a field is
-    ///  $8000 bytes or more, its code is too short for the DIB fields the loader reads along its chain of DIBs, or a
-    ///  relocation does not point at a word in its code.
+    ///  $8000 bytes or more, its code is too short for the DIB fields the loader reads along its chain of DIBs, its
+    ///  chain does not end with a link of 0, or a relocation does not point at a word in its code.
     /// </exception>
     public static byte[] Write(ReadOnlySpan<byte> header, IReadOnlyList<SosDriver> drivers)
     {
@@ -193,7 +199,7 @@ public sealed class SosDriverFile
                 throw new ArgumentException($"A driver's code is {DibFlags + 1}-{MaxField} bytes; {driver.Name}'s is {driver.Code.Length}.", nameof(drivers));
             }
 
-            CheckDibs(driver, nameof(drivers));
+            CheckDibs(driver);
 
             if (comment.Length > MaxField || driver.Relocations.Length * 2 > MaxField)
             {
@@ -228,15 +234,21 @@ public sealed class SosDriverFile
     // driver to be page-aligned, for which the loader reads the word at $20 of the driver's code, its first DIB's DCB
     // length.
     private const int DibFlags = 0x14;
+    private const int DibActive = 0x80;
     private const int DibActivePageAligned = 0xC0;
+
+    // An active DIB's device type, after its unit at $16, both of which the loader enters in the device table.
+    private const int DibDeviceType = 0x17;
     private const int DibDcb = 0x20;
 
     // Walks the driver's chain of DIBs as SOS's loader does, from the first at the code's start along the links (each
-    // an offset in the code) to the link of 0 that ends it, checking that each DIB's flags, and the DCB length an
-    // active page-aligned one makes the loader read, are inside the code. The loader ends the chain only at a link of
-    // 0, so a chain that comes back to a DIB, itself included, never ends.
-    private static void CheckDibs(SosDriver driver, string parameter)
+    // an offset in the code) to the link of 0 that ends it, checking that what the loader reads of each DIB is inside
+    // the code: its flags; for an active one, its unit and device type; and for an active page-aligned one, the DCB
+    // length at $20. The loader's walk of the file (FLAGS, through NEXT_DIB) ends only at a link of 0, so a chain that
+    // comes back to a DIB, itself included, never ends; the self-links that LINK stops at are ones FLAGS writes.
+    private static void CheckDibs(SosDriver driver)
     {
+        const string parameter = "drivers";
         byte[] code = driver.Code;
         HashSet<int> seen = [];
         for (int dib = 0; ;)
@@ -249,6 +261,11 @@ public sealed class SosDriverFile
             if (dib + DibFlags >= code.Length)
             {
                 throw new ArgumentException($"{driver.Name} links to a DIB at offset {dib}, whose flags are past its code.", parameter);
+            }
+
+            if ((code[dib + DibFlags] & DibActive) != 0 && dib + DibDeviceType >= code.Length)
+            {
+                throw new ArgumentException($"{driver.Name}'s active DIB at offset {dib} ends before its unit and device type.", parameter);
             }
 
             if ((code[dib + DibFlags] & DibActivePageAligned) == DibActivePageAligned && code.Length < DibDcb + 2)

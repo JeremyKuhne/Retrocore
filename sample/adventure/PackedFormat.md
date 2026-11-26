@@ -141,7 +141,7 @@ The codes that need a value take the action's parameters in turn, 0 once there a
 | 81 | Swaps the counter with the counter the value names (its low four bits) |
 | 82 | Adds the value to the counter |
 | 83 | Takes the value from the counter, which goes no lower than -1 |
-| 84 | Writes the command's second word in full, in capitals as the console gives it |
+| 84 | Writes the command's second word in full, in capitals as the console gives it (a console may cut a long line: the Apple II's keeps 63 characters) |
 | 85 | Writes the command's second word as code 84 does, and ends the line |
 | 86 | Ends the line |
 | 87 | Swaps the player's room with the saved room the value names (its low four bits) |

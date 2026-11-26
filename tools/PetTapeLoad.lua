@@ -10,19 +10,21 @@
 -- RETRO_OUT: the file to write: video RAM ($8000-$83E7), then $0000-$FFFF.
 
 local output = os.getenv("RETRO_OUT") or "memory.bin"
-local finish = tonumber(os.getenv("RETRO_END") or "120")
+-- MAME's time is whole seconds and attoseconds, so times are compared as attotimes: time.seconds drops a
+-- fraction such as 2.5, and time:as_double() rounds a frame at 2.999999999999999880 up to 3, a frame early.
+local load_at = emu.attotime.from_double(3)
+local finish = emu.attotime.from_double(tonumber(os.getenv("RETRO_END") or "120"))
 local typed = false
 
 subscription = emu.add_machine_frame_notifier(function()
-  -- time.seconds counts whole seconds; as_double keeps the fraction of a time such as 2.5.
-  local seconds = manager.machine.time:as_double()
-  if not typed and seconds >= 3 then
+  local now = manager.machine.time
+  if not typed and now >= load_at then
     typed = true
     manager.machine.natkeyboard:post("LOAD\r")
     for _, cassette in pairs(manager.machine.cassettes) do cassette:play() end
   end
 
-  if seconds < finish then return end
+  if now < finish then return end
   local space = manager.machine.devices[":f3"].spaces["program"]
   local bytes = {}
   for address = 0x8000, 0x83E7 do bytes[#bytes + 1] = string.char(space:read_u8(address)) end

@@ -269,7 +269,9 @@ What the comparison has to allow for:
   MAME.
 - **Keys MAME cannot type.** A script entry `@port,field,state` presses (1) or releases (0) a key by MAME's port and
   field names, such as `@:LINE7,F1,1`, for the function and shift keys.
-- **Time.** The script schedules by `machine.time:as_double()`; `machine.time.seconds` is only the whole seconds.
+- **Time.** The script compares MAME's time, whole seconds and attoseconds, with each time as an attotime
+  (`emu.attotime.from_double`). `machine.time.seconds` is only the whole seconds, and `machine.time:as_double()`
+  rounds a frame just short of a second, such as the PET's at 2.999999999999999880, up to it, a frame early.
   It logs when each entry fired, and every comparison checks that each one fired within a frame of its time
   (`MameSchedule.ShouldHaveFiredOnTime`). `MameSchedule` writes the times in plain decimal and refuses a `|` in an
   entry's text, which the script would split.

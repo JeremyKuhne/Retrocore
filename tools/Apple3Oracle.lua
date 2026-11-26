@@ -11,14 +11,15 @@
 -- The trace reads no memory: on MAME's Apple III a debugger read of zero page can latch an X-byte.
 
 local output = (os.getenv("RETRO_OUT") or "trace.log"):gsub("\\", "/")
-local finish = tonumber(os.getenv("RETRO_END") or "1")
+-- MAME's time is whole seconds and attoseconds, so times are compared as attotimes: time.seconds drops a
+-- fraction such as 2.5, and time:as_double() rounds a frame at 2.999999999999999880 up to 3, a frame early.
+local finish = emu.attotime.from_double(tonumber(os.getenv("RETRO_END") or "1"))
 local debugger = manager.machine.debugger
 debugger:command('trace ' .. output .. ',maincpu,noloop,{tracelog "%02x %02x %02x %02x %02x|",a,x,y,p,sp}')
 debugger.execution_state = "run"
 
 subscription = emu.add_machine_frame_notifier(function()
-  -- time.seconds counts whole seconds; as_double keeps the fraction of a time such as 2.5.
-  if manager.machine.time:as_double() >= finish then
+  if manager.machine.time >= finish then
     debugger:command("trace off,maincpu")
     manager.machine:exit()
   end

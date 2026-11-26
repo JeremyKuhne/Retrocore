@@ -12,9 +12,11 @@
 -- RETRO_KEYS: optional text to type, with \r for RETURN, starting at the emulated second RETRO_KEYS_AT.
 
 local output = (os.getenv("RETRO_OUT") or "trace.log"):gsub("\\", "/")
-local finish = tonumber(os.getenv("RETRO_END") or "1")
+-- MAME's time is whole seconds and attoseconds, so times are compared as attotimes: time.seconds drops a
+-- fraction such as 2.5, and time:as_double() rounds a frame at 2.999999999999999880 up to 3, a frame early.
+local finish = emu.attotime.from_double(tonumber(os.getenv("RETRO_END") or "1"))
 local keys = os.getenv("RETRO_KEYS")
-local keysAt = tonumber(os.getenv("RETRO_KEYS_AT") or "0")
+local keysAt = emu.attotime.from_double(tonumber(os.getenv("RETRO_KEYS_AT") or "0"))
 local cpu = os.getenv("RETRO_CPU") or "maincpu"
 local typed = false
 local debugger = manager.machine.debugger
@@ -24,8 +26,7 @@ debugger:command('trace ' .. output .. ',' .. cpu .. ',noloop,{tracelog "%02x %0
 debugger.execution_state = "run"
 
 subscription = emu.add_machine_frame_notifier(function()
-  -- time.seconds counts whole seconds; as_double keeps the fraction of a time such as 2.5.
-  local now = manager.machine.time:as_double()
+  local now = manager.machine.time
   if keys and not typed and now >= keysAt then
     manager.machine.natkeyboard:post((keys:gsub("\\r", "\r")))
     typed = true

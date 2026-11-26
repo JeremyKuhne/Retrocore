@@ -33,6 +33,14 @@ internal sealed partial class Trs80Model100DebugTarget
     ///   32 (the default), <c>optionRom</c> names an option ROM's file, and <c>time</c> sets the clock (an ISO 8601
     ///   date and time; the host's local time by default).
     ///  </para>
+    ///  <para>
+    ///   <c>ramImage</c> names a file that keeps the RAM between sessions, as the Model 100's battery does: the fitted
+    ///   RAM's bytes, from its first address to $FFFF. When it exists it is loaded before the power comes on, so the ROM
+    ///   finds its RAM valid and carries on, the clock taken from <c>time</c> or the host; when it does not, the
+    ///   machine cold-starts and the file is written. Either way the RAM is saved to it when the session ends or
+    ///   another launch replaces it (see <see cref="SaveRecordings"/>). <c>coldStart</c>, true, starts from empty RAM
+    ///   even when the file exists, and replaces it when the session ends.
+    ///  </para>
     /// </remarks>
     /// <param name="args">The arguments.</param>
     /// <returns>The target, powered on.</returns>
@@ -62,7 +70,28 @@ internal sealed partial class Trs80Model100DebugTarget
         }
 
         Trs80Model100Machine machine = new(configuration, new(rom, option), model);
-        return new(machine);
+        Trs80Model100DebugTarget target = new(machine);
+        if (args.String("ramImage") is { } image)
+        {
+            string path = Path.GetFullPath(image);
+            if (File.Exists(path) && args.Bool("coldStart") != true)
+            {
+                byte[] ram = File.ReadAllBytes(path);
+                int size = configuration.RamKilobytes * 1024;
+                if (ram.Length != size)
+                {
+                    throw new ArgumentException(
+                        $"The RAM image {path} has {ram.Length} bytes; a {configuration.RamKilobytes} KB machine's has {size}.");
+                }
+
+                machine.LoadRam(ram);
+                machine.PowerOn();
+            }
+
+            target._ramImagePath = path;
+        }
+
+        return target;
     }
 
     /// <summary>

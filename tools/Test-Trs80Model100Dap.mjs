@@ -11,7 +11,7 @@
 // ROM, everything after the first launch is skipped, which is not a pass.
 
 import { resolve, join } from "node:path";
-import { writeFileSync, existsSync, unlinkSync } from "node:fs";
+import { writeFileSync, existsSync, unlinkSync, statSync } from "node:fs";
 import { tmpdir, homedir } from "node:os";
 import assert from "node:assert/strict";
 import { startDap } from "./DapClient.mjs";
@@ -72,6 +72,7 @@ async function type(line) {
 }
 
 const source = join(tmpdir(), `retrocore-model100-${process.pid}.asm`);
+const ramImage = join(tmpdir(), `retrocore-model100-${process.pid}.ram`);
 const skipped = [];
 try {
     writeFileSync(source, program.join("\n"));
@@ -102,7 +103,7 @@ try {
         assert.equal((await request("evaluate", { expression: "PC" })).result, "$E000 (57344)");
         assert.equal((await request("threads")).threads[0].name, "TRS-80 Model 100 80C85");
         const hardware = Object.fromEntries((await request("retro/devices")).hardware.map(row => [row.id, row]));
-        assert.deepEqual(Object.keys(hardware), ["model", "rom", "optionRom", "memory", "lcd", "clock", "power", "io"]);
+        assert.deepEqual(Object.keys(hardware), ["model", "rom", "optionRom", "memory", "lcd", "clock", "power", "ramImage", "io"]);
         assert.equal(hardware.rom.value, "32 KB, the US Model 100's");
         assert.equal(hardware.memory.value, "32 KB at $8000-$FFFF");
         assert.equal(hardware.clock.value, "uPD1990AC, TP at 256 Hz on RST 7.5");
@@ -138,7 +139,7 @@ try {
         phase("launching to the menu");
         events.length = 0;
         await request("launch", {
-            machine: "trs80-model100", romDirectory: roms, stopOnEntry: false, speed: "max", time: "2026-11-26T09:30:00"
+            machine: "trs80-model100", romDirectory: roms, ramImage, stopOnEntry: false, speed: "max", time: "2026-11-26T09:30:00"
         });
         await request("setExceptionBreakpoints", { filters: [] });
         await request("configurationDone");
@@ -149,7 +150,7 @@ try {
             "the menu, two seconds after power-on");
         await type("\r");
         await screen(screenText => screenText.includes("29382 Bytes free") && /^Ok$/m.test(screenText), "BASIC");
-        await type("print 6*7;date$\r");
+        await type("a=42:print 6*7;date$\r");
         // A cold start sets the clock to January 1, as MAME's does, whatever the launch's time.
         await screen(screenText => screenText.includes(" 42 01/01/00"), "BASIC's answer");
 
@@ -158,6 +159,22 @@ try {
         await screen((_, running) => running.poweredOff === true, "the power to go off");
         await request("retro/reset", {});
         await screen((screenText, running) => running.poweredOff === false && screenText.includes("Select:"), "the menu after Reset");
+
+        // The RAM image is written as another launch replaces the machine, and the next session resumes from it: BASIC
+        // after POWER OFF,RESUME, with its variable.
+        assert.ok(!existsSync(ramImage), "nothing is written while the session runs");
+        await type("\ra=42\rpower off,resume\r");
+        await screen((_, running) => running.poweredOff === true, "the power to go off again");
+        events.length = 0;
+        await request("launch", { machine: "trs80-model100", romDirectory: roms, ramImage, stopOnEntry: false, speed: "max" });
+        assert.equal(statSync(ramImage).size, 32768, "the relaunch saved the RAM");
+        await request("setExceptionBreakpoints", { filters: [] });
+        await request("configurationDone");
+        await screen((_, running) => running.cycles > 3 * 2457600, "the resumed machine to settle");
+        await type("?a\r");
+        await screen(screenText => /^ 42$/m.test(screenText), "BASIC to resume with its variable");
+        const ramHardware = Object.fromEntries((await request("retro/devices")).hardware.map(row => [row.id, row]));
+        assert.equal(ramHardware.ramImage.value, ramImage);
 
         if (existsSync(tandy102)) {
             phase("launching the Tandy 102");
@@ -179,11 +196,13 @@ try {
     if (failure()) throw failure();
     console.log(skipped.length === 0
         ? "Model 100 DAP integration passed: the missing-ROM messages, a source's breakpoint, call stack, registers, "
-            + "step out and LCD output, the menu, BASIC, POWER OFF and Reset, and the Tandy 102's menu."
+            + "step out and LCD output, the menu, BASIC, POWER OFF and Reset, a RAM image resumed in a new session, and the "
+            + "Tandy 102's menu."
         : `Model 100 DAP integration checked the missing-ROM messages${skipped.length === 1 && existsSync(model100) ? " and the Model 100" : ""}; `
             + `skipped (inconclusive, not passed): ${skipped.join("; ")}.`);
 } finally {
     clearTimeout(timeout);
     if (existsSync(source)) unlinkSync(source);
+    if (existsSync(ramImage)) unlinkSync(ramImage);
     await close();
 }

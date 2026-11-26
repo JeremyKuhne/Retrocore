@@ -25,7 +25,7 @@ namespace Retrocore.Debug;
 ///   LABEL; 137 PRINT; 138 PASTE; 139 PAUSE/BREAK.
 ///  </para>
 /// </remarks>
-internal sealed partial class Trs80Model100DebugTarget : IDebugTarget
+internal sealed partial class Trs80Model100DebugTarget : IDebugTarget, IRecordingTarget
 {
     /// <summary>
     ///  The LCD's own colors, the only screen it has.
@@ -43,6 +43,7 @@ internal sealed partial class Trs80Model100DebugTarget : IDebugTarget
     private bool _fetched;
     private bool _acknowledged;
     private bool _resetPending;
+    private string? _ramImagePath;
 
     /// <summary>
     ///  Wraps a machine.
@@ -301,6 +302,35 @@ internal sealed partial class Trs80Model100DebugTarget : IDebugTarget
     /// <inheritdoc/>
     public IEnumerable<(string Event, JsonObject Body)> StatusEvents() => [];
 
+    /// <summary>
+    ///  Gets the file the RAM is kept in between sessions, or null when the launch named none.
+    /// </summary>
+    internal string? RamImagePath => _ramImagePath;
+
+    /// <inheritdoc/>
+    /// <remarks>
+    ///  <para>
+    ///   Writes the RAM to the launch's <c>ramImage</c>, as the battery keeps it when the machine is switched off: to a
+    ///   file beside it first, then over it, so a save that fails leaves the image as it was, and the save can be
+    ///   tried again. The CPU's state is not kept, as it is not when the power goes, so the next session starts with
+    ///   the power coming on.
+    ///  </para>
+    /// </remarks>
+    public void SaveRecordings()
+    {
+        if (_ramImagePath is not { } path) { return; }
+        string temporary = $"{path}.{Environment.ProcessId}.tmp";
+        try
+        {
+            File.WriteAllBytes(temporary, _machine.SaveRam());
+            File.Move(temporary, path, overwrite: true);
+        }
+        finally
+        {
+            if (File.Exists(temporary)) { File.Delete(temporary); }
+        }
+    }
+
     /// <inheritdoc/>
     public void DeviceAction(IDevice device, string action, JsonObject args) =>
         throw new ArgumentException($"{device.Info.Name} does not support {action}.");
@@ -366,6 +396,11 @@ internal sealed partial class Trs80Model100DebugTarget : IDebugTarget
                 "Power",
                 _machine.IsPoweredOff ? "off" : "on",
                 "Software turns it off with port $BA bit 4; Reset turns it back on."),
+            new(
+                "ramImage",
+                "RAM image",
+                _ramImagePath ?? "none",
+                "The launch's ramImage option: the file that keeps the RAM between sessions, saved as the session ends."),
             new("io", "Serial, modem, cassette, printer, wand", "not connected", "Coming in later phases.")
         ];
     }

@@ -163,6 +163,29 @@ public sealed class Trs80Model100Machine : IMachine
     }
 
     /// <summary>
+    ///  Loads the fitted RAM, as a battery-backed image of it: its bytes from <see cref="Trs80Model100Bus.RamStart"/>
+    ///  to $FFFF.
+    /// </summary>
+    /// <param name="image">The image.</param>
+    /// <exception cref="ArgumentException">The image is not the size of the fitted RAM.</exception>
+    public void LoadRam(ReadOnlySpan<byte> image)
+    {
+        int size = Configuration.RamKilobytes * 1024;
+        if (image.Length != size)
+        {
+            throw new ArgumentException($"The RAM image must be {size} bytes.", nameof(image));
+        }
+
+        image.CopyTo(Bus.Ram[(Bus.RamStart - 0x8000)..]);
+    }
+
+    /// <summary>
+    ///  Copies the fitted RAM, from <see cref="Trs80Model100Bus.RamStart"/> to $FFFF.
+    /// </summary>
+    /// <returns>The image.</returns>
+    public byte[] SaveRam() => Bus.Ram[(Bus.RamStart - 0x8000)..].ToArray();
+
+    /// <summary>
     ///  Gets the text the ROM keeps of the screen, its 40x8 character copy at $FE00-$FF3F, as eight lines.
     /// </summary>
     /// <returns>The lines, with characters outside printable ASCII as spaces.</returns>

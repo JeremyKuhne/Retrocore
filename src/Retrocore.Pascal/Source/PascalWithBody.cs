@@ -35,8 +35,4 @@ internal sealed class PascalWithBody
     /// </summary>
     public int Ifs { get; set; }
 
-    /// <summary>
-    ///  Gets or sets whether the ELSE being read is one of its own IFs', so that it goes on.
-    /// </summary>
-    public bool Kept { get; set; }
 }

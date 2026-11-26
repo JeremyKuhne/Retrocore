@@ -176,7 +176,12 @@ internal sealed class PascalDocuments
                 _programs[root] = analysis;
             }
 
-            if (analysis.Program.File(path) is not null) { return analysis.Program; }
+            if (analysis.Program.File(path) is not null)
+            {
+                // Read by a main file now, it is no longer a program of its own.
+                if (!string.Equals(root, path, StringComparison.OrdinalIgnoreCase)) { _programs.Remove(path); }
+                return analysis.Program;
+            }
         }
 
         // A file no main file reads is its own program, kept by its own path.
@@ -193,14 +198,20 @@ internal sealed class PascalDocuments
     {
         PascalProgram program = PascalProgram.Analyze(root, Read);
 
-        // The files read from disk, and the folders an include was looked for in, whose times change as a file in
-        // them is added or removed.
+        // The files read from disk; the folders an include was looked for in, whose times change as a file in them
+        // is added or removed; and the Pascal files beside them, any of which may become a main file that reads one.
         Dictionary<string, DateTime> stamps = [with(StringComparer.OrdinalIgnoreCase)];
         foreach (PascalSourceFile file in program.Files)
         {
             if (!_open.ContainsKey(file.Path)) { stamps[file.Path] = PascalAnalysis.Stamp(file.Path); }
             string folder = Path.GetDirectoryName(file.Path) ?? "";
-            stamps.TryAdd(folder, PascalAnalysis.Stamp(folder));
+            if (stamps.TryAdd(folder, PascalAnalysis.Stamp(folder)))
+            {
+                foreach (string beside in Beside(folder).Where(beside => !_open.ContainsKey(beside)))
+                {
+                    stamps.TryAdd(beside, PascalAnalysis.Stamp(beside));
+                }
+            }
         }
 
         return new(program, stamps);
@@ -210,20 +221,7 @@ internal sealed class PascalDocuments
     private List<string> Roots(string path)
     {
         string folder = Path.GetDirectoryName(path) ?? "";
-        List<string> beside = [];
-        try
-        {
-            if (Directory.Exists(folder))
-            {
-                beside.AddRange(Directory.EnumerateFiles(folder).Where(IsPascal));
-            }
-        }
-        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
-        {
-            // A folder that can't be listed offers only its open files.
-        }
-
-        IEnumerable<string> candidates = beside
+        IEnumerable<string> candidates = Beside(folder)
             .Concat(_open.Keys.Where(file => string.Equals(
                 Path.GetDirectoryName(file),
                 folder,
@@ -232,6 +230,19 @@ internal sealed class PascalDocuments
             .Distinct(StringComparer.OrdinalIgnoreCase);
 
         return [.. candidates.Where(file => Read(file) is { } text && IsMain(text))];
+    }
+
+    // The Pascal files in a folder; none when it can't be listed, which leaves only its open files.
+    private static List<string> Beside(string folder)
+    {
+        try
+        {
+            return Directory.Exists(folder) ? [.. Directory.EnumerateFiles(folder).Where(IsPascal)] : [];
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            return [];
+        }
     }
 
     private static bool IsPascal(string file) =>

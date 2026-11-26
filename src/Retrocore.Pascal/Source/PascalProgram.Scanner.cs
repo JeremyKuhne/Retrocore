@@ -348,7 +348,7 @@ public sealed partial class PascalProgram
 
         // A compound statement: BEGIN to its END, each name used recorded in the scope.
         // A statement part, BEGIN to its END, noting the WITH statements whose bodies may name fields bare: a body
-        // that is a BEGIN ends at its END, any other at the ";", UNTIL or END that ends the statement, or an ELSE
+        // that is a BEGIN ends at its END, any other at the ";", END or UNTIL that ends the statement, or an ELSE
         // that isn't its own IF's.
         private void Compound(PascalScope scope)
         {
@@ -375,18 +375,23 @@ public sealed partial class PascalProgram
                 }
                 else if (token.Is("ELSE"))
                 {
-                    foreach (PascalWithBody body in withs.Where(body => !body.Block && body.Depth == depth && body.Ifs > 0))
+                    // An ELSE ends the bodies with no IF of their own open; in the others it is their IF's.
+                    withs.RemoveAll(body => !body.Block && body.Depth == depth && body.Ifs == 0);
+                    foreach (PascalWithBody body in withs.Where(body => !body.Block && body.Depth == depth))
                     {
                         body.Ifs--;
-                        body.Kept = true;
                     }
-
-                    withs.RemoveAll(body => !body.Block && body.Depth == depth && !body.Kept);
-                    withs.ForEach(body => body.Kept = false);
                 }
-                else if (token.IsSymbol(";") || token.Is("UNTIL"))
+                else if (token.IsSymbol(";"))
                 {
                     withs.RemoveAll(body => !body.Block && body.Depth == depth);
+                }
+                else if (token.Is("REPEAT")) { depth++; }
+                else if (token.Is("UNTIL"))
+                {
+                    // REPEAT's statements are a level, as BEGIN's are, which UNTIL closes.
+                    withs.RemoveAll(body => body.Depth >= depth);
+                    depth--;
                 }
                 else if (token.Is("END"))
                 {

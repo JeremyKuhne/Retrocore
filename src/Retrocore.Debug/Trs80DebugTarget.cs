@@ -29,6 +29,7 @@ internal sealed partial class Trs80DebugTarget : IDebugTarget
     private DebugFrame _beforeInstruction;
     private bool _instruction;
     private BasicRom? _basicRom;
+    private Trs80Level1Basic? _level1;
 
     // A reset button press whose handler has not yet started.
     private bool _resetPending;
@@ -292,7 +293,9 @@ internal sealed partial class Trs80DebugTarget : IDebugTarget
             string level1 = Path.Join(roms, "Level1.asm");
             if (File.Exists(level1))
             {
-                debug.Add(new SourceMapModule(Trs80SdkModules.AssembleLevel1(level1), Trs80MemoryArea.Rom));
+                AssemblyResult result = Trs80SdkModules.AssembleLevel1(level1);
+                debug.Add(new SourceMapModule(result, Trs80MemoryArea.Rom));
+                _level1 = Trs80Level1Basic.From(result.Symbols, this, () => _machine.Processor.Registers, SetRegisters, _calls.Reset);
             }
 
             return;
@@ -313,29 +316,43 @@ internal sealed partial class Trs80DebugTarget : IDebugTarget
     }
 
     /// <inheritdoc/>
-    public BasicDialect? Basic => _machine.Configuration.Rom == Trs80Rom.Level2 ? BasicDialect.Level2 : null;
+    public BasicDialect? Basic => _machine.Configuration.Rom == Trs80Rom.Level2 ? BasicDialect.Level2 : BasicDialect.Level1;
 
     /// <inheritdoc/>
-    public BasicRom? BasicRom => _basicRom;
+    public BasicRom? BasicRom => _level1?.Rom ?? _basicRom;
+
+    /// <inheritdoc/>
+    public int BasicCurrentLine => _level1?.CurrentLine ?? (Peek(CurrentLine) | (Peek((ushort)(CurrentLine + 1)) << 8));
+
+    /// <inheritdoc/>
+    public (int Line, int Address)? BasicStatementStart(ushort pc)
+    {
+        if (_level1 is { } level1) { return level1.StatementStart(pc); }
+        return _basicRom is { } rom && pc == rom.Gone ? (BasicCurrentLine, BasicTextPointer + 1) : null;
+    }
+
+    /// <inheritdoc/>
+    public IReadOnlyList<(int Line, int TextPointer)>? BasicGosubs => _level1?.Gosubs;
 
     /// <inheritdoc/>
     public bool InRom(ushort address) => _machine.Bus.Area(address) == Trs80MemoryArea.Rom;
 
     /// <inheritdoc/>
-    public int BasicTextPointer => _machine.Processor.Registers.HL;
+    public int BasicTextPointer => _level1?.TextPointer ?? _machine.Processor.Registers.HL;
 
     /// <inheritdoc/>
-    public int BasicStack => Peek(SavedStack) | (Peek((ushort)(SavedStack + 1)) << 8);
+    public int BasicStack => _level1?.Stack ?? (Peek(SavedStack) | (Peek((ushort)(SavedStack + 1)) << 8));
 
     /// <inheritdoc/>
     public int BasicLiveStack => _machine.Processor.Registers.SP;
 
     /// <inheritdoc/>
-    public int BasicForSize => ForEntrySize;
+    public int BasicForSize => _level1 is null ? ForEntrySize : Trs80Level1Basic.ForSize;
 
     /// <inheritdoc/>
     public (int Code, string Message, bool Handled) BasicError()
     {
+        if (_level1 is { } level1) { return level1.Error(); }
         int code = _machine.Processor.Registers.E;
         string message = code / 2 < s_errors.Length ? $"?{s_errors[code / 2]} ERROR" : $"error {code}";
         bool handled = (Peek(ErrorLine) | Peek((ushort)(ErrorLine + 1))) != 0 && Peek(InErrorHandler) == 0;
@@ -345,6 +362,12 @@ internal sealed partial class Trs80DebugTarget : IDebugTarget
     /// <inheritdoc/>
     public void SetBasicStatement(int line, int textPointer)
     {
+        if (_level1 is { } level1)
+        {
+            level1.SetStatement(line, textPointer);
+            return;
+        }
+
         Poke(CurrentLine, (byte)line);
         Poke((ushort)(CurrentLine + 1), (byte)(line >> 8));
         Z80Registers registers = _machine.Processor.Registers;
@@ -361,6 +384,12 @@ internal sealed partial class Trs80DebugTarget : IDebugTarget
     /// </remarks>
     public void EnterBasicPrompt(BasicRom rom)
     {
+        if (_level1 is { } level1)
+        {
+            level1.EnterPrompt();
+            return;
+        }
+
         int top = Peek(StackTop) | (Peek((ushort)(StackTop + 1)) << 8);
         ushort stack = (ushort)(top - 2);
         Poke(stack, 0);
@@ -378,6 +407,8 @@ internal sealed partial class Trs80DebugTarget : IDebugTarget
         _machine.Processor.Registers = registers;
         _calls.Reset();
     }
+
+    private void SetRegisters(Z80Registers registers) => _machine.Processor.Registers = registers;
 
     /// <summary>
     ///  Gets the directory of the Model I ROM sources: a directory that holds them, or its <c>Trs80</c> folder.

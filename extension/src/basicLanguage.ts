@@ -44,6 +44,7 @@ function sessionDialect(): string | undefined {
 
     if (session.configuration.machine === "apple3") return "business";
     if (session.configuration.machine === "trs80-model1") return session.configuration.rom === "level1" ? "level1" : "level2";
+    if (session.configuration.machine === "trs80-model3" && session.configuration.rom === "level1") return "level1";
     if (session.configuration.machine === "apple1") return "apple1";
     if (session.configuration.machine === "coco" && session.configuration.model !== "coco3") return "colorbasic";
     if (session.configuration.machine === "kaypro2") return "mbasic";
@@ -121,10 +122,16 @@ class ListingFileSystem implements vscode.FileSystemProvider {
     rename(uri: vscode.Uri): void { throw vscode.FileSystemError.NoPermissions(uri); }
 }
 
-/** The dialect a tokenized file's name gives: a tape is Level II, a CiderPress2 $FC name AppleSoft, $FA Integer BASIC. */
-function dialectOfFile(file: vscode.Uri): string | undefined {
+/**
+ * The dialect a tokenized file gives: a tape's is the Level that recorded it, as the language server reads it; a
+ * CiderPress2 $FC name is AppleSoft, $FA Integer BASIC.
+ */
+async function dialectOfFile(file: vscode.Uri): Promise<string | undefined> {
     const name = file.path.split("/").pop() ?? "";
-    if (/\.cas$/i.test(name)) return "level2";
+    // A file that is not a tape opens as Level II's, whose reading then says what is wrong.
+    if (/\.cas$/i.test(name)) {
+        return languageRequest<{ dialect: string }>("retrocore/basic/list", { path: file.fsPath }).then(listing => listing.dialect, () => "level2");
+    }
     if (/#fc/i.test(name)) return "applesoft";
     if (/#fa/i.test(name)) return "integer";
     return undefined;
@@ -182,7 +189,7 @@ export function registerBasicLanguage(context: vscode.ExtensionContext): void {
     context.subscriptions.push(vscode.commands.registerCommand("retrocore.basic.openListing", async (target?: vscode.Uri, dialect?: string): Promise<vscode.Uri | undefined> => {
         const file = target ?? (await vscode.window.showOpenDialog({ title: "Open a tokenized BASIC program or tape", canSelectMany: false }))?.[0];
         if (file === undefined) return undefined;
-        dialect ??= dialectOfFile(file) ?? (await vscode.window.showQuickPick(
+        dialect ??= (await dialectOfFile(file)) ?? (await vscode.window.showQuickPick(
             [
                 { label: "AppleSoft", dialect: "applesoft" },
                 { label: "Integer BASIC", dialect: "integer", detail: "Saving tokenizes through the Apple II's ROM (RETROCORE_II_ROMS)" },

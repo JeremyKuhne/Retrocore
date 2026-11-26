@@ -1224,7 +1224,7 @@ generators), which are byte-identical to MAME's; `romDirectory` or `RETROCORE_TR
 can hold MAME's dumps instead. When the running ROM is one the sources build, its source
 debugs as a ROM module, and Model III and Model 4 BASIC has the BASIC thread, as Level II
 does. A Model III with `rom` `level1` runs Level I BASIC from `Level1.asm`'s Model III
-build. The options are `rom`, `ramKilobytes`, `disks` (JV1, JV3, DMK or IMD),
+build, with the BASIC thread too. The options are `rom`, `ramKilobytes`, `disks` (JV1, JV3, DMK or IMD),
 `diskController`, `cassette` and `fastCassette` (Model III and 4), `fastDisk` and
 `bootRom` (Model II), `bootSeconds`, `screen` and `speed`. On the Model III family the
 panel takes the Model I's keys; on the Model II it types ASCII, with **Escape** for
@@ -1321,9 +1321,9 @@ protocol.
 
 **Retrocore: Open BASIC Program** opens the BASIC program in the running machine as
 text: AppleSoft on the Apple II Plus and IIe, Integer BASIC on the II, Level II on the
-Model I, Color BASIC on the Color Computer 1 and 2, with Extended and Disk
-Extended Color BASIC's words when their ROMs are fitted, BBC BASIC II on the BBC Micro, and Atari BASIC on the Atari. Level I and the CoCo 3's
-BASIC are not supported yet. It is in three places besides the Command Palette:
+Model I, Level I on the Model I and the Model III with `rom` `level1`, Color BASIC on the Color Computer 1 and 2, with
+Extended and Disk Extended Color BASIC's words when their ROMs are fitted, BBC BASIC II on the BBC Micro, and Atari BASIC
+on the Atari. The CoCo 3's BASIC is not supported yet. It is in three places besides the Command Palette:
 
 - the **BASIC program** button on the machine panel's key bar;
 - the **BASIC program** row under the machine in the Machine view, which shows the
@@ -1340,8 +1340,9 @@ BASIC are not supported yet. It is in three places besides the Command Palette:
   has unsaved edits, you choose **Keep Mine**, **Take the Machine's** or
   **Compare**.
 - **Import** and **Export** are in the editor's title bar. They cover text listings
-  (`.bas`), tokenized programs as BASIC stores them, and on the Model I, CSAVE tapes
-  (`.cas`). An exported AppleSoft program is named in CiderPress2's form, such as
+  (`.bas`), tokenized programs as BASIC stores them, and CSAVE tapes (`.cas`) for Level
+  II and Level I. A Level I tape that loads memory other than a program from `$4200`, as
+  a machine-code program that starts itself does, is refused. An exported AppleSoft program is named in CiderPress2's form, such as
   `PROGRAM#fc0801`.
 
 When the session ends, an editor with no unsaved edits closes. One with edits
@@ -1352,7 +1353,7 @@ character, `{$84}` for any byte, and `{{` for a brace.
 
 ### The BASIC thread
 
-A session running AppleSoft, Integer BASIC, Level II, Color BASIC, BBC BASIC or Atari BASIC has a
+A session running AppleSoft, Integer BASIC, Level II, Level I, Color BASIC, BBC BASIC or Atari BASIC has a
 **BASIC** thread beside the CPU's.
 Its call stack is the statement running, then each GOSUB in progress at the
 statement that called it; it shows **BASIC: ready** at the prompt.
@@ -1377,7 +1378,8 @@ statement that called it; it shows **BASIC: ready** at the prompt.
   **Handled BASIC errors** at those they will; and **BASIC program end** at STOP,
   END, the end of the program and Ctrl-C or BREAK. Integer BASIC and Color BASIC
   have no error handler, so their errors, such as `*** BAD BRANCH ERR` or `?UL ERROR`,
-  always stop.
+  always stop. Neither has Level I, whose HOW?, WHAT? and SORRY stop as BASIC errors, but
+  INPUT asks again after a mistyped answer, so that error counts as handled.
 - **Variables:** a BASIC frame has **Variables**, **Arrays** (each expanding to its
   elements), **Functions** (AppleSoft's DEF FN), **Loops** (the FOR loops in
   progress) and **Program** (where the program, variables, arrays and strings are).
@@ -1468,7 +1470,7 @@ get:
 **Retrocore: Renumber BASIC Program...** renumbers the lines and every reference to
 them. **Retrocore: Open as BASIC Listing** (also on the Explorer's context menu for
 `.cas` and CiderPress2 `#fc` and `#fa` files) opens a tokenized program or a Model I
-tape as text; saving writes it back in the same form.
+tape as text, a Level I tape as Level I BASIC; saving writes it back in the same form.
 
 Integer BASIC checks a line's grammar as it is typed and gives one word a different token
 for each place in its grammar, so Retrocore tokenizes Integer BASIC by running the

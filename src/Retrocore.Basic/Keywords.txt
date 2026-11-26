@@ -1,4 +1,4 @@
-# BASIC reserved word help: word | dialects (a = AppleSoft, 2 = Level II, i = Integer BASIC, b = Business BASIC, c = Color BASIC, m = MBASIC, p = Commodore PET BASIC, o = BBC BASIC) | syntax | what it does.
+# BASIC reserved word help: word | dialects (a = AppleSoft, 2 = Level II, i = Integer BASIC, b = Business BASIC, c = Color BASIC, m = MBASIC, p = Commodore PET BASIC, o = BBC BASIC, 1 = Level I BASIC) | syntax | what it does.
 # Written for Retrocore from the interpreters' behavior; one line per word and dialect group.
 END|a2b|END|Stops the program and returns to the prompt; CONT continues after it.
 FOR|a2b|FOR v = start TO end [STEP increment]|Starts a loop: sets v to start, and NEXT adds the increment (1 by default) until v passes end. The body always runs at least once.
@@ -829,3 +829,41 @@ CATALOG|p|CATALOG [Ddrive] [ON Uunit]|BASIC 4: lists a disk's directory without 
 RENAME|p|RENAME [Ddrive,] "old" TO "new" [ON Uunit]|BASIC 4: renames a disk file.
 SCRATCH|p|SCRATCH [Ddrive,] "name" [ON Uunit]|BASIC 4: deletes disk files, after ARE YOU SURE? in direct mode; the name may hold the wild cards ? and *.
 DIRECTORY|p|DIRECTORY [Ddrive] [ON Uunit]|BASIC 4: lists a disk's directory without touching the program in memory. DS and DS$ then hold the drive's status.
+# Level I BASIC: Tiny BASIC numbers, the variables A to Z, the strings A$ and B$ of 16 characters, the one array A(n), and words that can be cut short with a period, as P. for PRINT.
+LIST|1|LIST [line]|Lists the program from its first line, or from the line given; L. is short for it typed as a command.
+LLIST|1|LLIST [line]|The Model III's Level I: lists the program on the printer.
+RUN|1|RUN [line]|Forgets the GOSUBs, FOR loops and READ's place, and runs the program from its first line or the line given; R. is short for it typed as a command.
+NEW|1|NEW|Erases the program and clears the screen.
+CONT|1|CONT|Continues after STOP or BREAK, at the statement after the one that stopped; C. is short for it.
+CLOAD|1|CLOAD|Loads a program from tape at 250 baud, in place of the one in memory.
+CSAVE|1|CSAVE|Saves the program to tape at 250 baud.
+NEXT|1|NEXT v|Ends a FOR loop: adds the STEP to v and goes back after the FOR while v has not passed the limit; N. is short for it.
+LET|1|[LET] v = expression|Assigns a number to one of A to Z or an element A(n), or text to A$ or B$; LET can be left out.
+INPUT|1|INPUT ["prompt";] v [, v ...] / INPUT # v [, v ...]|Reads values typed after a question mark, or from tape after #; a value that is not a number asks again. I. is short for it.
+IF|1|IF condition [THEN] statement / IF condition THEN line|Runs the rest of the line when the condition is not zero, else goes on with the next line; THEN can be left out before a statement.
+ON|1|ON n GOTO line, line ... / ON n GOSUB line, line ...|Jumps to, or calls, the nth line of the list; goes on with the next statement when n is 0 or past the list.
+GOTO|1|GOTO line|Continues at a line; G. is short for it.
+GOSUB|1|GOSUB line|Calls the subroutine at a line; RETURN comes back after the GOSUB. GOS. is short for it.
+RESET|1|RESET(x, y)|Turns off a graphics block: x 0-127 across, y 0-47 down. R. is short for it in a program.
+RETURN|1|RETURN|Returns from a GOSUB to the statement after it; RET. is short for it.
+READ|1|READ v [, v ...]|Takes the next items from the DATA lines; REA. is short for it.
+RESTORE|1|RESTORE|Makes READ start again at the first DATA line; REST. is short for it.
+REM|1|REM text|A remark: the rest of the line, colons and all, is skipped.
+DATA|1|DATA item [, item ...]|Holds values for READ; it must start its line, and the rest of the line is skipped when it runs. D. is short for it.
+FOR|1|FOR v = start TO end [STEP increment]|Starts a loop of whole numbers: NEXT adds the increment (1 by default) until v passes end. F. is short for it.
+PRINT|1|PRINT [items] / PRINT # items|Prints numbers, quoted text, A$ and B$, TAB(n) and AT n; a comma moves to the next 16-column zone, a semicolon stays. # sends the line to tape. P. is short for it.
+SET|1|SET(x, y)|Turns on a graphics block: x 0-127 across, y 0-47 down; S. is short for it.
+STOP|1|STOP|Stops the program with BREAK AT and the line; CONT continues after it. ST. is short for it.
+END|1|END|Ends the program and returns to READY; E. is short for it.
+CLS|1|CLS|Clears the screen.
+LPRINT|1|LPRINT [items]|The Model III's Level I: prints on the printer, as PRINT does on the screen.
+THEN|1|IF condition THEN statement / THEN line|Starts what IF runs when its condition holds; a line number alone jumps there. T. is short for it.
+TO|1|FOR v = start TO end|Gives the end value of a FOR loop; T. is short for it.
+STEP|1|FOR v = start TO end STEP increment|Gives a FOR loop's increment, which may be negative; S. is short for it.
+TAB|1|PRINT TAB(column)|In PRINT: moves to a column; T. is short for it.
+AT|1|PRINT AT position|In PRINT: moves the cursor to a screen position, 0-1023, 64 to a row; A. is short for it.
+RND|1|RND(n)|A random number: a fraction between 0 and 1 for RND(0), else a whole number from 1 to n. R. is short for it.
+ABS|1|ABS(x)|The absolute value of x; A. is short for it.
+MEM|1|MEM|The bytes free between the program's end and the top of memory; M. is short for it.
+INT|1|INT(x)|The greatest whole number not above x; I. is short for it.
+POINT|1|POINT(x, y)|1 when the graphics block at x, y is on, else 0; P. is short for it.

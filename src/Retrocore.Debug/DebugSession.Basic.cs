@@ -89,7 +89,7 @@ internal sealed partial class DebugSession
             BasicProgram tape = BasicTape.Read(bytes, out _);
             return tape.Dialect.Name == dialect.Name
                 ? StoreBasic(tape, [])
-                : throw new InvalidOperationException($"A CSAVE tape holds Level II BASIC, not {dialect.DisplayName}.");
+                : throw new InvalidOperationException($"The tape holds a {tape.Dialect.DisplayName} program, not {dialect.DisplayName}.");
         }
 
         // Every tokenized program has zero bytes, which end its lines; a text file has none.

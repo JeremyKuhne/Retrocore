@@ -116,10 +116,10 @@ public sealed partial class BasicSource
         List<BasicStatement> starts)
     {
         string resolved = BasicProgram.Resolved(dialect, text, labels);
-        if (dialect is IntegerBasicDialect or AtariBasicDialect)
+        if (dialect is IntegerBasicDialect or AtariBasicDialect or Level1Dialect)
         {
-            // Integer BASIC's and Atari BASIC's stored tokens are not the Microsoft form the scanner read, so their
-            // offsets are found in the stored tokens themselves.
+            // Integer BASIC's and Atari BASIC's stored tokens, and Level I's text, are not the Microsoft form the scanner
+            // read, so their offsets are found in the stored bytes themselves.
             byte[] stored;
             try
             {
@@ -130,9 +130,12 @@ public sealed partial class BasicSource
                 return [];
             }
 
-            List<int> storedOffsets = dialect is AtariBasicDialect
-                ? AtariBasicDialect.StatementOffsets(stored)
-                : IntegerBasicDialect.StatementOffsets(stored);
+            List<int> storedOffsets = dialect switch
+            {
+                AtariBasicDialect => AtariBasicDialect.StatementOffsets(stored),
+                Level1Dialect => Level1Dialect.StatementOffsets(stored),
+                _ => IntegerBasicDialect.StatementOffsets(stored)
+            };
 
             for (int index = 0; index < starts.Count && index < storedOffsets.Count; index++)
             {

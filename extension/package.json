@@ -328,8 +328,8 @@
       },
       {
         "language": "retrocore-level1",
-        "scopeName": "source.retrocore-basic",
-        "path": "./syntaxes/basic.tmLanguage.json"
+        "scopeName": "source.retrocore-level1",
+        "path": "./syntaxes/level1.tmLanguage.json"
       },
       {
         "language": "retrocore-basic",

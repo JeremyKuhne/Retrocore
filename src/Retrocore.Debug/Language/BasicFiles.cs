@@ -46,7 +46,7 @@ internal static class BasicFiles
         BasicDialect dialect = DialectOf(path, args.String("dialect"));
         byte[] bytes = File.ReadAllBytes(path);
         BasicProgram program = IsTape(path) ? BasicTape.Read(bytes, out _) : BasicProgram.FromImage(dialect, bytes);
-        return new JsonObject { ["text"] = program.ToText(), ["dialect"] = dialect.Name };
+        return new JsonObject { ["text"] = program.ToText(), ["dialect"] = program.Dialect.Name };
     }
 
     /// <summary>

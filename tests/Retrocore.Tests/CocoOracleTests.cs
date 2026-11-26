@@ -180,6 +180,7 @@ public class CocoOracleTests
         try
         {
             string output = Path.Join(work, "memory.bin");
+            string fired = Path.Join(work, "fired.txt");
             string lua = Path.GetFullPath(Path.Join(AppContext.BaseDirectory, "..", "..", "..", "..", "tools", "Trs80Oracle.lua"));
             if (!File.Exists(lua)) { lua = FindTool("Trs80Oracle.lua"); }
 
@@ -210,31 +211,21 @@ public class CocoOracleTests
             };
 
             foreach (string argument in arguments) { start.ArgumentList.Add(argument); }
-            start.Environment["RETRO_SCRIPT"] = string.Join('|', script.Select(ScriptEntry));
-            start.Environment["RETRO_END"] = finish.ToString(CultureInfo.InvariantCulture);
+            start.Environment["RETRO_SCRIPT"] = MameSchedule.Script(script);
+            start.Environment["RETRO_FIRED"] = fired;
+            start.Environment["RETRO_END"] = MameSchedule.Seconds(finish);
             start.Environment["RETRO_OUT"] = output;
             using Process process = Process.Start(start) ?? throw new InvalidOperationException("MAME did not start.");
             string log = process.StandardOutput.ReadToEnd() + process.StandardError.ReadToEnd();
             process.WaitForExit(120_000).Should().BeTrue("MAME finishes");
             File.Exists(output).Should().BeTrue($"the Lua script dumps memory; MAME said: {log}");
+            MameSchedule.ShouldHaveFiredOnTime(script, File.ReadAllText(fired));
             return (File.ReadAllBytes(output), disk is null ? null : File.ReadAllBytes(image));
         }
         finally
         {
             Directory.Delete(work, recursive: true);
         }
-    }
-
-    /// <summary>
-    ///  Formats a schedule entry for the Lua script's <c>RETRO_SCRIPT</c>: the time in seconds, with a '.' before any
-    ///  fraction whatever the culture; <c>=</c>; then the text, with <c>\r</c> for ENTER.
-    /// </summary>
-    /// <param name="entry">The emulated second to type at, and the text to type.</param>
-    /// <returns>The entry as <c>seconds=text</c>.</returns>
-    internal static string ScriptEntry((double At, string Text) entry)
-    {
-        string at = entry.At.ToString(CultureInfo.InvariantCulture);
-        return $"{at}={entry.Text.Replace("\r", "\\r", StringComparison.Ordinal)}";
     }
 
     private static string FindTool(string name)

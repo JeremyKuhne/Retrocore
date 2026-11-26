@@ -270,6 +270,9 @@ What the comparison has to allow for:
 - **Keys MAME cannot type.** A script entry `@port,field,state` presses (1) or releases (0) a key by MAME's port and
   field names, such as `@:LINE7,F1,1`, for the function and shift keys.
 - **Time.** The script schedules by `machine.time:as_double()`; `machine.time.seconds` is only the whole seconds.
+  It logs when each entry fired, and every comparison checks that each one fired within a frame of its time
+  (`MameSchedule.ShouldHaveFiredOnTime`). `MameSchedule` writes the times in plain decimal and refuses a `|` in an
+  entry's text, which the script would split.
 - **The Model 4's clock at 4 MHz.** MAME 0.264 keeps it at 30 Hz, where the technical references give 60 Hz, so the
   clock's count is compared at 2 MHz only. The Model 4 DOSes run at 4 MHz, so their comparisons run with the two
   clocks at different rates; their screens after `DIR` show no time, but the cursor's blink, which the clock drives,

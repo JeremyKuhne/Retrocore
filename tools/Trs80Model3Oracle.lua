@@ -13,16 +13,21 @@
 -- RETRO_OUT:    the dump file.
 -- RETRO_SHARE:  the memory share written after the address space, such as ":videoram".
 -- RETRO_CPU:    the CPU's tag, ":maincpu" unless set.
+-- RETRO_FIRED:  optional; a file to log, a line per entry, "seconds=fired": the entry's time and the emulated
+--               second it fired.
 
 local space = manager.machine.devices[os.getenv("RETRO_CPU") or ":maincpu"].spaces["program"]
 local schedule = {}
 for entry in string.gmatch(os.getenv("RETRO_SCRIPT") or "", "[^|]+") do
   local at, text = string.match(entry, "^([%d%.]+)=(.*)$")
+  if not tonumber(at) then error("RETRO_SCRIPT entry is not seconds=text: " .. entry) end
   schedule[#schedule + 1] = { at = tonumber(at), text = (text:gsub("\\r", "\r")) }
 end
 local finish = tonumber(os.getenv("RETRO_END") or "10")
 local output = os.getenv("RETRO_OUT") or "memory.bin"
 local share = os.getenv("RETRO_SHARE")
+local fired_log = os.getenv("RETRO_FIRED")
+local fired = {}
 local next_entry = 1
 local done = false
 subscription = emu.add_machine_frame_notifier(function()
@@ -36,6 +41,7 @@ subscription = emu.add_machine_frame_notifier(function()
     else
       manager.machine.natkeyboard:post(text)
     end
+    fired[#fired + 1] = string.format("%.6f=%.6f", schedule[next_entry].at, now)
     next_entry = next_entry + 1
   end
   if not done and now >= finish then
@@ -49,6 +55,11 @@ subscription = emu.add_machine_frame_notifier(function()
     local file = io.open(output, "wb")
     file:write(table.concat(bytes))
     file:close()
+    if fired_log then
+      local log = io.open(fired_log, "w")
+      log:write(table.concat(fired, "\n"), "\n")
+      log:close()
+    end
     manager.machine:exit()
   end
 end)

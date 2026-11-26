@@ -2,8 +2,9 @@
 
 The adventure engine plays games in a binary format of its own, which [`tools/packer.cs`](tools/packer.cs) writes from
 a game in the ScottFree `.dat` text format. This page gives the format, then the rules the engine plays it by. The
-C# reference engine in [`tools/ReferenceEngine.cs`](tools/ReferenceEngine.cs) follows them, and the 6502 engine is
-to follow them too, so a transcript of one matches the other's character for character.
+6502 engine in [`src/core`](src/core) and the C# reference engine in
+[`tools/ReferenceEngine.cs`](tools/ReferenceEngine.cs) both follow them, so a transcript of one matches the other's
+character for character.
 
 ## The layout
 
@@ -140,7 +141,7 @@ The codes that need a value take the action's parameters in turn, 0 once there a
 | 81 | Swaps the counter with the counter the value names (its low four bits) |
 | 82 | Adds the value to the counter |
 | 83 | Takes the value from the counter, which goes no lower than -1 |
-| 84 | Writes the command's second word in full, in capitals as the console gives it |
+| 84 | Writes the command's second word in full, in capitals as the console gives it (a console may cut a long line: the Apple II's keeps 63 characters, and its Monitor cancels one of 256) |
 | 85 | Writes the command's second word as code 84 does, and ends the line |
 | 86 | Ends the line |
 | 87 | Swaps the player's room with the saved room the value names (its low four bits) |

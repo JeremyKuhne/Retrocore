@@ -57,7 +57,7 @@
         "entry": {
           "type": "string",
           "minLength": 1,
-          "description": "The entry point's label; defaults to the first section."
+          "description": "The entry point's label; defaults to the first byte the project's own sources emit, after the platform folders' code."
         },
         "output": {
           "type": "string",

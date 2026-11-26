@@ -130,7 +130,8 @@ public sealed partial class ProjectHeaderTests
 
     /// <summary>
     ///  The Model I's RAM follows its Expansion Interface as its launch does: 48K with it, which Level II has unless
-    ///  its target says not and Level I only when it says so.
+    ///  its target says not and Level I only when it says so; a <c>ramKilobytes</c> that is not a whole number, which
+    ///  the launch refuses, leaves the machine's default.
     /// </summary>
     /// <param name="machine">The catalog machine.</param>
     /// <param name="options">The target's options.</param>
@@ -141,10 +142,11 @@ public sealed partial class ProjectHeaderTests
     [DataRow("trs80-model1-level1", "{}", 4)]
     [DataRow("trs80-model1-level1", "{ \"expansionInterface\": true }", 48)]
     [DataRow("trs80-model1-level1", "{ \"ramKilobytes\": 16 }", 16)]
+    [DataRow("apple1", "{ \"ramKilobytes\": 48.5 }", 4)]
     public void ModelIRamFollowsTheExpansionInterface(string machine, string options, int ram)
     {
         Write("retrocore.json", $$"""
-            { "sdk": "1", "cpu": "z80", "targets": { "t": { "machine": "{{machine}}", "environment": "bare", "options": {{options}} } } }
+            { "sdk": "1", "cpu": "{{CatalogMachine.Find(machine)?.Cpu.Name}}", "targets": { "t": { "machine": "{{machine}}", "environment": "bare", "options": {{options}} } } }
             """);
 
         RetrocoreProject.Load(_folder).Target("t").Symbols()["RC_RAM_KB"].Should().Be(ram);

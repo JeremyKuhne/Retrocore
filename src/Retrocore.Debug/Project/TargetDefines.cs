@@ -167,9 +167,10 @@ internal static class TargetDefines
     // 48K with it, otherwise 16K under Level II and 4K under Level I, as the launch has it.
     private static int RamKilobytes(ProjectTarget target)
     {
-        if (target.Options["ramKilobytes"] is { } ram && ram.GetValueKind() == System.Text.Json.JsonValueKind.Number)
+        // An option that is not a whole number is the launch's to refuse; the define takes the default.
+        if (target.Options["ramKilobytes"] is System.Text.Json.Nodes.JsonValue ram && ram.TryGetValue(out int kilobytes))
         {
-            return ram.GetValue<int>();
+            return kilobytes;
         }
 
         if (target.Machine.Machine == "trs80-model1")

@@ -132,7 +132,7 @@ internal sealed class RetrocoreProject
     internal IReadOnlyDictionary<string, long> Defines { get; private set; } = new Dictionary<string, long>();
 
     /// <summary>
-    ///  Gets the entry point's label, or null to start at the first section.
+    ///  Gets the entry point's label, or null to start at the first byte the project's own sources emit.
     /// </summary>
     internal string? Entry { get; private set; }
 

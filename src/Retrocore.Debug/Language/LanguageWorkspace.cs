@@ -149,7 +149,7 @@ internal sealed partial class LanguageWorkspace
             if (IsTarget(root) || InProject(path)) { _owners.TryRemove(KeyValuePair.Create(path, root)); }
         }
 
-        List<string> dropped = [.. _analyses.Keys.Where(IsTarget)];
+        List<string> dropped = [.. _analyses.Keys.Concat(_pending.Keys).Where(IsTarget).Distinct(StringComparer.OrdinalIgnoreCase)];
         foreach (string root in dropped)
         {
             _analyses.TryRemove(root, out _);

@@ -331,8 +331,9 @@ internal sealed partial class SourceAnalysis
     ///   An analysis that is not a project target's reports on every file. A target reports on the project's sources
     ///   the project prefers it for (the active target, or the first that lists them), on the project's files those
     ///   include, and on files outside the project, such as the SDK's headers. So a source two targets assemble shows
-    ///   one target's diagnostics, whichever finishes last. The members are decided once, as the analysis is first
-    ///   asked; a file that is not a member is reported on unless the project prefers another target for it.
+    ///   its preferred target's diagnostics, whichever finishes first; only a file outside the project, which every
+    ///   target that includes it reports on, shows the last one's. The members are decided once, as the analysis is
+    ///   first asked; a file that is not a member is reported on unless the project prefers another target for it.
     ///  </para>
     /// </remarks>
     /// <param name="path">The file's full path.</param>

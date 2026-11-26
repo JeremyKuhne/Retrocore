@@ -250,6 +250,13 @@ internal static class ProjectSources
             return null;
         }
 
+        // A project file that is gone is no project, and no error: its targets go with it.
+        if (!File.Exists(file))
+        {
+            s_projects.TryRemove(file, out _);
+            return null;
+        }
+
         if (s_projects.TryGetValue(file, out var known) && known.Written == written) { return known.Projects; }
         IReadOnlyList<RetrocoreProject>? projects = null;
         string? error = null;

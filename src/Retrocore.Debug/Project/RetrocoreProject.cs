@@ -64,7 +64,7 @@ internal sealed class RetrocoreProject
     /// <summary>
     ///  The fields a target's <c>image</c> can give, as an object.
     /// </summary>
-    internal static readonly string[] ImageFields = ["template"];
+    internal static readonly string[] ImageFields = ["template", "boot"];
 
     /// <summary>
     ///  The dialects a source object can name.
@@ -414,6 +414,9 @@ internal sealed class RetrocoreProject
             ImageGiven = json.ContainsKey("image"),
             BuildsImage = json["image"] is not JsonValue { } image || image.GetValueKind() != JsonValueKind.False,
             ImageTemplate = json["image"] is { } imageNode ? ReadTemplate(project, where, imageNode) : null,
+            ImageBoot = json["image"] is JsonObject { } imageObject && imageObject["boot"] is { } imageBoot
+                ? Text(file, $"{where}'s image 'boot'", imageBoot)
+                : null,
             BootImage = json["bootImage"] is { } boot ? MediaPath(project, where, Text(file, $"{where}'s 'bootImage'", boot)) : null
         };
     }
@@ -475,13 +478,16 @@ internal sealed class RetrocoreProject
 
         if (node is not JsonObject image)
         {
-            throw new ProjectException($"{file}: {where}'s 'image' must be true, false or an object giving 'template'.");
+            throw new ProjectException($"{file}: {where}'s 'image' must be true, false or an object giving 'template' or 'boot'.");
         }
 
         Check(file, $"{where}'s 'image'", image, ImageFields);
-        return image["template"] is { } template
-            ? MediaPath(project, where, Text(file, $"{where}'s image 'template'", template))
-            : throw Missing(file, $"{where}'s 'image'", "template");
+        if (image.Count == 0)
+        {
+            throw new ProjectException($"{file}: {where}'s 'image' must give 'template' or 'boot'.");
+        }
+
+        return image["template"] is { } template ? MediaPath(project, where, Text(file, $"{where}'s image 'template'", template)) : null;
     }
 
     // A path a target's media fields give, relative to the project's folder, with ${obj} for its intermediate folder.

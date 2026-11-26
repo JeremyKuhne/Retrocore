@@ -157,7 +157,14 @@ internal sealed class ProjectTarget
     internal string? ImageTemplate { get; init; }
 
     /// <summary>
-    ///  Gets the full path of the boot media the target names, its <c>bootImage</c>, or null for the environment's own.
+    ///  Gets which of its environment's images a launch boots, the target's <c>image.boot</c>, such as <c>disk</c>, or
+    ///  null for the environment's first.
+    /// </summary>
+    internal string? ImageBoot { get; init; }
+
+    /// <summary>
+    ///  Gets the full path of the folder of boot media or dumps the target names, its <c>bootImage</c>, where its launch
+    ///  looks for them first by hash, or null.
     /// </summary>
     internal string? BootImage { get; init; }
 

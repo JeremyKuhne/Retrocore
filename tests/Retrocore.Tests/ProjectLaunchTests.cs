@@ -210,7 +210,7 @@ public sealed class ProjectLaunchTests
         JsonObject withExecutable = Launch("iiplus");
         withExecutable["executable"] = Path.Join(_folder, "game.xex");
         client.Fails("launch", withExecutable).Should().Contain("cannot give 'executable'");
-        client.Fails("launch", Launch("dos")).Should().EndWith("the 'prodos' environment is not yet supported; only 'bare', 'wozmon', 'dos33' and 'dfs' build.");
+        client.Fails("launch", Launch("dos")).Should().EndWith("the 'prodos' environment is not yet supported; only 'bare', 'wozmon', 'dos33', 'dfs' and 'basic' build.");
 
         Write("main.s", "stz $00");
         client.Fails("launch", Launch("iiplus")).Should().Contain("target iiplus:").And.Contain("main.s(1)");
@@ -325,6 +325,125 @@ public sealed class ProjectLaunchTests
         client.Fails("launch", launch).Should().EndWith(option == "bootSeconds"
             ? "the 'dfs' environment boots its image from power-on, so its options and its launch cannot give 'bootSeconds'."
             : $"a dfs target boots its own disk in drive 0, so its options and its launch cannot give '{option}'.");
+    }
+
+    /// <summary>
+    ///  A <c>basic</c> target's launch puts its tape in cassette 1 with PLAY down, types LOAD at BASIC's prompt and RUN
+    ///  once the program is in, and stops at its entry, on BASIC 4, BASIC 2 and BASIC 1.
+    /// </summary>
+    /// <param name="machine">The catalog machine.</param>
+    [TestMethod]
+    [DataRow("pet4032")]
+    [DataRow("pet2001-basic2")]
+    [DataRow("pet2001")]
+    public void BasicLaunchLoadsItsTape(string machine)
+    {
+        Write("retrocore.json", $$"""
+            { "sdk": "1", "name": "game", "cpu": "6502", "sources": ["src/*.s"], "entry": "START",
+              "targets": { "pet": { "machine": "{{machine}}", "environment": "basic" } } }
+            """);
+
+        Write("src/main.s", "DATA:\n    nop\nSTART:\n    lda #1\nLoop:\n    jmp Loop\n");
+        using DapTestClient client = new();
+        client.Request("initialize", []);
+        client.Request("launch", Launch("pet"))["project"]?["entry"]?.GetValue<int>().Should().Be(0x0411);
+        client.Request("evaluate", new JsonObject
+        {
+            ["expression"] = "PC"
+        }).String("result").Should().StartWith("$411 ");
+
+        client.Request("configurationDone", []);
+        client.Event("stopped").String("reason").Should().Be("entry");
+    }
+
+    /// <summary>
+    ///  A <c>basic</c> target, or its launch, cannot give the tape, disks or units its launch decides.
+    /// </summary>
+    /// <param name="option">The option.</param>
+    /// <param name="value">Its value, as JSON.</param>
+    /// <param name="inTarget">Whether the target's options give it, rather than the launch.</param>
+    [TestMethod]
+    [DataRow("cassette1", "\"x.tap\"", true)]
+    [DataRow("cassette1", "\"x.tap\"", false)]
+    [DataRow("disks", "[\"x.d64\"]", false)]
+    [DataRow("diskUnits", "[8]", true)]
+    [DataRow("diskModel", "\"2040\"", false)]
+    public void BasicLaunchRefusesWhatItsMediaDecides(string option, string value, bool inTarget)
+    {
+        string options = inTarget ? $$""", "options": { "{{option}}": {{value}} }""" : "";
+        Write("retrocore.json", $$"""
+            { "sdk": "1", "name": "game", "cpu": "6502", "sources": ["src/*.s"], "entry": "START",
+              "targets": { "tape": { "machine": "pet4032", "environment": "basic"{{options}} } } }
+            """);
+
+        Write("src/main.s", "DATA:\n    nop\nSTART:\n    lda #1\nLoop:\n    jmp Loop\n");
+        using DapTestClient client = new();
+        client.Request("initialize", []);
+        JsonObject launch = Launch("tape");
+        if (!inTarget) { launch[option] = JsonNode.Parse(value); }
+        client.Fails("launch", launch).Should().EndWith(
+            $"a basic target boots its own tape or disk, so its options and its launch cannot give '{option}'.");
+    }
+
+    /// <summary>
+    ///  A <c>basic</c> target cannot boot its disk on BASIC 1's PET, whose IEEE-488 routines stop disk drives, nor name
+    ///  as its <c>bootImage</c> what is not a folder when it boots the disk; a tape target never reads it.
+    /// </summary>
+    [TestMethod]
+    public void BasicDiskLaunchRefusesBasic1AndAMissingFolder()
+    {
+        Write("retrocore.json", """
+            { "sdk": "1", "name": "game", "cpu": "6502", "sources": ["src/*.s"],
+              "targets": {
+                "basic1": { "machine": "pet2001", "environment": "basic", "image": { "boot": "disk" } },
+                "missing": { "machine": "pet4032", "environment": "basic", "image": { "boot": "disk" }, "bootImage": "no-such-folder" },
+                "tape": { "machine": "pet4032", "environment": "basic", "bootImage": "no-such-folder" } } }
+            """);
+
+        Write("src/main.s", "rts\n");
+        using DapTestClient client = new();
+        client.Request("initialize", []);
+        client.Fails("launch", Launch("basic1")).Should().EndWith(
+            "BASIC 1's IEEE-488 routines have the bug that stops disk drives working, so it cannot boot its 4040 disk; boot the tape, or target a PET with BASIC 2 or 4.");
+
+        client.Fails("launch", Launch("missing")).Should().EndWith(
+            $"its 'bootImage', {Path.Join(_folder, "no-such-folder")}, is not a folder of the 4040's ROMs.");
+
+        Action build = () => ProjectBuild.Build(RetrocoreProject.Load(_folder).Target("basic1"));
+        build.Should().Throw<ProjectException>("the build refuses it too").WithMessage("*cannot boot its 4040 disk*");
+        RetrocoreProject.Load(_folder).Target("tape").RequireSupported();
+    }
+
+    /// <summary>
+    ///  A <c>basic</c> target whose image boots its disk finds the 4040's ROMs by hash: without them its launch fails
+    ///  naming them (and the test is inconclusive); with MAME's c4040 set in <c>RETROCORE_PET_ROMS</c> it boots the disk
+    ///  in unit 8 to its entry.
+    /// </summary>
+    [TestMethod]
+    public void BasicDiskLaunchBootsWithTheDrivesRoms()
+    {
+        string drive = Path.Join(PetMachineTests.RomRoot, "c4040");
+        string bootImage = Directory.Exists(drive) ? $", \"bootImage\": \"{drive.Replace('\\', '/')}\"" : "";
+        Write("retrocore.json", $$"""
+            { "sdk": "1", "name": "game", "cpu": "6502", "sources": ["src/*.s"], "entry": "START",
+              "targets": { "disk": { "machine": "pet4032", "environment": "basic", "image": { "boot": "disk" }{{bootImage}} } } }
+            """);
+
+        Write("src/main.s", "DATA:\n    nop\nSTART:\n    lda #1\nLoop:\n    jmp Loop\n");
+        using DapTestClient client = new();
+        client.Request("initialize", []);
+        BootMediaSet set = BootMedia.Named(SdkModules.SdkDirectory, BasicEnvironment.DriveRoms);
+        if (BootMedia.Find(set, BootMedia.Roots(set, drive)) is null)
+        {
+            client.Fails("launch", Launch("disk")).Should().Contain("it boots its 4040 disk, but the Commodore 4040 dual drive's ROMs");
+            Assert.Inconclusive("Set RETROCORE_PET_ROMS to a folder with MAME's c4040 set unzipped to boot the 4040 disk.");
+        }
+
+        client.Request("launch", Launch("disk"));
+        client.Request("evaluate", new JsonObject
+        {
+            ["expression"] = "PC"
+        }).String("result").Should().StartWith("$411 ");
     }
 
     /// <summary>

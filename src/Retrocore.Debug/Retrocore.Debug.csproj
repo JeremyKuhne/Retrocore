@@ -92,6 +92,7 @@
          maps, which a target's build checks its program against. -->
     <None Include="..\..\sdk\**\*.inc" Link="Sdk\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\..\sdk\**\*.map.json" Link="Sdk\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\sdk\**\boot-media.json" Link="Sdk\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <!-- SDL's packages carry each library once per name its platform links by: libSDL3.so, .so.0 and .so.0.4.20 on

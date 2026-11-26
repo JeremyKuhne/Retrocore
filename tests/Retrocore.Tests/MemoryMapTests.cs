@@ -265,7 +265,10 @@ public sealed class MemoryMapTests
             ["dos33"] = 2,
 
             // The BBC Micro model B, and the model A with the disk interface.
-            ["dfs"] = 2
+            ["dfs"] = 2,
+
+            // The PET at 4 sizes.
+            ["basic"] = 4
         };
 
         string environments = Path.Join(SdkModules.SdkDirectory, "1", "environments");

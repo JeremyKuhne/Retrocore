@@ -6,6 +6,7 @@ using Retrocore.Debug.Project;
 using Retrocore.Machines.Apple1;
 using Retrocore.Media;
 using Retrocore.Media.Acorn;
+using Retrocore.Media.Commodore;
 using System.Text.Json.Nodes;
 
 namespace Retrocore.Tests;
@@ -337,6 +338,92 @@ public sealed class ProjectEnvironmentTests
         File.WriteAllBytes(Path.Join(_folder, "data.bin"), new byte[0x40000]);
         Action big = () => ProjectBuild.Build(RetrocoreProject.Load(_folder).Target("dfs"));
         big.Should().Throw<ProjectException>().WithMessage("*its files do not fit on a DFS disk: *");
+    }
+
+    /// <summary>
+    ///  A <c>basic</c> target writes its PRG: the load address <c>$0401</c>, BASIC's line that SYSes its entry, zeros to
+    ///  its load address, <c>$0410</c>, then the program; the TAP tape of it; and a 4040 disk holding it under the
+    ///  project's name. The tape is what a launch boots, unless the target's image boots the disk.
+    /// </summary>
+    [TestMethod]
+    public void BasicWritesItsProgramTapeAndDisk()
+    {
+        void Project(string image) => Write("retrocore.json", $$"""
+            { "sdk": "1", "name": "adventure", "cpu": "6502", "sources": ["main.s"], "entry": "START",
+              "targets": { "pet": { "machine": "pet4032", "environment": "basic"{{image}} } } }
+            """);
+
+        Write("main.s", "DATA:\n    .byte 1\nSTART:\n    rts\n");
+        Project("");
+        TargetBuild build = ProjectBuild.Build(RetrocoreProject.Load(_folder).Target("pet"));
+        string output = Path.Join(_folder, "artifacts", "pet");
+        build.Media.Should().Be(new TargetMedia(
+            Path.Join(output, "adventure.prg"), "PRG", Path.Join(output, "adventure.tap"), "PET tape (TAP)",
+            "LOAD and RUN from the tape; the 4040 disk is adventure.d64"));
+
+        byte[] prg = File.ReadAllBytes(Path.Join(output, "adventure.prg"));
+        byte[] stub = PetSysProgram.Stub(0x0411);
+        prg.AsSpan(0, stub.Length).ToArray().Should().Equal(stub);
+        prg.AsSpan(stub.Length, 2 + 0x0410 - 0x0401 - stub.Length).ToArray().Should().OnlyContain(value => value == 0);
+        prg[(2 + 0x0410 - 0x0401)..].Should().Equal(1, 0x60);
+
+        File.ReadAllBytes(Path.Join(output, "adventure.tap")).Should().Equal(PetSysProgram.ToTap("ADVENTURE", prg));
+        CbmDosDisk disk = CbmDosDisk.FromD64(File.ReadAllBytes(Path.Join(output, "adventure.d64")));
+        (disk.Name, disk.Id).Should().Be(("ADVENTURE", "RC"));
+        disk.Files.Select(file => (file.Name, file.Type)).Should().Equal(("ADVENTURE", CbmDosFileType.Program));
+        disk.ReadFile("ADVENTURE").Should().Equal(prg);
+
+        Project(""", "image": { "boot": "disk" }""");
+        ProjectBuild.Build(RetrocoreProject.Load(_folder).Target("pet")).Media.Should().Be(new TargetMedia(
+            Path.Join(output, "adventure.prg"), "PRG", Path.Join(output, "adventure.d64"), "4040 disk (D64)",
+            "LOAD\"ADVENTURE\",8 and RUN, in a 4040 with its ROMs; the tape is adventure.tap"));
+
+        Project(""", "image": false""");
+        ProjectBuild.Build(RetrocoreProject.Load(_folder).Target("pet")).Media.Image.Should().BeNull();
+        Directory.GetFiles(output).Select(Path.GetFileName).Should().BeEquivalentTo("adventure.bin", "adventure.dbg", "adventure.map", "adventure.prg");
+    }
+
+    /// <summary>
+    ///  A <c>basic</c> program's name on its tape and disk keeps the project name's letters, digits, <c>-</c> and
+    ///  <c>.</c>, which CBM DOS takes and the PET types, so a project named with <c>_</c> builds.
+    /// </summary>
+    [TestMethod]
+    public void BasicNamesTheProgramWhatThePetTypes()
+    {
+        Write("retrocore.json", """
+            { "sdk": "1", "name": "my_game-2.0", "cpu": "6502", "sources": ["main.s"],
+              "targets": { "pet": { "machine": "pet4032", "environment": "basic" } } }
+            """);
+
+        Write("main.s", "rts\n");
+        ProjectBuild.Build(RetrocoreProject.Load(_folder).Target("pet"));
+        CbmDosDisk.FromD64(File.ReadAllBytes(Path.Join(_folder, "artifacts", "pet", "my_game-2.0.d64"))).Files.Single().Name
+            .Should().Be("MYGAME-2.0");
+    }
+
+    /// <summary>
+    ///  A <c>basic</c> target takes no <c>files</c>, boots only its tape or its disk, and an environment that boots one
+    ///  image takes no <c>boot</c>.
+    /// </summary>
+    [TestMethod]
+    public void ImageBootsAreTheEnvironmentsOwn()
+    {
+        Write("retrocore.json", """
+            { "sdk": "1", "name": "game", "cpu": "6502", "sources": ["main.s"],
+              "targets": {
+                "files": { "machine": "pet4032", "environment": "basic", "files": ["main.s"] },
+                "floppy": { "machine": "pet4032", "environment": "basic", "image": { "boot": "floppy" } },
+                "dos": { "machine": "apple2-iiplus", "environment": "dos33", "image": { "boot": "disk" } } } }
+            """);
+
+        Write("main.s", "rts\n");
+        RetrocoreProject project = RetrocoreProject.Load(_folder);
+        Action files = project.Target("files").RequireSupported;
+        files.Should().Throw<ProjectException>().WithMessage("*the 'basic' environment puts only its program on its tape and disk, so it takes no 'files'.");
+        Action floppy = project.Target("floppy").RequireSupported;
+        floppy.Should().Throw<ProjectException>().WithMessage("*the 'basic' environment boots 'tape' or 'disk', not 'floppy'.");
+        Action dos = project.Target("dos").RequireSupported;
+        dos.Should().Throw<ProjectException>().WithMessage("*the 'dos33' environment boots one image, so its image takes no 'boot'.");
     }
 
     /// <summary>

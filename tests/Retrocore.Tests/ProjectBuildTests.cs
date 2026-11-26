@@ -206,7 +206,7 @@ public sealed class ProjectBuildTests
     }
 
     /// <summary>
-    ///  A bare binary is one block: code with a gap in it is an error, rather than a binary that fills the gap.
+    ///  A program's binary is one block: code with a gap in it is an error, rather than a binary that fills the gap.
     /// </summary>
     [TestMethod]
     public void BareBinaryIsOneBlock()
@@ -217,7 +217,7 @@ public sealed class ProjectBuildTests
 
         Write("main.s", "rts\n.section Low, $5000, $10\nrts");
         Error(() => ProjectBuild.Build(RetrocoreProject.Load(_folder).Target("t"))).Should().EndWith(
-            "target t: a bare binary is one block, but its code and data end at $5000 and the next part starts at $6000.");
+            "target t: a program's binary is one block, but its code and data end at $5000 and the next part starts at $6000.");
 
         Write("main.s", "rts\n.section Below, $5FFF, 1\nrts");
         File.ReadAllBytes(ProjectBuild.Build(RetrocoreProject.Load(_folder).Target("t")).Binary).Should().Equal(0x60, 0x60);
@@ -237,7 +237,7 @@ public sealed class ProjectBuildTests
 
         Write("main.s", "rts");
         RetrocoreProject project = RetrocoreProject.Load(_folder);
-        Error(() => ProjectBuild.Build(project.Target("dos"))).Should().EndWith("the 'dos33' environment is not yet supported; only 'bare' builds.");
+        Error(() => ProjectBuild.Build(project.Target("dos"))).Should().EndWith("the 'dos33' environment is not yet supported; 'bare', 'wozmon' build.");
         Error(() => ProjectBuild.Build(project.Target("bare"))).Should().EndWith("target bare: the entry 'GO' is not an address the sources define.");
         Directory.Exists(Path.Join(_folder, "artifacts")).Should().BeFalse();
     }

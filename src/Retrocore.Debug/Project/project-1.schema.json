@@ -133,7 +133,7 @@
         },
         "environment": {
           "$ref": "#/definitions/environment",
-          "description": "How the program is loaded and started, and which system calls it may make. Every machine runs bare; each other environment runs on the machines the SDK plan pairs it with. Only bare builds yet."
+          "description": "How the program is loaded and started, and which system calls it may make. Every machine runs bare; each other environment runs on the machines the SDK plan pairs it with. bare and wozmon build yet."
         },
         "cpu": {
           "$ref": "#/definitions/cpu",
@@ -198,14 +198,41 @@
         },
         "files": {
           "type": "array",
-          "description": "Data files put beside the program on its disk. Not yet supported: a build that has them fails."
+          "description": "Data files put beside the program on its disk, such as a step's output: each a path relative to the project's folder (which may give ${obj}), or an object with its path, its name on the disk and the load address the disk records. An environment with no disk takes none.",
+          "items": {
+            "oneOf": [
+              { "type": "string", "minLength": 1 },
+              {
+                "type": "object",
+                "required": ["path"],
+                "additionalProperties": false,
+                "properties": {
+                  "path": { "type": "string", "minLength": 1, "description": "The file, relative to the project's folder; ${obj} is its obj/ folder." },
+                  "name": { "type": "string", "minLength": 1, "description": "Its name on the disk, instead of one made from its file name." },
+                  "address": { "$ref": "#/definitions/address", "description": "The load address the disk records for it, where the disk records one." }
+                }
+              }
+            ]
+          }
         },
         "image": {
-          "description": "The disk or tape image the target builds, or false for none. Not yet supported: a build that has it fails."
+          "description": "Whether the target builds its environment's disk or tape image (true, the default), or not (false), or an object whose template names the disk the image starts from. An environment that builds no image takes none.",
+          "oneOf": [
+            { "type": "boolean" },
+            {
+              "type": "object",
+              "required": ["template"],
+              "additionalProperties": false,
+              "properties": {
+                "template": { "type": "string", "minLength": 1, "description": "The disk the image starts from, relative to the project's folder." }
+              }
+            }
+          ]
         },
         "bootImage": {
           "type": "string",
-          "description": "The boot media the environment needs, by name or hash, where it is not an SDK source. Not yet supported: a build that has it fails."
+          "minLength": 1,
+          "description": "The boot media the environment needs, where it is not an SDK source, relative to the project's folder; without it, the build looks for the media by hash. An environment that boots from the SDK's sources takes none."
         }
       }
     },
@@ -262,7 +289,7 @@
       "enum": ["bare", "wozmon", "dos33", "prodos", "sos", "basic", "dfs", "cpm", "level2", "trsdos", "colorbasic", "diskbasic"],
       "enumDescriptions": [
         "A raw binary loaded straight into RAM, with the ROM's routines only. All machines.",
-        "Woz Monitor hex and an ACI tape. The Apple-1. Not yet supported.",
+        "Woz Monitor hex to type in, and an ACI tape (WAV). The Apple-1.",
         "A B file on a DOS 3.3 disk. The Apple II, II Plus and IIe. Not yet supported.",
         "A SYS or BIN file under ProDOS. The II Plus with 64K, and the IIe. Not yet supported.",
         "A SOS.INTERP on a SOS boot disk. The Apple III. Not yet supported.",

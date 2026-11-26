@@ -12,7 +12,7 @@ namespace Retrocore.Debug.Project;
 internal sealed class ProjectTarget
 {
     /// <summary>
-    ///  The environments a target can name; only <c>bare</c> builds yet.
+    ///  The environments a target can name; <see cref="TargetEnvironment.Built"/> are those that build.
     /// </summary>
     internal static readonly string[] Environments =
         ["bare", "wozmon", "dos33", "prodos", "sos", "basic", "dfs", "cpm", "level2", "trsdos", "colorbasic", "diskbasic"];
@@ -136,9 +136,35 @@ internal sealed class ProjectTarget
     }
 
     /// <summary>
-    ///  Gets the fields the target gives that are not supported yet, such as <c>files</c>.
+    ///  Gets the data files the target puts beside its program on its disk, its <c>files</c>.
     /// </summary>
-    internal IReadOnlyList<string> Unsupported { get; init; } = [];
+    internal IReadOnlyList<TargetFile> Files { get; init; } = [];
+
+    /// <summary>
+    ///  Gets whether the target gives <c>image</c>.
+    /// </summary>
+    internal bool ImageGiven { get; init; }
+
+    /// <summary>
+    ///  Gets whether the build writes the environment's image: true unless the target's <c>image</c> is false.
+    /// </summary>
+    internal bool BuildsImage { get; init; } = true;
+
+    /// <summary>
+    ///  Gets the full path of the disk the image starts from, the target's <c>image.template</c>, or null for a blank
+    ///  one.
+    /// </summary>
+    internal string? ImageTemplate { get; init; }
+
+    /// <summary>
+    ///  Gets the full path of the boot media the target names, its <c>bootImage</c>, or null for the environment's own.
+    /// </summary>
+    internal string? BootImage { get; init; }
+
+    /// <summary>
+    ///  Gets the target's environment, or null when it does not build yet.
+    /// </summary>
+    internal TargetEnvironment? Built => TargetEnvironment.Find(Environment);
 
     /// <summary>
     ///  Gets the symbols a build defines: the SDK's <c>RC_</c> defines (<see cref="TargetDefines"/>), the project's,
@@ -167,24 +193,27 @@ internal sealed class ProjectTarget
     internal List<string> SdkPaths(string sdk) => TargetDefines.SdkPaths(this, sdk);
 
     /// <summary>
-    ///  Throws when the target or its project uses a field that is not supported yet, or an environment that does
-    ///  not build yet.
+    ///  Throws when the target uses a source kind that is not supported yet, an environment that does not build yet,
+    ///  or <c>files</c>, <c>image</c> or <c>bootImage</c> where its environment takes none.
     /// </summary>
-    /// <exception cref="ProjectException">Something it uses is not supported yet.</exception>
+    /// <exception cref="ProjectException">Something it uses is not supported.</exception>
     internal void RequireSupported()
     {
         List<string> problems =
         [
-            .. Project.Unsupported.Select(field => $"the project's '{field}' is not yet supported"),
-            .. Unsupported.Select(field => $"'{field}' is not yet supported"),
             .. Project.Sources.Concat(Sources)
                 .Where(source => source.Kind != "asm")
                 .Select(source => $"the source '{source.Path}' is {source.Kind}, which is not yet supported")
         ];
 
-        if (Environment != Bare)
+        if (Built is { } environment)
         {
-            problems.Add($"the '{Environment}' environment is not yet supported; only '{Bare}' builds");
+            problems.AddRange(environment.Problems(this));
+        }
+        else
+        {
+            problems.Add(
+                $"the '{Environment}' environment is not yet supported; {string.Join(", ", TargetEnvironment.Built.Select(name => $"'{name}'"))} build");
         }
 
         if (problems.Count != 0)
@@ -247,29 +276,30 @@ internal sealed class ProjectTarget
 
     /// <summary>
     ///  Gets the platform folders' sources for the target: <c>src/platform/&lt;family&gt;/</c>'s, then
-    ///  <c>src/platform/&lt;model&gt;/</c>'s, each folder's in ordinal order of their relative paths, the same on every
-    ///  system. A model's file takes the place of its family's file of the same relative path, compared as file
-    ///  names are.
+    ///  <c>src/platform/&lt;model&gt;/</c>'s, then <c>src/platform/&lt;environment&gt;/</c>'s, each folder's in ordinal
+    ///  order of their relative paths, the same on every system. A later folder's file takes the place of an earlier
+    ///  folder's file of the same relative path, compared as file names are, where the earlier one came; the rest of
+    ///  a folder's files follow the earlier folders'.
     /// </summary>
     /// <returns>The files' full paths.</returns>
     internal List<string> PlatformFiles()
     {
-        List<KeyValuePair<string, string>> family = Folder(Machine.Family);
-        if (Machine.Id == Machine.Family) { return [.. family.Select(entry => entry.Value)]; }
+        List<string> folders = [Machine.Family];
+        if (Machine.Id != Machine.Family) { folders.Add(Machine.Id); }
+        folders.Add(Environment);
 
-        List<KeyValuePair<string, string>> model = Folder(Machine.Id);
-        Dictionary<string, string> replacements = [with(ProjectGlob.FileNames)];
-        foreach ((string name, string file) in model) { replacements[name] = file; }
-        HashSet<string> familyNames = [with(ProjectGlob.FileNames)];
-        List<string> files = [];
-        foreach ((string name, string file) in family)
+        List<string> names = [];
+        Dictionary<string, string> files = [with(ProjectGlob.FileNames)];
+        foreach (string folder in folders)
         {
-            files.Add(replacements.GetValueOrDefault(name, file));
-            familyNames.Add(name);
+            foreach ((string name, string file) in Folder(folder))
+            {
+                if (!files.ContainsKey(name)) { names.Add(name); }
+                files[name] = file;
+            }
         }
 
-        files.AddRange(model.Where(entry => !familyNames.Contains(entry.Key)).Select(entry => entry.Value));
-        return files;
+        return [.. names.Select(name => files[name])];
     }
 
     // A platform folder's sources by their paths relative to it, with '/' between folders, in ordinal order.

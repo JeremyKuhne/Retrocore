@@ -91,11 +91,8 @@ public sealed partial class ProjectCatalogTests
         Strings(definitions["target"]?["properties"]?["options"]?["propertyNames"]?["not"]?["enum"])
             .Should().BeEquivalentTo(RetrocoreProject.ReservedOptions);
 
-        foreach (string field in RetrocoreProject.UnsupportedFields)
-        {
-            string description = (string?)(definitions["project"]?["properties"]?[field] ?? definitions["target"]?["properties"]?[field])?["description"] ?? "";
-            description.Should().Contain("Not yet supported", field);
-        }
+        Fields(definitions["target"]?["properties"]?["files"]?["items"]?["oneOf"]?[1]).Should().BeEquivalentTo(RetrocoreProject.FileFields);
+        Fields(definitions["target"]?["properties"]?["image"]?["oneOf"]?[1]).Should().BeEquivalentTo(RetrocoreProject.ImageFields);
     }
 
     private static List<string> Strings(JsonNode? node) =>

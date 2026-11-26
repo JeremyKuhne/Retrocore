@@ -30,6 +30,7 @@ A `source` launch and `--assemble` search only `Sdk/`.
 | --- | --- | --- |
 | `cpus/6502/cpu.inc` | every 6502 and 65C02 target | the stack's page and the three vectors |
 | `environments/bare/environment.inc` | `bare` | nothing yet: a bare program calls its ROM |
+| `environments/wozmon/environment.inc` | `wozmon` | nothing yet: the program calls the Woz Monitor, as the Apple-1's `<machine.inc>` names it |
 | `machines/apple1/machine.inc` | `apple1` | the PIA, and the Woz Monitor's ECHO, PRBYTE, PRHEX and GETLINE, written here |
 | `machines/apple2/machine.inc` | every Apple II | `IIeEquates.asm`, `MonitorEntries.asm`, and nine more Monitor entries |
 | `machines/apple3/machine.inc` | `apple3` | `Apple3Equates.asm`, and text page 1 |
@@ -115,8 +116,38 @@ The bare maps, from the ROM sources and the emulator (a test checks names from e
 | `pet-4k` to `-32k` | `$0800` | `$0400` to the top of RAM | `$00-$8C`, BASIC's, while it isn't running |
 | `bbc-32k` (model B), `bbc-16k` (model A) | `$2000` | from PAGE (`$1900` with the DFS, `$0E00`) to MODE 7's screen | `$70-$8F` |
 
+The `wozmon` maps, `apple1-4k` to `-32k`, are the bare Apple-1's but for their descriptions (a test checks it): a
+program typed in as hex, or read from the cassette interface's tape, loads where a bare one does, and runs with the
+Woz Monitor as a bare one does.
+
 A bare Apple III program runs before SOS, in the power-on state: its zero page is physically the system bank's
 `$FF00` page, whose `$FFCA-$FFCF` are the NMI and IRQ vectors, so the map leaves `$C0-$FF` to the machine. The
 Apple-1's Woz Monitor points IRQ and BRK at `$0000` and NMI at `$0F00`, so a program that takes an interrupt puts its
 handler there. The model B's free RAM starts at PAGE with its DFS fitted, `$1900`, as the emulator boots it (OSHWM at
 `$0244` reads `$19` once the MOS has started).
+
+## Environments
+
+A target's environment decides how its program is loaded and started, and the file and image it is built as. The
+build assembles every environment's program the same way, at its map's `load`, into one block, and writes
+`artifacts/<target>/<name>.bin` with its debug information and map; the environment writes its own file and its
+image beside them. `retrocore build` prints a line for each, and `obj/<target>/build.json` gives them as `file` and
+`image`.
+
+| Environment | Its file | Its image | A launch |
+| --- | --- | --- | --- |
+| `bare` | the binary | none | loads the binary into RAM and starts at its entry |
+| `wozmon` | `<name>.hex`, the Woz Monitor's hex: lines that store the bytes from `load`, then `<entry>R` | `<name>.wav`, an ACI tape of the bytes, which `C100R` and then `start.endR` read | loads the binary as if its hex had been typed, and starts at its entry as `R` would |
+
+A target's fields for its media, which an environment that has no use for one refuses, naming it:
+
+- **`files`**: data files put beside the program on its disk, each a path (relative to the project's folder, with
+  `${obj}` for its `obj/`, so a step's output can go on the disk) or `{ "path", "name", "address" }`, giving its name
+  on the disk and the load address the disk records. Neither `bare` nor `wozmon` has a disk.
+- **`image`**: `false` leaves the image out (the `wozmon` tape), and `{ "template": "<disk>" }` starts it from a
+  disk where the environment can.
+- **`bootImage`**: boot media that is not an SDK source, for an environment that needs some.
+
+Each target also assembles its environment's platform folder, `src/platform/<environment>/`, after its family's and
+its model's: a file there takes the place of theirs of the same name, so an environment can give its own console or
+the code that loads a program's data from its disk.

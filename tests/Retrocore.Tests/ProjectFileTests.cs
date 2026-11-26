@@ -80,7 +80,6 @@ public sealed class ProjectFileTests
         project.Entry.Should().Be("start");
         project.Output.Should().Be(Path.Join(_folder, "out"));
         project.Intermediate.Should().Be(Path.Join(_folder, "obj"));
-        project.Unsupported.Should().BeEmpty();
 
         ProjectTarget target = project.Target("apple2-bare");
         target.Machine.Should().Be(CatalogMachine.Find("apple2-iie-enhanced"));
@@ -263,7 +262,7 @@ public sealed class ProjectFileTests
         RetrocoreProject project = RetrocoreProject.Load(_folder);
         project.Target("cpm").Cpu.Should().BeSameAs(ProjectCpu.I8080);
         project.Target("cpm-z80").Cpu.Should().BeSameAs(ProjectCpu.Z80);
-        Error(project.Target("cpm").RequireSupported).Should().EndWith("the 'cpm' environment is not yet supported; only 'bare' builds.");
+        Error(project.Target("cpm").RequireSupported).Should().EndWith("the 'cpm' environment is not yet supported; 'bare', 'wozmon' build.");
     }
 
     /// <summary>
@@ -292,22 +291,67 @@ public sealed class ProjectFileTests
     }
 
     /// <summary>
-    ///  Fields the plan has but the host does not build yet load, and building with them fails naming each.
+    ///  A target's <c>files</c>, <c>image</c> and <c>bootImage</c> load: a file as a path, <c>${obj}</c> in it
+    ///  replaced, or as an object with its name and address; an image as true, false or a template. Building fails
+    ///  naming each one the target's environment does not take, and an environment that does not build yet.
     /// </summary>
     [TestMethod]
-    public void UnsupportedFieldsFailTheBuild()
+    public void MediaFieldsLoadAndEnvironmentsJudgeThem()
     {
         Write("retrocore.json", """
             { "sdk": "1", "cpu": "6502", "targets": {
                 "plain": { "machine": "apple2-iiplus", "environment": "bare" },
-                "disk": { "machine": "apple2-iiplus", "environment": "dos33", "files": [], "image": false, "bootImage": "x" } } }
+                "bare": { "machine": "apple2-iiplus", "environment": "bare", "files": ["${obj}/game.bin"], "image": false, "bootImage": "x.dsk" },
+                "woz": { "machine": "apple1", "environment": "wozmon", "image": false },
+                "wozfiles": { "machine": "apple1", "environment": "wozmon", "files": [{ "path": "a.bin", "name": "A", "address": "$1000" }],
+                              "image": { "template": "t.dsk" } },
+                "disk": { "machine": "apple2-iiplus", "environment": "dos33" } } }
             """);
 
         RetrocoreProject project = RetrocoreProject.Load(_folder);
-        project.Target("plain").RequireSupported();
-        Error(project.Target("disk").RequireSupported).Should().EndWith(
-            "target disk: 'files' is not yet supported; 'image' is not yet supported; 'bootImage' is not yet supported; "
-                + "the 'dos33' environment is not yet supported; only 'bare' builds.");
+        ProjectTarget plain = project.Target("plain");
+        plain.RequireSupported();
+        (plain.Files.Count, plain.ImageGiven, plain.BuildsImage, plain.ImageTemplate, plain.BootImage).Should().Be((0, false, true, null, null));
+
+        ProjectTarget bare = project.Target("bare");
+        bare.Files.Should().Equal(new TargetFile(Path.Join(_folder, "obj", "game.bin"), Name: null, Address: null));
+        (bare.ImageGiven, bare.BuildsImage, bare.BootImage).Should().Be((true, false, Path.Join(_folder, "x.dsk")));
+        Error(bare.RequireSupported).Should().EndWith(
+            "target bare: the 'bare' environment has no disk to put 'files' on; the 'bare' environment builds no image, so it takes no 'image'; "
+                + "the 'bare' environment boots from the SDK's sources, so it takes no 'bootImage'.");
+
+        ProjectTarget woz = project.Target("woz");
+        woz.RequireSupported();
+        woz.BuildsImage.Should().BeFalse();
+
+        ProjectTarget wozFiles = project.Target("wozfiles");
+        wozFiles.Files.Should().Equal(new TargetFile(Path.Join(_folder, "a.bin"), "A", 0x1000));
+        (wozFiles.BuildsImage, wozFiles.ImageTemplate).Should().Be((true, Path.Join(_folder, "t.dsk")));
+        Error(wozFiles.RequireSupported).Should().EndWith(
+            "target wozfiles: the 'wozmon' environment has no disk to put 'files' on; the 'wozmon' environment's image does not start from a template.");
+
+        Error(project.Target("disk").RequireSupported).Should().EndWith("target disk: the 'dos33' environment is not yet supported; 'bare', 'wozmon' build.");
+    }
+
+    /// <summary>
+    ///  A malformed <c>files</c> or <c>image</c> names what is wrong.
+    /// </summary>
+    [TestMethod]
+    public void MalformedMediaFieldsFail()
+    {
+        string Fails(string target)
+        {
+            Write("retrocore.json", $$"""{ "sdk": "1", "cpu": "6502", "targets": { "t": { "machine": "apple1", "environment": "wozmon", {{target}} } } }""");
+            return Error(() => RetrocoreProject.Load(_folder));
+        }
+
+        Fails("\"files\": \"a.bin\"").Should().EndWith("target t's 'files' must be a list of paths and file objects.");
+        Fails("\"files\": [\"a.bin\", \"./a.bin\"]").Should().EndWith("target t's 'files' names ./a.bin twice.");
+        Fails("\"files\": [{ \"name\": \"A\" }]").Should().EndWith("a file of target t must give 'path'.");
+        Fails("\"files\": [{ \"path\": \"a.bin\", \"address\": 4096 }]").Should().EndWith("a.bin's 'address' must be an address such as \"$6000\".");
+        Fails("\"files\": [{ \"path\": \"a.bin\", \"kind\": \"B\" }]").Should().Contain("a file of target t has no field 'kind'");
+        Fails("\"image\": \"disk\"").Should().EndWith("target t's 'image' must be true, false or an object giving 'template'.");
+        Fails("\"image\": {}").Should().EndWith("target t's 'image' must give 'template'.");
     }
 
     /// <summary>
@@ -362,6 +406,30 @@ public sealed class ProjectFileTests
         Write("src/platform/apple2-iie/Able.s", "");
         Relative(RetrocoreProject.Load(_folder).Target("t")).Should().Equal(
             "src/platform/apple2/Zed.s", "src/platform/apple2/alpha.s", "src/platform/apple2-iie/Able.s", "src/platform/apple2-iie/beta.s");
+    }
+
+    /// <summary>
+    ///  The environment's platform folder comes after the family's and the model's, a file of its own taking the place
+    ///  of theirs of the same name, so a target's environment can give its own console or loader.
+    /// </summary>
+    [TestMethod]
+    public void EnvironmentFolderFollowsAndReplaces()
+    {
+        Write("retrocore.json", """
+            { "sdk": "1", "cpu": "6502", "targets": {
+                "woz": { "machine": "apple1", "environment": "wozmon" },
+                "bare": { "machine": "apple1", "environment": "bare" } } }
+            """);
+
+        Write("src/platform/apple1/console.s", "");
+        Write("src/platform/apple1/screen.s", "");
+        Write("src/platform/wozmon/console.s", "");
+        Write("src/platform/wozmon/load.s", "");
+        RetrocoreProject project = RetrocoreProject.Load(_folder);
+        Relative(project.Target("woz")).Should().Equal(
+            "src/platform/wozmon/console.s", "src/platform/apple1/screen.s", "src/platform/wozmon/load.s");
+
+        Relative(project.Target("bare")).Should().Equal("src/platform/apple1/console.s", "src/platform/apple1/screen.s");
     }
 
     /// <summary>

@@ -1,0 +1,18 @@
+{
+  "description": "The Apple-1 with 4K, wozmon: a program typed in at the Woz Monitor as hex, or read from the cassette interface's tape, that calls the Woz Monitor's routines.",
+  "load": "$0300",
+  "free": [
+    { "start": "$0280", "end": "$0FFF" }
+  ],
+  "zeroPage": ["$00-$23", "$2C-$FF"],
+  "reserved": [
+    { "start": "$0100", "end": "$01FF", "why": "the stack" },
+    { "start": "$0200", "end": "$027F", "why": "the Woz Monitor's input buffer" },
+    { "start": "$1000", "end": "$BFFF", "why": "addresses with no RAM, as the machine has 4K from $0000" },
+    { "start": "$C000", "end": "$C1FF", "why": "the cassette interface's ROM and I/O, when it is fitted" },
+    { "start": "$C200", "end": "$CFFF", "why": "addresses no device answers" },
+    { "start": "$D000", "end": "$DFFF", "why": "the keyboard and display PIA, repeated through the 4K" },
+    { "start": "$E000", "end": "$EFFF", "why": "the 4K bank at $E000, where Apple-1 BASIC loads by default" },
+    { "start": "$F000", "end": "$FFFF", "why": "the Woz Monitor's ROM, repeated through the 4K" }
+  ]
+}

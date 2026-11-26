@@ -94,9 +94,9 @@ requesting device puts its vector on the bus, and holds off the devices after it
 fetches, that includes the opcode an NMI's response fetches and ignores: an NMI taken before an `ED`-prefixed
 instruction, whose handler starts with `LD C,L` (`$4D`), reads as `RETI`.
 
-The keyboard sends ASCII, with CTRL giving `$01`-`$1A`, BREAK `$03`, ESC `$1B`, the arrows `$1C`-`$1F` (left, right,
-up, down), HOLD `$00`, and F1 and F2 `$01` and `$02`. These follow the Model II's documentation as remembered rather
-than its keyboard's ROM, so they need checking against a real ROM.
+The keyboard sends ASCII, with CTRL giving `$01`-`$1A`, BREAK `$03`, BACKSPACE `$08`, TAB `$09`, ENTER `$0D`, ESC
+`$1B`, the arrows `$1C`-`$1F` (left, right, up, down), HOLD `$00`, and F1 and F2 `$01` and `$02`. These follow the
+Model II's documentation as remembered rather than its keyboard's ROM, so they need checking against a real ROM.
 
 The Model 16, 16B and Tandy 6000 add a 68000 board, which is not emulated: they run what a Model II or 12 runs, such as
 TRSDOS-II, and not TRS-XENIX.
@@ -160,8 +160,8 @@ behavior was found by booting each image here, and the comparison with MAME agre
 
 Level II on the Model I reads a letter alone as uppercase and with shift as lowercase, so there a lowercase letter is
 typed with shift. Level I, on the Model III or the Model I, reads shift and a letter as its control code, so there
-every letter is typed as its key alone and comes out in uppercase, and ` has no key. The Model II types ASCII, as its
-keyboard sends it.
+every letter is typed as its key alone and comes out in uppercase, and ` has no key. The Model II types ASCII, with the
+codes its documentation gives ([the Model II](#the-model-ii-12-and-16)).
 
 ## ROMs
 

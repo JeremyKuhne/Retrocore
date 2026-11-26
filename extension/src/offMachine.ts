@@ -313,8 +313,9 @@ export class OffMachine {
 
     /**
      * Why the machine shown cannot take a setting, if it cannot: it has no such setting; its disks need their
-     * controller, and the Model I's controller its Expansion Interface; a cartridge holds BASIC's slot; or Level I
-     * cannot run what it starts with.
+     * controller, and the Model I's controller its Expansion Interface; a cartridge holds BASIC's slot; Level I
+     * cannot run what it starts with; or the BASIC file it runs names its dialect, which keeps the ROM whose BASIC
+     * that is.
      */
     refusal(option: string, value: string | number | boolean): string | undefined {
         const target = this.target;

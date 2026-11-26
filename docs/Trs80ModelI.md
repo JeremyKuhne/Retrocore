@@ -142,8 +142,8 @@ The ROM and the memory are settings of the machine, in Start Machine's options a
 
 - **ROM**: Level II BASIC 1.3 (the default), Level II BASIC 1.2 or Level I BASIC, the `rom` and `revision` options.
   Changed while the machine is off, the tape stays in; Level I, which has no disks, takes out the disks and the disk
-  controller; and the memory becomes the new ROM's unless a size was chosen. A machine that starts from a disk keeps
-  Level II, and one that runs a BASIC file that names its dialect, by its name (`.level1.bas`) or its first line,
+  controller; and the memory becomes the new ROM's unless a size was chosen. A machine Start Machine starts from a disk
+  keeps Level II, and one that runs a BASIC file that names its dialect, by its name (`.level1.bas`) or its first line,
   keeps the ROM whose BASIC that is; a plain `.bas` goes into whichever BASIC the ROM has. While it runs, the Machine view's ROM row
   (or the ROM setting) offers to change it: after asking, since what is only in the machine's memory is lost, it
   stops the session, sets the ROM as it would off, and starts the machine again with its tape.

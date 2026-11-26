@@ -185,6 +185,10 @@ public class CbmDosDiskTests
         FluentActions.Invoking(() => CbmDosDisk.Format("disk", "x")).Should().ThrowExactly<ArgumentException>();
         FluentActions.Invoking(() => disk.AddProgram("short", [1, 4])).Should().ThrowExactly<ArgumentException>();
         FluentActions.Invoking(() => disk.AddSequential("empty", [])).Should().ThrowExactly<ArgumentException>();
+#pragma warning disable CS8625 // Exercise the public null guards.
+        FluentActions.Invoking(() => disk.AddSequential(name: null, [])).Should().ThrowExactly<ArgumentNullException>();
+        FluentActions.Invoking(() => disk.AddProgram(name: null, [1])).Should().ThrowExactly<ArgumentNullException>();
+#pragma warning restore CS8625
         disk.Files.Should().ContainSingle();
     }
 

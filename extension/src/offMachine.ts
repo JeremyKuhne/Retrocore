@@ -96,7 +96,10 @@ export class OffMachine {
         }
     }
 
-    /** The configuration's name, which its saved machine is kept under. */
+    /**
+     * The configuration's name. Its saved machine is kept under this name, with a project launch's target added
+     * (project.ts savedName).
+     */
     get name(): string | undefined {
         const name = this.target?.configuration.name;
         return typeof name === "string" ? name : undefined;

@@ -124,7 +124,10 @@ export interface SavedMachine {
 
 /** The hardware options a launch configuration gives, as one string to compare. */
 export function fingerprint(configuration: Record<string, unknown>): string {
-    return JSON.stringify(hardwareOptions.map(option => configuration[option] ?? null));
+    // A project launch's target the extension read names its file and target one way, however the launch gives them.
+    const resolved = configuration.retrocoreTarget !== undefined;
+    return JSON.stringify(hardwareOptions.map(option =>
+        resolved && (option === "project" || option === "target") ? null : configuration[option] ?? null));
 }
 
 /**

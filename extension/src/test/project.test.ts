@@ -71,6 +71,8 @@ test("a project launch gets its target's machine, and every target of one config
         "the target by name or as project/target is the same target");
     assert.equal(savedName({ ...launch, target: "apple2-iie" }), savedName(iie),
         "and a launch.json entry read as it is, as the off machine reads it, keeps the same name");
+    assert.equal(fingerprint(withProjectMachine({ ...launch, project: path.join(sample, "retrocore.json"), target: "apple2-iie" })),
+        fingerprint(iie), "and the same hardware, the project given as its folder or its file");
 });
 
 test("a launch that is not a project's, or names a target the extension cannot find, is left for the host", () => {

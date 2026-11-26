@@ -89,6 +89,22 @@ directory, reads it to `$1E00` in the highest bank, checks for `SOS KRNL` and ju
 `ON_THREE = 1` On Three's 1985 revision, 2.2, which the SOS 1.3 System Utilities disk carries and which looks for
 more than 256K.
 
+## Building a boot disk
+
+The SDK's sources build a disk that boots SOS 1.3 and runs a program of your own as its interpreter, with nothing
+from Apple's disks. `Apple3SdkModules.BuildSosBootDisk` puts together:
+
+- block 0, the bootstrap loader, from `SosBoot.asm`;
+- `SOS.KERNEL`, from `SosKernel.asm`;
+- `SOS.DRIVER`, the header from `SosDriverHeader.asm` and the console driver, or the drivers asked for, written by
+  `SosDriverFile.Write`;
+- `SOS.INTERP`, the program, written by `SosInterpreterFile.Write`.
+
+The program runs at a fixed address in the system bank, from `$2000` up to the kernel at `$B800`, and starts at its
+first byte. `SOS.INTERP` is `SOS NTRP`, a header count and that many bytes (usually none), the load address and
+length, and the code; nothing is relocated. SOS's loader places the drivers below the program, or at the top of the bank below when there is no room. The disk's other files
+go on with the builder's `Add`. `SosBootDisk.Create` does the same from the four pieces' bytes.
+
 ## Debugging
 
 - **The kernel** maps wherever memory holds its bytes: the loader and INIT while they run, and the rest in the
@@ -109,5 +125,7 @@ more than 256K.
 - `SosDriverHeaderTests` pins the header by digest and compares it with the disks' headers. It checks that each Apple
   driver build (`Apple3SdkModules.BuildSosDriver`) has the disk's code, relocations and comment, and that
   `SosDriverFile.Write` writes files that read back and rewrites the disks' `SOS.DRIVER` byte for byte.
+- `SosBootDiskTests` and `SosInterpreterTests` build boot disks from the SDK's sources and read them back. Under
+  emulation, with the boot ROM's dump, the disk boots SOS 1.3, and a small interpreter writes a line to `.CONSOLE`.
 - `node tools/Test-Apple3Dap.mjs` stops at a breakpoint in the kernel's source while the System Utilities boot,
   and binds one in the formatter driver's source once SOS has loaded it.

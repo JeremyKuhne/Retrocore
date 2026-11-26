@@ -81,5 +81,6 @@ section, which it clears itself.
 
 ## Pirate Adventure
 
-Pirate Adventure is Scott and Alexis Adams' game, and is not in this repository yet: it comes with the targets that
-load it from disk, with [games/README.md](games/README.md) recording where it is hosted and on what terms.
+Pirate Adventure is Scott and Alexis Adams' game. Its file, `games/pirate.dat`, is in this repository, with
+[games/README.md](games/README.md) recording where it is hosted and on what terms, and the reference engine plays it
+(`games/pirate-win.in` wins). It is not built into any target yet: the targets that load it from disk are to come.

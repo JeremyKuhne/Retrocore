@@ -135,25 +135,19 @@ public sealed class SosDriverHeaderTests
     public static IEnumerable<object[]> AppleBuilds => SosDriverSourceTests.Builds.Where(build => (string)build[0] != "TitanRam");
 
     /// <summary>
-    ///  With Apple's disks, each driver the build makes has the relocations and comment of the disk's driver.
+    ///  With Apple's disks, each Apple driver build has the code, relocations and comment of the disk's driver.
     /// </summary>
     /// <param name="folder">The driver's folder.</param>
     /// <param name="define">A symbol to set for a build other than the default, or empty.</param>
     /// <param name="disk">The disk whose SOS.DRIVER has this build.</param>
     /// <param name="device">The driver's first device.</param>
+    /// <param name="hash">Unused.</param>
+    /// <param name="length">Unused.</param>
     [TestMethod]
-    [DataRow("Console", "", Utilities, ".CONSOLE")]
-    [DataRow("Console", "RELEASE_130", Basic, ".CONSOLE")]
-    [DataRow("Rs232", "", Basic, ".RS232")]
-    [DataRow("Grafix", "", Basic, ".GRAFIX")]
-    [DataRow("Profile", "", Utilities, ".PROFILE")]
-    [DataRow("Printer", "", Basic, ".PRINTER")]
-    [DataRow("Audio", "", Basic, ".AUDIO")]
-    [DataRow("Silentype", "", Basic, ".SILENTYPE")]
-    [DataRow("Fmtd1", "", Utilities, ".FMTD1")]
-    [DataRow("Ram", "", Utilities, ".RAM")]
-    public void BuiltDriverMatchesTheDisk(string folder, string define, string disk, string device)
+    [DynamicData(nameof(AppleBuilds))]
+    public void BuiltDriverMatchesTheDisk(string folder, string define, string disk, string device, string hash, int length)
     {
+        _ = (hash, length);
         SosDriver expected = SosDriverFile.Read(SosVolumeTests.Volume(disk).ReadFile("SOS.DRIVER")).Drivers.Single(driver => driver.Name == device);
         SosDriver actual = Apple3SdkModules.BuildSosDriver(SosBootDiskTests.SdkDirectory, folder, define);
         actual.Code.Should().Equal(expected.Code);
@@ -255,6 +249,9 @@ public sealed class SosDriverHeaderTests
         active[0x14] = 0x80;
         Action noType = () => SosDriverFile.Write(header, [new SosDriver("", active, [])]);
         noType.Should().Throw<ArgumentException>().WithParameterName("drivers");
+        byte[] typed = new byte[0x18];
+        typed[0x14] = 0x80;
+        SosDriverFile.Read(SosDriverFile.Write(header, [new SosDriver("", typed, [])])).Drivers.Should().ContainSingle();
 
         // The loader's walk of the file ends a chain only at a link of 0: a DIB that links to itself, or a loop, never
         // ends.

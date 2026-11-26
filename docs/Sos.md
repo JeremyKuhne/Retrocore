@@ -106,8 +106,8 @@ more than 256K.
 - `SosDriverSourceTests` pins each driver build's code, and with the disks compares its code, relocation table and
   comment with the driver in that disk's `SOS.DRIVER`.
 - `SosVolumeTests` reads SOS volumes and driver files.
-- `SosDriverHeaderTests` pins the header by digest and compares it with the disks' headers. It checks that each of
-  Apple's drivers the build makes (`Apple3SdkModules.BuildSosDriver`) has the disk's code, relocations and comment, and that
+- `SosDriverHeaderTests` pins the header by digest and compares it with the disks' headers. It checks that each Apple
+  driver build (`Apple3SdkModules.BuildSosDriver`) has the disk's code, relocations and comment, and that
   `SosDriverFile.Write` writes files that read back and rewrites the disks' `SOS.DRIVER` byte for byte.
 - `node tools/Test-Apple3Dap.mjs` stops at a breakpoint in the kernel's source while the System Utilities boot,
   and binds one in the formatter driver's source once SOS has loaded it.

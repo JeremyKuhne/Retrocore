@@ -216,7 +216,9 @@ internal static class Apple3SdkModules
     ///  the console. The built-in disk's driver is in the kernel.
     /// </param>
     /// <returns>The builder, with the loader and the three files.</returns>
-    /// <exception cref="ArgumentException">The name is not a SOS name, or there are no drivers.</exception>
+    /// <exception cref="ArgumentException">
+    ///  The name is not a SOS name, the program is empty, or there are no drivers.
+    /// </exception>
     /// <exception cref="ArgumentOutOfRangeException">
     ///  The drive count is not 1-4, or the program does not fit between the load address and the kernel.
     /// </exception>

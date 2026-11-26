@@ -22,7 +22,7 @@ namespace Retrocore.Tests;
 [TestClass]
 public sealed class SosInterpreterTests
 {
-    // Where the test interpreter runs: the bottom of the system bank, as the SDK's sos environment places a program.
+    // Where the test interpreter runs: the bottom of the system bank, which leaves a program the most room.
     private const int LoadAddress = 0x2000;
 
     // A program that opens .CONSOLE, writes a line to it and waits, through SOS calls: BRK, the call number and the

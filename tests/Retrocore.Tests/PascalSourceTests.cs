@@ -13,8 +13,10 @@ namespace Retrocore.Tests;
 [TestClass]
 public sealed class PascalSourceTests
 {
-    // A program written to the style, which the lint passes.
-    private const string Sample = """
+    /// <summary>
+    ///  A program written to the style, which the lint passes; it includes <see cref="Part"/>.
+    /// </summary>
+    internal const string Sample = """
         (** A sample program, to show the style. *)
 
         PROGRAM Sample;
@@ -55,7 +57,10 @@ public sealed class PascalSourceTests
         END.
         """;
 
-    private const string Part = """
+    /// <summary>
+    ///  The file <see cref="Sample"/> includes, <c>PART.TEXT</c>.
+    /// </summary>
+    internal const string Part = """
         (** Writes the count. *)
         PROCEDURE Report;
 
@@ -280,7 +285,8 @@ public sealed class PascalSourceTests
     }
 
     /// <summary>
-    ///  A file over the Editor's 18 pages, or with a name a disk can't keep, is reported.
+    ///  A file over the Editor's 18 pages, or a .TEXT file with a name a disk can't keep, is reported; a .pas file's
+    ///  name is the editor's own.
     /// </summary>
     [TestMethod]
     public void FilesTheEditorCannotOpenAreReported()
@@ -294,6 +300,10 @@ public sealed class PascalSourceTests
         Dictionary<string, string> files = new() { [Path.Join("SRC", "Sample.text")] = "PROGRAM P;\nBEGIN END." };
         PascalProgram program = PascalProgram.Analyze(Path.Join("SRC", "Sample.text"), files.GetValueOrDefault);
         PascalLint.Check(program, bibliography: null).Should().ContainSingle().Which.Rule.Should().Be("file-name");
+
+        files = new() { [Path.Join("SRC", "sample.pas")] = "PROGRAM P;\nBEGIN END." };
+        program = PascalProgram.Analyze(Path.Join("SRC", "sample.pas"), files.GetValueOrDefault);
+        PascalLint.Check(program, bibliography: null).Should().BeEmpty();
 
         files = new() { [Path.Join("SRC", "AVERYLONGNAME.TEXT")] = "PROGRAM P;\nBEGIN END." };
         program = PascalProgram.Analyze(Path.Join("SRC", "AVERYLONGNAME.TEXT"), files.GetValueOrDefault);

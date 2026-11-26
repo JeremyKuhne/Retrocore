@@ -11,16 +11,19 @@ internal sealed class DocumentSyncHandler
 {
     private readonly LanguageWorkspace _workspace;
     private readonly BasicDocuments _basic;
+    private readonly PascalDocuments? _pascal;
 
     /// <summary>
     ///  Creates the handler.
     /// </summary>
     /// <param name="workspace">The workspace.</param>
     /// <param name="basic">The open BASIC documents.</param>
-    public DocumentSyncHandler(LanguageWorkspace workspace, BasicDocuments basic)
+    /// <param name="pascal">The open Pascal documents, or null to treat Pascal as any other text.</param>
+    public DocumentSyncHandler(LanguageWorkspace workspace, BasicDocuments basic, PascalDocuments? pascal = null)
     {
         _workspace = workspace;
         _basic = basic;
+        _pascal = pascal;
     }
 
     /// <inheritdoc/>
@@ -39,6 +42,10 @@ internal sealed class DocumentSyncHandler
         {
             _basic.Update(request.TextDocument.Uri, request.TextDocument.LanguageId, request.TextDocument.Text);
         }
+        else if (_pascal is not null && request.TextDocument.LanguageId == LanguageHost.PascalId)
+        {
+            _pascal.Update(request.TextDocument.Uri, request.TextDocument.Text);
+        }
         else
         {
             _workspace.Update(LanguageHost.PathOf(request.TextDocument.Uri), request.TextDocument.Text);
@@ -52,7 +59,9 @@ internal sealed class DocumentSyncHandler
     public void Change(LspParams request)
     {
         // Full synchronization: the last change holds the whole text.
-        if (request.ContentChanges.LastOrDefault() is { } change && !_basic.Change(request.TextDocument.Uri, change))
+        if (request.ContentChanges.LastOrDefault() is { } change
+            && !_basic.Change(request.TextDocument.Uri, change)
+            && _pascal?.Change(request.TextDocument.Uri, change) is not true)
         {
             _workspace.Update(LanguageHost.PathOf(request.TextDocument.Uri), change);
         }
@@ -64,7 +73,7 @@ internal sealed class DocumentSyncHandler
     /// <param name="request">The request's params.</param>
     public void Close(LspParams request)
     {
-        if (!_basic.Close(request.TextDocument.Uri))
+        if (!_basic.Close(request.TextDocument.Uri) && _pascal?.Close(request.TextDocument.Uri) is not true)
         {
             _workspace.Close(LanguageHost.PathOf(request.TextDocument.Uri));
         }

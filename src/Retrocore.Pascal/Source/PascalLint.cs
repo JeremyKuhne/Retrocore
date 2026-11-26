@@ -4,7 +4,6 @@
 
 using Retrocore.Documentation;
 using Retrocore.Media;
-using System.Text.RegularExpressions;
 
 namespace Retrocore.Pascal.Source;
 
@@ -12,7 +11,7 @@ namespace Retrocore.Pascal.Source;
 ///  Checks Apple Pascal sources against the SDK's Pascal style (docs/PascalStyle.md): what the editor reports and
 ///  the SDK's tests require.
 /// </summary>
-public static partial class PascalLint
+public static class PascalLint
 {
     /// <summary>
     ///  The widest a line may be: the Editor's screen.
@@ -80,12 +79,14 @@ public static partial class PascalLint
             }
         }
 
+        // A .TEXT file is one for a disk, whose name the disk keeps; a .pas file is the editor's own.
         string name = Path.GetFileName(path);
-        if (name.Length > FileNameLength)
+        bool forDisk = name.EndsWith(".TEXT", StringComparison.OrdinalIgnoreCase);
+        if (forDisk && name.Length > FileNameLength)
         {
             Add(0, 0, 0, "file-name", $"'{name}' is over {FileNameLength} characters, the longest a disk keeps.");
         }
-        else if (name != name.ToUpperInvariant() || !name.EndsWith(".TEXT", StringComparison.Ordinal))
+        else if (forDisk && name != name.ToUpperInvariant())
         {
             Add(0, 0, 0, "file-name", "Name the file as the disk does, in capitals ending .TEXT.");
         }
@@ -267,13 +268,16 @@ public static partial class PascalLint
             }
 
             CheckAlso(program, bibliography, doc, problems);
-            foreach (Match link in Link().Matches(doc.Token.Text))
+            foreach (PascalDocLink link in doc.Links.Where(link => program.FindLink(link.Target) is null))
             {
-                string target = link.Groups["target"].Value;
-                if (program.FindLink(target) is null)
-                {
-                    Add(doc.Token, "link", $"No declaration is named '{target}'.");
-                }
+                problems.Add(new(
+                    doc.Token.File,
+                    link.Line,
+                    link.Column,
+                    link.EndColumn,
+                    IsError: false,
+                    "link",
+                    $"No declaration is named '{link.Target}'."));
             }
         }
 
@@ -335,7 +339,4 @@ public static partial class PascalLint
         IsError: false,
         rule,
         message);
-
-    [GeneratedRegex(@"<(?:[^<>]* at )?(?<target>[A-Za-z][A-Za-z0-9]*(?:\.[A-Za-z][A-Za-z0-9]*)*)>")]
-    private static partial Regex Link();
 }

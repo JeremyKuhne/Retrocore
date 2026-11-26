@@ -85,6 +85,11 @@ internal static partial class LanguageHost
     /// </summary>
     internal const string BasicId = "retrocore-basic";
 
+    /// <summary>
+    ///  The VS Code language of Apple Pascal documents.
+    /// </summary>
+    internal const string PascalId = "retrocore-pascal";
+
     private const int ByteMaximum = 0xFF;
     private const int WordMaximum = 0xFFFF;
 
@@ -118,12 +123,13 @@ internal static partial class LanguageHost
         JsonRpcServer server = new(Console.OpenStandardInput(), Console.OpenStandardOutput());
         LanguageWorkspace workspace = new(server);
         BasicDocuments basic = new(server);
-        DocumentSyncHandler sync = new(workspace, basic);
-        DefinitionHandler definition = new(workspace, basic);
+        PascalDocuments pascal = new(server);
+        DocumentSyncHandler sync = new(workspace, basic, pascal);
+        DefinitionHandler definition = new(workspace, basic, pascal);
         ReferencesHandler references = new(workspace, basic);
-        HoverHandler hover = new(workspace, basic);
+        HoverHandler hover = new(workspace, basic, pascal);
         CompletionHandler completion = new(workspace, basic);
-        DocumentSymbolHandler documentSymbols = new(workspace, basic);
+        DocumentSymbolHandler documentSymbols = new(workspace, basic, pascal);
         WorkspaceSymbolHandler workspaceSymbols = new(workspace);
         CodeActionHandler codeActions = new(workspace, basic);
 

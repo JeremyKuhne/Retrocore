@@ -71,6 +71,29 @@ public sealed partial class PascalDocComment
             .Select(item => (item, DocumentationAlso.Parse(item)));
 
     /// <summary>
+    ///  Gets the comment's links, <c>&lt;Name&gt;</c> or <c>&lt;text at Name&gt;</c>, where each is in the file.
+    /// </summary>
+    public IEnumerable<PascalDocLink> Links
+    {
+        get
+        {
+            string[] lines = PascalLexer.Lines(Token.Text);
+            for (int index = 0; index < lines.Length; index++)
+            {
+                int offset = index == 0 ? Token.Column : 0;
+                foreach (Match link in Link().Matches(lines[index]))
+                {
+                    yield return new(
+                        link.Groups["target"].Value,
+                        Token.Line + index,
+                        offset + link.Index,
+                        offset + link.Index + link.Length);
+                }
+            }
+        }
+    }
+
+    /// <summary>
     ///  Gets a section by name.
     /// </summary>
     /// <param name="name">The section's name.</param>
@@ -186,6 +209,9 @@ public sealed partial class PascalDocComment
 
     [GeneratedRegex(@"^\s*(?<name>[A-Z][A-Za-z]+):(?<rest>.*)$")]
     private static partial Regex SectionHeading();
+
+    [GeneratedRegex(@"<(?:[^<>]* at )?(?<target>[A-Za-z][A-Za-z0-9]*(?:\.[A-Za-z][A-Za-z0-9]*)*)>")]
+    private static partial Regex Link();
 
     [GeneratedRegex(@",\s+(?=[A-Za-z][A-Za-z0-9]*\s*=)")]
     private static partial Regex EntryStart();

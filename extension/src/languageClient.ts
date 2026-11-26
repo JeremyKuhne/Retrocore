@@ -206,9 +206,9 @@ export const basicLanguages = ["retrocore-applesoft", "retrocore-level2", "retro
     "retrocore-level1", "retrocore-colorbasic", "retrocore-mbasic",
     "retrocore-petbasic", "retrocore-bbcbasic", "retrocore-atari", "retrocore-basic"];
 
-/** Assembly documents must be files; BASIC also supports virtual documents. */
+/** Assembly and Pascal documents must be files, read with the files they include; BASIC also supports virtual documents. */
 export const documentSelector = [
-    ...["retrocore-asm", "retrocore-macro10"].map(language => ({ language, scheme: "file" })),
+    ...["retrocore-asm", "retrocore-macro10", "retrocore-pascal"].map(language => ({ language, scheme: "file" })),
     ...basicLanguages.map(language => ({ language }))
 ];
 

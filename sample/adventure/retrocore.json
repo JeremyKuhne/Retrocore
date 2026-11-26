@@ -37,6 +37,8 @@
     "apple2-test": { "machine": "apple2-iiplus", "environment": "bare",
                      "defines": { "TEST_GAME": 1 } },
     "apple3": { "machine": "apple3", "environment": "bare" },
+    "apple3-sos": { "machine": "apple3", "environment": "sos", "defines": { "GAME_LINKED": 0 },
+                    "files": [{ "path": "${obj}/pirate.bin", "name": "PIRATE.DAT" }] },
     "pet": { "machine": "pet4032", "environment": "bare" },
     "pet-basic": { "machine": "pet4032", "environment": "basic" },
     "pet-disk": { "machine": "pet4032", "environment": "basic", "image": { "boot": "disk" } },

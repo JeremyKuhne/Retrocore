@@ -133,7 +133,7 @@
         },
         "environment": {
           "$ref": "#/definitions/environment",
-          "description": "How the program is loaded and started, and which system calls it may make. Every machine runs bare; each other environment runs on the machines the SDK plan pairs it with. bare, wozmon, dos33, dfs and basic build yet."
+          "description": "How the program is loaded and started, and which system calls it may make. Every machine runs bare; each other environment runs on the machines the SDK plan pairs it with. bare, wozmon, dos33, dfs, basic and sos build yet."
         },
         "cpu": {
           "$ref": "#/definitions/cpu",
@@ -293,7 +293,7 @@
         "Woz Monitor hex to type in, and an ACI tape (WAV). The Apple-1.",
         "A B file on a DOS 3.3 disk that its HELLO starts. The Apple II, II Plus and IIe.",
         "A SYS or BIN file under ProDOS. The II Plus with 64K, and the IIe. Not yet supported.",
-        "A SOS.INTERP on a SOS boot disk. The Apple III. Not yet supported.",
+        "A SOS.INTERP at $2000 on a SOS 1.3 boot disk built from the SDK's sources. The Apple III.",
         "A PRG with a BASIC SYS line, on a TAP tape and a 4040 disk. The PET.",
         "A *RUN file on a DFS disk that its !BOOT runs, and a UEF tape. The BBC Micro.",
         "A .COM file under CP/M. The Apple II and IIe with a SoftCard, the TRS-80 Model 4, the Altair and the Kaypro II. Not yet supported.",

@@ -210,7 +210,7 @@ public sealed class ProjectLaunchTests
         JsonObject withExecutable = Launch("iiplus");
         withExecutable["executable"] = Path.Join(_folder, "game.xex");
         client.Fails("launch", withExecutable).Should().Contain("cannot give 'executable'");
-        client.Fails("launch", Launch("dos")).Should().EndWith("the 'prodos' environment is not yet supported; only 'bare', 'wozmon', 'dos33', 'dfs' and 'basic' build.");
+        client.Fails("launch", Launch("dos")).Should().EndWith("the 'prodos' environment is not yet supported; only 'bare', 'wozmon', 'dos33', 'dfs', 'basic' and 'sos' build.");
 
         Write("main.s", "stz $00");
         client.Fails("launch", Launch("iiplus")).Should().Contain("target iiplus:").And.Contain("main.s(1)");

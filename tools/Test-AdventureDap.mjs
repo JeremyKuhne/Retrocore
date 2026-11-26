@@ -35,6 +35,7 @@ const plays = {
     "apple1-wozmon": { family: "apple1", transcripts: ["pirate-win"], hex: true },
     pet: { family: "pet", transcripts: ["pirate-win", "pirate-die"] },
     "pet-basic": { family: "pet", transcripts: ["pirate-win", "pirate-die"] },
+    "apple3-sos": { family: "apple3", folder: "sos", transcripts: ["pirate-win", "pirate-die"], typeAtPrompt: true },
     "pet-disk": { family: "pet", transcripts: ["pirate-win"], needs: "the 4040's ROMs" },
     apple2: { family: "apple2", transcripts: ["pirate-win", "pirate-die"] },
     "apple2-dos": { family: "apple2", transcripts: ["pirate-win", "pirate-die"] },
@@ -125,7 +126,7 @@ try {
     for (const target of targets) {
         assert.ok(allTargets.includes(target), `there is no target ${target} to play`);
         const { family, transcripts } = plays[target];
-        const consoleSource = join(sample, "src", "platform", family, "console.s");
+        const consoleSource = join(sample, "src", "platform", plays[target].folder ?? family, "console.s");
         const readLine = firstLine(consoleSource, "ReadLine");
         const write = firstLine(consoleSource, "Write");
         let skipped = false;
@@ -158,6 +159,16 @@ try {
             ] });
             assert.ok(set.breakpoints.every(breakpoint => breakpoint.verified), "the console's logpoints map to their source");
             await request("configurationDone");
+
+            // Under SOS, keys typed before the console driver is open are lost, so they go in once the engine first
+            // reads a line, as a user would type them.
+            if (plays[target].typeAtPrompt) {
+                for (const end = performance.now() + 60000; !events.some(message => message.event === "output" && message.body.output.trim() === "READ");) {
+                    assert.ok(performance.now() < end, `${target} ${name}: the engine reads a line`);
+                    await new Promise(done => setTimeout(done, 100));
+                }
+            }
+
             await request("retro/type", { text: commands.map(command => `${command}\n`).join("") });
 
             // The engine runs to the end of the game.

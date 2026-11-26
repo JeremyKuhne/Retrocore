@@ -58,6 +58,12 @@ internal sealed partial class DebugSession
                 MediaActions.KeepReplaced(bbc.BootDrive, $"the build's {build.Media.ImageKind} took its place");
                 bbc.BootDrive.Insert(floppy, label, "SSD");
                 break;
+            case Apple3DebugTarget apple3:
+                // The built-in drive, .D1, which the boot ROM boots.
+                WozDisk sos = SectorDiskConverter.Convert(bytes, proDosOrder: false);
+                MediaActions.KeepReplaced(apple3.BootDrive, $"the build's {build.Media.ImageKind} took its place");
+                apple3.BootDrive.Insert(sos, label, "DSK");
+                break;
             case PetDebugTarget pet:
                 BootPet(build, pet, bytes, label);
                 return;

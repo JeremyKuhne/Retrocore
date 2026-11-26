@@ -299,11 +299,9 @@ program may use, and the reserved areas with the reason for each.
 - **At run time**, a later phase lets the debugger warn on writes into reserved areas, as the `;; Keeps:` contracts
   warn today.
 
-**The Apple-1's expansion RAM.** Retrocore's Apple-1 has 4K or 8K at `$0000` and the 4K bank at `$E000`, and
-`Apple1Configuration.Validate` rejects any other size. This plan adds larger `ramKilobytes` values (16 and 32) for the
-expansion RAM period owners added and modern replicas ship with, and the memory map grows to match. That needs the
-validation, the bus's RAM, the launch's hardware row and [Apple1.md](../Apple1.md) to change. The adventure's Apple-1
-target asks for 32K.
+**The Apple-1's expansion RAM.** Retrocore's Apple-1 takes `ramKilobytes` 16 and 32 as well as 4 and 8, for the
+expansion RAM period owners added and modern replicas ship with: RAM contiguous from `$0000`, with the 4K bank at
+`$E000` where it was ([Apple1.md](../Apple1.md#the-machine)). The adventure's Apple-1 target asks for 32K.
 
 The linker already reports a segment that overflows its region and sections that overlap. A memory map adds what
 the linker cannot know, the machine's reserved areas, and turns those errors into messages that name the target.

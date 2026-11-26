@@ -25,13 +25,15 @@ let lastRead: Promise<void> = Promise.resolve();
 
 /** Waits for the workspace's projects to be read, so activeTargetName gives the active target. */
 export function activeTargetRead(): Promise<void> {
-    return lastRead;
+    return lastRead.catch(() => undefined);
 }
 
 /** The active target's name as retrocore.activeTarget gives it (project/target), if the workspace has one. */
 export function activeTargetName(): string | undefined {
     return current === undefined ? undefined : qualifiedName(current);
 }
+
+const activeTargetVariable = "${command:retrocore.activeTarget}";
 
 /**
  * A launch configuration with ${command:retrocore.activeTarget} in its target replaced by the active target, as VS
@@ -44,8 +46,6 @@ export function withActiveTarget<T extends Record<string, unknown>>(configuratio
     }
     return { ...configuration, target: configuration.target.replaceAll(activeTargetVariable, name) };
 }
-
-const activeTargetVariable = "${command:retrocore.activeTarget}";
 
 /** The workspace's project targets and the one chosen. */
 export interface ActiveTargets {
@@ -128,8 +128,8 @@ export function registerActiveTarget(context: vscode.ExtensionContext): ActiveTa
             }
         }
         targets = found;
-        show();
         current = active();
+        show();
     };
     const queue = (): Promise<void> => {
         const next = (reading ?? Promise.resolve()).then(refresh, refresh);
@@ -168,8 +168,8 @@ export function registerActiveTarget(context: vscode.ExtensionContext): ActiveTa
         }
         if (picked === undefined) return undefined;
         await context.workspaceState.update(stateKey, { file: picked.file, target: picked.name });
-        show();
         current = active();
+        show();
         return qualifiedName(picked);
     }));
 

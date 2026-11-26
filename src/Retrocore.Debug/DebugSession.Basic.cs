@@ -92,8 +92,14 @@ internal sealed partial class DebugSession
                 : throw new InvalidOperationException($"The tape holds a {tape.Dialect.DisplayName} program, not {dialect.DisplayName}.");
         }
 
-        // Every tokenized program has zero bytes, which end its lines; a text file has none.
-        if (bytes.AsSpan().IndexOf((byte)0) >= 0) { return StoreBasic(BasicProgram.FromImage(dialect, bytes), []); }
+        // Every tokenized program has zero bytes, which end its lines; a text file has none. Level I's lines end in a
+        // carriage return, so its image is told by its line numbers' bytes, which below line 8192 are control
+        // characters a text file does not hold.
+        bool image = dialect is Level1Dialect
+            ? bytes.Any(value => value is < (byte)' ' and not ((byte)'\t' or (byte)'\r' or (byte)'\n'))
+            : bytes.AsSpan().IndexOf((byte)0) >= 0;
+
+        if (image) { return StoreBasic(BasicProgram.FromImage(dialect, bytes), []); }
         return WriteBasic(File.ReadAllText(path));
     }
 

@@ -232,7 +232,8 @@ for PRINT, read as `EXEC` reads them), GOSUBs are in the call stack, and the Var
 the array A(n) counting down from the top of memory, and the FOR loops. Level I keeps no tokens: a line is its number
 and its text as typed, from `$4200` to `TXTUNF`, so a `.level1.bas` file (or one with `REM retrocore level1`) reads
 as the program lists. Its errors, HOW?, WHAT? and SORRY, stop as **BASIC errors**, except a mistyped answer to INPUT,
-which asks again and counts as handled. Not every Level I tape is a BASIC program: one whose block does not start at
+which asks again and counts as handled, and an error in an item READ takes from DATA, which Level I reports with no
+line, as it has none while it reads the item, and which does not stop. Not every Level I tape is a BASIC program: one whose block does not start at
 `$4200`, as the Eliza tape's starts at `$41FE` to load over CLOAD's return address and start its machine code, is
 memory, which Import refuses, and debugs at the Z80 level against `Level1.asm`. A `basic` launch does not yet run a
 Level I file.

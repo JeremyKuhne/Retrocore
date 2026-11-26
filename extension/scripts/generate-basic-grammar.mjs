@@ -358,8 +358,9 @@ const colorBasic = [...keywords("ColorBasicDialect.cs", "s_commands"), ...keywor
 const bbcBasic = bbcKeywords();
 const petBasic = keywords("PetBasicDialect.cs");
 const atari = keywords("AtariBasicDialect.cs");
-// Level I's words in the order EXEC tries them: the statements a program runs, the commands, then the words inside
-// statements and the functions; an abbreviation, as P. for PRINT, is the first word with those letters.
+// Level I's words in the order EXEC tries them in a program, the statements a program runs, then the commands, which
+// a typed line tries first, and the words inside statements and the functions; an abbreviation, as P. for PRINT, is
+// the first word with those letters.
 const level1 = ["s_statements", "s_commands", "s_ifWords", "s_forWords", "s_printWords", "s_functions"]
     .flatMap(table => keywords("Level1Dialect.cs", table));
 const union = [...appleSoft, ...level2.filter(word => !appleSoft.includes(word))];

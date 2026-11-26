@@ -107,6 +107,7 @@ async function consoleSays(pattern) {
 
 const cassette = join(tmpdir(), `retrocore-${process.pid}.cas`);
 const levelOneTape = join(tmpdir(), `retrocore-${process.pid}-level1.cas`);
+const levelOneImage = join(tmpdir(), `retrocore-${process.pid}-level1.bin`);
 try {
     await request("initialize", { adapterID: "retrocore", linesStartAt1: true, columnsStartAt1: true });
     phase("initialized");
@@ -424,12 +425,21 @@ try {
     basic = await request("retro/basic/program");
     assert.equal(basic.text, levelOneProgram, "the program came back from its Level I tape");
 
+    // A Level I image has no zero byte when its line numbers have none, as from 1000 up; it imports as an image.
+    const numbered = "1000 P. 1\n1010 GOTO 1000\n";
+    assert.equal((await request("retro/basic/write", { text: numbered })).success, true);
+    await request("retro/basic/export", { path: levelOneImage, format: "tokenized" });
+    assert.ok(!readFileSync(levelOneImage).includes(0), "the image has no zero byte");
+    assert.equal((await request("retro/basic/write", { text: "10 P. 1\n" })).success, true);
+    await request("retro/basic/import", { path: levelOneImage });
+    assert.equal((await request("retro/basic/program")).text, numbered, "the image came back as Level I lines");
+
     await request("disconnect");
     console.log("Model I DAP passed: boot to READY, a Level II source breakpoint with the Z80 call stack, a cassette round trip, RUN and CONT stops, the reset button, power-on and entry stops, 1x and 2x speed, stepping from a Z80 source into Level2.asm"
         + (existsSync(dos) ? ", a NEWDOS/80 boot" : "") + ", a fast cassette load at real speed, tapes for the other Level warned of, and Level I's BASIC thread: RUN's start, steps, a line breakpoint in a GOSUB, its variables, STOP, and a Level I tape round trip.");
 } finally {
     clearTimeout(timeout);
     close();
-    for (const file of [cassette, levelOneTape]) if (existsSync(file)) unlinkSync(file);
+    for (const file of [cassette, levelOneTape, levelOneImage]) if (existsSync(file)) unlinkSync(file);
 }
 if (failure()) throw failure();

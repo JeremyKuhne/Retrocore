@@ -294,8 +294,8 @@ internal sealed class Level1Dialect : BasicDialect
     ///  </para>
     ///  <para>
     ///   While READ stores a DATA item, <c>CURRNT</c> is 0 (<c>ST_READ_1</c>), and the line is only on the stack under
-    ///   the call, so BASIC reads as in direct mode then: an error in a DATA item is reported, as the ROM reports it,
-    ///   with no line.
+    ///   the call, so BASIC reads as in direct mode then: the ROM reports an error in a DATA item with no line, and the
+    ///   debugger does not stop for it.
     ///  </para>
     /// </remarks>
     /// <param name="memory">The memory.</param>

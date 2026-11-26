@@ -1221,15 +1221,15 @@ off and on. See the [Atari guide](../docs/Atari800.md) for what is emulated.
 Z80 side of a Model 16 (`model` `2`, `12` or `16`). Without dumps they run the SDK's
 builds of their ROMs (`Model3.asm`, `Model4PBoot.asm`, `Model2Boot.asm` and the character
 generators), which are byte-identical to MAME's dumps of the ROMs they cover;
-`romDirectory` or `RETROCORE_TRS80_ROMS` can hold MAME's dumps instead. When the running ROM is one the sources build, its source
-debugs as a ROM module, and Model III and Model 4 BASIC has the BASIC thread, as Level II
-does. A Model III with `rom` `level1` runs Level I BASIC from `Level1.asm`'s Model III
-build, with the BASIC thread too. The options are `rom`, `ramKilobytes`, `disks` (JV1, JV3, DMK or IMD),
-`diskController`, `cassette` and `fastCassette` (Model III and 4), `fastDisk` and
-`bootRom` (Model II), `bootSeconds`, `screen` and `speed`. On the Model III family the
-panel takes the Model I's keys; on the Model II it types ASCII, with **Escape** for
-BREAK and buttons for HOLD, F1 and F2. See the
-[Model III, 4 and II guide](../docs/Trs80Model3And2.md) for what is emulated.
+`romDirectory` or `RETROCORE_TRS80_ROMS` can hold MAME's dumps instead. When the running
+ROM is one the sources build, its source debugs as a ROM module, and Model III and Model
+4 BASIC has the BASIC thread, as Level II does. A Model III with `rom` `level1` runs
+Level I BASIC from `Level1.asm`'s Model III build, with the BASIC thread too. The options
+are `rom`, `ramKilobytes`, `disks` (JV1, JV3, DMK or IMD), `diskController`, `cassette`
+and `fastCassette` (Model III and 4), `fastDisk` and `bootRom` (Model II), `bootSeconds`,
+`screen` and `speed`. On the Model III family the panel takes the Model I's keys; on the
+Model II it types ASCII, with **Escape** for BREAK and buttons for HOLD, F1 and F2. See
+the [Model III, 4 and II guide](../docs/Trs80Model3And2.md) for what is emulated.
 
 ## Debugging on the Kaypro II
 

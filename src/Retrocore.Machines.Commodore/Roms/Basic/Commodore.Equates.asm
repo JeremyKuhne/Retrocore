@@ -9,8 +9,10 @@
 ;; <INPUT_BUFFER_LENGTH>=80, <NULL_COMMAND>=1, <FULL_STACK_TOP>=1, <STACK_RESERVE_19>=1, <TERMINAL_FIRST>=1,
 ;; <LOCAL_TERMINAL_POSITION>=1, <VARIABLE_LIST_IN_LINE_NUMBER>=1, <CLOCK_IN_PAGE2>=1, <STATUS_IN_PAGE2>=1,
 ;; <RND_TIMER_9044>=1 and <ERROR_PADDING5>=1 before including this file. For either BASIC 4 revision, set
-;; <DISK_STATUS_STRING>=1, <LINE_WIDTH_STORAGE>=0 and <EXTENDED_DISK_VECTORS>=1 instead. The chip revisions change
-;; code, not this workspace. Layouts that overlap kernal storage are rejected.
+;; <DISK_STATUS_STRING>=1, <LINE_WIDTH_STORAGE>=0 and <EXTENDED_DISK_VECTORS>=1 instead. For the VIC-20, set
+;; <INPUT_BUFFER_LENGTH>=89, <LINE_WIDTH_STORAGE>=0, <OUTPUT_SUPPRESSION_FLAG>=0, <CONVERSION_VECTORS>=1,
+;; <CURSOR_COLUMN_FROM_PLOT>=1, <STANDARD_KERNAL>=1, <BASIC_RAM_VECTORS>=1 and <NUMBERED_ERRORS>=1. The chip revisions
+;; change code, not this workspace. Layouts that overlap kernal storage are rejected.
 ;;
 ;; The layout follows the <REALIO>=3 build of Microsoft's m6502.asm with the Basic1.mac, Basic2.mac and Basic4.mac
 ;; overlays. The names follow the assembly style guide; each definition lists Microsoft's name and those of
@@ -93,6 +95,9 @@ ERROR_PADDING5 = 0
 EXTENDED_DISK_VECTORS = 0
 .endif
 
+; The VIC-20's switches, which the modules read too.
+.include "Commodore.Switches.asm"
+
 .ifndef STACK_LEVELS
 .if STACK_RESERVE_19
 ;; Stack reserve, counted in two-byte levels.
@@ -137,21 +142,30 @@ STACK_END = $01FB
 .assert RND_TIMER_9044 = 0 || RND_TIMER_9044 = 1, "RND_TIMER_9044 is 0 or 1."
 .assert ERROR_PADDING5 = 0 || ERROR_PADDING5 = 1, "ERROR_PADDING5 is 0 or 1."
 .assert EXTENDED_DISK_VECTORS = 0 || EXTENDED_DISK_VECTORS = 1, "EXTENDED_DISK_VECTORS is 0 or 1."
+.assert CURSOR_COLUMN_FROM_PLOT = 0 || LOCAL_TERMINAL_POSITION + TERMINAL_FIRST = 0, "PLOT needs the later layout."
+.assert OUTPUT_SUPPRESSION_FLAG = 1 || TERMINAL_FIRST = 0, "BASIC 1's workspace keeps the output-suppression flag."
+.assert STANDARD_KERNAL = 0 || CLOCK_IN_PAGE2 + STATUS_IN_PAGE2 = 0, "The standard kernal has its own clock and status."
+.assert STANDARD_KERNAL = 0 || EXTENDED_DISK_VECTORS = 0, "The standard kernal has no disk-command jump table."
 
 ; Sizes and terminal constants from the Microsoft build.
 ;; Number of temporary string descriptors.
 ;; Also: NUMTMP (M6502)
 TEMPORARY_COUNT = 3
 
+.ifndef LINE_LENGTH
 ;; Default terminal line width.
 ;; Also: LINLEN (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 LINE_LENGTH = 40
+.endif
 
+.ifndef ZONE_WIDTH
 ;; Width of a print zone.
 ;; Also: CLMWID (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 ZONE_WIDTH = 10
+.endif
 
-;; Column beyond which there are no more print zones.
+;; Column beyond which there are no more print zones. No code uses it: the VIC-20's listing (BV20) leaves its NCMPOS at
+;; the 40-column screen's 30.
 ;; Also: NCMPOS (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 LAST_COMMA_COLUMN = ((LINE_LENGTH / ZONE_WIDTH) - 1) * ZONE_WIDTH
 
@@ -171,6 +185,17 @@ RAM_ORIGIN = $0400
 ;; Three-byte writable jump used by `USR`.
 ;; Also: USRPOK (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 UserVector = $00
+.if CONVERSION_VECTORS
+;; The address of the routine that converts <Fac> to a signed two-byte integer in A and Y, high byte first, for machine
+;; code to call: start-up points it at <FacToSignedWord>.
+;; Also: ADRAY1 (BV20)
+FloatToIntegerVector = UserVector + 3
+
+;; The address of the routine that converts the signed two-byte integer in A and Y, high byte first, to a number in
+;; <Fac>, for machine code to call: start-up points it at <ReturnSignedWord>.
+;; Also: ADRAY2 (BV20)
+IntegerToFloatVector = FloatToIntegerVector + 2
+.endif
 .if TERMINAL_FIRST
 ;; Current logical channel number.
 ;; Also: CHANNL (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R), CHANL (K4S79, HVK4)
@@ -178,7 +203,7 @@ CurrentChannel = UserVector + 3
 .else
 ;; Current logical channel number, after the flags.
 ;; Also: CHANNL (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R), CHANL (K4S79, HVK4)
-CurrentChannel = TangentSign + 2 + 2 * DISK_STATUS_STRING
+CurrentChannel = TangentSign + 1 + 3 * DISK_STATUS_STRING + OUTPUT_SUPPRESSION_FLAG * (1 - DISK_STATUS_STRING)
 .endif
 .if NULL_COMMAND
 ;; Number of `NULL` characters to print.
@@ -193,6 +218,10 @@ TerminalPosition = CurrentChannel + 1 + NULL_COMMAND
 ;; Early screen editor's cursor column, used when <TerminalPosition> wraps.
 ;; Also: CQPNTR (UNKN)
 EditorCursorColumn = $E2
+.elseif CURSOR_COLUMN_FROM_PLOT
+;; The cursor's column, which `TAB` reads through <KernalPlot> and keeps here while it evaluates its argument.
+;; Also: TRMPOS (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+TerminalPosition = EndDelimiter + 1
 .else
 ;; Screen editor's terminal position.
 ;; Also: TRMPOS (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
@@ -235,9 +264,9 @@ Delimiter = InputBuffer + INPUT_BUFFER_LENGTH
 Delimiter = LineNumber + 2
 .endif
 .else
-;; Delimiter character after the `USR` jump.
+;; Delimiter character after the `USR` jump and any conversion vectors.
 ;; Also: CHARAC (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
-Delimiter = UserVector + 3
+Delimiter = UserVector + 3 + 4 * CONVERSION_VECTORS
 .endif
 ;; One-byte integer result, sharing <Delimiter>.
 ;; Also: INTEGR (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
@@ -247,9 +276,15 @@ SmallInteger = Delimiter
 ;; Also: ENDCHR (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 EndDelimiter = Delimiter + 1
 
+.if STANDARD_KERNAL
+;; 0 while `LOAD` runs, 1 while `VERIFY` does: the mode <KernalLoad> is called with, and how BASIC finishes.
+;; Also: VERCK (BV20)
+LoadVerifyFlag = EndDelimiter + 1 + CURSOR_COLUMN_FROM_PLOT
+.endif
+
 ;; General counter.
 ;; Also: COUNT (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
-Counter = EndDelimiter + 1
+Counter = EndDelimiter + 1 + CURSOR_COLUMN_FROM_PLOT + STANDARD_KERNAL
 
 ;; Array-dimensioning flag: set while `DIM` is defining arrays.
 ;; Also: DIMFLG (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R), KIMY (M6502)
@@ -286,7 +321,7 @@ TangentSign = InputMode + 1
 ;; Three-byte DS$ disk-status string descriptor.
 ;; Also: DSDESC (CBM4S79, K4S79, HV4, HV4R, HVK4)
 DiskStatusDescriptor = TangentSign + 1
-.else
+.elseif OUTPUT_SUPPRESSION_FLAG
 ;; Output-suppression flag.
 ;; Also: CNTWFL (M6502, HV1, HV1R, HV2)
 OutputSuppressed = TangentSign + 1
@@ -535,7 +570,7 @@ DecimalExponent = DestinationStart + 1
 DecimalPointSeen = SourceStart
 
 ;; Decimal exponent sign flag, sharing the second byte of <SourceStart>.
-;; Also: EXPSGN (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: EXPSGN (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R), EPSGN (BV20)
 ExponentSign = SourceStart + 1
 
 ; Unpacked floating-point accumulators and reused string scratch.
@@ -621,7 +656,7 @@ ResultSign = ArgSign + 1
 FacExtension = ResultSign + 1
 
 ;; Two-byte string or descriptor pointer, sharing <ResultSign> and <FacExtension>.
-;; Also: STRNG1 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: STRNG1 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R), STRNGI (BV20)
 StringPointer = ResultSign
 
 ;; Two-byte numeric-output pointer, shared with <TokenizePointer>, <SecondStringPointer>, <PolynomialPointer> and
@@ -686,6 +721,13 @@ NumberBuffer = NumberBufferPrefix + 1
 ;; BASIC 4's kernal listings (K4S79, HVK4) call it `TIME` at its page-zero location, a name the builds give a switch.
 ;; Also: CQTIMR (M6502), CTIMR (CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 JiffyClock = $0200
+.elseif STANDARD_KERNAL
+;; Three-byte clock in the standard kernal's page zero. BASIC reads and sets it through <KernalReadClock> and
+;; <KernalSetClock>.
+;;
+;; The kernal listings (K4S79, HVK4) call it `TIME`, a name the builds give a switch.
+;; Also: CQTIMR (M6502), CTIMR (CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+JiffyClock = $A0
 .else
 ;; Three-byte clock in page zero.
 ;;
@@ -699,6 +741,11 @@ JiffyClock = $8D
 ;; BASIC 4's kernal listings call it `SATUS` at its page-zero location.
 ;; Also: CQSTAT (M6502), CSTAT (CBM4S79, HV1, HV1R, HV2, HV4, HV4R), SATUS (K4S79, HVK4)
 IoStatus = $020C
+.elseif STANDARD_KERNAL
+;; I/O status byte in the standard kernal's page zero. BASIC reads it through <KernalReadStatus>.
+;;
+;; Also: CQSTAT (M6502), CSTAT (CBM4S79, HV1, HV1R, HV2, HV4, HV4R), SATUS (K4S79, HVK4)
+IoStatus = $90
 .else
 ;; I/O status byte in page zero.
 ;;
@@ -722,7 +769,7 @@ RandomTimer = $E844
 .endif
 .if LOCAL_TERMINAL_POSITION
 .assert RandomValue + 5 <= EditorCursorColumn, "The BASIC workspace must not overlap the editor's cursor column."
-.else
+.elseif CURSOR_COLUMN_FROM_PLOT = 0
 .assert RandomValue + 5 <= TerminalPosition, "The BASIC workspace must not overlap the editor's terminal position."
 .endif
 .if INPUT_BUFFER_PAGE = 2
@@ -735,6 +782,154 @@ RandomTimer = $E844
 .endif
 .assert STACK_END - NumberBuffer > 2 * STACK_LEVELS + 16, "STACK_LEVELS's stack reserve must fit above NumberBuffer."
 
+.if BASIC_RAM_VECTORS
+; BASIC's RAM vectors at $0300: six of BASIC's routines jump through these, so a program can put its own in front of
+; them. Start-up points each at the ROM's routine, the `Default` entry of the routine that jumps through it.
+;; Where <ReportError> goes, with the error's number in X.
+;; Also: IERROR (BV20)
+ErrorVector = $0300
+
+;; Where <CommandLoop> goes to read the next line typed.
+;; Also: IMAIN (BV20)
+CommandLoopVector = ErrorVector + 2
+
+;; Where <Tokenize> goes to turn a typed line's keywords into tokens.
+;; Also: ICRNCH (BV20)
+TokenizeVector = CommandLoopVector + 2
+
+;; Where `LIST` goes to print a character or token of a program line.
+;; Also: IQPLOP (BV20)
+ListTokenVector = TokenizeVector + 2
+
+;; Where <ExecuteStatement> goes to run the statement at the text pointer.
+;; Also: IGONE (BV20)
+StatementVector = ListTokenVector + 2
+
+;; Where <EvaluateOperand> goes to read an operand: a number, a variable, a function or a bracketed expression.
+;; Also: IEVAL (BV20)
+OperandVector = StatementVector + 2
+
+;; The accumulator `SYS` loads before it calls, and keeps when the routine returns.
+;; Also: SAREG (BV20)
+SysAccumulator = OperandVector + 2
+
+;; The X register `SYS` loads before it calls, and keeps when the routine returns.
+;; Also: SXREG (BV20)
+SysX = SysAccumulator + 1
+
+;; The Y register `SYS` loads before it calls, and keeps when the routine returns.
+;; Also: SYREG (BV20)
+SysY = SysX + 1
+
+;; The status register `SYS` loads before it calls, and keeps when the routine returns.
+;; Also: SPREG (BV20)
+SysStatus = SysY + 1
+.endif
+
+.if STANDARD_KERNAL
+; The standard kernal's jump table, the entries BASIC calls, named as the VIC-20 kernal's source names them. Their
+; contracts are the kernal's; the old names are BASIC's (BV20) and Microsoft's.
+;; Sets which messages the kernal prints: bit 7 of A for the control messages, bit 6 for the errors.
+;; Also: SETMSG (BV20)
+KernalSetMessages = $FF90
+
+;; The bit of <KernalSetMessages>' mode that turns on the control messages, such as SEARCHING and LOADING, which BASIC
+;; wants in direct mode.
+KERNAL_CONTROL_MESSAGES = $80
+
+;; Returns the top of the RAM for BASIC in X/Y, with carry set, or sets it from X/Y, with carry clear.
+KernalMemoryTop = $FF99
+
+;; Returns the bottom of the RAM for BASIC in X/Y, with carry set, or sets it from X/Y, with carry clear.
+KernalMemoryBottom = $FF9C
+
+;; Returns the status of the last input or output in A.
+;; Also: READST (BV20)
+KernalReadStatus = $FFB7
+
+;; Sets the logical file number (A), the device (X) and the secondary address (Y) for OPEN, LOAD and SAVE.
+KernalSetFile = $FFBA
+
+;; Sets the file name for OPEN, LOAD and SAVE: A characters at X/Y.
+KernalSetFileName = $FFBD
+
+;; Opens the logical file that <KernalSetFile> and <KernalSetFileName> described; carry set on an error, code in A.
+KernalOpen = $FFC0
+
+;; Closes logical file A; carry set on an error, code in A.
+KernalClose = KernalOpen + 3
+
+;; Makes logical file X the input channel; carry set on an error, code in A.
+KernalSelectInput = KernalClose + 3
+
+;; Makes logical file X the output channel; carry set on an error, code in A.
+KernalSelectOutput = KernalSelectInput + 3
+
+;; Puts input back to the keyboard and output to the screen.
+;; Also: CQCCHN (M6502), CCCHN (CBM4S79, HV1, HV1R, HV2, HV4, HV4R), CLSCHN (CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+KernalResetChannels = KernalSelectOutput + 3
+
+;; Reads a character from the input channel into A; carry set on an error, code in A.
+;; Also: CQINCH (M6502), CINCH (CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+KernalCharacterIn = KernalResetChannels + 3
+
+;; Writes the character in A to the output channel; carry set on an error, code in A.
+KernalCharacterOut = KernalCharacterIn + 3
+
+;; Loads (A = 0) or verifies (A = 1) the file <KernalSetFile> and <KernalSetFileName> described, at X/Y when the
+;; secondary address is 0; returns the end address in X/Y, or carry set on an error, code in A.
+KernalLoad = KernalCharacterOut + 3
+
+;; Saves memory from the address in the zero-page pair at A up to X/Y; carry set on an error, code in A.
+KernalSave = KernalLoad + 3
+
+;; Sets the jiffy clock from A (the lowest byte), X and Y (the highest).
+;; Also: SETTIM (BV20)
+KernalSetClock = KernalSave + 3
+
+;; Reads the jiffy clock into A (the lowest byte), X and Y (the highest).
+;; Also: RDTIM (BV20)
+KernalReadClock = KernalSetClock + 3
+
+;; Tests the STOP key: zero set while it is down. BASIC calls it through <CheckStop>.
+KernalTestStopKey = KernalReadClock + 3
+
+;; Gets a character from the input channel without waiting, 0 when there is none; carry set on an error, code in A.
+;; BASIC calls it through <GetCharacter>.
+KernalGetInput = KernalTestStopKey + 3
+
+;; Forgets every open file and resets the channels.
+;; Also: CQCALL (M6502), CCALL (CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+CloseAllFiles = KernalGetInput + 3
+
+;; Reads the cursor's row and column into X and Y, with carry set, or moves the cursor there, with carry clear.
+;; Also: PLOT (BV20)
+KernalPlot = $FFF0
+
+;; Returns the address of the I/O, the first VIA's, in X/Y.
+;; Also: RDBAS (BV20)
+KernalIoBase = $FFF3
+
+;; What RS-232's OPEN and CLOSE return in A, with carry set, after moving the top of memory to X/Y for their buffers:
+;; not an error, but a signal that BASIC's own top has moved.
+KERNAL_MEMORY_TOP_MOVED = $F0
+
+;; <IoStatus>: bytes that `VERIFY` found different (and, on tape, bytes that both copies of a block had wrong).
+STATUS_SECOND_PASS_ERROR = $10
+
+;; The Datasette's device number, the default for `LOAD`, `SAVE` and `OPEN`.
+DEVICE_TAPE = 1
+
+;; The screen's device number; this and the devices above it are not tape or RS-232.
+DEVICE_SCREEN = 3
+
+;; The offset, from the address <KernalIoBase> returns, of the first VIA's timer 1 counter, whose two bytes `RND(0)`
+;; reads.
+VIA_TIMER1_LOW = 4
+
+;; The offset of the first VIA's timer 2 counter, whose two bytes `RND(0)` also reads.
+VIA_TIMER2_LOW = 8
+.else
 ; PET kernal jump table, named as Microsoft's BASIC calls its entries.
 ;; Execute BASIC's OPEN.
 ;; Also: CQOPEN (M6502), COPEN (CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
@@ -794,6 +989,7 @@ GetCharacter = CheckStop + 3
 ;; Close all open channels.
 ;; Also: CQCALL (M6502), CCALL (CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 CloseAllFiles = GetCharacter + 3
+.endif
 
 .if EXTENDED_DISK_VECTORS
 ; BASIC 4's jump table (CBM4S79, HV4, HV4R) names these entries CONCAT, DOPEN, DCLOSE, RECORD, FORMAT, COLECT, BACKUP,

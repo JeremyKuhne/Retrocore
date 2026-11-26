@@ -211,8 +211,9 @@ ReadTableByte:
 ;; Parameters: tableMode = 0 for direct indexed, 1 for <Pointer1> indirect, 2 for <Fac> indirect with page carry;
 ;;   trackQuotes = 1 to print high-bit characters inside quotes literally;
 ;;   literalPi = 1 to print the PI character literally;
-;;   spaceWords = 1 to output spaces before and after each expanded word
-.macro ListTokens tableMode, trackQuotes, literalPi, spaceWords
+;;   spaceWords = 1 to output spaces before and after each expanded word;
+;;   vector = optional, the RAM vector <Statements::List::CheckToken> jumps through first (the VIC-20's)
+.macro ListTokens tableMode, trackQuotes, literalPi, spaceWords, vector
     .assert tableMode >= 0 && tableMode <= 2, "tableMode must be 0, 1 or 2."
     .assert trackQuotes = 0 || trackQuotes = 1, "trackQuotes must be 0 or 1."
     .assert literalPi = 0 || literalPi = 1, "literalPi must be 0 or 1."
@@ -221,11 +222,18 @@ ReadTableByte:
 ;; Prints a stored character or expands a token using <ReservedWords>.
 ;;
 ;; The high bit marks the last byte of each reserved word. In table mode 0 Y wraps after 256 table bytes;
-;; the two indirect modes can walk farther. Tokens are not checked against the end of the table.
+;; the two indirect modes can walk farther. Tokens are not checked against the end of the table. Where the build
+;; passes `vector` (the VIC-20), it jumps through it first, to `CheckTokenDefault` unless a program has changed it.
 ;; In: A = nonzero stored byte, Y = offset in the current line, negative = bit 7 of A
 ;; See: <Statements::List::NextLine>, <PrintCharacter>
 ;; Also: QPLOP (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 CheckToken:
+    .ifnblank vector
+        jmp (vector)
+
+;; The ROM's <Statements::List::CheckToken>, where the RAM vector points unless a program changes it.
+CheckTokenDefault:
+    .endif
     bpl ListCharacter
     .if literalPi
         cmp #PI

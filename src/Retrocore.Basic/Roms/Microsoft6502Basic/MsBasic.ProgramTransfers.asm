@@ -41,10 +41,23 @@ Done:
 
 ;; Emits STOP, END and CONT.
 ;; Parameters: lineNumberDirect = 1 to detect direct execution through <CurrentLine>, 0 through the text-pointer page;
-;;   clearOutput = 1 to clear the output-suppression flag as the program stops, with or without the break message
-.macro StopAndContinue lineNumberDirect, clearOutput
+;;   clearOutput = 1 to clear the output-suppression flag as the program stops, with or without the break message;
+;;   stopTest = optional, the operating system's STOP-key test, for a <CheckStop> of BASIC's own that calls it and
+;;   falls into `STOP` (the VIC-20's)
+.macro StopAndContinue lineNumberDirect, clearOutput, stopTest
     .assert lineNumberDirect = 0 || lineNumberDirect = 1, "lineNumberDirect is 0 or 1."
     .assert clearOutput = 0 || clearOutput = 1, "clearOutput is 0 or 1."
+
+    .ifnblank stopTest
+        ;; Tests the STOP key, between statements, and falls into <Statements::Stop>: with the key down, the program
+        ;; stops at BREAK. The kernal's test leaves zero set while the key is down, and carry set then too.
+        ;; See: <Statements::StopOrEnd>
+        ;; Also: ISCNTC (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
+        .proc CheckStop
+        jsr stopTest
+        ; Falls into Statements::Stop.
+        .endproc
+    .endif
 
     .scope Statements continued
 
@@ -148,7 +161,9 @@ Done:
 .endmacro
 
 ;; Emits the <Statements::Run> statement entry.
-.macro RunStatement
+;; Parameters: setMessages = optional, the operating system's message switch, called with 0 to turn its messages off
+;;   while the program runs (the VIC-20's)
+.macro RunStatement setMessages
 
     .scope Statements continued
 
@@ -159,6 +174,12 @@ Done:
     ;; See: <ResetProgramState>, <ClearVariables>, <Statements::GoSub::Transfer>
     ;; Also: RUN (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
     .proc Run
+    .ifnblank setMessages
+        php
+        lda #$00                    ; no messages
+        jsr setMessages
+        plp
+    .endif
     bne WithLine
     jmp ResetProgramState
 
@@ -172,8 +193,9 @@ WithLine:
 .endmacro
 
 ;; Emits the <Statements::GoSub> and <Statements::GoTo> entries.
-;; Parameters: nextStatement = entry that resumes the statement loop after the transfer
-.macro GosubAndGoto nextStatement
+;; Parameters: nextStatement = entry that resumes the statement loop after the transfer;
+;;   wholeLineCompare = optional, 1 to search on from the current line whenever the target is above it (the VIC-20's)
+.macro GosubAndGoto nextStatement, wholeLineCompare
 
     .scope Statements continued
 
@@ -219,8 +241,21 @@ Transfer:
     .proc GoTo
     jsr ReadLineNumber
     jsr FindLineEnd
-    lda CurrentLine+1
-    cmp LineNumber+1
+    .ifnblank wholeLineCompare
+        .if wholeLineCompare
+            sec
+            lda CurrentLine
+            sbc LineNumber
+            lda CurrentLine+1
+            sbc LineNumber+1
+        .else
+            lda CurrentLine+1
+            cmp LineNumber+1
+        .endif
+    .else
+        lda CurrentLine+1
+        cmp LineNumber+1
+    .endif
     bcs SearchFromStart
     tya
     sec

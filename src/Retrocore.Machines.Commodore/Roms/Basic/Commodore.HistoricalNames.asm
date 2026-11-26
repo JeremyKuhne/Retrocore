@@ -2,11 +2,12 @@
 ;; COMMODORE BASIC: COMMODORE'S NAMES OF SHARED DEFINITIONS
 ;;
 ;; Commodore's names, and the names Microsoft's source gives only in its Commodore builds, for definitions of the
-;; shared Microsoft modules. They resolve only in the PET builds that include this file. Each entry is an alias in
-;; <Commodore> that inherits its target's documentation and gives the names in its `Also:` section, citing the
+;; shared Microsoft modules. They resolve only in the PET and VIC-20 builds that include this file. Each entry is an
+;; alias in <Commodore> that inherits its target's documentation and gives the names in its `Also:` section, citing the
 ;; documents by their keys in docs/Bibliography.md: Microsoft's source (M6502), Commodore's BASIC 4 listing of July
 ;; 23, 1979 (CBM4S79), and Martin Hoffmann-Vetter's reconstructions of each PET BASIC (HV1, HV1R, HV2, HV4, HV4R),
-;; each for its own build and, under the lineage rule, for the same definition in the other PET builds. In CBM4S79,
+;; each for its own build and, under the lineage rule, for the same definition in the other PET builds, and
+;; Commodore's listing of the VIC-20's BASIC (BV20) for the entries only that build has. In CBM4S79,
 ;; SQR05 and SQR20 are in code18, TENC in code19, N0999, N9999 and NMIL in code22, and RMULC and RADDC in code25;
 ;; COPYC is in code6, STRD in code14, and CHRD, LEFTD, RIGHTD and MIDD in code16. The room check and the classic
 ;; collector's steps also have Microsoft's names here (M6502), since BASIC 4 gives those names to other steps, and so
@@ -275,6 +276,28 @@ ReleaseSkipLink = Strings::ReleaseDescriptor::SkipLink
 ;; Inherit: <Strings::ReleaseDescriptor::ReadDescriptor>
 ;; Also: FRE02 (CBM4S79, HV4, HV4R)
 ReleaseReadDescriptor = Strings::ReleaseDescriptor::ReadDescriptor
+.endif
+
+; The VIC-20's BASIC (BV20): the shared entries only its build has.
+.ifdef ClearVariables::AfterClose
+;; Inherit: <ClearVariables::AfterClose>
+;; Also: CLEART (BV20)
+ClearVariablesAfterClose = ClearVariables::AfterClose
+.endif
+.ifdef Statements::List::CheckTokenDefault
+;; Inherit: <Statements::List::CheckTokenDefault>
+;; Also: NQPLOP (BV20)
+CheckTokenDefault = Statements::List::CheckTokenDefault
+.endif
+.ifdef EvaluateOperand::Default
+;; Inherit: <EvaluateOperand::Default>
+;; Also: NEVAL (BV20)
+EvaluateOperandDefault = EvaluateOperand::Default
+.endif
+.ifdef FacToSignedWord
+;; Inherit: <FacToSignedWord>
+;; Also: FLPINT (BV20)
+FloatToInteger = FacToSignedWord
 .endif
 
 

@@ -19,16 +19,37 @@ namespace Retrocore.Media.Commodore;
 ///   1,000,000 Hz.
 ///  </para>
 ///  <para>
-///   Images are written as version 1 for the PET, so a byte is 8 µs. MAME reads every TAP image at the C64's PAL
-///   clock, so it plays a PET image 1.5% slow, which Commodore's loaders allow.
+///   Images are written as version 1 for the machine that recorded them: for the PET a byte is 8 µs, for the VIC-20
+///   8 of its cycles. MAME reads every TAP image at the C64's PAL clock, so it plays a PET image 1.5% slow and a
+///   VIC-20 one up to 3.7% slow, which Commodore's loaders allow.
 ///  </para>
 /// </remarks>
 public static class TapFormat
 {
     /// <summary>
+    ///  The machine byte of a C64 image.
+    /// </summary>
+    public const byte C64Machine = 0;
+
+    /// <summary>
+    ///  The machine byte of a VIC-20 image.
+    /// </summary>
+    public const byte Vic20Machine = 1;
+
+    /// <summary>
     ///  The machine byte of a PET image.
     /// </summary>
     public const byte PetMachine = 3;
+
+    /// <summary>
+    ///  The video byte of a PAL machine's image.
+    /// </summary>
+    public const byte Pal = 0;
+
+    /// <summary>
+    ///  The video byte of an NTSC machine's image.
+    /// </summary>
+    public const byte Ntsc = 1;
 
     /// <summary>
     ///  The longest pulse an image holds, in microseconds: a zero's three bytes of cycles, about 16.8 seconds.
@@ -99,37 +120,43 @@ public static class TapFormat
                 if (cycles == 0) { continue; }
             }
 
-            pulses.Add((int)Math.Max(1, Math.Round(cycles * 1_000_000 / clock)));
+            pulses.Add(Math.Max(1, Microseconds(cycles, clock)));
         }
 
         return new(pulses);
     }
 
     /// <summary>
-    ///  Writes pulses as a version 1 TAP image for the PET: a byte of 8 µs units for a pulse up to 2,040 µs, and a
-    ///  zero and the exact length for a longer one or one that is not a multiple of 8.
+    ///  Writes pulses as a version 1 TAP image for a machine: a byte of 8 cycles' units where that reads back as the
+    ///  same pulse, and otherwise a zero and the length in cycles. For the PET, whose cycle is a microsecond, that is
+    ///  a byte for a multiple of 8 µs up to 2,040 µs.
     /// </summary>
     /// <remarks>
     ///  <para>
-    ///   A pulse longer than <see cref="LongestPulse"/> is written as that; <see cref="CommodoreTapeCodec"/> lists it
-    ///   as a loss.
+    ///   The PET's and the VIC-20's cycles are no longer than a microsecond, so their images hold each pulse exactly.
+    ///   A pulse longer than <see cref="Longest"/> is written as that; <see cref="CommodoreTapeCodec"/> lists it as a
+    ///   loss.
     ///  </para>
     /// </remarks>
     /// <param name="pulses">The pulses, in microseconds.</param>
+    /// <param name="machine">The header's machine byte, such as <see cref="PetMachine"/>.</param>
+    /// <param name="video">The header's video byte, <see cref="Pal"/> or <see cref="Ntsc"/>.</param>
     /// <returns>The image.</returns>
-    public static byte[] Write(IReadOnlyList<int> pulses)
+    public static byte[] Write(IReadOnlyList<int> pulses, byte machine = PetMachine, byte video = Pal)
     {
         ArgumentNullException.ThrowIfNull(pulses);
+        double clock = Clock(machine, video);
         List<byte> data = [];
         foreach (int pulse in pulses)
         {
-            if (pulse % 8 == 0 && pulse / 8 is > 0 and < 256)
+            long cycles = Math.Min((long)Math.Round(pulse * clock / 1_000_000), 0xFF_FFFF);
+            long units = (long)Math.Round(cycles / 8.0);
+            if (units is > 0 and < 256 && Microseconds(units * 8, clock) == pulse)
             {
-                data.Add((byte)(pulse / 8));
+                data.Add((byte)units);
             }
             else
             {
-                int cycles = Math.Min(pulse, LongestPulse);
                 data.Add(0);
                 data.Add((byte)cycles);
                 data.Add((byte)(cycles >> 8));
@@ -140,17 +167,34 @@ public static class TapFormat
         byte[] image = new byte[HeaderLength + data.Count];
         Signature.CopyTo(image);
         image[12] = 1;
-        image[13] = PetMachine;
+        image[13] = machine;
+        image[14] = video;
         BinaryPrimitives.WriteUInt32LittleEndian(image.AsSpan(16), (uint)data.Count);
         data.CopyTo(image, HeaderLength);
         return image;
     }
 
-    private static double Clock(byte machine, byte video) => machine switch
+    /// <summary>
+    ///  Gets the longest pulse a machine's image holds, in microseconds: a zero's three bytes of cycles.
+    /// </summary>
+    /// <param name="machine">The header's machine byte.</param>
+    /// <param name="video">The header's video byte.</param>
+    /// <returns>The length: <see cref="LongestPulse"/> for the PET, about 15-16 seconds for the others.</returns>
+    public static int Longest(byte machine, byte video) => Microseconds(0xFF_FFFF, Clock(machine, video));
+
+    /// <summary>
+    ///  Gets the clock a header names, in hertz.
+    /// </summary>
+    /// <param name="machine">The header's machine byte.</param>
+    /// <param name="video">The header's video byte.</param>
+    /// <returns>The clock: the C64's for a machine byte it does not know.</returns>
+    public static double Clock(byte machine, byte video) => machine switch
     {
-        1 => video == 1 ? 1_022_730 : 1_108_405,
-        2 => video == 1 ? 894_886 : 886_724,
+        Vic20Machine => video == Ntsc ? 1_022_730 : 1_108_405,
+        2 => video == Ntsc ? 894_886 : 886_724,
         PetMachine => 1_000_000,
-        _ => video == 1 ? 1_022_730 : 985_248
+        _ => video == Ntsc ? 1_022_730 : 985_248
     };
+
+    private static int Microseconds(long cycles, double clock) => (int)Math.Round(cycles * 1_000_000 / clock);
 }

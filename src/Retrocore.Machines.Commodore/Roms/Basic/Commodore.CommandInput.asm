@@ -6,9 +6,13 @@
 ; BASIC 1      1                    0, 0, 0, 0            1, 0                    0, 1
 ; BASIC 2      1                    1, 1, 1, 0            0, 0                    0, 0
 ; BASIC 4      0                    1, 1, 1, 1            0, 1                    1, 0
-; Both revisions of BASIC 1 and BASIC 4 use their version's same settings. The next entry is FindLine.
+; VIC-20       0                    1, 1, 1, 0            0, 1                    0, 0
+; Both revisions of BASIC 1 and BASIC 4 use their version's same settings. The next entry is FindLine. The workspace's
+; <BASIC_RAM_VECTORS>, <NUMBERED_ERRORS> and <STANDARD_KERNAL> select the VIC-20's code: the jumps through the RAM
+; vectors, the numbered messages and the kernal's calls.
 
 .include "../../Microsoft6502Basic/MsBasic.CommandCore.asm"
+.include "Commodore.Switches.asm"
 
 ;; Emits error reporting and the READY prompt: <ReportOutOfMemory>, <ReportError> and <ReadyForCommand>, which falls
 ;; into the <CommandLoop> that <CommodoreCommandLoop> emits next.
@@ -25,16 +29,36 @@
 
     ;; Restores the default channels when one is selected and prints the error, then returns to the command prompt.
     ;;
-    ;; Where `clearSuppression` is 1 (BASIC 1 and 2), it first clears the output-suppression flag.
-    ;; In: X = the message's offset in <ErrorMessages>
+    ;; Where `clearSuppression` is 1 (BASIC 1 and 2), it first clears the output-suppression flag. With
+    ;; <BASIC_RAM_VECTORS> (the VIC-20), it jumps through `ErrorVector`, to its `Default` entry unless a program has
+    ;; changed the vector; with <NUMBERED_ERRORS>, X is the error's number, its message is found through
+    ;; `ErrorMessageAddresses`, and the channels are reset whether or not one is selected.
+    ;; In: X = the message's offset in `ErrorMessages`, or with <NUMBERED_ERRORS> the error's number
     ;; See: <KernalResetChannels>, <PrintCharacter>, <ReportMessage>
     ;; Also: ERROR (M6502, K4S79, HV1, HV1R, HV2, HV4, HV4R, HVK4, CBM4S79)
     .proc ReportError
+    .if BASIC_RAM_VECTORS
+        jmp (ErrorVector)
+
+;; The ROM's error handler, where <ErrorVector> points unless a program changes it.
+;; Also: NERROR (BV20)
+Default:
+    .endif
     .if clearSuppression
         lsr OutputSuppressed
     .endif
-    lda CurrentChannel
-    beq PrintMessage
+    .if NUMBERED_ERRORS
+        txa
+        asl a
+        tax
+        lda ErrorMessageAddresses-2,x
+        sta Pointer1
+        lda ErrorMessageAddresses-1,x
+        sta Pointer1+1
+    .else
+        lda CurrentChannel
+        beq PrintMessage
+    .endif
     jsr KernalResetChannels
     lda #$00
     sta CurrentChannel
@@ -44,15 +68,26 @@
 PrintMessage:
     jsr PrintNewline
     jsr PrintQuestionMark
+    .if NUMBERED_ERRORS
+        ldy #$00
+    .endif
 
 ;; Prints the message's characters until the one with bit 7 set, then falls into <ReportError::AddErrorSuffix>.
 ;; Also: GETERR (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 NextCharacter:
-    lda ErrorMessages,x
+    .if NUMBERED_ERRORS
+        lda (Pointer1),y
+    .else
+        lda ErrorMessages,x
+    .endif
     pha
     and #$7F
     jsr PrintCharacter
-    inx
+    .if NUMBERED_ERRORS
+        iny
+    .else
+        inx
+    .endif
     pla
     bpl NextCharacter
     ErrorFinish
@@ -62,7 +97,8 @@ NextCharacter:
 
     ;; Prints the READY message and falls into <CommandLoop>.
     ;;
-    ;; Where `clearSuppression` is 1 (BASIC 1 and 2), it first clears the output-suppression flag.
+    ;; Where `clearSuppression` is 1 (BASIC 1 and 2), it first clears the output-suppression flag. With
+    ;; <STANDARD_KERNAL> (the VIC-20), it then turns the kernal's control messages on, for direct mode.
     ;; See: <CommandLoop>
     ;; Also: READY (M6502, K4S79, HV1, HV1R, HV2, HV4, HV4R, HVK4, CBM4S79)
     .proc ReadyForCommand
@@ -72,6 +108,10 @@ NextCharacter:
     lda #<ReadyMessage
     ldy #>ReadyMessage
     jsr PrintText
+    .if STANDARD_KERNAL
+        lda #KERNAL_CONTROL_MESSAGES
+        jsr KernalSetMessages
+    .endif
     ; Falls into CommandLoop.
     .endproc
 .endmacro
@@ -92,9 +132,18 @@ NextCharacter:
     ;; Reads and executes a direct command, or inserts, replaces or deletes a numbered program line.
     ;;
     ;; Where `resetBeforeInsert` is 1 (BASIC 2 and 4), a new line first clears the variables and relinks the program.
+    ;; With <BASIC_RAM_VECTORS> (the VIC-20), it jumps through `CommandLoopVector`, to its `Default` entry unless a
+    ;; program has changed the vector.
     ;; See: <InputLine>, <Tokenize>, <FindLine>, <LinkProgram>
     ;; Also: MAIN (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
     .proc CommandLoop
+    .if BASIC_RAM_VECTORS
+        jmp (CommandLoopVector)
+
+;; The ROM's command loop, where <CommandLoopVector> points unless a program changes it.
+;; Also: NMAIN (BV20)
+Default:
+    .endif
     jsr InputLine
     stx TextPointer
     sty TextPointer+1
@@ -243,7 +292,8 @@ Return:
     ;; Reads a carriage-return-terminated line into <InputBuffer>.
     ;;
     ;; Where `checkedInput` is 1 (BASIC 4), it reports STRING TOO LONG when it fills the buffer. The earlier readers
-    ;; rely on the editor's limit and continue until carriage return or an eight-bit index wrap.
+    ;; rely on the editor's limit and continue until carriage return or an eight-bit index wrap. With
+    ;; <STANDARD_KERNAL> (the VIC-20), it reads through `CheckedCharacterIn`, which reports the kernal's errors.
     ;; Out: X/Y = address before <InputBuffer> after <FinishInputLine>
     ;; Errors: STRING TOO LONG for a full buffer where `checkedInput` is 1
     ;; Entry:
@@ -255,7 +305,9 @@ Return:
 ;; Reads and stores the next character.
 ;; Also: INLINC (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 NextCharacter:
-    .if checkedInput
+    .if checkedInput && STANDARD_KERNAL
+        jsr CheckedCharacterIn
+    .elseif checkedInput
         jsr KernalCharacterIn
     .else
         jsr InputCharacter
@@ -272,7 +324,11 @@ StoreCharacter:
     inx
     .if checkedInput
         cpx #INPUT_BUFFER_LENGTH
-        bne NextCharacter
+        .if STANDARD_KERNAL
+            bcc NextCharacter
+        .else
+            bne NextCharacter
+        .endif
         ldx #<ERROR_STRING_TOO_LONG
         jmp ReportError
     .else
@@ -329,13 +385,21 @@ Return:
     ;; ends a `DATA` field and `?` abbreviates `PRINT`. High-bit characters other than pi are discarded outside
     ;; quoted strings and `REM` text, including in an unquoted `DATA` field. Where `skipKeywordSpaces` is 1
     ;; (BASIC 1), the walker ignores spaces within a word; where `indirectTable` is 1 (BASIC 4), it walks the table
-    ;; through <Pointer1>.
+    ;; through <Pointer1>. With <BASIC_RAM_VECTORS> (the VIC-20), it jumps through `TokenizeVector`, to its `Default`
+    ;; entry unless a program has changed the vector.
     ;; In: TextPointer = the first character's address, whose low byte is its offset in <InputBuffer>'s page
     ;; Out: TextPointer = address before <InputBuffer>, Y = encoded line length including the link and line-number
     ;;   header
     ;; See: <Statements::List>
     ;; Also: CRUNCH (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
     .proc Tokenize
+    .if BASIC_RAM_VECTORS
+        jmp (TokenizeVector)
+
+;; The ROM's tokenizer, where <TokenizeVector> points unless a program changes it.
+;; Also: NCRNCH (BV20)
+Default:
+    .endif
     ldx TextPointer
     ldy #$04                        ; the stores, to InputBuffer-5,y after an increment, start at InputBuffer
     sty TokenizeState

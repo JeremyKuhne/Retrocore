@@ -2,6 +2,7 @@
 ; COMMODORE BASIC: GET AND INPUT CHANNELS
 
 .include "../../Microsoft6502Basic/MsBasic.Families.asm"
+.include "Commodore.Switches.asm"
 
 ;; Emits `GET`, `INPUT#` and the channel release: <Statements::Get>, <Statements::InputNumber> and <RestoreChannels>.
 ;; Parameters: bufferPage = zero for a page-zero input buffer, or the nonzero buffer page
@@ -10,7 +11,8 @@
 
     .scope Statements continued
 
-    ;; `GET`: reads characters into the variable list, from a numbered input channel when `#` follows.
+    ;; `GET`: reads characters into the variable list, from a numbered input channel when `#` follows. With
+    ;; <STANDARD_KERNAL> (the VIC-20), it records the channel first and selects it through `CheckedSelectInput`.
     ;; Errors: ILLEGAL DIRECT when used in direct mode
     ;; Also: GET (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
     .proc Get
@@ -21,8 +23,13 @@
     jsr EvaluateByte
     lda #','
     jsr CheckCharacter
-    jsr KernalSelectInput
-    stx CurrentChannel
+    .if STANDARD_KERNAL
+        stx CurrentChannel
+        jsr CheckedSelectInput
+    .else
+        jsr KernalSelectInput
+        stx CurrentChannel
+    .endif
 
 ;; Sets up an empty buffer, reads through the shared input code in GET mode, then releases a selected channel.
 ;; Also: GETTTY (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
@@ -43,13 +50,19 @@ ReadCharacters:
     .endproc
 
     ;; `INPUT#`: selects the input channel, runs INPUT from its direct-mode check, then falls into <RestoreChannels>.
+    ;; With <STANDARD_KERNAL> (the VIC-20), it records the channel first and selects it through `CheckedSelectInput`.
     ;; Also: INPUTN (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
     .proc InputNumber
     jsr EvaluateByte
     lda #','
     jsr CheckCharacter
-    jsr KernalSelectInput
-    stx CurrentChannel
+    .if STANDARD_KERNAL
+        stx CurrentChannel
+        jsr CheckedSelectInput
+    .else
+        jsr KernalSelectInput
+        stx CurrentChannel
+    .endif
     jsr Statements::Input::CheckDirect
     ; Falls into RestoreChannels.
     .endproc
@@ -79,8 +92,10 @@ Release:
 ;;   statusMask = channel error bits;
 ;;   revisedEof = 1 to use the revised BASIC 4 end-of-file helper;
 ;;   editorPatch = 1 to use the BASIC 1 editor-ROM stop helper;
-;;   localStopLabel = 1 to define the blank-line stop, `StopEmptyInput`, here (BASIC 4)
-.macro CommodoreInputStatement clearSuppression, statusMask, revisedEof, editorPatch, localStopLabel
+;;   localStopLabel = 1 to define the blank-line stop, `StopEmptyInput`, here (BASIC 4);
+;;   blankSkips = optional, 1 (when given) for a blank terminal line to skip the rest of the statement rather than stop
+;;   the program (the VIC-20's)
+.macro CommodoreInputStatement clearSuppression, statusMask, revisedEof, editorPatch, localStopLabel, blankSkips
     .assert clearSuppression = 0 || clearSuppression = 1, "clearSuppression is 0 or 1."
     .assert statusMask = 2 || statusMask = 3, "statusMask is 2 or 3."
     .assert revisedEof = 0 || revisedEof = 1, "revisedEof is 0 or 1."
@@ -95,7 +110,8 @@ Release:
     ;; An optional quoted prompt is printed first. Terminal input receives a question-mark prompt and a blank line stops
     ;; the program; a file error releases the channel and skips to the next statement. Where `revisedEof` is 1 (the
     ;; revised BASIC 4), its patch `HandleBlankInput`, in BASIC's patch area, takes the blank-line and end-of-file
-    ;; handling.
+    ;; handling. Where the build passes `blankSkips` (the VIC-20), a blank terminal line skips the rest of the statement
+    ;; instead, and the channel's status comes from `KernalReadStatus` (with <STANDARD_KERNAL>).
     ;; Entry:
     ;;   CheckDirect = rejects direct mode and puts a comma before the buffer; <Statements::InputNumber> enters here
     ;;   ReadLine = reads a line and checks the channel's status; the revised BASIC 4's `HandleBlankInput` re-enters
@@ -126,7 +142,11 @@ ReadLine:
     jsr PromptAndInputLine
     lda CurrentChannel
     beq CheckEmpty
-    lda IoStatus
+    .if STANDARD_KERNAL
+        jsr KernalReadStatus
+    .else
+        lda IoStatus
+    .endif
     and #statusMask
     beq CheckEmpty
     jsr RestoreChannels
@@ -144,7 +164,12 @@ CheckEmpty:
         lda CurrentChannel
         bne ReadLine
     .endif
-    .if editorPatch
+    .ifnblank blankSkips
+        .assert blankSkips = 1, "blankSkips is 1 when given."
+        .assert editorPatch + localStopLabel + revisedEof = 0, "A blank line either skips or stops."
+        jsr FindStatementEnd
+        jmp AdvanceTextPointer
+    .elseif editorPatch
         jmp StopEmptyInput
     .elseif localStopLabel
         ; Falls into StopEmptyInput, except in the revised BASIC 4, which jumped to HandleBlankInput.

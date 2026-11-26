@@ -2,6 +2,7 @@
 ; COMMODORE BASIC: CLOCK-STRING ASSIGNMENT
 
 .include "../../Microsoft6502Basic/MsBasic.Families.asm"
+.include "Commodore.Switches.asm"
 
 ;; The number of digits a `TI$` assignment takes: hours, minutes and seconds, two digits each.
 CLOCK_STRING_LENGTH = 6
@@ -18,7 +19,8 @@ CLOCK_STRING_LENGTH = 6
     ;; The reserved variables' values are in ROM, in <ZeroValue>'s page, so a destination there is `TI$` (the only
     ;; reserved string variable). The string must be six characters, `HHMMSS`; it is converted to 60 Hz ticks
     ;; (sixtieths of a second), and the low three bytes of the integer are stored in <JiffyClock>
-    ;; with interrupts off, so the clock interrupt never sees half of the new value. The value is not checked against
+    ;; with interrupts off, so the clock interrupt never sees half of the new value (with <STANDARD_KERNAL>, the
+    ;; VIC-20's, by the kernal's SETTIM). The value is not checked against
     ;; 24 hours: `TI$ = "999999"` sets the clock past a day. Nor are the digits checked as digits: <ClassifyCharacter>
     ;; is the reader's entry after its colon test, so it takes every byte from `0` up for a digit, with the value of
     ;; its distance from `0` (`A` counts 17), and rejects only the bytes below `0`. A space it skips by going on to
@@ -75,18 +77,25 @@ SkipScale:
     bne NextPair
     jsr Float::MultiplyByTen
     jsr Float::ToLongInteger
-    ldx #$02
-    sei
+    .if STANDARD_KERNAL
+        ldx FacMantissa3
+        ldy FacMantissa2
+        lda FacMantissa4
+        jmp KernalSetClock
+    .else
+        ldx #$02
+        sei
 
 ;; Stores the integer's three low bytes in <JiffyClock>, interrupts off.
 ;; Also: TIMEST (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 StoreClock:
-    lda FacMantissa2,x
-    sta JiffyClock,x
-    dex
-    bpl StoreClock
-    cli
-    rts
+        lda FacMantissa2,x
+        sta JiffyClock,x
+        dex
+        bpl StoreClock
+        cli
+        rts
+    .endif
 
     ;; Adds the digit at <Pointer1>+Y to <Fac>: any byte from `0` up, counted from `0`
     ;; (see <AssignClockString>).

@@ -54,7 +54,7 @@ public sealed class BasicWorkspaceConversionTests
     // Apple's Monitor and IIe manuals, which AppleSoft's definitions of the Monitor's routines cite.
     private static readonly string[] s_monitorKeys = ["A2RM78", "A2RM79", "IIEROM82", "IIETRM85"];
     private static readonly string[] s_commodoreKeys =
-        ["M6502", "UNKN", "CBM4S79", "K4S79", "HV1", "HV1R", "HV2", "HV4", "HV4R", "HVK4"];
+        ["M6502", "UNKN", "CBM4S79", "K4S79", "HV1", "HV1R", "HV2", "HV4", "HV4R", "HVK4", "BV20"];
 
     // The SDK's own names, which no document and no overlay gives: the switches, the stack page and the layouts.
     private static readonly HashSet<string> s_sdkNames =
@@ -62,7 +62,9 @@ public sealed class BasicWorkspaceConversionTests
         "Stack", "Variable", "ArrayHeader", "StringDescriptor", "ForFrame", "GosubFrame", "OperatorEntry",
         "ProgramLine", "FunctionDefinition", "TERMINAL_FIRST", "FULL_STACK_TOP", "STACK_RESERVE_19", "LOCAL_TERMINAL_POSITION", "LINE_WIDTH_STORAGE",
         "DISK_STATUS_STRING", "VARIABLE_LIST_IN_LINE_NUMBER", "CLOCK_IN_PAGE2", "STATUS_IN_PAGE2", "RND_TIMER_9044",
-        "ERROR_PADDING5", "EXTENDED_DISK_VECTORS", "FLOAT_SIZE", "DEFAULT_BOUND"
+        "ERROR_PADDING5", "EXTENDED_DISK_VECTORS", "FLOAT_SIZE", "DEFAULT_BOUND", "SQR_PATCH_SPACE",
+        "UNSPACED_LINE_NUMBERS", "CONVERSION_VECTORS", "CURSOR_COLUMN_FROM_PLOT", "OUTPUT_SUPPRESSION_FLAG",
+        "STANDARD_KERNAL", "BASIC_RAM_VECTORS", "NUMBERED_ERRORS", "COMMODORE_SWITCHES_DEFINED"
     ];
 
     /// <summary>

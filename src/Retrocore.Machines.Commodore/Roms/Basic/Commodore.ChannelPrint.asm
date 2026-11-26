@@ -2,6 +2,7 @@
 ; COMMODORE BASIC: OUTPUT CHANNEL SELECTION, CHARACTER OUTPUT AND PRINT SPACING
 
 .include "../../Microsoft6502Basic/MsBasic.Families.asm"
+.include "Commodore.Switches.asm"
 
 ;; The carriage return, which ends a line on every channel.
 ;; Also: CR (K4S79, HVK4)
@@ -31,7 +32,9 @@ DELETE_CHARACTER = $14
     jmp RestoreChannels
     .endproc
 
-    ;; `CMD`: selects an output channel and prints any following items; the channel stays selected.
+    ;; `CMD`: selects an output channel and prints any following items; the channel stays selected. With
+    ;; <STANDARD_KERNAL> (the VIC-20), it records the channel first and selects it through `CheckedSelectOutput`, which
+    ;; reports the kernal's error.
     ;; Out: CurrentChannel = the selected logical channel
     ;; See: <KernalSelectOutput>
     ;; Also: CMD (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
@@ -45,8 +48,13 @@ DELETE_CHARACTER = $14
 ;; Also: SAVEIT (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 SelectChannel:
     php
-    jsr KernalSelectOutput
-    stx CurrentChannel
+    .if STANDARD_KERNAL
+        stx CurrentChannel
+        jsr CheckedSelectOutput
+    .else
+        jsr KernalSelectOutput
+        stx CurrentChannel
+    .endif
     plp
     jmp Statements::Print
     .endproc
@@ -101,8 +109,9 @@ CursorRight:
     ;; Sends A to the selected output channel unless output is suppressed.
     ;;
     ;; Where `localPosition` is 1 (BASIC 1), it tracks the screen column itself and calls its editor-ROM patch on an
-    ;; advance. Where `honorSuppression` is 0 (BASIC 4), output is never suppressed. Every build sets zero from A before
-    ;; returning.
+    ;; advance. Where `honorSuppression` is 0 (BASIC 4 and the VIC-20), output is never suppressed. With
+    ;; <STANDARD_KERNAL>, it sends through `CheckedCharacterOut`, which reports the kernal's error. Every build sets
+    ;; zero from A before returning.
     ;; In: A = character
     ;; Out: A = the character if output is suppressed, else the output routine's result, zero = set when A is zero
     ;; See: <KernalCharacterOut>
@@ -150,10 +159,15 @@ RestoreCharacter:
         pla
     .endif
 
-;; Sends the character through <KernalCharacterOut>; nothing branches here, and the label is kept for its old name.
+;; Sends the character through <KernalCharacterOut>, or `CheckedCharacterOut`; nothing branches here, and the label is
+;; kept for its old name.
 ;; Also: OUTLOC (M6502)
 Send:
-    jsr KernalCharacterOut
+    .if STANDARD_KERNAL
+        jsr CheckedCharacterOut
+    .else
+        jsr KernalCharacterOut
+    .endif
 
 ;; Sets zero from A and returns; where output can be suppressed, suppressed output branches here.
 ;; Also: OUTRTS (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
@@ -172,12 +186,13 @@ Return:
 ;; Emits input-line completion and the newline entries: <FinishInputLine> and <PrintNewline>.
 ;; Parameters: bufferPage = zero for a page-zero input buffer, or the nonzero buffer page;
 ;;   localPosition = 1 to maintain <TerminalPosition> in BASIC rather than the editor;
-;;   channelLineFeed = 1 to emit a line feed only for channels with bit 7 set;
+;;   channelLineFeed = 1 to emit a line feed only for channels with bit 7 set, 2 to test the bit with `BIT`, keeping A
+;;   the carriage return;
 ;;   nullPadding = 1 to emit the configured NULL characters after a newline
 .macro CommodoreLineEnd bufferPage, localPosition, channelLineFeed, nullPadding
     .assert bufferPage >= 0 && bufferPage <= 255, "bufferPage must fit in a byte."
     .assert localPosition = 0 || localPosition = 1, "localPosition is 0 or 1."
-    .assert channelLineFeed = 0 || channelLineFeed = 1, "channelLineFeed is 0 or 1."
+    .assert channelLineFeed >= 0 && channelLineFeed <= 2, "channelLineFeed is 0, 1 or 2."
     .assert nullPadding = 0 || nullPadding = 1, "nullPadding is 0 or 1."
 
     ;; Terminates an input line, and prints a newline only for terminal input.
@@ -203,7 +218,8 @@ Return:
     ;; Prints a carriage return and the line feed and padding this build needs.
     ;;
     ;; Where `localPosition` is 1 (BASIC 1), the screen's return also resets the column; where `channelLineFeed` is 1
-    ;; (BASIC 4), only a channel with bit 7 set gets the line feed; where `nullPadding` is 1 (BASIC 1), it sends
+    ;; (BASIC 4) or 2 (the VIC-20, testing with `BIT`), only a channel with bit 7 set gets the line feed, so the
+    ;; complement at the end is of the line feed or, with 2, of the return; where `nullPadding` is 1 (BASIC 1), it sends
     ;; as many zero bytes as its null-padding count holds, and the other builds complement A instead.
     ;; Entry:
     ;;   Finish = finishes the newline (padding, column, or A complemented); the shared <PrintString> enters here
@@ -221,7 +237,10 @@ Return:
 SendReturn:
     lda #CARRIAGE_RETURN
     jsr PrintCharacter
-    .if channelLineFeed
+    .if channelLineFeed = 2
+        bit CurrentChannel
+        bpl Finish
+    .elseif channelLineFeed
         lda CurrentChannel
         bpl Finish
     .endif
@@ -271,10 +290,17 @@ Return:
 .macro CommodorePrintSpacing tokenDispatch
     .assert tokenDispatch = 0 || tokenDispatch = 1, "tokenDispatch is 0 or 1."
 
-    ;; PRINT's comma: prints spaces to the next <ZONE_WIDTH> zone from <TerminalPosition>.
+    ;; PRINT's comma: prints spaces to the next <ZONE_WIDTH> zone from <TerminalPosition>, or with
+    ;; <CURSOR_COLUMN_FROM_PLOT> (the VIC-20) from the cursor's column, which it reads through `KernalPlot`.
     ;; Also: COMPRT (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
     .proc PrintComma
-    lda TerminalPosition
+    .if CURSOR_COLUMN_FROM_PLOT
+        sec
+        jsr KernalPlot
+        tya
+    .else
+        lda TerminalPosition
+    .endif
 
 ;; Starts the zone's modulus; nothing branches here, and the label is kept for its old name.
 ;; Also: MORCOM (M6502)
@@ -295,7 +321,8 @@ SubtractZone:
     ;; (`SPC`), and falls into <PrintSpaces>.
     ;;
     ;; Where `tokenDispatch` is 1 (BASIC 1), it tells them apart by the token it saved, and `SPC(0)` prints 256 spaces;
-    ;; the later builds tell them apart by carry, and print none.
+    ;; the later builds tell them apart by carry, and print none. With <CURSOR_COLUMN_FROM_PLOT> (the VIC-20), it first
+    ;; reads the cursor's column through `KernalPlot` into <TerminalPosition>.
     ;; In: A = the token where `tokenDispatch` is 1; carry = set for `TAB`, clear for `SPC`, where it is 0
     ;; Errors: SYNTAX if the closing parenthesis is missing
     ;; Also: TABER (M6502, HV1, HV1R, HV2, HV4, HV4R, CBM4S79)
@@ -314,6 +341,11 @@ SubtractZone:
         beq PrintSpaces::ContinuePrint
     .else
         php
+        .if CURSOR_COLUMN_FROM_PLOT
+            sec
+            jsr KernalPlot
+            sty TerminalPosition
+        .endif
         jsr SkipAndEvaluateByte
         cmp #')'
         bne HandleBadInput::ToSyntaxError

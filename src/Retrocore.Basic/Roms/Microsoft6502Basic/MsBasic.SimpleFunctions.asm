@@ -8,8 +8,10 @@
 ; These entries follow array multiplication and precede the user-defined-function code.
 
 ;; Emits the free-space, position and integer-to-float entries.
-;; Parameters: setCarry = 1 to set carry before the <ReturnByte> branch, 0 to leave it unchanged
-.macro SimpleFunctions setCarry
+;; Parameters: setCarry = 1 to set carry before the <ReturnByte> branch, 0 to leave it unchanged;
+;;   cursorRead = optional, the operating system's routine that returns the cursor's column in Y when called with carry
+;;   set, for `POS` to call instead of reading <TerminalPosition> (the VIC-20's PLOT)
+.macro SimpleFunctions setCarry, cursorRead
     .assert setCarry = 0 || setCarry = 1, "setCarry must be 0 or 1."
 
     .scope Functions continued
@@ -55,7 +57,12 @@ Collect:
     ;; Returns the current text output column in <Fac>.
     ;; Also: POS (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
     .proc Pos
-    ldy TerminalPosition
+    .ifnblank cursorRead
+        sec
+        jsr cursorRead
+    .else
+        ldy TerminalPosition
+    .endif
     .endproc
     .endscope
 

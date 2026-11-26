@@ -37,7 +37,7 @@ public sealed class BasicStatementsConversionTests
 
     // The documents a vendor's file may cite: its vendor's, Microsoft's source, and UNKN.
     private static readonly string[] s_appleKeys = ["M6502", "UNKN", "ASTIL", "AS82", "ASRM78"];
-    private static readonly string[] s_commodoreKeys = ["M6502", "UNKN", "CBM4S79", "HV1", "HV1R", "HV2", "HV4", "HV4R"];
+    private static readonly string[] s_commodoreKeys = ["M6502", "UNKN", "CBM4S79", "HV1", "HV1R", "HV2", "HV4", "HV4R", "BV20"];
 
     // The definitions in the converted files that give no overlay name of their own: the families' guard, the
     // labels only the SDK names (CONT1 was the SDK's own; RUN's and FN's branch targets were *+5), and the labels

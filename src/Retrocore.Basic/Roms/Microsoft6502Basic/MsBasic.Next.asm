@@ -8,8 +8,10 @@
 ;; Emits <Statements::Next>, which steps the <ForFrame> that `FOR` pushed (a five-byte step, its sign and a five-byte
 ;; packed limit), and the expression and type checks that follow it.
 ;; Parameters: countedStack = 1 to advance X through the frame, 0 to calculate the offsets in A;
-;;   nextStatement = the platform's continuation after <Statements::Next>
-.macro NextEntries countedStack, nextStatement
+;;   nextStatement = the platform's continuation after <Statements::Next>;
+;;   jumpToError = optional, 1 (when given) to report NEXT WITHOUT FOR by a jump to <ReportError>, for error numbers in
+;;   which it is not 0 (the VIC-20's)
+.macro NextEntries countedStack, nextStatement, jumpToError
     .assert countedStack = 0 || countedStack = 1, "countedStack must be 0 or 1."
 
     .scope Statements continued
@@ -44,10 +46,16 @@ SearchFrame:
     ldx #<ERROR_NEXT_WITHOUT_FOR
 
 ;; With zero set, relays to <RequireType::ToError>, as for NEXT WITHOUT FOR (offset 0) and for `READ`'s input path
-;; (<AssignVariableList>), which branches here with `beq`; with zero clear, falls into <AddStep>.
+;; (<AssignVariableList>), which branches here with `beq`; with zero clear, falls into <AddStep>. Where the build
+;; passes `jumpToError` (the VIC-20), only those paths come here, and it jumps to <ReportError>.
 ;; Also: ERRGO5 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 ToError:
-    beq RequireType::ToError
+    .ifnblank jumpToError
+        .assert jumpToError = 1, "jumpToError is 1 when given."
+        jmp ReportError
+    .else
+        beq RequireType::ToError
+    .endif
 
 ;; Sets the stack to the frame, adds <ForFrame::STEP> to the variable, stores, compares with <ForFrame::LIMIT> signed by
 ;; STEP_SIGN.

@@ -8,8 +8,9 @@
 ;; Emits the operand parser and syntax checks preceding variable-value handling.
 ;; Parameters: piToken = 1 to accept the single-byte PI constant (the PET), bitwiseNot = 1 for signed 16-bit NOT (the
 ;;   PET), 0 for Boolean NOT (AppleSoft), functionEntry = the entry a function token goes to: <CallFunction>, or
-;;   AppleSoft's SCRN check
-.macro OperandEvaluation piToken, bitwiseNot, functionEntry
+;;   AppleSoft's SCRN check; vector = optional, the RAM vector the routine jumps through first (the VIC-20's);
+;;   farVariable = optional, 1 to reach <EvaluateVariable> with a JMP rather than a branch
+.macro OperandEvaluation piToken, bitwiseNot, functionEntry, vector, farVariable
     .assert piToken = 0 || piToken = 1, "piToken is 0 or 1."
     .assert bitwiseNot = 0 || bitwiseNot = 1, "bitwiseNot is 0 or 1."
 
@@ -17,10 +18,18 @@
     ;;
     ;; A quoted literal falls into <ReadQuotedString>, a unary minus goes to <ApplyPrefixOperator>, and the other tokens
     ;; to <EvaluateTokenOperand>, which sends `NOT` to <ApplyPrefixOperator> and the rest to <EvaluateFunctionOperand>.
+    ;; Where the build gives `vector` (the VIC-20), the routine jumps through it first, to its `Default` entry unless a
+    ;; program has changed the vector.
     ;; In: TextPointer = character preceding the operand
     ;; Out: Fac = value or string descriptor, ValueType = result type, TextPointer = terminating character
     ;; Also: EVAL (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
     .proc EvaluateOperand
+    .ifnblank vector
+        jmp (vector)
+
+;; The ROM's operand evaluation, where the RAM vector points unless a program changes it.
+Default:
+    .endif
     lda #$00
     sta ValueType
 ;; Reads the next character; a unary plus comes back here.
@@ -37,7 +46,19 @@ ToParseNumber:
 ;; Also: EVAL2 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 NotDigit:
     jsr IsLetter
-    bcs EvaluateVariable
+    .ifnblank farVariable
+        .if farVariable
+            bcc NotLetter
+            jmp EvaluateVariable
+
+;; Not a letter: the `PI` token, a point, a quote or a token.
+NotLetter:
+        .else
+            bcs EvaluateVariable
+        .endif
+    .else
+        bcs EvaluateVariable
+    .endif
     .if piToken
         cmp #<TOKEN_PI
         bne CheckPoint
@@ -221,7 +242,8 @@ ToGetNextCharacter:
 .endmacro
 
 ;; Emits the integer-variable conversion path, falling through for floating-point variables.
-.macro IntegerVariableValue
+;; Parameters: keepX = optional, 1 (when given) to test <IntegerType> with `BIT`, keeping X (the VIC-20's)
+.macro IntegerVariableValue keepX
     ;; Loads an integer variable through <FacMantissa3> and converts it to floating point.
     ;; For a real variable it returns nothing: the code after it, in the vendor's file, loads the value.
     ;; In: IntegerType = negative for an integer variable, FacMantissa3 = the value's address (low byte),
@@ -229,7 +251,12 @@ ToGetNextCharacter:
     ;; Out: Fac = numeric value for an integer variable
     ;; Also: GOOO (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
     .proc LoadNumericVariable
-    ldx IntegerType
+    .ifnblank keepX
+        .assert keepX = 1, "keepX is 1 when given."
+        bit IntegerType
+    .else
+        ldx IntegerType
+    .endif
     bpl NotInteger
     ldy #$00
     lda (FacMantissa3),y

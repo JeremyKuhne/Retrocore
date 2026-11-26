@@ -6,8 +6,12 @@
 ; the function table contains actual entry addresses.
 
 .include "../../Microsoft6502Basic/MsBasic.OperatorTable.asm"
+.include "Commodore.NumberedErrors.asm"
+.include "Commodore.Switches.asm"
 
-;; Emits the Commodore statement, function and operator tables, reserved words and messages.
+;; Emits the Commodore statement, function and operator tables, reserved words and messages. With <STANDARD_KERNAL>
+;; (the VIC-20), `LOAD`, `SAVE`, `VERIFY`, `SYS`, `OPEN` and `CLOSE` are BASIC's own statements; with
+;; <NUMBERED_ERRORS>, the messages are `CommodoreNumberedErrors`' numbered ones.
 ;; Parameters: goToken = 1 to include the `GO` spelling; diskCommands = 1 to add the disk statements;
 ;;   badData = 1 for the early `BAD DATA` error, 0 for `FILE DATA`;
 ;;   singleReturn = 1 for a carriage return alone in `READY` and `BREAK`, 0 for `CR/LF`
@@ -41,9 +45,15 @@ StatementTable:
     .word Statements::Stop - 1
     .word Statements::On - 1
     .word Statements::Wait - 1
-    .word KernalLoad - 1
-    .word KernalSave - 1
-    .word KernalVerify - 1
+    .if STANDARD_KERNAL
+        .word Statements::Load - 1
+        .word Statements::Save - 1
+        .word Statements::Verify - 1
+    .else
+        .word KernalLoad - 1
+        .word KernalSave - 1
+        .word KernalVerify - 1
+    .endif
     .word Statements::Def - 1
     .word Statements::Poke - 1
     .word Statements::PrintNumber - 1
@@ -52,9 +62,15 @@ StatementTable:
     .word Statements::List - 1
     .word Statements::Clear - 1
     .word Statements::Cmd - 1
-    .word KernalSys - 1
-    .word KernalOpen - 1
-    .word KernalClose - 1
+    .if STANDARD_KERNAL
+        .word Statements::Sys - 1
+        .word Statements::Open - 1
+        .word Statements::Close - 1
+    .else
+        .word KernalSys - 1
+        .word KernalOpen - 1
+        .word KernalClose - 1
+    .endif
     .word Statements::Get - 1
     .word Statements::New - 1
     .if diskCommands
@@ -294,6 +310,10 @@ ReservedWords:
         .byte "DIRECTOR", 'Y' | $80
     .endif
     .byte $00
+    .if NUMBERED_ERRORS
+        CommodoreNumberedErrors
+        .exitmacro
+    .endif
 
 ;; Error messages addressed by the ERROR_* constants' byte offsets.
 ;; Bit 7 on the last character ends each message; <ReportError> appends <ErrorSuffix>.

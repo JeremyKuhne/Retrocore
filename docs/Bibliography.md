@@ -30,6 +30,10 @@ workspace adds documents of its own, or replaces a key, with the same columns.
 | HV4 | PET BASIC 4 (901465-19, -20, -21), reconstructed source | | Martin Hoffmann-Vetter | <https://github.com/mist64/cbmsrc/tree/01bd60f162ef92212ef0cb67546ae8f42be34168/BASIC_PET_V4_REC> |
 | HV4R | PET BASIC 4 revised (901465-23, -20, -21), reconstructed source | | Martin Hoffmann-Vetter | <https://github.com/mist64/cbmsrc/tree/01bd60f162ef92212ef0cb67546ae8f42be34168/BASIC_PET_V4R_REC> |
 | HVK4 | PET operating system 4.0 (901465-21, 901447-29, 901465-22), reconstructed source | | Martin Hoffmann-Vetter | <https://github.com/mist64/cbmsrc/tree/01bd60f162ef92212ef0cb67546ae8f42be34168/KERNAL_PET_4.0_REC> |
+| KV20 | VIC-20 kernal source, listing of October 9, 1980 | 1980 | Commodore | <https://github.com/mist64/cbmsrc/tree/01bd60f162ef92212ef0cb67546ae8f42be34168/KERNAL_VIC_04> |
+| BV20 | VIC-20 BASIC source, with revisions to March 6, 1981 | 1981 | Commodore | <https://github.com/mist64/cbmsrc/tree/01bd60f162ef92212ef0cb67546ae8f42be34168/BASIC_VIC> |
+| V20PRG | VIC-20 Programmer's Reference Guide, first edition, sixth printing | 1982 | Commodore | <https://archive.org/details/VIC-20ProgrammersReferenceGuide1stEdition6thPrinti> |
+| MTV | COMPUTE!'s Mapping the VIC, by Russ Davies | 1984 | COMPUTE! Books | <https://archive.org/details/Computes_Mapping_the_VIC> |
 | IIGSFR87 | Apple IIGS Firmware Reference | 1987 | Addison-Wesley | <https://archive.org/details/Apple_IIGS_Firmware_Reference_1987_Adn-Wesley_Publishing> |
 | MOUSETN | Apple II Technical Notes: Mouse #1-#7 (Developer Technical Support, revised 1985-1990) | 1990 | Apple Computer | <https://mirrors.apple2.org.za/Apple%20II%20Documentation%20Project/Interface%20Cards/Digitizers/Apple%20Mouse%20Interface%20Card/Documentation/Apple%20II%20Mouse%20Technical%20Notes.pdf> |
 | IICTRM89 | Apple IIc Technical Reference Manual, Second Edition | 1989 | Addison-Wesley | <https://archive.org/details/AppleIIcTechnicalReference2ndEd> |
@@ -64,6 +68,12 @@ where the check found that the document gives that name for that thing:
   cbmsrc's notes say the reconstructions of BASIC 1 carry Commodore's later names back to BASIC 1's code, so HV1's
   and HV1R's names are the reconstructor's, not Microsoft's or Commodore's of 1977.
 - **HVK4:** as the HV keys, at the BASIC 4 ROMs' addresses.
+- **KV20 and BV20:** assembled by a script, which puts each label where the ROMs have its code (901486-06 for the
+  kernal, 901486-01 for BASIC); a name is cited where its address or value equals the SDK build's. Where 901486-06
+  changed the listing's code, the ROM's code is what the source has, and the listing's names for code it removed are
+  given in prose.
+- **V20PRG and MTV:** only the archive's OCR text was searched. A name is cited where it appears beside its address,
+  in decimal or hexadecimal, allowing for the OCR's damage ($ read as S, O for 0).
 - **Lineage:** a definition that descends through a vendor's builds cites, in every build, each document of that line
   whose listing names it, including the other builds' documents; a document whose build lacks the definition stays out.
   Where a switch gives the builds different values (BUFPAG, BUFLEN, NUMLEV, STKEND, CTIMR, CSTAT, CHTIM, TIL), each

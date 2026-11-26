@@ -2,6 +2,7 @@
 ; COMMODORE BASIC: NEXT STATEMENT AND TOKEN DISPATCH
 
 .include "../../Microsoft6502Basic/MsBasic.Families.asm"
+.include "Commodore.Switches.asm"
 
 ;; Emits the next-statement fetcher: <NextStatement> and <ExecuteStatement>.
 ;; The workspace's <INPUT_BUFFER_PAGE> is the direct buffer's page: zero for page zero.
@@ -97,9 +98,25 @@ ReadLine:
 
     ;; Fetches a statement's first character, dispatches it with <DispatchStatement>, then continues at
     ;; <NextStatement>.
+    ;;
+    ;; With <BASIC_RAM_VECTORS> (the VIC-20), it jumps through `StatementVector`, to its `Default` entry unless a
+    ;; program has changed the vector.
     ;; Also: GONE (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
     .proc ExecuteStatement
+    .if BASIC_RAM_VECTORS
+        jmp (StatementVector)
+
+;; The ROM's statement execution, where <StatementVector> points unless a program changes it.
+;; Also: NGONE (BV20)
+Default:
+    .endif
     jsr fetchToken
+    .if BASIC_RAM_VECTORS
+
+;; Dispatches the statement; nothing branches here, and the label is kept for its old name.
+;; Also: NGONE1 (BV20)
+Dispatch:
+    .endif
     jsr DispatchStatement
     jmp NextStatement
     .endproc

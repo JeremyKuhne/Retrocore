@@ -94,11 +94,13 @@ public sealed class BasicSharedFloatAliasesTests
     };
 
     // The names whose aliases Commodore's file guards, so that only some builds define them: BASIC 4's lister names,
-    // and the names of the expression, variable and string modules' definitions, which the math region's build leaves
-    // out and BasicExpressionsConversionTests checks in the whole builds.
+    // the VIC-20's names for the entries only its build has, and the names of the expression, variable and string
+    // modules' definitions, which the math region's build leaves out and BasicExpressionsConversionTests checks in the
+    // whole builds.
     private static readonly HashSet<string> s_guardedNames =
     [
-        "RESCR2", "PRIT3B", .. BasicExpressionsConversionTests.CommodoreOldNames.Keys
+        "RESCR2", "PRIT3B", "CLEART", "NQPLOP", "NEVAL", "FLPINT",
+        .. BasicExpressionsConversionTests.CommodoreOldNames.Keys
     ];
 
     // Addresses in the independently assembled PET1, PET2 and PET4 listings:

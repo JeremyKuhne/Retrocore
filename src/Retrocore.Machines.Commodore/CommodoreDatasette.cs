@@ -9,43 +9,60 @@ using Retrocore.Media.Commodore;
 namespace Retrocore.Machines.Commodore;
 
 /// <summary>
-///  A Commodore C2N Datasette on one of the PET's cassette ports: PLAY, RECORD, STOP and the tape's position, the
-///  motor the PET runs, and the read and write lines.
+///  A Commodore C2N or 1530 Datasette on a cassette port: PLAY, RECORD, STOP and the tape's position, the motor the
+///  computer runs, and the read and write lines.
 /// </summary>
 /// <remarks>
 ///  <para>
-///   The sense line is low while PLAY is down, alone or with RECORD; the motor runs while the PET holds its line low.
-///   Playing, the read line falls at each pulse's start and rises halfway through. Recording, each rise of the write
-///   line ends a pulse and starts the next, as the read line then falls there, the Datasette inverting what it
+///   The sense line is low while PLAY is down, alone or with RECORD; the motor runs while the computer holds its line
+///   low. Playing, the read line falls at each pulse's start and rises halfway through. Recording, each rise of the
+///   write line ends a pulse and starts the next, as the read line then falls there, the Datasette inverting what it
 ///   records. A recording replaces the tape from the head on.
 ///  </para>
+///  <para>
+///   The tape's pulses are microseconds; the Datasette counts them in the computer's cycles, a microsecond on the PET
+///   and 0.98 or 0.90 of one on the VIC-20.
+///  </para>
 /// </remarks>
-public sealed class PetDatasette : ITapeDrive, IMediumSlot
+public sealed class CommodoreDatasette : ITapeDrive, IMediumSlot
 {
+    private readonly double _cyclesPerMicrosecond;
     private CommodoreTape? _tape;
     private string _label = "";
     private string _format = "";
     private TapeMode _mode;
     private int _index;
     private int _elapsed;
+    private int _length;
     private bool _write;
     private bool _recordingStarted;
 
     /// <summary>
     ///  Builds a Datasette for a port.
     /// </summary>
-    /// <param name="port">1 or 2.</param>
-    internal PetDatasette(int port)
+    /// <param name="id">The device's id, such as <c>cassette1</c>.</param>
+    /// <param name="name">Its name, such as <c>Cassette #1</c>.</param>
+    /// <param name="controller">The lines it is wired to.</param>
+    /// <param name="cpuHertz">The computer's clock, which counts the pulses.</param>
+    /// <param name="tapMachine">The machine byte of the TAP images it saves.</param>
+    /// <param name="tapVideo">Their video byte.</param>
+    internal CommodoreDatasette(
+        string id,
+        string name,
+        string controller,
+        double cpuHertz,
+        byte tapMachine = TapFormat.PetMachine,
+        byte tapVideo = TapFormat.Pal)
     {
-        Port = port;
-        Id = $"cassette{port}";
+        Id = id;
+        _cyclesPerMicrosecond = cpuHertz / 1_000_000;
+        TapMachine = tapMachine;
+        TapVideo = tapVideo;
         Info = new()
         {
-            Name = $"Cassette #{port}",
+            Name = name,
             Description = "Commodore C2N Datasette",
-            Controller = port == 1
-                ? "PIA 1: CA1 reads the tape, PA4 senses the keys, CB2 runs the motor; the VIA's PB3 writes"
-                : "The VIA: CB1 reads the tape, PB4 runs the motor, PB3 writes; PIA 1's PA5 senses the keys",
+            Controller = controller,
             Formats = ["tap", "wav"],
             SaveFormats = ["tap", "wav"],
             Operations = MediaOperations.Insert | MediaOperations.Eject | MediaOperations.Record | MediaOperations.Save
@@ -53,9 +70,14 @@ public sealed class PetDatasette : ITapeDrive, IMediumSlot
     }
 
     /// <summary>
-    ///  Gets the port, 1 or 2.
+    ///  Gets the machine byte of the TAP images the Datasette saves, whose clock they count.
     /// </summary>
-    public int Port { get; }
+    public byte TapMachine { get; }
+
+    /// <summary>
+    ///  Gets the video byte of the TAP images it saves.
+    /// </summary>
+    public byte TapVideo { get; }
 
     /// <inheritdoc/>
     public string Id { get; }
@@ -202,6 +224,7 @@ public sealed class PetDatasette : ITapeDrive, IMediumSlot
     {
         _index = 0;
         _elapsed = 0;
+        _length = 0;
         _recordingStarted = false;
         Read = true;
     }
@@ -216,6 +239,7 @@ public sealed class PetDatasette : ITapeDrive, IMediumSlot
         ArgumentOutOfRangeException.ThrowIfGreaterThan(pulse, _tape?.Pulses.Count ?? 0);
         _index = pulse;
         _elapsed = 0;
+        _length = 0;
         _recordingStarted = false;
     }
 
@@ -239,7 +263,7 @@ public sealed class PetDatasette : ITapeDrive, IMediumSlot
     }
 
     /// <summary>
-    ///  Advances the tape one CPU cycle, a microsecond.
+    ///  Advances the tape one CPU cycle.
     /// </summary>
     /// <param name="motor">Whether the motor runs.</param>
     /// <param name="write">The write line's level.</param>
@@ -263,16 +287,18 @@ public sealed class PetDatasette : ITapeDrive, IMediumSlot
                 return;
             }
 
-            int pulse = _tape.Pulses[_index];
-            if (++_elapsed >= pulse)
+            // A pulse's length in cycles, worked out as the head reaches it.
+            if (_length == 0) { _length = Math.Max(1, (int)Math.Round(_tape.Pulses[_index] * _cyclesPerMicrosecond)); }
+            if (++_elapsed >= _length)
             {
                 _index++;
                 _elapsed = 0;
+                _length = 0;
                 Read = _index >= _tape.Pulses.Count;
                 return;
             }
 
-            Read = _elapsed >= pulse / 2;
+            Read = _elapsed >= _length / 2;
         }
         else if (_mode == TapeMode.Recording)
         {
@@ -289,12 +315,13 @@ public sealed class PetDatasette : ITapeDrive, IMediumSlot
 
             if (_recordingStarted && _elapsed > 0)
             {
-                _tape.Record(_index, _elapsed);
+                _tape.Record(_index, Math.Max(1, (int)Math.Round(_elapsed / _cyclesPerMicrosecond)));
                 _index++;
             }
 
             _recordingStarted = true;
             _elapsed = 0;
+            _length = 0;
         }
     }
 }

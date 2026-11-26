@@ -210,3 +210,123 @@ LoadFloat:
     jmp Float::LoadFac
     .endproc
 .endmacro
+
+;; Emits the variable lookup and <LoadVariableValue> for the standard kernal: a reserved variable is one whose value is
+;; in BASIC's ROM, and `TI` and `ST` come from the kernal's `KernalReadClock` and `KernalReadStatus`.
+.macro CommodoreKernalVariableValue
+
+    ;; Tells whether the variable's value is in BASIC's ROM, as a reserved variable's and an undefined simple
+    ;; variable's are: from <ROM_ORIGIN> up to <CharacterReaderTemplate>. An array element's is in RAM, so `TI(1)` and
+    ;; `ST(1)` are ordinary.
+    ;; In: FacMantissa3 = the value's address (low byte), FacMantissa4 = its high byte
+    ;; Out: carry = set for an address in that range
+    ;; Keeps: X, Y
+    ;; Also: TSTROM (BV20)
+    .proc IsRomVariable
+    sec
+    lda FacMantissa3
+    sbc #<ROM_ORIGIN
+    lda FacMantissa4
+    sbc #>ROM_ORIGIN
+    bcc Return
+    lda #<CharacterReaderTemplate
+    sbc FacMantissa3
+    lda #>CharacterReaderTemplate
+    sbc FacMantissa4
+
+;; Returns.
+;; Also: TSTR10 (BV20)
+Return:
+    rts
+    .endproc
+
+    ;; Looks up the variable operand with <FindVariable> and falls into <LoadVariableValue>.
+    ;; Also: ISVAR (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
+    .proc EvaluateVariable
+    jsr FindVariable
+    ; Falls into LoadVariableValue.
+    .endproc
+
+    ;; Makes `TI$` a string, and otherwise leaves a string variable's descriptor address in <FacMantissa3> and
+    ;; <FacMantissa4>; loads `TI` and `ST` as numbers, and a numeric variable's value, into <Fac>.
+    ;; In: A = the value's address (low byte), Y = its high byte, VariableName = the variable's name, ValueType = its
+    ;;   type, IntegerType = negative for an integer variable
+    ;; Out: Fac = the numeric value; for a string, FacMantissa3 = its descriptor's address (low byte), FacMantissa4 =
+    ;;   its high byte
+    ;; Also: ISVRET (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
+    .proc LoadVariableValue
+    sta FacMantissa3
+    sty FacMantissa4
+    ldx VariableName
+    ldy VariableName+1
+    lda ValueType
+    beq LoadNumericVariable
+
+    ; A string: TI$ is the clock, as six digits.
+    lda #$00
+    sta FacExtension
+    jsr IsRomVariable
+    bcc Return
+    cpx #'T'
+    bne Return
+    cpy #('I'+$80)
+    bne Return
+    jsr ReadClock
+    sty DecimalExponent
+    dey
+    sty NumberBufferPointer
+    ldy #$06                        ; TI$'s six digits
+    sty DigitCount
+    ldy #<(Float::PowersOfTenEnd-Float::PowersOfTen)
+    jsr Float::FormatFacAtOffset::ExtractDigits
+    jmp Strings::FromNumberBuffer
+
+;; Returns with a string's descriptor address in <FacMantissa3> and <FacMantissa4>.
+;; Also: STRRTS (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
+Return:
+    rts
+
+    IntegerVariableValue 1
+
+    ; A real variable: TI and ST are the clock and the status.
+    jsr IsRomVariable
+    bcc LoadFloat
+    cpx #'T'
+    bne MatchStatus
+    cpy #'I'
+    bne LoadFloat
+    jsr ReadClock
+    tya
+    ldx #$A0                        ; the exponent of a 32-bit integer in the mantissa
+    jmp Float::ConvertMantissa
+
+;; Reads the jiffy clock through <KernalReadClock> into <Fac>'s low three mantissa bytes, with zero above them.
+;; Out: Y = 0
+;; Also: GETTIM (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
+ReadClock:
+    jsr KernalReadClock
+    stx FacMantissa3
+    sty FacMantissa2
+    sta FacMantissa4
+    ldy #$00
+    sty FacMantissa1
+    rts
+
+;; `ST` returns <KernalReadStatus>'s status as a number.
+;; Also: QSTATV (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
+MatchStatus:
+    cpx #'S'
+    bne LoadFloat
+    cpy #'T'
+    bne LoadFloat
+    jsr KernalReadStatus
+    jmp Float::ConvertSignedByte
+
+;; Moves the real variable into <Fac>.
+;; Also: GOMOVF (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
+LoadFloat:
+    lda FacMantissa3
+    ldy FacMantissa4
+    jmp Float::LoadFac
+    .endproc
+.endmacro

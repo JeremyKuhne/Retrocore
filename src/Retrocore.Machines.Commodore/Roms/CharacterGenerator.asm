@@ -1,4 +1,4 @@
-;; COMMODORE PET CHARACTER ROMS: THE 2001'S 901447-08 AND THE 2001-N'S 901447-10
+;; COMMODORE PET AND VIC-20 CHARACTER ROMS: THE 2001'S 901447-08, THE 2001-N'S 901447-10 AND THE VIC-20'S 901460-03
 ;;
 ;; The PET draws its 40 × 25 characters from a 2K character ROM: two sets of 128 characters, eight bytes each, one
 ;; a scanline from the top of the cell. Bit 7 of a row is its leftmost dot and a lit dot is 1. The VIA's CA2 picks
@@ -12,12 +12,27 @@
 ;; at $41-$5A. Its editor, BASIC 1's, stores an unshifted letter as $01-$1A in either set, so on a 2001 switched to
 ;; the second set the letters typed unshifted show as capitals and shifted ones as lowercase.
 ;;
-;; Assembles byte-identically to either chip: ORIGINAL selects the 2001's 901447-08 (1; 0, the default, for the
-;; 2001-N's 901447-10). Maintained by hand; the PetRomSourceTests digests check that both assemble byte-identically.
+;; The VIC-20's 4K chip, 901460-03, is the 901447-10's two sets with a pound sign, £, at $1C in place of the
+;; backslash, and each set followed by its reversed copy: the VIC chip has no reverse of its own, so the VIC-20's
+;; editor stores a reversed character as its code plus $80, which is the copy. Its sets are at $000-$7FF and
+;; $800-$FFF, which bit 1 of the VIC's register 5 picks.
+;;
+;; Assembles byte-identically to each chip: ORIGINAL selects the 2001's 901447-08 (1; 0, the default, for the
+;; 2001-N's 901447-10), and VIC20 the VIC-20's 901460-03 (1; 0, the default, for a PET's). Maintained by hand; the
+;; PetRomSourceTests and Vic20RomSourceTests digests check that each assembles byte-identically.
 
 .ifndef ORIGINAL
 ORIGINAL = 0
 .endif
+
+.ifndef VIC20
+VIC20 = 0
+.endif
+
+.assert ORIGINAL = 0 || VIC20 = 0, "The VIC-20's chip has the 901447-10's sets, not the 901447-08's."
+
+; 1 while ROW draws a set's reversed copy, with each dot lit and dark the other way round.
+Reversed .set 0
 
 ;; Starts a character: checks that it lands in its place in the set.
 ;;
@@ -27,12 +42,17 @@ ORIGINAL = 0
     .assert ((* >> 3) & $7F) = (code), "A GLYPH is out of order."
 .endmacro
 
-;; One row of dots: eight characters from left to right, # for a lit dot and . for a dark one.
+;; One row of dots: eight characters from left to right, # for a lit dot and . for a dark one; while a reversed copy
+;; is drawn, each dot is the other way round.
 ;;
 ;; Parameters: dots = the row
 .macro ROW dots
     .assert .strlen(dots) = 8, "A ROW has eight dots."
+.if Reversed
+    .byte $FF ^ (((.strat(dots, 0) = '#') << 7) | ((.strat(dots, 1) = '#') << 6) | ((.strat(dots, 2) = '#') << 5) | ((.strat(dots, 3) = '#') << 4) | ((.strat(dots, 4) = '#') << 3) | ((.strat(dots, 5) = '#') << 2) | ((.strat(dots, 6) = '#') << 1) | (.strat(dots, 7) = '#'))
+.else
     .byte ((.strat(dots, 0) = '#') << 7) | ((.strat(dots, 1) = '#') << 6) | ((.strat(dots, 2) = '#') << 5) | ((.strat(dots, 3) = '#') << 4) | ((.strat(dots, 4) = '#') << 3) | ((.strat(dots, 5) = '#') << 2) | ((.strat(dots, 6) = '#') << 1) | (.strat(dots, 7) = '#')
+.endif
 .endmacro
 
 ;; The capitals A-Z.
@@ -577,6 +597,17 @@ ORIGINAL = 0
     ROW "..####.."
     ROW "........"
 
+.if VIC20
+    GLYPH $1C    ; £
+    ROW "....##.."
+    ROW "...#...."
+    ROW "...#...."
+    ROW "..####.."
+    ROW "...#...."
+    ROW ".###...."
+    ROW ".##.###."
+    ROW "........"
+.else
     GLYPH $1C    ; \
     ROW "........"
     ROW ".#......"
@@ -586,6 +617,7 @@ ORIGINAL = 0
     ROW ".....#.."
     ROW "......#."
     ROW "........"
+.endif
 
     GLYPH $1D    ; ]
     ROW "..####.."
@@ -1643,7 +1675,8 @@ ORIGINAL = 0
 
 .org $0000
 
-; $000-$3FF: the first set, uppercase and graphics.
+;; The first set, uppercase and graphics.
+.macro FIRSTSET
     GLYPH $00    ; @
     ROW "...###.."
     ROW "..#...#."
@@ -1656,8 +1689,10 @@ ORIGINAL = 0
     UPPERCASE $01
     SIGNS
     GRAPHICS 0, 0
+.endmacro
 
-; $400-$7FF: the second set, with lowercase.
+;; The second set, with lowercase.
+.macro SECONDSET
     GLYPH $00    ; @
     ROW "...###.."
     ROW "..#...#."
@@ -1674,3 +1709,20 @@ ORIGINAL = 0
 .endif
     SIGNS
     GRAPHICS 1, 1 - ORIGINAL
+.endmacro
+
+.if VIC20
+; $000-$7FF: the first set and its reversed copy; $800-$FFF: the second set and its copy.
+    FIRSTSET
+Reversed .set 1
+    FIRSTSET
+Reversed .set 0
+    SECONDSET
+Reversed .set 1
+    SECONDSET
+Reversed .set 0
+.else
+; $000-$3FF: the first set, uppercase and graphics; $400-$7FF: the second set, with lowercase.
+    FIRSTSET
+    SECONDSET
+.endif

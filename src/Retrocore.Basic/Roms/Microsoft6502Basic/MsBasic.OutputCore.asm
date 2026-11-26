@@ -5,8 +5,11 @@
 
 ;; Emits the line-number and decimal-output routines.
 ;; Parameters: omitPositiveSpace = 1 to omit the leading space for positive values, otherwise 0
-;;   includeTime = 1 to use the time-conversion table, otherwise 0
-.macro DecimalOutput omitPositiveSpace, includeTime
+;;   includeTime = 1 to use the time-conversion table, otherwise 0;
+;;   keepY = optional, 1 (when given) for <Float::PrintFac> to call <Float::FormatFacAtOffset>, past the `LDY #1` of
+;;   <Float::FormatFac>, with the Y of 0 that <Float::PrintDecimalAX>'s conversion leaves, so that a line number prints
+;;   without the space for its sign (the VIC-20's)
+.macro DecimalOutput omitPositiveSpace, includeTime, keepY
 
     .assert omitPositiveSpace = 0 || omitPositiveSpace = 1, "omitPositiveSpace is 0 or 1."
     .assert includeTime = 0 || includeTime = 1, "includeTime is 0 or 1."
@@ -44,7 +47,12 @@
     ;; Entry:
     ;;   ToPrintString = Jumps on to <PrintText>, printing the string at Y:A
     .proc PrintFac
-    jsr FormatFac
+    .ifnblank keepY
+        .assert keepY = 1, "keepY is 1 when given."
+        jsr FormatFacAtOffset
+    .else
+        jsr FormatFac
+    .endif
 
 ;; Prints the string addressed by Y:A through <PrintText>.
 ;; Also: STROU2 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)

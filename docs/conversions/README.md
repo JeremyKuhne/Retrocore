@@ -19,5 +19,6 @@ in [AssemblyStyle.md](../AssemblyStyle.md).
 | Programmer's Aid #1 (`Roms/ProgrammersAid/`) | Converted | [ProgrammersAid.md](ProgrammersAid.md) |
 | The 3.5 disk controller (`Roms/Disk35/`, Apple's EPROM, and the emulator's `Roms/Disk35.rom.asm`) | Converted | [Disk35.md](Disk35.md) |
 | Apple III Business BASIC (`src/Retrocore.Machines.Apple3/Roms/BusinessBasic/`), as its own source (the shared Microsoft modules not used yet) | Converted | [BusinessBasic.md](BusinessBasic.md) |
+| The VIC-20's BASIC, kernal and character ROM (`src/Retrocore.Machines.Commodore/Roms/Vic20/`) | BASIC, the kernal and the character ROM converted | [Vic20.md](Vic20.md) |
 
 Each decision has an ID, which commit messages and comments may cite.

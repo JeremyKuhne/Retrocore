@@ -31,7 +31,7 @@ public sealed partial class BasicCommodoreConversionTests
 
     // The documents a Commodore file may cite: Commodore's, Microsoft's source and UNKN (no document gives the name).
     private static readonly string[] s_keys =
-        ["M6502", "UNKN", "CBM4S79", "K4S79", "HV1", "HV1R", "HV2", "HV4", "HV4R", "HVK4"];
+        ["M6502", "UNKN", "CBM4S79", "K4S79", "HV1", "HV1R", "HV2", "HV4", "HV4R", "HVK4", "BV20"];
 
     private const int MinimumOverlayNames = 5;
     private const int MinimumOldNames = 400;
@@ -225,7 +225,9 @@ public sealed partial class BasicCommodoreConversionTests
         "INIT_DELAY_SIZE", "INIT_EARLY_BUFFER_SETUP", "PROBE_LOAD_ZERO", "PROBE_ZERO_INDEX", "PROBE_SAVE_START",
         "PROBE_STOP_AT_SCREEN", "PROBE_TEST_BYTE", "START_CARRY_PROGRAM_START", "START_BANNER_AFTER_FREE",
         "BASIC4_OUTPUT_PADDING", "RESET_STACK_POINTER", "DISK_STATUS_STRING", "LINE_WIDTH_STORAGE",
-        "EXTENDED_DISK_VECTORS",
+        "EXTENDED_DISK_VECTORS", "SQR_PATCH_SPACE", "UNSPACED_LINE_NUMBERS", "CONVERSION_VECTORS",
+        "CURSOR_COLUMN_FROM_PLOT", "OUTPUT_SUPPRESSION_FLAG", "STANDARD_KERNAL", "BASIC_RAM_VECTORS", "NUMBERED_ERRORS",
+        "COMMODORE_SWITCHES_DEFINED",
 
         // The new constants.
         "CLOCK_STRING_LENGTH", "GARBAGE_MARK", "LINK_SIZE", "STATUS_END_OF_FILE", "PATCH_AREA_END", "PATCH_FILL",

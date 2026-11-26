@@ -4,24 +4,37 @@
 .include "MsBasic.Families.asm"
 
 ;; Emits the random-number constants and routine.
-;; Parameters: useTimers = 1 to seed RND(0) from hardware timers, 0 to return the previous value
+;; Parameters: useTimers = 1 to seed RND(0) from the PET's timer registers, 2 from the I/O chip the kernal's IOBASE
+;;   names, with five-byte constants, 0 to return the previous value
 .macro RandomRoutine useTimers
 
-    .assert useTimers = 0 || useTimers = 1, "useTimers is 0 or 1."
+    .assert useTimers >= 0 && useTimers <= 2, "useTimers is 0, 1 or 2."
 
     .scope Float continued
 
+    .if useTimers = 2
+;; Multiplier for <Functions::Rnd>, five bytes.
+;; Also: RMULZC (M6502)
+RandomMultiplier:
+        .byte $98, $35, $44, $7A, $00
+
+;; Addend for <Functions::Rnd>, five bytes.
+;; Also: RADDZC (M6502)
+RandomAddend:
+        .byte $68, $28, $B1, $46, $00
+    .else
 ;; Multiplier for <Functions::Rnd>, stored as four bytes followed by the first byte of <Float::RandomAddend>.
 ;;
 ;; The five-byte operands intentionally overlap; <Float::RandomAddend>'s fifth byte is the opcode at <Functions::Rnd>.
 ;; Also: RMULZC (M6502)
 RandomMultiplier:
-    .byte $98, $35, $44, $7A
+        .byte $98, $35, $44, $7A
 
 ;; Addend for <Functions::Rnd>: four bytes followed by the first instruction byte at <Functions::Rnd>.
 ;; Also: RADDZC (M6502)
 RandomAddend:
-    .byte $68, $28, $B1, $46
+        .byte $68, $28, $B1, $46
+    .endif
     .endscope
 
     .scope Functions continued
@@ -30,9 +43,10 @@ RandomAddend:
     ;;
     ;; A negative argument starts a sequence from that argument. A positive argument advances the saved value using
     ;; <Float::RandomMultiplier> and <Float::RandomAddend>. Zero returns the last value in <RandomValue> unless the
-    ;; timer variant reads hardware timers. For a nonzero argument the high and low mantissa bytes are exchanged (and,
-    ;; in the timer variant, the middle two); a zero argument's timer bytes are loaded already permuted and skip the
-    ;; exchange. The exponent is shifted into the mantissa during normalization, and the positive result is saved in
+    ;; timer variant reads hardware timers: the PET's at fixed addresses or, in mode 2 (the VIC-20), timer 1 and timer
+    ;; 2 of the VIA the kernal's IOBASE returns. For a nonzero argument the high and low mantissa bytes are exchanged
+    ;; (and, in the timer variants, the middle two); a zero argument's timer bytes are loaded already permuted and skip
+    ;; the exchange. The exponent is shifted into the mantissa during normalization, and the positive result is saved in
     ;; <RandomValue>.
     ;; Out: Fac = pseudorandom value
     ;; Entry:
@@ -44,7 +58,25 @@ RandomAddend:
         tax
     .endif
     bmi Scramble
-    .if useTimers
+    .if useTimers = 2
+        bne NextValue
+        jsr KernalIoBase
+        stx Pointer1
+        sty Pointer1+1
+        ldy #VIA_TIMER1_LOW
+        lda (Pointer1),y
+        sta FacMantissa1
+        iny
+        lda (Pointer1),y
+        sta FacMantissa3
+        ldy #VIA_TIMER2_LOW
+        lda (Pointer1),y
+        sta FacMantissa2
+        iny
+        lda (Pointer1),y
+        sta FacMantissa4
+        jmp NormalizeAndSave
+    .elseif useTimers
         bne NextValue
         lda CQHTIM
         sta FacMantissa1

@@ -10,22 +10,47 @@
 ; EvaluateNumber without the extra check; PET BASIC 2 and 4 use EvaluateExpression and the check.
 
 ;; Emits the prefix of the integer-conversion boundary constant.
-.macro IntegerConversionBoundary
+;; Parameters: fifthByte = optional, 1 (when given) to emit the constant's fifth byte, 0, as the VIC-20 does
+.macro IntegerConversionBoundary fifthByte
 
 ;; Four-byte prefix of the packed number compared with <Fac> by <FacToInteger>.
 ;;
-;; <Float::Compare> reads five bytes: the fifth is the $20 JSR opcode at <EvaluateSubscript>, not a zero byte.
+;; <Float::Compare> reads five bytes: the fifth is the $20 JSR opcode at <EvaluateSubscript>, not a zero byte, except
+;; where the build passes `fifthByte`, which gives it a zero of its own.
 ;; Also: N32768 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 MinimumInteger:
     .byte $90, $80, $00, $00
+    .ifnblank fifthByte
+        .assert fifthByte = 1, "fifthByte is 1 when given."
+        .byte $00
+    .endif
 .endmacro
 
 ;; Emits the subscript and integer conversion entries immediately after <MinimumInteger>.
 ;; Parameters: evaluateEntry = expression evaluator, checkType = 1 to check the type at <FacToNonnegativeInteger>, 0 to
-;;   omit it
-.macro IntegerConversion evaluateEntry, checkType
+;;   omit it; wordResult = optional, 1 (when given) to begin with `FacToSignedWord`, after a five-byte boundary
+.macro IntegerConversion evaluateEntry, checkType, wordResult
     .assert checkType = 0 || checkType = 1, "checkType must be 0 or 1."
-    .assert * = MinimumInteger+4, "IntegerConversion must immediately follow IntegerConversionBoundary."
+    .ifnblank wordResult
+        .assert wordResult = 1, "wordResult is 1 when given."
+        .assert * = MinimumInteger+5, "IntegerConversion must immediately follow IntegerConversionBoundary."
+    .else
+        .assert * = MinimumInteger+4, "IntegerConversion must immediately follow IntegerConversionBoundary."
+    .endif
+
+    .ifnblank wordResult
+        ;; Converts <Fac> to a signed integer and returns it in A and Y, high byte first: the routine
+        ;; <FloatToIntegerVector> points at, for machine code to call.
+        ;; Out: A = the integer's high byte, Y = its low byte
+        ;; Errors: ILLEGAL QUANTITY outside -32768 to 32767
+        ;; See: <FacToInteger>
+        .proc FacToSignedWord
+        jsr FacToInteger
+        lda FacMantissa3
+        ldy FacMantissa4
+        rts
+        .endproc
+    .endif
 
     ;; Evaluates the next subscript and converts it to a nonnegative integer.
     ;;

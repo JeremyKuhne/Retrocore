@@ -32,8 +32,10 @@ INPUT_MODE_READ = $98
 ;; Parameters: bufferPage = the page containing <InputBuffer>, maskGetBit7 = 1 to clear bit 7 of a `GET` character,
 ;;   getPointerYFirst = 1 to load the `GET` buffer pointer's high byte before its low byte,
 ;;   patchedGetString = 1 to use the early `BeginGetString` patch, channelInput = 1 to honor input channels,
-;;   blankNumericRetry = 1 to retry an empty terminal `INPUT` numeric value
-.macro VariableInput bufferPage, maskGetBit7, getPointerYFirst, patchedGetString, channelInput, blankNumericRetry
+;;   blankNumericRetry = 1 to retry an empty terminal `INPUT` numeric value;
+;;   space = optional, 1 (when given) for `READ`'s search to find a `DATA` after spaces, reading each statement's
+;;   first character through <GetCurrentCharacter> (the VIC-20's)
+.macro VariableInput bufferPage, maskGetBit7, getPointerYFirst, patchedGetString, channelInput, blankNumericRetry, space
     .assert bufferPage >= 0 && bufferPage <= 255, "bufferPage must fit in a byte."
     .assert InputBuffer > 0 && InputBuffer / 256 = bufferPage, "InputBuffer must be in bufferPage, after a byte."
     .assert maskGetBit7 = 0 || maskGetBit7 = 1, "maskGetBit7 must be 0 or 1."
@@ -300,9 +302,16 @@ SearchData:
 ;; Reads the statement's first token and loops until it is `DATA`.
 ;; Also: NOWLIN (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 CheckStatement:
-    lda (TextPointer),y
-    tax
-    jsr AdvanceTextPointer
+    .ifnblank space
+        .assert space = 1, "space is 1 when given."
+        jsr AdvanceTextPointer
+        jsr GetCurrentCharacter
+        tax
+    .else
+        lda (TextPointer),y
+        tax
+        jsr AdvanceTextPointer
+    .endif
     cpx #TOKEN_DATA
     bne SearchData
     jmp NextValue

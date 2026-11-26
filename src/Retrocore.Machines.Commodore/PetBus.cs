@@ -102,12 +102,20 @@ public sealed class PetBus : IProcessorBus
     /// <summary>
     ///  Gets the Datasette on cassette port 1, the 2001's built-in one.
     /// </summary>
-    public PetDatasette Cassette1 { get; } = new(1);
+    public CommodoreDatasette Cassette1 { get; } = new(
+        "cassette1",
+        "Cassette #1",
+        "PIA 1: CA1 reads the tape, PA4 senses the keys, CB2 runs the motor; the VIA's PB3 writes",
+        1_000_000);
 
     /// <summary>
     ///  Gets the Datasette on cassette port 2.
     /// </summary>
-    public PetDatasette Cassette2 { get; } = new(2);
+    public CommodoreDatasette Cassette2 { get; } = new(
+        "cassette2",
+        "Cassette #2",
+        "The VIA: CB1 reads the tape, PB4 runs the motor, PB3 writes; PIA 1's PA5 senses the keys",
+        1_000_000);
 
     /// <summary>
     ///  Gets the video.

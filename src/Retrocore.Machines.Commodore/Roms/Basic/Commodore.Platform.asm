@@ -18,3 +18,5 @@
 .include "Commodore.VariableEvaluation.asm"
 .include "Commodore.Initialization.asm"
 .include "Commodore.StatementDispatch.asm"
+.include "Commodore.KernalStatements.asm"
+.include "Commodore.KernalStartup.asm"

@@ -130,16 +130,26 @@ ToIllegalQuantity:
 .endmacro
 
 ;; Emits the common variable, DATA and string reset.
-;; Parameters: closeFiles = 1 to close the operating system's open files;
+;; Parameters: closeFiles = 1 to close the operating system's open files after resetting the strings, 2 to close them
+;;   first, with an entry after the call;
 ;;   clearDiskStatus = 1 to clear the disk-status descriptor
 .macro ClearStorage closeFiles, clearDiskStatus
-    .assert closeFiles = 0 || closeFiles = 1, "closeFiles is 0 or 1."
+    .assert closeFiles >= 0 && closeFiles <= 2, "closeFiles is 0, 1 or 2."
     .assert clearDiskStatus = 0 || clearDiskStatus = 1, "clearDiskStatus is 0 or 1."
 
     ;; Resets string, variable and array storage, then falls into the DATA and stack reset.
+    ;;
+    ;; Where `closeFiles` is 2 (the VIC-20), it closes the files first, and `AfterClose` resets the storage without
+    ;; closing them.
     ;; See: <ResetStack>, <Statements::Restore>
     ;; Also: CLEARC (M6502, ASTIL, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
     .proc ClearVariables
+    .if closeFiles = 2
+        jsr CQCALL
+
+;; Resets the storage without closing the files, as BASIC does when RS-232 has moved the top of memory.
+AfterClose:
+    .endif
     lda MemoryTop
     ldy MemoryTop+1
     sta StringsBottom
@@ -148,7 +158,7 @@ ToIllegalQuantity:
         lda #$00
         sta DSDESC
     .endif
-    .if closeFiles
+    .if closeFiles = 1
         jsr CQCALL
     .endif
     lda VariablesStart

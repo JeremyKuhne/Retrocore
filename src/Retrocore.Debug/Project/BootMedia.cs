@@ -17,10 +17,9 @@ namespace Retrocore.Debug.Project;
 ///  <para>
 ///   Each set is identified by the SHA-1 of each file, as its usual source publishes it (MAME's sets give SHA-1). The
 ///   files are looked for in a target's <c>bootImage</c> folder, the launch's ROM folder and the set's folder beside
-///   it, the folder the set's
-///   variable names (such as <c>RETROCORE_PET_ROMS</c>), and <c>RETROCORE_CACHE</c> (by default
-///   <c>%USERPROFILE%\Retrocore</c>), each searched with its subfolders, a linked file read as its target is and a
-///   linked folder left out, so no search loops. Only files of a set's sizes are read. A set is found when every
+///   it, the folder an environment variable names (such as <c>RETROCORE_PET_ROMS</c>), and <c>RETROCORE_CACHE</c> (by
+///   default <c>%USERPROFILE%\Retrocore</c>), each searched with its subfolders, a linked file read as its target is
+///   and a linked folder left out, so no search loops. Only files of a set's sizes are read. A set is found when every
 ///   file is.
 ///  </para>
 /// </remarks>

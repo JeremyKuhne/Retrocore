@@ -108,7 +108,7 @@ internal sealed class BasicEnvironment : TargetEnvironment
     /// <remarks>
     ///  <para>
     ///   BASIC 1's PET cannot boot the disk, as its IEEE-488 routines have the bug that stops disk drives working, and a
-    ///   target that boots the disk names in <c>bootImage</c> a folder, of the 4040's ROMs; a tape target never reads it.
+    ///   target that boots the disk names a folder, of the 4040's ROMs, in <c>bootImage</c>; a tape target never reads it.
     ///  </para>
     /// </remarks>
     protected override IEnumerable<string> OwnProblems(ProjectTarget target)

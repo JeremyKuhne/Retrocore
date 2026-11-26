@@ -175,7 +175,7 @@ public sealed class ProjectLaunchTests
                 "disk16": { "machine": "apple2-iiplus", "environment": "bare", "cards": { "6": "diskII16" } },
                 "held": { "machine": "apple2-iie", "environment": "bare", "options": { "diskImage": "BOOT" }, "cards": { "7": "mouse" } },
                 "held6": { "machine": "apple2-iiplus", "environment": "bare", "options": { "diskController": "diskII" }, "cards": { "6": "mockingboard" } },
-                "dos": { "machine": "apple2-iiplus", "environment": "dos33" } } }
+                "dos": { "machine": "apple2-iiplus", "environment": "prodos" } } }
             """);
 
         Write("main.s", "rts");
@@ -210,7 +210,7 @@ public sealed class ProjectLaunchTests
         JsonObject withExecutable = Launch("iiplus");
         withExecutable["executable"] = Path.Join(_folder, "game.xex");
         client.Fails("launch", withExecutable).Should().Contain("cannot give 'executable'");
-        client.Fails("launch", Launch("dos")).Should().EndWith("the 'dos33' environment is not yet supported; only 'bare' and 'wozmon' build.");
+        client.Fails("launch", Launch("dos")).Should().EndWith("the 'prodos' environment is not yet supported; only 'bare', 'wozmon' and 'dos33' build.");
 
         Write("main.s", "stz $00");
         client.Fails("launch", Launch("iiplus")).Should().Contain("target iiplus:").And.Contain("main.s(1)");
@@ -224,6 +224,101 @@ public sealed class ProjectLaunchTests
         {
             ["expression"] = "PC"
         }).String("result").Should().StartWith("$6000");
+    }
+
+    /// <summary>
+    ///  A <c>dos33</c> target's launch boots its disk in slot 6, from the SDK's Disk II firmware and DOS, on the II
+    ///  (with the Autostart ROM) with Integer BASIC's HELLO, and on the II Plus and both IIe models with AppleSoft's, and stops at its entry
+    ///  once HELLO has loaded the program: by BLOAD and CALL when the entry is past its first byte, by BRUN when it
+    ///  is there. The program's data file is on the disk.
+    /// </summary>
+    /// <param name="machine">The catalog machine.</param>
+    /// <param name="entry">The project's entry label.</param>
+    [TestMethod]
+    [DataRow("apple2-ii", "START")]
+    [DataRow("apple2-iiplus", "START")]
+    [DataRow("apple2-iiplus", "DATA")]
+    [DataRow("apple2-iie", "START")]
+    [DataRow("apple2-iie-enhanced", "START")]
+    public void Dos33LaunchBootsItsDisk(string machine, string entry)
+    {
+        Write("retrocore.json", $$"""
+            { "sdk": "1", "name": "game", "cpu": "6502", "sources": ["src/*.s"], "entry": "{{entry}}",
+              "targets": { "dos": { "machine": "{{machine}}", "environment": "dos33", "files": [{ "path": "data.bin", "name": "DATA.BIN", "address": "$4000" }] } } }
+            """);
+
+        Write("src/main.s", "DATA:\n    nop\nSTART:\n    lda #1\nLoop:\n    jmp Loop\n");
+        File.WriteAllBytes(Path.Join(_folder, "data.bin"), [1, 2, 3]);
+
+        using DapTestClient client = new();
+        client.Request("initialize", []);
+        JsonObject launched = client.Request("launch", Launch("dos"));
+        int address = entry == "DATA" ? 0x6000 : 0x6001;
+        launched["project"]?["entry"]?.GetValue<int>().Should().Be(address);
+        client.Request("evaluate", new JsonObject
+        {
+            ["expression"] = "PC"
+        }).String("result").Should().StartWith($"${address:X4}");
+
+        IReadOnlyList<Retrocore.Media.DosFile> files = Retrocore.Media.DosDisk.ReadFiles(
+            File.ReadAllBytes(Path.Join(_folder, "artifacts", "dos", "game.dsk")));
+
+        files.Select(file => file.Name).Should().Equal("HELLO", "GAME", "DATA.BIN");
+        client.Request("configurationDone", []);
+        client.Event("stopped").String("reason").Should().Be("entry");
+    }
+
+    /// <summary>
+    ///  On the Apple II, HELLO CALLs an entry at <c>$8000</c>, which Integer BASIC cannot write as a number, as
+    ///  <c>-32767-1</c>, and the program starts there.
+    /// </summary>
+    [TestMethod]
+    public void Dos33LaunchCallsAnEntryAt8000OnTheII()
+    {
+        Write("retrocore.json", """
+            { "sdk": "1", "name": "game", "cpu": "6502", "sources": ["src/*.s"], "entry": "START",
+              "targets": { "dos": { "machine": "apple2-ii", "environment": "dos33", "memoryMap": { "load": "$7FFF" } } } }
+            """);
+
+        Write("src/main.s", "DATA:\n    nop\nSTART:\n    lda #1\nLoop:\n    jmp Loop\n");
+        using DapTestClient client = new();
+        client.Request("initialize", []);
+        client.Request("launch", Launch("dos"))["project"]?["entry"]?.GetValue<int>().Should().Be(0x8000);
+        client.Request("evaluate", new JsonObject
+        {
+            ["expression"] = "PC"
+        }).String("result").Should().StartWith("$8000");
+    }
+
+    /// <summary>
+    ///  A <c>dos33</c> target, or its launch, cannot give the options of the Disk II its launch boots, nor launch with its
+    ///  image off, nor on the Apple II's original Monitor, which boots no disk.
+    /// </summary>
+    [TestMethod]
+    public void Dos33LaunchRefusesWhatItsDiskDecides()
+    {
+        Write("retrocore.json", """
+            { "sdk": "1", "name": "game", "cpu": "6502", "sources": ["src/*.s"],
+              "targets": {
+                "image": { "machine": "apple2-iiplus", "environment": "dos33", "options": { "diskImage": "x.dsk" } },
+                "none": { "machine": "apple2-iiplus", "environment": "dos33", "image": false },
+                "original": { "machine": "apple2-ii", "environment": "dos33", "options": { "monitor": "original" } } } }
+            """);
+
+        Write("src/main.s", "rts\n");
+        using DapTestClient client = new();
+        client.Request("initialize", []);
+        client.Fails("launch", Launch("image")).Should().EndWith(
+            "a dos33 target boots its own disk in slot 6's 16-sector Disk II, so its options and its launch cannot give 'diskImage'.");
+
+        JsonObject thirteen = Launch("none");
+        thirteen["diskSectors"] = 13;
+        client.Fails("launch", thirteen).Should().EndWith(
+            "a dos33 target boots its own disk in slot 6's 16-sector Disk II, so its options and its launch cannot give 'diskSectors'.");
+
+        client.Fails("launch", Launch("none")).Should().EndWith("the 'dos33' environment boots its image, so its image cannot be false to launch it.");
+        client.Fails("launch", Launch("original")).Should().EndWith(
+            "a dos33 target boots its disk as the machine powers on, which the Apple II's original Monitor does not do; leave out 'monitor', or give 'autostart'.");
     }
 
     private JsonObject Launch(string target) => new()

@@ -27,11 +27,13 @@ Percent:
 
 .section CODE
 
-;; Plays the game at <Game>, and never returns.
+;; Plays the game at <Game>, and never returns. The engine's state is cleared first, then the platform loads the game
+;; (<LoadGame>), before the console starts, as a disk's system may need the screen as it was, then the console.
 .proc Start
     cld
-    jsr Console::Start
     jsr ClearState
+    jsr LoadGame
+    jsr Console::Start
     jsr LocateTables
     bcc Found
     Print Phrases::NotAGame

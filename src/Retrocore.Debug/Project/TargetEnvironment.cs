@@ -17,7 +17,7 @@ namespace Retrocore.Debug.Project;
 /// </remarks>
 internal abstract class TargetEnvironment
 {
-    private static readonly TargetEnvironment[] s_built = [new BareEnvironment(), new WozmonEnvironment()];
+    private static readonly TargetEnvironment[] s_built = [new BareEnvironment(), new WozmonEnvironment(), new Dos33Environment()];
 
     /// <summary>
     ///  Gets the environment's name, one of <see cref="ProjectTarget.Environments"/>.
@@ -40,6 +40,28 @@ internal abstract class TargetEnvironment
     internal virtual bool TakesTemplate => false;
 
     /// <summary>
+    ///  Gets whether a launch boots the environment's image and lets it start the program, rather than loading the
+    ///  binary into RAM.
+    /// </summary>
+    internal virtual bool BootsImage => false;
+
+    /// <summary>
+    ///  Gets the most of the machine's own seconds booting the image takes, to the program's entry, beyond which a
+    ///  launch reports that it did not start.
+    /// </summary>
+    internal virtual int BootSeconds => 0;
+
+    /// <summary>
+    ///  Gives a project launch's arguments what booting the environment's image needs, such as the drive it goes in.
+    /// </summary>
+    /// <param name="target">The target.</param>
+    /// <param name="launch">The launch's arguments, with the target's options in them.</param>
+    /// <exception cref="ProjectException">The target's options give what the environment's image decides.</exception>
+    internal virtual void Launch(ProjectTarget target, System.Text.Json.Nodes.JsonObject launch)
+    {
+    }
+
+    /// <summary>
     ///  Gets whether the environment boots from media that is not an SDK source, which a target's <c>bootImage</c> can
     ///  name.
     /// </summary>
@@ -57,7 +79,7 @@ internal abstract class TargetEnvironment
     internal static IEnumerable<string> Built => s_built.Select(environment => environment.Name);
 
     /// <summary>
-    ///  Gets the environments that build, by name, as a phrase: <c>'bare' and 'wozmon'</c>.
+    ///  Gets the environments that build, by name, as a phrase: <c>'bare', 'wozmon' and 'dos33'</c>.
     /// </summary>
     internal static string BuiltPhrase
     {

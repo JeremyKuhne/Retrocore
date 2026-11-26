@@ -33,7 +33,8 @@ try
 {
     return args switch
     {
-        ["pack", string input, string output] => Pack(input, output),
+        ["pack", string input, string output] => Pack(input, output, include: null),
+        ["pack", string input, string output, string include] => Pack(input, output, include),
         ["play", string packed, string commands, .. string[] options] => Play(packed, commands, options),
         _ => Usage()
     };
@@ -46,18 +47,32 @@ catch (Exception exception) when (exception is InvalidDataException or IOExcepti
 
 static int Usage()
 {
-    Console.Error.WriteLine("Usage: dotnet run packer.cs -- pack game.dat game.bin");
+    Console.Error.WriteLine("Usage: dotnet run packer.cs -- pack game.dat game.bin [game.inc]");
     Console.Error.WriteLine("       dotnet run packer.cs -- play game.bin commands.txt [--echo] [--columns 40] [--expect expected.out]");
     return 2;
 }
 
-static int Pack(string input, string output)
+// Packs a game, and with an include, writes its size there as GAME_SIZE, for a program that loads the game from a disk
+// into a buffer of that size.
+static int Pack(string input, string output, string? include)
 {
     ScottFreeGame game = ScottFreeGame.Parse(File.ReadAllText(input));
     (byte[] bytes, List<(string Part, int Size)> sizes, List<string> warnings) = GamePacker.Pack(game);
     foreach (string warning in warnings) { Console.Error.WriteLine($"Warning: {warning}"); }
     if (Path.GetDirectoryName(Path.GetFullPath(output)) is { } folder) { Directory.CreateDirectory(folder); }
     File.WriteAllBytes(output, bytes);
+    if (include is not null)
+    {
+        if (Path.GetDirectoryName(Path.GetFullPath(include)) is { } includeFolder)
+        {
+            Directory.CreateDirectory(includeFolder);
+        }
+
+        File.WriteAllText(include, string.Create(
+            CultureInfo.InvariantCulture,
+            $"; The packed game's size, which the packer wrote with {Path.GetFileName(output)}.\n\n;; The packed game's size in bytes.\nGAME_SIZE = {bytes.Length}\n"));
+    }
+
     foreach ((string part, int size) in sizes)
     {
         Console.WriteLine(string.Create(CultureInfo.InvariantCulture, $"{part,-18} {size,6}"));

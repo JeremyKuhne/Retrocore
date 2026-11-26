@@ -293,17 +293,20 @@ public sealed partial class ProjectHeaderTests
     ///  the ROM sources they inherit from.
     /// </summary>
     /// <param name="machine">The catalog machine.</param>
+    /// <param name="environment">The environment, whose header is linted with the machine's.</param>
     /// <param name="modules">The ROM sources the headers link to.</param>
     [TestMethod]
-    [DataRow("apple1", "WozMonitor")]
-    [DataRow("apple2-iie-enhanced", "Monitor")]
-    [DataRow("apple3", "")]
-    [DataRow("pet4032", "Kernal4")]
-    [DataRow("bbcb", "Mos")]
-    public void HeadersAreCleanInTheEditor(string machine, string modules)
+    [DataRow("apple1", "bare", "WozMonitor")]
+    [DataRow("apple1", "wozmon", "WozMonitor")]
+    [DataRow("apple2-iie-enhanced", "bare", "Monitor")]
+    [DataRow("apple2-iiplus", "dos33", "Monitor,Dos33")]
+    [DataRow("apple3", "bare", "")]
+    [DataRow("pet4032", "bare", "Kernal4")]
+    [DataRow("bbcb", "bare", "Mos")]
+    public void HeadersAreCleanInTheEditor(string machine, string environment, string modules)
     {
         Write("retrocore.json", $$"""
-            { "sdk": "1", "cpu": "6502", "sources": ["main.s"], "targets": { "t": { "machine": "{{machine}}", "environment": "bare" } } }
+            { "sdk": "1", "cpu": "6502", "sources": ["main.s"], "targets": { "t": { "machine": "{{machine}}", "environment": "{{environment}}" } } }
             """);
 
         Write("main.s", ".include <cpu.inc>\n.include <machine.inc>\n.include <environment.inc>\nrts");

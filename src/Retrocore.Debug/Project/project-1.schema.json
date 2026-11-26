@@ -133,7 +133,7 @@
         },
         "environment": {
           "$ref": "#/definitions/environment",
-          "description": "How the program is loaded and started, and which system calls it may make. Every machine runs bare; each other environment runs on the machines the SDK plan pairs it with. bare and wozmon build yet."
+          "description": "How the program is loaded and started, and which system calls it may make. Every machine runs bare; each other environment runs on the machines the SDK plan pairs it with. bare, wozmon and dos33 build yet."
         },
         "cpu": {
           "$ref": "#/definitions/cpu",
@@ -290,7 +290,7 @@
       "enumDescriptions": [
         "A raw binary loaded straight into RAM, with the ROM's routines only. All machines.",
         "Woz Monitor hex to type in, and an ACI tape (WAV). The Apple-1.",
-        "A B file on a DOS 3.3 disk. The Apple II, II Plus and IIe. Not yet supported.",
+        "A B file on a DOS 3.3 disk that its HELLO starts. The Apple II, II Plus and IIe.",
         "A SYS or BIN file under ProDOS. The II Plus with 64K, and the IIe. Not yet supported.",
         "A SOS.INTERP on a SOS boot disk. The Apple III. Not yet supported.",
         "A PRG with a BASIC SYS line. The PET. Not yet supported.",

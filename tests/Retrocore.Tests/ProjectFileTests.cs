@@ -262,7 +262,7 @@ public sealed class ProjectFileTests
         RetrocoreProject project = RetrocoreProject.Load(_folder);
         project.Target("cpm").Cpu.Should().BeSameAs(ProjectCpu.I8080);
         project.Target("cpm-z80").Cpu.Should().BeSameAs(ProjectCpu.Z80);
-        Error(project.Target("cpm").RequireSupported).Should().EndWith("the 'cpm' environment is not yet supported; only 'bare' and 'wozmon' build.");
+        Error(project.Target("cpm").RequireSupported).Should().EndWith("the 'cpm' environment is not yet supported; only 'bare', 'wozmon' and 'dos33' build.");
     }
 
     /// <summary>
@@ -305,7 +305,7 @@ public sealed class ProjectFileTests
                 "woz": { "machine": "apple1", "environment": "wozmon", "image": false },
                 "wozfiles": { "machine": "apple1", "environment": "wozmon", "files": [{ "path": "a.bin", "name": "A", "address": "$1000" }],
                               "image": { "template": "t.dsk" } },
-                "disk": { "machine": "apple2-iiplus", "environment": "dos33" } } }
+                "disk": { "machine": "apple2-iiplus", "environment": "prodos" } } }
             """);
 
         RetrocoreProject project = RetrocoreProject.Load(_folder);
@@ -330,7 +330,7 @@ public sealed class ProjectFileTests
         Error(wozFiles.RequireSupported).Should().EndWith(
             "target wozfiles: the 'wozmon' environment has no disk to put 'files' on; the 'wozmon' environment's image does not start from a template.");
 
-        Error(project.Target("disk").RequireSupported).Should().EndWith("target disk: the 'dos33' environment is not yet supported; only 'bare' and 'wozmon' build.");
+        Error(project.Target("disk").RequireSupported).Should().EndWith("target disk: the 'prodos' environment is not yet supported; only 'bare', 'wozmon' and 'dos33' build.");
     }
 
     /// <summary>

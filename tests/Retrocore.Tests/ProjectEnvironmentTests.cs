@@ -4,6 +4,7 @@
 
 using Retrocore.Debug.Project;
 using Retrocore.Machines.Apple1;
+using Retrocore.Media;
 using System.Text.Json.Nodes;
 
 namespace Retrocore.Tests;
@@ -137,6 +138,118 @@ public sealed class ProjectEnvironmentTests
         Project("""{ "machine": "apple1", "environment": "bare" }""");
         ProjectBuild.Build(RetrocoreProject.Load(_folder).Target("woz")).Media.Should().Be(TargetMedia.None);
         Directory.GetFiles(output).Select(Path.GetFileName).Should().BeEquivalentTo("hello.bin", "hello.dbg", "hello.map");
+    }
+
+    /// <summary>
+    ///  A <c>dos33</c> target writes a DOS 3.3 disk: DOS on tracks 0 to 2, <c>HELLO</c> in AppleSoft, which BLOADs the
+    ///  program and CALLs its entry, the program as a B file at its load address named for the project, and its
+    ///  files, each a B file at its address. With the entry at the first byte, HELLO BRUNs it.
+    /// </summary>
+    [TestMethod]
+    public void Dos33WritesItsDisk()
+    {
+        Write("retrocore.json", """
+            { "sdk": "1", "name": "my-game", "cpu": "6502", "sources": ["main.s"], "entry": "START",
+              "targets": { "dos": { "machine": "apple2-iiplus", "environment": "dos33",
+                "files": ["data.bin", { "path": "${obj}/extra.bin", "name": "EXTRA DATA", "address": "$4000" }] } } }
+            """);
+
+        Write("main.s", "DATA:\n    .byte 1\nSTART:\n    rts\n");
+        Write("data.bin", "AB");
+        Write("obj/extra.bin", "XYZ");
+        TargetBuild build = ProjectBuild.Build(RetrocoreProject.Load(_folder).Target("dos"));
+        string disk = Path.Join(_folder, "artifacts", "dos", "my-game.dsk");
+        build.Media.Should().Be(new TargetMedia(File: null, FileKind: null, disk, "DOS 3.3 disk", "boot the disk, and HELLO starts MYGAME"));
+
+        List<DosFile> files = [.. DosDisk.ReadFiles(File.ReadAllBytes(disk))];
+        files.Select(file => (file.Name, file.Type)).Should().Equal(
+            ("HELLO", DosFileType.AppleSoft), ("MYGAME", DosFileType.Binary), ("DATA.BIN", DosFileType.Binary), ("EXTRA DATA", DosFileType.Binary));
+
+        files[1].TryGetBinary(out int address, out ReadOnlyMemory<byte> data).Should().BeTrue();
+        (address, data.ToArray()).Should().BeEquivalentTo((0x6000, new byte[] { 1, 0x60 }));
+        files[2].TryGetBinary(out address, out data).Should().BeTrue();
+        (address, data.ToArray()).Should().BeEquivalentTo((0, "AB"u8.ToArray()));
+        files[3].TryGetBinary(out address, out data).Should().BeTrue();
+        (address, data.ToArray()).Should().BeEquivalentTo((0x4000, "XYZ"u8.ToArray()));
+        files[0].TryGetProgram(out ReadOnlyMemory<byte> hello).Should().BeTrue();
+        Basic.BasicProgram.FromImage(Basic.BasicDialect.AppleSoft, hello.Span).ToText().Should().Contain("CHR$(4);\"BLOAD MYGAME\": CALL 24577");
+
+        Write("retrocore.json", """
+            { "sdk": "1", "name": "my-game", "cpu": "6502", "sources": ["main.s"],
+              "targets": { "dos": { "machine": "apple2-iiplus", "environment": "dos33", "image": false } } }
+            """);
+
+        TargetBuild first = ProjectBuild.Build(RetrocoreProject.Load(_folder).Target("dos"));
+        (first.Media.Image, first.Media.Note).Should().Be((null, "the binary is the B file MYGAME, which loads at its first address"));
+        File.Exists(disk).Should().BeFalse("the earlier build's disk goes");
+
+        // With no entry, the first byte is the entry, and HELLO BRUNs the program.
+        Write("retrocore.json", """
+            { "sdk": "1", "name": "my-game", "cpu": "6502", "sources": ["main.s"],
+              "targets": { "dos": { "machine": "apple2-iiplus", "environment": "dos33" } } }
+            """);
+
+        ProjectBuild.Build(RetrocoreProject.Load(_folder).Target("dos"));
+        DosDisk.ReadFiles(File.ReadAllBytes(disk))[0].TryGetProgram(out hello).Should().BeTrue();
+        Basic.BasicProgram.FromImage(Basic.BasicDialect.AppleSoft, hello.Span).ToText().Should().Contain("CHR$(4);\"BRUN MYGAME\"").And.NotContain("CALL");
+    }
+
+    /// <summary>
+    ///  On the Apple II, HELLO is Integer BASIC's, its Ctrl-D in its string, and it CALLs an entry from <c>$8000</c>
+    ///  as the negative number Integer BASIC takes for it.
+    /// </summary>
+    [TestMethod]
+    public void Dos33HelloOnTheIIIsIntegerBasic()
+    {
+        Write("retrocore.json", """
+            { "sdk": "1", "name": "game", "cpu": "6502", "sources": ["main.s"], "entry": "START",
+              "targets": { "dos": { "machine": "apple2-ii", "environment": "dos33", "memoryMap": { "load": "$8000" } } } }
+            """);
+
+        Write("main.s", "DATA:\n    .byte 1\nSTART:\n    rts\n");
+        ProjectBuild.Build(RetrocoreProject.Load(_folder).Target("dos"));
+        DosFile hello = DosDisk.ReadFiles(File.ReadAllBytes(Path.Join(_folder, "artifacts", "dos", "game.dsk")))[0];
+        hello.Type.Should().Be(DosFileType.IntegerBasic);
+        hello.TryGetProgram(out ReadOnlyMemory<byte> program).Should().BeTrue();
+        string text = Basic.BasicProgram.FromImage(Basic.BasicDialect.Integer, program.Span).ToText();
+        text.Should().Contain("BLOAD GAME").And.Contain("CALL -32767");
+        program.ToArray().Should().Contain(0x84, "Ctrl-D, with its high bit, starts the string");
+    }
+
+    /// <summary>
+    ///  A file whose name DOS 3.3 cannot take, or that another file on the disk has, fails the build naming it, as does a
+    ///  project whose program would be named HELLO.
+    /// </summary>
+    [TestMethod]
+    public void Dos33RefusesBadNames()
+    {
+        string Fails(string files)
+        {
+            Write("retrocore.json", $$"""
+                { "sdk": "1", "name": "game", "cpu": "6502", "sources": ["main.s"],
+                  "targets": { "dos": { "machine": "apple2-iiplus", "environment": "dos33", "files": {{files}} } } }
+                """);
+
+            Action build = () => ProjectBuild.Build(RetrocoreProject.Load(_folder).Target("dos"));
+            return build.Should().Throw<ProjectException>().Which.Message;
+        }
+
+        Write("main.s", "rts\n");
+        Write("a,b.bin", "1");
+        Write("1st.bin", "1");
+        Write("data.bin", "1");
+        Fails("""["a,b.bin"]""").Should().EndWith("'A,B.BIN' is not a DOS 3.3 file name, 1 to 30 characters from a capital letter with no comma; give its file a 'name'.");
+        Fails("""["1st.bin"]""").Should().Contain("'1ST.BIN' is not a DOS 3.3 file name");
+        Fails("""[{ "path": "data.bin", "name": "GAME" }]""").Should().EndWith("two files on the disk are named GAME.");
+        Fails("""[{ "path": "data.bin", "name": "HELLO" }]""").Should().EndWith("two files on the disk are named HELLO.");
+
+        Write("retrocore.json", """
+            { "sdk": "1", "name": "hello", "cpu": "6502", "sources": ["main.s"],
+              "targets": { "dos": { "machine": "apple2-iiplus", "environment": "dos33" } } }
+            """);
+
+        Action hello = () => ProjectBuild.Build(RetrocoreProject.Load(_folder).Target("dos"));
+        hello.Should().Throw<ProjectException>().WithMessage("*the program would be HELLO on the disk, the name of the program that starts it; give the project another 'name'.");
     }
 
     /// <summary>

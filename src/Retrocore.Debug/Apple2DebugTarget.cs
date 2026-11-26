@@ -1404,6 +1404,11 @@ internal sealed partial class Apple2DebugTarget : DisposableBase, IZ80CardHost
         _machine.Drives[0].Insert(media, $"DOS {Dos} disk with {name}", thirteen ? "D13" : "DSK");
     }
 
+    /// <summary>
+    ///  Gets slot 6's drive 1, the drive the Disk II's firmware boots.
+    /// </summary>
+    internal Apple2FloppyDrive BootDrive => _machine.Drives[0];
+
     /// <inheritdoc/>
     public IReadOnlyList<HardwareRow> Hardware()
     {

@@ -10,7 +10,10 @@ It runs on five machines as `bare` targets of its project file, [`retrocore.json
 unchanged, with its machine's platform folder before it, and links Pirate Adventure in, packed by the project's
 step. Another target, `apple2-test`, links the test game instead (`TEST_GAME`, in `src/linked-game.s`). The targets
 in each machine's own environment follow as the SDK's environments arrive: `apple1-wozmon` builds the Apple-1's
-program as Woz Monitor hex to type in and an ACI tape.
+program as Woz Monitor hex to type in and an ACI tape, and `apple2-dos` builds a DOS 3.3 disk whose `HELLO` starts the
+engine, which loads Pirate Adventure from the disk as `PIRATE.DAT` (`GAME_LINKED` is 0 there, and
+`src/platform/dos33/game.s` loads the game). The packer writes the game's size beside it, `obj/pirate.inc`, for the
+buffer it loads into.
 
 ```text
 sample/adventure/
@@ -18,7 +21,7 @@ sample/adventure/
   src/core/                   the engine, which uses no machine's addresses
   src/linked-game.s           the packed game, linked in as Game: Pirate Adventure, or the test game
   src/platform/<family>/      console.s, the machine's screen and keyboard
-  src/platform/<environment>/ an environment's own platform files, after the family's (none yet)
+  src/platform/<environment>/ an environment's own platform files, after the family's: dos33/game.s loads the game
   tools/packer.cs             .dat to the packed format, and the C# reference engine
   games/test.dat              a small test adventure of our own, MIT
   games/test-*.in, *.out      its transcripts: the commands, and what the screen shows
@@ -32,6 +35,7 @@ sample/adventure/
 | `apple1` | Apple-1, 32K | the Woz Monitor's ECHO, and the PIA's keyboard | `$0300` |
 | `apple1-wozmon` | Apple-1, 32K, as Woz Monitor hex and an ACI tape | the Woz Monitor's ECHO, and the PIA's keyboard | `$0300` |
 | `apple2` | Apple II Plus | the Monitor's COUT and GETLN1 | `$6000` |
+| `apple2-dos` | Apple II Plus, from a DOS 3.3 disk, the game loaded from `PIRATE.DAT` | the Monitor's COUT and GETLN1 | `$6000` |
 | `apple2-test` | Apple II Plus, the test game | the Monitor's COUT and GETLN1 | `$6000` |
 | `apple3` | Apple III | its own text page 1 and keyboard routines | `$2000` |
 | `pet` | PET 4032 | the kernal's jump table | `$0800` |
@@ -78,7 +82,8 @@ engine itself writes it. `--columns` sets the screen's width, 40 by default.
 
 [`tools/Test-AdventureDap.mjs`](../../tools/Test-AdventureDap.mjs) plays both of Pirate Adventure's transcripts, the
 win from start to finish and the death, on the Apple-1 with 32K, the PET 4032, the Apple II and the BBC Micro, the
-win on `apple1-wozmon`, whose hex it checks against what the launch loaded, and the test game's three on
+win on `apple1-wozmon`, whose hex it checks against what the launch loaded, both on `apple2-dos`, booted from its
+disk, and the test game's three on
 `apple2-test` alone, under the debug adapter, through project launches, and checks that what the
 6502 engine writes matches the transcript's `.out`, character for character. Give target names to play only those,
 such as `node tools/Test-AdventureDap.mjs apple1 pet`.

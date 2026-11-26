@@ -380,7 +380,11 @@ and image beside the binary and saying which of `files`, `image` and `bootImage`
 environment does not take fails naming it. [sdk/1/README.md](../../sdk/1/README.md#environments) is the contract.
 `wozmon` writes `<name>.hex` and the ACI tape `<name>.wav` (`"image": false` leaves the tape out), and its maps are the
 bare Apple-1's. The adventure's `apple1-wozmon` target plays Pirate Adventure's win under the debugger, and the test
-checks that its hex stores the bytes the launch loaded. A target's `bootImage` is a path, relative to the project's folder; the
+checks that its hex stores the bytes the launch loaded. `dos33` writes `<name>.dsk`: DOS 3.3 from the SDK's sources,
+`HELLO` (AppleSoft, or Integer BASIC on the II), the program as a B file, and the target's `files` as B files; a launch
+boots it in slot 6, after the saved machine's and the journal's media, and runs to the program's entry. It boots the II
+Plus, the enhanced IIe, and the II with the Autostart ROM. The adventure's `apple2-dos` target loads `PIRATE.DAT` from
+its disk with `BLOAD`, printed through `COUT`, and plays both of Pirate Adventure's transcripts. A target's `bootImage` is a path, relative to the project's folder; the
 lookup by hash, which phase 4 also gives, is still to come.
 
 ## Debugging in VS Code

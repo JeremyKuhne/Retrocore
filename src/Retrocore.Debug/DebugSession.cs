@@ -1045,8 +1045,10 @@ internal sealed partial class DebugSession
         // A bare program calls the ROM's routines, such as COUT, which the Apple II's Monitor sets up as it resets, so
         // the ROM runs first, as the other machines' ROMs do before a program loads. It runs before the target's cards
         // and a saved machine's cards and disks go in; a disk the target's own options insert is in the drive from the
-        // start, and the ROM starts booting it for that time, which bootSeconds: 0 leaves out.
-        if (built is not null && Target is Apple2DebugTarget) { Boot(args.Double("bootSeconds") ?? 0.25); }
+        // start, and the ROM starts booting it for that time, which bootSeconds: 0 leaves out. A target whose environment
+        // boots its image is booted to its entry once its image is in (BootImage), so it takes no bootSeconds.
+        bool booted = built?.Target.Built?.BootsImage == true;
+        if (built is not null && !booted && Target is Apple2DebugTarget) { Boot(args.Double("bootSeconds") ?? 0.25); }
 
         if (args.String("screen") is { } screen) { Target.Screen = screen; }
 
@@ -1120,6 +1122,11 @@ internal sealed partial class DebugSession
             {
                 LoadOnDosDisk(dosTarget, SourceBuild.Emitted(result), args.Int("entryAddress"), sourceFile);
             }
+            else if (booted)
+            {
+                // A target whose environment boots its image loads nothing here: its image goes in once the saved
+                // machine and the journal's disks have, and the machine boots it to the entry (BootImage).
+            }
             else
             {
                 int? first = null;
@@ -1165,6 +1172,9 @@ internal sealed partial class DebugSession
 
         // The disks the last run kept go back in their drives, over what the launch and saved machine put there.
         OpenJournal(args);
+
+        // A project target whose environment boots its image boots it now, over them, to its program's entry.
+        if (built is not null && booted) { BootImage(built); }
 
         // A Kaypro's command, or MBASIC for a BASIC file, is typed at CP/M's prompt from the disks the session mounts.
         if (Target is KayproDebugTarget kaypro

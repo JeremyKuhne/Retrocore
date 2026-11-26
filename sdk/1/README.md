@@ -31,6 +31,7 @@ A `source` launch and `--assemble` search only `Sdk/`.
 | `cpus/6502/cpu.inc` | every 6502 and 65C02 target | the stack's page and the three vectors |
 | `environments/bare/environment.inc` | `bare` | nothing yet: a bare program calls its ROM |
 | `environments/wozmon/environment.inc` | `wozmon` | nothing yet: the program calls the Woz Monitor, as the Apple-1's `<machine.inc>` names it |
+| `environments/dos33/environment.inc` | `dos33` | DOS 3.3's page-3 vector from `$03D0`, from DosInit.asm, and `DOS_COMMAND`, the Ctrl-D that starts a command a program writes |
 | `machines/apple1/machine.inc` | `apple1` | the PIA, and the Woz Monitor's ECHO, PRBYTE, PRHEX and GETLINE, written here |
 | `machines/apple2/machine.inc` | every Apple II | `IIeEquates.asm`, `MonitorEntries.asm`, and nine more Monitor entries |
 | `machines/apple3/machine.inc` | `apple3` | `Apple3Equates.asm`, and text page 1 |
@@ -120,6 +121,12 @@ The `wozmon` maps, `apple1-4k` to `-32k`, are the bare Apple-1's but for their d
 program typed in as hex, or read from the cassette interface's tape, loads where a bare one does, and runs with the
 Woz Monitor as a bare one does.
 
+The `dos33` maps, `apple2-48k` and the Apple II's `apple2-ii-48k`, are the bare one's with DOS 3.3 reserved from
+`$9600` (its three file buffers, then DOS itself from `$9D00`), as the SDK builds DOS for a 48K machine: a target with
+less RAM has no map. They also reserve HELLO, which BASIC is still running as the program loads: AppleSoft's at
+`$0801` with its variables to `$08FF`, and on the II, Integer BASIC's variables there and its program below HIMEM,
+`$9500-$95FF`. They load at `$6000` and have the bare map's zero page, which neither the Monitor nor DOS 3.3 uses.
+
 A bare Apple III program runs before SOS, in the power-on state: its zero page is physically the system bank's
 `$FF00` page, whose `$FFCA-$FFCF` are the NMI and IRQ vectors, so the map leaves `$C0-$FF` to the machine. The
 Apple-1's Woz Monitor points IRQ and BRK at `$0000` and NMI at `$0F00`, so a program that takes an interrupt puts its
@@ -138,12 +145,23 @@ image beside them. `retrocore build` prints a line for each, and `obj/<target>/b
 | --- | --- | --- | --- |
 | `bare` | the binary | none | loads the binary into RAM and starts at its entry |
 | `wozmon` | `<name>.hex`, the Woz Monitor's hex: lines that store the bytes from `load`, then `<entry>R` | `<name>.wav`, an ACI tape of the bytes, which `C100R` and then `start.endR` read | loads the binary as if its hex had been typed, and starts at its entry as `R` would |
+| `dos33` | the binary, as the B file it is on the disk | `<name>.dsk`, a DOS 3.3 disk (DOS order) with DOS, `HELLO`, the program as a B file named for the project in capitals, and the target's `files` | boots the disk from slot 6, and `HELLO` starts the program: `BRUN` when its entry is its first byte, else `BLOAD` and `CALL` |
+
+A launch that boots an image builds it as `retrocore build` does, puts it in its drive after a saved machine's media
+and the recovery journal's disks have gone in, so the program debugged is the one just built (a changed disk it
+replaces is kept, as one the machine ejects is), and runs the machine with nothing tracked until an instruction starts
+at the program's entry with its bytes in memory. There it stops, or runs on, as a `bare` launch does from its entry.
+The image goes in from memory, so what the program writes to it never reaches the build's output. A target with
+`"image": false` builds, but cannot launch. On the Apple II, a `dos33` launch gives the machine the Autostart ROM,
+which boots the disk at power-on, and its target cannot give the Disk II's options.
 
 A target's fields for its media, which an environment that has no use for one refuses, naming it:
 
 - **`files`**: data files put beside the program on its disk, each a path (relative to the project's folder, with
   `${obj}` for its `obj/`, so a step's output can go on the disk) or `{ "path", "name", "address" }`, giving its name
-  on the disk and the load address the disk records. Neither `bare` nor `wozmon` has a disk.
+  on the disk and the load address the disk records. Neither `bare` nor `wozmon` has a disk. On a `dos33` disk each
+  is a B file, named by `name` or its file name in capitals, at `address` or `$0000`, which a program loads where it
+  wants with `BLOAD` and `,A`.
 - **`image`**: `false` leaves the image out (the `wozmon` tape), and `{ "template": "<disk>" }` starts it from a
   disk where the environment can.
 - **`bootImage`**: boot media that is not an SDK source, for an environment that needs some.

@@ -127,7 +127,8 @@ Every download (SIMH, software images, ROM dumps) is approved first, as before.
 ## Still open
 
 - **CP/M's sources**, the BIOS and boot sector, as SDK sources or documented disassemblies. The BIOS and boot
-  sources of CP/M 2.2b and Burcon's CP/M (`BIOS.ASM`, `BOOT.ASM`) were downloaded with the images.
+  sources of CP/M 2.2b and Burcon's CP/M (`BIOS.ASM`, `BOOT.ASM`) were downloaded with the images; Burcon's are
+  Mike Douglas's disassemblies of a memory dump, not Burcon's own source.
 - **The 88-MDS Minidisk** (5.25-inch, 16 sectors of 137 bytes on 35 tracks), and HDBL, MDBL and DBL 3.3.
 - **Sector interrupts.** The controller's interrupt at each sector's start is not modeled, as nothing here uses it.
 - **DBL's loader** runs from RAM at `$2C00`, which the PROM's source map does not cover, so stepping it shows

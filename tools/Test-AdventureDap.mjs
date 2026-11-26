@@ -7,10 +7,11 @@
 // Apple-1 with 32K, the PET 4032, the Apple II Plus and the BBC Micro), and the test game's transcripts on apple2-test,
 // through project launches, each running the project's steps, which pack the games with the sample's packer, and
 // building the same core with its machine's platform folder. It checks that what the engine writes matches the C#
-// reference engine's transcript in the matching .out file character for character. A watch on the console's Write's
-// store of A records each character the engine sends, and a logpoint on ReadLine marks where it reads a command, so
-// the commands can be put back where the screen shows them. The Apple II's, PET's and BBC's screens are checked for
-// the game's end as well. The launches check Keeps: contracts and fail on a broken one. A false Keeps: on the top-level LocateTables stops the run, but one on
+// reference engine's transcript in the matching .out file character for character. A logpoint on the console's Write
+// records each character the engine sends, and one on ReadLine marks where it reads a command, so the commands can be
+// put back where the screen shows them. Each logs once a call, though the PET's and BBC's IRQs come in as they run.
+// The Apple II's, PET's and BBC's screens are checked for the game's end as well. The launches check Keeps: contracts
+// and fail on a broken one. A false Keeps: on the top-level LocateTables stops the run, but one on
 // Numbers::NextRandom, inside a .scope, did not, so the engine's scoped contracts are checked by reading rather than
 // here. On the SDK's ROMs, so it needs no dumps. Give target names to play only those, such as
 // `node tools/Test-AdventureDap.mjs pet`.
@@ -73,37 +74,21 @@ const { request, event, events, fail, close, failure } = startDap(root);
 const timeout = setTimeout(() => fail(new Error("Adventure DAP integration timed out.")),
     180000 * Math.max(1, targets.reduce((count, target) => count + (plays[target]?.transcripts.length ?? 0), 0)));
 
-// What the engine has written, with each command after the prompt it answers, as the screen shows them. A logpoint
-// can log twice when an interrupt is taken at its instruction, as the PET's and BBC's are, so the reads are counted
-// once between characters; the characters come from a watch on the console's store of A, which logs once a store.
+// What the engine has written, with each command after the prompt it answers, as the screen shows them: Write's
+// logpoint logs each character's code, and ReadLine's each read.
 function transcript(commands) {
     let text = "";
     let next = 0;
-    let reading = false;
     for (const message of events) {
         if (message.event !== "output" || message.body.category !== "console") continue;
         const output = message.body.output.trimEnd();
         if (output === "READ") {
-            if (!reading) text += `${commands[next++] ?? ""}\n`;
-            reading = true;
-        } else if (/^\d+ \(/.test(output)) {
-            // The engine clears its storage as it starts, SavedA with it, and never writes a 0.
-            const code = Number(output.split(" ")[0]);
-            if (code === 0) continue;
-            text += String.fromCharCode(code);
-            reading = false;
+            text += `${commands[next++] ?? ""}\n`;
+        } else if (/^\d+$/.test(output)) {
+            text += String.fromCharCode(Number(output));
         }
     }
     return text;
-}
-
-// The address of a symbol in a target's map.
-function address(target, symbol) {
-    const map = readFileSync(join(sample, "artifacts", target, "adventure.map"), "utf8");
-    const line = map.split(/\r?\n/).find(text => text.trim().split(/ +/)[0] === symbol);
-    const found = line?.match(/\$([0-9A-F]{4}) /);
-    assert.ok(found, `${symbol} is in ${target}'s map`);
-    return found[1];
 }
 
 try {
@@ -113,6 +98,7 @@ try {
         const { family, transcripts } = plays[target];
         const consoleSource = join(sample, "src", "platform", family, "console.s");
         const readLine = firstLine(consoleSource, "ReadLine");
+        const write = firstLine(consoleSource, "Write");
         for (const name of transcripts) {
             const commands = readFileSync(join(sample, "games", `${name}.in`), "utf8").split(/\r?\n/);
             if (commands.at(-1) === "") commands.pop();
@@ -121,13 +107,9 @@ try {
             await request("launch", { project: sample, target, stopOnEntry: false, speed: "max", sound: "off",
                 logpointLimit: 0, checkContracts: "stop" });
             const set = await request("setBreakpoints", { source: { path: consoleSource }, breakpoints: [
-                { line: readLine, logMessage: "READ" }
+                { line: readLine, logMessage: "READ" }, { line: write, logMessage: "{A,d}" }
             ] });
-            assert.ok(set.breakpoints.every(breakpoint => breakpoint.verified), "the console's logpoint maps to its source");
-            const watch = await request("setDataBreakpoints", { breakpoints: [
-                { dataId: `mem:${address(target, "Console::SavedA")}:1`, accessType: "write", logMessage: "{A,d}" }
-            ] });
-            assert.ok(watch.breakpoints.every(breakpoint => breakpoint.verified), "the console's SavedA can be watched");
+            assert.ok(set.breakpoints.every(breakpoint => breakpoint.verified), "the console's logpoints map to their source");
             await request("configurationDone");
             await request("retro/type", { text: commands.map(command => `${command}\n`).join("") });
 

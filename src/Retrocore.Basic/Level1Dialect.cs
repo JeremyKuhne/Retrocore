@@ -546,8 +546,9 @@ internal sealed class Level1Dialect : BasicDialect
     ///  <para>
     ///   The place is in a READ list when the last statement word before it, in its statement and outside quotes, is
     ///   READ: the statement's own, or the one after an IF's condition. A FOR loop's place, after its FOR statement,
-    ///   has FOR last, after an IF's condition too. Level I's other words, such as THEN, TO and the functions, start
-    ///   with no statement word, so reading each position for one finds only statements.
+    ///   has FOR last, after an IF's condition too. Level I's other words, the functions and FOR's, PRINT's and IF's
+    ///   words, are read first and passed over: cut short, as <c>R.</c> for RND or <c>I.</c> for INT, they would read
+    ///   as statements, and in full none holds a statement word. Neither READ nor FOR is cut short to one of them.
     ///  </para>
     /// </remarks>
     /// <param name="memory">The memory.</param>
@@ -577,6 +578,10 @@ internal sealed class Level1Dialect : BasicDialect
             {
                 quoted = true;
             }
+            else if (OtherWord(units, x, out int past))
+            {
+                x = past - 1;
+            }
             else if (Match(units, x, s_statements, out int after) is { } word)
             {
                 last = word;
@@ -585,6 +590,19 @@ internal sealed class Level1Dialect : BasicDialect
         }
 
         return last == "READ";
+    }
+
+    // Whether a function or one statement's word (FOR's TO and STEP, PRINT's TAB and AT, IF's THEN) is at a place,
+    // in full or cut short, and where it ends.
+    private static bool OtherWord(ReadOnlySpan<int> text, int x, out int end)
+    {
+        foreach (string[] table in (string[][])[s_functions, s_forWords, s_printWords, s_ifWords])
+        {
+            if (Match(text, x, table, out end) is not null) { return true; }
+        }
+
+        end = x;
+        return false;
     }
 
     /// <summary>

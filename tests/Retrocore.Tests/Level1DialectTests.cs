@@ -224,6 +224,10 @@ public class Level1DialectTests
     [DataRow("IF X=1 THEN FOR I=1 TO 1826|", false)]
     [DataRow("P. \"READ\"|", false)]
     [DataRow("READ A(I+1)|", true)]
+    [DataRow("READ A(R.(9))|", true)]
+    [DataRow("READ A(I.(X))|,B", true)]
+    [DataRow("IF P.(1,2) THEN READ A|", true)]
+    [DataRow("IF X=1 T. FOR I=1 T. 1826|", false)]
     [DataRow("P. \"A:B\": READ A|", true)]
     [DataRow("READ A: FOR I=1 TO 9|", false)]
     public void ReadListPlacesAreFound(string marked, bool inList)

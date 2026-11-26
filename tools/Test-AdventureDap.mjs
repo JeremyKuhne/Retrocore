@@ -80,6 +80,8 @@ try {
             await new Promise(done => setTimeout(done, 200));
         }
 
+        const stopped = events.find(message => message.event === "stopped" && message.body.reason === "exception");
+        assert.ok(!stopped, `${name}: the machine stopped: ${stopped?.body.description}`);
         const played = transcript(commands);
         assert.equal(played, expected, `${name}: the 6502 engine's transcript matches the reference engine's`);
 

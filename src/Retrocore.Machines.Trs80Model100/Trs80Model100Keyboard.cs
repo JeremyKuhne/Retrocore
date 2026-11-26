@@ -79,7 +79,8 @@ public sealed class Trs80Model100Keyboard
     }
 
     /// <summary>
-    ///  Reads the rows, as port $E0 does: a bit is low when a key in its row is down in a column strobed low.
+    ///  Reads the rows, as a read of ports $E0-$EF does: a bit is low when a key in its row is down in a column
+    ///  strobed low.
     /// </summary>
     /// <param name="strobe">The columns' strobes: port A in bits 0-7 and port B bit 0 in bit 8.</param>
     /// <returns>The rows.</returns>

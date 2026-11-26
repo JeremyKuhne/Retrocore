@@ -13,7 +13,8 @@ namespace Retrocore.Tests;
 /// </summary>
 /// <remarks>
 ///  <para>
-///   The tests that boot read the ROM as <see cref="Trs80Model100RomTests"/> does, and are inconclusive without it.
+///   Every test but the missing-ROM one launches with the ROM, read as <see cref="Trs80Model100RomTests"/> does, and
+///   is inconclusive without it.
 ///  </para>
 /// </remarks>
 [TestClass]

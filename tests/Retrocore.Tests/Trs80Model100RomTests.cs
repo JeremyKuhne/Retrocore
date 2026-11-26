@@ -16,10 +16,10 @@ namespace Retrocore.Tests;
 ///   <c>t102.bin</c>, the US Model 100's and Tandy 102's ROMs (MAME's <c>m100rom.m12</c> and <c>m102rom.m12</c>),
 ///   from <c>RETROCORE_TRS80M100_ROMS</c> or the <c>trs80m100-roms</c> folder of the external test data, and are
 ///   inconclusive without them. What the tests expect was checked against MAME 0.264's <c>trsm100</c> and
-///   <c>tandy102</c> (2026-11-26): the menu and its bytes free at 8, 16, 24 and 32 KB on the Model 100 and at 24 and
-///   32 KB on the 102, the only sizes MAME's <c>tandy102</c> offers (its 8 and 16 KB figures here are the Model 100's,
-///   which share its RAM map), BASIC's banner, and the LCD, which matched MAME's screen dot for dot at the menu but for the
-///   clock's seconds.
+///   <c>tandy102</c> (2026-11-26): the menu and its bytes free at 8, 16, 24 and 32 KB on the Model 100 and at 24
+///   and 32 KB on the 102, the only sizes MAME's <c>tandy102</c> offers; the 102 at 8 and 16 KB is expected to show
+///   the Model 100's figures, which is not checked against MAME. Also BASIC's banner, and the LCD, which matched
+///   MAME's screen dot for dot at the menu but for the clock's seconds.
 ///  </para>
 /// </remarks>
 [TestClass]

@@ -10,7 +10,7 @@ namespace Retrocore.Machines.Trs80Model100;
 /// <remarks>
 ///  <para>
 ///   Columns 0-7 are strobed by the 81C55's port A bits 0-7 and column 8 by port B bit 0; a key pressed pulls its
-///   row's bit low in port $E0's read while its column is strobed low. The layout is MAME's <c>kc85</c> matrix,
+///   row's bit low in a read of ports $E0-$EF while its column is strobed low. The layout is MAME's <c>kc85</c> matrix,
 ///   which agrees with Covington's <i>System Map</i> but for the arrows: there, column 5's rows 4-7 are down, up,
 ///   left and right. The ROM bears MAME out: <c>INKEY$</c> gives 29, 28, 30 and 31, left, right, up and down, for
 ///   rows 4-7.

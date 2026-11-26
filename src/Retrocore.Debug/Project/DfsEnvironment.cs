@@ -18,7 +18,8 @@ namespace Retrocore.Debug.Project;
 ///   <c>files</c>, each at its <c>address</c> or <c>&amp;0000</c>, for a program to load with OSFILE at an address of
 ///   its own; and <c>$.!BOOT</c>, <c>*RUN &lt;NAME&gt;</c>, with the disk's boot option set to <c>*EXEC</c> it. A file's
 ///   name is <c>D.NAME</c>, in directory <c>D</c>, or <c>NAME</c> in <c>$</c>. The same files go on a UEF tape,
-///   <c>&lt;name&gt;.uef</c>, for the tape filing system, at 1200 baud. <c>"image": false</c> leaves both out. A launch
+///   <c>&lt;name&gt;.uef</c>, for the tape filing system, at 1200 baud, each named <c>D.NAME</c>, or <c>NAME</c> for
+///   <c>$</c>. <c>"image": false</c> leaves both out. A launch
 ///   boots the disk, holding SHIFT as the machine powers on.
 ///  </para>
 /// </remarks>
@@ -42,7 +43,8 @@ internal sealed class DfsEnvironment : TargetEnvironment
     /// <inheritdoc/>
     /// <remarks>
     ///  <para>
-    ///   The MOS and the DFS start, and the DFS loads and runs the program, in a few of the machine's seconds.
+    ///   The MOS and the DFS start, and the DFS loads and runs the program, in a few of the machine's seconds; a launch
+    ///   that has not started it in 30 has failed, such as at a filing system's error.
     ///  </para>
     /// </remarks>
     internal override int BootSeconds => 30;
@@ -85,7 +87,7 @@ internal sealed class DfsEnvironment : TargetEnvironment
         string ssd = Beside(build, ".ssd");
         File.WriteAllBytes(ssd, disk.ToImage());
         string uef = Beside(build, ".uef");
-        File.WriteAllBytes(uef, AcornTapeBuilder.BuildUef(files.Select(file => new AcornTapeFile(file.Name, file.LoadAddress, file.ExecutionAddress, file.Data))));
+        File.WriteAllBytes(uef, AcornTapeBuilder.BuildUef(TapeFiles(files)));
         return new(uef, "UEF tape, for *TAPE and *RUN", ssd, "DFS disk", $"SHIFT-BREAK boots the disk, and !BOOT runs {program}");
     }
 
@@ -125,8 +127,12 @@ internal sealed class DfsEnvironment : TargetEnvironment
             }
 
             AcornDfsFile added = new(directory, name, (uint)(file.Address ?? 0), ExecutionAddress: 0, File.ReadAllBytes(file.Path));
-            if (files.Any(known => known.Directory == added.Directory && string.Equals(known.Name, added.Name, StringComparison.OrdinalIgnoreCase))
-                || (added.Directory == '$' && string.Equals(added.Name, AcornDfsDisk.BootFileName, StringComparison.OrdinalIgnoreCase)))
+
+            // The DFS compares names and directories without case.
+            bool Same(AcornDfsFile known) => char.ToUpperInvariant(known.Directory) == char.ToUpperInvariant(added.Directory)
+                && string.Equals(known.Name, added.Name, StringComparison.OrdinalIgnoreCase);
+
+            if (files.Any(Same) || (added.Directory == '$' && string.Equals(added.Name, AcornDfsDisk.BootFileName, StringComparison.OrdinalIgnoreCase)))
             {
                 throw new ProjectException($"{where}: two files on the disk are named {added.Directory}.{added.Name.ToUpperInvariant()}.");
             }
@@ -141,13 +147,24 @@ internal sealed class DfsEnvironment : TargetEnvironment
             disk.AddRange(files);
             disk.AddBootFile($"*RUN {program}");
         }
-        catch (InvalidOperationException exception)
+        catch (Exception exception) when (exception is InvalidOperationException or ArgumentException)
         {
+            // A full catalogue or disk, or a file too long or at an address the catalogue cannot record.
             throw new ProjectException($"{where}: its files do not fit on a DFS disk: {exception.Message}");
         }
 
         return (files, disk);
     }
+
+    /// <summary>
+    ///  Gets the files a target's tape holds: the disk's, each named <c>D.NAME</c>, or <c>NAME</c> in <c>$</c>, so a
+    ///  program loads one under <c>*TAPE</c> by the name it gives the DFS.
+    /// </summary>
+    /// <param name="files">The disk's files.</param>
+    /// <returns>The tape's files.</returns>
+    internal static IEnumerable<AcornTapeFile> TapeFiles(IEnumerable<AcornDfsFile> files) =>
+        files.Select(file => new AcornTapeFile(
+            file.Directory == '$' ? file.Name : $"{file.Directory}.{file.Name}", file.LoadAddress, file.ExecutionAddress, file.Data));
 
     /// <summary>
     ///  Gets the name of a target's program on its disk: its project's name in capitals, the characters a DFS name

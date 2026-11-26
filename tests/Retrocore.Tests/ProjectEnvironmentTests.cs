@@ -256,7 +256,8 @@ public sealed class ProjectEnvironmentTests
     /// <summary>
     ///  A <c>dfs</c> target writes a DFS disk: its title the project's name, the program as <c>$.&lt;NAME&gt;</c> at its
     ///  load address running at its entry, its files at their addresses in their directories, and a <c>!BOOT</c> that
-    ///  <c>*RUN</c>s the program, with the boot option to <c>*EXEC</c> it; and a UEF tape of the same files.
+    ///  <c>*RUN</c>s the program, with the boot option to <c>*EXEC</c> it; and a UEF tape of the same files, each named
+    ///  <c>D.NAME</c>, or <c>NAME</c> in <c>$</c>.
     /// </summary>
     [TestMethod]
     public void DfsWritesItsDiskAndTape()
@@ -291,12 +292,21 @@ public sealed class ProjectEnvironmentTests
         (level.LoadAddress, level.Data).Should().BeEquivalentTo((0x3000u, "XYZ"u8.ToArray()));
         System.Text.Encoding.ASCII.GetString(disk.Find('$', AcornDfsDisk.BootFileName)?.File.Data ?? []).Should().Be("*RUN ADVENTU\r");
 
+        // The tape is the one the tape builder makes of the same files, each named with its directory but for $'s.
         AcornTape tape = UefFormat.Read(File.ReadAllBytes(Path.Join(output, "adventure.uef")));
-        tape.HalfCycles.Should().NotBeEmpty();
+        AcornTape expected = AcornTapeBuilder.Build(
+        [
+            new("ADVENTU", 0x1900, 0x1901, [1, 0x60]),
+            new("DATA", 0, 0, "AB"u8.ToArray()),
+            new("G.LEVEL1", 0x3000, 0, "XYZ"u8.ToArray())
+        ]);
+
+        tape.HalfCycles.Should().Equal(expected.HalfCycles);
     }
 
     /// <summary>
-    ///  A file whose name the DFS cannot take, or that another file on the disk has, fails the build naming it.
+    ///  A file whose name the DFS cannot take, or that another file on the disk has in any case, fails the build naming
+    ///  it, as does a file too long for the disk. (A program cannot be <c>!BOOT</c>: a project's name has no <c>!</c>.)
     /// </summary>
     [TestMethod]
     public void DfsRefusesBadNames()
@@ -317,6 +327,16 @@ public sealed class ProjectEnvironmentTests
         Fails("""[{ "path": "data.bin", "name": "TOOLONGNAME" }]""").Should().EndWith("'TOOLONGNAME' is not a DFS file name, D.NAME or NAME with 1 to 7 printable characters, none a space or . : \" # *; give its file a 'name'.");
         Fails("""[{ "path": "data.bin", "name": "GAME" }]""").Should().EndWith("two files on the disk are named $.GAME.");
         Fails("""[{ "path": "data.bin", "name": "!BOOT" }]""").Should().EndWith("two files on the disk are named $.!BOOT.");
+        Fails("""[{ "path": "data.bin", "name": "g.LEVEL" }, { "path": "main.s", "name": "G.level" }]""").Should().EndWith("two files on the disk are named G.LEVEL.");
+
+        Write("retrocore.json", """
+            { "sdk": "1", "name": "game", "cpu": "6502", "sources": ["main.s"],
+              "targets": { "dfs": { "machine": "bbcb", "environment": "dfs", "files": [{ "path": "data.bin", "address": "$FFFF" }] } } }
+            """);
+
+        File.WriteAllBytes(Path.Join(_folder, "data.bin"), new byte[0x40000]);
+        Action big = () => ProjectBuild.Build(RetrocoreProject.Load(_folder).Target("dfs"));
+        big.Should().Throw<ProjectException>().WithMessage("*its files do not fit on a DFS disk: *");
     }
 
     /// <summary>

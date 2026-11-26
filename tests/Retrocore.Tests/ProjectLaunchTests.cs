@@ -297,21 +297,33 @@ public sealed class ProjectLaunchTests
     }
 
     /// <summary>
-    ///  A <c>dfs</c> target, or its launch, cannot give the disks, the boot or the disk interface its launch decides.
+    ///  A <c>dfs</c> target, or its launch, cannot give the disks, the boot or the disk interface its launch decides,
+    ///  nor <c>bootSeconds</c>, as the machine boots its disk from power-on.
     /// </summary>
+    /// <param name="option">The option.</param>
+    /// <param name="value">Its value, as JSON.</param>
+    /// <param name="inTarget">Whether the target's options give it, rather than the launch.</param>
     [TestMethod]
-    public void DfsLaunchRefusesWhatItsDiskDecides()
+    [DataRow("disks", "[\"x.ssd\"]", true)]
+    [DataRow("boot", "false", false)]
+    [DataRow("diskInterface", "true", true)]
+    [DataRow("bootSeconds", "1", false)]
+    public void DfsLaunchRefusesWhatItsDiskDecides(string option, string value, bool inTarget)
     {
-        Write("retrocore.json", """
+        string options = inTarget ? $$""", "options": { "{{option}}": {{value}} }""" : "";
+        Write("retrocore.json", $$"""
             { "sdk": "1", "name": "game", "cpu": "6502", "sources": ["src/*.s"],
-              "targets": { "dfs": { "machine": "bbcb", "environment": "dfs", "options": { "disks": ["x.ssd"] } } } }
+              "targets": { "dfs": { "machine": "bbcb", "environment": "dfs"{{options}} } } }
             """);
 
         Write("src/main.s", "rts\n");
         using DapTestClient client = new();
         client.Request("initialize", []);
-        client.Fails("launch", Launch("dfs")).Should().EndWith(
-            "a dfs target boots its own disk in drive 0, so its options and its launch cannot give 'disks'.");
+        JsonObject launch = Launch("dfs");
+        if (!inTarget) { launch[option] = JsonNode.Parse(value); }
+        client.Fails("launch", launch).Should().EndWith(option == "bootSeconds"
+            ? "the 'dfs' environment boots its image from power-on, so its options and its launch cannot give 'bootSeconds'."
+            : $"a dfs target boots its own disk in drive 0, so its options and its launch cannot give '{option}'.");
     }
 
     /// <summary>

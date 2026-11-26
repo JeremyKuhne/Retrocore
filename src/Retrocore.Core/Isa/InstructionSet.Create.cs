@@ -269,7 +269,9 @@ public sealed partial class InstructionSet
             Pulled = (byte)(effects.Pulled + other.Pulled),
             MayPush = (byte)(effects.MayPush + other.MayPush),
             MayPull = (byte)(effects.MayPull + other.MayPull),
-            StackRegisterPlusOne = effects.StackRegisterPlusOne != 0 ? effects.StackRegisterPlusOne : other.StackRegisterPlusOne
+            StackRegisterPlusOne = effects.StackRegisterPlusOne != 0 ? effects.StackRegisterPlusOne : other.StackRegisterPlusOne,
+            ConditionFlags = effects.ConditionFlags != 0 ? effects.ConditionFlags : other.ConditionFlags,
+            ConditionTable = effects.ConditionFlags != 0 ? effects.ConditionTable : other.ConditionTable
         };
 
         return combined.WithCopies(other);

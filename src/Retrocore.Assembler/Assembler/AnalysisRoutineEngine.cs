@@ -50,6 +50,8 @@ internal sealed class AnalysisRoutineEngine
     private readonly int _flagsRegister;
     private readonly int _programCounter;
     private readonly byte _allFlags;
+    private readonly AnalysisEvaluator? _evaluator;
+    private readonly int[] _registers;
 
     /// <summary>
     ///  Creates an engine over a 64 KiB image.
@@ -65,13 +67,20 @@ internal sealed class AnalysisRoutineEngine
     ///  The summary of the routine with a contract that starts at an address, or null; a branch, jump or
     ///  fall-through there is a tail call.
     /// </param>
+    /// <param name="evaluator">
+    ///  Runs an instruction whose inputs are known on the CPU's core, for the values it leaves; null to follow no
+    ///  constants but those the effects lines give.
+    /// </param>
     internal AnalysisRoutineEngine(
         InstructionSet set,
         byte[] memory,
         bool[] defined,
         Func<ushort, AnalysisRoutineSummary?> callee,
-        Func<ushort, AnalysisRoutineSummary?> routineAt)
+        Func<ushort, AnalysisRoutineSummary?> routineAt,
+        AnalysisEvaluator? evaluator = null)
     {
+        _evaluator = evaluator;
+        _registers = new int[set.Description.EffectRegisters.Count];
         _set = set;
         _memory = memory;
         _defined = defined;
@@ -134,7 +143,7 @@ internal sealed class AnalysisRoutineEngine
         Dictionary<ushort, AnalysisRoutineState> states = [];
         Queue<ushort> work = new();
         AnalysisRoutineState start = new();
-        for (int slot = 0; slot < SlotCount; slot++) { start.Slots[slot] = slot; }
+        for (int slot = 0; slot < SlotCount; slot++) { start.Slots[slot] = AnalysisValue.Of(slot); }
         states[entry] = start;
         work.Enqueue(entry);
         AnalysisRoutineState? exit = null;
@@ -142,6 +151,9 @@ internal sealed class AnalysisRoutineEngine
         ushort incompleteAt = 0;
         bool changesCallerStack = false;
         int steps = 0;
+
+        // Each conditional instruction's outcomes over every visit: bit 0 not taken, bit 1 taken.
+        Dictionary<ushort, int> outcomes = [];
 
         while (work.TryDequeue(out ushort pc))
         {
@@ -161,7 +173,7 @@ internal sealed class AnalysisRoutineEngine
             Step(state, instruction, pc);
         }
 
-        return Summarize(exit, incomplete, incompleteAt, changesCallerStack);
+        return Summarize(exit, incomplete, incompleteAt, changesCallerStack) with { Conditions = outcomes };
 
         void Step(AnalysisRoutineState state, DisassembledInstruction instruction, ushort pc)
         {
@@ -185,8 +197,16 @@ internal sealed class AnalysisRoutineEngine
                         return;
                     }
 
-                    Follow(target, state.Copy(), pc);
-                    if (flow == DisassemblyFlow.ConditionalBranch) { Follow(next, state, pc); }
+                    if (flow == DisassemblyFlow.Jump)
+                    {
+                        Follow(target, state, pc);
+                        return;
+                    }
+
+                    // A branch whose flags are known goes one way; each way taken tells of the flags.
+                    bool? taken = Decide(state, effects, pc);
+                    if (taken != false) { Follow(target, Refined(state.Copy(), effects, taken: true), pc); }
+                    if (taken != true) { Follow(next, Refined(state, effects, taken: false), pc); }
                     return;
                 case DisassemblyFlow.IndirectJump:
                     Stop("it jumps indirectly", pc);
@@ -199,8 +219,20 @@ internal sealed class AnalysisRoutineEngine
             // A conditional return returns, and falls through when not taken.
             if (effects.MayPull != 0 && effects.Pulled == 0 && effects.MayPush == 0)
             {
-                if (state.StackLost || HasFrames(state)) { Stop("it returns through data it pushed", pc, stack: true); }
-                else { Return(state.Copy()); }
+                bool? returns = Decide(state, effects, pc);
+                if (returns != false && (state.StackLost || HasFrames(state)))
+                {
+                    Stop("it returns through data it pushed", pc, stack: true);
+                }
+                else if (returns != false)
+                {
+                    Return(Refined(state.Copy(), effects, taken: true));
+                }
+
+                if (returns == true) { return; }
+                state = Refined(state, effects, taken: false);
+                Follow(next, state, pc);
+                return;
             }
 
             switch (Effects(state, instruction, effects, pc))
@@ -225,6 +257,16 @@ internal sealed class AnalysisRoutineEngine
 
         void Call(AnalysisRoutineState state, DisassembledInstruction instruction, ushort pc, ushort next)
         {
+            // A conditional call not taken goes on; one that may be taken joins both ways at the next instruction.
+            InstructionEffects effects = instruction.Effects;
+            if (effects.ConditionFlags != 0)
+            {
+                bool? taken = Decide(state, effects, pc);
+                if (taken != true) { Follow(next, Refined(state.Copy(), effects, taken: false), pc); }
+                if (taken == false) { return; }
+                state = Refined(state, effects, taken: true);
+            }
+
             ushort? target = instruction.DirectTarget;
             AnalysisRoutineSummary? callee = target is { } address ? _callee(address) : null;
             // A callee that changes the stack under its return address changes this routine's frame: with data
@@ -240,6 +282,22 @@ internal sealed class AnalysisRoutineEngine
             if (callee is null) { Unknown(state, pc); }
             else { Apply(state, callee, pc); }
             if (callee is null || callee.Returns || callee.Incomplete is not null) { Follow(next, state, pc); }
+        }
+
+        // Whether a conditional instruction is taken, from the flags known, noted for the summary.
+        bool? Decide(AnalysisRoutineState state, InstructionEffects effects, ushort pc)
+        {
+            KnownFlags(state, out byte known, out byte values);
+            bool? taken = effects.Taken(known, values);
+            int outcome = taken switch
+            {
+                true => 2,
+                false => 1,
+                _ => 3
+            };
+
+            outcomes[pc] = (outcomes.TryGetValue(pc, out int seen) ? seen : 0) | outcome;
+            return taken;
         }
 
         // Anything about the stack the analysis cannot follow is a stack the callers cannot trust.
@@ -289,6 +347,37 @@ internal sealed class AnalysisRoutineEngine
         }
     }
 
+    // The flags whose values are known, and those values, as bits of the flags register.
+    private static void KnownFlags(AnalysisRoutineState state, out byte known, out byte values)
+    {
+        known = 0;
+        values = 0;
+        for (int bit = 0; bit < 8; bit++)
+        {
+            AnalysisValue flag = state.Slots[FlagSlot + bit];
+            if (!flag.IsConstant) { continue; }
+            known |= (byte)(1 << bit);
+            if (flag.Constant != 0) { values |= (byte)(1 << bit); }
+        }
+    }
+
+    // A state with what an outcome tells of the condition's flags: BEQ taken means zero is set. The flags keep
+    // where their values came from.
+    private static AnalysisRoutineState Refined(AnalysisRoutineState state, InstructionEffects effects, bool taken)
+    {
+        if (effects.ConditionFlags == 0) { return state; }
+        KnownFlags(state, out byte known, out byte values);
+        effects.Implied(taken, known, values, out byte implied, out byte impliedValues);
+        for (int bit = 0; bit < 8; bit++)
+        {
+            if ((implied & (1 << bit)) == 0) { continue; }
+            int slot = FlagSlot + bit;
+            state.Slots[slot] = state.Slots[slot] with { Constant = (impliedValues >> bit) & 1 };
+        }
+
+        return state;
+    }
+
     private static bool HasFrames(AnalysisRoutineState state) => state.Stacks.Values.Any(frames => frames.Count != 0);
 
     private bool TryDecode(ushort pc, out DisassembledInstruction instruction)
@@ -317,8 +406,11 @@ internal sealed class AnalysisRoutineEngine
         byte writtenFlags = (byte)(effects.FlagsWritten | effects.FlagsMayWrite);
         AnalysisRoutineOutcome outcome = AnalysisRoutineOutcome.Next;
 
+        // What the core leaves when every register and flag the instruction reads is a known constant.
+        bool evaluated = Evaluate(state, instruction, effects, pc, out int evaluatedFlags);
+
         // The values the instruction leaves in registers it writes, where they are known: copies, loads and pulls.
-        Dictionary<int, int> results = [];
+        Dictionary<int, AnalysisValue> results = [];
         for (int index = 0; index < effects.CopyCount; index++)
         {
             effects.GetCopy(index, out int destination, out int source);
@@ -335,7 +427,7 @@ internal sealed class AnalysisRoutineEngine
         if (access == MemoryAccess.Read && direct && readLeaves == 0 && OneBit(written & ~stackBit) is int loaded and >= 0)
         {
             // A load from a fixed address gets what a store left there; anything else there is a new value.
-            results[loaded] = state.Memory.TryGetValue(instruction.Operand, out int value) ? value : Changed(pc);
+            results[loaded] = state.Memory.TryGetValue(instruction.Operand, out AnalysisValue value) ? value : AnalysisValue.Of(Changed(pc));
         }
 
         if (effects.Pushed != 0)
@@ -356,11 +448,13 @@ internal sealed class AnalysisRoutineEngine
         {
             if (direct && access == MemoryAccess.Write && OneBit(readLeaves) is int stored and >= 0)
             {
-                state.Memory[instruction.Operand] = state.Slots[stored];
+                // Memory keeps where the value came from but not a constant: without the machine's memory map, a
+                // fixed address may be I/O, as the BBC's keyboard scan writes a VIA register and tests it.
+                state.Memory[instruction.Operand] = state.Slots[stored] with { Constant = -1 };
             }
             else if (direct)
             {
-                state.Memory[instruction.Operand] = Changed(pc);
+                state.Memory[instruction.Operand] = AnalysisValue.Of(Changed(pc));
             }
             else
             {
@@ -379,15 +473,67 @@ internal sealed class AnalysisRoutineEngine
         for (int bit = 0; bit < 32; bit++)
         {
             if ((written & (1u << bit)) == 0) { continue; }
-            state.Slots[bit] = results.TryGetValue(bit, out int value) ? value : Changed(pc);
+            AnalysisValue value = results.TryGetValue(bit, out AnalysisValue result) ? result : AnalysisValue.Of(Changed(pc));
+            state.Slots[bit] = evaluated ? value with { Constant = _registers[bit] } : value;
+        }
+
+        // A flag the instruction sets or clears, or the core computed, is a constant.
+        for (int bit = 0; bit < 8; bit++)
+        {
+            byte mask = (byte)(1 << bit);
+            if ((writtenFlags & mask) == 0) { continue; }
+            int constant = -1;
+            if (evaluated) { constant = (evaluatedFlags >> bit) & 1; }
+            else if ((effects.FlagsSet & mask) != 0) { constant = 1; }
+            else if ((effects.FlagsCleared & mask) != 0) { constant = 0; }
+            state.Slots[FlagSlot + bit] = new AnalysisValue(Changed(pc), constant);
+        }
+
+        return outcome == AnalysisRoutineOutcome.Returned && state.StackLost ? AnalysisRoutineOutcome.Lost : outcome;
+    }
+
+    // Runs an instruction on the core when every register and flag it reads is known, and nothing it does is a
+    // jump, a stack access or a write the analysis must see itself; the registers it leaves are in _registers.
+    private bool Evaluate(
+        AnalysisRoutineState state,
+        DisassembledInstruction instruction,
+        InstructionEffects effects,
+        ushort pc,
+        out int flags)
+    {
+        flags = 0;
+        if (_evaluator is null || (effects.Pushed | effects.Pulled | effects.MayPush | effects.MayPull) != 0)
+        {
+            return false;
+        }
+
+        uint read = effects.RegistersRead;
+        for (int bit = 0; bit < _registers.Length; bit++)
+        {
+            AnalysisValue value = state.Slots[bit];
+            bool needed = (read & (1u << bit)) != 0;
+            if (needed && (!value.IsConstant || (_leaves & (1u << bit)) == 0)) { return false; }
+            _registers[bit] = value.IsConstant ? value.Constant : 0;
         }
 
         for (int bit = 0; bit < 8; bit++)
         {
-            if ((writtenFlags & (1 << bit)) != 0) { state.Slots[FlagSlot + bit] = Changed(pc); }
+            AnalysisValue flag = state.Slots[FlagSlot + bit];
+            if ((effects.FlagsRead & (1 << bit)) != 0 && !flag.IsConstant) { return false; }
+            if (flag.IsConstant && flag.Constant != 0) { flags |= 1 << bit; }
         }
 
-        return outcome == AnalysisRoutineOutcome.Returned && state.StackLost ? AnalysisRoutineOutcome.Lost : outcome;
+        // The instruction's bytes and the code after them, which a core may read ahead, as the 6502 reads the byte
+        // after a one-byte instruction.
+        Span<byte> bytes = stackalloc byte[8];
+        int count = 0;
+        for (; count < bytes.Length && (count < instruction.Size || _defined[(ushort)(pc + count)]); count++)
+        {
+            bytes[count] = _memory[(ushort)(pc + count)];
+        }
+
+        bytes = bytes[..count];
+        return _evaluator.TryRun(pc, bytes, _registers, ref flags, static _ => -1, out _);
     }
 
     // A pull restores the values a push saved when it takes back exactly that push's bytes into as many registers;
@@ -396,7 +542,7 @@ internal sealed class AnalysisRoutineEngine
         AnalysisRoutineState state,
         InstructionEffects effects,
         int stack,
-        Dictionary<int, int> results,
+        Dictionary<int, AnalysisValue> results,
         ref byte writtenFlags)
     {
         if (state.StackLost) { return AnalysisRoutineOutcome.Lost; }
@@ -473,14 +619,14 @@ internal sealed class AnalysisRoutineEngine
         {
             uint mask = 1u << bit;
             if ((_leaves & mask) == 0 || (summary.KeptRegisters & mask) != 0) { continue; }
-            state.Slots[bit] = (summary.UnknownRegisters & mask) != 0 ? Unknown(at) : Changed(at);
+            state.Slots[bit] = AnalysisValue.Of((summary.UnknownRegisters & mask) != 0 ? Unknown(at) : Changed(at));
         }
 
         for (int bit = 0; bit < 8; bit++)
         {
             byte mask = (byte)(1 << bit);
             if ((summary.KeptFlags & mask) != 0) { continue; }
-            state.Slots[FlagSlot + bit] = (summary.UnknownFlags & mask) != 0 ? Unknown(at) : Changed(at);
+            state.Slots[FlagSlot + bit] = AnalysisValue.Of((summary.UnknownFlags & mask) != 0 ? Unknown(at) : Changed(at));
         }
 
         Forget(state, at);
@@ -494,7 +640,7 @@ internal sealed class AnalysisRoutineEngine
     {
         foreach (int address in state.Memory.Keys.ToArray())
         {
-            state.Memory[address] = JoinValue(state.Memory[address], Unknown(at));
+            state.Memory[address] = JoinValue(state.Memory[address], AnalysisValue.Of(Unknown(at)));
         }
     }
 
@@ -514,7 +660,7 @@ internal sealed class AnalysisRoutineEngine
             if (!followed) { continue; }
 
             // With no return followed, nothing is known; a stack pointer is back where it was at every return.
-            int value = exit is null ? UnknownSomewhere : exit.Slots[slot];
+            int value = exit is null ? UnknownSomewhere : exit.Slots[slot].Origin;
             if (register && exit is not null && (_stackRegisters & (1u << slot)) != 0) { value = slot; }
             if (value == slot)
             {
@@ -557,7 +703,10 @@ internal sealed class AnalysisRoutineEngine
 
     // Two paths' values of one slot: the same value; else surely changed if either path changed it, keeping where;
     // else unknown if either is; else, two different entry values, changed.
-    private static int JoinValue(int first, int second)
+    private static AnalysisValue JoinValue(AnalysisValue first, AnalysisValue second) =>
+        new(JoinOrigin(first.Origin, second.Origin), first.Constant == second.Constant ? first.Constant : -1);
+
+    private static int JoinOrigin(int first, int second)
     {
         if (first == second) { return first; }
         bool changedFirst = first is <= ChangedSomewhere and >= ChangedLimit;
@@ -581,14 +730,17 @@ internal sealed class AnalysisRoutineEngine
         // A value stored on one path only is a new value on the other.
         foreach (int address in first.Memory.Keys)
         {
-            joined.Memory[address] = second.Memory.TryGetValue(address, out int theirs)
+            joined.Memory[address] = second.Memory.TryGetValue(address, out AnalysisValue theirs)
                 ? JoinValue(first.Memory[address], theirs)
-                : JoinValue(first.Memory[address], ChangedSomewhere);
+                : JoinValue(first.Memory[address], AnalysisValue.Of(ChangedSomewhere));
         }
 
-        foreach ((int address, int value) in second.Memory)
+        foreach ((int address, AnalysisValue value) in second.Memory)
         {
-            if (!first.Memory.ContainsKey(address)) { joined.Memory[address] = JoinValue(value, ChangedSomewhere); }
+            if (!first.Memory.ContainsKey(address))
+            {
+                joined.Memory[address] = JoinValue(value, AnalysisValue.Of(ChangedSomewhere));
+            }
         }
 
         joined.StackLost |= second.StackLost;
@@ -614,10 +766,10 @@ internal sealed class AnalysisRoutineEngine
                 {
                     AnalysisRoutineUnit left = mine[index].Units[unit];
                     AnalysisRoutineUnit right = frames[index].Units[unit];
-                    int[] values = new int[left.Values.Length];
+                    AnalysisValue[] values = new AnalysisValue[left.Values.Length];
                     for (int value = 0; value < values.Length; value++)
                     {
-                        int theirs = value < right.Values.Length ? right.Values[value] : ChangedSomewhere;
+                        AnalysisValue theirs = value < right.Values.Length ? right.Values[value] : AnalysisValue.Of(ChangedSomewhere);
                         values[value] = JoinValue(left.Values[value], theirs);
                     }
 

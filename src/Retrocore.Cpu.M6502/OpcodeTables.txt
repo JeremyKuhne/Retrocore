@@ -46,8 +46,8 @@ access read-write ASL LSR ROL ROR INC DEC TRB TSB RMB SMB SLO RLA SRE RRA DCP IS
 # 'writes' those it always assigns; the rest keep their values. Registers go by name and flags by word, and P
 # means every flag, as PHP pushes them. A written flag=0 or flag=1 takes that value, flag=bitN a copy of bit N
 # of the memory operand. 'push n' and 'pull n' move n bytes through the stack register, S, which they also
-# read and write. 'copies X=A' says the instruction sets X to A's value. Instruction:Form replaces the
-# instruction's own line, and a :Form line adds to each
+# read and write. 'copies X=A' says the instruction sets X to A's value. 'taken zero=1' says when a branch is
+# taken. Instruction:Form replaces the instruction's own line, and a :Form line adds to each
 # instruction in that form, as the index register an address is formed from. 'effects in Set' lines win over
 # these in that set and those built on it. PC is left to the flow lines and the memory operand to the access
 # lines.
@@ -90,10 +90,14 @@ effects RTS                     reads S                 writes S                
 effects RTI                     reads S                 writes P S                      pull 3
 effects BRK                     reads P S               writes S interrupt=1            push 3
 effects in Wdc65C02 BRK         reads P S               writes S interrupt=1 decimal=0  push 3
-effects BCC BCS                 reads carry
-effects BEQ BNE                 reads zero
-effects BMI BPL                 reads negative
-effects BVC BVS                 reads overflow
+effects BCC                     reads carry             taken carry=0
+effects BCS                     reads carry             taken carry=1
+effects BEQ                     reads zero              taken zero=1
+effects BNE                     reads zero              taken zero=0
+effects BMI                     reads negative          taken negative=1
+effects BPL                     reads negative          taken negative=0
+effects BVC                     reads overflow          taken overflow=0
+effects BVS                     reads overflow          taken overflow=1
 effects CLC                                             writes carry=0
 effects SEC                                             writes carry=1
 effects CLD                                             writes decimal=0

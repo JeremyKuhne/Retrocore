@@ -94,21 +94,33 @@ effects CCF                     reads A X Y carry       writes Y half-carry X su
 effects NOP DI EI IM HALT none
 effects JP JR none
 effects JP:[HL] JP:[IX] JP:[IY] reads $1
-effects JP:NZ,nn JP:Z,nn JR:NZ,rel JR:Z,rel reads zero
-effects JP:NC,nn JP:C,nn JR:NC,rel JR:C,rel reads carry
-effects JP:PO,nn JP:PE,nn       reads overflow
-effects JP:P,nn JP:M,nn         reads negative
+effects JP:NZ,nn JR:NZ,rel       reads zero              taken zero=0
+effects JP:Z,nn JR:Z,rel         reads zero              taken zero=1
+effects JP:NC,nn JR:NC,rel       reads carry             taken carry=0
+effects JP:C,nn JR:C,rel         reads carry             taken carry=1
+effects JP:PO,nn                 reads overflow          taken overflow=0
+effects JP:PE,nn                 reads overflow          taken overflow=1
+effects JP:P,nn                  reads negative          taken negative=0
+effects JP:M,nn                  reads negative          taken negative=1
 effects DJNZ                    reads B                 writes B
 effects CALL RST                reads SP                writes SP                       push 2
-effects CALL:NZ,nn CALL:Z,nn    reads zero SP           may-write SP                    may-push 2
-effects CALL:NC,nn CALL:C,nn    reads carry SP          may-write SP                    may-push 2
-effects CALL:PO,nn CALL:PE,nn   reads overflow SP       may-write SP                    may-push 2
-effects CALL:P,nn CALL:M,nn     reads negative SP       may-write SP                    may-push 2
+effects CALL:NZ,nn               reads zero SP           may-write SP may-push 2 taken zero=0
+effects CALL:Z,nn                reads zero SP           may-write SP may-push 2 taken zero=1
+effects CALL:NC,nn               reads carry SP          may-write SP may-push 2 taken carry=0
+effects CALL:C,nn                reads carry SP          may-write SP may-push 2 taken carry=1
+effects CALL:PO,nn               reads overflow SP       may-write SP may-push 2 taken overflow=0
+effects CALL:PE,nn               reads overflow SP       may-write SP may-push 2 taken overflow=1
+effects CALL:P,nn                reads negative SP       may-write SP may-push 2 taken negative=0
+effects CALL:M,nn                reads negative SP       may-write SP may-push 2 taken negative=1
 effects RET RETI RETN           reads SP                writes SP                       pull 2
-effects RET:NZ RET:Z            reads zero SP           may-write SP                    may-pull 2
-effects RET:NC RET:C            reads carry SP          may-write SP                    may-pull 2
-effects RET:PO RET:PE           reads overflow SP       may-write SP                    may-pull 2
-effects RET:P RET:M             reads negative SP       may-write SP                    may-pull 2
+effects RET:NZ                   reads zero SP           may-write SP may-pull 2 taken zero=0
+effects RET:Z                    reads zero SP           may-write SP may-pull 2 taken zero=1
+effects RET:NC                   reads carry SP          may-write SP may-pull 2 taken carry=0
+effects RET:C                    reads carry SP          may-write SP may-pull 2 taken carry=1
+effects RET:PO                   reads overflow SP       may-write SP may-pull 2 taken overflow=0
+effects RET:PE                   reads overflow SP       may-write SP may-pull 2 taken overflow=1
+effects RET:P                    reads negative SP       may-write SP may-pull 2 taken negative=0
+effects RET:M                    reads negative SP       may-write SP may-pull 2 taken negative=1
 effects IN                      reads B C               writes $1 negative zero Y half-carry=0 X overflow subtract=0
 effects IN:A,[n]                reads A                 writes A
 effects OUT                     reads B C $2

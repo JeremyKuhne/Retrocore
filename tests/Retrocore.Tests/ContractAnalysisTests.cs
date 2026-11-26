@@ -97,7 +97,7 @@ public class ContractAnalysisTests
             ;; Ends in a routine that keeps X, or in one that changes it.
             ;; Keeps: X
             Caller:
-                lda #0
+                lda $10
                 beq Kept
                 jmp Changes
             ;; Keeps X.

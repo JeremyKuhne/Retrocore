@@ -62,7 +62,7 @@ internal sealed class AnalysisContracts
             }
         }
 
-        _engine = new(set, _memory, _defined, Callee, RoutineAt);
+        _engine = new(set, _memory, _defined, Callee, RoutineAt, AnalysisEvaluator.For(set));
         IsaDescription description = set.Description;
         _general = _engine.Registers & ~AnalysisRoutineEngine.StackRegisters(set);
         foreach (string name in description.EffectRegisters)
@@ -163,7 +163,22 @@ internal sealed class AnalysisContracts
             ? first.Address.CompareTo(second.Address)
             : string.CompareOrdinal(first.Item, second.Item));
 
-        return new(findings, count, unverified, skipped);
+        // A condition is fixed only where every routine that reached it, from its start or any of its Entry:
+        // labels, was followed to the end and found it went the same one way; a routine the analysis gave up on
+        // may have left a way unfollowed.
+        foreach (ushort address in _contracts.Keys) { Analyzed(address); }
+        Dictionary<ushort, int> conditions = [];
+        foreach (AnalysisRoutineSummary? analyzed in _analyzed.Values)
+        {
+            if (analyzed is null) { continue; }
+            foreach ((ushort at, int ways) in analyzed.Conditions)
+            {
+                int these = analyzed.Incomplete is null ? ways : 3;
+                conditions[at] = (conditions.TryGetValue(at, out int seen) ? seen : 0) | these;
+            }
+        }
+
+        return new(findings, count, unverified, skipped, conditions);
     }
 
     private static AnalysisContractFinding Finding(AnalysisContract contract, string item, AnalysisContractProblem kind, ushort? at) =>

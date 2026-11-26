@@ -71,4 +71,18 @@ internal sealed record AnalysisRoutineSummary
     ///  Gets whether the summary comes from the routine's documentation rather than its code.
     /// </summary>
     public bool Documented { get; init; }
+
+    /// <summary>
+    ///  Gets the ways each conditional branch, call and return the analysis reached went, by address: bit 0 for
+    ///  not taken, bit 1 for taken.
+    /// </summary>
+    internal IReadOnlyDictionary<ushort, int> Conditions { get; init; } = new Dictionary<ushort, int>();
+
+    /// <summary>
+    ///  Gets the conditional branches, calls and returns that always go one way, by address: true for always taken,
+    ///  false for never.
+    /// </summary>
+    internal IReadOnlyDictionary<ushort, bool> FixedConditions => Conditions
+        .Where(pair => pair.Value != 3)
+        .ToDictionary(pair => pair.Key, pair => pair.Value == 2);
 }

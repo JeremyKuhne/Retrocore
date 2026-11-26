@@ -48,7 +48,8 @@ access read-write NEG COM LSR ROR ASR ASL ROL DEC INC XNC XDEC
 # EXG's first register, $2 the second, and 'push $1' and 'pull $1' move the list's bytes. An indexed postbyte's
 # index register, accumulator offset and auto-increment add to every indexed instruction. PC is left to the flow
 # lines, and the state the registers line does not list, NMI's arming and the flags an unprefixed store
-# immediate takes from the instruction before it, is left out.
+# immediate takes from the instruction before it, is left out. A branch's 'taken' condition joins flag tests with
+# & and then |, and compares flags with = and !=, as BGT's zero=0&negative=overflow.
 parts D=A,B
 stack S
 effects :Direct                 reads DP
@@ -146,20 +147,34 @@ effects PSHS                    reads $1 S              writes S                
 effects PULS                    reads S                 writes $1 S                     pull $1
 effects PSHU                    reads $1 U              writes U                        push U $1
 effects PULU                    reads U                 writes $1 U                     pull U $1
-effects BCC BCS                 reads carry
-effects BEQ BNE                 reads zero
-effects BMI BPL                 reads negative
-effects BVC BVS                 reads overflow
-effects BHI BLS                 reads carry zero
-effects BGE BLT                 reads negative overflow
-effects BGT BLE                 reads negative overflow zero
-effects LBCC LBCS               reads carry
-effects LBEQ LBNE               reads zero
-effects LBMI LBPL               reads negative
-effects LBVC LBVS               reads overflow
-effects LBHI LBLS               reads carry zero
-effects LBGE LBLT               reads negative overflow
-effects LBGT LBLE               reads negative overflow zero
+effects BCC                      reads carry             taken carry=0
+effects BCS                      reads carry             taken carry=1
+effects BEQ                      reads zero              taken zero=1
+effects BNE                      reads zero              taken zero=0
+effects BMI                      reads negative          taken negative=1
+effects BPL                      reads negative          taken negative=0
+effects BVC                      reads overflow          taken overflow=0
+effects BVS                      reads overflow          taken overflow=1
+effects BHI                      reads carry zero        taken carry=0&zero=0
+effects BLS                      reads carry zero        taken carry=1|zero=1
+effects BGE                      reads negative overflow taken negative=overflow
+effects BLT                      reads negative overflow taken negative!=overflow
+effects BGT                      reads negative overflow zero taken zero=0&negative=overflow
+effects BLE                      reads negative overflow zero taken zero=1|negative!=overflow
+effects LBCC                     reads carry             taken carry=0
+effects LBCS                     reads carry             taken carry=1
+effects LBEQ                     reads zero              taken zero=1
+effects LBNE                     reads zero              taken zero=0
+effects LBMI                     reads negative          taken negative=1
+effects LBPL                     reads negative          taken negative=0
+effects LBVC                     reads overflow          taken overflow=0
+effects LBVS                     reads overflow          taken overflow=1
+effects LBHI                     reads carry zero        taken carry=0&zero=0
+effects LBLS                     reads carry zero        taken carry=1|zero=1
+effects LBGE                     reads negative overflow taken negative=overflow
+effects LBLT                     reads negative overflow taken negative!=overflow
+effects LBGT                     reads negative overflow zero taken zero=0&negative=overflow
+effects LBLE                     reads negative overflow zero taken zero=1|negative!=overflow
 effects BRA BRN LBRA LBRN JMP NOP SYNC XHCF none
 effects BSR LBSR JSR            reads S                 writes S                        push 2
 effects RTS                     reads S                 writes S                        pull 2

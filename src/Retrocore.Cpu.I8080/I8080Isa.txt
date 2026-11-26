@@ -106,20 +106,32 @@ effects CMC                     reads carry             writes carry
 effects RLC RRC                 reads A                 writes A carry
 effects RAL RAR                 reads A carry           writes A carry
 effects JMP NOP DI EI HLT none
-effects JNZ JZ                  reads zero
-effects JNC JC                  reads carry
-effects JPO JPE                 reads parity
-effects JP JM                   reads negative
+effects JNZ                      reads zero              taken zero=0
+effects JZ                       reads zero              taken zero=1
+effects JNC                      reads carry             taken carry=0
+effects JC                       reads carry             taken carry=1
+effects JPO                      reads parity            taken parity=0
+effects JPE                      reads parity            taken parity=1
+effects JP                       reads negative          taken negative=0
+effects JM                       reads negative          taken negative=1
 effects CALL RST                reads SP                writes SP                       push 2
-effects CNZ CZ                  reads zero SP           may-write SP                    may-push 2
-effects CNC CC                  reads carry SP          may-write SP                    may-push 2
-effects CPO CPE                 reads parity SP         may-write SP                    may-push 2
-effects CP CM                   reads negative SP       may-write SP                    may-push 2
+effects CNZ                      reads zero SP           may-write SP may-push 2 taken zero=0
+effects CZ                       reads zero SP           may-write SP may-push 2 taken zero=1
+effects CNC                      reads carry SP          may-write SP may-push 2 taken carry=0
+effects CC                       reads carry SP          may-write SP may-push 2 taken carry=1
+effects CPO                      reads parity SP         may-write SP may-push 2 taken parity=0
+effects CPE                      reads parity SP         may-write SP may-push 2 taken parity=1
+effects CP                       reads negative SP       may-write SP may-push 2 taken negative=0
+effects CM                       reads negative SP       may-write SP may-push 2 taken negative=1
 effects RET                     reads SP                writes SP                       pull 2
-effects RNZ RZ                  reads zero SP           may-write SP                    may-pull 2
-effects RNC RC                  reads carry SP          may-write SP                    may-pull 2
-effects RPO RPE                 reads parity SP         may-write SP                    may-pull 2
-effects RP RM                   reads negative SP       may-write SP                    may-pull 2
+effects RNZ                      reads zero SP           may-write SP may-pull 2 taken zero=0
+effects RZ                       reads zero SP           may-write SP may-pull 2 taken zero=1
+effects RNC                      reads carry SP          may-write SP may-pull 2 taken carry=0
+effects RC                       reads carry SP          may-write SP may-pull 2 taken carry=1
+effects RPO                      reads parity SP         may-write SP may-pull 2 taken parity=0
+effects RPE                      reads parity SP         may-write SP may-pull 2 taken parity=1
+effects RP                       reads negative SP       may-write SP may-pull 2 taken negative=0
+effects RM                       reads negative SP       may-write SP may-pull 2 taken negative=1
 effects PUSH:B                  reads BC SP             writes SP                       push 2
 effects PUSH:D                  reads DE SP             writes SP                       push 2
 effects PUSH:H                  reads HL SP             writes SP                       push 2
@@ -162,8 +174,9 @@ effects SHLX                    reads DE HL
 effects LHLX                    reads DE                writes HL
 effects RIM                                             writes A
 effects SIM                     reads A
-effects JNK JK                  reads K
-effects RSTV                    reads V SP              may-write SP                    may-push 2
+effects JNK                      reads K                 taken K=0
+effects JK                       reads K                 taken K=1
+effects RSTV                    reads V SP              may-write SP may-push 2 taken V=1
 
 [forms]
 # Operand forms with expressions, in the order operands are matched; literal forms such as A,B and M match

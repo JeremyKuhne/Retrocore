@@ -1,7 +1,8 @@
 # Backlog: static analysis of assembly sources
 
 Status: **survey, with item 4's groundwork done for every CPU (the 6502 family, the Z80, the MC6809, the 8080 and the
-8085) and its first slice, [the Keeps and Uses check](#the-keeps-and-uses-check), in tests**. This note gathers what
+8085), its first slice, [the Keeps and Uses check](#the-keeps-and-uses-check), and item 5's first slice,
+[flag values](#flag-values), in tests**. This note gathers what
 Retrocore already checks, what other assemblers and tools check, and where the two differ, as the starting point for
 a design. The [effects lines](#register-and-flag-effects) are decided; where the check runs is not.
 
@@ -206,6 +207,7 @@ warnings, which most assemblers have.
    gets wrong. The effects are done for every CPU: see [Register and flag effects](#register-and-flag-effects).
    The dataflow is started: see [The Keeps and Uses check](#the-keeps-and-uses-check).
 5. **Flag values,** as SourceGen carries them, to report branches never taken and the code only they reach.
+   Started: see [Flag values](#flag-values).
 6. **Unreferenced code and fall-through:** what no entry point reaches, and a routine that runs into the next,
    for the conversions to document.
 7. **Stack balance:** pushes and pulls on every path through a routine, with a pushed address and `RTS` reported
@@ -273,6 +275,11 @@ to its arithmetic, K to `INX` and `DCX`, and the whole of F to PSW.
   carry flag cannot be confused. A flag without a word, the Z80's undocumented X and Y, goes by its name. The
   flags register by name (`P`, `F`) means every flag, as `PHP` pushes them and `POP AF` pulls them.
 - In `writes`, `flag=0` and `flag=1` are constants, and `flag=bitN` is a copy of bit N of the memory operand.
+- `taken Condition` says when a conditional branch, call or return is taken: `taken zero=1` for `BEQ`,
+  `taken carry=0` for `RET NC`. Tests on flags (`flag=0`, `flag=1`, `flag=flag`, `flag!=flag`) join with `&`,
+  then `|`, as the 6809's `BHI` (`carry=0&zero=0`), `BLS` (`carry=1|zero=1`) and `BGT`
+  (`zero=0&negative=overflow`); at most four flags, all of them in `reads`. Conditions on something else, as
+  `DJNZ`'s B and `BBR`'s memory bit, have none.
 - `copies Dst=Src` says a written register takes another's value unchanged, as `TAX`, `LD A,B`, `MOV` and `TFR`
   do, and `EX DE,HL` and `XCHG` copy both ways (`copies D=H E=L H=D L=E`). Operand slots work as in `reads`; a
   copy between operands that are not single registers, as `LD A,[HL]` and `LD HL,DE`, copies nothing. An
@@ -323,7 +330,10 @@ some paths; and the stack register. `ReadsAny(mask)` and `ChangesAny(mask)` test
 `DependsOnPostbyte` is set, `Effects(encoding)` leaves out what the postbyte names, and
 `Effects(encoding, postbyte)` adds it from tables of every postbyte built with the set, so it too is an array
 lookup that allocates nothing; `DisassembledInstruction.Effects` passes the postbyte. `CopyCount` and
-`GetCopy(index, out destination, out source)` give the copies, by register bit.
+`GetCopy(index, out destination, out source)` give the copies, by register bit. `ConditionFlags` are the flags a
+condition decides on, held with a truth table of 16 bits; `Taken(known, values)` says whether it is taken from
+the flags known (true, false, or null when the unknown ones decide), and `Implied(taken, ...)` what each outcome
+tells of its flags, as `BHI` taken says carry and zero are clear.
 
 What it costs, measured in Release: a lookup about 1.3 ns, with nothing allocated; the tables 36 bytes an encoding,
 about 37 KB for the four 6502 family sets, 45 KB for the Z80's 1,255 encodings, and for the 6809 its encodings' and
@@ -354,6 +364,10 @@ and the generator that builds the 6502 cores skips `[isa]`, so execution is unch
   as good as the core. So are the 8080's: its core runs 8080PRE, TST8080, CPUTEST and 8080EXM
   (`I8080ExerciserTests`, from `tools/Fetch-I8080Tests.ps1`), the 8085 the first two, and the 8085's K and V follow
   Ken Shirriff's tracing of the silicon, which the core cites, more than any exerciser.
+- `BranchConditionTests.ConditionsMatchExecution` runs every conditional branch, call and return of the 6502,
+  both 65C02s, the Z80, the 6809, the 8080 and the 8085 on its core, 64 times from random flags, and checks it goes
+  where its condition says; every conditional encoding must have one, but `DJNZ`, `BBR` and `BBS`. A planted
+  error in the 6809's `BGT` was caught.
 - `InstructionFlagsTests`: every CPU's hover and inspector flags now come from the data, and change the flags the
   hovers listed by hand before, kept as the tests' expectations (`M6502HoverFlagsComeFromTheEffects`,
   `OtherHoverFlagsComeFromTheEffects`). Only documented flags are shown, so the Z80's X and Y and the 8085's K and V
@@ -379,7 +393,8 @@ Taken on the open questions this work raised:
 
 ### Follow-ups
 
-- **Item 5,** flag values, which the Keeps and Uses check needs next (see its limits).
+- The analyses that use the data: [the Keeps and Uses check](#the-keeps-and-uses-check) and
+  [flag values](#flag-values).
 
 ## The Keeps and Uses check
 
@@ -412,8 +427,9 @@ with the routines checked, the `Keeps:` items it could not verify, and the routi
 
 `ContractAnalysisTests` cover the rules on small sources for the 6502, the Z80 and the 6809.
 `ContractAnalysisSdkTests.SdkSourcesReport` runs the check over the Monitor, the IIe firmwares, AppleSoft, the BBC
-MOS, BASIC and DFS, three CoCo ROMs and Kaypro MBASIC, and prints the report: 990 routines checked, 31 findings and
-30 `Keeps:` items not verified. Working through earlier reports fixed both the analysis and the documentation:
+MOS, BASIC and DFS, three CoCo ROMs and Kaypro MBASIC, and prints the report: before flag values, 990 routines
+checked, 30 findings and 30 `Keeps:` items not verified. Working through earlier reports fixed both the analysis
+and the documentation:
 
 - Real: Color BASIC's BLINK loads B, which its `Uses:` left out; it now lists it.
 - The documentation parser dropped `Out:` and `In:` entries that name several registers with one meaning, as
@@ -425,10 +441,9 @@ MOS, BASIC and DFS, three CoCo ROMs and Kaypro MBASIC, and prints the report: 99
 
 ### Limits and follow-ups
 
-- **Branches that cannot fall through** (item 5). The MOS writes `bne ... ; always` after a load of a non-zero
-  value, and the Monitor `ldy #0` then `beq`; the check follows the fall-through it cannot rule out, which accounts
-  for most of the MOS findings. Known flag values from immediate loads, `SEC` and `CLC` would remove them; that
-  needs each branch's condition and sense in the data.
+- **Branches decided by memory or by what a caller passes,** as the MOS's `ora VDU_STATUS` then `bne ... ;
+  always: a bit is set`: [flag values](#flag-values) decide branches on constants, so `ldy #0` then `beq` and
+  `lda #CFS_ACIA_WRITING` then `bne` now go one way, but not these.
 - **Arithmetic that restores a value,** as IsLetter's `sbc #$5B` and `sbc #$A5`, which leave A as it was.
 - **Memory saved by a callee,** as NetFS's SAVE_CALL_REGISTERS stores X and Y for NFS_CALL_RETURN to load back:
   a summary would need the fixed addresses a routine stores and writes.
@@ -439,6 +454,76 @@ MOS, BASIC and DFS, three CoCo ROMs and Kaypro MBASIC, and prints the report: 99
 - **Hints a source cannot give yet:** calls that never return or take inline bytes.
 - `Keeps:` of memory is not checked, only of registers and flags.
 - Where the check runs, as for the other analyses, is the first open question below.
+
+## Flag values
+
+The first slice of item 5, in the same engine as the Keeps and Uses check (`AnalysisRoutineEngine`). Each
+register, flag and stacked value now carries a constant where one is known, beside where its value came from
+(`AnalysisValue`).
+
+### How values are found
+
+- The effects lines give constants: `CLC`, `SEC`, `XOR A`'s flags.
+- Otherwise, when every register and flag an instruction reads is a constant, `AnalysisEvaluator` runs it on the
+  CPU's own core and takes the registers and flags it leaves: `LDA #0`'s zero flag, `DEX` from a known X, `ADC #0`
+  with a known carry (and, on the 6502, a known decimal flag; `CLD` gives one). The core is the emulator's, checked
+  against the single-step vectors, so the analysis has no rules of its own for how flags are computed. The core
+  reads only the instruction's bytes and the code after them, which the 6502 reads ahead; any other read, and any
+  port, ends the run without a result. Instructions that push or pull are not run.
+- Memory holds where a value came from, as before, but no constant: without the machine's memory map a fixed
+  address may be I/O. The BBC's keyboard scan stores 1 in the VIA's IFR and tests it with `BIT`, and a remembered
+  constant there decided a branch the hardware decides.
+- `copies` and pulls carry constants with the values.
+
+### How they decide branches
+
+- A conditional branch whose `taken` condition the known flags decide goes only one way; one they do not decide
+  goes both, and each way learns what its outcome says: past a `BCS` not taken, carry is clear, so a `BCC` there
+  is always taken.
+- A conditional return the flags decide returns or falls through; a conditional call not taken applies nothing of
+  its callee, and one that may be taken joins both ways after it.
+- Each summary keeps the ways each condition went (`Conditions`). `AnalysisContractReport.FixedConditions` are
+  those that went one way in every routine that reached them, from its start and from each of its `Entry:` labels
+  (SCAN_FOR_NEW_KEY clears carry and falls into SCAN_KEYBOARD, an entry where it is set). A routine the analysis
+  gave up on may have left a way unfollowed, as MBASIC's QINT does at a call into a routine that changes the stack,
+  so its conditions count as going both ways.
+
+### What it found
+
+`FlagValueAnalysisTests` cover constants from loads, the core's results, what branches imply, the Z80's `XOR A`
+with `JR NZ` and `RET Z`, the 6809's two-flag `BHI` and `BLS`, and an untaken `CALL C`.
+
+`SdkSourcesReport` now also compares the fixed conditions with the sources' own comments. Of the branches the
+sources mark `always`, 120 are proved; 125 are not, mostly because memory or a caller decides them, or because a
+routine the analysis gave up on reaches them. 10 conditions are fixed without the mark, and each was checked by hand:
+real always-branches such as `ldy #TEXT_INVERSE` then `bne`, `clc` then `bcc`, and a `bvs` followed by a `bvc`.
+One is fixed only in the routines the analysis follows into it: OSBYTE &0C's `bne`, whose other callers come
+through a table.
+
+For the Keeps and Uses check: 1,023 routines checked (from 990), 29 findings (from 30), 31 `Keeps:` items not
+verified. Gone: the Monitor's ScreenOutNoInverse, the MOS's START_TRANSMITTING, VDU_PAGED_MODE_ON,
+SET_CURSOR_START and INVERT_TEXT_CELL, whose paths only an impossible fall-through reached. Routines followed now
+for the first time found three documentation errors in MBASIC, fixed:
+
+- DHALVE underflows into ZERO, which clears A; its `Uses:` now lists A.
+- DEL's `Out: VARTAB = HL = ...` named only VARTAB; it is now `HL, VARTAB = ...`.
+- CHKRES's `Out:` had HL inside the zero flag's meaning; HL now has its own entry.
+
+What it costs, measured in Release over the MOS, the DFS and MBASIC: about 150 to 200 ms for the three, as before,
+and 58 MB allocated against 52 MB without the core, from more revisits as constants are learned and then joined
+away. Most of the allocation is the engine's copies of states, which a follow-up could cut.
+
+### Limits and follow-ups
+
+- **Memory constants** need the machine's memory map, to tell RAM, ROM and I/O apart; ROM tables and RAM flags
+  would then decide branches too.
+- **Partly known values:** `ORA` with a non-zero constant leaves a non-zero result whatever memory held, as the
+  MOS's `ora VDU_STATUS` relies on. Known bits, not just whole constants, would prove these.
+- **What a caller passes:** `In:` sections such as `carry = set` could seed an entry's flags.
+- **Code no documented routine reaches** is not analyzed, so a fixed condition is fixed in the routines followed;
+  item 6's reachability would say which code that is.
+- **Reporting:** branches never taken, and the code only they reach, are in the report test, not yet a lint;
+  where the analyses run is the first open question.
 
 ## Open questions
 

@@ -891,7 +891,7 @@ DDIV10_3:
 ;;
 ;; In:    FAC = a nonzero number
 ;; Out:   FAC = the number / 2
-;; Uses:  HL
+;; Uses:  A, HL
 DHALVE:
     LD HL,FAC
     DEC [HL]

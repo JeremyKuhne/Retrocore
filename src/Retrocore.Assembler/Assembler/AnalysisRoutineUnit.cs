@@ -10,4 +10,4 @@ namespace Retrocore.Assembler;
 /// <param name="Flags">Whether the unit is the flags.</param>
 /// <param name="Slot">The register's bit.</param>
 /// <param name="Values">The values: one, or the eight flags'.</param>
-internal sealed record AnalysisRoutineUnit(bool Flags, int Slot, int[] Values);
+internal sealed record AnalysisRoutineUnit(bool Flags, int Slot, AnalysisValue[] Values);

@@ -9,7 +9,7 @@ namespace Retrocore.Isa;
 public static partial class IsaParser
 {
     private const string ExpectedEffects =
-        "Expected 'effects [in Set] Instruction ... [reads ...] [writes ...] [may-write ...] [push|pull|may-push|may-pull [Register] n] [copies ...]', or '... none'.";
+        "Expected 'effects [in Set] Instruction ... [reads ...] [writes ...] [may-write ...] [push|pull|may-push|may-pull [Register] n] [copies ...] [taken Condition]', or '... none'.";
 
     // The register map effects lines share; the registers and flags lines must come before it.
     private static EffectRegisterMap Map(int number, List<IsaRegister> registers, List<IsaFlag> flags, IsaRules rules)
@@ -82,6 +82,8 @@ public static partial class IsaParser
         byte pushed = 0, pulled = 0, mayPush = 0, mayPull = 0, readSlots = 0, writeSlots = 0, maySlots = 0;
         byte pushSlot = 0, pullSlot = 0;
         List<(int Destination, int Source)> copies = [];
+        byte conditionFlags = 0;
+        ushort conditionTable = 0;
         int stack = -1;
         HashSet<string> seen = [];
         while (index < tokens.Count)
@@ -141,6 +143,16 @@ public static partial class IsaParser
                     case "may-push": mayPush = count; break;
                     default: mayPull = count; break;
                 }
+
+                continue;
+            }
+
+            if (keyword == "taken")
+            {
+                // taken Condition: flag=0, flag=1, flag=flag or flag!=flag, joined by & and then by |.
+                string condition = index < tokens.Count ? tokens[index++] : "";
+                (conditionFlags, conditionTable) = Condition(condition, flags)
+                    ?? throw Error(number, $"Expected 'taken' and a condition on at most four flags, as zero=1 or carry=0&zero=0 or negative!=overflow, not '{condition}'.");
 
                 continue;
             }
@@ -242,6 +254,11 @@ public static partial class IsaParser
             }
         }
 
+        if ((conditionFlags & ~flagsRead) != 0)
+        {
+            throw Error(number, "A condition's flags are read; list them in reads.");
+        }
+
         // What is written on every path is not also written on some.
         registersMay &= ~registersWritten;
         flagsMay = (byte)(flagsMay & ~flagsWritten);
@@ -273,7 +290,9 @@ public static partial class IsaParser
             Pulled = pulled,
             MayPush = mayPush,
             MayPull = mayPull,
-            StackRegisterPlusOne = (byte)(stack + 1)
+            StackRegisterPlusOne = (byte)(stack + 1),
+            ConditionFlags = conditionFlags,
+            ConditionTable = conditionTable
         };
 
         // Copies between registers are kept now; those naming an operand wait for its encoding.
@@ -325,8 +344,84 @@ public static partial class IsaParser
         return false;
     }
 
-    private static bool IsEffectKeyword(string token) =>
-        token is "reads" or "writes" or "may-write" or "push" or "pull" or "may-push" or "may-pull" or "copies" or "none";
+    private static readonly string[] s_effectKeywords =
+        ["reads", "writes", "may-write", "push", "pull", "may-push", "may-pull", "copies", "taken", "none"];
+
+    private static bool IsEffectKeyword(string token) => Array.IndexOf(s_effectKeywords, token) >= 0;
+
+    // A condition's flags and truth table, or null when it is malformed or names more than four flags.
+    private static (byte Flags, ushort Table)? Condition(string condition, List<IsaFlag> flags)
+    {
+        List<List<(int First, int Second, bool Equal)>> terms = [];
+        byte involved = 0;
+        foreach (string term in condition.Split('|'))
+        {
+            List<(int First, int Second, bool Equal)> literals = [];
+            foreach (string literal in term.Split('&'))
+            {
+                int not = literal.IndexOf("!=", StringComparison.Ordinal);
+                int equals = not >= 0 ? not : literal.IndexOf('=');
+                if (equals <= 0) { return null; }
+                int first = FlagBit(literal[..equals], flags);
+                string right = literal[(equals + (not >= 0 ? 2 : 1))..];
+
+                // A constant is a comparison with bit -1 or -2, for 0 and 1.
+                int second = right switch
+                {
+                    "0" when not < 0 => -1,
+                    "1" when not < 0 => -2,
+                    _ => FlagBit(right, flags)
+                };
+
+                if (first < 0 || second == int.MinValue) { return null; }
+                involved |= (byte)(1 << first);
+                if (second >= 0) { involved |= (byte)(1 << second); }
+                literals.Add((first, second, not < 0));
+            }
+
+            terms.Add(literals);
+        }
+
+        int count = CountBits(involved);
+        if (count > 4) { return null; }
+        ushort table = 0;
+        for (int row = 0; row < 1 << count; row++)
+        {
+            // The row's value of each involved flag, in bit order.
+            bool[] value = new bool[8];
+            int index = 0;
+            for (int bit = 0; bit < 8; bit++)
+            {
+                if ((involved & (1 << bit)) == 0) { continue; }
+                value[bit] = (row & (1 << index)) != 0;
+                index++;
+            }
+
+            bool taken = false;
+            foreach (List<(int First, int Second, bool Equal)> literals in terms)
+            {
+                bool all = true;
+                foreach ((int first, int second, bool equal) in literals)
+                {
+                    bool other = second switch { -1 => false, -2 => true, _ => value[second] };
+                    all &= (value[first] == other) == equal;
+                }
+
+                taken |= all;
+            }
+
+            if (taken) { table |= (ushort)(1 << row); }
+        }
+
+        return (involved, table);
+    }
+
+    // A flag's bit by its word, or by its name when it has none; int.MinValue when there is no such flag.
+    private static int FlagBit(string name, List<IsaFlag> flags)
+    {
+        int found = flags.FindIndex(flag => HasWord(flag, name) || (flag.Words.Count == 0 && flag.Name == name));
+        return found < 0 ? int.MinValue : flags[found].Bit;
+    }
 
     // A side of a copy: a register without parts by its bit, or an operand slot as minus its number.
     private static int CopySide(string token, EffectRegisterMap map)
@@ -355,5 +450,13 @@ public static partial class IsaParser
                 }
             }
         }
+    }
+
+    // The number of bits set; the generators' netstandard2.0 has no BitOperations.
+    private static int CountBits(byte value)
+    {
+        int count = 0;
+        for (; value != 0; value &= (byte)(value - 1)) { count++; }
+        return count;
     }
 }

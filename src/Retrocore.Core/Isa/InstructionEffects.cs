@@ -180,6 +180,89 @@ public readonly record struct InstructionEffects
     }
 
     /// <summary>
+    ///  Gets the flags a conditional branch, call or return decides on, as bits of the flags register, at most
+    ///  four; 0 when the instruction has no condition on flags.
+    /// </summary>
+    public byte ConditionFlags { get; init; }
+
+    /// <summary>
+    ///  Gets the condition's truth table: bit <c>n</c> is set when the instruction is taken with the condition's
+    ///  flags, in bit order, set as the bits of <c>n</c>.
+    /// </summary>
+    internal ushort ConditionTable { get; init; }
+
+    /// <summary>
+    ///  Gets whether the instruction is taken, given some flags' values.
+    /// </summary>
+    /// <param name="known">The flags whose values are known, as bits of the flags register.</param>
+    /// <param name="values">Their values, as bits of the flags register.</param>
+    /// <returns>
+    ///  True when it is taken whatever the unknown flags are, false when it is not, and null when they decide, or
+    ///  the instruction has no condition.
+    /// </returns>
+    public bool? Taken(byte known, byte values)
+    {
+        if (ConditionFlags == 0) { return null; }
+        bool anyTaken = false, anyNot = false;
+        int count = 1 << CountBits(ConditionFlags);
+        for (int row = 0; row < count; row++)
+        {
+            if (!Agrees(row, known, values)) { continue; }
+            if ((ConditionTable & (1 << row)) != 0) { anyTaken = true; } else { anyNot = true; }
+        }
+
+        return anyTaken == anyNot ? null : anyTaken;
+    }
+
+    /// <summary>
+    ///  Gets what taking the instruction, or not, says of the condition's flags: those that have one value in
+    ///  every case that agrees with what is known, as BNE taken says zero is clear.
+    /// </summary>
+    /// <param name="taken">Whether the instruction is taken.</param>
+    /// <param name="known">The flags whose values are known, as bits of the flags register.</param>
+    /// <param name="values">Their values, as bits of the flags register.</param>
+    /// <param name="implied">Receives the flags whose values the outcome fixes, as bits of the flags register.</param>
+    /// <param name="impliedValues">Receives their values.</param>
+    public void Implied(bool taken, byte known, byte values, out byte implied, out byte impliedValues)
+    {
+        implied = 0;
+        impliedValues = 0;
+        if (ConditionFlags == 0) { return; }
+        byte ones = 0xFF, zeros = 0xFF;
+        bool any = false;
+        int count = 1 << CountBits(ConditionFlags);
+        for (int row = 0; row < count; row++)
+        {
+            if (!Agrees(row, known, values) || ((ConditionTable & (1 << row)) != 0) != taken) { continue; }
+            byte flags = Flags(row);
+            ones &= flags;
+            zeros &= (byte)~flags;
+            any = true;
+        }
+
+        if (!any) { return; }
+        implied = (byte)((ones | zeros) & ConditionFlags);
+        impliedValues = (byte)(ones & ConditionFlags);
+    }
+
+    // A truth table row's flags, as bits of the flags register.
+    private byte Flags(int row)
+    {
+        byte flags = 0;
+        int index = 0;
+        for (int bit = 0; bit < 8; bit++)
+        {
+            if ((ConditionFlags & (1 << bit)) == 0) { continue; }
+            if ((row & (1 << index)) != 0) { flags |= (byte)(1 << bit); }
+            index++;
+        }
+
+        return flags;
+    }
+
+    private bool Agrees(int row, byte known, byte values) => ((Flags(row) ^ values) & known & ConditionFlags) == 0;
+
+    /// <summary>
     ///  Gets whether a register is read.
     /// </summary>
     /// <param name="register">The register's bit in <see cref="IsaDescription.EffectRegisters"/>.</param>
@@ -227,4 +310,12 @@ public readonly record struct InstructionEffects
     /// <param name="bit">The flag's bit in the flags register.</param>
     /// <returns>The operand bit, or -1 when the flag is not a copy of one.</returns>
     public int OperandBit(int bit) => (uint)bit < 8 ? (int)((OperandBits >> (bit * 4)) & 0xF) - 1 : -1;
+
+    // The number of bits set; the generators' netstandard2.0 has no BitOperations.
+    private static int CountBits(byte value)
+    {
+        int count = 0;
+        for (; value != 0; value &= (byte)(value - 1)) { count++; }
+        return count;
+    }
 }

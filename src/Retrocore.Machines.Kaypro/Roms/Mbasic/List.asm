@@ -411,7 +411,7 @@ FCERRG:
 
 ;; Removes program text from BC up to HL, moving the rest of the program down.
 ;; In:    BC = the first byte to remove, HL = the first byte to keep
-;; Out:   VARTAB = HL = the program's new end
+;; Out:   HL, VARTAB = the program's new end
 ;; Uses:  A, BC, DE
 DEL:
     EX DE,HL                        ; DE = the first byte to keep

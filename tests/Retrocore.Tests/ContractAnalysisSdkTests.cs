@@ -44,6 +44,7 @@ public class ContractAnalysisSdkTests
         ];
 
         int findings = 0;
+        int provedMarked = 0, provedUnmarked = 0, unprovedMarked = 0;
         int checkedRoutines = 0;
         int unverified = 0;
         foreach ((string name, AssemblyResult result, string model) in modules)
@@ -67,11 +68,58 @@ public class ContractAnalysisSdkTests
                 }
 
                 foreach (string reason in skipped) { Console.WriteLine($"  not followed: {reason}"); }
+                (int marked, int unmarked, int unproved) = ReportConditions(result, report);
+                provedMarked += marked;
+                provedUnmarked += unmarked;
+                unprovedMarked += unproved;
             }
         }
 
         Console.WriteLine($"Total: {checkedRoutines} routines checked, {findings} findings, {unverified} Keeps: items not verified.");
+        Console.WriteLine($"Conditions: {provedMarked} marked 'always' and proved fixed, {provedUnmarked} fixed without it.");
+        Console.WriteLine($"Conditions: {unprovedMarked} marked 'always' but not proved.");
         checkedRoutines.Should().BePositive();
+    }
+
+    // The conditions the analysis reached, against the source's own "always" comments: those it proved go one way,
+    // marked or not, and those marked that it did not prove.
+    private static (int Marked, int Unmarked, int Unproved) ReportConditions(AssemblyResult result, AnalysisContractReport report)
+    {
+        Dictionary<int, AssemblyLocation> locations = [];
+        foreach (AssemblySourceMapEntry entry in result.SourceMap)
+        {
+            if (entry.Size != 0 && entry.Location is { } location)
+            {
+                locations.TryAdd(entry.Address, location);
+            }
+
+        }
+
+        int marked = 0, unmarked = 0, unproved = 0;
+        foreach ((ushort at, int ways) in report.Conditions.OrderBy(pair => pair.Key))
+        {
+            if (!locations.TryGetValue(at, out AssemblyLocation? location) || !File.Exists(location.Path)) { continue; }
+            string line = File.ReadLines(location.Path).ElementAtOrDefault(location.Line) ?? "";
+            int comment = line.IndexOf(';', StringComparison.Ordinal);
+            bool always = comment >= 0 && line[comment..].Contains("always", StringComparison.OrdinalIgnoreCase);
+            string where = $"{Path.GetFileName(location.Path)}:{location.Line + 1}";
+            if (ways != 3 && always)
+            {
+                marked++;
+            }
+            else if (ways != 3)
+            {
+                unmarked++;
+                Console.WriteLine($"  fixed (${at:X4}, {(ways == 2 ? "always taken" : "never taken")}): {line.Trim()}  [{where}]");
+            }
+            else if (always)
+            {
+                unproved++;
+                Console.WriteLine($"  marked, not proved (${at:X4}): {line.Trim()}  [{where}]");
+            }
+        }
+
+        return (marked, unmarked, unproved);
     }
 
     // The instruction sets the documented routines are in.

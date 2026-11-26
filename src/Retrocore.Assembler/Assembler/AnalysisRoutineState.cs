@@ -15,9 +15,10 @@ internal sealed class AnalysisRoutineState
     internal const int SlotCount = 40;
 
     /// <summary>
-    ///  Gets each slot's value: its own index for its entry value, below zero for changed.
+    ///  Gets each slot's value: its origin, its own index for its entry value and below zero for changed, and its
+    ///  constant where it is known.
     /// </summary>
-    internal int[] Slots { get; private init; } = new int[SlotCount];
+    internal AnalysisValue[] Slots { get; private init; } = new AnalysisValue[SlotCount];
 
     /// <summary>
     ///  Gets what each stack holds, by its pointer register's bit.
@@ -28,7 +29,7 @@ internal sealed class AnalysisRoutineState
     ///  Gets the values registers were stored to at fixed addresses, by address, so a load from one gets the value
     ///  back.
     /// </summary>
-    internal Dictionary<int, int> Memory { get; private init; } = [];
+    internal Dictionary<int, AnalysisValue> Memory { get; private init; } = [];
 
     /// <summary>
     ///  Gets or sets whether a stack pointer changed other than by a push or pull, so the stack is not known.
@@ -43,7 +44,7 @@ internal sealed class AnalysisRoutineState
     {
         AnalysisRoutineState copy = new()
         {
-            Slots = (int[])Slots.Clone(),
+            Slots = (AnalysisValue[])Slots.Clone(),
             StackLost = StackLost,
             Memory = [with(Memory)]
         };

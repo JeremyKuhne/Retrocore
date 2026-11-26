@@ -134,9 +134,21 @@ Internet Archive.
 | Model 4 | TRSDOS 6.2.0 | `TRSDOS62.imd` (`T80M4DOS.IMD`) | `cpm22_202207` | `bed5f992…` |
 | Model 4 and 4P | LS-DOS 6.3.0 level J | `LSDOS63J.dsk` (JV3, `ldos63j.dsk`) | `cpm22_202207` | `c419e101…` |
 
-The item names are the download pages' last path segment, `https://archive.org/details/<item>`. The Model II's DOSes
-are not among them: TRSDOS 1.2, 2.0a and 2.0b, TRSDOS-II 4.2 and LS-DOS 6.3.1 for it are in MAME's `trs80m2`
-software list, and none boots here yet (see the [backlog](backlog/Trs80Model3AndModel2.md#stages), stage 2).
+The item names are the download pages' last path segment, `https://archive.org/details/<item>`.
+
+The Model II's DOSes are not among those items. They are in MAME's `trs80m2` software list, in the Internet Archive
+item `MAME_0.202_Software_List_ROMs_merged`, as `trs80m2.zip` (SHA-256 `813f8840…`). That holds a zip for each
+entry, named below with the file in it. The fixtures keep them under new names. None boots here yet (see the
+[backlog](backlog/Trs80Model3AndModel2.md#stages), stage 2).
+
+| Machine | DOS | File | In `trs80m2.zip` | SHA-256 |
+| --- | --- | --- | --- | --- |
+| Model II | TRSDOS 1.2 | `M2TRSDOS12.imd` | `tdos12.zip`: `trsdos12.imd` | `f5974034…` |
+| Model II | TRSDOS 2.0a | `M2TRSDOS20A.imd` | `tdos12.zip`: `tdos20/tdos20a.imd` | `d1ff42e4…` |
+| Model II | TRSDOS 2.0b | `M2TRSDOS20B.imd` | `tdos12.zip`: `tdos20/tdos20b.imd` | `33128ef8…` |
+| Model II | TRSDOS 2.0's calculator disk, not a DOS | `M2TDOSCALC.imd` | `tdos12.zip`: `tdos20/tdoscalc.imd` | `87baf052…` |
+| Model 16 | TRSDOS-II 4.2 | `M16TRSDOS42.td0` (Teledisk) | `tdos12.zip`: `tdos42/tr16sys.td0` | `d46c1c43…` |
+| Model II | LS-DOS 6.3.1 | `M2LSDOS631.dmk` | `lsdos631.zip`: `l2-631a.dmk` | `1870918f…` |
 
 ## Typed and pasted text
 

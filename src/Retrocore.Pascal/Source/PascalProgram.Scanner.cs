@@ -18,6 +18,7 @@ public sealed partial class PascalProgram
         private int _at;
         private PascalDocComment? _pending;
         private readonly List<PascalDeclaration> _statement = [];
+        private readonly Dictionary<PascalToken, PascalDeclaration> _declared = [];
 
         /// <summary>
         ///  Creates a scanner.
@@ -531,6 +532,7 @@ public sealed partial class PascalProgram
             PascalDeclaration declaration = new(name.Text, kind, name, scope);
             scope.Declarations.Add(declaration);
             _program.Declarations.Add(declaration);
+            _declared.TryAdd(name, declaration);
             TakePending(declaration);
             _statement.Add(declaration);
             return declaration;
@@ -576,15 +578,18 @@ public sealed partial class PascalProgram
         {
             while (_at < _tokens.Count && _tokens[_at].Kind == PascalTokenKind.DocComment)
             {
-                // One that trails code on its line documents the undocumented names declared before it on that
-                // line, or the routine among them; with none, it documents nothing. One on a line of its own
-                // documents the next declaration.
+                // One that trails code on its line documents the undocumented names its statement declared before
+                // it; with none, it documents nothing. One on a line of its own documents the next declaration.
                 PascalToken doc = _tokens[_at];
                 PascalToken? before = _at > 0 ? _tokens[_at - 1] : null;
-                bool trailing = before is not null && before.EndLine == doc.Line && before.File == doc.File;
+                bool trailing = before is not null
+                    && before.Kind != PascalTokenKind.DocComment
+                    && before.EndLine == doc.Line
+                    && before.File == doc.File;
+
                 if (trailing)
                 {
-                    List<PascalDeclaration> targets = OnLineBefore(doc);
+                    List<PascalDeclaration> targets = StatementBefore(doc);
                     PascalDocComment parsed = PascalDocComment.Parse(doc);
                     if (targets.Count == 0) { _program.StrayDocs.Add(parsed); }
                     foreach (PascalDeclaration target in targets) { target.Doc = parsed; }
@@ -634,29 +639,28 @@ public sealed partial class PascalProgram
             return false;
         }
 
-        // The undocumented declarations on a comment's line before it, at its own level: none inside a "(" or RECORD
-        // the comment is outside of, nor one outside a "(" or RECORD the comment is inside of.
-        private List<PascalDeclaration> OnLineBefore(PascalToken doc)
+        // The undocumented declarations of the statement a trailing comment ends, at its own level: back to the ";",
+        // BEGIN or declaration keyword that starts the statement, not inside a "(" or RECORD the comment is outside of,
+        // and not past one it is inside of.
+        private List<PascalDeclaration> StatementBefore(PascalToken doc)
         {
-            Dictionary<PascalToken, PascalDeclaration> candidates = [];
-            for (int index = _program.Declarations.Count - 1; index >= 0; index--)
-            {
-                PascalDeclaration declaration = _program.Declarations[index];
-                if (declaration.Token.File != doc.File || declaration.Token.Line < doc.Line) { break; }
-                if (declaration.Token.Line == doc.Line && declaration.Doc is null)
-                {
-                    candidates.TryAdd(declaration.Token, declaration);
-                }
-            }
-
+            const int Reach = 500;
             List<PascalDeclaration> found = [];
             int level = 0;
-            for (int index = _at - 1; index >= 0 && _tokens[index].Line == doc.Line; index--)
+            for (int index = _at - 1; index >= 0 && index >= _at - Reach; index--)
             {
                 PascalToken token = _tokens[index];
+                if (token.File != doc.File) { break; }
+                if (token.Kind == PascalTokenKind.DocComment) { continue; }
                 if (token.IsSymbol(")") || token.Is("END")) { level++; }
-                else if (token.IsSymbol("(") || token.Is("RECORD")) { level--; }
-                else if (level == 0 && candidates.TryGetValue(token, out PascalDeclaration? declaration))
+                else if (token.IsSymbol("(") || token.Is("RECORD"))
+                {
+                    if (--level < 0) { break; }
+                }
+                else if (level == 0 && StartsStatement(token)) { break; }
+                else if (level == 0
+                    && _declared.TryGetValue(token, out PascalDeclaration? declaration)
+                    && declaration.Doc is null)
                 {
                     found.Add(declaration);
                 }
@@ -664,6 +668,14 @@ public sealed partial class PascalProgram
 
             return found;
         }
+
+        // Whether a token starts a declaration's or statement's text, so a trailing comment's reach ends there.
+        private static bool StartsStatement(PascalToken token) =>
+            token.IsSymbol(";")
+                || StartsBlock(token)
+                || token.Is("PROGRAM")
+                || token.Is("UNIT")
+                || token.Is("INTERFACE");
 
         // Whether the token is the last, as a program's final "." is.
         private bool IsEndOfProgram() => Skip() + 1 >= _tokens.Count;

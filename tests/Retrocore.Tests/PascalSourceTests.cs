@@ -524,6 +524,40 @@ public sealed class PascalSourceTests
     }
 
     /// <summary>
+    ///  A trailing comment reaches back through its own statement only, over lines if the statement does, and the
+    ///  same with or without the ";" before it.
+    /// </summary>
+    [TestMethod]
+    public void TrailingCommentsDocumentTheirStatement()
+    {
+        PascalProgram program = Analyze(
+            "PROGRAM P;\nTYPE S = RECORD Width: INTEGER; CASE Kind: INTEGER OF (** k *)\n"
+                + "  1: (X: INTEGER; Y: INTEGER (** y *))\nEND;\n"
+                + "  R = RECORD\n    Inner: RECORD Z: INTEGER END; Last: INTEGER (** last *)\n  END (** r *);\n"
+                + "VAR A: INTEGER; B: INTEGER (** b *);\n  C,\n  D: INTEGER (** cd *);\n"
+                + "PROCEDURE Q(\n  E: INTEGER) (** q *);\nBEGIN E := 1; (** stray *) END;\n"
+                + "PROCEDURE T BEGIN (** none *) END;\nBEGIN END.");
+
+        PascalDeclaration Find(string name) => program.Declarations.Single(declaration => declaration.Name == name);
+        (Find("Kind").Doc?.Summary).Should().Be("k");
+        Find("Width").Doc.Should().BeNull();
+        Find("S").Doc.Should().BeNull();
+        (Find("Y").Doc?.Summary).Should().Be("y");
+        Find("X").Doc.Should().BeNull();
+        (Find("Last").Doc?.Summary).Should().Be("last");
+        Find("Inner").Doc.Should().BeNull();
+        (Find("R").Doc?.Summary).Should().Be("r");
+        (Find("B").Doc?.Summary).Should().Be("b");
+        Find("A").Doc.Should().BeNull();
+        (Find("C").Doc?.Summary).Should().Be("cd");
+        (Find("D").Doc?.Summary).Should().Be("cd");
+        (Find("Q").Doc?.Summary).Should().Be("q");
+        Find("E").Doc.Should().BeNull();
+        Find("T").Doc.Should().BeNull();
+        program.StrayDocs.Select(doc => doc.Summary).Should().BeEquivalentTo(["stray", "none"]);
+    }
+
+    /// <summary>
     ///  A file's documentation may follow ordinary comments, such as a copyright line.
     /// </summary>
     /// <param name="comment">The comment before it.</param>

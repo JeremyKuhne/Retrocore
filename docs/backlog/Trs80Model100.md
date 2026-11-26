@@ -1,6 +1,7 @@
 # Backlog: the TRS-80 Model 100
 
-Status: **planned (2026-11-26); nothing built.** The first machine for the 8085 ([CPU backlog](I8080.md)), and
+Status: **phase 1 built (2026-11-26)**: the machine boots both ROMs to the menu and runs BASIC; phase 2, the
+debug target, is next. The first machine for the 8085 ([CPU backlog](I8080.md)), and
 the laptop that, with its relatives, made the portable computer a product. An OKI 80C85, a 240x64 LCD, 32 KB of ROM
 holding Microsoft BASIC and four built-in programs, 8 to 32 KB of RAM that a battery keeps, and serial, modem,
 cassette, printer and bar-code ports.
@@ -37,10 +38,14 @@ cassette, printer and bar-code ports.
 | **MAME** | MAME 0.264's `kyocera/kyocera.cpp`, through `mame -listxml` and `-listdevices` of the copy installed in the session (the source itself was not read) | ROM names and digests, chips, RAM options, clocks |
 | **SMAN** | Model 100 Service Manual (26-3801/3802), [text on archive.org](https://archive.org/stream/m100service/m100service_djvu.txt), seen only through search excerpts | Circuit description |
 | **T102** | Tandy 102 Service Manual (26-3803), seen only through search excerpts | Clock wiring, LCD drivers |
+| **HD** | Hitachi, *MOS LSI Data Book: LCD Driver LSI* (1983), the HD44102CH's pages; [bitsavers on archive.org](https://archive.org/details/bitsavers_hitachidatSLSIDataBookLCDDriverLSI_15075758) | The LCD driver's instructions, counters and dummy read |
+| **KYO** | MAME 0.264's `src/mame/kyocera/kyocera.cpp` and `kyocera.h` (Curt Coder, BSD-3-Clause), read, not copied (approved 2026-11-26) | Port decoding, RAM map by size, keyboard matrix, interrupt wiring |
 | **Z88** | [z88dk techdocs `targets/m100`](https://github.com/z88dk/techdocs/tree/master/targets/m100): `m100.asm`, `sysvars.txt`, `tokens.txt` | Disassembly, RAM variables for each model |
 
-Not yet read, each needing the user's approval to download: Tandy's *Technical Reference Manual* (26-3810), the
-service manuals as scans, MAME's and VirtualT's sources, and the disassemblies themselves. Facts below from search
+Not yet read: Tandy's *Technical Reference Manual* (26-3810), the Model 100 service manual's text (downloaded for
+phase 1, approved 2026-11-26, not yet searched), the uPD1990AC's and 8155's data sheets (approved, not found on the
+hosts this environment reaches; the chips follow their well-known behaviour and MAME's wiring), and VirtualT's
+source and the disassemblies, which need the user's approval. Facts below from search
 excerpts only are marked *(excerpt)*.
 
 ## The hardware
@@ -98,7 +103,9 @@ Address decoding is partial: each device answers all 16 ports of its block (SM0)
   4 ms, from the uPD1990's TP at 256 Hz. 4 ms, 256 Hz is what the clock chip can make; SM1's "microseconds" is a slip.
 - **The cassette's rate.** SMAN *(excerpt)* says 1500 baud; other descriptions say 1200, with 1200 and 2400 Hz tones,
   unconfirmed. To be settled from the ROM's timing loops and MAME.
-- **The keyboard table.** SM0 notes its matrix corrects the one in Tandy's *Technical Reference Manual*.
+- **The keyboard table.** SM0 notes its matrix corrects the one in Tandy's *Technical Reference Manual*. Its arrows
+  are wrong all the same: MAME puts left, right, up and down on column 6's rows 4-7, and the ROM agrees, giving
+  `INKEY$` codes 29, 28, 30 and 31 for them (checked 2026-11-26).
 - **The LCD's right-hand drivers.** LCD says drivers 4 and 9 drive 40x32 dots; one article says 40x42, a typo.
 - **The 102's ROM.** One source calls it identical to the 100's but for `PEEK(1)` (51 against 167,
   [masswerk](https://masswerk.at/rc2016/01/10.html)); Club100 and ROMS list fixes: a different character set, a
@@ -129,8 +136,8 @@ The matrix (SM0), rows read at `$E8` with the column's strobe bit low:
 | 6 | M | J | U | . > | 7 & | Left | PRINT | F7 | |
 | 7 | L | K | I | / ? | 8 * | Right | ENTER | F8 | PAUSE/BREAK |
 
-SM0's ASCII table shows the shifted characters; the unshifted ones here are from the key caps and need checking
-against the ROM's key table.
+SM0's ASCII table shows the shifted characters; the unshifted ones here are from the key caps. Column 6's arrows are
+SM0's; MAME's order, left, right, up, down, is the right one (see "Where the sources disagree").
 
 ### Interrupts
 
@@ -286,6 +293,29 @@ Covington's names kept as historical names. Covington's map is a second set of n
 
 Every download (the ROM, option ROMs, software, manuals, MAME's and VirtualT's sources, disassemblies) is approved
 by the user first, and stays out of the repository.
+
+## Phase 1 (built 2026-11-26)
+
+- **What is built.** `Retrocore.Machines.Trs80Model100`: the 80C85 at 2.4576 MHz, the main ROM and the option ROM's
+  switch, 8-32 KB of RAM, ports as MAME's `kyocera.cpp` decodes them, the keyboard matrix with typed keys, the LCD
+  as `IVideoSource`, the clock's TP on RST 7.5, and the power-off bit with a `PowerOn` switch. Three chips joined
+  `Retrocore.Core`'s shared ones: `Pio8155` (the 8155 and 81C55), `Lcd44102` (the HD44102, from Hitachi's 1983 data
+  book) and `Rtc1990` (the uPD1990AC).
+- **Checked against MAME 0.264.** Both ROMs cold-start to the menu with MAME's bytes free at every RAM size (5062,
+  13254, 21446, 29638); BASIC's banner (29382 free at 32 KB) and output; and the menu's LCD dots, which match MAME's
+  screen exactly but for the seconds of the clock. `Trs80Model100RomTests` pins them; `Trs80Model100MachineTests`
+  and `Model100ChipTests` need no ROM.
+- **Found on the way.**
+  - The LCD's byte has its top dot in bit 0, as the HD44102 data sheet draws it, not bit 7 as LCD guessed.
+  - A cold start sets the clock to January 1 and shows "Jan 01,1900 Sun", in MAME as here.
+  - The ROM scans the keyboard every third RST 7.5 (11.7 ms), takes a key seen on two scans and needs two scans with
+    no key to take the same key again, so typed keys are held and released 50 ms each. MAME's keyboard needs about
+    100 ms, as its notes say it is slow.
+  - BASIC scrolls one line at a time, about 50 ms a line, so a screen read mid-scroll shows a line twice. A loop
+    printing numbers runs within a line in three seconds of MAME's.
+  - `POWER OFF` comes back to the menu at power-on; `POWER OFF,RESUME` comes back to BASIC with its variables.
+- **Not yet.** The UART, modem, cassette, beeper, printer and wand are unconnected; TRAP never fires; the battery
+  never runs low.
 
 ## Decisions (agreed 2026-11-26)
 

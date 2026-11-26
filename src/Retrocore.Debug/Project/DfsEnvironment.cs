@@ -112,7 +112,8 @@ internal sealed class DfsEnvironment : TargetEnvironment
         List<AcornDfsFile> files = [new('$', program, (uint)start, (uint)build.Entry, bytes)];
         foreach (TargetFile file in target.Files)
         {
-            string name = file.Name ?? Path.GetFileNameWithoutExtension(file.Path).ToUpperInvariant();
+            string given = file.Name ?? Path.GetFileNameWithoutExtension(file.Path).ToUpperInvariant();
+            string name = given;
             char directory = '$';
             if (name.Length > 2 && name[1] == '.')
             {
@@ -123,7 +124,7 @@ internal sealed class DfsEnvironment : TargetEnvironment
             if (name.Length is 0 or > NameLength || !name.All(AcornDfsFile.IsNameCharacter) || !AcornDfsFile.IsNameCharacter(directory))
             {
                 throw new ProjectException(
-                    $"{where}: '{file.Name ?? name}' is not a DFS file name, D.NAME or NAME with 1 to {NameLength} printable characters, none a space or . : \" # *; give its file a 'name'.");
+                    $"{where}: '{given}' is not a DFS file name, D.NAME or NAME with 1 to {NameLength} printable characters, none a space or . : \" # *; give its file a 'name'.");
             }
 
             AcornDfsFile added = new(directory, name, (uint)(file.Address ?? 0), ExecutionAddress: 0, File.ReadAllBytes(file.Path));
@@ -134,7 +135,7 @@ internal sealed class DfsEnvironment : TargetEnvironment
 
             if (files.Any(Same) || (added.Directory == '$' && string.Equals(added.Name, AcornDfsDisk.BootFileName, StringComparison.OrdinalIgnoreCase)))
             {
-                throw new ProjectException($"{where}: two files on the disk are named {added.Directory}.{added.Name.ToUpperInvariant()}.");
+                throw new ProjectException($"{where}: two files on the disk are named {char.ToUpperInvariant(added.Directory)}.{added.Name.ToUpperInvariant()}.");
             }
 
             files.Add(added);

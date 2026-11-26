@@ -859,6 +859,11 @@ export function startsWithDisks(configuration: Record<string, unknown>): boolean
 // The machines whose rom launch option picks Level I or Level II BASIC.
 const romMachines = new Set(["trs80-model1", "trs80-model3"]);
 
+// Whether a launch configuration is a Model I's or a Model III's, whose rom picks its BASIC.
+function isRomMachine(configuration: Record<string, unknown>): boolean {
+    return romMachines.has(String(configuration.machine ?? ""));
+}
+
 /** Whether a launch configuration runs Level I BASIC, on a Model I or a Model III. */
 export function isLevel1(configuration: Record<string, unknown>): boolean {
     return romMachines.has(String(configuration.machine ?? "")) && configuration.rom === "level1";
@@ -884,7 +889,7 @@ function hasExpansion(configuration: Record<string, unknown>): boolean {
 export function impliedValue(choice: MachineChoice, configuration: Record<string, unknown>): string | number | boolean {
     if (choice.option === "diskController" && startsWithDisks(configuration)) return true;
     if (choice.option === "basicCartridge" && typeof configuration.cartridge === "string") return "none";
-    if (choice.option === "rom") return "level2";
+    if (choice.option === "rom" && isRomMachine(configuration)) return "level2";
     if (configuration.machine === "trs80-model1") {
         if (choice.option === "expansionInterface") return !isLevel1(configuration);
         if (choice.option === "ramKilobytes") return hasExpansion(configuration) ? 48 : isLevel1(configuration) ? 4 : 16;
@@ -894,7 +899,7 @@ export function impliedValue(choice: MachineChoice, configuration: Record<string
 
 /** The value a launch configuration gives one of its machine's choices: its own, or what it is left out. */
 export function settingValue(choice: MachineChoice, configuration: Record<string, unknown>): string | number | boolean {
-    if (choice.option === "rom") return romValue(configuration);
+    if (choice.option === "rom" && isRomMachine(configuration)) return romValue(configuration);
     const value = configuration[choice.option];
     return typeof value === "string" || typeof value === "number" || typeof value === "boolean" ? value : impliedValue(choice, configuration);
 }
@@ -914,7 +919,8 @@ function dropImplied(configuration: Record<string, unknown>, choice: MachineChoi
  */
 export function withSetting(configuration: Record<string, unknown>, choice: MachineChoice, value: string | number | boolean): Record<string, unknown> {
     const changed = { ...configuration };
-    if (choice.option === "rom") {
+    const rom = choice.option === "rom" && isRomMachine(configuration);
+    if (rom) {
         const launch = choice.values.find(candidate => candidate.value === value)?.launch ?? { rom: String(value) };
         delete changed.rom;
         delete changed.revision;
@@ -935,7 +941,7 @@ export function withSetting(configuration: Record<string, unknown>, choice: Mach
         dropImplied(changed, model1Expansion(true));
         dropImplied(changed, model1Ram(48));
     }
-    if (choice.option !== "rom") dropImplied(changed, choice);
+    if (!rom) dropImplied(changed, choice);
     return changed;
 }
 

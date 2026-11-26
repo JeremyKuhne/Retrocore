@@ -200,7 +200,7 @@ public sealed class ProjectBuildTests
 
         Write("main.s", "rts\n.section Low, $5000, $10\nrts");
         Error(() => ProjectBuild.Build(RetrocoreProject.Load(_folder).Target("t"))).Should().EndWith(
-            "target t: a bare binary is one block, but its code and data end at $5000 and resume at $6000.");
+            "target t: a bare binary is one block, but its code and data end at $5000 and the next part starts at $6000.");
 
         Write("main.s", "rts\n.section Below, $5FFF, 1\nrts");
         File.ReadAllBytes(ProjectBuild.Build(RetrocoreProject.Load(_folder).Target("t")).Binary).Should().Equal(0x60, 0x60);

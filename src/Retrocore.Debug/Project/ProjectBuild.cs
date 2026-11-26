@@ -15,8 +15,8 @@ namespace Retrocore.Debug.Project;
 /// </summary>
 /// <remarks>
 ///  <para>
-///   <c>retrocore build</c> builds through here, and a <c>project</c> launch is to as well, so that the bytes the
-///   debugger loads are the bytes CI builds. Only the <c>bare</c> environment builds yet: a raw binary loaded
+///   <c>retrocore build</c> builds through here, and the <c>project</c> launch planned next will too, so that the
+///   bytes the debugger loads are the bytes CI builds. Only the <c>bare</c> environment builds yet: a raw binary loaded
 ///   straight into RAM, so the sections that emit bytes must make one block, with no gap between them.
 ///  </para>
 ///  <para>
@@ -207,9 +207,6 @@ internal static class ProjectBuild
         File.WriteAllText(build.Record, record.ToJsonString(new() { WriteIndented = true }));
     }
 
-    // Every .cpu left after preprocessing that names one of the project CPUs must name one the machine has. The
-    // assembler judges the rest, such as Pcode, whose macros write p-code under the 6502.
-
     // A bare binary is one block: each segment must start where the one below it ends.
     private static void RequireOneBlock(ProjectTarget target, List<(int Address, ReadOnlyMemory<byte> Bytes)> segments)
     {
@@ -220,11 +217,13 @@ internal static class ProjectBuild
             if (ordered[index].Address != end)
             {
                 throw new ProjectException(
-                    $"{target.Project.File}: target {target.Name}: a bare binary is one block, but its code and data end at ${end - 1:X4} and resume at ${ordered[index].Address:X4}.");
+                    $"{target.Project.File}: target {target.Name}: a bare binary is one block, but its code and data end at ${end - 1:X4} and the next part starts at ${ordered[index].Address:X4}.");
             }
         }
     }
 
+    // Every .cpu left after preprocessing that names one of the project CPUs must name one the machine has. The
+    // assembler judges the rest, such as Pcode, whose macros write p-code under the 6502.
     private static void CheckCpus(ProjectTarget target, AssemblyProject project)
     {
         List<string> errors = [];

@@ -77,7 +77,8 @@ internal static class BuildCommand
 
             targets = Select(RetrocoreProject.LoadAll(path), targetName, all);
         }
-        catch (Exception exception) when (exception is ProjectException or ArgumentException)
+        catch (Exception exception)
+            when (exception is ProjectException or ArgumentException or IOException or UnauthorizedAccessException or NotSupportedException)
         {
             // A path the system cannot take, such as one with '|' on Windows, is an ArgumentException.
             error.WriteLine(exception.Message);
@@ -95,7 +96,7 @@ internal static class BuildCommand
                     $"{target.Project.Name}/{target.Name}: {build.Binary} (${start:X4}-${start + bytes.Length - 1:X4}, {bytes.Length} {(bytes.Length == 1 ? "byte" : "bytes")}, entry ${build.Entry:X4})");
             }
             catch (Exception exception)
-                when (exception is ProjectException or IOException or UnauthorizedAccessException or ArgumentException)
+                when (exception is ProjectException or ArgumentException or IOException or UnauthorizedAccessException or NotSupportedException)
             {
                 error.WriteLine(exception.Message);
                 failed++;

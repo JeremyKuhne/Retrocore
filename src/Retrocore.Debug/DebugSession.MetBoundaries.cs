@@ -158,8 +158,8 @@ internal sealed partial class DebugSession
             if (!ReferenceEquals(met.Cpu, cpu)) { continue; }
 
             // Stacks grow down, wrapping within their width, as a 6502's does within page one. Deeper than the
-            // boundary's stack is inside the handler of the interrupt taken there. Far above it is another stack, as
-            // an outer handler's own, or an outer boundary the CPU has gone back to past this one, which stays.
+            // boundary's stack is inside the handler of the interrupt taken there. Far above it, the CPU is on
+            // another stack, as a handler's own, or back past this boundary at an outer one: this one is kept.
             stack ??= cpu.Frame.StackPointer;
             int mask = cpu.StackMask;
             int below = (met.Stack - stack.Value) & mask;

@@ -29,7 +29,7 @@ internal static class MameSchedule
     ///  whatever the culture.
     /// </summary>
     /// <param name="seconds">The emulated second; zero or more, and finite.</param>
-    /// <returns>The time, such as <c>2.5</c>, <c>3</c> or <c>0.00001</c>.</returns>
+    /// <returns>The time to 15 significant digits, such as <c>2.5</c>, <c>3</c> or <c>0.00001</c>.</returns>
     /// <exception cref="ArgumentOutOfRangeException">
     ///  <paramref name="seconds"/> is negative, infinite or not a number.
     /// </exception>
@@ -40,8 +40,9 @@ internal static class MameSchedule
             throw new ArgumentOutOfRangeException(nameof(seconds), seconds, "A schedule time is a finite second, zero or more.");
         }
 
-        // "R" and the default format write 1E-05 and 1E+15, which the scripts can't read.
-        return seconds.ToString("0.#################", CultureInfo.InvariantCulture);
+        // "R" and the default format write 1E-05 and 1E+15, which the scripts can't read. A custom format keeps 15
+        // significant digits, and writes -0 for negative zero, so zero is written on its own.
+        return seconds == 0 ? "0" : seconds.ToString("0.###############", CultureInfo.InvariantCulture);
     }
 
     /// <summary>
@@ -67,7 +68,24 @@ internal static class MameSchedule
     /// </summary>
     /// <param name="script">The entries, in the order they fire.</param>
     /// <returns>The entries, separated by '|'.</returns>
-    internal static string Script(IEnumerable<(double At, string Text)> script) => string.Join('|', script.Select(Entry));
+    /// <exception cref="ArgumentException">
+    ///  An entry's time is before the one ahead of it: the scripts fire entries in turn, so it would fire late.
+    /// </exception>
+    internal static string Script(IEnumerable<(double At, string Text)> script)
+    {
+        double previous = 0;
+        foreach ((double at, _) in script)
+        {
+            if (at < previous)
+            {
+                throw new ArgumentException($"The schedule goes back from {previous} to {at} seconds.", nameof(script));
+            }
+
+            previous = at;
+        }
+
+        return string.Join('|', script.Select(Entry));
+    }
 
     /// <summary>
     ///  Checks the script's <c>RETRO_FIRED</c> log: every entry fired, in order, at its time or within a frame after.

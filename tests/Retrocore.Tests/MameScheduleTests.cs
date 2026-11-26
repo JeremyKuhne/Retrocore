@@ -27,6 +27,7 @@ public class MameScheduleTests
             MameSchedule.Seconds(12.125).Should().Be("12.125");
             MameSchedule.Seconds(3).Should().Be("3");
             MameSchedule.Seconds(0).Should().Be("0");
+            MameSchedule.Seconds(-0.0).Should().Be("0");
 
             // The default format writes these as 1E-05 and 1E+15.
             MameSchedule.Seconds(0.00001).Should().Be("0.00001");
@@ -62,6 +63,17 @@ public class MameScheduleTests
         MameSchedule.Entry((4, "@:LINE7,F1,1")).Should().Be("4=@:LINE7,F1,1");
         MameSchedule.Script([(2.5, "\r"), (6.25, "LIST\r")]).Should().Be("2.5=\\r|6.25=LIST\\r");
         MameSchedule.Script([]).Should().BeEmpty();
+    }
+
+    /// <summary>
+    ///  A schedule that goes back in time is refused, as the scripts would fire the later entry late.
+    /// </summary>
+    [TestMethod]
+    public void ScriptRefusesEntriesOutOfOrder()
+    {
+        Action format = () => MameSchedule.Script([(6, "RUN\r"), (2.5, "\r")]);
+        format.Should().Throw<ArgumentException>();
+        MameSchedule.Script([(2, "A"), (2, "B")]).Should().Be("2=A|2=B");
     }
 
     /// <summary>

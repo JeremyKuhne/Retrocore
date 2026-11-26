@@ -166,9 +166,12 @@ public class Trs80OracleTests
             start.Environment["RETRO_END"] = MameSchedule.Seconds(finish);
             start.Environment["RETRO_OUT"] = output;
             using Process process = Process.Start(start) ?? throw new InvalidOperationException("MAME did not start.");
-            process.StandardOutput.ReadToEnd();
+            // Both streams drain as MAME runs, so a full pipe can't stall it, and its errors reach the message.
+            Task<string> errors = process.StandardError.ReadToEndAsync();
+            Task<string> standard = process.StandardOutput.ReadToEndAsync();
             process.WaitForExit(120_000).Should().BeTrue("MAME finishes");
-            File.Exists(output).Should().BeTrue("the Lua script dumps memory");
+            Task.WaitAll(errors, standard);
+            File.Exists(output).Should().BeTrue($"the Lua script dumps memory; MAME said: {errors.Result}");
             MameSchedule.ShouldHaveFiredOnTime(script, File.ReadAllText(fired));
             return File.ReadAllBytes(output);
         }

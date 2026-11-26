@@ -259,11 +259,14 @@ internal static class GamePacker
             Require(action.Verb >= 0 && action.Noun >= 0 && action.Verb < game.Verbs.Count && (action.Verb == 0 || action.Noun < game.Nouns.Count), $"An action's words are out of range: {action.Verb}, {action.Noun}.");
             foreach (GameCondition condition in action.Conditions)
             {
-                Require(condition.Value is >= 0 and <= LargestValue, $"A condition's value {condition.Value} is out of range.");
+                Require(
+                    condition.Type is >= 0 and < 20 && condition.Value is >= 0 and <= LargestValue,
+                    $"A condition is out of range: type {condition.Type}, value {condition.Value}.");
             }
 
             foreach (int code in action.Codes)
             {
+                Require(code is >= 0 and < MostWords, $"Action code {code} is out of range: codes run from 0 to 149.");
                 int message = code is >= 1 and <= 51 ? code : code >= 102 ? code - 50 : 0;
                 Require(message < game.Messages.Count, $"Action code {code} prints message {message}, which the game lacks.");
             }

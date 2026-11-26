@@ -172,8 +172,8 @@ breaking as the player leaves a cave, has happened when it is shown.
 
 A command is the line's first two words, a verb and a noun; more are ignored. Each counts only to the word length.
 
-- A word alone that is no verb but one of the directions' nouns, or N, S, E, W, U or D, is GO and that direction.
-- I alone is INVENTORY.
+- N, S, E, W, U or D alone is GO and that direction, and I alone is INVENTORY, before the verbs are looked at.
+- A word alone that is no verb but one of the directions' nouns is GO and that direction.
 - The first word must be a verb: one the verbs don't hold gets `I don't know that word.` and takes no turn.
 - A second word that is no noun is noun 0, which only the actions with noun 0 answer. Code 84 still writes it, so
   SAY can say anything.
@@ -207,8 +207,9 @@ It is dark while flag 15 is set and the light, item 9, is neither carried nor in
 room is `It's too dark to see.`, and so is GET.
 
 Each turn, the light burns while it is in play and has time left: its time counts down by one. At 0, flag 16 is set,
-and a light the player has says `My light has run out!`. It goes on giving light: the game's own actions decide what
-happens to it. Below 25, every fifth turn, a light the player has says `My light is growing dim.`
+and a light carried or in the player's room says `My light has run out!`. It goes on giving light: the game's own
+actions decide what happens to it. Below 25, every fifth turn, a light carried or in the player's room says
+`My light is growing dim.`
 
 ### Showing the room
 

@@ -19,6 +19,12 @@ if (args.Length > 0 && args[0] == "--language-server")
     return;
 }
 
+if (args.Length > 0 && args[0] == "build")
+{
+    Environment.ExitCode = Retrocore.Debug.Project.BuildCommand.Run(args[1..], Console.Out, Console.Error);
+    return;
+}
+
 if (args.Length > 0 && args[0] == "--assemble")
 {
     Environment.ExitCode = AssembleCommand.Run(args[1..]);

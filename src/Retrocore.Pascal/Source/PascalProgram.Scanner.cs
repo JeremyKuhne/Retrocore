@@ -355,6 +355,7 @@ public sealed partial class PascalProgram
             int depth = 0;
             bool awaitingDo = false;
             List<PascalWithBody> withs = [];
+            Stack<int> repeats = [];
             while (Current is { } token)
             {
                 if (token.Is("WITH")) { awaitingDo = true; }
@@ -386,10 +387,15 @@ public sealed partial class PascalProgram
                 {
                     withs.RemoveAll(body => !body.Block && body.Depth == depth);
                 }
-                else if (token.Is("REPEAT")) { depth++; }
-                else if (token.Is("UNTIL"))
+                else if (token.Is("REPEAT"))
                 {
-                    // REPEAT's statements are a level, as BEGIN's are, which UNTIL closes.
+                    depth++;
+                    repeats.Push(depth);
+                }
+                else if (token.Is("UNTIL") && repeats.TryPeek(out int open) && open == depth)
+                {
+                    // REPEAT's statements are a level, as BEGIN's are, which its UNTIL closes; a stray UNTIL is not.
+                    repeats.Pop();
                     withs.RemoveAll(body => body.Depth >= depth);
                     depth--;
                 }

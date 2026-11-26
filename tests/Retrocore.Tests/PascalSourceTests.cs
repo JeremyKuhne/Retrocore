@@ -453,6 +453,18 @@ public sealed class PascalSourceTests
     }
 
     /// <summary>
+    ///  A stray UNTIL, as while typing, doesn't end the statement part it is in, so what follows is still declared.
+    /// </summary>
+    [TestMethod]
+    public void StrayUntilKeepsTheStatementPart()
+    {
+        PascalProgram program = Analyze(
+            "PROGRAM P;\nPROCEDURE Q;\nBEGIN\n  UNTIL TRUE\nEND;\nPROCEDURE R;\nBEGIN END;\nBEGIN END.");
+
+        program.Declarations.Single(declaration => declaration.Name == "R").Scope.Should().Be(program.Outer);
+    }
+
+    /// <summary>
     ///  A file with a line too long for a page is still measured for the Editor.
     /// </summary>
     [TestMethod]

@@ -28,7 +28,8 @@ each one's address and bank. After the conversion, 591 definitions carry 733 old
 - **WK11** (427): Willi Kusche's 292-page disassembly of 1.1, read from the PDF's text layer, a typed listing with
   addresses and bytes. Kusche had no original listing and merged in what he found; many of his BIOS names are
   Apple's (A2PBIOS). His listing is conditional for five versions of the runtime and lists Initialize where it is
-  loaded, so `$F29C`-`$F674` is mapped to `$6827`-`$6BFF`, where it runs (Restart runs where it is loaded), and its line order gives the bank (bank 2 is its
+  loaded, so `$F29C`-`$F674` is mapped to `$6827`-`$6BFF`, where it runs (Restart runs where it is loaded; his
+  listing's ORIG build, which is 1.1's, jumps there), and its line order gives the bank (bank 2 is its
   second `ORG $D000`).
   - A code label is cited where his address column gives it at the address and bank the build gives the definition.
   - A label with no address of its own takes the next line's only when code follows it directly; a data map's
@@ -38,8 +39,8 @@ each one's address and bank. After the conversion, 591 definitions carry 733 old
     that holds the instruction. Where he gives one byte several names, each goes on our alias for that use; where one
     of his names serves several of our aliases, it goes on the byte.
   - Not cited: his generated names, the sequential `INTxx`, `INUxx`, `INVxx`, `INWxx`, `INXxx` and `INZxx`, `A` and an
-    address (`A62`, `ABDE0`, `AF21F`, `NBF11`, `S2A90`) and his macros' locals (`CLB`, `SBB`, `BB`, `BL`, `BNB`); `P0BASE`; and `ENDCCT`
-    and `DOH1E`'s second definition, which his listing defines twice.
+    address (`A62`, `ABDE0`, `AF21F`, `NBF11`, `S2A90`) and his macros' locals (`CLB`, `SBB`, `BB`, `BL`, `BNB`);
+    `P0BASE`; and `ENDCCT` and `DOH1E`'s second definition, which his listing defines twice.
 - **A2POSRM** (191): Apple's *Operating System Reference Manual*, from the Internet Archive's OCR text, and the scan's
   pages where the OCR is illegible. The registers (Appendix A), SYSCOM's fields, the mark stack's fields (figure 6),
   the execution errors (XINVNDX ... XS2LONG), the procedure attributes, and the p-codes and standard procedures, each
@@ -117,15 +118,16 @@ Settled by the owner on the rename table's review.
   (Kusche's KBD, LCBNK1 ...) are not added there: those switches carry Apple's own documents' names.
 - **The review** found names placed by a local's bare name on another routine's local of the same name (HCKSUM,
   FPRETA, NB8, PCDSIZ, TJTPTR, HSLOT1, SEGNO), and names a pattern for generated ones had dropped (BUFF6B, BUFF2B,
-  FREAD1, READAF, READDF), and Restart's MINITC, lost to Initialize's mapping. Each was placed again by the instruction that uses it. UCSD's MAXSEG is the last segment,
-  15, not the count, and Apple's DISKINFO the dictionary's entries, not an entry's size: both are in prose. Apple's
+  FREAD1, READAF, READDF), and Restart's MINITC, lost to Initialize's mapping. Each was placed again by its address
+  or the instructions that use it. UCSD's MAXSEG is the last segment, 15, not the count, and Apple's DISKINFO the dictionary's entries, not an entry's size: both are in prose. Apple's
   DISKNUM and READTBL start at unit 1, a word above ours, and SLTTYPS at a slot 0, a byte below ours; they stay on
   our tables, as the rename table's review settled, with the difference in prose.
 - **Locals that a document names** got a `;;` summary to carry the `Also:`; where a step heading said what happens
   at the label, the summary replaces it.
 - **The lint** bounded a routine by the next documented routine above its address, so in banked code another bank's
   routine could fall between a routine and its own local (`CardInit`, in bank 2, between bank 1's `LoadStringAddress`
-  and its `SkipCharacters`). A `.proc`'s own local is now inside it by scope (`DocumentationTests.ProcEntriesAreItsLocals`).
+  and its `SkipCharacters`). A `.proc`'s own local is now inside it by scope
+  (`DocumentationTests.ProcEntriesAreItsLocals`).
 - **Old names in prose**, by script: what remains is the BIOS and SYSCOM as concepts, Pascal's own procedure names
   (UNITREAD, NEW, MARK), p-code mnemonics, the names of the documents' records (MISCINFO), and the sentences that give
   an old name as history.

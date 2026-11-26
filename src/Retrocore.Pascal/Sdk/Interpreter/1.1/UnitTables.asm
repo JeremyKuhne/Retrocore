@@ -75,7 +75,7 @@ AttachedDrivers:
 
 ;; Each unit's device, a word a unit from unit 0: <CHARACTER_DEVICE>, a drive number (with a high byte of 0) for a Disk
 ;; II drive, or else the address, less 1, of a driver that <UnitDriver> runs. Apple's DISKNUM and Kusche's DSKNUM start
-;; at unit 1, at UnitTable+2.
+;; at unit 1, at UnitTable+2 ($FEB0).
 ;; Also: DISKNUM (A2PBIOS), DSKNUM (WK11)
 UnitTable:
     NoUnit 0

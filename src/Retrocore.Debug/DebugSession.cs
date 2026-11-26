@@ -971,7 +971,8 @@ internal sealed partial class DebugSession
                     $"{target.Project.File}: target {target.Name}: slot {slot}'s {card} comes with its media from the target's options, such as diskImage, not from its cards.");
             }
 
-            // A slot the options filled with a Disk II or block storage keeps it, which a saved machine leaves alone too.
+            // A slot the options filled with a Disk II or block storage keeps it: a target that wants another card
+            // there, or none, leaves that option out.
             if (current?[slot] is JsonValue held && held.GetValueKind() == JsonValueKind.String && LaunchOwned(held.GetValue<string>()))
             {
                 throw new ProjectException(

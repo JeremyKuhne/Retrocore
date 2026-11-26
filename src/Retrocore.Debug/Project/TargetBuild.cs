@@ -42,6 +42,16 @@ internal sealed record TargetBuild(
     internal required string Record { get; init; }
 
     /// <summary>
+    ///  Gets the target's memory map, or null when its machine has none.
+    /// </summary>
+    internal MemoryMap? Map { get; init; }
+
+    /// <summary>
+    ///  Gets the linker configuration the build made from the memory map, when the target gives none.
+    /// </summary>
+    internal AssemblySource? MadeLinkerConfiguration { get; init; }
+
+    /// <summary>
     ///  Gets the project's steps as the build left them, each run or up to date.
     /// </summary>
     internal IReadOnlyList<StepResult> Steps { get; init; } = [];

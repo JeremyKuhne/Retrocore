@@ -308,6 +308,13 @@ expansion RAM period owners added and modern replicas ship with: RAM contiguous 
 The linker already reports a segment that overflows its region and sections that overlap. A memory map adds what
 the linker cannot know, the machine's reserved areas, and turns those errors into messages that name the target.
 
+**As built (phase 3).** The `bare` maps for the five machines are in `sdk/1/environments/bare/`, one file per RAM size,
+and [sdk/1/README.md](../../sdk/1/README.md#memory-maps) is their contract. A map also gives `load`, the address a
+program loads at, which is the launch's own at a machine's default RAM. The zero page is given only as the bytes a
+program may use, and every other address is free or reserved. The made configuration's RAM region runs to `$FFFF`, so
+the map's check, not the linker, reports a program that is too big, with how far over it is. The adventure gives no
+linker configuration: its five machines link by their maps. The run-time warning is still for later.
+
 ## Building
 
 `retrocore build [--target <name>|--all]` reads `retrocore.json`, runs its steps, assembles each target, and writes

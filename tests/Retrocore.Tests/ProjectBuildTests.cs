@@ -70,7 +70,7 @@ public sealed class ProjectBuildTests
         File.ReadAllText(Path.Join(output, "hello.dbg")).Should().Contain("main.s");
         string map = File.ReadAllText(Path.Join(output, "hello.map"));
         map.Should().StartWith("; hello, target apple2-bare: apple2-iiplus, bare, 6502\nload $6000-$6003 (4 bytes)\nentry $6001\n");
-        map.Should().Contain("\nsections\n  .text            $6000-$6003      4\n");
+        map.Should().Contain("\nsections\n  CODE             $6000-$6003      4\n");
         map.Should().Contain("START").And.Contain("$6001 label");
 
         JsonNode record = JsonNode.Parse(File.ReadAllText(Path.Join(_folder, "obj", "apple2-bare", "build.json")))

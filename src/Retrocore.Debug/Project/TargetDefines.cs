@@ -162,10 +162,15 @@ internal static class TargetDefines
     /// <returns>The define's part, such as <c>APPLE2_IIE_ENHANCED</c>.</returns>
     internal static string Part(string name) => name.ToUpperInvariant().Replace('-', '_').Replace('.', '_');
 
+    /// <summary>
+    ///  Gets the target's RAM in kilobytes, as <c>RC_RAM_KB</c> gives it.
+    /// </summary>
+    /// <param name="target">The target.</param>
+    /// <returns>The RAM.</returns>
     // The target's RAM: its ramKilobytes, or the machine's default. The Model I's default follows its Expansion
     // Interface, which a Level II machine has unless its target says not and a Level I one only when it says so:
     // 48K with it, otherwise 16K under Level II and 4K under Level I, as the launch has it.
-    private static int RamKilobytes(ProjectTarget target)
+    internal static int RamKilobytes(ProjectTarget target)
     {
         // Read as the launch reads it. One that is not a whole number leaves the define the default; a size the
         // machine does not offer is the define's value as given, and the launch refuses it.

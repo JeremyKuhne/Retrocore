@@ -1,0 +1,17 @@
+{
+  "description": "The Apple II, II Plus and IIe with 48K, bare: a program loaded into RAM that calls the Monitor's routines.",
+  "load": "$6000",
+  "free": [
+    { "start": "$0300", "end": "$03CF" },
+    { "start": "$0800", "end": "$BFFF" }
+  ],
+  "zeroPage": ["$06-$09", "$FA-$FD"],
+  "reserved": [
+    { "start": "$0100", "end": "$01FF", "why": "the stack" },
+    { "start": "$0200", "end": "$02FF", "why": "the Monitor's input buffer, which GETLN fills" },
+    { "start": "$03D0", "end": "$03FF", "why": "the vectors: DOS's at $03D0, and the Monitor's BRK, reset, NMI and IRQ vectors from $03F0" },
+    { "start": "$0400", "end": "$07FF", "why": "text and lo-res page 1, the screen, with the screen holes the cards use" },
+    { "start": "$C000", "end": "$CFFF", "why": "the soft switches, the I/O and the slots' ROMs" },
+    { "start": "$D000", "end": "$FFFF", "why": "AppleSoft's and the Monitor's ROM" }
+  ]
+}

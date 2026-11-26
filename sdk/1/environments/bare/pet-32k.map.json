@@ -1,0 +1,20 @@
+{
+  "description": "The PET with 32K, bare: a program loaded into RAM that calls the Kernal's and the editor's routines and does not return to BASIC.",
+  "load": "$0800",
+  "free": [
+    { "start": "$0400", "end": "$7FFF" }
+  ],
+  "zeroPage": ["$00-$8C"],
+  "reserved": [
+    { "start": "$0100", "end": "$01FF", "why": "the stack, with the tape's read errors at its bottom" },
+    { "start": "$0200", "end": "$0279", "why": "the Kernal's and BASIC's workspace: the input buffer, the open files and the keyboard buffer" },
+    { "start": "$027A", "end": "$0339", "why": "cassette 1's buffer" },
+    { "start": "$033A", "end": "$03F9", "why": "cassette 2's buffer" },
+    { "start": "$03FA", "end": "$03FF", "why": "the Monitor's command vector" },
+    { "start": "$8000", "end": "$8FFF", "why": "the screen, repeated" },
+    { "start": "$9000", "end": "$AFFF", "why": "the option ROMs' sockets" },
+    { "start": "$B000", "end": "$E7FF", "why": "BASIC's and the screen editor's ROM" },
+    { "start": "$E800", "end": "$EFFF", "why": "the PIAs and the VIA" },
+    { "start": "$F000", "end": "$FFFF", "why": "the Kernal's ROM" }
+  ]
+}

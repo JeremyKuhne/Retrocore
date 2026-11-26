@@ -86,8 +86,10 @@
     <None Include="..\Retrocore.Machines.Atari\Roms\Os\*.asm" Link="Sdk\Roms\Atari\Os\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\Retrocore.Machines.Atari\Roms\FloatingPoint\*.asm" Link="Sdk\Roms\Atari\FloatingPoint\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\Retrocore.Machines.Atari\Roms\AtariBasic\*.asm" Link="Sdk\Roms\Atari\AtariBasic\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
-    <!-- The SDK's headers for projects, by major version: sdk/1/ is Sdk/1/, which a target's includes search. -->
+    <!-- The SDK's headers for projects, by major version: sdk/1/ is Sdk/1/, which a target's includes search, and its memory
+         maps, which a target's build checks its program against. -->
     <None Include="..\..\sdk\**\*.inc" Link="Sdk\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\sdk\**\*.map.json" Link="Sdk\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <!-- SDL's packages carry each library once per name its platform links by: libSDL3.so, .so.0 and .so.0.4.20 on

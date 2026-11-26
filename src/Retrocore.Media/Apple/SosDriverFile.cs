@@ -19,8 +19,9 @@ namespace Retrocore.Media;
 ///   comment, its code assembled at origin 0, and its relocation table, each with a 2-byte length; a comment length
 ///   of <c>$FFFF</c> ends the file. A driver's code starts with its first device
 ///   information block (DIB): the link to the next, the entry point, then the device's name as a length and 15
-///   characters. The links chain the driver's own DIBs. The loader places and links the drivers from the last in the
-///   file to the first, linking each driver's last active DIB to the first active DIB of the driver before it.
+///   characters. The links, offsets in the code, chain the driver's own DIBs. The loader places and links the drivers
+///   from the last in the file to the first, linking each driver's last active DIB to the first active DIB of the
+///   driver before it in the file.
 ///  </para>
 ///  <para>
 ///   The relocation table lists the offsets, 2 bytes each, of the code's words that hold addresses in the code.
@@ -151,8 +152,8 @@ public sealed class SosDriverFile
     /// <exception cref="ArgumentException">
     ///  The header is short, $8000 bytes or more, or its drive count is not 1-4 (stricter than the loader, which
     ///  takes 0 as 1 and more than 4 as 4); there are no drivers; or a driver's comment is not ASCII, a field is
-    ///  $8000 bytes or more, its code is too short for its first DIB's fields the loader reads, or a relocation does
-    ///  not point at a word in its code.
+    ///  $8000 bytes or more, its code is too short for the DIB fields the loader reads along its chain of DIBs, or a
+    ///  relocation does not point at a word in its code.
     /// </exception>
     public static byte[] Write(ReadOnlySpan<byte> header, IReadOnlyList<SosDriver> drivers)
     {
@@ -192,10 +193,7 @@ public sealed class SosDriverFile
                 throw new ArgumentException($"A driver's code is {DibFlags + 1}-{MaxField} bytes; {driver.Name}'s is {driver.Code.Length}.", nameof(drivers));
             }
 
-            if ((driver.Code[DibFlags] & DibActivePageAligned) == DibActivePageAligned && driver.Code.Length < DibDcb + 2)
-            {
-                throw new ArgumentException($"{driver.Name} asks to be page-aligned but its code ends before its DCB's length.", nameof(drivers));
-            }
+            CheckDibs(driver);
 
             if (comment.Length > MaxField || driver.Relocations.Length * 2 > MaxField)
             {
@@ -225,13 +223,38 @@ public sealed class SosDriverFile
         return file.ToArray();
     }
 
-    // A DIB's flags byte, after the link, the entry point, and the name's length and 15 characters: the loader reads
-    // it for every DIB in the chain. Write checks the first, which starts the code; the links to the others are the
-    // driver's own. Bit 7 marks the DIB active; an active DIB with bit 6 set asks for the driver to be
-    // page-aligned, for which the loader also reads the word at the DCB's offset, its length.
+    // A DIB's flags byte, after the link, the entry point, and the name's length and 15 characters, which the loader
+    // reads for every DIB in the driver's chain. Bit 7 marks the DIB active; an active DIB with bit 6 set asks for the
+    // driver to be page-aligned, for which the loader reads the word at $20 of the driver's code, its first DIB's DCB
+    // length.
     private const int DibFlags = 0x14;
     private const int DibActivePageAligned = 0xC0;
     private const int DibDcb = 0x20;
+
+    // Walks the driver's chain of DIBs as SOS's loader does, from the first at the code's start along the links (each
+    // an offset in the code) to a link of 0 or one to itself, checking that each DIB's flags, and the DCB length an
+    // active page-aligned one makes the loader read, are inside the code.
+    private static void CheckDibs(SosDriver driver)
+    {
+        byte[] code = driver.Code;
+        HashSet<int> seen = [];
+        for (int dib = 0; seen.Add(dib);)
+        {
+            if (dib + DibFlags >= code.Length)
+            {
+                throw new ArgumentException($"{driver.Name} links to a DIB at offset {dib}, which runs past its code.", "drivers");
+            }
+
+            if ((code[dib + DibFlags] & DibActivePageAligned) == DibActivePageAligned && code.Length < DibDcb + 2)
+            {
+                throw new ArgumentException($"{driver.Name} asks to be page-aligned but its code ends before its DCB's length.", "drivers");
+            }
+
+            int link = code[dib] | (code[dib + 1] << 8);
+            if (link == 0 || link == dib) { break; }
+            dib = link;
+        }
+    }
 
     private static void WriteField(MemoryStream file, ReadOnlySpan<byte> field)
     {

@@ -204,9 +204,9 @@ public sealed class SosDriverHeaderTests
     }
 
     /// <summary>
-    ///  The writer refuses what SOS's loader cannot load: a short header, no drivers, code too short for its first
-    ///  DIB's flags (or, for a page-aligned driver, its DCB's length), a relocation outside the code; and, stricter than
-    ///  the loader, a drive count outside 1-4 and a comment that is not ASCII.
+    ///  The writer refuses what SOS's loader cannot load: a short header, no drivers, code too short for the flags of
+    ///  each DIB along its chain (or, for a page-aligned driver, its DCB's length), a relocation outside the code; and,
+    ///  stricter than the loader, a drive count outside 1-4 and a comment that is not ASCII.
     /// </summary>
     [TestMethod]
     public void WriterRefusesWhatSosCannotLoad()
@@ -232,6 +232,17 @@ public sealed class SosDriverHeaderTests
         byte[] reaches = new byte[0x22];
         reaches[0x14] = 0xC0;
         SosDriverFile.Read(SosDriverFile.Write(header, [new SosDriver("", reaches, [])])).Drivers.Should().ContainSingle();
+
+        // The loader reads the DCB length at $20 for any active page-aligned DIB along the chain, not only the first.
+        byte[] second = new byte[0x21];
+        second[0] = 0x08;
+        second[0x08 + 0x14] = 0xC0;
+        Action chained = () => SosDriverFile.Write(header, [new SosDriver("", second, [])]);
+        chained.Should().Throw<ArgumentException>().WithParameterName("drivers");
+        byte[] past = new byte[0x21];
+        past[0] = 0x10;
+        Action pastCode = () => SosDriverFile.Write(header, [new SosDriver("", past, [])]);
+        pastCode.Should().Throw<ArgumentException>().WithParameterName("drivers");
         Action outside = () => SosDriverFile.Write(header, [console with { Relocations = [console.Code.Length - 1] }]);
         outside.Should().Throw<ArgumentException>().WithParameterName("drivers");
         Action notAscii = () => SosDriverFile.Write(header, [console with { Comment = "café" }]);

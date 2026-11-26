@@ -137,14 +137,14 @@ Every download (SIMH, software images, ROM dumps) is approved first, as before.
   hand; no test compares a disk session with SIMH, as the BASIC tests do.
 - **Loading a tape with MBL.** `proms` fits MBL, but a launch starts at its program, at DBL's `$FF00` or at `$0000`; to
   load a tape, the program counter is set to `$FE00` in the debugger. A launch option to start at MBL would do it.
-- **DBL and MBL in the maintained style.** Both sources predate [ConvertingSources.md](../ConvertingSources.md) and
-  don't opt in to the strict style check; converting them would give them full names with the listings' names kept
-  as historical names, as the Apple II sources have.
+- **DBL and MBL in the maintained style.** Both sources were written before the conversion rules in
+  [ConvertingSources.md](../ConvertingSources.md) and don't opt in to the strict style check; converting them would
+  give them full names with the listings' names kept as historical names, as the Apple II sources have.
 - **Trim erase and the head.** The FDC+ holds off a head unload until a write's trim erase ends; here the head
   unloads at once. Nothing here can tell the difference.
-- **A missing PROM source.** A launch whose `sdkRoms` folder lacks `Dbl.asm` or `Mbl.asm` fails with a
-  file-not-found error, while the source map skips a missing file. Whether a launch should fall back to the SDK's
-  copy is open.
+- **A missing PROM source.** A launch whose `sdkRoms` folder lacks the source of a PROM it fits, `Dbl.asm` or
+  `Mbl.asm`, fails with a file-not-found error, while the source map skips a missing file. Whether a launch should
+  fall back to the SDK's copy is open.
 - **The 1975 source listing** on gatesnotes.com, which the user named: its host is allowed now, but its CDN answers
   automated downloads with "Access Denied", so it needs downloading by hand.
 - **The 88-SIO's status bits** other than 0, 4 and 7 read 0 here; the board's manual would settle them.

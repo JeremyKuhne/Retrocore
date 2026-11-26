@@ -30,9 +30,9 @@ const allTargets = ["apple2", "pet", "bbc", "apple1"];
 const targets = process.argv.length > 2 ? process.argv.slice(2) : allTargets;
 
 // The screens kept in memory: the PET's 1,000 screen codes at $8000, where 1-26 are the capitals and 32-63 are as in
-// ASCII, in capitals as the console writes them; and MODE 7's 1K at $7C00, as the BBC writes the characters. MODE 7
-// scrolls by moving the screen's start through that 1K, so a row can run from its end to its start: its memory is
-// searched twice over, joined where it wraps.
+// ASCII, in capitals as the console writes them; and MODE 7's 1K at $7C00 on the model B, as the BBC writes the
+// characters. MODE 7 scrolls by moving the screen's start through that 1K, so a row can run from its end to its start:
+// its memory is searched twice over, joined where it wraps.
 const screens = {
     pet: {
         address: 0x8000,
@@ -157,6 +157,7 @@ try {
                 const bytes = [...Buffer.from((await request("readMemory", {
                     memoryReference: `0x${address.toString(16)}`, count
                 })).data, "base64")];
+                assert.equal(bytes.length, count, `${target}: the screen's memory reads`);
 
                 const screen = (wraps ? [...bytes, ...bytes] : bytes).map(text).join("");
                 assert.ok(screen.includes(end), `${target} ${name}: the screen shows "${end}"`);

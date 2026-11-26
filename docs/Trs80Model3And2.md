@@ -12,7 +12,7 @@ The SDK has native sources for every ROM these machines run with a known good du
 Model III, 4 and 4P boot their DOSes from disk images (see [DOSes](#doses)); the Model II has not run one yet. See
 [What is not done yet](#what-is-not-done-yet). The Model II's keyboard has its own processor and ROM (MAME's
 `65-1991.z4`), which are not run here: the emulated keyboard queues its codes directly, as its documentation
-describes them rather than as its ROM sends them ([the Model II](#the-model-ii-12-and-16)).
+is remembered to give them rather than as its ROM sends them ([the Model II](#the-model-ii-12-and-16)).
 
 ## The Model III, 4 and 4P
 
@@ -161,7 +161,7 @@ behavior was found by booting each image here, and the comparison with MAME agre
 Level II on the Model I reads a letter alone as uppercase and with shift as lowercase, so there a lowercase letter is
 typed with shift. Level I, on the Model III or the Model I, reads shift and a letter as its control code, so there
 every letter is typed as its key alone and comes out in uppercase, and ` has no key. The Model II types ASCII, with the
-codes its documentation gives ([the Model II](#the-model-ii-12-and-16)).
+codes its documentation is remembered to give ([the Model II](#the-model-ii-12-and-16)).
 
 ## ROMs
 

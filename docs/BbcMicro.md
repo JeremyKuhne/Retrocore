@@ -101,7 +101,9 @@ image the same way, with the launch's `boot`. In Retrocore Desktop, F1-F9 and F1
 SHIFT LOCK, and Ctrl+Shift+F12 is SHIFT-BREAK.
 **Machine reset** stops at the MOS's first instruction after BREAK. The **BRK instructions** filter stops at each
 error the MOS, BASIC or the DFS raises, and names it. The Drives view shows the cassette and the drives, and
-inserts, records, ejects and saves media; `retro/media` takes the same requests.
+inserts, records, ejects and saves media, and presses the recorder's PLAY, RECORD, STOP and REWIND (RECORD with no
+tape puts in a blank one, saved with Save As; a tape put in to play is write-protected, so RECORD will not go down on
+it); `retro/media` takes the same requests.
 
 **What the debugger knows about the BBC Micro.**
 

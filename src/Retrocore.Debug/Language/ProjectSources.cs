@@ -21,7 +21,9 @@ namespace Retrocore.Debug.Language;
 ///   them.
 ///  </para>
 ///  <para>
-///   A project file is read again when it changes on disk; each target's source list is kept for a second, so a
+///   The client tells the server of a change to a project file by sending <c>retrocore/activeTarget</c> again, or by
+///   a watched-files change; either analyzes the project's targets again. A project file is read again when it changes
+///   on disk; each target's source list is kept for a second, so a
 ///   source added to a folder a pattern names is found soon after.
 ///  </para>
 /// </remarks>
@@ -33,6 +35,13 @@ internal static class ProjectSources
     internal const string Extension = ".retrocore-target";
 
     private static readonly TimeSpan s_sourcesLife = TimeSpan.FromSeconds(1);
+
+    // Every folder below, skipping those that cannot be read, as SourceIncludes.Roots searches.
+    private static readonly EnumerationOptions s_searchAll = new()
+    {
+        IgnoreInaccessible = true,
+        RecurseSubdirectories = true
+    };
 
     private static readonly ConcurrentDictionary<string, (DateTime Written, IReadOnlyList<RetrocoreProject>? Projects)> s_projects =
         new(StringComparer.OrdinalIgnoreCase);
@@ -140,7 +149,7 @@ internal static class ProjectSources
     internal static List<string> RootsIn(string folder)
     {
         List<string> roots = [];
-        foreach (string file in Directory.EnumerateFiles(folder, RetrocoreProject.FileName, SearchOption.AllDirectories))
+        foreach (string file in Directory.EnumerateFiles(folder, RetrocoreProject.FileName, s_searchAll))
         {
             // A root file's projects have their own files, found in their own folders.
             string full = Path.GetFullPath(file);

@@ -114,6 +114,46 @@ public sealed class ProjectLanguageTests
     }
 
     /// <summary>
+    ///  A file the project's sources include follows the target the source prefers: the active one, whichever
+    ///  target's analysis finishes last.
+    /// </summary>
+    /// <returns>A task.</returns>
+    [TestMethod]
+    public async Task IncludedFilesFollowTheActiveTarget()
+    {
+        File.WriteAllText(Path.Join(_folder, "retrocore.json"), """
+            { "sdk": "1", "cpu": "6502", "sources": ["src/main.s"], "targets": {
+                "iiplus": { "machine": "apple2-iiplus", "environment": "bare" },
+                "iie": { "machine": "apple2-iie-enhanced", "environment": "bare", "cpu": "65c02" } } }
+            """);
+
+        Directory.CreateDirectory(Path.Join(_folder, "src"));
+        string main = Path.Join(_folder, "src", "main.s");
+        string shared = Path.Join(_folder, "src", "shared.inc");
+        File.WriteAllText(main, ".include \"shared.inc\"\n    rts\n");
+        File.WriteAllText(shared, ".if .defined(RC_CPU_65C02)\n    stz $00\n.else\n    lda #0\n.endif\n");
+        LanguageWorkspace workspace = new(new RecordingLanguageClient());
+        LanguageHost.ActiveTargetChanged(workspace, new JsonObject
+        {
+            ["project"] = _folder, ["target"] = "iie"
+        });
+
+        workspace.Update(main, File.ReadAllText(main));
+        workspace.Update(shared, File.ReadAllText(shared));
+        for (int round = 0; round < 3; round++)
+        {
+            // Both targets analyze both files again; the shared file stays the active target's.
+            LanguageHost.ActiveTargetChanged(workspace, new JsonObject
+            {
+                ["project"] = _folder, ["target"] = "iie"
+            });
+
+            await workspace.IdleAsync(main, CancellationToken.None);
+            (await workspace.InactiveLinesAsync(shared, CancellationToken.None)).Should().Equal(new AssemblyLineRange(3, 1));
+        }
+    }
+
+    /// <summary>
     ///  A folder's roots are its project's targets, one each, in place of the sources they assemble; a source no
     ///  target assembles stays a root of its own.
     /// </summary>

@@ -166,7 +166,8 @@ internal sealed partial class LanguageWorkspace
 
         // Every target analyzed before is analyzed again, for workspace search, as is each open source's, which may be
         // another target now; scheduling a root again cancels an attempt still running.
-        List<string> roots = [.. dropped, .. _open.Keys.Where(InProject).Select(RootOf)];
+        // A target the project no longer has is gone, with its diagnostics, rather than analyzed into an error.
+        List<string> roots = [.. dropped.Where(root => ProjectSources.Target(root) is not null), .. _open.Keys.Where(InProject).Select(RootOf)];
         foreach (string root in roots.Distinct(StringComparer.OrdinalIgnoreCase))
         {
             Schedule(root);
@@ -319,6 +320,9 @@ internal sealed partial class LanguageWorkspace
 
     private string RootOf(string path)
     {
+        // A project's source goes by the target the project prefers now, which a new file in a pattern or a file the
+        // target no longer lists can change without an analysis; files a source includes go by the last that did.
+        if (ProjectSources.RootOf(path) is { } target) { return target; }
         if (_owners.TryGetValue(path, out string? root)) { return root; }
         return SourceIncludes.RootOf(path);
     }
@@ -382,14 +386,20 @@ internal sealed partial class LanguageWorkspace
         Publish(analysis);
     }
 
-    // Whether a root owns a file it analyzed: any root but a project's target owns its members; a target owns those
-    // that prefer no other target. A source's preferred target is the active one or the first that lists it, so its
-    // owner does not depend on which analysis finishes first; when that target cannot list its sources, its error is
-    // on the project file. A file a target only includes prefers none, so each target that includes it reports on it.
-    private static bool Owns(string root, string path) =>
-        !root.EndsWith(ProjectSources.Extension, StringComparison.OrdinalIgnoreCase)
-            || ProjectSources.RootOf(path) is not { } preferred
+    // Whether a root owns a file it analyzed: any root but a project's target owns its members; a target owns the
+    // project's files that prefer it, the sources its project prefers it for and the files those include (the active
+    // target, or the first that lists them), so the owner does not depend on which analysis finishes first. A target
+    // that cannot list its sources reports its error on the project file. Files outside the project, such as the SDK's
+    // headers, belong to each target that includes them.
+    private static bool Owns(string root, string path)
+    {
+        if (!root.EndsWith(ProjectSources.Extension, StringComparison.OrdinalIgnoreCase)) { return true; }
+        string folder = (Path.GetDirectoryName(root) ?? "") + Path.DirectorySeparatorChar;
+        if (!path.StartsWith(folder, StringComparison.OrdinalIgnoreCase)) { return true; }
+        string preferred = SourceIncludes.RootOf(path);
+        return !preferred.EndsWith(ProjectSources.Extension, StringComparison.OrdinalIgnoreCase)
             || string.Equals(preferred, root, StringComparison.OrdinalIgnoreCase);
+    }
 
     private void Publish(SourceAnalysis analysis)
     {
@@ -451,15 +461,18 @@ internal sealed partial class LanguageWorkspace
     }
 
     /// <summary>
-    ///  Gets a hint marking each run of a file's lines that its analysis's conditional assembly left out as
-    ///  unnecessary, which an editor fades: the inactive branches of the target's <c>.if</c> blocks.
+    ///  Gets a hint marking each run of a file's lines that a project target's build leaves out as unnecessary, which
+    ///  an editor fades: the branches of its <c>.if</c> blocks its defines turn off, and also the bodies of macros it
+    ///  never invokes and of <c>.repeat</c>s it repeats no times. Sources analyzed alone get none, as they have no
+    ///  target to choose their branches.
     /// </summary>
     /// <param name="analysis">The analysis.</param>
     /// <param name="path">A file the analysis opened.</param>
-    /// <returns>The hints, none when the file had nothing left out.</returns>
+    /// <returns>The hints, none when the file had nothing left out or the analysis is not a target's.</returns>
     internal static IEnumerable<Diagnostic> InactiveHints(SourceAnalysis analysis, string path)
     {
-        if (analysis.Result.SkippedLines is not { } skipped
+        if (!analysis.Root.EndsWith(ProjectSources.Extension, StringComparison.OrdinalIgnoreCase)
+            || analysis.Result.SkippedLines is not { } skipped
             || !skipped.Skipped.TryGetValue(path, out IReadOnlyList<AssemblyLineRange>? lines))
         {
             return [];
@@ -470,7 +483,7 @@ internal sealed partial class LanguageWorkspace
             Range = new LspRange(range.Start, 0, range.End, 0),
             Severity = DiagnosticSeverity.Hint,
             Source = "retrocore",
-            Message = "This build leaves these lines out.",
+            Message = "This target's build does not assemble these lines.",
             IsUnnecessary = true
         });
     }

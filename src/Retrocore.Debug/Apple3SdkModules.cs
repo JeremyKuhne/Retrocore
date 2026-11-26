@@ -197,6 +197,47 @@ internal static class Apple3SdkModules
         return SosDriverFile.Write(header, [.. folders.Select(folder => BuildSosDriver(directory, folder))]);
     }
 
+    /// <summary>
+    ///  Starts a bootable SOS disk around a program, from the SDK's sources: SOS's bootstrap loader in block 0, SOS
+    ///  1.3's SOS.KERNEL, a SOS.DRIVER with the drivers asked for, and the program as SOS.INTERP. Add the program's
+    ///  other files to the builder, then build the image.
+    /// </summary>
+    /// <param name="directory">The SDK ROM directory, or null for the copy beside the debug host.</param>
+    /// <param name="name">The volume's name: 1-15 letters, digits and periods, starting with a letter.</param>
+    /// <param name="loadAddress">
+    ///  Where the program runs, in the system bank, and its entry point: <c>$2000</c> or above, with the program
+    ///  ending at or below the kernel at <c>$B800</c>. SOS places the drivers below it.
+    /// </param>
+    /// <param name="program">The program, assembled to run at the load address; nothing is relocated.</param>
+    /// <param name="drives">The number of built-in floppy drives SOS is to configure, 1-4; by default 1, .D1.</param>
+    /// <param name="drivers">
+    ///  The drivers' folders in <c>Sos/Drivers</c>, in SOS.DRIVER's order; by default the console's alone. SOS needs
+    ///  the console. The built-in disk's driver is in the kernel.
+    /// </param>
+    /// <returns>The builder, with the loader and the three files.</returns>
+    /// <exception cref="ArgumentException">The name is not a SOS name, or there are no drivers.</exception>
+    /// <exception cref="ArgumentOutOfRangeException">
+    ///  The drive count is not 1-4, or the program does not fit between the load address and the kernel.
+    /// </exception>
+    /// <exception cref="FileNotFoundException">The SDK has no source for a piece.</exception>
+    /// <exception cref="InvalidDataException">A source has errors.</exception>
+    internal static SosVolumeBuilder BuildSosBootDisk(
+        string? directory,
+        string name,
+        int loadAddress,
+        ReadOnlySpan<byte> program,
+        int drives = 1,
+        IReadOnlyList<string>? drivers = null)
+    {
+        byte[] interpreter = SosInterpreterFile.Write(loadAddress, program);
+        return SosBootDisk.Create(
+            name,
+            BuildSosBoot(directory),
+            BuildSosKernel(directory),
+            BuildSosDriverFile(directory, drives, drivers ?? ["Console"]),
+            interpreter);
+    }
+
     // The distance between the two origins a driver is assembled at: a whole number of pages, so that a source
     // that aligns to a page assembles the same.
     private const int DriverShift = 0x1000;

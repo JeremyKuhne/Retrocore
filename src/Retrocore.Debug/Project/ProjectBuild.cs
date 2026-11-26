@@ -48,16 +48,17 @@ internal static partial class ProjectBuild
     internal static TargetBuild Build(ProjectTarget target)
     {
         target.RequireSupported();
-        List<StepResult> steps = ProjectSteps.Run(target.Project);
 
-        // The configuration made from the memory map is written before the assembly, so it is there to read when the
-        // build fails.
+        // The configuration made from the memory map is written first, so it is there to read when the build fails,
+        // and a target whose map is missing or malformed fails before its project's steps run.
         if (target.LinkerConfiguration is null && target.MemoryMap(SdkModules.SdkDirectory) is { } map)
         {
             string made = MadeConfigurationPath(target);
             Directory.CreateDirectory(Path.GetDirectoryName(made) ?? target.Project.Intermediate);
             File.WriteAllText(made, map.LinkerConfiguration(target));
         }
+
+        List<StepResult> steps = ProjectSteps.Run(target.Project);
 
         TargetBuild build = Assemble(target) with { Steps = steps };
         Write(build);

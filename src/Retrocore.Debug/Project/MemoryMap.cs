@@ -156,7 +156,7 @@ internal sealed class MemoryMap
         List<MemoryArea> free = Areas(file, "'free'", json["free"], why: false);
         List<MemoryArea> zeroPage = ZeroPageAreas(file, "'zeroPage'", json["zeroPage"]);
         List<MemoryArea> reserved = Areas(file, "'reserved'", json["reserved"], why: true);
-        MemoryMap map = new(file, description, load, Sorted(free), Sorted(zeroPage), Sorted(reserved));
+        MemoryMap map = new(file, description, load, Sorted(Merged(free)), Sorted(zeroPage), Sorted(reserved));
         map.Validate(file);
         return map;
     }
@@ -234,8 +234,8 @@ internal sealed class MemoryMap
     ///  <para>
     ///   The RAM region runs to <c>$FFFF</c>, not to the end of the free area, so a program too big for it is
     ///   reported by the memory check (<see cref="Check(ProjectTarget, AssemblyResult)"/>), which says by how much,
-    ///   rather than by the linker. A source with no <c>.section</c> assembles at the load address as before, in the
-    ///   default section.
+    ///   rather than by the linker. A source with no <c>.section</c> assembles at the load address as before, in
+    ///   <c>CODE</c>.
     ///  </para>
     /// </remarks>
     /// <param name="target">The target, which the configuration's comment names.</param>

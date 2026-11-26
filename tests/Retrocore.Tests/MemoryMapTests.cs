@@ -219,6 +219,9 @@ public sealed class MemoryMapTests
         Error(() => Build("apple2-iiplus", 48, "    rts\n", "\"memoryMap\": { \"zeroPage\": [] }")).Should().EndWith(
             "'zeroPage' must give at least one byte a program may use.");
 
+        Error(() => Build("apple2-iiplus", 48, "    rts\n", "\"memoryMap\": { \"zeroPage\": [\"$06-$100\"] }")).Should().EndWith(
+            "in target t's 'memoryMap' 'zeroPage', '$06-$100' must be a byte or a run of them, such as \"$06-$09\".");
+
         Error(() => Build("apple2-iiplus", 48, "    rts\n", "\"memoryMap\": { \"free\": [{ \"start\": \"$0050\", \"end\": \"$0060\" }] }"))
             .Should().EndWith("the zero page is given by 'zeroPage', not as free or reserved areas.");
 

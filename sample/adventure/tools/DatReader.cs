@@ -44,7 +44,8 @@ internal sealed class DatReader(string text)
             throw new InvalidDataException($"A quoted string was expected at line {Line(_position)}.");
         }
 
-        // Two quotation marks together inside a string are one; one alone ends it.
+        // Two quotation marks together after a string's first character are one; one alone ends it. So a string can't
+        // start with a quotation mark: a `` ` `` is one anywhere.
         int start = ++_position;
         int end;
         while (true)

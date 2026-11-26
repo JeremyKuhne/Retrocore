@@ -256,7 +256,7 @@ internal static class GamePacker
 
         foreach (GameAction action in game.Actions)
         {
-            Require(action.Verb < game.Verbs.Count && (action.Verb == 0 || action.Noun < game.Nouns.Count), $"An action's words are out of range: {action.Verb}, {action.Noun}.");
+            Require(action.Verb >= 0 && action.Noun >= 0 && action.Verb < game.Verbs.Count && (action.Verb == 0 || action.Noun < game.Nouns.Count), $"An action's words are out of range: {action.Verb}, {action.Noun}.");
             foreach (GameCondition condition in action.Conditions)
             {
                 Require(condition.Value is >= 0 and <= LargestValue, $"A condition's value {condition.Value} is out of range.");

@@ -51,7 +51,8 @@ The tables follow the header in that order.
   `*` in the `.dat`, and takes the `*` off the others.
 - **Where each item starts** is a byte for each item: a room, 0 for none, or 255 for carried.
 - **The noun GET and DROP know each item by** is a byte for each item, the noun its `.dat` description names between
-  slashes at its end (`Lamp/LAMP/`), as the first of its synonyms, or 0 for an item they don't take.
+  slashes at its end (`Lamp/LAMP/`), as the first of its synonyms, or 0 for an item they don't take: one with no
+  word, or a word that is no noun, which the packer warns of.
 - **The treasures** are a bit for each item, item *n*'s in bit *n* mod 8 of byte *n* / 8: the items whose `.dat`
   description starts with `*`.
 
@@ -140,7 +141,7 @@ The codes that need a value take the action's parameters in turn, 0 once there a
 | 82 | Adds the value to the counter |
 | 83 | Takes the value from the counter, which goes no lower than -1 |
 | 84 | Writes the command's second word in full, in capitals as the console gives it |
-| 85 | Writes the noun and ends the line |
+| 85 | Writes the command's second word as code 84 does, and ends the line |
 | 86 | Ends the line |
 | 87 | Swaps the player's room with the saved room the value names (its low four bits) |
 | 88 | Waits about two seconds |
@@ -189,8 +190,8 @@ The command is performed:
    (or a noun the game doesn't know), then `I can't carry any more.`, and otherwise takes it and says `OK`. DROP
    says `What?`, then `I'm not carrying it.`, and otherwise `OK`.
 4. With none performed, an action that answered but whose conditions didn't hold gets `I can't do that yet.`; GO
-   with no direction gets `Give me a direction too.`, and with a noun no action takes `I can't go that way.`; and
-   anything else `I don't understand.`
+   with no direction, or a word the game doesn't know, gets `Give me a direction too.`, and with a noun no action
+   takes `I can't go that way.`; and anything else `I don't understand.`
 
 ### What happens on its own
 
@@ -235,5 +236,6 @@ a word as wide as a line goes as it is.
 Besides the messages above, the engine says `I'm dead!` for code 61, `I can't save the game yet.` for code 71, and
 `The game is now over.` at the end. It lists what the player carries after `I'm carrying: `, or says
 `I'm carrying nothing.`. The score is `I've stored `, the count, ` treasures. On a scale of 0 to 100, that rates `,
-the count × 100 / the treasure count, and `.`, then `Well done!` when every treasure is stored. A list separates its
-exits or items with `, ` and ends in `.`. [`tools/ReferenceEngine.cs`](tools/ReferenceEngine.cs) holds each string.
+the count × 100 / the treasure count, and `.`, then `Well done!` when every treasure is stored; a game with no
+treasures rates 0 and never wins this way. A list separates its exits or items with `, ` and ends in `.`.
+[`tools/ReferenceEngine.cs`](tools/ReferenceEngine.cs) holds each string.

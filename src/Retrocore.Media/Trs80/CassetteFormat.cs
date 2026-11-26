@@ -74,8 +74,9 @@ public static class CassetteFormat
         return (bytes[first] is SystemData or SystemEntry) && IsName(bytes, index + 1, SystemNameLength);
     }
 
-    // Whether count bytes from index are a name: a printable character, then printable characters or $00 padding,
-    // as the loader compares only the characters typed.
+    // Whether count bytes from index read as a name: a printable character, then printable characters or $00
+    // padding. The loader compares only the characters typed, so any padding loads; this narrower reading keeps most
+    // Level I blocks at $55xx from being taken for a SYSTEM tape.
     private static bool IsName(IReadOnlyList<byte> bytes, int index, int count)
     {
         if (bytes[index] is < 0x21 or > 0x7E) { return false; }

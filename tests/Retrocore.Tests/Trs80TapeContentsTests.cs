@@ -75,9 +75,10 @@ public class Trs80TapeContentsTests
         CassetteFormat.Detect([.. s_leader, 0xA5, 0x10, 0x00, 0x10, 0x02, 0x01, 0x02]).Should().Be(CassetteContents.Unknown);
 
         // Level II's PRINT #-1 records strings after the sync byte, so a data tape's first letters can look like Level
-        // I's addresses; Level I's checksum tells them apart.
-        byte[] record = [.. s_leader, 0xA5, .. "ABCD"u8, 0x0D];
-        CassetteFormat.Detect([.. record, .. record, .. record]).Should().Be(CassetteContents.Unknown);
+        // I's addresses: "AAAB" reads as a block from $4141 to $4142, its byte and checksum on the tape after them.
+        // Level I's checksum tells them apart.
+        byte[] record = [.. s_leader, 0xA5, .. "AAAB"u8, 0x0D];
+        CassetteFormat.Detect([.. record, .. record]).Should().Be(CassetteContents.Unknown);
     }
 
     /// <summary>

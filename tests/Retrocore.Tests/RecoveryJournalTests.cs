@@ -6,11 +6,13 @@ using Retrocore.Debug;
 using Retrocore.Machines.Acorn;
 using Retrocore.Machines.Altair;
 using Retrocore.Machines.Apple2;
+using Retrocore.Machines.Commodore;
 using Retrocore.Machines.Devices;
 using Retrocore.Machines.Trs80;
 using Retrocore.Media;
 using Retrocore.Media.Acorn;
 using Retrocore.Media.Altair;
+using Retrocore.Media.Commodore;
 using Retrocore.Media.Floppy;
 using Retrocore.Media.Trs80;
 using System.Globalization;
@@ -756,6 +758,39 @@ public sealed class RecoveryJournalTests
         Disks(id).Should().BeEmpty();
     }
 
+    /// <summary>
+    ///  A VIC-20's TAP image is kept and comes back with its codec's machine and video, so it saves as the VIC-20's
+    ///  image it was, even into a Datasette whose own images are the PET's.
+    /// </summary>
+    [TestMethod]
+    public void ACommodoreTapeComesBackForItsMachine()
+    {
+        string id = Id();
+        string tap = Path.Join(s_root, $"kept-{Guid.NewGuid():N}.tap");
+        byte[] image = TapFormat.Write([352, 512, 672, 3000], TapFormat.Vic20Machine, TapFormat.Ntsc);
+        File.WriteAllBytes(tap, image);
+
+        CommodoreDatasette deck = Datasette(tap);
+        deck.Tape?.MarkChanged();
+        Stop(Open(id), deck);
+        Disks(id).Single()?["source"]?["codec"]?["machine"]?.GetValue<int>().Should().Be(TapFormat.Vic20Machine);
+
+        CommodoreDatasette next = Datasette(tap);
+        RecoveryJournal journal = Open(id);
+        MediaActions.Recover([next], journal).Should().BeEmpty();
+        CommodoreTape back = next.Tape ?? throw new InvalidOperationException("The Datasette is empty.");
+        CommodoreTapeCodec codec = MediaActions.Source(back)?.Codec as CommodoreTapeCodec
+            ?? throw new InvalidOperationException("The tape came back without its TAP codec.");
+
+        codec.Machine.Should().Be(TapFormat.Vic20Machine);
+        codec.Video.Should().Be(TapFormat.Ntsc);
+
+        MediaActions.Device(next, "save", Speaking())?.String("outcome").Should().Be("saved");
+        File.ReadAllBytes(tap).Should().Equal(image);
+        Stop(journal, next);
+        Disks(id).Should().BeEmpty();
+    }
+
     private static string Id() => $"test-{Guid.NewGuid():N}";
 
     private static RecoveryJournal Open(string id) => RecoveryJournal.Open(id, []) ?? throw new InvalidOperationException("The journal is taken.");
@@ -803,6 +838,17 @@ public sealed class RecoveryJournalTests
         MediaActions.Register(loaded.Disk, path, loaded.Codec, bytes);
         floppy.Insert(loaded.Disk, path, "DSK");
         return floppy;
+    }
+
+    // A PET's Datasette with a TAP image in it, read and registered as the debug host does.
+    private static CommodoreDatasette Datasette(string tap)
+    {
+        CommodoreDatasette deck = new("cassette1", "Cassette #1", "A PET's port 1", cpuHertz: 1_000_000);
+        byte[] bytes = File.ReadAllBytes(tap);
+        (CommodoreTape tape, CommodoreTapeCodec codec) = CommodoreTapeCodec.Load(bytes);
+        MediaActions.Register(tape, tap, codec, bytes);
+        deck.Insert(tape, tap, "TAP");
+        return deck;
     }
 
     // A BBC Micro's first disk drive and cassette with images in them, read and registered as the debug host does.

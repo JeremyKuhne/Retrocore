@@ -303,6 +303,7 @@ public sealed partial class ProjectHeaderTests
     [DataRow("apple3", "bare", "")]
     [DataRow("pet4032", "bare", "Kernal4")]
     [DataRow("bbcb", "bare", "Mos")]
+    [DataRow("bbcb", "dfs", "Mos")]
     public void HeadersAreCleanInTheEditor(string machine, string environment, string modules)
     {
         Write("retrocore.json", $$"""

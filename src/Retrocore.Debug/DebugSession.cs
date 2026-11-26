@@ -1017,7 +1017,10 @@ internal sealed partial class DebugSession
             throw new ArgumentException("Give one of source, program and basic.");
         }
 
-        bool loads = sourceFile is not null || program is not null || built is not null;
+        // A target whose environment boots its image loads nothing as the machine is built: the machine boots the image
+        // once it is in (BootImage), so no ROM runs before then.
+        bool booted = built?.Target.Built?.BootsImage == true;
+        bool loads = sourceFile is not null || program is not null || (built is not null && !booted);
 
         // The old machine's changed disks are kept and its recordings saved, and it is disposed before the new one is
         // built, as machines can share host resources, such as the game controllers SDL reads. A launch that then
@@ -1048,7 +1051,6 @@ internal sealed partial class DebugSession
         // and a saved machine's cards and disks go in; a disk the target's own options insert is in the drive from the
         // start, and the ROM starts booting it for that time, which bootSeconds: 0 leaves out. A target whose environment
         // boots its image is booted to its entry once its image is in (BootImage), so it takes no bootSeconds.
-        bool booted = built?.Target.Built?.BootsImage == true;
         if (built is not null && !booted && Target is Apple2DebugTarget) { Boot(args.Double("bootSeconds") ?? 0.25); }
 
         if (args.String("screen") is { } screen) { Target.Screen = screen; }
@@ -1199,7 +1201,7 @@ internal sealed partial class DebugSession
         _basicStatement = null;
         _stopOnEntry = args.Bool("stopOnEntry") ?? true;
         _powerOn = "The machine reset as it powered on.";
-        if (loads) { _powerOn = "The machine reset as it powered on, and is at the program's entry."; }
+        if (loads || booted) { _powerOn = "The machine reset as it powered on, and is at the program's entry."; }
         if (basicFile is not null) { _powerOn = null; }
         if (basicFile is not null)
         {

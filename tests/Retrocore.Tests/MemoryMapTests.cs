@@ -262,7 +262,10 @@ public sealed class MemoryMapTests
 
             // The Apple II Plus and IIe with 48K, which DOS 3.3 as the SDK builds it runs on, and the Apple II, whose
             // HELLO is Integer BASIC's.
-            ["dos33"] = 2
+            ["dos33"] = 2,
+
+            // The BBC Micro model B, and the model A with the disk interface.
+            ["dfs"] = 2
         };
 
         string environments = Path.Join(SdkModules.SdkDirectory, "1", "environments");

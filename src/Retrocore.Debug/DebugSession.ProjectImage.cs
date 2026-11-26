@@ -4,6 +4,8 @@
 
 using Retrocore.Debug.Project;
 using Retrocore.Media;
+using Retrocore.Media.Acorn;
+using Retrocore.Media.Floppy;
 
 namespace Retrocore.Debug;
 
@@ -47,6 +49,12 @@ internal sealed partial class DebugSession
                 WozDisk disk = SectorDiskConverter.Convert(bytes, proDosOrder: false);
                 MediaActions.KeepReplaced(apple2.BootDrive, $"the build's {build.Media.ImageKind} took its place");
                 apple2.BootDrive.Insert(disk, label, "DSK");
+                break;
+            case BbcDebugTarget bbc:
+                // Drive 0, which SHIFT-BREAK boots.
+                FloppyDisk floppy = AcornDfsDisk.Read(bytes).ToDisk();
+                MediaActions.KeepReplaced(bbc.BootDrive, $"the build's {build.Media.ImageKind} took its place");
+                bbc.BootDrive.Insert(floppy, label, "SSD");
                 break;
             default:
                 throw new ProjectException($"{target.Project.File}: target {target.Name}: {target.Machine.Id} cannot boot the '{target.Environment}' environment's image yet.");

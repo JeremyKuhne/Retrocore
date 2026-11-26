@@ -28,7 +28,7 @@ namespace Retrocore.Debug.Project;
 ///   ROM runs for <c>bootSeconds</c> (a quarter of a second unless the launch says) as the machine is built,
 ///   before the cards and a saved machine's media go in and before the program loads, so the Monitor has set up the
 ///   routines a bare program calls, such as COUT. A target whose environment boots its image, such as <c>dos33</c>,
-///   loads nothing and takes no <c>bootSeconds</c>: the machine boots the image to the program's entry.
+///   loads nothing and refuses <c>bootSeconds</c>: the machine boots the image from power-on to the program's entry.
 ///  </para>
 /// </remarks>
 internal static class ProjectLaunch
@@ -95,6 +95,14 @@ internal static class ProjectLaunch
         }
 
         target.Built?.Launch(target, launch);
+
+        // The machine boots the image from power-on, so no ROM runs first.
+        if (target.Built?.BootsImage == true && launch.ContainsKey("bootSeconds"))
+        {
+            throw new ProjectException(
+                $"{target.Project.File}: target {target.Name}: the '{target.Environment}' environment boots its image from power-on, so its options and its launch cannot give 'bootSeconds'.");
+        }
+
         if (!launch.ContainsKey("hints"))
         {
             launch["hints"] = Path.Join(target.Project.Directory, $"{target.Project.Name}.{target.Name}.hints.json");

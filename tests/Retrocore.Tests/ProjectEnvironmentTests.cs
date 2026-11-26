@@ -5,6 +5,7 @@
 using Retrocore.Debug.Project;
 using Retrocore.Machines.Apple1;
 using Retrocore.Media;
+using Retrocore.Media.Acorn;
 using System.Text.Json.Nodes;
 
 namespace Retrocore.Tests;
@@ -250,6 +251,92 @@ public sealed class ProjectEnvironmentTests
 
         Action hello = () => ProjectBuild.Build(RetrocoreProject.Load(_folder).Target("dos"));
         hello.Should().Throw<ProjectException>().WithMessage("*the program would be HELLO on the disk, the name of the program that starts it; give the project another 'name'.");
+    }
+
+    /// <summary>
+    ///  A <c>dfs</c> target writes a DFS disk: its title the project's name, the program as <c>$.&lt;NAME&gt;</c> at its
+    ///  load address running at its entry, its files at their addresses in their directories, and a <c>!BOOT</c> that
+    ///  <c>*RUN</c>s the program, with the boot option to <c>*EXEC</c> it; and a UEF tape of the same files, each named
+    ///  <c>D.NAME</c>, or <c>NAME</c> in <c>$</c>.
+    /// </summary>
+    [TestMethod]
+    public void DfsWritesItsDiskAndTape()
+    {
+        Write("retrocore.json", """
+            { "sdk": "1", "name": "adventure", "cpu": "6502", "sources": ["main.s"], "entry": "START",
+              "targets": { "dfs": { "machine": "bbcb", "environment": "dfs",
+                "files": ["data.bin", { "path": "${obj}/extra.bin", "name": "G.LEVEL1", "address": "$3000" }] } } }
+            """);
+
+        Write("main.s", "DATA:\n    .byte 1\nSTART:\n    rts\n");
+        Write("data.bin", "AB");
+        Write("obj/extra.bin", "XYZ");
+        TargetBuild build = ProjectBuild.Build(RetrocoreProject.Load(_folder).Target("dfs"));
+        string output = Path.Join(_folder, "artifacts", "dfs");
+        build.Media.Should().Be(new TargetMedia(
+            Path.Join(output, "adventure.uef"), "UEF tape, for *TAPE and *RUN", Path.Join(output, "adventure.ssd"), "DFS disk",
+            "SHIFT-BREAK boots the disk, and !BOOT runs ADVENTU"));
+
+        AcornDfsDisk disk = AcornDfsDisk.Read(File.ReadAllBytes(Path.Join(output, "adventure.ssd")));
+        disk.Title.TrimEnd().Should().Be("ADVENTURE");
+        disk.BootOption.Should().Be(AcornBootOption.Exec);
+        AcornDfsFile program = disk.Find('$', "ADVENTU")?.File ?? throw new AssertFailedException("No program.");
+        (program.LoadAddress, program.ExecutionAddress, program.Data).Should().BeEquivalentTo((0x1900u, 0x1901u, new byte[]
+        {
+            1, 0x60
+        }));
+
+        AcornDfsFile data = disk.Find('$', "DATA")?.File ?? throw new AssertFailedException("No DATA.");
+        (data.LoadAddress, data.Data).Should().BeEquivalentTo((0u, "AB"u8.ToArray()));
+        AcornDfsFile level = disk.Find('G', "LEVEL1")?.File ?? throw new AssertFailedException("No G.LEVEL1.");
+        (level.LoadAddress, level.Data).Should().BeEquivalentTo((0x3000u, "XYZ"u8.ToArray()));
+        System.Text.Encoding.ASCII.GetString(disk.Find('$', AcornDfsDisk.BootFileName)?.File.Data ?? []).Should().Be("*RUN ADVENTU\r");
+
+        // The tape is the one the tape builder makes of the same files, each named with its directory but for $'s.
+        AcornTape tape = UefFormat.Read(File.ReadAllBytes(Path.Join(output, "adventure.uef")));
+        AcornTape expected = AcornTapeBuilder.Build(
+        [
+            new("ADVENTU", 0x1900, 0x1901, [1, 0x60]),
+            new("DATA", 0, 0, "AB"u8.ToArray()),
+            new("G.LEVEL1", 0x3000, 0, "XYZ"u8.ToArray())
+        ]);
+
+        tape.HalfCycles.Should().Equal(expected.HalfCycles);
+    }
+
+    /// <summary>
+    ///  A file whose name the DFS cannot take, or that another file on the disk has in any case, fails the build naming
+    ///  it, as does a file too long for the disk.
+    /// </summary>
+    [TestMethod]
+    public void DfsRefusesBadNames()
+    {
+        string Fails(string files)
+        {
+            Write("retrocore.json", $$"""
+                { "sdk": "1", "name": "game", "cpu": "6502", "sources": ["main.s"],
+                  "targets": { "dfs": { "machine": "bbcb", "environment": "dfs", "files": {{files}} } } }
+                """);
+
+            Action build = () => ProjectBuild.Build(RetrocoreProject.Load(_folder).Target("dfs"));
+            return build.Should().Throw<ProjectException>().Which.Message;
+        }
+
+        Write("main.s", "rts\n");
+        Write("data.bin", "1");
+        Fails("""[{ "path": "data.bin", "name": "TOOLONGNAME" }]""").Should().EndWith("'TOOLONGNAME' is not a DFS file name, D.NAME or NAME with 1 to 7 printable characters, none a space or . : \" # *; give its file a 'name'.");
+        Fails("""[{ "path": "data.bin", "name": "GAME" }]""").Should().EndWith("two files on the disk are named $.GAME.");
+        Fails("""[{ "path": "data.bin", "name": "!BOOT" }]""").Should().EndWith("two files on the disk are named $.!BOOT.");
+        Fails("""[{ "path": "data.bin", "name": "g.LEVEL" }, { "path": "main.s", "name": "G.level" }]""").Should().EndWith("two files on the disk are named G.LEVEL.");
+
+        Write("retrocore.json", """
+            { "sdk": "1", "name": "game", "cpu": "6502", "sources": ["main.s"],
+              "targets": { "dfs": { "machine": "bbcb", "environment": "dfs", "files": [{ "path": "data.bin", "address": "$FFFF" }] } } }
+            """);
+
+        File.WriteAllBytes(Path.Join(_folder, "data.bin"), new byte[0x40000]);
+        Action big = () => ProjectBuild.Build(RetrocoreProject.Load(_folder).Target("dfs"));
+        big.Should().Throw<ProjectException>().WithMessage("*its files do not fit on a DFS disk: *");
     }
 
     /// <summary>

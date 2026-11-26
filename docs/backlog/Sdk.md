@@ -190,7 +190,7 @@ make.
 | `prodos` | the Apple II Plus with 64K, and the IIe | the ProDOS MLI | a SYS file at `$2000`, or a BIN file with its aux type |
 | `sos` | the Apple III | SOS calls (`BRK`, a call number, its parameters) | a `SOS.INTERP` on a boot disk with the SDK's SOS 1.3 kernel and drivers |
 | `basic` | the PET | the Kernal and BASIC | a PRG with a BASIC `SYS` line, on a TAP tape; also on a 4040 disk when the drive's ROM dumps are found |
-| `dfs` | the BBC Micro | the MOS (`OSWRCH`, `OSRDCH`, `OSFILE`, …) | a `*RUN` file on a DFS disk (`.ssd`) whose `!BOOT` runs it; a UEF tape as an option |
+| `dfs` | the BBC Micro | the MOS (`OSWRCH`, `OSRDCH`, `OSFILE`, …) | a `*RUN` file on a DFS disk (`.ssd`) whose `!BOOT` runs it, and a UEF tape of the same files |
 | `cpm` | the Apple II and IIe with a SoftCard, the Model 4, the Altair, the Kaypro II | the BDOS at `$0005` | a `.COM` file at `$0100` |
 | `level2` | the Model I and III | Level II's routines | a SYSTEM tape (CAS) |
 | `trsdos` | the Model I, III and 4 | TRSDOS, LDOS and LS-DOS SVCs | a `/CMD` load module |
@@ -384,7 +384,10 @@ checks that its hex stores the bytes the launch loaded. `dos33` writes `<name>.d
 `HELLO` (AppleSoft, or Integer BASIC on the II), the program as a B file, and the target's `files` as B files; a launch
 boots it in slot 6, after the saved machine's and the journal's media, and runs to the program's entry. It boots the II
 Plus, the enhanced IIe, and the II with the Autostart ROM. The adventure's `apple2-dos` target loads `PIRATE.DAT` from
-its disk with `BLOAD`, printed through `COUT`, and plays both of Pirate Adventure's transcripts. A target's `bootImage` is a path, relative to the project's folder; the
+its disk with `BLOAD`, printed through `COUT`, and plays both of Pirate Adventure's transcripts. `dfs` writes
+`<name>.ssd`, the program as a `*RUN` file with the target's `files` and a `!BOOT` that runs it, and a UEF tape of
+the same files; a launch fits the disk interface, puts the disk in drive 0 and boots it holding SHIFT, on the model B
+and on a model A. The adventure's `bbc-dfs` target loads `$.PIRATE` with OSFILE and plays both transcripts. A target's `bootImage` is a path, relative to the project's folder; the
 lookup by hash, which phase 4 also gives, is still to come.
 
 ## Debugging in VS Code

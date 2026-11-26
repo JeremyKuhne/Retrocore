@@ -12,7 +12,8 @@ step. Another target, `apple2-test`, links the test game instead (`TEST_GAME`, i
 in each machine's own environment follow as the SDK's environments arrive: `apple1-wozmon` builds the Apple-1's
 program as Woz Monitor hex to type in and an ACI tape, and `apple2-dos` builds a DOS 3.3 disk whose `HELLO` starts the
 engine, which loads Pirate Adventure from the disk as `PIRATE.DAT` (`GAME_LINKED` is 0 there, and
-`src/platform/dos33/game.s` loads the game). The packer writes the game's size beside it, `obj/pirate.inc`, for the
+`src/platform/dos33/game.s` loads the game), and `bbc-dfs` builds a DFS disk whose `!BOOT` runs the engine, which
+loads the game with OSFILE as `$.PIRATE` (`src/platform/dfs/game.s`). The packer writes the game's size beside it, `obj/pirate.inc`, for the
 buffer it loads into.
 
 ```text
@@ -21,7 +22,8 @@ sample/adventure/
   src/core/                   the engine, which uses no machine's addresses
   src/linked-game.s           the packed game, linked in as Game: Pirate Adventure, or the test game
   src/platform/<family>/      console.s, the machine's screen and keyboard
-  src/platform/<environment>/ an environment's own platform files, after the family's: dos33/game.s loads the game
+  src/platform/<environment>/ an environment's own platform files, after the family's: dos33/ and dfs/game.s load
+                              the game
   tools/packer.cs             .dat to the packed format, and the C# reference engine
   games/test.dat              a small test adventure of our own, MIT
   games/test-*.in, *.out      its transcripts: the commands, and what the screen shows
@@ -40,6 +42,7 @@ sample/adventure/
 | `apple3` | Apple III | its own text page 1 and keyboard routines | `$2000` |
 | `pet` | PET 4032 | the kernal's jump table | `$0800` |
 | `bbc` | BBC Micro model B | the MOS's OSWRCH and OSWORD 0 | `$2000` |
+| `bbc-dfs` | BBC Micro model B, from a DFS disk, the game loaded from `$.PIRATE` | the MOS's OSWRCH and OSWORD 0 | `$1900` |
 
 Each console includes the SDK's `<machine.inc>` for its machine's names, and takes the screen's width from the
 SDK's `RC_SCREEN_COLUMNS`. The Apple III's console is built but not yet played under the debugger: a bare program
@@ -82,8 +85,8 @@ engine itself writes it. `--columns` sets the screen's width, 40 by default.
 
 [`tools/Test-AdventureDap.mjs`](../../tools/Test-AdventureDap.mjs) plays both of Pirate Adventure's transcripts, the
 win from start to finish and the death, on the Apple-1 with 32K, the PET 4032, the Apple II and the BBC Micro, the
-win on `apple1-wozmon`, whose hex it checks against what the launch loaded, both on `apple2-dos`, booted from its
-disk, and the test game's three on
+win on `apple1-wozmon`, whose hex it checks against what the launch loaded, both on `apple2-dos` and `bbc-dfs`, each
+booted from its disk, and the test game's three on
 `apple2-test` alone, under the debug adapter, through project launches, and checks that what the
 6502 engine writes matches the transcript's `.out`, character for character. Give target names to play only those,
 such as `node tools/Test-AdventureDap.mjs apple1 pet`.

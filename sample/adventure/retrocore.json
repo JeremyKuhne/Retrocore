@@ -1,5 +1,5 @@
 // The adventure on five machines as bare targets, and in their own environments as they arrive (apple1-wozmon, and
-// apple2-dos, which loads the game from its disk as PIRATE.DAT, GAME_LINKED being 0): the
+// apple2-dos and bbc-dfs, which load the game from their disks, GAME_LINKED being 0): the
 // engine's core, the same on every one, and the machine's platform folder, src/platform/<family>/, with its console.
 // Each links by the SDK's memory map for its machine and environment. `retrocore build --all`
 // first packs the games with the packer, a step it skips while the packer and the games are unchanged. Every other
@@ -38,6 +38,8 @@
                      "defines": { "TEST_GAME": 1 } },
     "apple3": { "machine": "apple3", "environment": "bare" },
     "pet": { "machine": "pet4032", "environment": "bare" },
-    "bbc": { "machine": "bbcb", "environment": "bare" }
+    "bbc": { "machine": "bbcb", "environment": "bare" },
+    "bbc-dfs": { "machine": "bbcb", "environment": "dfs", "defines": { "GAME_LINKED": 0 },
+                 "files": [{ "path": "${obj}/pirate.bin", "name": "PIRATE" }] }
   }
 }

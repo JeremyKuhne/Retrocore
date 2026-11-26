@@ -744,7 +744,12 @@ internal static class M6809Postbyte
         return false;
     }
 
-    private static string TransferRegisterName(int code) => code switch
+    /// <summary>
+    ///  Gets the register a <c>TFR</c> or <c>EXG</c> nibble names, or <c>?</c> for an undefined code.
+    /// </summary>
+    /// <param name="code">The nibble.</param>
+    /// <returns>The register's name.</returns>
+    public static string TransferRegisterName(int code) => code switch
     {
         0 => "D",
         1 => "X",

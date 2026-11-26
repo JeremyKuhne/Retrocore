@@ -45,6 +45,14 @@ public sealed partial class InstructionSet
     private List<InstructionEffects>? _effects = [];
     private InstructionEffects[] _effectsArray = [];
     private static readonly InstructionEffects s_noEffects;
+
+    // For encodings whose postbyte names registers: the rule by encoding while building, then by array, and the
+    // registers each postbyte of a field kind names, by kind.
+    private Dictionary<int, PostbyteRule>? _postbyteRules;
+    private PostbyteRule[]? _postbyteArray;
+    private PostbyteEffects[]?[]? _postbyteTables;
+    private uint _flagsRegisterMask;
+    private byte _allFlags;
     private readonly List<MemoryAccess> _encodingAccess = [];
     private MemoryAccess[] _encodingAccessArray = [];
     private List<(uint Prefix, int PrefixLength, int OperandSize, int OpcodeLength)>? _splits;
@@ -299,6 +307,70 @@ public sealed partial class InstructionSet
         ref HasEffects ? ref _effectsArray[encoding] : ref s_noEffects;
 
     /// <summary>
+    ///  Gets an encoding's effects with the registers its postbyte names, as the MC6809's <c>PULS</c> list, its
+    ///  <c>TFR</c> pair and its indexed modes' index registers, computed from tables built with the set.
+    /// </summary>
+    /// <param name="encoding">The encoding ID.</param>
+    /// <param name="postbyte">The byte after the opcode; ignored where the encoding has none.</param>
+    /// <returns>
+    ///  The effects; the same as <see cref="Effects(int)"/> unless
+    ///  <see cref="InstructionEffects.DependsOnPostbyte"/>, which stays set to say the postbyte was taken in.
+    /// </returns>
+    public InstructionEffects Effects(int encoding, byte postbyte)
+    {
+        ref readonly InstructionEffects effects = ref Effects(encoding);
+        if (!effects.DependsOnPostbyte || _postbyteArray is not { } rules || _postbyteTables is not { } tables)
+        {
+            return effects;
+        }
+
+        PostbyteRule rule = rules[encoding];
+        if (tables[(int)rule.Kind] is not { } table) { return effects; }
+        PostbyteEffects field = table[postbyte];
+        uint read = field.AddressRead, written = field.AddressWritten, may = 0;
+        if ((rule.ReadSlots & 1) != 0) { read |= field.First; }
+        if ((rule.ReadSlots & 2) != 0) { read |= field.Second; }
+        if ((rule.WriteSlots & 1) != 0) { written |= field.First; }
+        if ((rule.WriteSlots & 2) != 0) { written |= field.Second; }
+        if ((rule.MayWriteSlots & 1) != 0) { may |= field.First; }
+        if ((rule.MayWriteSlots & 2) != 0) { may |= field.Second; }
+        return Combine(effects, new InstructionEffects
+        {
+            RegistersRead = read,
+            RegistersWritten = written,
+            RegistersMayWrite = may,
+            FlagsRead = (read & _flagsRegisterMask) != 0 ? _allFlags : (byte)0,
+            FlagsWritten = (written & _flagsRegisterMask) != 0 ? _allFlags : (byte)0,
+            FlagsMayWrite = (may & _flagsRegisterMask) != 0 ? _allFlags : (byte)0,
+            Pushed = rule.PushSlot == 1 ? field.Bytes : (byte)0,
+            Pulled = rule.PullSlot == 1 ? field.Bytes : (byte)0
+        });
+    }
+
+    /// <summary>
+    ///  Builds the table of what each postbyte of a field kind names, once per kind.
+    /// </summary>
+    /// <param name="kind">The field kind.</param>
+    /// <param name="codec">The set's codec.</param>
+    /// <returns>Whether the codec describes the kind's effects.</returns>
+    private bool PostbyteTable(OperandFieldKind kind, PostbyteCodec codec)
+    {
+        PostbyteEffects[]?[] tables = _postbyteTables ??= new PostbyteEffects[]?[(int)OperandFieldKind.UserStackMask + 8];
+        if ((uint)kind >= (uint)tables.Length) { return false; }
+        if (tables[(int)kind] is not null) { return true; }
+        Func<string, uint> registers = Description.RegisterMask;
+        if (!codec.TryGetEffects(kind, 0, registers, out _)) { return false; }
+        PostbyteEffects[] table = new PostbyteEffects[256];
+        for (int postbyte = 0; postbyte < table.Length; postbyte++)
+        {
+            codec.TryGetEffects(kind, (byte)postbyte, registers, out table[postbyte]);
+        }
+
+        tables[(int)kind] = table;
+        return true;
+    }
+
+    /// <summary>
     ///  Finds the encoding whose opcode starts some bytes.
     /// </summary>
     /// <param name="bytes">Bytes starting at an instruction.</param>
@@ -448,6 +520,17 @@ public sealed partial class InstructionSet
         _encodingAccessArray = [.. _encodingAccess];
         _effectsArray = HasEffects && _effects is { } effects ? [.. effects] : [];
         _effects = null;
+        if (_postbyteRules is { } postbyteRules)
+        {
+            _postbyteArray = new PostbyteRule[_encodingArray.Length];
+            foreach (KeyValuePair<int, PostbyteRule> rule in postbyteRules)
+            {
+                _postbyteArray[rule.Key] = rule.Value;
+            }
+
+            _postbyteRules = null;
+        }
+
         _formArray = [.. Description.Forms];
         foreach (IsaEncoding encoding in _encodingArray)
         {

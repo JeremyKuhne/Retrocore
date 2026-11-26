@@ -59,6 +59,12 @@ public sealed partial class InstructionSet
         };
 
         if (set.HasEffects && set._effects is { } list) { list.Capacity = entries.Count; }
+        if (rules.EffectRegisters is { FlagsRegister: >= 0 } map)
+        {
+            set._flagsRegisterMask = 1u << map.FlagsRegister;
+            set._allFlags = map.AllFlags;
+        }
+
 
         // The :Form keys effects are looked up by, built once per form rather than once per encoding.
         string?[] formKeys = new string?[description.Forms.Count];
@@ -82,10 +88,25 @@ public sealed partial class InstructionSet
                 ? specificTarget
                 : rules.Targets.TryGetValue(entry.Instruction, out ushort generalTarget) ? generalTarget : null;
 
-            InstructionEffects effects = set.HasEffects
-                ? EffectsOf(rules, scopes, entry.Instruction, specificKey, formKeys[form.Id] ??= ":" + form.Name, form.Name)
-                    ?? throw new FormatException($"Instruction set '{name}': no effects line gives {entry.Instruction} {form.Name}.")
-                : default;
+            InstructionEffects effects = default;
+            if (set.HasEffects)
+            {
+                string formKey = formKeys[form.Id] ??= ":" + form.Name;
+                effects = EffectsOf(rules, scopes, entry.Instruction, specificKey, formKey, form.Name, out PostbyteRule rule)
+                    ?? throw new FormatException($"Instruction set '{name}': no effects line gives {entry.Instruction} {form.Name}.");
+
+                // A postbyte field's registers come from the codec per decoded postbyte, an indexed one's always.
+                bool named = rule.Slots != 0 || (form.HasPostbyte && form.Field(0) == OperandFieldKind.IndexedPostbyte);
+                if (postbytes is not null && form.HasPostbyte && named && set.PostbyteTable(form.Field(0), postbytes))
+                {
+                    effects = effects with { DependsOnPostbyte = true };
+                    (set._postbyteRules ??= [])[set._encodings.Count] = rule with
+                    {
+                        Kind = form.Field(0),
+                        PostbyteAt = entry.Length
+                    };
+                }
+            }
 
             set.Add(
                 mnemonic,
@@ -125,8 +146,10 @@ public sealed partial class InstructionSet
         string instruction,
         string instructionAndForm,
         string formKey,
-        string form)
+        string form,
+        out PostbyteRule rule)
     {
+        rule = default;
         EffectsLine? own = null;
         foreach (string scope in scopes)
         {
@@ -139,6 +162,7 @@ public sealed partial class InstructionSet
 
         if (own is null) { return null; }
         own.Used = true;
+        rule = rule.With(own);
         InstructionEffects effects = Resolve(rules, own, form);
         foreach (string scope in scopes)
         {
@@ -149,6 +173,7 @@ public sealed partial class InstructionSet
             }
 
             added.Used = true;
+            rule = rule.With(added);
             return Combine(effects, Resolve(rules, added, form));
         }
 
@@ -159,7 +184,7 @@ public sealed partial class InstructionSet
     private static InstructionEffects Resolve(IsaRules rules, EffectsLine line, string form)
     {
         InstructionEffects effects = line.Effects;
-        if ((line.ReadSlots | line.WriteSlots | line.MayWriteSlots) == 0 || rules.EffectRegisters is not { } map)
+        if (!line.HasSlots || rules.EffectRegisters is not { } map)
         {
             return effects;
         }

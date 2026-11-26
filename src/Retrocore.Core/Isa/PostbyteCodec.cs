@@ -119,4 +119,19 @@ public abstract class PostbyteCodec
         int fieldAddress,
         Span<byte> destination,
         [NotNullWhen(returnValue: false)] out string? error);
+
+    /// <summary>
+    ///  Gets the registers a postbyte names, for effects; the instruction set calls this for every postbyte of each
+    ///  field kind its effects use, once, and keeps the results in a table.
+    /// </summary>
+    /// <param name="kind">The field kind.</param>
+    /// <param name="postbyte">The postbyte.</param>
+    /// <param name="registers">Gives a register's bits by name, 0 for none.</param>
+    /// <param name="effects">Receives what the postbyte names.</param>
+    /// <returns>Whether the codec describes the field kind's effects; false by default.</returns>
+    public virtual bool TryGetEffects(OperandFieldKind kind, byte postbyte, Func<string, uint> registers, out PostbyteEffects effects)
+    {
+        effects = default;
+        return false;
+    }
 }

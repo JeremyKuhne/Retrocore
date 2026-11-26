@@ -34,6 +34,21 @@ internal sealed record EffectsLine(InstructionEffects Effects, int Line)
     internal byte MayWriteSlots { get; init; }
 
     /// <summary>
+    ///  Gets the operand slot, 1 to 8, whose register list gives the bytes pushed, or 0.
+    /// </summary>
+    internal byte PushSlot { get; init; }
+
+    /// <summary>
+    ///  Gets the operand slot whose register list gives the bytes pulled, or 0.
+    /// </summary>
+    internal byte PullSlot { get; init; }
+
+    /// <summary>
+    ///  Gets whether the line names any operand slot.
+    /// </summary>
+    internal bool HasSlots => (ReadSlots | WriteSlots | MayWriteSlots | PushSlot | PullSlot) != 0;
+
+    /// <summary>
     ///  Gets or sets whether some encoding of some set took these effects, so a line no encoding takes, such as
     ///  a misspelled instruction, can be reported.
     /// </summary>

@@ -80,6 +80,7 @@ public static partial class IsaParser
         uint registersRead = 0, registersWritten = 0, registersMay = 0, operandBits = 0;
         byte flagsRead = 0, flagsWritten = 0, flagsMay = 0, set = 0, cleared = 0, fromOperand = 0;
         byte pushed = 0, pulled = 0, mayPush = 0, mayPull = 0, readSlots = 0, writeSlots = 0, maySlots = 0;
+        byte pushSlot = 0, pullSlot = 0;
         int stack = -1;
         HashSet<string> seen = [];
         while (index < tokens.Count)
@@ -105,11 +106,20 @@ public static partial class IsaParser
                     index++;
                 }
 
-                byte count = index < tokens.Count
-                    && byte.TryParse(tokens[index], NumberStyles.None, CultureInfo.InvariantCulture, out byte parsed)
-                    && parsed != 0
-                        ? parsed
-                        : throw Error(number, $"Expected '{keyword} [Register] n', a byte count.");
+                // A count, or an operand slot whose register list gives it, as the MC6809's PSHS.
+                byte count = 0;
+                if (index < tokens.Count && keyword is "push" or "pull" && Slot(tokens[index]) is var countSlot && countSlot != 0)
+                {
+                    if (keyword == "push") { pushSlot = countSlot; } else { pullSlot = countSlot; }
+                }
+                else
+                {
+                    count = index < tokens.Count
+                        && byte.TryParse(tokens[index], NumberStyles.None, CultureInfo.InvariantCulture, out byte parsed)
+                        && parsed != 0
+                            ? parsed
+                            : throw Error(number, $"Expected '{keyword} [Register] n', a byte count, or 'push|pull [Register] $n'.");
+                }
 
                 index++;
                 if (own < 0)
@@ -139,9 +149,9 @@ public static partial class IsaParser
             for (; index < tokens.Count && !IsEffectKeyword(tokens[index]); index++)
             {
                 string token = tokens[index];
-                if (token.Length == 2 && token[0] == '$' && token[1] is >= '1' and <= '8')
+                if (Slot(token) is var slotNumber && slotNumber != 0)
                 {
-                    byte slot = (byte)(1 << (token[1] - '1'));
+                    byte slot = (byte)(1 << (slotNumber - 1));
                     if (reads) { readSlots |= slot; } else if (may) { maySlots |= slot; } else { writeSlots |= slot; }
                     continue;
                 }
@@ -218,7 +228,7 @@ public static partial class IsaParser
         if (stack >= 0)
         {
             uint bit = 1u << stack;
-            bool always = (pushed | pulled) != 0;
+            bool always = (pushed | pulled | pushSlot | pullSlot) != 0;
             if ((registersRead & bit) == 0 || ((always ? registersWritten : registersWritten | registersMay) & bit) == 0)
             {
                 throw Error(number, $"Pushes and pulls read and write {map.Names[stack]}; list it in reads and in writes or may-write.");
@@ -264,10 +274,16 @@ public static partial class IsaParser
             {
                 ReadSlots = readSlots,
                 WriteSlots = writeSlots,
-                MayWriteSlots = maySlots
+                MayWriteSlots = maySlots,
+                PushSlot = pushSlot,
+                PullSlot = pullSlot
             };
         }
     }
+
+    // $1 to $8 as 1 to 8, or 0 for any other token.
+    private static byte Slot(string token) =>
+        token.Length == 2 && token[0] == '$' && token[1] is >= '1' and <= '8' ? (byte)(token[1] - '0') : (byte)0;
 
     private static bool HasWord(IsaFlag flag, string word)
     {

@@ -32,6 +32,13 @@ public readonly record struct InstructionEffects
     public bool IsKnown { get; init; }
 
     /// <summary>
+    ///  Gets whether a postbyte names some of the registers, as the MC6809's <c>PSHS</c>, <c>TFR</c> and indexed
+    ///  modes do, and these effects, from <see cref="InstructionSet.Effects(int)"/> without it, leave them out;
+    ///  <see cref="InstructionSet.Effects(int, byte)"/> adds them.
+    /// </summary>
+    public bool DependsOnPostbyte { get; init; }
+
+    /// <summary>
     ///  Gets the registers read, as bits by register index.
     /// </summary>
     public uint RegistersRead { get; init; }

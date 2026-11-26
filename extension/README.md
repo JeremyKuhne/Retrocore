@@ -1411,8 +1411,8 @@ statement that called it; it shows **BASIC: ready** at the prompt.
   END, the end of the program and Ctrl-C or BREAK. Integer BASIC and Color BASIC
   have no error handler, so their errors, such as `*** BAD BRANCH ERR` or `?UL ERROR`,
   always stop. Level I has none either: its HOW?, WHAT? and SORRY stop as BASIC errors,
-  except a mistyped answer to INPUT, which INPUT asks for again, so it counts as handled, and
-  an error in a DATA item READ takes, which Level I reports with no line and does not stop.
+  except a mistyped answer to INPUT, which INPUT asks for again, so it counts as handled. An
+  error in a DATA item READ takes stops in the READ's line, though Level I reports it with no line.
 - **Variables:** a BASIC frame has **Variables**, **Arrays** (each expanding to its
   elements), **Functions** (AppleSoft's DEF FN), **Loops** (the FOR loops in
   progress) and **Program** (where the program, variables, arrays and strings are).

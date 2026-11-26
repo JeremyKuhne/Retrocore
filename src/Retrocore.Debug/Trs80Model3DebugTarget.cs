@@ -360,9 +360,14 @@ internal sealed partial class Trs80Model3DebugTarget : IDebugTarget
     public int BasicCurrentLine => Basic switch
     {
         null => 0,
-        Level1Dialect => Level1Dialect.CurrentLineNumber(new TargetBasicMemory(this)),
+        Level1Dialect => _level1?.LineNumber ?? Level1Dialect.CurrentLineNumber(new TargetBasicMemory(this)),
         _ => Peek(Level2CurrentLine) | (Peek((ushort)(Level2CurrentLine + 1)) << 8)
     };
+
+    /// <inheritdoc/>
+    public bool BasicInDirectMode => _level1 is { } level1
+        ? level1.LineAddress == 0
+        : Basic is not { } dialect || dialect.InDirectMode(new TargetBasicMemory(this));
 
     /// <inheritdoc/>
     public (int Line, int Address)? BasicStatementStart(ushort pc)

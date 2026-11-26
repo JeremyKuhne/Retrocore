@@ -37,6 +37,7 @@ internal sealed class Trs80Level1Basic
     private readonly Action _resetCalls;
     private readonly Dictionary<ushort, (int Code, string Message)> _errors;
     private readonly ushort _ready;
+    private readonly ushort _readStored;
 
     private Trs80Level1Basic(
         IDebugTarget target,
@@ -45,8 +46,10 @@ internal sealed class Trs80Level1Basic
         Action resetCalls,
         BasicRom rom,
         ushort ready,
+        ushort readStored,
         Dictionary<ushort, (int Code, string Message)> errors)
     {
+        _readStored = readStored;
         _target = target;
         _registers = registers;
         _setRegisters = setRegisters;
@@ -80,7 +83,7 @@ internal sealed class Trs80Level1Basic
         string[] names =
         [
             "ST_RUN_4", "RSTART", "RSTART_2", "ERROR", "ST_RUN", "ST_CONT", "ST_STOP", "ST_END",
-            "HOW_MSG", "WHAT_MSG", "SORRY_MSG"
+            "HOW_MSG", "WHAT_MSG", "SORRY_MSG", "READ_STORED"
         ];
 
         if (names.Any(name => !symbols.ContainsKey(name))) { return null; }
@@ -112,10 +115,44 @@ internal sealed class Trs80Level1Basic
             [Address("SORRY_MSG")] = (3, "SORRY")
         };
 
-        return new(target, registers, setRegisters, resetCalls, rom, Address("RSTART"), errors);
+        return new(target, registers, setRegisters, resetCalls, rom, Address("RSTART"), Address("READ_STORED"), errors);
     }
 
     private TargetBasicMemory Memory => new(_target);
+
+    /// <summary>
+    ///  Gets the address of the line running, 0 in direct mode: <c>CURRNT</c>'s (<see cref="Level1Dialect.LineAddress"/>),
+    ///  or while READ stores a DATA item, which sets <c>CURRNT</c> to 0, the READ line <c>ST_READ_1</c> keeps on the
+    ///  stack.
+    /// </summary>
+    /// <remarks>
+    ///  <para>
+    ///   <c>ST_READ_1</c> pushes <c>CURRNT</c> and calls <c>STORE_VALUE</c>, so the READ line is the word above the
+    ///   call's return address, <c>READ_STORED</c>, wherever on the stack an error inside the call leaves it. A READ
+    ///   typed at the prompt keeps 0 there, as it has no line.
+    ///  </para>
+    /// </remarks>
+    internal int LineAddress
+    {
+        get
+        {
+            int line = Level1Dialect.LineAddress(Memory);
+            if (line != 0) { return line; }
+            for (int at = Stack; at + 4 <= StackTop; at += 2)
+            {
+                if (Word(at) != _readStored) { continue; }
+                int kept = Word(at + 2);
+                if (kept is 0 or >= Level1Dialect.ProgramStart) { return kept; }
+            }
+
+            return 0;
+        }
+    }
+
+    /// <summary>
+    ///  Gets the number of the line running, or 0 in direct mode (<see cref="LineAddress"/>).
+    /// </summary>
+    internal int LineNumber => LineAddress is not 0 and var line ? Word(line) : 0;
 
     /// <summary>
     ///  Gets DE less one: the text pointer before the statement at <c>ST_RUN_4</c>.

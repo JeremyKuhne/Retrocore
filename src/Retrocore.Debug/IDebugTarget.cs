@@ -230,6 +230,17 @@ internal interface IDebugTarget : IDebugMemory
     bool BasicRomInMemory => false;
 
     /// <summary>
+    ///  Gets whether BASIC is in direct mode, running no line of the program, as its dialect reads it, or with no BASIC.
+    /// </summary>
+    /// <remarks>
+    ///  <para>
+    ///   A target whose BASIC runs a line that its dialect cannot see in memory alone says so here, as Level I's
+    ///   READ, which keeps its line on the stack while it stores a DATA item.
+    ///  </para>
+    /// </remarks>
+    bool BasicInDirectMode => Basic is not { } dialect || dialect.InDirectMode(new TargetBasicMemory(this));
+
+    /// <summary>
     ///  Gets the number of the BASIC line running, or last run.
     /// </summary>
     int BasicCurrentLine => Basic is { } dialect

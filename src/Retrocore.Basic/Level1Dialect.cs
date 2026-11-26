@@ -293,9 +293,9 @@ internal sealed class Level1Dialect : BasicDialect
     ///   the line running is kept on the stack <c>SCRATCH</c> points at.
     ///  </para>
     ///  <para>
-    ///   While READ stores a DATA item, <c>CURRNT</c> is 0 (<c>ST_READ_1</c>), and the line is only on the stack under
-    ///   the call, so BASIC reads as in direct mode then: the ROM reports an error in a DATA item with no line, and the
-    ///   debugger does not stop for it.
+    ///   While READ stores a DATA item, <c>CURRNT</c> is 0 (<c>ST_READ_1</c>), and the line is only on the stack above
+    ///   the call's return address, so memory alone reads as direct mode then, and the ROM reports an error in a DATA
+    ///   item with no line. The debugger, which has the stack pointer, finds the READ line there.
     ///  </para>
     /// </remarks>
     /// <param name="memory">The memory.</param>
@@ -307,8 +307,8 @@ internal sealed class Level1Dialect : BasicDialect
     }
 
     /// <summary>
-    ///  Gets the number of the line running, or 0 in direct mode and while READ stores a DATA item
-    ///  (<see cref="LineAddress"/>).
+    ///  Gets the number of the line running, or 0 in direct mode and, as memory alone reads it, while READ stores a
+    ///  DATA item (<see cref="LineAddress"/>).
     /// </summary>
     /// <param name="memory">The memory.</param>
     /// <returns>The line number.</returns>

@@ -323,8 +323,13 @@ internal sealed partial class Trs80DebugTarget : IDebugTarget
 
     /// <inheritdoc/>
     public int BasicCurrentLine => _machine.Configuration.Rom == Trs80Rom.Level1
-        ? Level1Dialect.CurrentLineNumber(new TargetBasicMemory(this))
+        ? _level1?.LineNumber ?? Level1Dialect.CurrentLineNumber(new TargetBasicMemory(this))
         : Peek(CurrentLine) | (Peek((ushort)(CurrentLine + 1)) << 8);
+
+    /// <inheritdoc/>
+    public bool BasicInDirectMode => _level1 is { } level1
+        ? level1.LineAddress == 0
+        : Basic is not { } dialect || dialect.InDirectMode(new TargetBasicMemory(this));
 
     /// <inheritdoc/>
     public (int Line, int Address)? BasicStatementStart(ushort pc)

@@ -63,7 +63,7 @@ internal sealed partial class DebugSession
             ["displayName"] = dialect.DisplayName,
             ["text"] = text,
             ["version"] = BasicVersion(),
-            ["running"] = !dialect.InDirectMode(memory),
+            ["running"] = !Target.BasicInDirectMode,
             ["error"] = error
         };
     }
@@ -138,7 +138,7 @@ internal sealed partial class DebugSession
     {
         TargetBasicMemory memory = new(Target);
         BasicRom? prompt = null;
-        if (!Basic.InDirectMode(memory))
+        if (!Target.BasicInDirectMode)
         {
             prompt = Target.BasicRom is { } rom && _debug.Position(Target, rom.StatementStart) is not null
                 ? rom
@@ -147,7 +147,7 @@ internal sealed partial class DebugSession
             if (!ReachStatement(prompt))
             {
                 // A program that ended while it was waited for is at the prompt already, which is where it is going.
-                if (Basic.InDirectMode(memory))
+                if (Target.BasicInDirectMode)
                 {
                     prompt = null;
                 }

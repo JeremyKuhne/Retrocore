@@ -436,6 +436,16 @@ try {
     await request("retro/basic/import", { path: levelOneImage });
     assert.equal((await request("retro/basic/program")).text, numbered, "the image came back as Level I lines");
 
+    // An error in a DATA item that READ is taking stops in the READ's line: Level I's current line is 0 while it reads
+    // the item, and the READ line is on the stack.
+    assert.equal((await request("retro/basic/write", { text: "10 READ A\n20 P. A\n30 DATA 1+\n" })).success, true);
+    await type("RUN\r");
+    await stoppedAt("breakpoint", 2, "RUN starts at 10.");
+    await request("continue", { threadId: 2 });
+    assert.equal((await stoppedAt("exception", 2, "WHAT? in 10 (code 2).")).name, "10: READ A");
+    await request("continue", { threadId: 2 });
+    await screen(text => text.includes("WHAT?"), "Level I's WHAT? for the DATA item");
+
     // A basic launch of a Level I file loads it into Level I and stops at its first statement, in the file; a Level
     // II file is refused.
     writeFileSync(levelOneFile, "10 A=5\n20 P. A*2\n30 END\n");
@@ -448,7 +458,7 @@ try {
 
     await request("disconnect");
     console.log("Model I DAP passed: boot to READY, a Level II source breakpoint with the Z80 call stack, a cassette round trip, RUN and CONT stops, the reset button, power-on and entry stops, 1x and 2x speed, stepping from a Z80 source into Level2.asm"
-        + (existsSync(dos) ? ", a NEWDOS/80 boot" : "") + ", a fast cassette load at real speed, tapes for the other Level warned of, and Level I's BASIC thread: RUN's start, steps, a line breakpoint in a GOSUB, its variables, STOP, and a Level I tape round trip, and a Level I file's basic launch.");
+        + (existsSync(dos) ? ", a NEWDOS/80 boot" : "") + ", a fast cassette load at real speed, tapes for the other Level warned of, and Level I's BASIC thread: RUN's start, steps, a line breakpoint in a GOSUB, its variables, STOP, a Level I tape round trip, an error in a DATA item, and a Level I file's basic launch.");
 } finally {
     clearTimeout(timeout);
     close();

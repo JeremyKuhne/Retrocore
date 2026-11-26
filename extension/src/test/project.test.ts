@@ -8,7 +8,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { after, test } from "node:test";
 import { fingerprint } from "../hardware";
-import { activeTargetParams, findTarget, loadTargets, parseJsonc, projectLaunch, projectTargetKey, qualifiedName, savedLabel, savedName, splitSavedName, withProjectMachine } from "../project";
+import { activeTargetParams, findTarget, inProject, loadTargets, parseJsonc, projectLaunch, projectTargetKey, qualifiedName, savedLabel, savedName, splitSavedName, withProjectMachine } from "../project";
 
 const sample = path.resolve(__dirname, "..", "..", "..", "sample", "project");
 
@@ -98,4 +98,13 @@ test("the language server is told the active target's project file and name, or 
     const [, iie] = loadTargets(sample);
     assert.deepEqual(activeTargetParams(iie), { project: path.join(sample, "retrocore.json"), target: "apple2-iie" });
     assert.deepEqual(activeTargetParams(undefined), { project: null, target: null });
+});
+
+test("a file is in a project when it is in a project's folder or below it, and not the folder itself or beside it", () => {
+    const folders = [path.join(sample)];
+    assert.equal(inProject(path.join(sample, "src", "hello.s"), folders), true);
+    assert.equal(inProject(path.join(sample, "a.inc"), folders), true);
+    assert.equal(inProject(sample, folders), false);
+    assert.equal(inProject(path.join(sample, "..", "iie", "main.s"), folders), false);
+    assert.equal(inProject(path.join(sample + "-other", "a.s"), folders), false);
 });

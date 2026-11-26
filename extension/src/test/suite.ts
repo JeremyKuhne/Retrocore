@@ -25,6 +25,7 @@ import { testMemorySubscriptions } from "./memorySubscriptions";
 import { testMemoryRestart } from "./memoryRestart";
 import { testProjectLaunch } from "./projectLaunch";
 import { testNoLaunchJson } from "./noLaunch";
+import { testTargetDimming } from "./targetDimming";
 
 export async function run(): Promise<void> {
     const workspace = vscode.workspace.workspaceFolders?.[0];
@@ -49,6 +50,7 @@ export async function run(): Promise<void> {
     await testMemorySubscriptions(workspace);
     await testMemoryRestart(workspace);
     await testProjectLaunch(workspace);
+    await testTargetDimming(workspace);
     const romDirectory = process.env.RETROCORE_IIE_ROMS;
     const root = workspace.uri.fsPath;
     const stops: { reason: string }[] = [];

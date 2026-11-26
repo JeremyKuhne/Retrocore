@@ -91,7 +91,7 @@ internal sealed partial class DebugSession
     private BasicRom? ActiveBasic => Target.BasicRom is { } rom
         && (Target.BasicRomInMemory || _debug.Position(Target, rom.Gone) is not null) ? rom : null;
 
-    private bool BasicDirect => Target.Basic is not { } dialect || dialect.InDirectMode(new TargetBasicMemory(Target));
+    private bool BasicDirect => Target.BasicInDirectMode;
 
     private int CurrentLine => Target.BasicCurrentLine;
 
@@ -417,6 +417,7 @@ internal sealed partial class DebugSession
     {
         if (_basicStatement is not { } statement || Target.Basic is not { } dialect) { return null; }
         IBasicMemory text = TextMemory;
+        if (dialect is Level1Dialect) { return Level1Dialect.StatementWord(text, statement.Address); }
         if (dialect is AtariBasicDialect)
         {
             // An Atari BASIC statement is its offset byte, then the statement's token, which numbers its word up to the

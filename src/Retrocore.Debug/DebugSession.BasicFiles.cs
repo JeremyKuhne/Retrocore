@@ -109,6 +109,7 @@ internal sealed partial class DebugSession
     // are looked for as it runs, as a BASIC loaded from disk has none until it is in memory.
     private void ReachPrompt()
     {
+        ForgetBoundaries();
         ulong end = Target.CycleCount + (ulong)(Target.ClockHertz * Target.BasicBootSeconds);
         ulong press = Target.CycleCount + (ulong)Target.ClockHertz;
         BasicRom? rom = Target.BasicRom;

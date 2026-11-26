@@ -21,13 +21,13 @@
 .scope LongInteger
 
 ;; The bytes of a long integer.
-SIZE = 8
+BYTE_COUNT = 8
 
 ;; The bits of a long integer.
-BITS = 8 * SIZE
+BIT_COUNT = 8 * BYTE_COUNT
 
 ;; The bytes of the binary-coded decimal number <LongInteger::FacToDigits> builds in <Arg> and the two bytes after it.
-DECIMAL_SIZE = SIZE + 2
+DECIMAL_SIZE = BYTE_COUNT + 2
 
 ;; The decimal digits <LongInteger::FacToDigits> makes, two to each of <DECIMAL_SIZE>'s bytes.
 DECIMAL_DIGITS = 2 * DECIMAL_SIZE
@@ -63,7 +63,7 @@ RELATION_GREATER = 1
     sta ValueType
     lda #0
     sta KeptY                               ; bit 7 set for a minus sign
-    ldx #SIZE - 1
+    ldx #BYTE_COUNT - 1
 
 ;; Zeros <Fac> and <Arg>.
 ;; Also: LZFAC1 (BB13)
@@ -92,7 +92,7 @@ TakeDigit:
     jsr MultiplyFacByTen
     jsr ClearArg
     lda SavedY
-    sta Arg+SIZE-1
+    sta Arg+BYTE_COUNT-1
     jsr AddAt                               ; Fac = Fac + Arg, through MultiplyFacByTen's pointers
 
 ;; Goes on to the next character, taking it if it is a digit.
@@ -136,7 +136,7 @@ SkipFraction:
 ;; Rounds exactly half to the even integer: up when <Fac> is odd.
 ;; Also: LRNDEVN (BB13)
 RoundToEven:
-    lda Fac+SIZE-1
+    lda Fac+BYTE_COUNT-1
     and #1
     beq ApplySign
     jsr IncrementFac
@@ -161,7 +161,7 @@ ApplySign:
 ;; See: <LongInteger::NegateAt>
 ;; Also: LTWSCOMP (BB13)
 .proc NegateFac
-    ldx #SIZE - 1
+    ldx #BYTE_COUNT - 1
 
 ;; Complements <Fac>'s bytes, before <LongInteger::IncrementFac> adds one.
 ;; Also: LTWSONE (BB13)
@@ -189,7 +189,7 @@ ComplementLoop:
 ;;   Done = returns; <LongInteger::ReadNumber> branches here
 ;; Also: LINCFAC (BB13)
 .proc IncrementFac
-    ldx #SIZE - 1
+    ldx #BYTE_COUNT - 1
 
 ;; Increments <Fac>'s bytes from the lowest while each carries.
 ;; Also: LTWSCO2 (BB13)
@@ -239,7 +239,7 @@ Done:
 ;; Also: FACTOARG (BB13)
 .proc CopyFacToArg
     pha
-    ldx #SIZE
+    ldx #BYTE_COUNT
 
 ;; Copies <Fac>'s bytes to <Arg>, from the last.
 ;; Also: FAC2AR2 (BB13)
@@ -332,7 +332,7 @@ Done:
 ;; Copies the eight bytes.
 ;; Also: LRESP2 (BB13)
 Copy:
-    ldy #SIZE - 1
+    ldy #BYTE_COUNT - 1
 
 ;; Copies a byte, from the last.
 ;; Also: LRES2F2 (BB13)
@@ -354,7 +354,7 @@ CopyLoop:
 ;; Also: LZIPRES (BB13)
 .proc ClearResult
     lda #0
-    ldx #SIZE
+    ldx #BYTE_COUNT
 
 ;; Zeros a byte, from the last.
 ;; Also: LZIP2 (BB13)
@@ -375,7 +375,7 @@ ClearLoop:
     sta Pointer1
     stx Pointer1XByte
     sty Pointer1+1
-    ldy #SIZE - 1
+    ldy #BYTE_COUNT - 1
 
 ;; Stores a byte, from the last.
 ;; Also: STFAC2 (BB13)
@@ -421,7 +421,7 @@ StoreLoop:
 ;; Keeps: X
 ;; Also: LADDPTR (BB13)
 .proc AddAt
-    ldy #SIZE - 1
+    ldy #BYTE_COUNT - 1
     clc
 
 ;; Adds a byte, from the last.
@@ -457,7 +457,7 @@ AddLoop:
 ;; Keeps: X
 ;; Also: LSUBER (BB13)
 .proc SubtractAt
-    ldy #SIZE - 1
+    ldy #BYTE_COUNT - 1
     sec
 
 ;; Subtracts a byte, from the last.
@@ -489,7 +489,7 @@ SubtractLoop:
 ;; Also: TWOSCOMP (BB13)
 .proc NegateAt
     tax
-    ldy #SIZE - 1
+    ldy #BYTE_COUNT - 1
 
 ;; Complements the bytes, from the first.
 ;; Also: LEORIT (BB13)
@@ -500,7 +500,7 @@ ComplementLoop:
     inx
     dey
     bpl ComplementLoop
-    ldy #SIZE - 1
+    ldy #BYTE_COUNT - 1
 
 ;; Adds one, from the last byte, while each carries.
 ;; Also: INCPTR2 (BB13)
@@ -532,11 +532,11 @@ Done:
 .proc Multiply
     jsr PointAtOperands
     jsr MakeOperandsPositive
-    lda #<(Fac+SIZE-1)
+    lda #<(Fac+BYTE_COUNT-1)
     sta LongOperand1Pointer                 ; the row: Fac's bytes, from the last
-    lda #<(Arg+SIZE-1)
+    lda #<(Arg+BYTE_COUNT-1)
     sta LongOperand2Pointer                 ; the column: Arg's bytes, from the last
-    lda #<(Result1+SIZE-2)
+    lda #<(Result1+BYTE_COUNT-2)
     sta LongResultPointer                   ; where the first byte product goes
     jsr ClearResult
 
@@ -558,11 +558,11 @@ Column:
     lda LongOperand2Pointer
     cmp #Arg
     bcs Column
-    lda #<(Arg+SIZE-1)
+    lda #<(Arg+BYTE_COUNT-1)
     sta LongOperand2Pointer                 ; back to Arg's last byte
     lda LongResultPointer
     clc
-    adc #SIZE
+    adc #BYTE_COUNT
     sta LongResultPointer
 
 ;; Moves on to the next byte of <Fac>, a byte higher in <Result1>.
@@ -664,16 +664,16 @@ Done:
 ;; Also: LSHFTLC (BB13)
 .proc ShiftLeftWithCarry
     tax
-    ldy #SIZE
+    ldy #BYTE_COUNT
 
 ;; Rotates a byte, from the last.
 ;; Also: LSHFT2 (BB13)
 RotateLoop:
-    rol SIZE-1,X
+    rol BYTE_COUNT-1,X
     dex
     dey
     bne RotateLoop
-    ldy SIZE,X
+    ldy BYTE_COUNT,X
     rts
 .endproc
 
@@ -686,7 +686,7 @@ RotateLoop:
 .proc ShiftRight
     clc
     tax
-    ldy #SIZE
+    ldy #BYTE_COUNT
 
 ;; Rotates a byte, from the first.
 ;; Also: LSHFTR2 (BB13)
@@ -711,10 +711,10 @@ MoveLoop:
     lda Fac+1,X
     sta Fac,X
     inx
-    cpx #SIZE - 1
+    cpx #BYTE_COUNT - 1
     bcc MoveLoop
     ldx #0
-    stx Fac+SIZE-1
+    stx Fac+BYTE_COUNT-1
     rts
 .endproc
 
@@ -797,11 +797,11 @@ Done:
     ldy #>(Arg)
     jsr IsZero
     sta SavedY
-    lda Result1+SIZE-1
+    lda Result1+BYTE_COUNT-1
     and #$1
     ora SavedY
     beq Finish                              ; exactly a half, and the quotient is even
-    ldx #SIZE
+    ldx #BYTE_COUNT
 
 ;; Adds one to the quotient in <Result1>, from the last byte.
 ;; Also: LINCBYT (BB13)
@@ -838,7 +838,7 @@ ByteLoop:
     clc
     adc #8
     sta KeptY
-    cmp #BITS
+    cmp #BIT_COUNT
     bcc ByteLoop
     jmp Float::DivideArg::DivisionByZero    ; all 64 bits zero
 
@@ -884,7 +884,7 @@ FromByte:
     cmp Fac,X
     bne Done
     inx
-    cpx #SIZE
+    cpx #BYTE_COUNT
     bcc FromByte
 
 ;; Returns.
@@ -935,7 +935,7 @@ ShiftBack:
     stx Pointer1XByte
     sty Pointer1+1
     lda #0
-    ldy #SIZE - 1
+    ldy #BYTE_COUNT - 1
 
 ;; ORs in a byte, from the last, stopping at the first nonzero one.
 ;; Also: LORAL2 (BB13)
@@ -986,7 +986,7 @@ Done:
     jsr IsZero
     beq *+5                                 ; zero: no 1 bit to find
     jsr NormalizeFac
-    lda #BITS
+    lda #BIT_COUNT
     sec
     sbc KeptY
     sta KeptY                               ; the bits to convert, from bit 63
@@ -1113,7 +1113,7 @@ Finish:
 ;; Also: LONGST0 (BB13)
 .proc SetFacToZero
     lda #0
-    ldx #SIZE - 1
+    ldx #BYTE_COUNT - 1
 
 ;; Fills <Fac>'s bytes up to X with A.
 ;; Also: LONGST (BB13)
@@ -1131,7 +1131,7 @@ FillLoop:
 .proc SetFacToOne
     jsr SetFacToZero
     lda #1
-    sta Fac+SIZE-1
+    sta Fac+BYTE_COUNT-1
     rts
 .endproc
 
@@ -1146,7 +1146,7 @@ FillLoop:
     sta Pointer1
     stx Pointer1XByte
     sty Pointer1+1
-    ldy #SIZE - 1
+    ldy #BYTE_COUNT - 1
 
 ;; Loads a byte, from the last.
 ;; Also: LDFAC2 (BB13)
@@ -1221,7 +1221,7 @@ LoadLoop:
     sta FacMantissa2
     lda Fac
     sta FacMantissa1
-    lda #$80 + BITS - 1                     ; bit 63 is 2^63: an exponent of 64, less the shifts
+    lda #$80 + BIT_COUNT - 1                ; bit 63 is 2^63: an exponent of 64, less the shifts
     sec
     sbc KeptY
     sta FacExponent
@@ -1274,7 +1274,7 @@ Done:
     sbc #$80                                ; the integer's count of bits
     bmi Finish                              ; none: zero
     sta SavedY
-    cmp #LongInteger::BITS
+    cmp #LongInteger::BIT_COUNT
     bcc *+5
     jmp Float::OverflowError
     lda #<(Arg)

@@ -63,7 +63,7 @@ internal sealed partial class DebugSession
             ["displayName"] = dialect.DisplayName,
             ["text"] = text,
             ["version"] = BasicVersion(),
-            ["running"] = !dialect.InDirectMode(memory),
+            ["running"] = !Target.BasicInDirectMode,
             ["error"] = error
         };
     }
@@ -89,11 +89,16 @@ internal sealed partial class DebugSession
             BasicProgram tape = BasicTape.Read(bytes, out _);
             return tape.Dialect.Name == dialect.Name
                 ? StoreBasic(tape, [])
-                : throw new InvalidOperationException($"A CSAVE tape holds Level II BASIC, not {dialect.DisplayName}.");
+                : throw new InvalidOperationException($"The tape holds a {tape.Dialect.DisplayName} program, not {dialect.DisplayName}.");
         }
 
-        // Every tokenized program has zero bytes, which end its lines; a text file has none.
-        if (bytes.AsSpan().IndexOf((byte)0) >= 0) { return StoreBasic(BasicProgram.FromImage(dialect, bytes), []); }
+        // Every tokenized program has zero bytes, which end its lines; a text file has none. Level I's image may have
+        // none, so it is told by its line numbers (Level1Dialect.IsImage).
+        bool image = dialect is Level1Dialect
+            ? Level1Dialect.IsImage(bytes)
+            : bytes.AsSpan().IndexOf((byte)0) >= 0;
+
+        if (image) { return StoreBasic(BasicProgram.FromImage(dialect, bytes), []); }
         return WriteBasic(File.ReadAllText(path));
     }
 
@@ -133,7 +138,7 @@ internal sealed partial class DebugSession
     {
         TargetBasicMemory memory = new(Target);
         BasicRom? prompt = null;
-        if (!Basic.InDirectMode(memory))
+        if (!Target.BasicInDirectMode)
         {
             prompt = Target.BasicRom is { } rom && _debug.Position(Target, rom.StatementStart) is not null
                 ? rom
@@ -142,7 +147,7 @@ internal sealed partial class DebugSession
             if (!ReachStatement(prompt))
             {
                 // A program that ended while it was waited for is at the prompt already, which is where it is going.
-                if (Basic.InDirectMode(memory))
+                if (Target.BasicInDirectMode)
                 {
                     prompt = null;
                 }
@@ -199,6 +204,7 @@ internal sealed partial class DebugSession
     // ends between instructions either way. Returns whether it got there.
     private bool ReachStatement(BasicRom rom)
     {
+        ForgetBoundaries();
         ulong end = Target.CycleCount + (ulong)(Target.ClockHertz * StatementWaitSeconds);
         while (true)
         {

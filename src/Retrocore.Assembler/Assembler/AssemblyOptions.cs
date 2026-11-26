@@ -17,6 +17,7 @@ public sealed class AssemblyOptions
     private IReadOnlyList<string> _includePaths = [];
     private IReadOnlyList<string> _sdkPaths = [];
     private IReadOnlyDictionary<string, long> _predefined = new Dictionary<string, long>(StringComparer.Ordinal);
+    private IReadOnlyDictionary<string, string> _predefinedTexts = new Dictionary<string, string>(StringComparer.Ordinal);
     private int _maximumIncludeDepth = 32;
     private int _maximumMacroDepth = 64;
     private int _maximumRepeatCount = 1_000_000;
@@ -158,6 +159,27 @@ public sealed class AssemblyOptions
         init => _predefined = (value ?? throw new ArgumentNullException(nameof(value))).ToDictionary(
             pair => pair.Key,
             pair => pair.Value,
+            StringComparer.Ordinal);
+    }
+
+    /// <summary>
+    ///  Gets textual definitions made before any source is read, as <c>.define NAME text</c> makes them, such as a
+    ///  build's target name.
+    /// </summary>
+    /// <remarks>
+    ///  <para>
+    ///   Each is a definition without parameters, which native and ca65 sources expand where the name appears, as
+    ///   the build had written <c>.define</c> ahead of every source. <c>.undefine</c> removes one.
+    ///  </para>
+    /// </remarks>
+    public IReadOnlyDictionary<string, string> PredefinedTexts
+    {
+        get => _predefinedTexts;
+        init => _predefinedTexts = (value ?? throw new ArgumentNullException(nameof(value))).ToDictionary(
+            pair => AssemblySyntax.IsPlainIdentifier(pair.Key)
+                ? pair.Key
+                : throw new ArgumentException($"'{pair.Key}' cannot name a textual definition.", nameof(value)),
+            pair => pair.Value ?? throw new ArgumentException("A textual definition needs text.", nameof(value)),
             StringComparer.Ordinal);
     }
 

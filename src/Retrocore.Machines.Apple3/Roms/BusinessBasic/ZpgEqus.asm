@@ -144,7 +144,8 @@ CHARACTER_LINE_FEED = 10
 ;; A return.
 CHARACTER_RETURN = 13
 
-;; Control-O, the console's code that turns the screen back on.
+;; Control-O, the console's code that turns the screen back on (the SOS console driver's control code $0F, in
+;; Sos/Drivers/Console/ConsFctn.asm).
 CHARACTER_SCREEN_ON = 15
 
 ; ---------------------------------------------------------------------------------------------------------------------
@@ -266,7 +267,8 @@ CurrentFileNumber:
 
 ;; A JMP, through which BASIC calls a routine whose address it puts in FunctionJump+1 and FunctionJump+2.
 ;;
-;; <ResetInterpreter> stores the JMP opcode.
+;; <ResetInterpreter> stores the JMP opcode. Apple's listing also names FunctionJump+1 SIZE, for AppleSoft's garbage
+;; collector; nothing in Business BASIC uses that name, so it is left out (as DOS's unused MULT is).
 ;; See: <Modules::CallModule>, <Modules::CallBasic>
 ;; Also: JMPER (BB13)
 FunctionJump:
@@ -530,10 +532,6 @@ DescriptorPointer:
 ;; Also: FOUR6 (BB13)
 CollectorStep:
     .byte DESCRIPTOR_SIZE
-
-;; A size, in <FunctionJump>'s address bytes.
-;; Also: SIZE (BB13)
-CollectorOffset = FunctionJump + 1
 
 ;; The last of <FunctionJump>'s address bytes, which the float code borrows: in addition the unshifted operand's
 ;; rounding byte (<Float::UnshiftedExtension>), and in `EXP` the rounding byte of its first multiplication.

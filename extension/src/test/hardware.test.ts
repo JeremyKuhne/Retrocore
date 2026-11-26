@@ -4,7 +4,7 @@
 
 import * as assert from "node:assert/strict";
 import { test } from "node:test";
-import { cardsFor, changesFrom, fingerprint, group, restorable, type HardwareRow } from "../hardware";
+import { cardsFor, changesFrom, fingerprint, fitting, group, restorable, type HardwareRow } from "../hardware";
 
 const row = (id: string, devices: string[] = []): HardwareRow => ({ id, name: id, value: "", description: "", devices });
 
@@ -77,4 +77,11 @@ test("a saved machine's changes are what differs from the launch's own machine",
     }, "slot 0 and the empty drive are the launch's own, so a setting can change them");
     assert.deepEqual(changesFrom({ media: { cassette: null } }, { media: {} }), { media: { cassette: null } }, "a drive the base lacks is kept");
     assert.deepEqual(changesFrom(undefined, base), {}, "nothing saved, nothing changed");
+});
+
+test("saved media for drives a machine lacks, as Level I lacks disks, is left out of its changes", () => {
+    const changes = { cards: {}, media: { cassette: { path: "a.cas" }, drive0: { path: "ldos.dsk" } } };
+    assert.deepEqual(fitting(changes, { media: { cassette: null } }), { cards: {}, media: { cassette: { path: "a.cas" } } });
+    assert.deepEqual(fitting(changes, { media: { cassette: null, drive0: null } }), changes, "a machine with the drive keeps it");
+    assert.deepEqual(fitting(changes, undefined), changes, "a machine not described leaves them as they are");
 });

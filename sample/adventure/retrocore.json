@@ -1,0 +1,39 @@
+// The adventure on five machines as bare targets, and in their own environments as they arrive (apple1-wozmon): the
+// engine's core, the same on every one, and the machine's platform folder, src/platform/<family>/, with its console.
+// Each links by the SDK's memory map for its machine and environment. `retrocore build --all`
+// first packs the games with the packer, a step it skips while the packer and the games are unchanged. Every target
+// links Pirate Adventure in but apple2-test, which links the test game (TEST_GAME, src/linked-game.s).
+{
+  "sdk": "1",
+  "name": "adventure",
+  "cpu": "6502",
+  "sources": [
+    "src/core/game.s",
+    "src/core/text.s",
+    "src/core/phrases.s",
+    "src/core/numbers.s",
+    "src/core/parser.s",
+    "src/core/world.s",
+    "src/core/actions.s",
+    "src/core/conditions.s",
+    "src/core/codes.s",
+    "src/core/engine.s",
+    "src/linked-game.s"
+  ],
+  "steps": [
+    { "tool": "tools/packer.cs", "args": ["pack", "${in}", "${out}"], "in": "games/test.dat", "out": "${obj}/test.bin" },
+    { "tool": "tools/packer.cs", "args": ["pack", "${in}", "${out}"], "in": "games/pirate.dat", "out": "${obj}/pirate.bin" }
+  ],
+  "defines": { "TEST_GAME": 0 },
+  "entry": "Engine::Start",
+  "targets": {
+    "apple1": { "machine": "apple1", "environment": "bare", "options": { "ramKilobytes": 32 } },
+    "apple1-wozmon": { "machine": "apple1", "environment": "wozmon", "options": { "ramKilobytes": 32 } },
+    "apple2": { "machine": "apple2-iiplus", "environment": "bare" },
+    "apple2-test": { "machine": "apple2-iiplus", "environment": "bare",
+                     "defines": { "TEST_GAME": 1 } },
+    "apple3": { "machine": "apple3", "environment": "bare" },
+    "pet": { "machine": "pet4032", "environment": "bare" },
+    "bbc": { "machine": "bbcb", "environment": "bare" }
+  }
+}

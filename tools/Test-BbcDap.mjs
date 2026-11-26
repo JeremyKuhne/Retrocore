@@ -105,6 +105,7 @@ writeFileSync(disk, blank);
 // A disk whose boot option is 3, *EXEC, and whose !BOOT types a line that prints BOOTED: the catalogue's one entry is
 // eight bytes in each of its two sectors, and the file's 16 bytes start at sector 2.
 const bootDisk = join(tmpdir(), `retrocore-bbc-${process.pid}-boot.ssd`);
+const savedUef = join(tmpdir(), `retrocore-bbc-${process.pid}-saved.uef`);
 const booting = Buffer.alloc(80 * 10 * 256);
 const bootText = Buffer.from("PRINT \"BOO\";\"TED\"\r", "latin1");
 booting.write("!BOOT  $", 8, "latin1");
@@ -302,14 +303,29 @@ try {
     await request("retro/type", { text: "PRINT \"£\"\n" });
     await screen(text => /^£ *$/m.test(text), "a pasted £");
 
+    // The recorder's keys: RECORD with no tape puts in a blank one, which STOP, REWIND and PLAY work, and Save As
+    // writes it as a UEF.
+    const cassette = async () => (await request("retro/devices")).devices.find(device => device.id === "cassette");
+    await request("retro/device", { id: "cassette", action: "record", supportsRetrocoreMedia: true });
+    assert.equal((await cassette()).transport.mode, "recording");
+    assert.equal((await cassette()).media.changed, true, "a blank tape is changed until it is saved");
+    for (const action of ["stop", "rewind", "play"]) await request("retro/device", { id: "cassette", action });
+    assert.equal((await cassette()).transport.mode, "playing");
+    await request("retro/device", { id: "cassette", action: "stop" });
+    assert.equal((await cassette()).transport.mode, "stopped");
+    const tapeSaved = await request("retro/device", { id: "cassette", action: "save", path: savedUef, supportsRetrocoreMedia: true });
+    assert.equal(tapeSaved.outcome, "saved", JSON.stringify(tapeSaved));
+    assert.equal(readFileSync(savedUef).subarray(0, 10).toString("latin1"), "UEF File!\0");
+
     await request("disconnect");
     console.log("BBC Micro DAP passed: stepping from the 6502 sample into Mos.asm and out, a breakpoint in BASIC's source, "
         + "a BBC BASIC program on the BASIC thread, BBC BASIC's names in data breakpoints, conditions, setExpression and DEF "
         + "FN, PROC frames under interrupts, the reset stop, a BASIC file on the Model A, and the Model B saving "
-        + `a program to an SSD that saves to its image, booting a disk's !BOOT at start and with SHIFT-BREAK, and a pasted £, ${dumps ? `the last parts on the dumps in ${romDirectory}` : "all from the SDK's sources"}.`);
+        + `a program to an SSD that saves to its image, booting a disk's !BOOT at start and with SHIFT-BREAK, a pasted £, and `
+        + `the recorder's keys on a blank tape saved as a UEF, ${dumps ? `the last parts on the dumps in ${romDirectory}` : "all from the SDK's sources"}.`);
 } finally {
     clearTimeout(timeout);
     close();
-    for (const file of [program, names, modelA, disk, bootDisk]) if (existsSync(file)) unlinkSync(file);
+    for (const file of [program, names, modelA, disk, bootDisk, savedUef]) if (existsSync(file)) unlinkSync(file);
 }
 if (failure()) throw failure();

@@ -37,7 +37,8 @@ public abstract class AtariDiskDrive : IDiskDrive, IMediumSlot
             Name = $"D{number}:",
             Description = "5¼-inch single-sided floppy drive",
             Controller = controller,
-            Formats = ["atr", "xfd"],
+            // A binary load file (.xex) goes in on a disk that boots it.
+            Formats = ["atr", "xfd", "xex"],
             SaveFormats = ["atr", "xfd"],
             Operations = MediaOperations.Insert | MediaOperations.Eject | MediaOperations.WriteProtect | MediaOperations.Save,
             Tracks = 40,

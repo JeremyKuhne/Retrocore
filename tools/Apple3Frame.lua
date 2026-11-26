@@ -9,10 +9,12 @@
 -- RETRO_OUT: the file to write.
 
 local output = os.getenv("RETRO_OUT") or "frame.rgba"
-local finish = tonumber(os.getenv("RETRO_END") or "4")
+-- MAME's time is whole seconds and attoseconds, so times are compared as attotimes: time.seconds drops a
+-- fraction such as 2.5, and time:as_double() rounds a frame at 2.999999999999999880 up to 3, a frame early.
+local finish = emu.attotime.from_double(tonumber(os.getenv("RETRO_END") or "4"))
 
 subscription = emu.add_machine_frame_notifier(function()
-  if manager.machine.time.seconds < finish then return end
+  if manager.machine.time < finish then return end
   local screen = manager.machine.screens[":screen"]
   local pixels, width, height = screen:pixels()
   local rgba = {}

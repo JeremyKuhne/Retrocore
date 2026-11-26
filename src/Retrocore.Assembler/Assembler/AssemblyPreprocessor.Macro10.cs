@@ -85,7 +85,7 @@ internal sealed partial class AssemblyPreprocessor
     }
 
     /// <summary>
-    ///  Defines the options' predefined symbols as constants ahead of every source.
+    ///  Defines the options' predefined symbols as constants, and their textual definitions, ahead of every source.
     /// </summary>
     private void Predefine()
     {
@@ -99,6 +99,12 @@ internal sealed partial class AssemblyPreprocessor
 
             string text = $"{symbol.Key} = {value}";
             Emit(new Line(text, location, AssemblyDialect.Native), text);
+        }
+
+        foreach (KeyValuePair<string, string> definition in _options.PredefinedTexts)
+        {
+            Ca65.Defines[definition.Key] = new(parameters: null, definition.Value);
+            Ca65.DefineLengths |= LengthBit(definition.Key.Length);
         }
     }
 

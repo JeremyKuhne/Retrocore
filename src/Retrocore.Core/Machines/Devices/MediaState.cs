@@ -11,4 +11,16 @@ namespace Retrocore.Machines.Devices;
 /// <param name="Format">The image format, such as <c>JV3</c> or <c>WOZ</c>.</param>
 /// <param name="WriteProtected">Whether the machine cannot write to it.</param>
 /// <param name="Changed">Whether the machine has written to it since it was inserted.</param>
-public readonly record struct MediaState(string Label, string Format, bool WriteProtected, bool Changed);
+public readonly record struct MediaState(string Label, string Format, bool WriteProtected, bool Changed)
+{
+    /// <summary>
+    ///  Gets what the media holds, where the device can tell, such as <c>Level I tape</c>; null when it cannot.
+    /// </summary>
+    public string? Contents { get; init; }
+
+    /// <summary>
+    ///  Gets why the machine cannot read the media, such as a tape recorded for another ROM; null when nothing is
+    ///  known to be wrong.
+    /// </summary>
+    public string? Warning { get; init; }
+}

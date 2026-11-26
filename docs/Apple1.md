@@ -8,13 +8,23 @@ Cassette Interface. This guide covers what it emulates, its ROMs and their sourc
 
 | Area | Addresses | Emulated |
 | --- | --- | --- |
-| RAM | $0000-$0FFF, or $0000-$1FFF | 4K as shipped, or 8K (`RamKilobytes`). |
+| RAM | $0000-$0FFF, $0000-$1FFF, $0000-$3FFF or $0000-$7FFF | 4K as shipped, 8K, or 16K or 32K of expansion RAM (`RamKilobytes`). |
 | RAM | $E000-$EFFF | The 4K bank where BASIC loads and runs (`HighRam`, on by default). |
 | Cassette interface | $C000-$C1FF | The ACI: its tape flip-flop and input at $C000-$C0FF, its PROM at $C100 (`CassetteInterface`, on by default). |
 | PIA | $D010-$D013 | KBD, KBDCR, DSP and DSPCR, repeated through $D000-$DFFF wherever address bit 4 is set. |
 | Monitor | $FF00-$FFFF | The Monitor's two 256x4 PROMs, which see only the low byte of the address, so they fill $F000-$FFFF. |
 
 Every other address reads its own high byte, the last byte most instructions that reach it fetched.
+
+**Expansion RAM.** The board has sockets for two rows of eight 4K-bit dynamic RAM chips, 8K bytes in all, and the
+Operation Manual calls the system expandable to 65K through its 44-pin edge connector. Owners went past 8K in two
+ways: RAM cards on the edge connector, and 16K-bit chips (4116s, which take the same +12, +5 and -5 V as the 4K-bit
+chips) in place of one row of 4K-bit ones or both, for 20K or 32K, as in the [Apple 1 32K and 20K Memory
+Upgrade](https://apple1notes.com/wp-content/uploads/2020/07/Apple-1-32K-and-20K-Memory-Upgrade20130615.pdf) notes.
+Modern replicas ship with more: the Replica 1 has a 32K static RAM at $0000-$7FFF. Retrocore emulates the RAM those
+give a program, not the chips or the card: `RamKilobytes` 16 or 32 is RAM contiguous from $0000, to $3FFF or $7FFF,
+and the 4K bank at $E000 stays where it is, so BASIC still loads and runs there. A real upgrade's rows could be
+jumpered elsewhere; Retrocore does not model the jumpers.
 
 **CPU.** The NMOS 6502 runs at 1.0227 MHz (1,022,727 Hz), the 14.31818 MHz crystal divided by fourteen. The
 clock stretching the board uses to refresh its dynamic RAM is not emulated.
@@ -59,6 +69,27 @@ E000.EFFFR
 
 `E000.EFFFW` writes that range instead, after a leader of about ten seconds. Several commands can share a line,
 and Return goes back to the Monitor.
+
+## Typing a program in
+
+Without a tape, a program goes in through the Monitor: each line at its `\` prompt gives an address, a colon and the
+bytes to store from there, and an address followed by `R` runs it.
+[`WozMonitorHex`](../src/Retrocore.Machines.Apple1/WozMonitorHex.cs) writes that text for some bytes:
+
+```text
+0300: A9 C8 20 EF FF A9 C9 20
+0308: EF FF 4C 1F FF
+0300R
+```
+
+`WozMonitorHex.ToText(bytes, address, entry)` gives each line its address, so a line typed wrong can be typed again
+on its own, and ends with the `R` line unless `entry` is null. Lines hold 8 bytes by default, which keeps each one
+on a 40-column line of the screen. A line holds at most 40: the Monitor takes 127 keys before Return and drops a
+longer line with a backslash. Lines end with a carriage return and a line feed. Retrocore's keyboard
+(`Apple1Keyboard.Type`) skips the carriage return and types the line feed as Return; a Monitor sent both runs the
+line at the carriage return and skips the line feed, as it skips any character below `.`. The keyboard takes the
+whole text at once, as if it were pasted, and the Monitor stores at most about 20 bytes a second: each byte is three
+keys, and the terminal echoes about 60 keys a second.
 
 ## Apple-1 BASIC
 
@@ -127,7 +158,7 @@ launch configuration names it with `"machine": "apple1"`. Its options are:
 
 | Option | Default | |
 | --- | --- | --- |
-| `ramKilobytes` | 4 | RAM from $0000: 4 or 8. |
+| `ramKilobytes` | 4 | RAM from $0000: 4 or 8 on the board, or 16 or 32 of expansion RAM. |
 | `highRam` | true | The 4K bank at $E000. |
 | `cassetteInterface` | true | The Apple Cassette Interface. |
 | `cassette` | | A `.wav` tape, which plays from the start of the session. |

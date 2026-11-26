@@ -200,10 +200,12 @@ public class SdkDocumentationTests
     // Each sample folder's machine project, whose sources its links reach.
     private static readonly Dictionary<string, string> s_sampleMachines = new()
     {
+        ["adventure"] = "Retrocore.Machines.Apple2",
         ["atari"] = "Retrocore.Machines.Atari",
         ["bbc"] = "Retrocore.Machines.Acorn",
         ["coco"] = "Retrocore.Machines.Coco",
         ["iie"] = "Retrocore.Machines.Apple2",
+        ["project"] = "Retrocore.Machines.Apple2",
         ["softcard"] = "Retrocore.Machines.Apple2",
         ["trs80"] = "Retrocore.Machines.Trs80"
     };
@@ -393,9 +395,13 @@ public class SdkDocumentationTests
     private static readonly string[] s_sdkFolders =
         ["AppleSoft", "DiskII", "Dos", "IntegerBasic", "Microsoft6502Basic", "ProgrammersAid", "System"];
 
-    // The SDK's modules as the editor indexes them: the roots among the IIe's ROM sources. AppleSoft.asm is the
-    // default module; the overlay is a mutually exclusive MACRO-10 source.
-    private static IEnumerable<string> SdkRoots(string roms) =>
+    /// <summary>
+    ///  The SDK's modules as the editor indexes them: the roots among the IIe's ROM sources. AppleSoft.asm is the
+    ///  default module; the overlay is a mutually exclusive MACRO-10 source.
+    /// </summary>
+    /// <param name="roms">The folder holding the IIe's ROM sources.</param>
+    /// <returns>Each module's root.</returns>
+    internal static IEnumerable<string> SdkRoots(string roms) =>
         s_sdkFolders
             .SelectMany(folder => SourceIncludes.Roots(Path.Join(roms, folder)))
             .Where(root => !Path.GetFileName(root).Equals("applesoft.mac", StringComparison.OrdinalIgnoreCase))

@@ -257,8 +257,8 @@ CONSTP:
     LD [TEMPPT],HL                  ; discard the string temporaries
     .byte $21                       ; LD HL,nn: skips the OR $FF
 
-;; Stops the program with the Break message, discarding the return address to NEWSTT: Control-C's entry from INPUT
-;; and the scans for NEXT and WEND.
+;; Stops the program with the Break message, discarding the return address to NEWSTT: Control-C's entry from INPUT,
+;; LINE INPUT and RANDOMIZE's prompt for a seed.
 STPEND:
     OR $FF                          ; nonzero: print the Break message
     POP BC                          ; discard the return address to NEWSTT

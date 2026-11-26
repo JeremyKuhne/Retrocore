@@ -62,6 +62,19 @@ jobs:
           mkdir -p artifacts/iie-sample
           dotnet artifacts/AnyCPU/Release/Retrocore.Debug/net11.0/Retrocore.Debug.dll --assemble sample/iie/main.s artifacts/iie-sample/main.bin --dialect ca65 --config sample/iie/link.cfg
 
+      # The project builds the engine for each of its targets, a game linked into each, after its steps pack both games
+      # with the packer; then the reference engine plays each game's transcripts as their .out files show them.
+      - name: Build the adventure sample and play its transcripts
+        working-directory: Retrocore/sample/adventure
+        run: |
+          dotnet ../../artifacts/AnyCPU/Release/Retrocore.Debug/net11.0/Retrocore.Debug.dll build --all
+          for transcript in test-win test-fall test-drown; do
+            dotnet run tools/packer.cs -- play obj/test.bin "games/$transcript.in" --echo --expect "games/$transcript.out"
+          done
+          for transcript in pirate-win pirate-die; do
+            dotnet run tools/packer.cs -- play obj/pirate.bin "games/$transcript.in" --echo --expect "games/$transcript.out"
+          done
+
       - name: Debug adapter tests
         run: |
           node tools/Test-Trs80Dap.mjs
@@ -72,6 +85,7 @@ jobs:
           node tools/Test-PetBasicDap.mjs
           node tools/Test-IntegerBasicDap.mjs
           node tools/Test-Breakpoints.mjs
+          node tools/Test-InterruptHitsDap.mjs
           node tools/Test-Memory.mjs
           node tools/Test-IIeDap.mjs
           node tools/Test-IIPlusDap.mjs
@@ -84,7 +98,21 @@ jobs:
           node tools/Test-BbcDap.mjs
           node tools/Test-AltairDap.mjs
           node tools/Test-AtariDap.mjs
+          node tools/Test-AdventureDap.mjs
+          node tools/Test-ProjectDap.mjs
           node tools/Test-OffMachine.mjs
+
+      # The host packed as the .NET tool retrocore, installed from that package alone into a local folder (it is
+      # published nowhere, and no other source may supply a package of its name), builds and debugs the project sample
+      # as the host itself does.
+      - name: The retrocore tool
+        run: |
+          rm -rf artifacts/tool-package artifacts/tool
+          dotnet pack src/Retrocore.Debug/Retrocore.Debug.csproj -c Release --no-build -o artifacts/tool-package
+          unzip -l artifacts/tool-package/retrocore.0.1.0-dev.nupkg | grep -qF tools/net11.0/any/Schemas/project-1.schema.json
+          printf '<configuration>\n  <packageSources>\n    <clear />\n    <add key="retrocore" value="." />\n  </packageSources>\n</configuration>\n' > artifacts/tool-package/nuget.config
+          dotnet tool install retrocore --version 0.1.0-dev --tool-path artifacts/tool --configfile artifacts/tool-package/nuget.config
+          RETROCORE_DAP_HOST="$PWD/artifacts/tool/retrocore" node tools/Test-ProjectDap.mjs
 
       - name: Extension tests
         working-directory: Retrocore/extension

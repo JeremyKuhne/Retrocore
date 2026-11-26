@@ -190,6 +190,17 @@ internal sealed partial class Apple1DebugTarget : DisposableBase, IDebugTarget, 
     public bool IsInstructionBoundary => _machine.Processor.IsInstructionBoundary;
 
     /// <inheritdoc/>
+    public bool IsTakingInterrupt => _machine.Processor.IsTakingInterrupt;
+
+    /// <inheritdoc/>
+    /// <remarks>
+    ///  <para>
+    ///   S is a byte: the stack is page one.
+    ///  </para>
+    /// </remarks>
+    public int StackMask => 0xFF;
+
+    /// <inheritdoc/>
     public bool InInstruction => _machine.Processor.CurrentOpCode is not null;
 
     /// <inheritdoc/>
@@ -435,7 +446,7 @@ internal sealed partial class Apple1DebugTarget : DisposableBase, IDebugTarget, 
                 "memory",
                 "Memory",
                 memory,
-                "The launch's ramKilobytes (4 or 8) and highRam options; BASIC loads and runs at $E000, and loadBasic puts it there."),
+                "The launch's ramKilobytes (4, 8, 16 or 32) and highRam options; BASIC loads and runs at $E000, and loadBasic puts it there."),
             new(
                 "terminal",
                 "Terminal",

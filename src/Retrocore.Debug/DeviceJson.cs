@@ -15,7 +15,8 @@ namespace Retrocore.Debug;
 ///   Each device is an object with its <c>id</c>, <c>kind</c> (<c>floppyDrive</c>, <c>tapeDrive</c> or
 ///   <c>blockStorage</c>), <c>name</c>, <c>description</c>, <c>controller</c>, <c>formats</c>, <c>operations</c>
 ///   (<c>insert</c>, <c>eject</c>, <c>record</c>, <c>writeProtect</c>, <c>save</c>), <c>tracks</c> and <c>sides</c>; its
-///   <c>media</c> (<c>label</c>, <c>format</c>, <c>writeProtected</c>, <c>changed</c>) or null; its
+///   <c>media</c> (<c>label</c>, <c>format</c>, <c>writeProtected</c>, <c>changed</c>, and where the device can tell,
+///   <c>contents</c> and <c>warning</c>) or null; its
 ///   <c>activity</c> (<c>idle</c>, <c>seeking</c>, <c>reading</c>, <c>writing</c>); and its kind's state:
 ///   <c>head</c> (<c>motor</c>, <c>selected</c>, <c>track</c>, <c>side</c>, <c>sector</c>), <c>transport</c>
 ///   (<c>motor</c>, <c>mode</c>, <c>position</c>, <c>length</c>) or <c>blocks</c> (<c>count</c>,
@@ -115,6 +116,10 @@ internal static class DeviceJson
             ["writeProtected"] = media.WriteProtected,
             ["changed"] = media.Changed
         };
+
+        // What the media holds and why the machine cannot read it, such as a tape for the other Level's ROM.
+        if (media.Contents is { } contents) { json["contents"] = contents; }
+        if (media.Warning is { } warning) { json["warning"] = warning; }
 
         // A changed disk the recovery journal kept from the last run, which a drive's row says.
         if (device is Retrocore.Media.IMediumSlot { Medium: { IsDirty: true } kept } && MediaActions.IsKept(kept))

@@ -64,6 +64,24 @@ public sealed class SosVolumeBuilder
     }
 
     /// <summary>
+    ///  Sets the boot loader from its bytes, such as SOS's bootstrap loader assembled from source, so the disk boots
+    ///  SOS: block 0, and block 1 when given. SOS's loader is block 0 alone; the boot ROM reads only block 0, and the
+    ///  loader reads block 1 without using it; Apple's SOS disks leave it zeros.
+    /// </summary>
+    /// <param name="loader">512 bytes for block 0, or 1,024 for blocks 0 and 1.</param>
+    /// <exception cref="ArgumentException">The loader is not one or two blocks.</exception>
+    public void BootFrom(ReadOnlySpan<byte> loader)
+    {
+        if (loader.Length is not (BlockSize or 2 * BlockSize))
+        {
+            throw new ArgumentException($"A boot loader is {BlockSize} or {2 * BlockSize} bytes; this one is {loader.Length}.", nameof(loader));
+        }
+
+        _boot.AsSpan().Clear();
+        loader.CopyTo(_boot);
+    }
+
+    /// <summary>
     ///  Adds a file.
     /// </summary>
     /// <param name="name">Its name: 1-15 letters, digits and periods, starting with a letter.</param>

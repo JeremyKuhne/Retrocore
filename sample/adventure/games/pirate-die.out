@@ -1,0 +1,34 @@
+* Welcome to Adventure number 2:
+"pirate adventure"
+  by Alexis & Scott Adams, dedicated:
+Ted Heeren & Paul Sharland
+Remember you can always ask for "help".
+
+I'm in a Flat in london
+Obvious exits: none.
+I can also see: Flight of stairs, Sign
+says: "Bring *TREASURES* here, say:
+SCORE", Bottle of rum, Rug, Safety
+sneakers, Sack of crackers.
+> GET SNEAKERS
+OK
+> CLIMB STAIRS
+I'm in a alcove
+Obvious exits: Down.
+I can also see: Open window, Books in a
+bookcase.
+> GET BOOK
+There's a strange sound
+> SAY YOHO
+Everything spins around and suddenly
+I'm elsewhere...
+I'M outside an open window
+on the ledge of a very tall building
+Obvious exits: none.
+> JUMP
+That's not very smart
+I'm dead!
+Welcome to Never Never Land
+Obvious exits: none.
+> QUIT
+The game is now over.

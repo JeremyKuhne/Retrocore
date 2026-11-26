@@ -58,7 +58,8 @@ public sealed class Atari410 : ITapeDrive, IMediumSlot
             Name = "Program Recorder",
             Description = "410 cassette recorder",
             Controller = "Serial bus, motor on PIA CA2",
-            Formats = ["cas"],
+            // A binary load file (.xex) goes in on a tape that boots it.
+            Formats = ["cas", "xex"],
             SaveFormats = ["cas"],
             Operations = Operations
         };

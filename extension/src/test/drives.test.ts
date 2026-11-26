@@ -278,3 +278,22 @@ test("a disk with an image can be reverted, and one the machine ejected says whe
     const kept = { id: "k-1", label: image, format: "2MG", why: "ejected" as const, when: new Date(2026, 10, 14, 10, 41).toISOString(), changed: true };
     assert.match(keptSummary(kept, now), /^work\.woz · .*10:41.* today · ejected by the machine$/);
 });
+
+test("a tape says what it holds, and warns when the machine's ROM cannot read it", () => {
+    const tape = (contents?: string, warning?: string): Device => ({
+        id: "cassette", kind: "tapeDrive", name: "Cassette", description: "Cassette recorder, 500 baud", controller: "the cassette port",
+        formats: ["cas"], saveFormats: [], operations: ["insert", "eject", "record"], tracks: 0, sides: 0,
+        media: { label: path.resolve(path.sep, "tapes", "elizal1r.cas"), format: "CAS", writeProtected: true, changed: false, contents, warning },
+        activity: "idle", transport: { motor: false, mode: "playing", position: 0, length: 2048 }
+    });
+    const warning = "This tape was recorded by Level I BASIC (250 baud); Level II can't read it. Switch the ROM to Level I.";
+    const wrong = tape("Level I tape (250 baud)", warning);
+    assert.equal(summary(wrong), "elizal1r.cas · Level I tape (250 baud), which this ROM can't read · 0 of 2,048 bytes");
+    assert.deepEqual(tooltipLines(wrong).slice(1, 3), ["Level I tape (250 baud)", `⚠ ${warning}`]);
+    assert.equal(mark(wrong), "unreadable");
+    const right = tape("Level II BASIC program (500 baud)");
+    assert.equal(summary(right), "elizal1r.cas · Level II BASIC program (500 baud) · 0 of 2,048 bytes");
+    assert.equal(mark(right), undefined);
+    assert.equal(summary(tape()), "elizal1r.cas · 0 of 2,048 bytes", "a tape of unknown format says nothing of it");
+    assert.equal(tooltipLines(tape()).some(line => line.startsWith("⚠")), false);
+});

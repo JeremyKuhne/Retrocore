@@ -15,15 +15,17 @@
   "main": "./out/extension.js",
   "activationEvents": [
     "onDebugResolve:retrocore",
+    "workspaceContains:retrocore.json",
+    "workspaceContains:**/retrocore.json",
     "onDebugDynamicConfigurations:retrocore",
     "onFileSystem:retrocore-basic",
     "onFileSystem:retrocore-basic-file"
   ],
   "scripts": {
     "generate:grammar": "node scripts/generate-grammar.mjs && node scripts/generate-basic-grammar.mjs",
-    "compile": "npm run generate:grammar && tsc -p .",
+    "compile": "npm run generate:grammar && node scripts/copy-schema.mjs && tsc -p .",
     "check:grammar": "node scripts/generate-grammar.mjs --check && node scripts/generate-basic-grammar.mjs --check",
-    "test:grammar": "npm run check:grammar && node --test out/test/grammar.test.js out/test/basicGrammar.test.js out/test/pascalGrammar.test.js out/test/display.test.js out/test/pictures.test.js out/test/hardware.test.js out/test/machines.test.js out/test/startFlow.test.js out/test/favorite.test.js out/test/memory.test.js out/test/drives.test.js out/test/cycles.test.js",
+    "test:grammar": "npm run check:grammar && node --test out/test/grammar.test.js out/test/basicGrammar.test.js out/test/pascalGrammar.test.js out/test/display.test.js out/test/pictures.test.js out/test/hardware.test.js out/test/machines.test.js out/test/startFlow.test.js out/test/favorite.test.js out/test/memory.test.js out/test/drives.test.js out/test/cycles.test.js out/test/project.test.js",
     "test:language": "node out/test/runTest.js --language-only",
     "test:memory-integration": "node out/test/runTest.js --memory-only",
     "test:editor": "node out/test/runTest.js",
@@ -43,7 +45,31 @@
     "vscode-textmate": "9.2.0"
   },
   "contributes": {
+    "colors": [
+      {
+        "id": "retrocore.inactiveCodeBackground",
+        "description": "The background of the lines a Retrocore assembly source's .if blocks leave out for the active target.",
+        "defaults": { "dark": "#8080801A", "light": "#8080801A", "highContrast": null, "highContrastLight": null }
+      },
+      {
+        "id": "retrocore.inactiveCodeOverviewRuler",
+        "description": "The overview ruler's mark for the lines a Retrocore assembly source's .if blocks leave out for the active target.",
+        "defaults": { "dark": "#808080B3", "light": "#808080B3", "highContrast": "#808080", "highContrastLight": "#808080" }
+      }
+    ],
+    "jsonValidation": [
+      {
+        "fileMatch": "retrocore.json",
+        "url": "./out/schemas/project-1.schema.json"
+      }
+    ],
     "languages": [
+      {
+        "id": "jsonc",
+        "filenames": [
+          "retrocore.json"
+        ]
+      },
       {
         "id": "retrocore-asm",
         "aliases": [
@@ -328,8 +354,8 @@
       },
       {
         "language": "retrocore-level1",
-        "scopeName": "source.retrocore-basic",
-        "path": "./syntaxes/basic.tmLanguage.json"
+        "scopeName": "source.retrocore-level1",
+        "path": "./syntaxes/level1.tmLanguage.json"
       },
       {
         "language": "retrocore-basic",
@@ -362,6 +388,11 @@
           "type": "string",
           "default": "",
           "description": "Path to Retrocore.Debug.dll. Empty uses the workspace build under artifacts/AnyCPU/Release/Retrocore.Debug/net11.0."
+        },
+        "retrocore.inactiveCode.shade": {
+          "type": "boolean",
+          "default": true,
+          "description": "Shade the lines of a Retrocore assembly source that the active target's .if blocks leave out, across the whole line and in the overview ruler, as the language server reports them. The server fades their text as well; the colors are retrocore.inactiveCodeBackground and retrocore.inactiveCodeOverviewRuler."
         },
         "retrocore.lint.unlinkedNameWords": {
           "type": "array",
@@ -514,6 +545,9 @@
       },
       {
         "language": "retrocore-level2"
+      },
+      {
+        "language": "retrocore-level1"
       },
       {
         "language": "retrocore-integer"
@@ -699,6 +733,11 @@
         {
           "command": "retrocore.hardware.addCard",
           "when": "view == retrocore.machine && viewItem =~ /\\baddCard\\b/",
+          "group": "inline@1"
+        },
+        {
+          "command": "retrocore.machine.changeRom",
+          "when": "view == retrocore.machine && viewItem =~ /\\bchangeRom\\b/",
           "group": "inline@1"
         },
         {
@@ -906,6 +945,10 @@
       ],
       "commandPalette": [
         {
+          "command": "retrocore.activeTarget",
+          "when": "false"
+        },
+        {
           "command": "retrocore.display.paste",
           "when": "false"
         },
@@ -1015,6 +1058,10 @@
         },
         {
           "command": "retrocore.machine.setting",
+          "when": "false"
+        },
+        {
+          "command": "retrocore.machine.changeRom",
           "when": "false"
         },
         {
@@ -1154,6 +1201,15 @@
       ]
     },
     "commands": [
+      {
+        "command": "retrocore.pickTarget",
+        "title": "Retrocore: Pick Target...",
+        "icon": "$(target)"
+      },
+      {
+        "command": "retrocore.activeTarget",
+        "title": "Retrocore: Active Target"
+      },
       {
         "command": "retrocore.clearCycles",
         "title": "Retrocore: Clear Source Cycle Counts"
@@ -1344,6 +1400,11 @@
         "title": "Change Setting..."
       },
       {
+        "command": "retrocore.machine.changeRom",
+        "title": "Change ROM...",
+        "icon": "$(chip)"
+      },
+      {
         "command": "retrocore.resetSavedMachine",
         "title": "Retrocore: Reset Saved Machine..."
       },
@@ -1488,10 +1549,28 @@
         ],
         "configurationAttributes": {
           "launch": {
-            "required": [
-              "machine"
+            "anyOf": [
+              {
+                "required": [
+                  "machine"
+                ]
+              },
+              {
+                "required": [
+                  "project",
+                  "target"
+                ]
+              }
             ],
             "properties": {
+              "project": {
+                "type": "string",
+                "description": "A Retrocore project to build and debug: its retrocore.json, or the folder that holds it. The target supplies machine, model, rom, its options and its cards; project replaces source, program, debugFile, basic, executable and basicSource, and decides dialect, linkerConfiguration, loadAddress, entryAddress and dos."
+              },
+              "target": {
+                "type": "string",
+                "description": "With project: the target to build and debug, by name, or as project/target where a root retrocore.json's projects share one."
+              },
               "machine": {
                 "enum": [
                   "apple2",
@@ -1537,6 +1616,18 @@
                 "default": true,
                 "description": "Apple-1: a 4 KB bank of RAM at $E000-$EFFF, where BASIC loads and runs."
               },
+              "proms": {
+                "type": "array",
+                "items": {
+                  "enum": ["dbl", "mbl"],
+                  "enumDescriptions": [
+                    "Altair 8800: MITS's disk boot loader at $FF00, which boots the 88-DCDD's drive 0.",
+                    "Altair 8800: MITS's multi-boot loader at $FE00, which loads a MITS tape from the device the sense switches A11-A8 name."
+                  ]
+                },
+                "uniqueItems": true,
+                "description": "Altair 8800: the boot PROMs fitted, assembled from the SDK's sources or sdkRoms; DBL by default with the 88-DCDD, none without it."
+              },
               "cassetteInterface": {
                 "type": "boolean",
                 "default": true,
@@ -1576,7 +1667,7 @@
               },
               "ramKilobytes": {
                 "type": "number",
-                "description": "Model I: RAM in kilobytes, 4-48; defaults to 48 with the Expansion Interface, else 16 (4 for Level I). Apple II and II Plus: 16, 32 or 48 (the default) on the board. Apple III: 128, 256 (the default) or 512. Apple-1: 4 (the default) or 8 from $0000. Color Computer 1 and 2: 4, 16, 32 or 64 (16 on a CoCo 1, 64 on a CoCo 2); CoCo 3: 128 (the default) or 512. Model III: 16, 32 or 48 (the default). Model 4 and 4P: 64 or 128 (the default). Model II, 12 and 16: 32 to 512 in 32K banks, 64 by default. Altair 8800: 1 to 64 from $0000, 64 by default. PET: 4, 8, 16 or 32; 8 by default, or 32 on a 4032 (16 is the 4016). Atari 800 and 400: 8 to 48 in steps of 8; 48 on the 800 and 16 on the 400 by default."
+                "description": "Model I: RAM in kilobytes, 4-48; defaults to 48 with the Expansion Interface, else 16 (4 for Level I). Apple II and II Plus: 16, 32 or 48 (the default) on the board. Apple III: 128, 256 (the default) or 512. Apple-1: 4 (the default), 8, 16 or 32 from $0000. Color Computer 1 and 2: 4, 16, 32 or 64 (16 on a CoCo 1, 64 on a CoCo 2); CoCo 3: 128 (the default) or 512. Model III: 16, 32 or 48 (the default). Model 4 and 4P: 64 or 128 (the default). Model II, 12 and 16: 32 to 512 in 32K banks, 64 by default. Altair 8800: 1 to 64 from $0000, 64 by default. PET: 4, 8, 16 or 32; 8 by default, or 32 on a 4032 (16 is the 4016). Atari 800 and 400: 8 to 48 in steps of 8; 48 on the 800 and 16 on the 400 by default."
               },
               "switches": {
                 "type": "number",
@@ -1627,7 +1718,7 @@
                 "anyOf": [
                   {
                     "type": "boolean",
-                    "description": "Model I: the Expansion Interface's disk controller; defaults on when disks are given, since with a controller and no disk the ROM waits for one. Model III, 4 and 4P: the FD1793, likewise on when disks are given. Color Computer: the disk controller cartridge with Disk Extended Color BASIC; defaults on when disks are given."
+                    "description": "Model I: the Expansion Interface's disk controller; defaults on when disks are given, since with a controller and no disk the ROM waits for one. Model III, 4 and 4P: the FD1793, likewise on when disks are given. Color Computer: the disk controller cartridge with Disk Extended Color BASIC; defaults on when disks are given. Altair 8800: the 88-DCDD floppy controller with four 8-inch drives; defaults on when disks are given."
                   },
                   {
                     "enum": [
@@ -1696,7 +1787,7 @@
                   "type": "string"
                 },
                 "maxItems": 16,
-                "description": "Model I, III, 4 and 4P: JV1, JV3, DMK or IMD images for drives 0-3, chosen by extension or, for .dsk, by contents. Model II, 12 and 16: IMD, DMK or JV3 images of 8-inch disks. Apple III: DOS- or ProDOS-order (.po) or WOZ images for .D1, the built-in drive, then .D2-.D4. Color Computer: JVC (.dsk) images for drives 0-3, which put the disk controller in the slot. PET: .d64, .d67 or .g64 images for the first disk unit's drive 0, its drive 1, then the next unit's; without diskUnits, as many units as they need, from device 8. Kaypro II: IMG, DSK, IMD or DMK images of single-sided double-density 5.25-inch disks for drive A, then B. BBC Micro: SSD or DSD images for drives 0 and 1; a DSD's second side is drive 2 or 3. Atari 800 and 400: ATR or XFD images for D1:-D4:; an .xex boots from a disk built for it."
+                "description": "Model I, III, 4 and 4P: JV1, JV3, DMK or IMD images for drives 0-3, chosen by extension or, for .dsk, by contents. Model II, 12 and 16: IMD, DMK or JV3 images of 8-inch disks. Apple III: DOS- or ProDOS-order (.po) or WOZ images for .D1, the built-in drive, then .D2-.D4. Color Computer: JVC (.dsk) images for drives 0-3, which put the disk controller in the slot. PET: .d64, .d67 or .g64 images for the first disk unit's drive 0, its drive 1, then the next unit's; without diskUnits, as many units as they need, from device 8. Kaypro II: IMG, DSK, IMD or DMK images of single-sided double-density 5.25-inch disks for drive A, then B. BBC Micro: SSD or DSD images for drives 0 and 1; a DSD's second side is drive 2 or 3. Atari 800 and 400: ATR or XFD images for D1:-D4:; an .xex boots from a disk built for it. Altair 8800: SIMH .dsk images of 8-inch disks (77 tracks of 32 137-byte sectors) for the 88-DCDD's drives 0-3, which fit the controller and the DBL PROM and boot drive 0."
               },
               "diskUnits": {
                 "type": "array",
@@ -1724,7 +1815,7 @@
               },
               "bootSeconds": {
                 "type": "number",
-                "description": "Model I, III, 4 and Color Computer: emulated seconds the ROM runs before a program loads, to set up its RAM; defaults to 1 on a Model I, III or 4 and 2 on a Color Computer or an Atari when loading a program. Model II and Kaypro II: 0 by default."
+                "description": "Model I, III, 4 and Color Computer: emulated seconds the ROM runs before a program loads, to set up its RAM; defaults to 1 on a Model I, III or 4 and 2 on a Color Computer or an Atari when loading a program. Model II and Kaypro II: 0 by default. Apple II project launches: 0.25 by default, so the Monitor is set up for a bare program."
               },
               "command": {
                 "type": "string",
@@ -2172,11 +2263,11 @@
               },
               "hints": {
                 "type": "string",
-                "description": "The hints file Retrocore Memory keeps marks, names and comments in, which --disassemble reads too. Defaults to <name>.hints.json beside the source, program or debug file."
+                "description": "The hints file Retrocore Memory keeps marks, names and comments in, which --disassemble reads too. Defaults to <name>.hints.json beside the source, program or debug file, or for a project launch <project name>.<target>.hints.json beside its retrocore.json."
               },
               "basic": {
                 "type": "string",
-                "description": "A BASIC file to load and RUN: .applesoft.bas, .integer.bas, .apple1.bas, .level2.bas, .colorbasic.bas, .petbasic.bas, .bbcbasic.bas, .atari.bas, or a .bas whose first line names its dialect. Numbered lines, or lines with labels; the machine boots to BASIC's prompt first. Replaces source and program."
+                "description": "A BASIC file to load and RUN: .applesoft.bas, .integer.bas, .apple1.bas, .level2.bas, .level1.bas, .colorbasic.bas, .petbasic.bas, .bbcbasic.bas, .atari.bas, or a .bas whose first line names its dialect. Numbered lines, or lines with labels; the machine boots to BASIC's prompt first. Replaces source and program."
               },
               "run": {
                 "type": "boolean",
@@ -2220,7 +2311,7 @@
               },
               "sdkRoms": {
                 "type": "string",
-                "description": "Directory of the SDK's ROM sources to debug instead of the copy beside the debug host, so breakpoints set in those files bind: the Apple II's Roms directory (Slot7.rom.asm, AppleSoft, Microsoft6502Basic, System, IntegerBasic, DiskII, Dos), the TRS-80's (Level2.asm, Level1.asm, CharacterGenerator.asm, Model3.asm, Model4PBoot.asm, Model2Boot.asm and their character generators), the Color Computer's (ColorBasic.asm, ExtendedBasic.asm, DiskBasic.asm and Coco3.asm), the PET's (Basic/Basic1.asm, Basic2.asm and Basic4.asm, Basic1/Editor1.asm and Kernal1.asm, Basic2/Editor2.asm and Kernal2.asm, Basic4/Editor4.asm and Kernal4.asm, CharacterGenerator.asm and PetEquates.asm, with Microsoft6502Basic beside it as in the SDK), the Kaypro II's (Kaypro2.asm, Kaypro2CharacterGenerator.asm and MBASIC's modules in Mbasic), the BBC Micro's (Mos.asm, BbcBasic.asm, Dnfs.asm and Saa5050.asm, with their Mos, Basic and Dnfs folders), or the Atari's (its OS, floating point package, Atari BASIC and the 810's firmware)."
+                "description": "Directory of the SDK's ROM sources to debug instead of the copy beside the debug host, so breakpoints set in those files bind: the Apple II's Roms directory (Slot7.rom.asm, AppleSoft, Microsoft6502Basic, System, IntegerBasic, DiskII, Dos), the TRS-80's (Level2.asm, Level1.asm, CharacterGenerator.asm, Model3.asm, Model4PBoot.asm, Model2Boot.asm and their character generators), the Color Computer's (ColorBasic.asm, ExtendedBasic.asm, DiskBasic.asm and Coco3.asm), the PET's (Basic/Basic1.asm, Basic2.asm and Basic4.asm, Basic1/Editor1.asm and Kernal1.asm, Basic2/Editor2.asm and Kernal2.asm, Basic4/Editor4.asm and Kernal4.asm, CharacterGenerator.asm and PetEquates.asm, with Microsoft6502Basic beside it as in the SDK), the Kaypro II's (Kaypro2.asm, Kaypro2CharacterGenerator.asm and MBASIC's modules in Mbasic), the Altair 8800's (Dbl.asm and Mbl.asm, which the PROMs are also built from), the BBC Micro's (Mos.asm, BbcBasic.asm, Dnfs.asm and Saa5050.asm, with their Mos, Basic and Dnfs folders), or the Atari's (its OS, floating point package, Atari BASIC and the 810's firmware)."
               },
               "breakpoints": {
                 "type": "array",

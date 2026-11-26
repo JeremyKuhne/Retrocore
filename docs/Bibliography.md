@@ -34,7 +34,33 @@ workspace adds documents of its own, or replaces a key, with the same columns.
 | MOUSETN | Apple II Technical Notes: Mouse #1-#7 (Developer Technical Support, revised 1985-1990) | 1990 | Apple Computer | <https://mirrors.apple2.org.za/Apple%20II%20Documentation%20Project/Interface%20Cards/Digitizers/Apple%20Mouse%20Interface%20Card/Documentation/Apple%20II%20Mouse%20Technical%20Notes.pdf> |
 | IICTRM89 | Apple IIc Technical Reference Manual, Second Edition | 1989 | Addison-Wesley | <https://archive.org/details/AppleIIcTechnicalReference2ndEd> |
 | BB13 | Apple /// Business BASIC 1.3 Source Code Listing: Apple's source files, reformatted and merged into one listing by David Craig (1997) | | Apple Computer | <https://www.apple3.org/Documents/SourceCode/Apple3_Business_BASIC_1.3.pdf> |
+| A2POSRM | Apple II Apple Pascal Operating System Reference Manual (A2L0028, 030-0100-00) | 1980 | Apple Computer | <https://archive.org/details/Apple_Pascal_Operating_System_Reference_Manual> |
+| A2PBIOS | ATTACH-BIOS Document for Apple II Pascal 1.1, by Barry Haynes (January 12, 1980) | 1980 | Apple Computer | <https://archive.org/details/Apple_II_Pascal_ATTACH> |
+| WK11 | Apple ][ Pascal 1.1 P-Code Interpreter 6502 Disassembly, by Willi Kusche (1990s) | | | <https://archive.org/details/Apple_2_Pascal_11_PCodeIntDism> |
+| UCSD20 | UCSD Pascal II.0 system source listings (scanned May 2006) | 1979 | University of California, San Diego | <https://archive.org/details/UCSD_PASCAL_II.0_Listing> |
+| UCSD20IO | UCSD Pascal II.0 I/O System | 1978 | University of California, San Diego | <https://archive.org/details/UCSD_PASCAL_II.0_IO_System_Dec78> |
 | UNKN | Unclear where this originated: a name no listed document gives | | | |
+
+## How the Apple Pascal documents were checked
+
+The interpreter's names (`src/Retrocore.Pascal/Sdk/Interpreter/1.1`) were checked against the SDK's build of
+SYSTEM.APPLE, which is byte-identical to Apple Pascal 1.1's. The full method, with the counts, is in
+[`docs/conversions/PascalInterpreter.md`](conversions/PascalInterpreter.md).
+
+- **WK11:** the PDF's text layer, a typed listing with addresses and bytes. A code label is cited where its address
+  column gives it at the address the build gives the definition (Initialize, which Kusche lists where it is loaded,
+  `$F29C`-`$F674`, mapped to where Restart copies it to run, `$6827`-`$6BFF`); a name for a byte in zero page or memory is cited where Kusche's
+  instruction and ours at the same address use it and our symbol, decoded from the instruction's bytes. His
+  generated names (the sequential `INTxx` ... `INZxx`, `A` and an address, his macros' locals) are not cited.
+- **A2PBIOS:** its excerpts of Apple's BIOS source, matched to the build instruction for instruction, and its
+  equates by address. A name found only in prose is not cited.
+- **A2POSRM:** the Internet Archive's OCR text, and the scan's pages where the OCR is illegible. P-codes and
+  standard procedures by their numbers (its table misprints five standard procedures' numbers; the names are cited
+  at the numbers `Pcode.asm` and the build agree on), registers, SYSCOM's and the mark stack's fields and the
+  execution errors by what it says each is.
+- **UCSD20:** the OCR text. SYSCOMREC's offsets computed from its declaration (identifier lists allocated
+  backward, as its own comment says); the Compiler's p-code and standard-procedure comments by their numbers.
+- **UCSD20IO:** the unit numbers, the unit I/O calls and the BIOS entry points, matched by function.
 
 ## How the BASIC documents were checked
 

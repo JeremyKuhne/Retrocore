@@ -12,16 +12,18 @@
 -- RETRO_TYPE: text to type at the PET once RETRO_TYPE_AT seconds have passed; "\n" is RETURN. Optional.
 
 local output = (os.getenv("RETRO_OUT") or "trace.log"):gsub("\\", "/")
-local finish = tonumber(os.getenv("RETRO_END") or "1")
+-- MAME's time is whole seconds and attoseconds, so times are compared as attotimes: time.seconds drops a
+-- fraction such as 2.5, and time:as_double() rounds a frame at 2.999999999999999880 up to 3, a frame early.
+local finish = emu.attotime.from_double(tonumber(os.getenv("RETRO_END") or "1"))
 local text = os.getenv("RETRO_TYPE")
-local typeAt = tonumber(os.getenv("RETRO_TYPE_AT") or "0")
+local typeAt = emu.attotime.from_double(tonumber(os.getenv("RETRO_TYPE_AT") or "0"))
 local debugger = manager.machine.debugger
 debugger:command('trace ' .. output .. ',0,noloop,{tracelog "%02x %02x %02x %02x %02x|",a,x,y,p,sp}')
 debugger.execution_state = "run"
 
 local typed = false
 subscription = emu.add_machine_frame_notifier(function()
-  local now = manager.machine.time.seconds
+  local now = manager.machine.time
   if text and not typed and now >= typeAt then
     manager.machine.natkeyboard:post((text:gsub("\\n", "\n")))
     typed = true

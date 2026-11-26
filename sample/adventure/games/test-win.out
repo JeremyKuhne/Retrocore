@@ -1,0 +1,114 @@
+Welcome to the lighthouse! Find the two
+treasures and leave them at the foot of
+the tower.
+I'm on a sandy beach beside a cold grey
+sea. A cave opens in the cliffs.
+Obvious exits: North.
+I can also see: Seagull.
+> look
+I'm on a sandy beach beside a cold grey
+sea. A cave opens in the cliffs.
+Obvious exits: North.
+I can also see: Seagull.
+The seagull cries and wheels over the
+sea.
+> go cave
+It's too dark to see.
+> w
+It's dangerous to move in the dark!
+The seagull cries and wheels over the
+sea.
+I'm on a sandy beach beside a cold grey
+sea. A cave opens in the cliffs.
+Obvious exits: North.
+I can also see: Seagull.
+> search sand
+I found something in the sand!
+> search sand
+I find nothing more.
+The seagull cries and wheels over the
+sea.
+> get key
+OK
+The seagull cries and wheels over the
+sea.
+> n
+I'm in a round room at the foot of a
+lighthouse
+Obvious exits: South, Up.
+I can also see: Wooden sign, Tin of
+oil.
+> read sign
+The sign says: "Leave treasures here,
+then say SCORE."
+> get oil
+OK
+> u
+I'm in a lamp room at the top of the
+lighthouse
+Obvious exits: Down.
+I can also see: Unlit oil lamp, Iron
+chest.
+> get lamp
+OK
+> open chest
+The chest creaks open.
+> get coin
+I can't carry any more.
+> drop key
+OK
+> get doubloon
+OK
+> light lamp
+I pour in the oil and light the lamp.
+> d
+I'm in a round room at the foot of a
+lighthouse
+Obvious exits: South, Up.
+I can also see: Wooden sign.
+> i
+I'm carrying: *Gold doubloon*, Lit oil
+lamp.
+My light is growing dim.
+> drop coin
+OK
+> s
+The seagull cries and wheels over the
+sea.
+I'm on a sandy beach beside a cold grey
+sea. A cave opens in the cliffs.
+Obvious exits: North.
+I can also see: Seagull.
+> go cave
+I'm in a damp sea cave
+Obvious exits: West.
+I can also see: *Silver pearl*.
+> get pearl
+OK
+> look
+I'm in a damp sea cave
+Obvious exits: West.
+My light has run out!
+The lamp gutters and goes out.
+The tide is rising!
+> w
+It's dangerous to move in the dark!
+I'm on a sandy beach beside a cold grey
+sea. A cave opens in the cliffs.
+Obvious exits: North.
+I can also see: Seagull.
+> n
+I'm in a round room at the foot of a
+lighthouse
+Obvious exits: South, Up.
+I can also see: Wooden sign, *Gold
+doubloon*.
+> drop pearl
+OK
+> say hello
+HELLO echoes back from the cliffs.
+> score
+I've stored 2 treasures. On a scale of
+0 to 100, that rates 100.
+Well done!
+The game is now over.

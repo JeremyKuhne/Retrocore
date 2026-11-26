@@ -228,8 +228,8 @@ internal sealed partial class KayproDebugTarget
         AssemblyResult result = KayproSdkModules.AssembleMbasic(source);
         debug.Add(new SourceMapModule(result, area: null));
         // STOP, END and Control-C between statements all pass CONSTP (CNTCCN reaches ST_STOP for every key, which
-        // returns for all but Control-C), and Control-C in INPUT and the loop scans enters at STPEND; the statement
-        // tells which. ENDCON ends a program that runs off its last line.
+        // returns for all but Control-C), and Control-C in INPUT, LINE INPUT and RANDOMIZE's prompt enters at STPEND;
+        // the statement tells which. ENDCON ends a program that runs off its last line.
         _mbasicRom = BasicRom.From(
             result.Symbols,
             "READY",

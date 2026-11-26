@@ -358,10 +358,16 @@ const colorBasic = [...keywords("ColorBasicDialect.cs", "s_commands"), ...keywor
 const bbcBasic = bbcKeywords();
 const petBasic = keywords("PetBasicDialect.cs");
 const atari = keywords("AtariBasicDialect.cs");
+// Level I's words in a program's order: the statements EXEC tries in a program (TABLE1_PROGRAM), then the commands,
+// which only a typed line tries, first (TABLE1), then the words inside statements and the functions. An abbreviation,
+// as P. for PRINT, is the first word with those letters, as in a program: L. is LET, though typed it is LIST.
+const level1 = ["s_statements", "s_commands", "s_ifWords", "s_forWords", "s_printWords", "s_functions"]
+    .flatMap(table => keywords("Level1Dialect.cs", table));
 const union = [...appleSoft, ...level2.filter(word => !appleSoft.includes(word))];
 const outputs = [
     ["applesoft.tmLanguage.json", grammar("applesoft", "AppleSoft BASIC", appleSoft)],
     ["level2.tmLanguage.json", grammar("level2", "Level II BASIC", level2)],
+    ["level1.tmLanguage.json", grammar("level1", "Level I BASIC", level1, { names: "[A-Za-z]\\$?", wholeLineData: true, abbreviated: abbreviations(level1) })],
     ["integer.tmLanguage.json", grammar("integer", "Integer BASIC", integer, { names: "[A-Za-z][A-Za-z0-9]*\\$?" })],
     ["business.tmLanguage.json", grammar("business", "Business BASIC", business, { names: "[A-Za-z][A-Za-z0-9.]*[$%&]?", business: true })],
     ["colorbasic.tmLanguage.json", grammar("colorbasic", "Color BASIC", colorBasic, { names: "[A-Z][A-Z0-9]*\\$?", ignoreCase: false })],
@@ -375,5 +381,5 @@ for (const [file, content] of outputs) {
     const output = resolve(extension, "syntaxes", file);
     writeGenerated(output, JSON.stringify(content, null, 2) + "\n", `${file} is stale. Run npm run generate:grammar.`);
 }
-console.log(`BASIC grammars: ${appleSoft.length} AppleSoft, ${level2.length} Level II, ${integer.length} Integer BASIC, `
+console.log(`BASIC grammars: ${appleSoft.length} AppleSoft, ${level2.length} Level II, ${level1.length} Level I, ${integer.length} Integer BASIC, `
     + `${business.length} Business BASIC, ${colorBasic.length} Color BASIC, ${mbasic.length} MBASIC, ${petBasic.length} PET BASIC, ${bbcBasic.words.length} BBC BASIC and ${atari.length} Atari BASIC reserved words.`);

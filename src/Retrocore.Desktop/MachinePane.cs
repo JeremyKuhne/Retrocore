@@ -790,12 +790,17 @@ internal sealed class MachinePane : ScrollViewer
         }
     }
 
+    // The files Record offers: those the deck saves its tapes as, or, on a deck that writes the recording itself, the
+    // ones it takes. An Atari's .xex goes in but is not written.
+    private static IReadOnlyList<string> RecordFormats(DeviceState device) =>
+        device.Info.SaveFormats.Count > 0 ? device.Info.SaveFormats : device.Info.Formats;
+
     private async Task Record(DeviceState device)
     {
         IStorageFile? file = await _window.StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
         {
             Title = $"Record from {device.Info.Name} to",
-            FileTypeChoices = Filters($"{device.Info.Name} images", device.Info.Formats),
+            FileTypeChoices = Filters($"{device.Info.Name} images", RecordFormats(device)),
         });
 
         if (file?.TryGetLocalPath() is { } path) { Act(device, "record", new JsonObject { ["path"] = path }); }

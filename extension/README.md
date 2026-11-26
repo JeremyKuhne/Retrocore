@@ -1220,8 +1220,8 @@ off and on. See the [Atari guide](../docs/Atari800.md) for what is emulated.
 `"trs80-model4"` is the Model 4), and `"machine": "trs80-model2"` a Model II, 12 or the
 Z80 side of a Model 16 (`model` `2`, `12` or `16`). Without dumps they run the SDK's
 builds of their ROMs (`Model3.asm`, `Model4PBoot.asm`, `Model2Boot.asm` and the character
-generators), which are byte-identical to MAME's dumps of the ROMs they cover; `romDirectory` or `RETROCORE_TRS80_ROMS`
-can hold MAME's dumps instead. When the running ROM is one the sources build, its source
+generators), which are byte-identical to MAME's dumps of the ROMs they cover;
+`romDirectory` or `RETROCORE_TRS80_ROMS` can hold MAME's dumps instead. When the running ROM is one the sources build, its source
 debugs as a ROM module, and Model III and Model 4 BASIC has the BASIC thread, as Level II
 does. A Model III with `rom` `level1` runs Level I BASIC from `Level1.asm`'s Model III
 build, with the BASIC thread too. The options are `rom`, `ramKilobytes`, `disks` (JV1, JV3, DMK or IMD),

@@ -57,7 +57,7 @@ and every ROM they run is an SDK source, except the PET's 4040 and 2040 disk dri
 What is missing:
 
 - a project that names its targets, and a build of it that runs outside the editor;
-- `retrocore` as a .NET tool: the debug host is `IsPackable=false`;
+- a published `retrocore` .NET tool: the debug host packs as one, but no preview build ships it;
 - per-target SDK roots: every host searches the one `Sdk/` folder;
 - headers that describe each target to the program, and `RC_` defines;
 - user-set symbols outside `--assemble`: the debug launch and the language server pass none;
@@ -313,9 +313,10 @@ its output. It is the .NET tool's command, grown from the debug host's `--assemb
 CPU, an origin, a linker configuration and defines. The debugger builds through the same code, so CI and F5 always
 produce the same bytes. The command also prints the deprecation warnings that only the editor shows today.
 
-Packaging the debug host as a tool is new: it is `IsPackable=false` today. Its `Sdk/` folder goes in the package, as it
-goes beside the host now. The host is already AOT-compatible, but a tool runs on the .NET runtime the C# steps need
-anyway.
+The debug host packs as the tool (`dotnet pack src/Retrocore.Debug`, package `retrocore`, command `retrocore`), which
+CI installs from its own package folder and builds and debugs the project sample with. Its `Sdk/` and `Schemas/`
+folders go in the package, as they go beside the host. The host is already AOT-compatible, but a tool runs on the .NET
+runtime the C# steps need anyway.
 
 **Steps.** A step runs a host-side tool before assembly, with declared inputs and outputs. The build skips it when the
 hashes of its inputs and its tool are unchanged. A tool is a C# file-based app (`dotnet run tools/packer.cs`) or a

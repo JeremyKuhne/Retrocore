@@ -11,11 +11,11 @@ import { keepResolved, resolveVariables } from "./favorite";
 import { changesFrom, fitting } from "./hardware";
 import type { Device } from "./drives";
 import { languageRequest } from "./languageClient";
-import { catalogMachine, isLevel1, launchConfiguration, machineById, machines, startsWithDisks, withSetting, type Machine, type MachineChoice } from "./machines";
+import { catalogMachine, launchConfiguration, machineById, machines, startsWithDisks, withSetting, type Machine, type MachineChoice } from "./machines";
 import { activeTargetRead, withActiveTarget } from "./activeTarget";
 import { withProjectMachine } from "./project";
 import type { SavedMachines } from "./savedMachine";
-import { crowdsCartridge, describeSetup, driveOptions, isUsable, refusal, setupConfiguration, setupFromConfiguration, startOrigin, withOption, type Setup } from "./startFlow";
+import { basicRomRefusal, crowdsCartridge, describeSetup, driveOptions, isUsable, refusal, setupConfiguration, setupFromConfiguration, startOrigin, withOption, type Setup } from "./startFlow";
 
 /** Where an off machine came from, which decides how it boots. */
 export type OffSource =
@@ -313,8 +313,9 @@ export class OffMachine {
 
     /**
      * Why the machine shown cannot take a setting, if it cannot: it has no such setting; its disks need their
-     * controller, and the Model I's controller its Expansion Interface; a cartridge holds BASIC's slot; or Level I
-     * cannot run what it starts with.
+     * controller, and the Model I's controller its Expansion Interface; a cartridge holds BASIC's slot; Level I
+     * cannot read the disk a Start Machine setup starts from; or the BASIC file it runs names its dialect, which
+     * keeps the ROM whose BASIC that is.
      */
     refusal(option: string, value: string | number | boolean): string | undefined {
         const target = this.target;
@@ -329,9 +330,9 @@ export class OffMachine {
             return `${this.name ?? "The machine"} starts with a cartridge in BASIC's slot, so BASIC stays out.`;
         }
         if (target.source.kind === "setup") return refusal(machine, target.source.setup, option, value);
-        // A launch that runs a BASIC file needs Level II's BASIC.
-        if (option === "rom" && typeof target.configuration.basic === "string" && isLevel1(withSetting(target.configuration, choice, value))) {
-            return `${this.name ?? "The machine"} runs a BASIC file, which Level I cannot load.`;
+        // A launch that runs a BASIC file that names its dialect keeps the ROM whose BASIC that is.
+        if (option === "rom" && typeof target.configuration.basic === "string") {
+            return basicRomRefusal(this.name ?? "The machine", target.configuration.basic, withSetting(target.configuration, choice, value));
         }
         return undefined;
     }

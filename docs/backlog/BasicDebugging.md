@@ -1,6 +1,6 @@
 # Backlog: debugging BASIC programs
 
-Status: **Level I's `basic` launch, disk images, Color BASIC's tapes and the CoCo 3 left.** AppleSoft, Integer BASIC,
+Status: **Disk images, Color BASIC's tapes and the CoCo 3 left.** AppleSoft, Integer BASIC,
 Apple-1 BASIC, Level II, Level I, Color BASIC on the CoCo 1 and 2, Business BASIC, PET BASIC, BBC BASIC and MBASIC are done, each with some or
 all of: the library ([`Retrocore.Basic`](../../src/Retrocore.Basic)), the command line, the machine-program editor
 with import and export, the language support, the BASIC thread, BASIC variables, and workspace files with labels and
@@ -12,11 +12,9 @@ debugger or the editor.
 
 Level I BASIC, on the Model I and the Model III, has its dialect (`Level1Dialect`), the machine-program editor with
 import and export of listings and its tapes, the language support, the BASIC thread and its variables, from the
-symbols of [`Level1.asm`](../../src/Retrocore.Machines.Trs80/Roms/Level1.asm)'s build for each model.
-
-What is left: the **`basic` launch** of a `.level1.bas` file. The debug host can load one, but Start Machine and the
-Machine view refuse a BASIC file on Level I, and their refusal of a change of ROM assumes the file is Level II's; it
-should follow the file's dialect, so a Level I file refuses a change to Level II.
+symbols of [`Level1.asm`](../../src/Retrocore.Machines.Trs80/Roms/Level1.asm)'s build for each model, and the
+`basic` launch of a `.level1.bas` file, in Start Machine and the Machine view too, where a file that names its
+dialect keeps the ROM whose BASIC that is.
 
 ## Disk images
 

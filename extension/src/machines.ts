@@ -413,7 +413,7 @@ export const machines: readonly Machine[] = [
         configuration: { machine: "trs80-model1", rom: "level1" },
         diskFormats: [],
         tapeFormats: ["cas"],
-        basicDialects: [],
+        basicDialects: ["level1"],
         dos: false,
         choices: [model1Rom, model1Ram(4), model1Expansion(false), lowercase]
     },
@@ -437,7 +437,7 @@ export const machines: readonly Machine[] = [
         configuration: { machine: "trs80-model3", model: "3", rom: "level1" },
         diskFormats: [],
         tapeFormats: ["cas"],
-        basicDialects: [],
+        basicDialects: ["level1"],
         dos: false,
         choices: [model3Rom, model3Ram]
     },

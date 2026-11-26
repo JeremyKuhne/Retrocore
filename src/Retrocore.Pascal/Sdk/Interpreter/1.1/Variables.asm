@@ -18,8 +18,8 @@ OPCODE_SIND0 = $F8
 ; Variables.
 
 ;; What to add to a variable's number times 2 for its offset from its frame: the variables follow the frame's
-;; <MSCW_SIZE> bytes, and are numbered from 1.
-VARIABLE_BIAS = MSCW_SIZE - 2
+;; <MarkStack> bytes, and are numbered from 1.
+VARIABLE_BIAS = .sizeof(MarkStack) - 2
 
 ; Pcodes: the loads and stores of constants, locals, globals, intermediates, extended words and indirect words.
 .scope Pcodes continued

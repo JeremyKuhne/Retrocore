@@ -31,8 +31,8 @@ ResetForOverflow:
 
     ; Forget the directory.
     lda #0
-    sta SysDirectory
-    sta SysDirectory+1
+    sta Syscom::Directory
+    sta Syscom::Directory+1
 
     ; Move the heap and the stack out of the error handler's way.
     sta HeapTop
@@ -100,24 +100,24 @@ StringOverflow:
 ;; In: A = the error's number
 Report:
     ; Record the error's number.
-    sta SysErrorNumber
+    sta Syscom::ErrorNumber
     lda #0
-    sta SysErrorNumber+1
+    sta Syscom::ErrorNumber+1
 
     ; Record where it happened.
     lda InstructionPointer
-    sta SysIpc
+    sta Syscom::ErrorInstruction
     lda InstructionPointer+1
-    sta SysIpc+1
+    sta Syscom::ErrorInstruction+1
 
     ; Record ProgramStackTop less a mark stack frame and the word below it.
     lda ProgramStackTop
     sec
-    sbc #MSCW_SIZE + KP_LINK_SIZE
-    sta SysErrorStack
+    sbc #.sizeof(MarkStack) + KP_LINK_SIZE
+    sta Syscom::ErrorFrame
     lda ProgramStackTop+1
     sbc #0
-    sta SysErrorStack+1
+    sta Syscom::ErrorFrame+1
 
     ; Run Call.
     lda CallAddress

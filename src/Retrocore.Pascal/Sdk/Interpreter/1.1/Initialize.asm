@@ -14,7 +14,7 @@ COPY_PAGES = 4
 
 ; SYSCOM.
 
-;; The bytes at <SyscomExtra>, just after SYSCOM, that <Initialize> clears with it.
+;; The bytes at <Syscom::Rest>, just after SYSCOM, that <Initialize> clears with it.
 SYSCOM_EXTRA_SIZE = $20
 
 ; Reading SYSTEM.PASCAL.
@@ -29,17 +29,24 @@ DIRECTORY_BLOCK = 2
 ;; The bytes of directory <Initialize> reads: 4 blocks.
 DIRECTORY_SIZE = $0800
 
-;; The size of a directory entry. The first is the volume's own, and the files' follow it.
-;; Also: DIRENTRY (UCSD20)
-DIRECTORY_ENTRY_SIZE = 26
+;; A directory entry. The first is the volume's own, and the files' follow it. UCSD calls it a DIRENTRY (UCSD20).
+.struct DirectoryEntry
+    ;; Its first block.
+    ;; Also: DFIRSTBLK (UCSD20)
+    FIRST_BLOCK .word
 
-;; Where a directory entry keeps its first block.
-;; Also: DFIRSTBLK (UCSD20)
-DIRECTORY_FIRST_BLOCK = 0
+    LAST_BLOCK .word                ;; The block after its last.
+    KIND .word                      ;; Its kind of file, with flags.
 
-;; Where a directory entry keeps its name, as a Pascal string.
-;; Also: DTID (UCSD20), DVID (UCSD20)
-DIRECTORY_NAME = 6
+    ;; Its name, as a Pascal string of up to 15 characters: the volume's in the first entry.
+    ;; Also: DTID (UCSD20), DVID (UCSD20)
+    NAME .res 16
+
+    LAST_BYTE .word                 ;; The bytes used in its last block.
+    DATE .word                      ;; When it was last changed.
+.endstruct
+
+    .assert .sizeof(DirectoryEntry) = 26, "A directory entry is 26 bytes."
 
 ;; The directory entries <Initialize> checks for SYSTEM.PASCAL: the volume's own and the first 76 files'.
 DIRECTORY_ENTRIES_CHECKED = 77
@@ -55,9 +62,6 @@ DICTIONARY_SEGMENTS = 16
 ;; The size of a dictionary entry: the segment's first block, counted from the file's start, then its size in bytes.
 ;; Also: DISKINFO (A2POSRM), SEGDESC (UCSD20)
 DICTIONARY_ENTRY_SIZE = 4
-
-;; Where a <SegmentTable> entry keeps the segment's first block.
-SEGMENT_TABLE_BLOCK = 2
 
 ;; What ends <NoSystemMessage>.
 MESSAGE_END = '#'
@@ -102,15 +106,15 @@ BootAddresses:
 BootMemoryTop:
     .word MemoryTop
 
-;; <SegmentTable>'s address.
+;; <Syscom::SegmentTable>'s address.
 ;; Also: ASYSPT (WK11)
 BootSegmentTable:
-    .word SegmentTable
+    .word Syscom::SegmentTable
 
 ;; SYSCOM's address.
 ;; Also: ADRIOR (WK11)
 BootSyscom:
-    .word Syscom
+    .word Syscom::Start
 
 ;; <CspTable>'s address, whose high byte goes in <CspDispatch>'s JMP.
 ;; Also: ACSPT (WK11)
@@ -206,8 +210,8 @@ InitializeImage:
     .assert * = COPY_ADDRESS + InitializeImage - Restart, "Initialize is assembled where Restart copies it."
 
 ;; Sets up the BIOS's and the p-machine's state, finds SYSTEM.PASCAL on the boot unit, reads its segments' places into
-;; <SegmentTable>, loads segments 15 and 0, and runs segment 0's procedure 1. Runs at <COPY_ADDRESS> + $27, and does not
-;; return.
+;; <Syscom::SegmentTable>, loads segments 15 and 0, and runs segment 0's procedure 1. Runs at <COPY_ADDRESS> + $27, and
+;; does not return.
 .proc Initialize
 
 ;; The directory entry being checked: the buffer's start, then the entry's name, then the entry's start.
@@ -217,7 +221,7 @@ Entry = Result
 ;; Also: BLKNUM (WK11)
 FirstBlock = Buffer
 
-;; The <SegmentTable> entry being filled.
+;; The <Syscom::SegmentTable> entry being filled.
 TableEntry = Pointer
 
 ;; The segment dictionary entry being read.
@@ -305,16 +309,16 @@ InitializeDisk:
     lda #UNIT_BOOT_DISK
     jsr BiosDiskInit
 
-    ; Clear SYSCOM, and the SYSCOM_EXTRA_SIZE bytes after it.
+    ; Clear SYSCOM: 256 bytes, then the SYSCOM_EXTRA_SIZE bytes after them.
 ClearSyscom:
     ldx #0
     lda #0
 ClearSyscomByte:
-    sta Syscom,x
+    sta Syscom::Start,x
     inx
     bne ClearSyscomByte
 ClearExtraByte:
-    sta SyscomExtra,x
+    sta Syscom::Rest,x
     inx
     cpx #SYSCOM_EXTRA_SIZE
     bne ClearExtraByte
@@ -376,7 +380,7 @@ FindSystemFile:
     ldx #DIRECTORY_ENTRIES_CHECKED + 1
     clc
     lda Entry
-    adc #DIRECTORY_NAME
+    adc #DirectoryEntry::NAME
     sta Entry
     bcc CountEntry
     inc Entry+1
@@ -385,7 +389,7 @@ FindSystemFile:
 NextEntry:
     clc
     lda Entry
-    adc #DIRECTORY_ENTRY_SIZE
+    adc #.sizeof(DirectoryEntry)
     sta Entry
     bcc CountEntry
     inc Entry+1
@@ -460,12 +464,12 @@ CompareNameByte:
 ReadSegmentDictionary:
     lda Entry
     sec
-    sbc #DIRECTORY_NAME
+    sbc #DirectoryEntry::NAME
     sta Entry
     bcs TakeFirstBlock
     dec Entry+1
 TakeFirstBlock:
-    ldy #DIRECTORY_FIRST_BLOCK
+    ldy #DirectoryEntry::FIRST_BLOCK
     lda (Entry),y
     sta FirstBlock
     iny
@@ -528,7 +532,7 @@ ClearUses:
     cpx #SegmentKp - SegmentUses
     bne ClearUses
 
-    ; Fill SegmentTable's first DICTIONARY_SEGMENTS entries from the dictionary.
+    ; Fill Syscom::SegmentTable's first DICTIONARY_SEGMENTS entries from the dictionary.
     lda BootSegmentTable
     sta TableEntry
     lda BootSegmentTable+1
@@ -549,7 +553,7 @@ NextSegment:
     sta (TableEntry),y
     lda TableEntry
     clc
-    adc #SEGMENT_TABLE_BLOCK
+    adc #SegmentEntry::BLOCK
     sta TableEntry
     bcc CopyBlockAndSize
     inc TableEntry+1
@@ -575,7 +579,7 @@ CopyBlockAndSize:
     ; Step to the next entries.
     lda TableEntry
     clc
-    adc #SEGMENT_TABLE_ENTRY_SIZE - SEGMENT_TABLE_BLOCK
+    adc #.sizeof(SegmentEntry) - SegmentEntry::BLOCK
     sta TableEntry
     bcc StepDictionary
     inc TableEntry+1
@@ -595,11 +599,11 @@ StartSystem:
     lda BootMemoryTop
     sta ProgramStackTop
     sta LocalFrame
-    sta SysMemoryTop
+    sta Syscom::StackTop
     lda BootMemoryTop+1
     sta ProgramStackTop+1
     sta LocalFrame+1
-    sta SysMemoryTop+1
+    sta Syscom::StackTop+1
 
     ; Read segment UNNAMED_SEGMENT in below ProgramStackTop, HeapTop's high byte 0 leaving ReadSegment room for it.
     lda #0
@@ -631,22 +635,22 @@ StartSystem:
     jsr FindProcedureIn
 
     ; Make the frame the outer block's: GlobalFrame, and its own static and dynamic links.
-    .assert MSCW_DYNAMIC_LINK = MSCW_STATIC_LINK + 2, "DEY steps from the dynamic link to the static link's high byte."
-    ldy #MSCW_STATIC_LINK
+    .assert MarkStack::DYNAMIC_LINK = MarkStack::STATIC_LINK + 2, "DEY reaches the static link."
+    ldy #MarkStack::STATIC_LINK
     lda LocalFrame
     sta GlobalFrame
     sta (LocalFrame),y
-    ldy #MSCW_DYNAMIC_LINK
+    ldy #MarkStack::DYNAMIC_LINK
     sta (LocalFrame),y
     lda LocalFrame+1
     sta GlobalFrame+1
     dey
     sta (LocalFrame),y
-    ldy #MSCW_DYNAMIC_LINK + 1
+    ldy #MarkStack::DYNAMIC_LINK + 1
     sta (LocalFrame),y
 
     ; Its first global, just after the frame: SYSCOM's address.
-    ldy #MSCW_SIZE
+    ldy #.sizeof(MarkStack)
     lda BootSyscom
     sta (LocalFrame),y
     iny
@@ -693,7 +697,7 @@ ClearDleFlag:
 
     ; Record the boot unit.
     lda #UNIT_BOOT_DISK
-    sta SysBootUnit
+    sta Syscom::BootUnit
 
     ; If NoSystemFile pointed the reset vector at Boot, put the old one back.
     lda ResetPatched

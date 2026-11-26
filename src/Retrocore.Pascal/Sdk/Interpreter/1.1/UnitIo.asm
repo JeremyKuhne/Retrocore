@@ -17,7 +17,7 @@ ATTACHED_DRIVERS = 16
 
 ; The requests a unit call makes of a driver, which it passes in X.
 
-; I/O results, as SysIoResult holds them, numbered as SYSTEM.PASCAL numbers its I/O error messages.
+; I/O results, as Syscom::IoResult holds them, numbered as SYSTEM.PASCAL numbers its I/O error messages.
 
 ; A UNITREAD or UNITWRITE control word's bits.
 
@@ -180,7 +180,7 @@ Attached:
     ; Bad: record IO_BAD_UNIT, drop the return address, and end the call.
 Bad:
     ldx #IO_BAD_UNIT
-    stx SysIoResult
+    stx Syscom::IoResult
     pla
     pla
     jmp Fetch::Skip2
@@ -194,9 +194,9 @@ Bad:
 ;; <IOR at StandardProcedures::IoResult>, the standard procedure IORESULT: pushes the last I/O call's result.
 ;; Also: IORESULT (UCSD20, UCSD20IO), PSHIOR (WK11)
 .proc IoResult
-    lda SysIoResult+1
+    lda Syscom::IoResult+1
     pha
-    lda SysIoResult
+    lda Syscom::IoResult
     pha
     jmp Fetch::Skip2
 .endproc
@@ -205,7 +205,7 @@ Bad:
 ;; last I/O call's result was not <IO_OK>.
 ;; Also: CSP0 (WK11), IOC (UCSD20)
 .proc IoCheck
-    lda SysIoResult
+    lda Syscom::IoResult
     beq Done
     jmp ExecutionError::UserIo
 Done:
@@ -468,7 +468,7 @@ FinishRestoring:
 ;; In: X = the I/O result
 ;; Also: STOIOR (WK11)
 Finish:
-    stx SysIoResult
+    stx Syscom::IoResult
     jmp Fetch::Skip2
 
 ;; Pushes a <UNITREAD at StandardProcedures::UnitRead> or <UNITWRITE at StandardProcedures::UnitWrite>'s arguments
@@ -566,7 +566,7 @@ Transfer:
 
     ; No error so far. Take CONTROL_RAW and CONTROL_NO_LINE_FEED.
     ldy #0
-    sty SysIoResult
+    sty Syscom::IoResult
     txa
     and #CONTROL_RAW
     bne TakeNoLineFeed
@@ -717,11 +717,11 @@ NextCharacter:
     ldx #0
     sta (Buffer,x)
 
-    ; Unless raw, SysEofCharacter ends the read. UNIT_CONSOLE puts zeros in the rest of the buffer, from the
+    ; Unless raw, Syscom::EofCharacter ends the read. UNIT_CONSOLE puts zeros in the rest of the buffer, from the
     ; end-of-file character on; any other unit leaves it there and stops.
     ldy UnitIo::Raw
     bne Echo
-    cmp SysEofCharacter
+    cmp Syscom::EofCharacter
     bne Echo
     ldy #UNIT_CONSOLE
     cpy UnitIo::Unit
@@ -842,13 +842,13 @@ IoReturn:
 ;; <WriteCharacter> or <ReadCharacter>.
 ;; In: X = the BIOS call's result
 .proc StoreIoResult
-    stx SysIoResult
+    stx Syscom::IoResult
     rts
 .endproc
 
 ;; Writes a character through <Writer>, the unit's BIOS write call, which returns through <StoreIoResult>.
 ;; In: A = the character, Unit = the unit
-;; Out: X = the I/O result, also in <SysIoResult>
+;; Out: X = the I/O result, also in <Syscom::IoResult>
 .proc WriteCharacter
     ; Have the BIOS call return to StoreIoResult.
     tay
@@ -866,7 +866,7 @@ IoReturn:
 
 ;; Reads a character through <Reader>, the unit's BIOS read call, which returns through <StoreIoResult>.
 ;; In: Unit = the unit
-;; Out: A = the character, X = the I/O result, also in <SysIoResult>
+;; Out: A = the character, X = the I/O result, also in <Syscom::IoResult>
 .proc ReadCharacter
     ; Have the BIOS call return to StoreIoResult.
     tay

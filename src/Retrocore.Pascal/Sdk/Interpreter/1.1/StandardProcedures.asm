@@ -423,7 +423,7 @@ FindCaller:
     sta CallerFrame+1
     jmp CheckCaller
 NextFrame:
-    ldy #MSCW_DYNAMIC_LINK
+    ldy #MarkStack::DYNAMIC_LINK
     lda (CallerFrame),y
     tax
     iny
@@ -433,7 +433,7 @@ NextFrame:
 
     ; The frame's caller: an error when it is the system's outer block.
 CheckCaller:
-    ldy #MSCW_JTAB
+    ldy #MarkStack::JUMP_TABLE
     lda (CallerFrame),y
     sta CallerJtab
     iny
@@ -457,12 +457,12 @@ SetIpc:
     lda CallerJtab
     sec
     sbc (CallerJtab),y
-    ldy #MSCW_IPC
+    ldy #MarkStack::INSTRUCTION_POINTER
     sta (CallerFrame),y
     ldy #1
     lda CallerJtab+1
     sbc (CallerJtab),y
-    ldy #MSCW_IPC + 1
+    ldy #MarkStack::INSTRUCTION_POINTER + 1
     sta (CallerFrame),y
 
     ; Is the caller the one to leave?
@@ -470,7 +470,7 @@ SetIpc:
     lda ExitProcedure
     cmp (CallerJtab),y
     bne NextFrame
-    ldy #MSCW_SEG
+    ldy #MarkStack::PROCEDURE_DICTIONARY
     lda (CallerFrame),y
     sta Word
     iny
@@ -710,13 +710,13 @@ CountByte:
 .proc MemoryAvailable
     ; ProgramStackTop less the directory, if there is one, or else less HeapTop.
     sec
-    lda SysDirectory+1
+    lda Syscom::Directory+1
     beq NoDirectory
     lda ProgramStackTop
-    sbc SysDirectory
+    sbc Syscom::Directory
     tax
     lda ProgramStackTop+1
-    sbc SysDirectory+1
+    sbc Syscom::Directory+1
     jmp Push
 NoDirectory:
     lda ProgramStackTop

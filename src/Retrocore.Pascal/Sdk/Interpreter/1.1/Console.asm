@@ -7,20 +7,6 @@
 ;; The bits of a key's ASCII code, without bit 7.
 ASCII_BITS = $7F
 
-; The console's keys in SYSCOM, which ConsoleCheck reads through SyscomPointer.
-
-;; The offset in SYSCOM of the flush key, which switches <ConsoleFlags>' <CONSOLE_FLUSHED> on or off.
-;; Also: CRTINFO_FLUSH (A2POSRM, UCSD20)
-SYSCOM_FLUSH_KEY = $53
-
-;; The offset in SYSCOM of the break key, which runs the break handler.
-;; Also: CRTINFO_BREAK (A2POSRM, UCSD20)
-SYSCOM_BREAK_KEY = $54
-
-;; The offset in SYSCOM of the stop key, which switches <ConsoleFlags>' <CONSOLE_STOPPED> on or off.
-;; Also: CRTINFO_STOP (A2POSRM, UCSD20)
-SYSCOM_STOP_KEY = $55
-
 ; ConsoleFlags' bits.
 
 ;; Output is stopped: <ConsoleCheck> waits for the stop key again.
@@ -144,7 +130,7 @@ TestSystemKeys:
     txa
 
     ; The stop key: stop output, or start it again.
-    ldy #SYSCOM_STOP_KEY
+    ldy #SyscomRecord::STOP_KEY
     cmp (SyscomPointer),y
     bne NotStop
     lda ConsoleFlags
@@ -169,7 +155,7 @@ FirmwareKey:
 ;; The break key: starts output again, stops flushing it, and runs the break handler.
 ;; Also: NOTSTOP (A2PBIOS)
 NotStop:
-    .assert SYSCOM_BREAK_KEY = SYSCOM_STOP_KEY - 1, "ConsoleCheck steps Y down from the stop key to the break key."
+    .assert SyscomRecord::BREAK_KEY = SyscomRecord::STOP_KEY - 1, "Y steps down to the break key."
     dey
     cmp (SyscomPointer),y
     bne NotBreak
@@ -181,7 +167,7 @@ NotStop:
 ;; The flush key: flushes output, or stops flushing it.
 ;; Also: NOTBRK (A2PBIOS, WK11)
 NotBreak:
-    .assert SYSCOM_FLUSH_KEY = SYSCOM_BREAK_KEY - 1, "ConsoleCheck steps Y down from the break key to the flush key."
+    .assert SyscomRecord::FLUSH_KEY = SyscomRecord::BREAK_KEY - 1, "Y steps down to the flush key."
     dey
     cmp (SyscomPointer),y
     bne Store

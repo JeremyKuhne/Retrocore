@@ -105,9 +105,9 @@ Variable = Pointer
 
     ; Forget the directory.
     lda #0
-    sta SysDirectory
+    sta Syscom::Directory
     lda #0
-    sta SysDirectory+1
+    sta Syscom::Directory+1
     jmp Fetch::Skip2
 .endproc
 .endscope

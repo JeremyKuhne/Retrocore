@@ -2,8 +2,8 @@
 ;; Procedure calls and returns: finding a procedure's attributes, building its mark stack frame, and the call and
 ;; return handlers.
 
-; Mark stack frames: what a call keeps in the frame it builds, at these offsets from the frame (MSCW_STATIC_LINK,
-; at 0, is in Constants.asm). Each is a word but MSCW_STACK, a byte.
+; Mark stack frames: what a call keeps in the frame it builds, at these offsets from the frame (MarkStack::STATIC_LINK,
+; at 0, is in Constants.asm). Each is a word but MarkStack::STACK_POINTER, a byte.
 
 ; A procedure's attributes, at these offsets from its JumpTable, at the end of its code. The words below JumpTable are
 ; self-relative: each holds how far below itself the address it means is.
@@ -75,11 +75,11 @@ NativeEntry = Dictionary
 ;; The word below the frame, which keeps the caller's <ProgramStackTop>.
 KpLink = Pointer2
 
-    .assert LocalFrame = GlobalFrame + MSCW_DYNAMIC_LINK, "The frame keeps LocalFrame as zero page does."
-    .assert JumpTable = GlobalFrame + MSCW_JTAB, "The frame keeps JumpTable as zero page does."
-    .assert ProcedureDictionary = GlobalFrame + MSCW_SEG, "The frame keeps ProcedureDictionary as zero page does."
-    .assert InstructionPointer = GlobalFrame + MSCW_IPC, "The frame keeps InstructionPointer as zero page does."
-    .assert MSCW_STACK = MSCW_IPC + 2, "The frame keeps the stack pointer after InstructionPointer."
+    .assert LocalFrame = GlobalFrame + MarkStack::DYNAMIC_LINK, "The frame keeps LocalFrame as zero page does."
+    .assert JumpTable = GlobalFrame + MarkStack::JUMP_TABLE, "The frame keeps JumpTable as zero page does."
+    .assert ProcedureDictionary = GlobalFrame + MarkStack::PROCEDURE_DICTIONARY, "Frames keep it as zero page does."
+    .assert InstructionPointer = GlobalFrame + MarkStack::INSTRUCTION_POINTER, "Frames keep it as zero page does."
+    .assert MarkStack::STACK_POINTER = MarkStack::INSTRUCTION_POINTER + 2, "The stack pointer is last."
 
     ; Keep the return address, from over the parameters.
     pla
@@ -229,7 +229,7 @@ PlaceFrame:
 BelowFrame:
     lda Mark
     sec
-    sbc #MSCW_SIZE
+    sbc #.sizeof(MarkStack)
     sta Mark
     lda Mark+1
     sbc #0
@@ -258,18 +258,18 @@ Overflow:
 
     ; Keep the caller's LocalFrame, JumpTable, ProcedureDictionary and InstructionPointer in the frame.
 Room:
-    ldy #MSCW_DYNAMIC_LINK
+    ldy #MarkStack::DYNAMIC_LINK
 KeepRegister:
     lda GlobalFrame,y
     sta (Mark),y
     iny
-    cpy #MSCW_STACK
+    cpy #MarkStack::STACK_POINTER
     bne KeepRegister
 
     ; Pull the parameters into the start of the locals, after the frame.
     clc
     lda Mark
-    adc #MSCW_SIZE
+    adc #.sizeof(MarkStack)
     sta Target
     lda Mark+1
     adc #0
@@ -290,7 +290,7 @@ CountParameter:
     ; Keep the stack pointer they leave.
     tsx
     txa
-    ldy #MSCW_STACK
+    ldy #MarkStack::STACK_POINTER
     sta (Mark),y
 
     ; Start at the procedure's first p-code, from its enter word.
@@ -316,17 +316,17 @@ CountParameter:
     clc
     adc #ATTR_PROCEDURE_NUMBER - ATTR_DATA_SIZE
     sta JumpTable
-    sta SysJtab
+    sta Syscom::SavedJumpTable
     lda Procedure+1
     adc #0
     sta JumpTable+1
-    sta SysJtab+1
+    sta Syscom::SavedJumpTable+1
     lda Mark
     sta LocalFrame
-    sta SysMp
+    sta Syscom::SavedLocalFrame
     lda Mark+1
     sta LocalFrame+1
-    sta SysMp+1
+    sta Syscom::SavedLocalFrame+1
 
     ; Keep the caller's ProgramStackTop in the word below the frame, and take ProgramStackTop down to it.
     lda Mark
@@ -350,10 +350,10 @@ CountParameter:
     ; Its segment.
     lda NewSeg
     sta ProcedureDictionary
-    sta SysSeg
+    sta Syscom::SavedProcedureDictionary
     lda NewSeg+1
     sta ProcedureDictionary+1
-    sta SysSeg+1
+    sta Syscom::SavedProcedureDictionary+1
 
     ; Return past the caller's JSR.
     inc ReturnAddress
@@ -406,7 +406,7 @@ FindStaticLink:
     sta CallerFrame+1
     jmp CheckCaller
 NextFrame:
-    ldy #MSCW_DYNAMIC_LINK
+    ldy #MarkStack::DYNAMIC_LINK
     lda (CallerFrame),y
     tax
     iny
@@ -416,7 +416,7 @@ NextFrame:
 
     ; Is this frame's caller at the outer level?
 CheckCaller:
-    ldy #MSCW_JTAB
+    ldy #MarkStack::JUMP_TABLE
     lda (CallerFrame),y
     sta CallerJtab
     iny
@@ -428,13 +428,13 @@ CheckCaller:
     bne NextFrame
 
     ; Then the caller's frame is the static link.
-    ldy #MSCW_DYNAMIC_LINK
+    ldy #MarkStack::DYNAMIC_LINK
     lda (CallerFrame),y
-    ldy #MSCW_STATIC_LINK
+    ldy #MarkStack::STATIC_LINK
     sta (LocalFrame),y
-    ldy #MSCW_DYNAMIC_LINK + 1
+    ldy #MarkStack::DYNAMIC_LINK + 1
     lda (CallerFrame),y
-    ldy #MSCW_STATIC_LINK + 1
+    ldy #MarkStack::STATIC_LINK + 1
     sta (LocalFrame),y
     jmp Fetch::Next
 .endproc
@@ -450,13 +450,13 @@ CheckCaller:
     jsr FindProcedure
 
     ; Its static link is its dynamic link.
-    ldy #MSCW_DYNAMIC_LINK
+    ldy #MarkStack::DYNAMIC_LINK
     lda (Mark),y
-    ldy #MSCW_STATIC_LINK
+    ldy #MarkStack::STATIC_LINK
     sta (Mark),y
-    ldy #MSCW_DYNAMIC_LINK + 1
+    ldy #MarkStack::DYNAMIC_LINK + 1
     lda (Mark),y
-    ldy #MSCW_STATIC_LINK + 1
+    ldy #MarkStack::STATIC_LINK + 1
     sta (Mark),y
     jmp Fetch::Next
 .endproc
@@ -471,7 +471,7 @@ CheckCaller:
     jsr FindProcedure
 
     ; Its static link is GlobalFrame.
-    ldy #MSCW_STATIC_LINK
+    ldy #MarkStack::STATIC_LINK
     lda GlobalFrame
     sta (Mark),y
     lda GlobalFrame+1
@@ -538,11 +538,11 @@ NewBase:
     pha
     tsx
     txa
-    ldy #MSCW_STACK
+    ldy #MarkStack::STACK_POINTER
     sta (Mark),y
 
     ; Its static link is the old base procedure's.
-    ldy #MSCW_STATIC_LINK
+    ldy #MarkStack::STATIC_LINK
     lda (GlobalFrame),y
     sta (Mark),y
     iny
@@ -552,10 +552,10 @@ NewBase:
     ; It becomes GlobalFrame.
     lda Mark
     sta GlobalFrame
-    sta SysBase
+    sta Syscom::SavedGlobalFrame
     lda Mark+1
     sta GlobalFrame+1
-    sta SysBase+1
+    sta Syscom::SavedGlobalFrame+1
     jmp Fetch::Next
 .endproc
 
@@ -564,16 +564,16 @@ NewBase:
 ;; Also: RBP (A2POSRM, UCSD20, WK11)
 .proc ReturnFromBaseProcedure
     ; Put the stack back, and pull the old GlobalFrame.
-    ldy #MSCW_STACK
+    ldy #MarkStack::STACK_POINTER
     lda (LocalFrame),y
     tax
     txs
     pla
     sta GlobalFrame
-    sta SysBase
+    sta Syscom::SavedGlobalFrame
     pla
     sta GlobalFrame+1
-    sta SysBase+1
+    sta Syscom::SavedGlobalFrame+1
     jmp Pcodes::ReturnFromProcedure::Unwind
 .endproc
 
@@ -589,7 +589,7 @@ KpLink = Pointer
 CallerSeg = Pointer
 
     ; Put the stack back as the call left it.
-    ldy #MSCW_STACK
+    ldy #MarkStack::STACK_POINTER
     lda (LocalFrame),y
     tax
     txs
@@ -618,10 +618,10 @@ Unwind:
     lda (InstructionPointer),y
     asl a
     clc
-    adc #MSCW_SIZE - 1
+    adc #.sizeof(MarkStack) - 1
     tay
 PushByte:
-    cpy #MSCW_SIZE - 1
+    cpy #.sizeof(MarkStack) - 1
     beq CheckSegment
     lda (LocalFrame),y
     pha
@@ -630,7 +630,7 @@ PushByte:
 
     ; Back to another segment? Then give back a use of this one.
 CheckSegment:
-    ldy #MSCW_SEG
+    ldy #MarkStack::PROCEDURE_DICTIONARY
     lda (LocalFrame),y
     sta CallerSeg
     iny
@@ -643,36 +643,36 @@ CheckSegment:
     jsr ReleaseSegmentUse
     lda CallerSeg
     sta ProcedureDictionary
-    sta SysSeg
+    sta Syscom::SavedProcedureDictionary
     lda CallerSeg+1
     sta ProcedureDictionary+1
-    sta SysSeg+1
+    sta Syscom::SavedProcedureDictionary+1
 
     ; Make the caller current again.
 RestoreCaller:
-    ldy #MSCW_JTAB
+    ldy #MarkStack::JUMP_TABLE
     lda (LocalFrame),y
     sta JumpTable
-    sta SysJtab
+    sta Syscom::SavedJumpTable
     iny
     lda (LocalFrame),y
     sta JumpTable+1
-    sta SysJtab+1
-    ldy #MSCW_IPC
+    sta Syscom::SavedJumpTable+1
+    ldy #MarkStack::INSTRUCTION_POINTER
     lda (LocalFrame),y
     sta InstructionPointer
     iny
     lda (LocalFrame),y
     sta InstructionPointer+1
-    ldy #MSCW_DYNAMIC_LINK + 1
+    ldy #MarkStack::DYNAMIC_LINK + 1
     lda (LocalFrame),y
     tax
     dey
     lda (LocalFrame),y
     sta LocalFrame
-    sta SysMp
+    sta Syscom::SavedLocalFrame
     stx LocalFrame+1
-    stx SysMp+1
+    stx Syscom::SavedLocalFrame+1
     jmp Fetch::Next
 .endproc
 .endscope

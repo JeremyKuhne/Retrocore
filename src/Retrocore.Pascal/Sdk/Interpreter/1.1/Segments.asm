@@ -2,7 +2,7 @@
 ;; Segments: reading them in below <ProgramStackTop>, relocating their assembled procedures, counting their uses, and
 ;; giving them back.
 
-; SegmentTable's entries, 6 bytes a segment, at these offsets.
+; Syscom::SegmentTable's entries, 6 bytes a segment, at these offsets.
 
 ; Units.
 
@@ -99,7 +99,7 @@ CountEntry:
     rts
 .endproc
 
-;; Reads a segment's code from its unit, as its <SegmentTable> entry places it, into memory taken below
+;; Reads a segment's code from its unit, as its <Syscom::SegmentTable> entry places it, into memory taken below
 ;; <ProgramStackTop>.
 ;;
 ;; A disk drive's segment is read through <BiosDiskRead>, and any other unit's through <BiosUnitDriver>, which runs the
@@ -109,13 +109,13 @@ CountEntry:
 ;; Also: RDSEG (WK11)
 .proc ReadSegment
 
-;; The segment, while A is worked into its <SegmentTable> offset; then the segment's size.
+;; The segment, while A is worked into its <Syscom::SegmentTable> offset; then the segment's size.
 Size = Pointer
 
 ;; Where the code is read, for <LoadSegment>.
 SegmentBase = ReturnAddress
 
-    ; X = the segment's SegmentTable offset, the segment times 6.
+    ; X = the segment's Syscom::SegmentTable offset, the segment times 6.
     sta Size
     asl a
     clc
@@ -130,7 +130,7 @@ SegmentBase = ReturnAddress
     pha
 
     ; What kind of unit? Y = its UnitTable offset.
-    lda SegmentTable + SEGMENT_UNIT,x
+    lda Syscom::SegmentTable + SegmentEntry::UNIT,x
     asl a
     tay
     lda UnitTable+1,y
@@ -139,7 +139,7 @@ SegmentBase = ReturnAddress
     beq SystemIo
 
     ; Another unit: its number, unless bit 7 is set, when it is its UnitTable entry's low byte as for a disk drive.
-    lda SegmentTable + SEGMENT_UNIT,x
+    lda Syscom::SegmentTable + SegmentEntry::UNIT,x
     bpl PushDrive
 DiskUnit:
     lda UnitTable,y
@@ -147,9 +147,9 @@ PushDrive:
     pha
 
     ; Take the segment's size below ProgramStackTop, if need be once the heap's directory is given back.
-    lda SegmentTable + SEGMENT_SIZE,x
+    lda Syscom::SegmentTable + SegmentEntry::SIZE,x
     sta Size
-    lda SegmentTable + SEGMENT_SIZE + 1,x
+    lda Syscom::SegmentTable + SegmentEntry::SIZE + 1,x
     sta Size+1
     lda ProgramStackTop
     sec
@@ -189,15 +189,15 @@ Room:
     pha
     lda Size
     pha
-    lda SegmentTable + SEGMENT_BLOCK + 1,x
+    lda Syscom::SegmentTable + SegmentEntry::BLOCK + 1,x
     pha
-    lda SegmentTable + SEGMENT_BLOCK,x
+    lda Syscom::SegmentTable + SegmentEntry::BLOCK,x
     pha
 
     ; Read it.
     lda UnitTable+1,y
     beq ReadDisk
-    lda SegmentTable + SEGMENT_UNIT,x
+    lda Syscom::SegmentTable + SegmentEntry::UNIT,x
     ldx #0
     jsr BiosUnitDriver
     jmp CheckResult
@@ -208,7 +208,7 @@ ReadDisk:
 CheckResult:
     cpx #0
     beq Done
-    stx SysIoResult
+    stx Syscom::IoResult
 SystemIo:
     jmp ExecutionError::SystemIo
 
@@ -272,7 +272,7 @@ Load:
     lda #1
     sta SegmentUses,y
 
-    ; X = the segment's SegmentTable offset, the segment times 6.
+    ; X = the segment's Syscom::SegmentTable offset, the segment times 6.
     tya
     sta Pointer
     asl a
@@ -282,16 +282,16 @@ Load:
 
     ; A data segment has no block: give it its size below ProgramStackTop. Its address is 2 bytes below its data, so
     ; that the word LDE, LAE and STE number 1 is its first.
-    lda SegmentTable + SEGMENT_BLOCK,x
+    lda Syscom::SegmentTable + SegmentEntry::BLOCK,x
     bne ReadCode
-    lda SegmentTable + SEGMENT_BLOCK + 1,x
+    lda Syscom::SegmentTable + SegmentEntry::BLOCK + 1,x
     bne ReadCode
     sec
     lda ProgramStackTop
-    sbc SegmentTable + SEGMENT_SIZE,x
+    sbc Syscom::SegmentTable + SegmentEntry::SIZE,x
     sta ProgramStackTop
     lda ProgramStackTop+1
-    sbc SegmentTable + SEGMENT_SIZE + 1,x
+    sbc Syscom::SegmentTable + SegmentEntry::SIZE + 1,x
     sta ProgramStackTop+1
     lda ProgramStackTop
     sec
@@ -361,7 +361,7 @@ BelowData:
 BelowParameters:
     lda Globals
     sec
-    sbc #MSCW_SIZE
+    sbc #.sizeof(MarkStack)
     sta Globals
     bcs NextProcedure
     dec Globals+1

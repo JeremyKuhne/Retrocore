@@ -63,7 +63,7 @@ LinkLow = Pointer
 
     ; Follow one static link a level.
 NextLevel:
-    ldy #MSCW_STATIC_LINK
+    ldy #MarkStack::STATIC_LINK
     lda (Frame),y
     sta LinkLow
     iny
@@ -80,25 +80,25 @@ Done:
 
 ;; Gives the heap back down to the directory SYSTEM.PASCAL read onto it, if there is one, to make room for the
 ;; stack.
-;; Out: HeapTop = <SysDirectory> when it was set, and SysDirectory = 0
+;; Out: HeapTop = <Syscom::Directory> when it was set, and Syscom::Directory = 0
 ;; Keeps: Y
 .proc FreeDirectory
     ; Is there a directory?
-    lda SysDirectory
+    lda Syscom::Directory
     bne Free
-    ldx SysDirectory+1
+    ldx Syscom::Directory+1
     bne Free
     rts
 
     ; Put HeapTop back where the directory starts, and forget it.
 Free:
     sta HeapTop
-    lda SysDirectory+1
+    lda Syscom::Directory+1
     sta HeapTop+1
     lda #0
-    sta SysDirectory
+    sta Syscom::Directory
     lda #0
-    sta SysDirectory+1
+    sta Syscom::Directory+1
     rts
 .endproc
 
@@ -113,6 +113,6 @@ InterpTable:
     ; .INTERP+2: the BIOS's first stub; the other 21 follow it, 3 bytes apart.
     .word BiosConsoleRead
     ; .INTERP+4: SYSCOM.
-    .word Syscom
+    .word Syscom::Start
     ; .INTERP+6: Pointer, the first of the zero-page bytes the handlers use for working storage.
     .word Pointer

@@ -8,14 +8,36 @@ FIRST_TABLE_OPCODE = $80
 
 ; Mark stack frames.
 
-;; The size of a mark stack frame, in bytes. A call places the procedure's frame this far, plus its data, below
-;; <ProgramStackTop>, and its locals follow the frame.
-;; Also: MSCW (A2POSRM, UCSD20)
-MSCW_SIZE = 12
+;; A mark stack frame: what a call keeps of its caller, at the bottom of the procedure's activation record, with the
+;; procedure's locals after it. A call places it, and the procedure's data, below <ProgramStackTop>. UCSD and Apple call
+;; it the MSCW (A2POSRM, UCSD20), the mark stack control word; Apple's adds <MarkStack::STACK_POINTER>, where UCSD's
+;; II.0 has the locals.
+.struct MarkStack
+    ;; The frame of the procedure one lexical level out.
+    ;; Also: MSSTAT (A2POSRM), STATLINK (UCSD20)
+    STATIC_LINK .word
 
-;; Where a mark stack frame keeps its static link: the frame of the procedure one lexical level out.
-;; Also: MSSTAT (A2POSRM), STATLINK (UCSD20)
-MSCW_STATIC_LINK = 0
+    ;; The caller's <LocalFrame>.
+    ;; Also: DYNLINK (UCSD20), MSDYN (A2POSRM)
+    DYNAMIC_LINK .word
+
+    ;; The caller's <JumpTable>.
+    ;; Also: MSJTAB (A2POSRM, UCSD20)
+    JUMP_TABLE .word
+
+    ;; The caller's <ProcedureDictionary>.
+    ;; Also: MSSEG (A2POSRM, UCSD20)
+    PROCEDURE_DICTIONARY .word
+
+    ;; The caller's <InstructionPointer>, the p-code after the call: where <RNP at Pcodes::ReturnFromProcedure> returns
+    ;; to.
+    ;; Also: MSIPC (A2POSRM, UCSD20)
+    INSTRUCTION_POINTER .word
+
+    ;; The 6502 stack pointer once the call has pulled the parameters, for the return to put back.
+    ;; Also: MSSP (A2POSRM)
+    STACK_POINTER .word
+.endstruct
 
 ;; The size of the word a call keeps the caller's <ProgramStackTop> in, just below the new frame.
 KP_LINK_SIZE = 2
@@ -112,7 +134,7 @@ CARD_PARALLEL = 5
 ;; A card with the Pascal 1.1 firmware entries, its routines' offsets at $Cn0D-$Cn10.
 CARD_PASCAL_FIRMWARE = 6
 
-; I/O results, which the BIOS and the unit routines leave in X and SysIoResult.
+; I/O results, which the BIOS and the unit routines leave in X and Syscom::IoResult.
 
 ;; No error.
 IO_OK = 0
@@ -263,28 +285,6 @@ CHARACTER_DEVICE = $FFFF
 
 ; Mark stack frames, procedure attributes and segments.
 
-;; Where a mark stack frame keeps its dynamic link: the caller's <LocalFrame>.
-;; Also: DYNLINK (UCSD20), MSDYN (A2POSRM)
-MSCW_DYNAMIC_LINK = 2
-
-;; Where a mark stack frame keeps the caller's <JumpTable>.
-;; Also: MSJTAB (A2POSRM, UCSD20)
-MSCW_JTAB = 4
-
-;; Where a mark stack frame keeps the caller's <ProcedureDictionary>.
-;; Also: MSSEG (A2POSRM, UCSD20)
-MSCW_SEG = 6
-
-;; Where a mark stack frame keeps the caller's <InstructionPointer>, the p-code after the call: where
-;; <RNP at Pcodes::ReturnFromProcedure> returns to.
-;; Also: MSIPC (A2POSRM, UCSD20)
-MSCW_IPC = 8
-
-;; Where a mark stack frame keeps the 6502 stack pointer once the call has pulled the parameters, for the return to
-;; put back.
-;; Also: MSSP (A2POSRM)
-MSCW_STACK = 10
-
 ;; Where a procedure's attributes keep its number, a byte: 0 for an assembled procedure.
 ;; Also: PROCEDURENUMBER (A2POSRM)
 ATTR_PROCEDURE_NUMBER = 0
@@ -312,20 +312,21 @@ ATTR_PARAMETER_SIZE = -6
 ;; Also: DATASIZE (A2POSRM)
 ATTR_DATA_SIZE = -8
 
-;; Where a <SegmentTable> entry keeps the segment's unit, a byte.
-;; Also: CODEUNIT (UCSD20)
-SEGMENT_UNIT = 0
+;; A <Syscom::SegmentTable> entry: where a segment is on disk. Its block and size are UCSD's CODEDESC (UCSD20), the
+;; segment's description.
+.struct SegmentEntry
+    ;; The segment's unit, a byte in a word.
+    ;; Also: CODEUNIT (UCSD20)
+    UNIT .word
 
-;; Where a <SegmentTable> entry keeps the segment's first block, a word: 0 for a data segment, which is not on disk.
-;; Also: CODEDESC (UCSD20), DISKADDR (UCSD20)
-SEGMENT_BLOCK = 2
+    ;; The segment's first block: 0 for a data segment, which is not on disk.
+    ;; Also: DISKADDR (UCSD20)
+    BLOCK .word
 
-;; Where a <SegmentTable> entry keeps the segment's size in bytes, a word.
-;; Also: CODELENG (UCSD20)
-SEGMENT_SIZE = 4
-
-;; The size of a <SegmentTable> entry: the segment's unit, its first block and its size in bytes, a word each.
-SEGMENT_TABLE_ENTRY_SIZE = 6
+    ;; The segment's size in bytes.
+    ;; Also: CODELENG (UCSD20)
+    SIZE .word
+.endstruct
 
 ; Comparisons, as the comparison handlers pass them to CompareSets in Comparison.
 

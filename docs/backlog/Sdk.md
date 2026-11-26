@@ -196,10 +196,10 @@ make.
 The first five starting targets use `wozmon`, `dos33`, `sos`, `basic` and `dfs`. The rest follow.
 
 **CPU compatibility** follows supersets. A `6502` project can target 65C02 machines, and an `8080` project can target
-Z80 machines (the Model 4, the Kaypro II or a SoftCard under CP/M) as well as the Altair. A `z80` or `65c02` project cannot target a machine
-whose CPU lacks its instructions. Each build starts at the target's CPU, as a launch does today. The assembler already
-rejects a 65C02 opcode under `.cpu Mos6502`. What is new is that a `.cpu` in the source naming a CPU the target lacks is
-an error naming the target, where today it silently replaces the launch's CPU.
+the Altair and Z80 machines (the Model 4, the Kaypro II, or a SoftCard under CP/M). A `z80` or `65c02` project cannot
+target a machine whose CPU lacks its instructions. Each build starts at the target's CPU, as a launch does today. The
+assembler already rejects a 65C02 opcode under `.cpu Mos6502`. What is new is that a `.cpu` in the source naming a CPU
+the target lacks is an error naming the target, where today it silently replaces the launch's CPU.
 
 **Boot media.** An environment whose system is an SDK source boots with nothing external: DOS 3.3, SOS, DFS, and
 the ROM environments. The SDK lists the known images of every other environment (title, version, SHA-256), such as

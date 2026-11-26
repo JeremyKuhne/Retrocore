@@ -90,7 +90,7 @@ public sealed class ProjectFileTests
         target.Cards?.ToJsonString().Should().Be("""{"4":"mockingboard"}""");
         target.Sources.Should().Equal(new ProjectSource("src/iie.s", Dialect: null));
         target.LinkerConfiguration.Should().Be(Path.Join(_folder, "link.cfg"));
-        target.Symbols().Should().BeEquivalentTo(new Dictionary<string, long>
+        target.Symbols().Where(pair => !pair.Key.StartsWith("RC_", StringComparison.Ordinal)).Should().BeEquivalentTo(new Dictionary<string, long>
         {
             ["DEBUG"] = 1, ["COLUMNS"] = 80, ["SCREEN"] = 0x400, ["MASK"] = 0x7F
         });
@@ -298,18 +298,15 @@ public sealed class ProjectFileTests
     public void UnsupportedFieldsFailTheBuild()
     {
         Write("retrocore.json", """
-            { "sdk": "1", "cpu": "6502", "steps": [], "targets": {
+            { "sdk": "1", "cpu": "6502", "targets": {
                 "plain": { "machine": "apple2-iiplus", "environment": "bare" },
-                "disk": { "machine": "apple2-iiplus", "environment": "dos33", "files": [], "image": false, "memoryMap": {}, "bootImage": "x" } } }
+                "disk": { "machine": "apple2-iiplus", "environment": "dos33", "files": [], "image": false, "bootImage": "x" } } }
             """);
 
         RetrocoreProject project = RetrocoreProject.Load(_folder);
-        Error(project.Target("plain").RequireSupported).Should().EndWith(
-            "target plain: the project's 'steps' is not yet supported.");
-
+        project.Target("plain").RequireSupported();
         Error(project.Target("disk").RequireSupported).Should().EndWith(
-            "target disk: the project's 'steps' is not yet supported; 'memoryMap' is not yet supported; "
-                + "'files' is not yet supported; 'image' is not yet supported; 'bootImage' is not yet supported; "
+            "target disk: 'files' is not yet supported; 'image' is not yet supported; 'bootImage' is not yet supported; "
                 + "the 'dos33' environment is not yet supported; only 'bare' builds.");
     }
 
@@ -383,9 +380,9 @@ public sealed class ProjectFileTests
     }
 
     /// <summary>
-    ///  A target assembles the project's sources, then its family's platform folder, then its model's, a model's
-    ///  file taking the place of its family's file of the same name, then its own sources; a file named twice comes
-    ///  once, where it first does.
+    ///  A target assembles its family's platform folder, then its model's, a model's file taking the place of its
+    ///  family's file of the same name, then the project's sources, then its own; a file named twice comes once,
+    ///  where it first does.
     /// </summary>
     [TestMethod]
     public void PlatformFoldersReplaceByName()
@@ -410,17 +407,17 @@ public sealed class ProjectFileTests
 
         RetrocoreProject project = RetrocoreProject.Load(_folder);
         Relative(project.Target("iie")).Should().Equal(
-            "src/core/main.s",
-            "src/core/parse/words.s",
             "src/platform/apple2-iie/console.s",
             "src/platform/apple2/disk.asm",
             "src/platform/apple2-iie/columns.s",
+            "src/core/main.s",
+            "src/core/parse/words.s",
             "src/extra.asm",
             "src/ca65.s");
 
         project.Target("iie").SourceFiles()[^1].Dialect.Should().Be(AssemblyDialect.Ca65);
         Relative(project.Target("iiplus")).Should().Equal(
-            "src/core/main.s", "src/core/parse/words.s", "src/platform/apple2/console.s", "src/platform/apple2/disk.asm");
+            "src/platform/apple2/console.s", "src/platform/apple2/disk.asm", "src/core/main.s", "src/core/parse/words.s");
 
         Relative(project.Target("pet")).Should().Equal("src/core/main.s", "src/core/parse/words.s");
     }

@@ -23,6 +23,7 @@ public static class BasicKeywordHelp
         char code = dialect.Name switch
         {
             "level2" => '2',
+            "level1" => '1',
             "integer" or "apple1" => 'i',
             "business" => 'b',
             "colorbasic" => 'c',

@@ -7,10 +7,12 @@ Retrocore runs the TRS-80's other Z80 machines beside the [Model I](Trs80ModelI.
 - [`Trs80Model2Machine`](../src/Retrocore.Machines.Trs80/Trs80Model2Machine.cs): the **Model II** and **Model 12**,
   and the Z80 side of the **Model 16, 16B and Tandy 6000**.
 
-The SDK has native sources for all of these machines' ROMs, byte-identical to the chips (see [ROMs](#roms)), so they
-run with nothing external, or from dumps. The real ROMs boot to their prompts, and the Model III, 4 and 4P boot their
-DOSes from disk images (see [DOSes](#doses)); the Model II has not run one yet. See
-[What is not done yet](#what-is-not-done-yet).
+The SDK has native sources for every ROM these machines run with a known good dump, byte-identical to the chips
+(see [ROMs](#roms)), so they run with nothing external, or from dumps. The real ROMs boot to their prompts, and the
+Model III, 4 and 4P boot their DOSes from disk images (see [DOSes](#doses)); the Model II has not run one yet. See
+[What is not done yet](#what-is-not-done-yet). The Model II's keyboard has its own processor and ROM (MAME's
+`65-1991.z4`), which are not run here: the emulated keyboard queues its codes directly, as its documentation
+is remembered to give them rather than as its ROM sends them ([the Model II](#the-model-ii-12-and-16)).
 
 ## The Model III, 4 and 4P
 
@@ -92,9 +94,9 @@ requesting device puts its vector on the bus, and holds off the devices after it
 fetches, that includes the opcode an NMI's response fetches and ignores: an NMI taken before an `ED`-prefixed
 instruction, whose handler starts with `LD C,L` (`$4D`), reads as `RETI`.
 
-The keyboard sends ASCII, with CTRL giving `$01`-`$1A`, BREAK `$03`, ESC `$1B`, the arrows `$1C`-`$1F` (left, right,
-up, down), HOLD `$00`, and F1 and F2 `$01` and `$02`. These follow the Model II's documentation as remembered rather
-than its keyboard's ROM, so they need checking against a real ROM.
+The keyboard sends ASCII, with CTRL giving `$01`-`$1A`, BREAK `$03`, BACKSPACE `$08`, TAB `$09`, ENTER `$0D`, ESC
+`$1B`, the arrows `$1C`-`$1F` (left, right, up, down), HOLD `$00`, and F1 and F2 `$01` and `$02`. These follow the
+Model II's documentation as remembered rather than its keyboard's ROM, so they need checking against a real ROM.
 
 The Model 16, 16B and Tandy 6000 add a 68000 board, which is not emulated: they run what a Model II or 12 runs, such as
 TRSDOS-II, and not TRS-XENIX.
@@ -132,8 +134,21 @@ Internet Archive.
 | Model 4 | TRSDOS 6.2.0 | `TRSDOS62.imd` (`T80M4DOS.IMD`) | `cpm22_202207` | `bed5f992…` |
 | Model 4 and 4P | LS-DOS 6.3.0 level J | `LSDOS63J.dsk` (JV3, `ldos63j.dsk`) | `cpm22_202207` | `c419e101…` |
 
-The item names are the download pages' last path segment, `https://archive.org/details/<item>`. The Model II's
-TRSDOS-II and the Model I's NEWDOS/80 are not there.
+The item names are the download pages' last path segment, `https://archive.org/details/<item>`.
+
+The Model II's DOSes are not among those items. They are in MAME's `trs80m2` software list, in the Internet Archive
+item `MAME_0.202_Software_List_ROMs_merged`, as `trs80m2.zip` (SHA-256 `813f8840…`). That holds a zip for each
+entry, named below with the file in it. The fixtures keep them under new names. None boots here yet (see the
+[backlog](backlog/Trs80Model3AndModel2.md#stages), stage 2).
+
+| Machine | DOS | File | In `trs80m2.zip` | SHA-256 |
+| --- | --- | --- | --- | --- |
+| Model II | TRSDOS 1.2 | `M2TRSDOS12.imd` | `tdos12.zip`: `trsdos12.imd` | `f5974034…` |
+| Model II | TRSDOS 2.0a | `M2TRSDOS20A.imd` | `tdos12.zip`: `tdos20/tdos20a.imd` | `d1ff42e4…` |
+| Model II | TRSDOS 2.0b | `M2TRSDOS20B.imd` | `tdos12.zip`: `tdos20/tdos20b.imd` | `33128ef8…` |
+| Model II | TRSDOS 2.0's calculator disk, not a DOS | `M2TDOSCALC.imd` | `tdos12.zip`: `tdos20/tdoscalc.imd` | `87baf052…` |
+| Model 16 | TRSDOS-II 4.2 | `M16TRSDOS42.td0` (Teledisk) | `tdos12.zip`: `tdos42/tr16sys.td0` | `d46c1c43…` |
+| Model II | LS-DOS 6.3.1 | `M2LSDOS631.dmk` | `lsdos631.zip`: `l2-631a.dmk` | `1870918f…` |
 
 ## Typed and pasted text
 
@@ -158,20 +173,20 @@ behavior was found by booting each image here, and the comparison with MAME agre
 
 Level II on the Model I reads a letter alone as uppercase and with shift as lowercase, so there a lowercase letter is
 typed with shift. Level I, on the Model III or the Model I, reads shift and a letter as its control code, so there
-every letter is typed as its key alone and comes out in uppercase, and ` has no key. The Model II types ASCII, as its
-keyboard sends it.
+every letter is typed as its key alone and comes out in uppercase, and ` has no key. The Model II types ASCII, with the
+codes its documentation is remembered to give ([the Model II](#the-model-ii-12-and-16)).
 
 ## ROMs
 
 The SDK's sources, in [`src/Retrocore.Machines.Trs80/Roms`](../src/Retrocore.Machines.Trs80/Roms), are maintained by
-hand and assemble byte-identically to each chip:
+hand and assemble byte-identically to each chip they cover:
 
 | Source | ROM |
 | --- | --- |
 | [`Model3.asm`](../src/Retrocore.Machines.Trs80/Roms/Model3.asm) | The Model III's 14K ROM (`ROMC` `'C'` or `'B'` for ROM C's revision) and the Model 4's (`MODEL = 4`). It includes [`Level2.asm`](../src/Retrocore.Machines.Trs80/Roms/Level2.asm), whose `MODEL` blocks hold the Model III's changes to Level II, and [`Model3Equates.asm`](../src/Retrocore.Machines.Trs80/Roms/Model3Equates.asm). |
 | [`Level1.asm`](../src/Retrocore.Machines.Trs80/Roms/Level1.asm) | With `MODEL = 3`, the Model III's Level I ROM (`8040032`): the Model I's Level I with `LPRINT` and `LLIST`, the Model III's ports and NMI, and its restarts moved. |
 | [`Model4PBoot.asm`](../src/Retrocore.Machines.Trs80/Roms/Model4PBoot.asm) | The 4P's boot ROM. |
-| [`Model2Boot.asm`](../src/Retrocore.Machines.Trs80/Roms/Model2Boot.asm) | The Model II's boot ROMs: `VERSION` 1 (`8043216`), 2 (`8047316`), 3 (`cpu_2119`, or `cpu_11be` with `FILL_11BE`) and 5 (`u54`). |
+| [`Model2Boot.asm`](../src/Retrocore.Machines.Trs80/Roms/Model2Boot.asm) | The Model II's boot ROMs: `VERSION` 1 (`8043216`), 2 (`8047316`), 3 (`cpu_2119`, or `cpu_11be` with `FILL_11BE`) and 5 (`u54`). Version 4 (`cpu_fc86`) has no source, as no good dump of it is known. |
 | [`Model3CharacterGenerator.asm`](../src/Retrocore.Machines.Trs80/Roms/Model3CharacterGenerator.asm) | The Model III's and Model 4's character generator, and with `MODEL4P` the 4P's. |
 | [`Model2CharacterGenerator.asm`](../src/Retrocore.Machines.Trs80/Roms/Model2CharacterGenerator.asm) | The Model II's character generator. |
 
@@ -180,8 +195,9 @@ Level I ROM), the Model 4's, the 4P's boot ROM and the Model II's newest boot RO
 copy of the sources.
 
 **Level I.** A Model III with `"rom": "level1"` runs Level I BASIC from its 4K ROM, the ROM space above it empty, with
-250 baud tapes (`CSAVE` and `CLOAD`) and `LPRINT` and `LLIST` on the printer. It has no BASIC thread, as Level I on the
-Model I has none. Neither ROM reads the other's tapes; a tape recorded for the other one still goes in, and the debug
+250 baud tapes (`CSAVE` and `CLOAD`) and `LPRINT` and `LLIST` on the printer. It has the BASIC thread, as Level I on
+the [Model I](Trs80ModelI.md#debugging) does, from the symbols of `Level1.asm`'s Model III build, and its `basic`
+launch runs a `.level1.bas` file. Neither ROM reads the other's tapes; a tape recorded for the other one still goes in, and the debug
 console and the Drives view say so, as on the [Model I](Trs80ModelI.md#the-machine). The Model 4 has only the Model III
 ROM, so its warning for a Level I tape names the machines that play one.
 
@@ -232,8 +248,9 @@ resets the Z80. The Retro Devices view shows the cassette and drives.
 
 The call stack, registers, ports, memory and breakpoints work as on the Model I. When the running ROM is one the SDK's
 sources build (whether from the sources or a dump), its source debugs as a ROM module, so stepping into the ROM shows
-`Model3.asm`, `Level2.asm`, `Model4PBoot.asm` or `Model2Boot.asm`. The Model III's and Model 4's BASIC is Level II's,
-at Level II's addresses, so they have the BASIC thread as the Model I has.
+`Model3.asm`, `Level2.asm`, `Model4PBoot.asm`, `Model2Boot.asm` or `Level1.asm`. The Model III's and Model 4's BASIC is
+Level II's, at Level II's addresses, so they have the BASIC thread as the Model I has; with `rom` `level1`, the Model III
+has Level I's, as [above](#level-i).
 
 ## Testing
 
@@ -241,9 +258,9 @@ at Level II's addresses, so they have the BASIC thread as the Model I has.
 | --- | --- |
 | `Trs80Model3Tests` | The Model III's map, clock interrupt and its mask, keyboard and NMI; the clock's 30 and 60 Hz; typed letters' keys, with shift for uppercase, and on Level I without shift; the Model 4's maps, paging, speed and 80x24; the 4P's boot ROM; the FD1793 with wait and NMI, INTRQ ending the wait; the cassette motor. |
 | `Trs80RomSourceTests` | Each source builds to its ROM's SHA-256, and with the dumps, byte for byte. |
-| `Trs80Model3RomTests` | The real ROMs, built from source: the Model III and Model 4 boot through `Cass?` and `Memory Size?` to BASIC and run a statement; the 4P, with no disk, says the drive is not ready; each Model II boot ROM asks for a diskette; the Model 4 ROM's clock counting the interrupts at 2 and 4 MHz; the Model 4's function keys' codes, with and without shift; `CSAVE` and `CLOAD` at 1500 and 500 baud, a hand-written 1500 baud CAS image loading; Level I booting to `READY`, taking a statement typed in lowercase, and saving and loading at 250 baud; and, with the [DOS images](#doses), each DOS booting to its prompt and listing its directory, and the Model 4's DOSes showing typed text in the case it was typed. |
+| `Trs80Model3RomTests` | The real ROMs, built from source: the Model III and Model 4 boot through `Cass?` and `Memory Size?` to BASIC and run a statement; the 4P, with no disk, says the drive is not ready; versions 1, 2, 3 and 5 of the Model II's boot ROM ask for a diskette; the Model 4 ROM's clock counting the interrupts at 2 and 4 MHz; the Model 4's function keys' codes, with and without shift; `CSAVE` and `CLOAD` at 1500 and 500 baud, a hand-written 1500 baud CAS image loading; Level I booting to `READY`, taking a statement typed in lowercase, and saving and loading at 250 baud; and, with the [DOS images](#doses), each DOS booting to its prompt and listing its directory, and the Model 4's DOSes showing typed text in the case it was typed. |
 | `Trs80Model2Tests` | Banked RAM; the CTC's mode 2 keyboard interrupt with `RETI`, and an NMI's ignored fetch reading as `RETI`; the clock NMI; the 6845; the DMA reading a sector; IMD and DMK images. |
-| `Trs80Model3OracleTests` | Against MAME 0.264, video RAM cell for cell after the same keystrokes on the same ROMs: Model III and Model 4 BASIC running a program; the Model 4's function keys and its clock's count at 2 MHz; with the [DOS images](#doses), TRSDOS 1.3, LDOS 5.1.3, TRSDOS 6.0 and 6.2 and LS-DOS 6.3 booting, taking the date and listing their directories; and the Model II's boot ROMs, versions 1, 2, 3 and 5, asking for a diskette. See [Comparing with MAME](#comparing-with-mame). |
+| `Trs80Model3OracleTests` | Against MAME 0.289, video RAM cell for cell after the same keystrokes on the same ROMs: Model III and Model 4 BASIC running a program; the Model 4's function keys and its clock's count at 2 MHz; with the [DOS images](#doses), TRSDOS 1.3 and 6.0 from their DMK and IMD images, LDOS 5.1.3, TRSDOS 6.2 and LS-DOS 6.3 booting, taking the date and listing their directories; and the Model II's boot ROMs, versions 1, 2, 3 and 5, asking for a diskette. See [Comparing with MAME](#comparing-with-mame). |
 | [`tools/Test-Trs80Model3Dap.mjs`](../tools/Test-Trs80Model3Dap.mjs) | Each machine launching from stand-in dumps it writes, and the Model III and II from the SDK's sources, with source in the stack trace; the missing-dump error, threads, hardware rows, and the Model II's reset stop. |
 
 ## Comparing with MAME
@@ -253,16 +270,19 @@ types the same keystrokes at the same emulated seconds and dumps the screen's vi
 `:video_ram` share. The machine here runs the SDK's builds of the same ROMs over the same devices' time, counting 2 MHz
 T-states while the Model 4 runs at 4 MHz. The screens must then match, cell for cell. MAME comes from
 `RETROCORE_MAME`, `mame/mame` or `mame/mame.exe` in the external data folder, or a Linux package's (`apt install
-mame` puts it in `/usr/games`). Its ROM sets, `trs80m3`, `trs80m4` and `trs80m2`, are in `trs80-roms/mame`. Without
-its set the Model 4's tests build MAME's `trs80m4` set from the SDK's sources, after checking that the builds have the SHA-1s
-MAME lists for it (`mame -listroms trs80m4`), and the others are inconclusive.
+mame` puts it in `/usr/games`). The tests target MAME 0.289; Ubuntu 24.04's package is 0.264, which passes all but
+the DMK images' tests. Retrocore's cloud environment sets up 0.289 from Ubuntu 26.10's package as
+`/usr/local/bin/mame-0.289`, in `RETROCORE_MAME`. Its ROM sets, `trs80m3`, `trs80m4` and `trs80m2`, are in
+`trs80-roms/mame`. Without its set the Model 4's tests build MAME's `trs80m4` set from the SDK's sources, after checking
+that the builds have the SHA-1s MAME lists for it (`mame -listroms trs80m4`), and the others are inconclusive.
 
 What the comparison has to allow for:
 
 - **Drives.** MAME's Model III and 4 drives are a configuration switch, off by default: its controller then reads
   `$FF` and the ROM starts BASIC. The DOS tests turn the switch on. The BASIC tests run without the controller here.
   With the switch on and drive 0 empty, MAME's ROM waits at `Diskette?`, as this one does.
-- **Images.** MAME 0.264 does not read the TRSDOS 1.3 and 6.0 DMK images, so those tests use their IMD copies.
+- **Images.** TRSDOS 1.3 and 6.0 run from both their DMK images and their IMD copies. MAME 0.264 does not read the
+  DMK images, so with it the two DMK tests fail, and only the IMD copies' tests cover those DOSes.
 - **Keys.** MAME types an uppercase letter with shift and a lowercase one without, as `Trs80Keyboard.Type` does for
   Level II on the Model III and 4 and the DOSes ([Typed and pasted text](#typed-and-pasted-text)), so both press
   the same keys. Where they differed, TRSDOS 6.0, which starts with caps lock off, echoed `dir` here and `DIR` in
@@ -275,7 +295,8 @@ What the comparison has to allow for:
   It logs when each entry fired, and every comparison checks that each one fired within 0.025 s, a frame and a
   margin, after its time (`MameSchedule.ShouldHaveFiredOnTime`). `MameSchedule` writes the times in plain decimal
   and refuses a `|` in an entry's text, which the script would split.
-- **The Model 4's clock at 4 MHz.** MAME 0.264 keeps it at 30 Hz, where the technical references give 60 Hz, so the
+- **The Model 4's clock at 4 MHz.** MAME, 0.264 and 0.289 alike, keeps it at 30 Hz, where the technical references
+  give 60 Hz: its clock interrupt is periodic, at 20.2752 MHz / 10 / 67584, whatever the CPU's speed. So the
   clock's count is compared at 2 MHz only. The Model 4 DOSes run at 4 MHz, so their comparisons run with the two
   clocks at different rates; their screens after `DIR` show no time, but the cursor's blink, which the clock drives,
   may be in a different phase.
@@ -292,7 +313,13 @@ What the comparison has to allow for:
 
 ## What is not done yet
 
-- **The Model II's TRSDOS-II**, which needs an image. Its comparison with MAME covers only the boot ROMs.
+- **The Model II's DOSes.** TRSDOS 1.2, 2.0a and 2.0b stop at `BOOT ERROR DM 23`, LS-DOS 6.3.1 leaves the screen
+  blank, and TRSDOS-II 4.2 is a Teledisk image, which the media library does not read (see the
+  [backlog](backlog/Trs80Model3AndModel2.md#stages), stage 2). Until they boot, the Model II's comparison with MAME
+  covers only the boot ROMs, and its DMA and keyboard codes are untested by real software; the keyboard codes also
+  need checking against its keyboard's ROM ([the Model II](#the-model-ii-12-and-16)).
+- **The Model II's boot ROM version 4**, MAME's `cpu_fc86` of 1982-11-18, which MAME lists with no good dump known,
+  so `Model2Boot.asm` has no source for it.
 - **The RS-232 ports**, the Model 4's sound beyond the speaker bit, its hi-res graphics board and hard disks, and the
   Model II's hard disks and serial devices.
 - **The Model 16's 68000.**

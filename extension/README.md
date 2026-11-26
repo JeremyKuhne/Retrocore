@@ -11,7 +11,13 @@ which starts when a `retrocore-asm` document opens; see
 
 `*.asm` files open as **Retrocore Assembly** (`retrocore-asm`), and `*.mac` files as
 **MACRO-10 Assembly**. `*.s` and `*.inc` are not claimed, as ca65 and the GNU
-assembler use them; select the language with the status-bar language selector or
+assembler use them, except in a Retrocore project: a `*.s` or `*.inc` in the folder of
+a project's `retrocore.json` (one with targets), or below it, opens as Retrocore
+Assembly whenever it is plain text: as it opens, and as the projects are read again
+(a project file changes, or a target is picked). To use
+another language for one, map it to that language (not plain text) in
+`files.associations`.
+Elsewhere, select the language with the status-bar language selector or
 **Change Language Mode**, or add a workspace setting:
 
 ```json
@@ -134,8 +140,9 @@ the Command Palette and on the **Machine** view's **...** menu. It asks three th
      and II Plus's memory and slot 0 card, the Mockingboard, the Model I's ROM, memory,
      Expansion Interface and lowercase, the Model III's ROM and memory, the Apple-1's memory and cassette interface, the PET's memory, sound and snow, and the Atari's BASIC revision, video standard, disk drives and sound. Each shows its current value; Esc goes back.
      The ROM picks Level I or Level II BASIC (and on the Model I, Level II 1.3 or 1.2), so
-     the Level I and Level II entries are the same machine with a different ROM; Level I
-     cannot start from a disk or run a BASIC file, so it is refused for those.
+     the Level I and Level II entries are the same machine with a different ROM. Level I
+     cannot start from a disk, so it is refused for one, and a BASIC file that names its
+     dialect, by its name or first line, keeps the ROM whose BASIC that is.
    - **Save as Launch Configuration** adds the setup to the workspace's launch.json,
      under a name you confirm, replacing one of the same name.
 
@@ -145,6 +152,36 @@ the Command Palette and on the **Machine** view's **...** menu. It asks three th
 A launch configuration is still the way to use options the picks don't offer, such
 as `breakpoints`, `speed` or your own ROM dumps. Saving a setup is a good start for
 one. The sections below describe each machine's launch options.
+
+## Projects
+
+A folder with a `retrocore.json` is a Retrocore project: its sources, defines and the
+machine targets it builds for (`retrocore build` builds them from a terminal). The
+status bar shows the **active target**, such as `hello · apple2-iie`; click it to pick
+another of the workspace's targets, grouped by project when there are several. The
+choice is kept for the workspace.
+
+**F5 with no launch.json** builds the active target and debugs it on its machine,
+stopping at the program's entry. VS Code chooses the debugger from the open editor, so
+press it from one of the project's sources; elsewhere VS Code may first ask which
+debugger to use. To keep breakpoints or other launch options, or to
+debug one launch configuration on whichever target is active:
+
+```jsonc
+{
+  "type": "retrocore",
+  "request": "launch",
+  "name": "Debug project",
+  "project": "${workspaceFolder}",
+  "target": "${command:retrocore.activeTarget}"
+}
+```
+
+`project` is a `retrocore.json` or its folder, and `target` a target's name, or
+`project/target` where a root file's projects share one. Each target keeps its own
+saved machine and recovery journal. `retrocore.json` is checked against the project
+schema as you edit it; leave out a `$schema` line, which would make VS Code fetch the
+schema from the web instead.
 
 ## What is highlighted
 
@@ -943,7 +980,8 @@ stack, cycle counts and `Keeps:` checks; a Z80 `CALL` or `RST` line shows its la
 call's cycles as a `JSR` line does. The machine is configured by:
 
 - `rom`: `level2` (the default) or `level1`, the **ROM** setting in the Machine view
-  and Start Machine's options;
+  and Start Machine's options; a `basic` launch takes that Level's files, `.level2.bas`
+  or `.level1.bas`;
 - `revision`: Level II `1.3` (the default) or `1.2`;
 - `ramKilobytes`, `expansionInterface`, `diskController`, `lowercase` and `doubler`
   (`percom` for NEWDOS/80's double density, `tandy` for Radio Shack's, or `both`);
@@ -1236,16 +1274,16 @@ off and on. See the [Atari guide](../docs/Atari800.md) for what is emulated.
 `"trs80-model4"` is the Model 4), and `"machine": "trs80-model2"` a Model II, 12 or the
 Z80 side of a Model 16 (`model` `2`, `12` or `16`). Without dumps they run the SDK's
 builds of their ROMs (`Model3.asm`, `Model4PBoot.asm`, `Model2Boot.asm` and the character
-generators), which are byte-identical to MAME's; `romDirectory` or `RETROCORE_TRS80_ROMS`
-can hold MAME's dumps instead. When the running ROM is one the sources build, its source
-debugs as a ROM module, and Model III and Model 4 BASIC has the BASIC thread, as Level II
-does. A Model III with `rom` `level1` runs Level I BASIC from `Level1.asm`'s Model III
-build. The options are `rom`, `ramKilobytes`, `disks` (JV1, JV3, DMK or IMD),
-`diskController`, `cassette` and `fastCassette` (Model III and 4), `fastDisk` and
-`bootRom` (Model II), `bootSeconds`, `screen` and `speed`. On the Model III family the
-panel takes the Model I's keys; on the Model II it types ASCII, with **Escape** for
-BREAK and buttons for HOLD, F1 and F2. See the
-[Model III, 4 and II guide](../docs/Trs80Model3And2.md) for what is emulated.
+generators), which are byte-identical to MAME's dumps of the ROMs they cover;
+`romDirectory` or `RETROCORE_TRS80_ROMS` can hold MAME's dumps instead. When the running
+ROM is one the sources build, its source debugs as a ROM module, and Model III and Model
+4 BASIC has the BASIC thread, as Level II does. A Model III with `rom` `level1` runs
+Level I BASIC from `Level1.asm`'s Model III build, with the BASIC thread too. The options
+are `rom`, `ramKilobytes`, `disks` (JV1, JV3, DMK or IMD), `diskController`, `cassette`
+and `fastCassette` (Model III and 4), `fastDisk` and `bootRom` (Model II), `bootSeconds`,
+`screen` and `speed`. On the Model III family the panel takes the Model I's keys; on the
+Model II it types ASCII, with **Escape** for BREAK and buttons for HOLD, F1 and F2. See
+the [Model III, 4 and II guide](../docs/Trs80Model3And2.md) for what is emulated.
 
 ## Debugging on the Kaypro II
 
@@ -1337,9 +1375,9 @@ protocol.
 
 **Retrocore: Open BASIC Program** opens the BASIC program in the running machine as
 text: AppleSoft on the Apple II Plus and IIe, Integer BASIC on the II, Level II on the
-Model I, Color BASIC on the Color Computer 1 and 2, with Extended and Disk
-Extended Color BASIC's words when their ROMs are fitted, BBC BASIC II on the BBC Micro, and Atari BASIC on the Atari. Level I and the CoCo 3's
-BASIC are not supported yet. It is in three places besides the Command Palette:
+Model I, Level I on the Model I and the Model III with `rom` `level1`, Color BASIC on the Color Computer 1 and 2, with
+Extended and Disk Extended Color BASIC's words when their ROMs are fitted, BBC BASIC II on the BBC Micro, and Atari BASIC
+on the Atari. The CoCo 3's BASIC is not supported yet. It is in three places besides the Command Palette:
 
 - the **BASIC program** button on the machine panel's key bar;
 - the **BASIC program** row under the machine in the Machine view, which shows the
@@ -1356,8 +1394,9 @@ BASIC are not supported yet. It is in three places besides the Command Palette:
   has unsaved edits, you choose **Keep Mine**, **Take the Machine's** or
   **Compare**.
 - **Import** and **Export** are in the editor's title bar. They cover text listings
-  (`.bas`), tokenized programs as BASIC stores them, and on the Model I, CSAVE tapes
-  (`.cas`). An exported AppleSoft program is named in CiderPress2's form, such as
+  (`.bas`), tokenized programs as BASIC stores them, and CSAVE tapes (`.cas`) for Level
+  II and Level I. A Level I tape that loads memory other than a program from `$4200`, as
+  a machine-code program that starts itself does, is refused. An exported AppleSoft program is named in CiderPress2's form, such as
   `PROGRAM#fc0801`.
 
 When the session ends, an editor with no unsaved edits closes. One with edits
@@ -1368,7 +1407,7 @@ character, `{$84}` for any byte, and `{{` for a brace.
 
 ### The BASIC thread
 
-A session running AppleSoft, Integer BASIC, Level II, Color BASIC, BBC BASIC or Atari BASIC has a
+A session running AppleSoft, Integer BASIC, Level II, Level I, Color BASIC, BBC BASIC or Atari BASIC has a
 **BASIC** thread beside the CPU's.
 Its call stack is the statement running, then each GOSUB in progress at the
 statement that called it; it shows **BASIC: ready** at the prompt.
@@ -1393,7 +1432,9 @@ statement that called it; it shows **BASIC: ready** at the prompt.
   **Handled BASIC errors** at those they will; and **BASIC program end** at STOP,
   END, the end of the program and Ctrl-C or BREAK. Integer BASIC and Color BASIC
   have no error handler, so their errors, such as `*** BAD BRANCH ERR` or `?UL ERROR`,
-  always stop.
+  always stop. Level I has none either: its HOW?, WHAT? and SORRY stop as BASIC errors,
+  except a mistyped answer to INPUT, which INPUT asks for again, so it counts as handled. An
+  error in a DATA item READ takes stops in the READ's line, though Level I reports it with no line.
 - **Variables:** a BASIC frame has **Variables**, **Arrays** (each expanding to its
   elements), **Functions** (AppleSoft's DEF FN), **Loops** (the FOR loops in
   progress) and **Program** (where the program, variables, arrays and strings are).
@@ -1428,9 +1469,9 @@ statement that called it; it shows **BASIC: ready** at the prompt.
 
 ### BASIC files
 
-`.applesoft.bas`, `.integer.bas`, `.apple1.bas`, `.business.bas`, `.level2.bas`,
+`.applesoft.bas`, `.integer.bas`, `.apple1.bas`, `.business.bas`, `.level2.bas`, `.level1.bas`,
 `.colorbasic.bas`, `.mbasic.bas`, `.bbcbasic.bas` and `.atari.bas` files are AppleSoft, Integer BASIC, Apple-1 BASIC,
-Business BASIC, Level II BASIC, Color BASIC, MBASIC (BASIC-80 5.21, the Kaypro II's
+Business BASIC, Level II BASIC, Level I BASIC, Color BASIC, MBASIC (BASIC-80 5.21, the Kaypro II's
 CP/M BASIC), BBC BASIC and Atari BASIC. Business BASIC and MBASIC take a reserved word only between separators,
 so their highlighting leaves `PRINTER` a name, and their names count in full, dots
 included (MBASIC's to 40 characters). A Color BASIC file may use every word of Disk Extended Color BASIC; a
@@ -1484,7 +1525,7 @@ get:
 **Retrocore: Renumber BASIC Program...** renumbers the lines and every reference to
 them. **Retrocore: Open as BASIC Listing** (also on the Explorer's context menu for
 `.cas` and CiderPress2 `#fc` and `#fa` files) opens a tokenized program or a Model I
-tape as text; saving writes it back in the same form.
+tape as text, a Level I tape as Level I BASIC; saving writes it back in the same form.
 
 Integer BASIC checks a line's grammar as it is typed and gives one word a different token
 for each place in its grammar, so Retrocore tokenizes Integer BASIC by running the

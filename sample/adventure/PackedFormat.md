@@ -169,6 +169,15 @@ There are 32 flags, a signed 16-bit counter with 16 more to swap it with, code 8
 The room is shown at the end of the turn rather than as the player moves, so what happens on its own, such as day
 breaking as the player leaves a cave, has happened when it is shown.
 
+This is how ScottFree's screen reads when it is written as one stream. ScottFree 1.14 (`ScottCurses.c`) keeps the
+room in a window of its own above the messages: GO draws the new room there at once, an action that moves the player
+or changes what is in the room sets `Redraw`, and the main loop redraws the window before and after the actions that
+happen on their own. The messages below it therefore read as here, the command and then what happened, such as the
+parrot eating a cracker, while the window shows the room as the turn leaves it. Printing the room into the stream
+wherever ScottFree draws the window would show it twice when an action that happens on its own changes it, and would
+show a room as dark that the same turn lights, since setting and clearing the dark flag (codes 56 and 57) leave the
+window as it is until the next redraw.
+
 ### Commands
 
 A command is the line's first two words, a verb and a noun; more are ignored. Each counts only to the word length.

@@ -20,6 +20,9 @@ internal sealed partial class Trs80Model3DebugTarget : IDebugTarget
     // Where Level II keeps the stack pointer as each statement begins.
     private const ushort SavedStack = 0x40E8;
 
+    // Where Level II keeps the line running.
+    private const ushort Level2CurrentLine = 0x40A2;
+
     private static readonly DebugRegisters s_registers = new(Z80Isa.Description);
 
     private readonly Trs80Model3Machine _machine;
@@ -30,6 +33,7 @@ internal sealed partial class Trs80Model3DebugTarget : IDebugTarget
     private bool _instruction;
     private bool _resetPending;
     private BasicRom? _basicRom;
+    private Trs80Level1Basic? _level1;
 
 
     /// <summary>
@@ -95,6 +99,17 @@ internal sealed partial class Trs80Model3DebugTarget : IDebugTarget
 
     /// <inheritdoc/>
     public bool IsInstructionBoundary => _machine.Processor.IsInstructionBoundary;
+
+    /// <inheritdoc/>
+    public bool IsTakingInterrupt => _machine.Processor.IsTakingInterrupt;
+
+    /// <inheritdoc/>
+    /// <remarks>
+    ///  <para>
+    ///   A halted Z80 runs a refresh fetch every four T-states without leaving the instruction after its HALT.
+    ///  </para>
+    /// </remarks>
+    public bool IsIdle => _machine.Processor.IsHalted;
 
     /// <inheritdoc/>
     /// <remarks>
@@ -284,6 +299,12 @@ internal sealed partial class Trs80Model3DebugTarget : IDebugTarget
                 && Trs80SdkModules.Matching(SystemRomImage, [() => Trs80SdkModules.AssembleLevel1(level1, 3)]) is { } built)
             {
                 debug.Add(new SourceMapModule(built, Trs80Model3MemoryArea.Rom));
+                _level1 = Trs80Level1Basic.From(
+                    built.Symbols,
+                    this,
+                    () => _machine.Processor.Registers,
+                    registers => _machine.Processor.Registers = registers,
+                    _calls.Reset);
             }
 
             return;
@@ -325,19 +346,85 @@ internal sealed partial class Trs80Model3DebugTarget : IDebugTarget
     internal byte[] SystemRomImage { get; init; } = [];
 
     /// <inheritdoc/>
-    public BasicDialect? Basic =>
-        _machine.Configuration.Variant == Trs80Model3Variant.Model4P || _machine.Configuration.Rom == Trs80Rom.Level1
-            ? null
-            : BasicDialect.Level2;
+    public BasicDialect? Basic => _machine.Configuration switch
+    {
+        { Variant: Trs80Model3Variant.Model4P } => null,
+        { Rom: Trs80Rom.Level1 } => BasicDialect.Level1,
+        _ => BasicDialect.Level2
+    };
 
     /// <inheritdoc/>
-    public BasicRom? BasicRom => _basicRom;
+    public BasicRom? BasicRom => _level1?.Rom ?? _basicRom;
 
     /// <inheritdoc/>
-    public int BasicTextPointer => _machine.Processor.Registers.HL;
+    public int BasicTextPointer => _level1?.TextPointer ?? _machine.Processor.Registers.HL;
 
     /// <inheritdoc/>
-    public int BasicStack => Peek(SavedStack) | (Peek((ushort)(SavedStack + 1)) << 8);
+    public int BasicStack => _level1?.Stack ?? (Peek(SavedStack) | (Peek((ushort)(SavedStack + 1)) << 8));
+
+    /// <inheritdoc/>
+    /// <remarks>
+    ///  <para>
+    ///   Level II's current line is at <c>$40A2</c>, as on the Model I.
+    ///  </para>
+    /// </remarks>
+    public int BasicCurrentLine => Basic switch
+    {
+        null => 0,
+        Level1Dialect => _level1?.LineNumber ?? Level1Dialect.CurrentLineNumber(new TargetBasicMemory(this)),
+        _ => Peek(Level2CurrentLine) | (Peek((ushort)(Level2CurrentLine + 1)) << 8)
+    };
+
+    /// <inheritdoc/>
+    public bool BasicInDirectMode => _level1 is { } level1
+        ? level1.LineAddress == 0
+        : Basic is not { } dialect || dialect.InDirectMode(new TargetBasicMemory(this));
+
+    /// <inheritdoc/>
+    public (int Line, int Address)? BasicStatementStart(ushort pc)
+    {
+        if (_level1 is { } level1) { return level1.StatementStart(pc); }
+        return _basicRom is { } rom && pc == rom.Gone ? (BasicCurrentLine, BasicTextPointer + 1) : null;
+    }
+
+    /// <inheritdoc/>
+    public IReadOnlyList<(int Line, int TextPointer)>? BasicGosubs => _level1?.Gosubs;
+
+    /// <inheritdoc/>
+    /// <remarks>
+    ///  <para>
+    ///   Level II's frames are read from the stack Level II saves, not from the stack pointer.
+    ///  </para>
+    /// </remarks>
+    public int BasicLiveStack => _level1?.Stack ?? 0;
+
+    /// <inheritdoc/>
+    public int BasicForSize => _level1 is null ? 0 : Trs80Level1Basic.ForSize;
+
+    /// <inheritdoc/>
+    public (int Code, string Message, bool Handled) BasicError() => _level1?.Error() ?? (0, "error", false);
+
+    /// <inheritdoc/>
+    public void SetBasicStatement(int line, int textPointer)
+    {
+        if (_level1 is not { } level1)
+        {
+            throw new NotSupportedException("This machine has no BASIC.");
+        }
+
+        level1.SetStatement(line, textPointer);
+    }
+
+    /// <inheritdoc/>
+    public void EnterBasicPrompt(BasicRom rom)
+    {
+        if (_level1 is not { } level1)
+        {
+            throw new NotSupportedException("This machine has no BASIC.");
+        }
+
+        level1.EnterPrompt();
+    }
 
     /// <inheritdoc/>
     public bool InRom(ushort address) => _machine.Bus.Area(address) == Trs80Model3MemoryArea.Rom;

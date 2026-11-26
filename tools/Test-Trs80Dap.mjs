@@ -4,7 +4,7 @@
 
 // Model I DAP integration: boots Level II to READY, stops at a breakpoint in the SDK's Level II source with the
 // Z80 call stack, saves and loads a program on tape, stops where RUN and CONT start and where the machine resets,
-// and boots NEWDOS/80 from a JV1 image when one is present.
+// boots NEWDOS/80 from a JV1 image when one is present, and debugs a Level I program on the BASIC thread.
 // The ROMs are assembled from the SDK's sources unless RETROCORE_TRS80_ROMS names the dumps.
 
 import { resolve, join } from "node:path";
@@ -92,7 +92,7 @@ async function stoppedAt(reason, threadId, description) {
     const stopped = await event("stopped");
     assert.equal(stopped.reason, reason);
     assert.equal(stopped.threadId, threadId);
-    assert.equal(stopped.description, description);
+    assert.equal(stopped.description ?? undefined, description);
     return (await request("stackTrace", { threadId })).stackFrames[0];
 }
 
@@ -107,6 +107,9 @@ async function consoleSays(pattern) {
 
 const cassette = join(tmpdir(), `retrocore-${process.pid}.cas`);
 const levelOneTape = join(tmpdir(), `retrocore-${process.pid}-level1.cas`);
+const levelOneImage = join(tmpdir(), `retrocore-${process.pid}-level1.bin`);
+const levelOneFile = join(tmpdir(), `retrocore-${process.pid}.level1.bas`);
+const levelTwoFile = join(tmpdir(), `retrocore-${process.pid}.level2.bas`);
 try {
     await request("initialize", { adapterID: "retrocore", linesStartAt1: true, columnsStartAt1: true });
     phase("initialized");
@@ -378,12 +381,101 @@ try {
     deck = (await request("retro/devices")).devices.find(device => device.id === "cassette");
     assert.deepEqual([deck.media.contents, deck.media.warning], ["Level II BASIC program (500 baud)", undefined], "Level II's own tape is fine");
 
+    // Level I has a BASIC thread: BASIC program start stops where RUN starts, a step goes to the statement after a
+    // colon, a line breakpoint stops in a GOSUB with its caller below, the variables read in Level I's formats, and
+    // STOP stops where it is. The program goes out to a Level I tape and back in.
+    await launch({ rom: "level1", ramKilobytes: 16 }, ["basicStart", "basicStop", "basicErrors"]);
+    await screen(text => text.includes("READY"), "Level I's READY for its BASIC thread");
+    assert.deepEqual((await request("threads")).threads.map(thread => thread.name), ["Model I Z80", "BASIC"]);
+    const document = (await request("retro/basic/document", { base: "retrocore-basic://trs80/" })).uri;
+    assert.match(document, /Program\.level1\.bas$/);
+    const levelOneProgram = "10 A=5\n20 P. A*2: B=A+1\n30 GOSUB 100\n40 STOP\n100 A(2)=B: RETURN\n";
+    const written = await request("retro/basic/write", { text: levelOneProgram });
+    assert.equal(written.success, true, JSON.stringify(written.diagnostics));
+    let basic = await request("retro/basic/program");
+    assert.deepEqual([basic.dialect, basic.displayName, basic.text], ["level1", "Level I BASIC", levelOneProgram]);
+    const bound = await request("setBreakpoints", { source: { path: document }, breakpoints: [{ line: 5 }] });
+    assert.equal(bound.breakpoints[0].verified, true, JSON.stringify(bound.breakpoints[0]));
+    await type("RUN\r");
+    assert.equal((await stoppedAt("breakpoint", 2, "RUN starts at 10.")).name, "10: A=5");
+    await request("next", { threadId: 2 });
+    assert.equal((await stoppedAt("step", 2, undefined)).name, "20: P. A*2");
+    await request("next", { threadId: 2 });
+    assert.equal((await stoppedAt("step", 2, undefined)).name, "20: B=A+1");
+    await request("continue", { threadId: 2 });
+    await stoppedAt("breakpoint", 2, undefined);
+    const inside = (await request("stackTrace", { threadId: 2 })).stackFrames;
+    assert.deepEqual(inside.map(frame => frame.name), ["100: A(2)=B", "30: GOSUB 100 (GOSUB)"]);
+    assert.equal(inside[0].source.path, document);
+    const basicScopes = Object.fromEntries((await request("scopes", { frameId: inside[0].id })).scopes
+        .map(scope => [scope.name, scope.variablesReference]));
+    const values = Object.fromEntries((await request("variables", { variablesReference: basicScopes.Variables })).variables
+        .map(item => [item.name, item.value]));
+    assert.deepEqual([values.A, values.B], ["5", "6"]);
+    const evaluate = async expression => (await request("evaluate", { expression, frameId: inside[0].id, context: "watch" })).result;
+    assert.equal(await evaluate("A*2+B"), "16");
+    await request("setBreakpoints", { source: { path: document }, breakpoints: [] });
+    await request("continue", { threadId: 2 });
+    await stoppedAt("exception", 2, "STOP in 40.");
+    assert.equal(await evaluate("A(2)"), "6");
+    await request("continue", { threadId: 2 });
+    await screen(text => text.includes("BREAK AT 40"), "Level I's BREAK AT");
+
+    await request("retro/basic/export", { path: levelOneTape, format: "tape" });
+    assert.equal((await request("retro/basic/write", { text: "10 P. 1\n" })).success, true);
+    await request("retro/basic/import", { path: levelOneTape });
+    basic = await request("retro/basic/program");
+    assert.equal(basic.text, levelOneProgram, "the program came back from its Level I tape");
+
+    // A Level I image has no zero byte when its line numbers have none, as from 1000 up; it imports as an image.
+    const numbered = "1000 P. 1\n1010 GOTO 1000\n";
+    assert.equal((await request("retro/basic/write", { text: numbered })).success, true);
+    await request("retro/basic/export", { path: levelOneImage, format: "tokenized" });
+    assert.ok(!readFileSync(levelOneImage).includes(0), "the image has no zero byte");
+    assert.equal((await request("retro/basic/write", { text: "10 P. 1\n" })).success, true);
+    await request("retro/basic/import", { path: levelOneImage });
+    assert.equal((await request("retro/basic/program")).text, numbered, "the image came back as Level I lines");
+
+    // An error in a DATA item that READ is taking stops in the READ's line: Level I's current line is 0 while it reads
+    // the item, and the READ line is on the stack.
+    assert.equal((await request("retro/basic/write", { text: "10 READ A\n20 P. A\n30 DATA 1+\n" })).success, true);
+    await type("RUN\r");
+    await stoppedAt("breakpoint", 2, "RUN starts at 10.");
+    await request("continue", { threadId: 2 });
+    assert.equal((await stoppedAt("exception", 2, "WHAT? in 10 (code 2).")).name, "10: READ A");
+    const z80 = (await request("stackTrace", { threadId: 1 })).stackFrames[0];
+    const readStored = /\((\d+)\)/.exec((await request("evaluate", { expression: "READ_STORED", frameId: z80.id, context: "watch" })).result)[1];
+    await request("continue", { threadId: 2 });
+    await screen(text => text.includes("WHAT?"), "Level I's WHAT? for the DATA item");
+
+    // After STOP the stack keeps the FOR loops saved; one whose limit is READ_STORED's address, with its line above
+    // it, is not taken for READ's frame, so BASIC at the prompt is not running.
+    const loops = `10 FOR I=1 TO ${readStored}\n20 FOR J=1 TO 2\n30 STOP\n`;
+    assert.equal((await request("retro/basic/write", { text: loops })).success, true);
+    await type("RUN\r");
+    await stoppedAt("breakpoint", 2, "RUN starts at 10.");
+    await request("continue", { threadId: 2 });
+    await stoppedAt("exception", 2, "STOP in 30.");
+    await request("continue", { threadId: 2 });
+    await screen(text => text.includes("BREAK AT 30"), "Level I's BREAK AT in the loops");
+    assert.equal((await request("retro/basic/program")).running, false, "BASIC is at its prompt");
+
+    // A basic launch of a Level I file loads it into Level I and stops at its first statement, in the file; a Level
+    // II file is refused.
+    writeFileSync(levelOneFile, "10 A=5\n20 P. A*2\n30 END\n");
+    await launch({ rom: "level1", basic: levelOneFile, stopOnEntry: true });
+    const fileEntry = await stoppedAt("entry", 2, undefined);
+    assert.deepEqual([fileEntry.name, fileEntry.source?.path, fileEntry.line], ["10: A=5", levelOneFile, 1]);
+    writeFileSync(levelTwoFile, "10 PRINT 1\n");
+    await assert.rejects(request("launch", { machine: "trs80-model1", sdkRoms, rom: "level1", basic: levelTwoFile }),
+        /is Level II BASIC, and the machine runs Level I BASIC/);
+
     await request("disconnect");
     console.log("Model I DAP passed: boot to READY, a Level II source breakpoint with the Z80 call stack, a cassette round trip, RUN and CONT stops, the reset button, power-on and entry stops, 1x and 2x speed, stepping from a Z80 source into Level2.asm"
-        + (existsSync(dos) ? ", a NEWDOS/80 boot" : "") + ", a fast cassette load at real speed, and tapes for the other Level warned of.");
+        + (existsSync(dos) ? ", a NEWDOS/80 boot" : "") + ", a fast cassette load at real speed, tapes for the other Level warned of, and Level I's BASIC thread: RUN's start, steps, a line breakpoint in a GOSUB, its variables, STOP, a Level I tape round trip, an error in a DATA item, and a Level I file's basic launch.");
 } finally {
     clearTimeout(timeout);
     close();
-    for (const file of [cassette, levelOneTape]) if (existsSync(file)) unlinkSync(file);
+    for (const file of [cassette, levelOneTape, levelOneImage, levelOneFile, levelTwoFile]) if (existsSync(file)) unlinkSync(file);
 }
 if (failure()) throw failure();

@@ -23,10 +23,17 @@ import type { HardwareRow } from "../hardware";
 import { openMemory, type MemoryBank } from "../memory";
 import { testMemorySubscriptions } from "./memorySubscriptions";
 import { testMemoryRestart } from "./memoryRestart";
+import { testProjectLaunch } from "./projectLaunch";
+import { testNoLaunchJson } from "./noLaunch";
+import { testTargetDimming } from "./targetDimming";
 
 export async function run(): Promise<void> {
     const workspace = vscode.workspace.workspaceFolders?.[0];
     if (workspace === undefined) throw new Error("M1 tests need the project workspace.");
+    if (process.env.RETROCORE_TEST_PROJECT_ONLY === "1") {
+        await testNoLaunchJson(workspace);
+        return;
+    }
     if (process.env.RETROCORE_TEST_MEMORY_ONLY === "1") {
         await testMemorySubscriptions(workspace);
         return;
@@ -42,6 +49,8 @@ export async function run(): Promise<void> {
     await testDrivesView(workspace);
     await testMemorySubscriptions(workspace);
     await testMemoryRestart(workspace);
+    await testProjectLaunch(workspace);
+    await testTargetDimming(workspace);
     const romDirectory = process.env.RETROCORE_IIE_ROMS;
     const root = workspace.uri.fsPath;
     const stops: { reason: string }[] = [];

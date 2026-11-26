@@ -40,4 +40,14 @@ internal sealed record TargetBuild(
     ///  Gets the build record's path, <c>obj/&lt;target&gt;/build.json</c>.
     /// </summary>
     internal required string Record { get; init; }
+
+    /// <summary>
+    ///  Gets the target's memory map, or null when its machine has none.
+    /// </summary>
+    internal MemoryMap? Map { get; init; }
+
+    /// <summary>
+    ///  Gets the project's steps as the build left them, each run or up to date.
+    /// </summary>
+    internal IReadOnlyList<StepResult> Steps { get; init; } = [];
 }

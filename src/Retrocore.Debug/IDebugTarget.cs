@@ -86,13 +86,26 @@ internal interface IDebugTarget : IDebugMemory
     bool IsInstructionBoundary { get; }
 
     /// <summary>
+    ///  Gets whether the CPU has left an instruction boundary for an interrupt's response rather than the
+    ///  instruction there, which runs once the handler returns. Read on the first cycle after the boundary.
+    /// </summary>
+    bool IsTakingInterrupt => false;
+
+    /// <summary>
+    ///  Gets the bits of <see cref="DebugFrame.StackPointer"/> the stack wraps within: $FFFF for a 16-bit stack
+    ///  pointer.
+    /// </summary>
+    int StackMask => 0xFFFF;
+
+    /// <summary>
     ///  Gets whether an instruction has started and not finished, as opposed to an interrupt's response.
     /// </summary>
     bool InInstruction { get; }
 
     /// <summary>
     ///  Gets whether the CPU idles between instructions for as long as something outside it decides, such as a 6809
-    ///  held by HALT or waiting in <c>SYNC</c>; it is then not at an instruction boundary until it goes on.
+    ///  held by HALT or waiting in <c>SYNC</c>; it is then not at an instruction boundary until it goes on. A halted
+    ///  Z80 is at one, the instruction after its <c>HALT</c>, between the refresh fetches it runs as it waits.
     /// </summary>
     bool IsIdle => false;
 
@@ -228,6 +241,17 @@ internal interface IDebugTarget : IDebugMemory
     ///  statement through the CPU's view of memory, which may have a ROM banked over it.
     /// </summary>
     bool BasicRomInMemory => false;
+
+    /// <summary>
+    ///  Gets whether BASIC is in direct mode, running no line of the program, as its dialect reads it, or with no BASIC.
+    /// </summary>
+    /// <remarks>
+    ///  <para>
+    ///   A target whose BASIC runs a line that its dialect cannot see in memory alone says so here, as Level I's
+    ///   READ, which keeps its line on the stack while it stores a DATA item.
+    ///  </para>
+    /// </remarks>
+    bool BasicInDirectMode => Basic is not { } dialect || dialect.InDirectMode(new TargetBasicMemory(this));
 
     /// <summary>
     ///  Gets the number of the BASIC line running, or last run.

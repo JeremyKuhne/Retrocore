@@ -62,16 +62,18 @@ jobs:
           mkdir -p artifacts/iie-sample
           dotnet artifacts/AnyCPU/Release/Retrocore.Debug/net11.0/Retrocore.Debug.dll --assemble sample/iie/main.s artifacts/iie-sample/main.bin --dialect ca65 --config sample/iie/link.cfg
 
-      # The packer packs the test game, the reference engine plays each transcript as its .out shows it, and the
-      # bare Apple II's program assembles with the game linked in.
-      - name: Pack and assemble the adventure sample
+      # The project builds the engine for its bare targets, a game linked into each, after its steps pack both games
+      # with the packer; then the reference engine plays each game's transcripts as their .out files show them.
+      - name: Build the adventure sample and play its transcripts
         working-directory: Retrocore/sample/adventure
         run: |
-          dotnet run tools/packer.cs -- pack games/test.dat obj/test.bin
+          dotnet ../../artifacts/AnyCPU/Release/Retrocore.Debug/net11.0/Retrocore.Debug.dll build --all
           for transcript in test-win test-fall test-drown; do
             dotnet run tools/packer.cs -- play obj/test.bin "games/$transcript.in" --echo --expect "games/$transcript.out"
           done
-          dotnet ../../artifacts/AnyCPU/Release/Retrocore.Debug/net11.0/Retrocore.Debug.dll --assemble src/platform/apple2-bare.s obj/apple2-bare.bin --config src/platform/apple2-bare.cfg
+          for transcript in pirate-win pirate-die; do
+            dotnet run tools/packer.cs -- play obj/pirate.bin "games/$transcript.in" --echo --expect "games/$transcript.out"
+          done
 
       - name: Debug adapter tests
         run: |
@@ -83,6 +85,7 @@ jobs:
           node tools/Test-PetBasicDap.mjs
           node tools/Test-IntegerBasicDap.mjs
           node tools/Test-Breakpoints.mjs
+          node tools/Test-InterruptHitsDap.mjs
           node tools/Test-Memory.mjs
           node tools/Test-IIeDap.mjs
           node tools/Test-IIPlusDap.mjs

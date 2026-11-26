@@ -5,6 +5,8 @@
 using System.Globalization;
 using System.Text.Json.Nodes;
 
+using Retrocore.Assembler;
+
 namespace Retrocore.Debug.Language;
 
 /// <summary>
@@ -133,6 +135,8 @@ internal static partial class LanguageHost
         server.OnNotification("textDocument/didClose", parameters => sync.Close(LspParams.From(parameters)));
         server.OnNotification("workspace/didChangeWatchedFiles", parameters => WatchedFilesChanged(workspace, parameters));
         server.OnNotification("retrocore/unlinkedNameWords", parameters => UnlinkedNameWordsChanged(workspace, parameters));
+        server.OnNotification("retrocore/activeTarget", parameters => ActiveTargetChanged(workspace, parameters));
+        server.OnRequest("retrocore/inactiveRanges", parameters => InactiveRanges(workspace, parameters));
         server.OnRequest("textDocument/definition", parameters => Answer(definition.Handle, parameters, Locations));
         server.OnRequest("textDocument/references", parameters => Answer(references.Handle, parameters, Locations));
         server.OnRequest("textDocument/hover", parameters => Answer(hover.Handle, parameters, found => found?.ToJson()));
@@ -176,6 +180,57 @@ internal static partial class LanguageHost
                 workspace.ConfigurationChanged(PathOf(new DocumentUri(uri)));
             }
         }
+    }
+
+    /// <summary>
+    ///  Takes the target the client made active: its project's sources are analyzed through it from now on, with its
+    ///  headers, defines and CPU.
+    /// </summary>
+    /// <param name="workspace">The workspace to reanalyze.</param>
+    /// <param name="parameters">
+    ///  <c>project</c>, a <c>retrocore.json</c> or its folder, as a path or a file URI, and <c>target</c>, the target's
+    ///  name, or <c>project/target</c> for one of a root file's projects; null for either clears it.
+    /// </param>
+    internal static void ActiveTargetChanged(LanguageWorkspace workspace, JsonObject? parameters)
+    {
+        string? project = parameters.String("project") is { } given ? ProjectPath(given) : null;
+        (string File, string Target)? previous = ProjectSources.Active;
+        ProjectSources.SetActive(project, parameters.String("target"));
+        string?[] changed = [previous?.File, ProjectSources.Active?.File];
+        foreach (string file in changed.OfType<string>().Distinct(StringComparer.OrdinalIgnoreCase))
+        {
+            workspace.ProjectChanged(file);
+        }
+    }
+
+    // A project given as a file URI or a path.
+    private static string ProjectPath(string project) =>
+        Uri.TryCreate(project, UriKind.Absolute, out Uri? uri) && uri.IsFile ? PathOf(new DocumentUri(project)) : Path.GetFullPath(project);
+
+    /// <summary>
+    ///  Answers which lines of a document its conditional assembly left out, for the editor to dim.
+    /// </summary>
+    /// <param name="workspace">The workspace.</param>
+    /// <param name="parameters"><c>textDocument</c>, with the document's <c>uri</c>.</param>
+    /// <returns>
+    ///  <c>ranges</c>: each run of lines left out, from the start of its first line to the start of the line after
+    ///  its last; null when no analysis opened the document, so nothing says which lines are.
+    /// </returns>
+    internal static async Task<JsonNode?> InactiveRanges(LanguageWorkspace workspace, JsonObject? parameters)
+    {
+        string uri = parameters?["textDocument"].String("uri") ?? throw new InvalidOperationException("Missing textDocument.uri.");
+        IReadOnlyList<AssemblyLineRange>? lines = await workspace
+            .InactiveLinesAsync(PathOf(new DocumentUri(uri)), CancellationToken.None)
+            .ConfigureAwait(continueOnCapturedContext: false);
+
+        return new JsonObject
+        {
+            ["ranges"] = lines?.Select(range => (JsonNode?)new JsonObject
+            {
+                ["start"] = new JsonObject { ["line"] = range.Start, ["character"] = 0 },
+                ["end"] = new JsonObject { ["line"] = range.End, ["character"] = 0 }
+            }).ToJsonArray()
+        };
     }
 
     /// <summary>

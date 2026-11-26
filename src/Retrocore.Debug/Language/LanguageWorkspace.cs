@@ -109,18 +109,108 @@ internal sealed partial class LanguageWorkspace
     }
 
     /// <summary>
-    ///  Reanalyzes roots that use a changed companion configuration.
+    ///  Reanalyzes roots that use a changed companion configuration, or a project's targets when its
+    ///  <c>retrocore.json</c> changed.
     /// </summary>
     /// <param name="path">The configuration's full path.</param>
     internal void ConfigurationChanged(string path)
     {
+        if (Path.GetFileName(path).Equals(Project.RetrocoreProject.FileName, StringComparison.OrdinalIgnoreCase))
+        {
+            ProjectChanged(path);
+            return;
+        }
+
         foreach (string root in _analyses.Keys.Concat(_pending.Keys).Distinct(StringComparer.OrdinalIgnoreCase))
         {
-            if (string.Equals(Path.ChangeExtension(root, ".cfg"), path, StringComparison.OrdinalIgnoreCase))
+            string? configuration = root.EndsWith(ProjectSources.Extension, StringComparison.OrdinalIgnoreCase)
+                ? ProjectSources.Target(root)?.LinkerConfiguration
+                : Path.ChangeExtension(root, ".cfg");
+
+            if (string.Equals(configuration, path, StringComparison.OrdinalIgnoreCase)) { Schedule(root); }
+        }
+    }
+
+    /// <summary>
+    ///  Analyzes a project's targets and open sources again, each source through the target it now belongs to, after
+    ///  its file or its active target changed. Its targets' analyses are forgotten and their diagnostics cleared
+    ///  first, since a source may now be analyzed through another target.
+    /// </summary>
+    /// <param name="projectFile">The project's <c>retrocore.json</c>.</param>
+    internal void ProjectChanged(string projectFile)
+    {
+        string folder = (Path.GetDirectoryName(Path.GetFullPath(projectFile)) ?? "") + Path.DirectorySeparatorChar;
+        bool InProject(string path) => path.StartsWith(folder, StringComparison.OrdinalIgnoreCase);
+        bool IsTarget(string root) => root.EndsWith(ProjectSources.Extension, StringComparison.OrdinalIgnoreCase) && InProject(root);
+
+        ProjectSources.Forget(folder);
+        foreach ((string path, string root) in _owners)
+        {
+            if (IsTarget(root) || InProject(path)) { _owners.TryRemove(KeyValuePair.Create(path, root)); }
+        }
+
+        List<string> dropped = [.. _analyses.Keys.Concat(_pending.Keys).Where(IsTarget).Distinct(StringComparer.OrdinalIgnoreCase)];
+        foreach (string root in dropped)
+        {
+            _analyses.TryRemove(root, out _);
+            _lastGood.TryRemove(root, out _);
+            if (!_published.TryRemove(root, out HashSet<string>? published)) { continue; }
+            lock (published)
             {
-                Schedule(root);
+                foreach (string path in published)
+                {
+                    _server.PublishDiagnostics(DocumentUri.FromFileSystemPath(path), []);
+                }
             }
         }
+
+        // Every target analyzed before is analyzed again, for workspace search, as is each open source's, which may be
+        // another target now; scheduling a root again cancels an attempt still running. A target the project no longer
+        // has is gone, with its diagnostics, rather than analyzed into an error; while the project file cannot be read,
+        // as in the middle of an edit, its targets are kept, showing why.
+        List<string> roots =
+        [
+            .. dropped.Where(root => ProjectSources.Target(root) is not null || ProjectSources.ErrorOf(root) is not null),
+            .. _open.Keys.Where(InProject).Select(RootOf)
+        ];
+
+        foreach (string root in roots.Distinct(StringComparer.OrdinalIgnoreCase))
+        {
+            Schedule(root);
+        }
+
+        // A dropped target still waiting or running is not stored or published after all.
+        lock (_scheduling)
+        {
+            foreach (string root in dropped.Except(roots, StringComparer.OrdinalIgnoreCase))
+            {
+                if (_pending.TryRemove(root, out CancellationTokenSource? waiting)) { waiting.Cancel(); }
+            }
+        }
+    }
+
+    /// <summary>
+    ///  Gets the lines of a file that its analysis's conditional assembly left out, for the editor to dim.
+    /// </summary>
+    /// <param name="path">The file's full path.</param>
+    /// <param name="cancellation">Cancels the wait for its analysis.</param>
+    /// <returns>
+    ///  The runs of lines left out, or null when no project target's analysis opened the file, so nothing says which
+    ///  lines its build leaves out, as for <see cref="InactiveHints"/>.
+    /// </returns>
+    internal async Task<IReadOnlyList<AssemblyLineRange>?> InactiveLinesAsync(string path, CancellationToken cancellation)
+    {
+        await AnalysisOfAsync(path, cancellation).ConfigureAwait(continueOnCapturedContext: false);
+
+        // The latest analysis, as its hints are the ones published, of the root the file belongs to after the wait.
+        if (!_analyses.TryGetValue(RootOf(path), out SourceAnalysis? latest)
+            || !latest.IsTarget
+            || latest.Result.SkippedLines is not { } skipped)
+        {
+            return null;
+        }
+
+        return skipped.Skipped.TryGetValue(path, out IReadOnlyList<AssemblyLineRange>? lines) ? lines : null;
     }
 
     /// <summary>
@@ -248,6 +338,9 @@ internal sealed partial class LanguageWorkspace
 
     private string RootOf(string path)
     {
+        // A project's source goes by the target the project prefers now, which a new file in a pattern or a file the
+        // target no longer lists can change without an analysis; files a source includes go by the last that did.
+        if (ProjectSources.RootOf(path) is { } target) { return target; }
         if (_owners.TryGetValue(path, out string? root)) { return root; }
         return SourceIncludes.RootOf(path);
     }
@@ -293,12 +386,20 @@ internal sealed partial class LanguageWorkspace
 
     private void Analyze(string root, CancellationToken cancellation)
     {
-        if (OpenText(root) is null && !File.Exists(root)) { return; }
+        bool target = root.EndsWith(ProjectSources.Extension, StringComparison.OrdinalIgnoreCase);
+        if (!target && OpenText(root) is null && !File.Exists(root)) { return; }
         SourceAnalysis analysis = SourceAnalysis.Assemble(root, OpenText);
         cancellation.ThrowIfCancellationRequested();
         _analyses[root] = analysis;
         if (analysis.Result.Success) { _lastGood[root] = analysis; }
-        foreach (string member in analysis.Members) { _owners[member] = root; }
+
+        // A project's source in several targets belongs only to the one it prefers: the active target, or the first
+        // that assembles it.
+        foreach (string member in analysis.Members.Where(analysis.Owns))
+        {
+            _owners[member] = root;
+        }
+
         Release(root);
         Publish(analysis);
     }
@@ -333,11 +434,25 @@ internal sealed partial class LanguageWorkspace
             list.AddRange(documentation);
         }
 
+        // The lines the conditional assembly left out fade, as hints an editor leaves out of its problems.
+        foreach ((string path, List<Diagnostic> list) in byFile)
+        {
+            list.AddRange(InactiveHints(analysis, path));
+        }
+
+        // A target reports only on the sources it owns, so a source two targets assemble shows its own target's.
+        foreach (string path in byFile.Keys.Where(path => !analysis.Owns(path)).ToList()) { byFile.Remove(path); }
+
         // Files this root reported before but no longer includes get their diagnostics cleared.
         HashSet<string> previous = _published.GetOrAdd(analysis.Root, _ => [with(StringComparer.OrdinalIgnoreCase)]);
         lock (previous)
         {
-            foreach (string stale in previous.Where(path => !byFile.ContainsKey(path)).ToList()) { byFile[stale] = []; }
+            // A file that another target owns now is that target's to report on, so it is not cleared here.
+            foreach (string stale in previous.Where(path => !byFile.ContainsKey(path) && analysis.Owns(path)).ToList())
+            {
+                byFile[stale] = [];
+            }
+
             previous.Clear();
             previous.UnionWith(byFile.Where(pair => pair.Value.Count != 0).Select(pair => pair.Key));
         }
@@ -346,6 +461,34 @@ internal sealed partial class LanguageWorkspace
         {
             _server.PublishDiagnostics(DocumentUri.FromFileSystemPath(path), list);
         }
+    }
+
+    /// <summary>
+    ///  Gets a hint marking each run of a file's lines that a project target's build leaves out as unnecessary, which
+    ///  an editor fades: the branches of its <c>.if</c> blocks its defines turn off, and also the bodies of macros it
+    ///  never invokes and of <c>.repeat</c>s it repeats no times. Sources analyzed alone get none, as they have no
+    ///  target to choose their branches.
+    /// </summary>
+    /// <param name="analysis">The analysis.</param>
+    /// <param name="path">A file the analysis opened.</param>
+    /// <returns>The hints, none when the file had nothing left out or the analysis is not a target's.</returns>
+    internal static IEnumerable<Diagnostic> InactiveHints(SourceAnalysis analysis, string path)
+    {
+        if (!analysis.IsTarget
+            || analysis.Result.SkippedLines is not { } skipped
+            || !skipped.Skipped.TryGetValue(path, out IReadOnlyList<AssemblyLineRange>? lines))
+        {
+            return [];
+        }
+
+        return lines.Select(range => new Diagnostic
+        {
+            Range = new LspRange(range.Start, 0, range.End, 0),
+            Severity = DiagnosticSeverity.Hint,
+            Source = "retrocore",
+            Message = "This target's build does not assemble these lines.",
+            IsUnnecessary = true
+        });
     }
 
     private (string Path, Diagnostic Diagnostic) Convert(AssemblyDiagnostic diagnostic, string root)

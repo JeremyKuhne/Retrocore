@@ -173,7 +173,8 @@ async function pickOptions(setup: Setup): Promise<Setup> {
             { title: picked.choice.label });
 
         if (value === undefined) continue;
-        // The disk it starts from needs a drive, a cartridge holds BASIC's slot, and Level I runs no disk or BASIC file.
+        // The disk it starts from needs a drive, a cartridge holds BASIC's slot, Level I runs no disk, and a BASIC file
+        // that names its dialect keeps the ROM whose BASIC that is.
         const refused = refusal(machine, current, picked.choice.option, value.value);
         if (refused !== undefined) {
             void vscode.window.showWarningMessage(refused);

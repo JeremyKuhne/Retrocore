@@ -257,6 +257,47 @@ public class Z80CoreTests
         wide.Should().Throw<ArgumentOutOfRangeException>();
     }
 
+    /// <summary>
+    ///  The debugger tells an interrupt's response, in each mode and for NMI, from the instruction at PC, which it
+    ///  replaces, from the first T-state after the boundary.
+    /// </summary>
+    /// <param name="mode">The interrupt mode, or -1 for NMI.</param>
+    /// <param name="handler">Where the response goes.</param>
+    [TestMethod]
+    [DataRow(-1, 0x0066)]
+    [DataRow(0, 0x0038)]
+    [DataRow(1, 0x0038)]
+    [DataRow(2, 0x1234)]
+    public void TakingInterruptMarksTheResponse(int mode, int handler)
+    {
+        // RST $38 / NOP, and in mode 2 the vector at $80FF, from I and the device's $FF.
+        Z80Processor<Z80TestBus> cpu = Create(0xFF, 0x00);
+        cpu.Bus.Memory[0x80FF] = 0x34;
+        cpu.Bus.Memory[0x8100] = 0x12;
+        cpu.Registers = cpu.Registers with { SP = 0x7000, I = 0x80 };
+        cpu.StepCycle();
+        cpu.IsTakingInterrupt.Should().BeFalse("RST $38 is an instruction");
+        while (!cpu.IsInstructionBoundary) { cpu.StepCycle(); }
+
+        cpu.Registers = cpu.Registers with
+        {
+            PC = 0x0001,
+            SP = 0x6000,
+            Iff1 = true,
+            Iff2 = true,
+            InterruptMode = (byte)Math.Max(mode, 0)
+        };
+
+        cpu.InterruptData = 0xFF;
+        cpu.Signals = mode < 0 ? Z80Signals.NonMaskableInterrupt : Z80Signals.InterruptRequest;
+        cpu.StepCycle();
+        cpu.IsTakingInterrupt.Should().BeTrue();
+        while (!cpu.IsInstructionBoundary) { cpu.StepCycle(); }
+        cpu.IsTakingInterrupt.Should().BeFalse();
+        cpu.Registers.PC.Should().Be((ushort)handler);
+        (cpu.Bus.Memory[0x5FFE] | (cpu.Bus.Memory[0x5FFF] << 8)).Should().Be(0x0001, "the NOP runs on return");
+    }
+
     private static Z80Processor<Z80TestBus> Create(params byte[] program)
     {
         Z80TestBus bus = new();

@@ -135,14 +135,16 @@ The sources are maintained by hand, and assemble byte for byte to the ROMs.
 ## Debugging
 
 Level II and Level I are in the Run and Debug dropdown, and **Retrocore: Start Machine…** starts either with a
-program or a tape, and Level II with a BASIC file or a disk too, all without a launch.json; the extension README's
+program, a tape or a BASIC file, and Level II with a disk too, all without a launch.json; the extension README's
 [Starting a machine](../extension/README.md#starting-a-machine) explains both.
 
 The ROM and the memory are settings of the machine, in Start Machine's options and the Machine view's **Settings**:
 
 - **ROM**: Level II BASIC 1.3 (the default), Level II BASIC 1.2 or Level I BASIC, the `rom` and `revision` options.
   Changed while the machine is off, the tape stays in; Level I, which has no disks, takes out the disks and the disk
-  controller; and the memory becomes the new ROM's unless a size was chosen. While it runs, the Machine view's ROM row
+  controller; and the memory becomes the new ROM's unless a size was chosen. A machine Start Machine starts from a disk
+  keeps Level II, and one that runs a BASIC file that names its dialect, by its name (`.level1.bas`) or its first line,
+  keeps the ROM whose BASIC that is; a plain `.bas` goes into whichever BASIC the ROM has. While it runs, the Machine view's ROM row
   (or the ROM setting) offers to change it: after asking, since what is only in the machine's memory is lost, it
   stops the session, sets the ROM as it would off, and starts the machine again with its tape.
 - **Memory**: 4, 16, 32 or 48 KB, `ramKilobytes`. 32 and 48 KB bring the Expansion Interface, and taking the
@@ -224,8 +226,22 @@ A recording is saved to its path when the tape is ejected.
 after colons), GOSUBs in the call stack, `FOR` loops, single, double, integer and string variables and arrays, and
 Level II expressions. A `basic` launch takes a `.level2.bas` file (or one with `' retrocore level2` or
 `REM retrocore level2`), with optional labels in place of line numbers. **Retrocore: Open BASIC Program** edits the
-program in memory, and imports and exports `.cas` tapes, listings and tokenized files. Level I BASIC debugs at the
-Z80 level against `Level1.asm`.
+program in memory, and imports and exports `.cas` tapes, listings and tokenized files.
+
+**Level I BASIC** has the BASIC thread too, from `Level1.asm`'s symbols: **BASIC program start** stops where RUN
+starts and CONT resumes, line breakpoints and steps go by statement (Level I's colons, and abbreviations such as `P.`
+for PRINT, read as `EXEC` reads them), GOSUBs are in the call stack, and the Variables view shows A to Z, A$ and B$,
+the array A(n) counting down from the top of memory, and the FOR loops. Level I keeps no tokens: a line is its number
+and its text as typed, from `$4200` to `TXTUNF`, so a `.level1.bas` file (or one with `REM retrocore level1`) reads
+as the program lists. Its errors, HOW?, WHAT? and SORRY, stop as **BASIC errors**, except a mistyped answer to INPUT,
+which asks again and counts as handled. An error in a DATA item that READ is taking stops in the READ's line, though
+Level I has no current line while it reads the item and reports the error with none: the debugger finds the line where
+READ keeps it, on the stack. Not every Level I tape is a BASIC program: one whose block does not start at
+`$4200`, as the Eliza tape's starts at `$41FE` to load over CLOAD's return address and start its machine code, is
+memory, which Import refuses, and debugs at the Z80 level against `Level1.asm`. A `basic` launch with `"rom":
+"level1"` takes a `.level1.bas` file (or one with `REM retrocore level1`, or a plain `.bas`), with optional labels in
+place of line numbers: Level I starts at `READY`, the program goes into memory, and RUN stops at its first statement
+with `stopOnEntry`. A Level II file is refused, as Level I cannot load it.
 
 **What the debugger knows about the Z80.**
 
@@ -246,10 +262,11 @@ Z80 level against `Level1.asm`.
 | --- | --- |
 | `Trs80MachineTests`, `Trs80DiskTests`, `Trs80CassetteTests` | The machine, with test ROMs assembled in the tests. |
 | `Trs80RomTests` | Level II and Level I boot. CSAVE and CLOAD round-trip, 1.3 takes typed lines, and NEWDOS/80 boots from JV1 and JV3. |
+| `Level1DialectTests` | Level I's program, as typed into the SDK's Level I ROM, read back and written in; its variables and numbers, written as its PRINT writes them; its FOR loops from `LOPVAR` and the stack; its statements, abbreviations and line references; and its CSAVE tapes, a machine-code block refused. |
 | `Trs80TapeContentsTests` | Which BASIC a tape is for, from Level II's and Level I's own recordings, the cassette's warning for the other Level's tapes, and Level I's `PRINT MEM` in 4K and 16K. |
 | `Trs80OracleTests` (Conformance) | The same keystrokes on our machine and on MAME, through [`tools/Trs80Oracle.lua`](../tools/Trs80Oracle.lua). The screens must match, and so must the BASIC program bytes; each keystroke must fire within 0.025 s, a frame and a margin, after its time, fractional seconds included. |
 | `Trs80RomSourceTests` | The ROM sources, by digest and against the dumps. |
-| [`tools/Test-Trs80Dap.mjs`](../tools/Test-Trs80Dap.mjs) | The debugger end to end: boot, a ROM-source breakpoint with the call stack, a cassette round trip, stepping from a program into the ROM source, a NEWDOS/80 boot, and the warning for a tape of the other Level, in a launch and from a saved machine. |
+| [`tools/Test-Trs80Dap.mjs`](../tools/Test-Trs80Dap.mjs) | The debugger end to end: boot, a ROM-source breakpoint with the call stack, a cassette round trip, stepping from a program into the ROM source, a NEWDOS/80 boot, the warning for a tape of the other Level, in a launch and from a saved machine, and Level I's BASIC thread: RUN's start, steps, a line breakpoint in a GOSUB, its variables, STOP and a Level I tape round trip. |
 
 Tests that need dumps, MAME or a DOS image are inconclusive without them. The DAP script needs none, since its
 ROMs come from the SDK sources.

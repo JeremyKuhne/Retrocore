@@ -100,7 +100,7 @@ internal sealed class ProjectTarget
     internal IReadOnlyDictionary<string, long> Defines { get; init; } = new Dictionary<string, long>();
 
     /// <summary>
-    ///  Gets the sources added for this target only, after the project's and the platform folders'.
+    ///  Gets the sources added for this target only, after the platform folders' and the project's.
     /// </summary>
     internal IReadOnlyList<ProjectSource> Sources { get; init; } = [];
 
@@ -110,20 +110,61 @@ internal sealed class ProjectTarget
     internal string? LinkerConfiguration { get; init; }
 
     /// <summary>
+    ///  Gets the target's <c>memoryMap</c>, the changes it makes to its machine's memory map, or null for none.
+    /// </summary>
+    internal JsonObject? MemoryMapOverride { get; init; }
+
+    /// <summary>
+    ///  Gets the target's memory map: the SDK's for its machine, environment and RAM (<see cref="MemoryMap.Find"/>),
+    ///  with its <c>memoryMap</c> applied.
+    /// </summary>
+    /// <param name="sdk">The SDK's root.</param>
+    /// <returns>The map, or null when the SDK has none for the machine.</returns>
+    /// <exception cref="ProjectException">
+    ///  The map is missing for the target's RAM or malformed, or the target changes a map its machine does not have.
+    /// </exception>
+    internal MemoryMap? MemoryMap(string sdk)
+    {
+        MemoryMap? map = global::Retrocore.Debug.Project.MemoryMap.Find(this, sdk);
+        if (map is null && MemoryMapOverride is not null)
+        {
+            throw new ProjectException(
+                $"{Project.File}: target {Name} gives 'memoryMap', but the SDK has no memory map for {Machine.Id} in the '{Environment}' environment to change.");
+        }
+
+        return map?.With(this);
+    }
+
+    /// <summary>
     ///  Gets the fields the target gives that are not supported yet, such as <c>files</c>.
     /// </summary>
     internal IReadOnlyList<string> Unsupported { get; init; } = [];
 
     /// <summary>
-    ///  Gets the symbols a build defines: the project's, then the target's over them.
+    ///  Gets the symbols a build defines: the SDK's <c>RC_</c> defines (<see cref="TargetDefines"/>), the project's,
+    ///  then the target's over the project's.
     /// </summary>
     /// <returns>Each symbol's value.</returns>
     internal Dictionary<string, long> Symbols()
     {
-        Dictionary<string, long> symbols = [with(Project.Defines)];
+        Dictionary<string, long> symbols = TargetDefines.Symbols(this);
+        foreach ((string name, long value) in Project.Defines) { symbols[name] = value; }
         foreach ((string name, long value) in Defines) { symbols[name] = value; }
         return symbols;
     }
+
+    /// <summary>
+    ///  Gets the textual definitions a build makes: <c>RC_TARGET</c>.
+    /// </summary>
+    /// <returns>Each definition's text.</returns>
+    internal Dictionary<string, string> Texts() => TargetDefines.Texts(this);
+
+    /// <summary>
+    ///  Gets the folders a build's angle-bracket includes search (<see cref="TargetDefines.SdkPaths"/>).
+    /// </summary>
+    /// <param name="sdk">The SDK's root.</param>
+    /// <returns>The folders.</returns>
+    internal List<string> SdkPaths(string sdk) => TargetDefines.SdkPaths(this, sdk);
 
     /// <summary>
     ///  Throws when the target or its project uses a field that is not supported yet, or an environment that does
@@ -171,10 +212,17 @@ internal sealed class ProjectTarget
         environment == Bare || (s_machines.TryGetValue(environment, out string[]? ids) && ids.Contains(machine.Id));
 
     /// <summary>
-    ///  Gets the source files the target assembles, in order: the project's <c>sources</c>, then the platform
-    ///  folders (<see cref="PlatformFiles"/>), then the target's own
-    ///  <c>sources</c>. A file named twice is assembled once, where it first comes.
+    ///  Gets the source files the target assembles, in order: the platform folders (<see cref="PlatformFiles"/>),
+    ///  then the project's <c>sources</c>, then the target's own <c>sources</c>. A file named twice is assembled
+    ///  once, where it first comes.
     /// </summary>
+    /// <remarks>
+    ///  <para>
+    ///   The platform comes first because the shared code builds on it: a constant such as a screen's width must be
+    ///   known where a <c>.res</c> or <c>.if</c> uses it, and a zero-page location before the instructions that
+    ///   address it, so the project's sources can be the same on every target.
+    ///  </para>
+    /// </remarks>
     /// <returns>The files.</returns>
     /// <exception cref="ProjectException">A file is missing, or a pattern matches nothing.</exception>
     internal List<TargetSourceFile> SourceFiles()
@@ -186,8 +234,8 @@ internal sealed class ProjectTarget
             if (seen.Add(file.Path)) { files.Add(file); }
         }
 
-        foreach (ProjectSource source in Project.Sources) { Expand(source).ForEach(Add); }
         foreach (string file in PlatformFiles()) { Add(new(file, Dialect: null)); }
+        foreach (ProjectSource source in Project.Sources) { Expand(source).ForEach(Add); }
         foreach (ProjectSource source in Sources) { Expand(source).ForEach(Add); }
         if (files.Count == 0)
         {

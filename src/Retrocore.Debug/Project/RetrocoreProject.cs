@@ -57,10 +57,10 @@ internal sealed class RetrocoreProject
     internal static readonly string[] SourceFields = ["path", "dialect", "kind"];
 
     /// <summary>
-    ///  The fields that are accepted but not supported yet: a project's <c>steps</c>, and a target's
-    ///  <c>memoryMap</c>, <c>files</c>, <c>image</c> and <c>bootImage</c>.
+    ///  The fields that are accepted but not supported yet: a target's <c>files</c>, <c>image</c> and
+    ///  <c>bootImage</c>.
     /// </summary>
-    internal static readonly string[] UnsupportedFields = ["steps", "memoryMap", "files", "image", "bootImage"];
+    internal static readonly string[] UnsupportedFields = ["files", "image", "bootImage"];
 
     /// <summary>
     ///  The dialects a source object can name.
@@ -127,12 +127,18 @@ internal sealed class RetrocoreProject
     internal IReadOnlyList<ProjectSource> Sources { get; private set; } = [];
 
     /// <summary>
+    ///  Gets the steps that run before any target assembles, in order.
+    /// </summary>
+    internal IReadOnlyList<ProjectStep> Steps { get; private set; } = [];
+
+    /// <summary>
     ///  Gets the symbols every target defines.
     /// </summary>
     internal IReadOnlyDictionary<string, long> Defines { get; private set; } = new Dictionary<string, long>();
 
     /// <summary>
-    ///  Gets the entry point's label, or null to start at the first section.
+    ///  Gets the entry point's label, or null to start at the first byte the project's own sources emit, or at the
+    ///  first section when they emit none.
     /// </summary>
     internal string? Entry { get; private set; }
 
@@ -292,6 +298,7 @@ internal sealed class RetrocoreProject
 
         project.Cpu = json["cpu"] is { } cpu ? ReadCpu(file, "the project", cpu) : throw Missing(file, "the project", "cpu");
         project.Sources = json["sources"] is { } sources ? ReadSources(file, "the project", sources) : [];
+        project.Steps = json["steps"] is { } steps ? ReadSteps(project, steps) : [];
         project.Defines = json["defines"] is { } defines ? ReadDefines(file, "the project", defines) : [];
         project.Entry = json["entry"] is { } entry ? Text(file, "'entry'", entry) : null;
         project.Output = Path.GetFullPath(
@@ -401,6 +408,7 @@ internal sealed class RetrocoreProject
             Cards = cards,
             Defines = json["defines"] is { } defines ? ReadDefines(file, where, defines) : [],
             Sources = json["sources"] is { } sources ? ReadSources(file, where, sources) : [],
+            MemoryMapOverride = json["memoryMap"] is { } memoryMap ? MemoryMap.ReadOverride(file, where, memoryMap) : null,
             LinkerConfiguration = json["linkerConfiguration"] is { } linker
                 ? Path.GetFullPath(Text(file, $"{where}'s 'linkerConfiguration'", linker), project.Directory)
                 : null,
@@ -452,6 +460,89 @@ internal sealed class RetrocoreProject
         }
 
         return sources;
+    }
+
+    private static List<ProjectStep> ReadSteps(RetrocoreProject project, JsonNode node)
+    {
+        string file = project.File;
+        if (node is not JsonArray entries)
+        {
+            throw new ProjectException($"{file}: 'steps' must be a list of steps, each an object giving 'tool'.");
+        }
+
+        List<ProjectStep> steps = [];
+        foreach (JsonNode? entry in entries)
+        {
+            int number = steps.Count + 1;
+            string where = $"step {number}";
+            if (entry is not JsonObject step)
+            {
+                throw new ProjectException($"{file}: {where} must be an object giving 'tool'.");
+            }
+
+            Check(file, where, step, ProjectStep.Fields);
+            string tool = step["tool"] is { } toolNode ? Text(file, $"{where}'s 'tool'", toolNode) : throw Missing(file, where, "tool");
+            if (tool.Contains("${", StringComparison.Ordinal))
+            {
+                throw new ProjectException($"{file}: {where}: the tool '{tool}' uses a variable; a tool's path cannot.");
+            }
+
+            if (!tool.EndsWith(".cs", StringComparison.OrdinalIgnoreCase) && !tool.EndsWith(".csproj", StringComparison.OrdinalIgnoreCase))
+            {
+                throw new ProjectException(
+                    $"{file}: {where}'s tool {tool} must be a C# file-based app (.cs) or a project (.csproj).");
+            }
+
+            List<string>? arguments = null;
+            if (step["args"] is { } argumentsNode)
+            {
+                arguments = argumentsNode is JsonArray list
+                    ? [.. list.Select(argument => Text(file, $"an argument of {where}", argument))]
+                    : throw new ProjectException($"{file}: {where}'s 'args' must be a list of arguments.");
+
+                foreach (string argument in arguments) { CheckVariables(file, where, argument, allowLists: true); }
+            }
+
+            steps.Add(new(
+                Path.GetFullPath(tool, project.Directory),
+                arguments,
+                StepPaths(project, where, "in", step["in"]),
+                StepPaths(project, where, "out", step["out"])));
+        }
+
+        return steps;
+    }
+
+    // A step's 'in' or 'out': a path or a list of them, relative to the project, with ${obj} for its intermediate folder.
+    private static List<string> StepPaths(RetrocoreProject project, string where, string field, JsonNode? node)
+    {
+        string file = project.File;
+        List<JsonNode?> entries = [];
+        if (node is JsonArray list) { entries.AddRange(list); }
+        else if (node is not null) { entries.Add(node); }
+
+        List<string> paths = [];
+        foreach (JsonNode? entry in entries)
+        {
+            string path = Text(file, $"{where}'s '{field}'", entry);
+            CheckVariables(file, where, path, allowLists: false);
+            paths.Add(Path.GetFullPath(path.Replace(ProjectStep.Intermediate, project.Intermediate, StringComparison.Ordinal), project.Directory));
+        }
+
+        return paths;
+    }
+
+    // A step's text may use ${obj}; an argument may also be exactly ${in} or ${out}.
+    private static void CheckVariables(string file, string where, string text, bool allowLists)
+    {
+        if (allowLists && text is ProjectStep.AllInputs or ProjectStep.AllOutputs) { return; }
+        string rest = text.Replace(ProjectStep.Intermediate, "", StringComparison.Ordinal);
+        if (rest.Contains("${", StringComparison.Ordinal))
+        {
+            throw new ProjectException(allowLists
+                ? $"{file}: {where}: '{text}' uses a variable it cannot; an argument can use ${{obj}}, or be exactly ${{in}} or ${{out}}."
+                : $"{file}: {where}: '{text}' uses a variable it cannot; a path can use ${{obj}} only.");
+        }
     }
 
     private static Dictionary<string, long> ReadDefines(string file, string where, JsonNode node)

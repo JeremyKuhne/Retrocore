@@ -819,7 +819,7 @@ export function registerDevices(context: vscode.ExtensionContext, basic: BasicPr
         for (const journal of journals) {
             const owner = saved.recoveryOf(journal.id);
             if (owner === undefined) continue;
-            const machine = journal.name ?? owner.name;
+            const machine = journal.name ?? (owner.target === undefined ? owner.name : `${owner.name} · ${owner.target}`);
             void vscode.window.showWarningMessage(crashedMessage(machine, journal.disks, journal.kept ?? undefined), "Recover", "Review", "Discard")
                 .then(async choice => {
                     if (choice === undefined) return;

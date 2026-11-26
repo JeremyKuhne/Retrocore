@@ -91,6 +91,17 @@ internal sealed partial class Trs80Model2DebugTarget : IDebugTarget
     public bool IsInstructionBoundary => _machine.Processor.IsInstructionBoundary;
 
     /// <inheritdoc/>
+    public bool IsTakingInterrupt => _machine.Processor.IsTakingInterrupt;
+
+    /// <inheritdoc/>
+    /// <remarks>
+    ///  <para>
+    ///   A halted Z80 runs a refresh fetch every four T-states without leaving the instruction after its HALT.
+    ///  </para>
+    /// </remarks>
+    public bool IsIdle => _machine.Processor.IsHalted;
+
+    /// <inheritdoc/>
     public bool InInstruction => _instruction;
 
     /// <inheritdoc/>

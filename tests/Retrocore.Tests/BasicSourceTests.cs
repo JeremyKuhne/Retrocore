@@ -217,6 +217,7 @@ public sealed class BasicSourceTests
     [TestMethod]
     [DataRow("applesoft")]
     [DataRow("level2")]
+    [DataRow("level1")]
     [DataRow("integer")]
     [DataRow("business")]
     [DataRow("colorbasic")]

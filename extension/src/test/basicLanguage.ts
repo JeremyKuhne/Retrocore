@@ -116,6 +116,21 @@ export async function testBasicLanguage(root: string): Promise<void> {
     assert.ok(await listing.save());
     assert.equal(execFileSync("dotnet", [host, "--basic", "list", tape], { encoding: "utf8" }), "10 CLS\n20 PRINT \"TAPE\"\n");
 
+    // A Level I tape opens as a Level I listing, and saving records it again as Level I's CSAVE does.
+    const levelOne = path.join(folder, "plain.level1.bas");
+    fs.writeFileSync(levelOne, "10 P. \"HI\"\n");
+    const levelOneTape = path.join(folder, "level1.cas");
+    execFileSync("dotnet", [host, "--basic", "tokenize", levelOne, levelOneTape]);
+    const levelOneUri = await vscode.commands.executeCommand<vscode.Uri>("retrocore.basic.openListing", vscode.Uri.file(levelOneTape));
+    const levelOneListing = await vscode.workspace.openTextDocument(levelOneUri);
+    assert.equal(levelOneListing.languageId, "retrocore-level1");
+    assert.equal(levelOneListing.getText(), "10 P. \"HI\"\n");
+    const levelOneEdit = new vscode.WorkspaceEdit();
+    levelOneEdit.insert(levelOneListing.uri, new vscode.Position(1, 0), "20 END\n");
+    await vscode.workspace.applyEdit(levelOneEdit);
+    assert.ok(await levelOneListing.save());
+    assert.equal(execFileSync("dotnet", [host, "--basic", "list", levelOneTape], { encoding: "utf8" }), "10 P. \"HI\"\n20 END\n");
+
     // A CiderPress2 Integer BASIC file ($FA) opens as its listing; saving tokenizes through the II's ROM, the SDK's
     // build of it without dumps.
     const integer = path.join(folder, "HELLO#fa0000");

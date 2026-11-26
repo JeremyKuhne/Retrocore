@@ -191,6 +191,9 @@ internal sealed class AltairDebugTarget : DisposableBase, IDebugTarget, IRecordi
     public bool IsInstructionBoundary => _machine.Processor.IsInstructionBoundary && !IsIdle;
 
     /// <inheritdoc/>
+    public bool IsTakingInterrupt => _machine.Processor.IsTakingInterrupt;
+
+    /// <inheritdoc/>
     public bool InInstruction => _instruction;
 
     /// <inheritdoc/>

@@ -114,6 +114,12 @@ public sealed partial class Processor<TBus> where TBus : IProcessorBus
     public bool IsInstructionBoundary => _state.Phase == 0 && _state.Sequence == ProcessorSequence.Instruction;
 
     /// <summary>
+    ///  Gets whether an IRQ's or NMI's response is in flight: the seven cycles taken at an instruction boundary in
+    ///  place of the instruction there, which runs once the handler returns.
+    /// </summary>
+    public bool IsTakingInterrupt => _state.Sequence == ProcessorSequence.Interrupt;
+
+    /// <summary>
     ///  Gets the number of elapsed CPU cycles.
     /// </summary>
     public ulong CycleCount => _state.CycleCount;

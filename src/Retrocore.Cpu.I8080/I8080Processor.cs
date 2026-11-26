@@ -112,6 +112,16 @@ public sealed partial class I8080Processor<TBus> where TBus : IProcessorBus, IIo
     public bool IsInstructionBoundary => _state.Operation == I8080Operation.None && _state.Cycle == I8080MachineCycle.None;
 
     /// <summary>
+    ///  Gets whether the processor has just left an instruction boundary for an interrupt's response rather than
+    ///  the instruction there, which runs once the handler returns: the acknowledge that reads the device's opcode,
+    ///  which then runs as an instruction would, or the 8085's TRAP or RST 5.5 to 7.5. Read it on the first cycle
+    ///  after the boundary: an <c>RST</c> instruction's internal cycle after its fetch looks the same.
+    /// </summary>
+    public bool IsTakingInterrupt =>
+        _state.Cycle == I8080MachineCycle.Acknowledge
+            || (_state.Operation == I8080Operation.Restart && _state.Cycle == I8080MachineCycle.Internal && _state.Step == 1);
+
+    /// <summary>
     ///  Gets whether <c>HLT</c> holds the processor until an interrupt or reset.
     /// </summary>
     public bool IsHalted => _state.Halted;

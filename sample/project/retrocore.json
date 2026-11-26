@@ -2,7 +2,6 @@
 // `retrocore build --all` here, or debug a target with a launch configuration that gives
 // "project": "${workspaceFolder}/sample/project" and "target": "apple2-iiplus".
 {
-  "$schema": "https://retrocore.dev/schemas/project-1.json",
   "sdk": "1",
   "name": "hello",
   "cpu": "6502",

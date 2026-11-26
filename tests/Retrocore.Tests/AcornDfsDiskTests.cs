@@ -101,7 +101,8 @@ public sealed class AcornDfsDiskTests
 
         read.ToImage().Should().Equal(image);
 
-        EncodedImage encoded = AcornDiskImage.Encode(AcornDiskImage.Read(image, doubleSided: false), doubleSided: false);
+        FloppyDisk floppy = AcornDiskImage.Read(image, doubleSided: false);
+        EncodedImage encoded = AcornDiskImage.Encode(floppy, doubleSided: false);
         encoded.IsLossless.Should().BeTrue();
         encoded.Bytes.Should().Equal(image);
     }
@@ -385,8 +386,10 @@ public sealed class AcornDfsDiskTests
 
         FloppyDisk saved = machine.Drives[0].Disk ?? throw new AssertFailedException("Drive 0 is empty.");
         AcornDfsDisk read = AcornDfsDisk.Read(new AcornDiskCodec().Encode(saved.Snapshot()).Bytes);
-        read.Entries.Select(entry => (entry.File.FullName, entry.StartSector)).Should().Equal(("$.PROG", 3), ("$.HELLO", 2));
-        (read.Find('$', "PROG") ?? throw new AssertFailedException("No PROG.")).File.LoadAddress.Should().Be(0xFFFF1900);
+        read.Entries.Select(entry => (entry.File.FullName, entry.StartSector))
+            .Should().Equal(("$.PROG", 3), ("$.HELLO", 2));
+        AcornDfsEntry program = read.Find('$', "PROG") ?? throw new AssertFailedException("No PROG.");
+        program.File.LoadAddress.Should().Be(0xFFFF1900);
         read.SequenceNumber.Should().Be(0x02, "the writer's one change and SAVE's");
     }
 

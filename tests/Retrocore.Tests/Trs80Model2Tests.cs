@@ -4,6 +4,7 @@
 
 using Retrocore.Assembler;
 using Retrocore.Cpu.Z80;
+using Retrocore.Debug;
 using Retrocore.Machines.Trs80;
 using Retrocore.Media.Floppy;
 using Retrocore.Media.Trs80;
@@ -174,8 +175,8 @@ public class Trs80Model2Tests
     /// <summary>
     ///  With the PIO's port A in bit control mode, as LS-DOS 6.3.1 sets it to take the FD1791's INTRQ as an interrupt,
     ///  the PIO reads port A at every T-state, and with it whether the selected drive's disk is two-sided. That costs
-    ///  nothing: once it sorted all the disk's tracks each time, which slowed LS-DOS so far that its screen stayed
-    ///  blank.
+    ///  nothing: once it sorted all the disk's tracks each time, which slowed LS-DOS's boot after its welcome screen
+    ///  from seconds to minutes.
     /// </summary>
     [TestMethod]
     public void PioWatchingTheControllerDoesNotAllocate()
@@ -209,6 +210,74 @@ public class Trs80Model2Tests
 
         Run();
         Allocations.During(Run).Should().Be(0);
+    }
+
+    /// <summary>
+    ///  LS-DOS 6.3.1 boots from its DMK image with the SDK's version 5 boot ROM: its welcome screen, the date, its
+    ///  prompt and a directory listing. The image is <c>M2LSDOS631.dmk</c> in <c>trs80-disks</c> under
+    ///  <see cref="ExternalTestData.Root"/>; the test is inconclusive without it.
+    /// </summary>
+    /// <remarks>
+    ///  <para>
+    ///   By the date prompt LS-DOS has put the PIO's port A in bit control mode, which once made each T-state sort
+    ///   the disk's tracks (<see cref="PioWatchingTheControllerDoesNotAllocate"/>). Each step is given the machine's
+    ///   own time, so that slowed this test from seconds to minutes without failing it.
+    ///  </para>
+    /// </remarks>
+    [TestMethod]
+    public void BootsLsDos()
+    {
+        string path = Path.Join(ExternalTestData.Root, "trs80-disks", "M2LSDOS631.dmk");
+        if (!File.Exists(path)) { Assert.Inconclusive($"{path} is missing."); }
+
+        string roms = Path.Join(AppContext.BaseDirectory, "Inputs", "Trs80");
+        byte[] boot = Trs80SdkModules.AssembleModel2Boot(Path.Join(roms, "Model2Boot.asm"), 5).Sections[0].Bytes.ToArray();
+        byte[] characters = Trs80SdkModules.AssembleModel2CharacterGenerator(Path.Join(roms, "Model2CharacterGenerator.asm"))
+            .Sections[0].Bytes.ToArray();
+
+        Trs80Model2Machine machine = new(new Trs80Model2Configuration(), new Trs80Model2Roms(boot, characters));
+        (FloppyDisk disk, string format) = Trs80DiskImage.Read(File.ReadAllBytes(path), ".dmk");
+        machine.Drives[0].Insert(disk, "M2LSDOS631.dmk", format);
+
+        ShowsWithin(machine, "W E L C O M E", seconds: 20);
+        ShowsWithin(machine, "Date", seconds: 20);
+        machine.Bus.Pio.Mode(0).Should().Be(3, "LS-DOS watches the controller's INTRQ through port A");
+        Type(machine, "11/14/86\r");
+        Type(machine, "\r");
+        ShowsWithin(machine, "LS-DOS Ready", seconds: 20);
+        Type(machine, "DIR\r");
+        ShowsWithin(machine, "FLOPPY/DCT", seconds: 20);
+    }
+
+    // Types text a key at a time, then runs a second.
+    private static void Type(Trs80Model2Machine machine, string text)
+    {
+        foreach (char character in text) { machine.Bus.Keyboard.Type((byte)character); }
+        for (int ticks = 0; machine.Bus.Keyboard.IsTyping && ticks < 3000; ticks++)
+        {
+            machine.Run(Trs80Model2Timing.ClockHertz / 60);
+        }
+
+        machine.Run(Trs80Model2Timing.ClockHertz);
+    }
+
+    // Runs a second at a time until the screen shows the text, for at most some seconds of the machine's time.
+    private static void ShowsWithin(Trs80Model2Machine machine, string text, int seconds)
+    {
+        for (int second = 0; second < seconds && !Text(machine).Contains(text, StringComparison.Ordinal); second++)
+        {
+            machine.Run(Trs80Model2Timing.ClockHertz);
+        }
+
+        Text(machine).Should().Contain(text, $"it shows within {seconds} seconds");
+    }
+
+    // The screen as shown, a line to a row, with inverse characters as their plain ones.
+    private static string Text(Trs80Model2Machine machine)
+    {
+        Trs80Model2Video video = machine.Bus.Video;
+        return string.Join('\n', Enumerable.Range(0, video.Rows).Select(row => new string([..
+            Enumerable.Range(0, video.Columns).Select(column => (char)(video.Displayed(row, column) & 0x7F))])));
     }
 
     /// <summary>

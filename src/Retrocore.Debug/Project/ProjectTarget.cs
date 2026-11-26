@@ -18,8 +18,8 @@ internal sealed class ProjectTarget
         ["bare", "wozmon", "dos33", "prodos", "sos", "basic", "dfs", "cpm", "level2", "trsdos", "colorbasic", "diskbasic"];
 
     // The machines each environment runs on, by catalog id, as the SDK plan's targets table gives them; bare runs on
-    // every machine, and the Model 4P counts as a Model 4. What a machine also needs is not checked yet: ProDOS on
-    // a II Plus needs 64K, and CP/M on an Apple II needs a SoftCard.
+    // every machine, and the Model 4P is listed beside the Model 4. What a machine also needs is not checked yet:
+    // ProDOS on a II Plus needs 64K, and CP/M on an Apple II needs a SoftCard.
     private static readonly Dictionary<string, string[]> s_machines = new()
     {
         ["wozmon"] = ["apple1"],
@@ -153,6 +153,15 @@ internal sealed class ProjectTarget
     }
 
     /// <summary>
+    ///  Gets the CPU a target's code runs on: the machine's, or under CP/M on an Apple II, the SoftCard's Z80.
+    /// </summary>
+    /// <param name="machine">The machine.</param>
+    /// <param name="environment">The environment.</param>
+    /// <returns>The CPU.</returns>
+    internal static ProjectCpu MachineCpu(CatalogMachine machine, string environment) =>
+        environment == "cpm" && machine.Family == "apple2" ? ProjectCpu.Z80 : machine.Cpu;
+
+    /// <summary>
     ///  Tests whether a machine runs an environment, as the SDK plan's targets table pairs them.
     /// </summary>
     /// <param name="machine">The machine.</param>
@@ -203,15 +212,15 @@ internal sealed class ProjectTarget
         List<KeyValuePair<string, string>> model = Folder(Machine.Id);
         Dictionary<string, string> replacements = [with(ProjectGlob.FileNames)];
         foreach ((string name, string file) in model) { replacements[name] = file; }
-        HashSet<string> replaced = [with(ProjectGlob.FileNames)];
+        HashSet<string> familyNames = [with(ProjectGlob.FileNames)];
         List<string> files = [];
         foreach ((string name, string file) in family)
         {
             files.Add(replacements.GetValueOrDefault(name, file));
-            replaced.Add(name);
+            familyNames.Add(name);
         }
 
-        files.AddRange(model.Where(entry => !replaced.Contains(entry.Key)).Select(entry => entry.Value));
+        files.AddRange(model.Where(entry => !familyNames.Contains(entry.Key)).Select(entry => entry.Value));
         return files;
     }
 

@@ -194,7 +194,7 @@
         "A SOS.INTERP on a SOS boot disk. The Apple III. Not yet supported.",
         "A PRG with a BASIC SYS line. The PET. Not yet supported.",
         "A *RUN file on a DFS disk. The BBC Micro. Not yet supported.",
-        "A .COM file under CP/M. Not yet supported.",
+        "A .COM file under CP/M. The Apple II and IIe with a SoftCard, the TRS-80 Model 4, the Altair and the Kaypro II. Not yet supported.",
         "A SYSTEM tape. The TRS-80 Model I and III. Not yet supported.",
         "A /CMD load module. The TRS-80 Model I, III and 4. Not yet supported.",
         "A DECB .BIN under Color BASIC. The Color Computer. Not yet supported.",

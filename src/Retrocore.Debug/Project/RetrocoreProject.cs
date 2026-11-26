@@ -281,7 +281,9 @@ internal sealed class RetrocoreProject
         project.Name = json["name"] is { } name ? Text(file, "'name'", name) : Path.GetFileName(project.Directory);
         if (!IsFileName(project.Name))
         {
-            throw new ProjectException($"{file}: the name '{project.Name}' must be letters, digits, '-', '_' and '.'.");
+            throw new ProjectException(json.ContainsKey("name")
+                ? $"{file}: the name '{project.Name}' must be letters, digits, '-', '_' and '.'."
+                : $"{file}: the project's folder name, '{project.Name}', cannot name its output; give 'name', letters, digits, '-', '_' and '.'.");
         }
 
         project.Cpu = json["cpu"] is { } cpu ? ReadCpu(file, "the project", cpu) : throw Missing(file, "the project", "cpu");
@@ -352,9 +354,10 @@ internal sealed class RetrocoreProject
             }
         }
 
-        if (!machine.Cpu.Runs(cpu))
+        ProjectCpu runs = ProjectTarget.MachineCpu(machine, environment);
+        if (!runs.Runs(cpu))
         {
-            throw new ProjectException($"{file}: {where}: {machine.Id}'s {machine.Cpu} does not run {cpu} code.");
+            throw new ProjectException($"{file}: {where}: {machine.Id}'s {runs} does not run {cpu} code.");
         }
 
         JsonObject options = [];
@@ -422,7 +425,7 @@ internal sealed class RetrocoreProject
             if (entry is JsonObject source)
             {
                 Check(file, $"a source of {where}", source, SourceFields);
-                string path = source["path"] is { } pathNode ? Text(file, "a source's 'path'", pathNode) : throw Missing(file, $"a source of {where}", "path");
+                string path = source["path"] is { } pathNode ? Text(file, $"a source of {where}'s 'path'", pathNode) : throw Missing(file, $"a source of {where}", "path");
                 string kind = source["kind"] is { } kindNode ? Text(file, $"{path}'s 'kind'", kindNode) : "asm";
                 if (!Kinds.Contains(kind))
                 {

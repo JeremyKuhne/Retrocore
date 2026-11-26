@@ -248,6 +248,35 @@ public sealed class ProjectFileTests
     }
 
     /// <summary>
+    ///  Under CP/M an Apple II's code runs on its SoftCard's Z80, so a Z80 or 8080 project can target it.
+    /// </summary>
+    [TestMethod]
+    public void CpmOnAnAppleIIRunsTheZ80()
+    {
+        Write("retrocore.json", """
+            { "sdk": "1", "cpu": "8080", "targets": {
+                "cpm": { "machine": "apple2-iie", "environment": "cpm" },
+                "cpm-z80": { "machine": "apple2-iiplus", "environment": "cpm", "cpu": "z80" } } }
+            """);
+
+        RetrocoreProject project = RetrocoreProject.Load(_folder);
+        project.Target("cpm").Cpu.Should().BeSameAs(ProjectCpu.I8080);
+        project.Target("cpm-z80").Cpu.Should().BeSameAs(ProjectCpu.Z80);
+        Error(project.Target("cpm").RequireSupported).Should().EndWith("the 'cpm' environment is not yet supported; only 'bare' builds.");
+    }
+
+    /// <summary>
+    ///  A project without a name whose folder's name cannot be one says to give it.
+    /// </summary>
+    [TestMethod]
+    public void FolderNameThatCannotNameTheProjectIsAnError()
+    {
+        Write("my game/retrocore.json", """{ "sdk": "1", "cpu": "6502", "targets": { "t": { "machine": "apple1", "environment": "bare" } } }""");
+        Error(() => RetrocoreProject.Load(Path.Join(_folder, "my game"))).Should().EndWith(
+            "the project's folder name, 'my game', cannot name its output; give 'name', letters, digits, '-', '_' and '.'.");
+    }
+
+    /// <summary>
     ///  Every CPU's instruction set is one the assembler's <c>.cpu</c> selects.
     /// </summary>
     [TestMethod]

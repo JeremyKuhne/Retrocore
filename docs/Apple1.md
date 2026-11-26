@@ -70,6 +70,27 @@ E000.EFFFR
 `E000.EFFFW` writes that range instead, after a leader of about ten seconds. Several commands can share a line,
 and Return goes back to the Monitor.
 
+## Typing a program in
+
+Without a tape, a program goes in through the Monitor: each line at its `\` prompt gives an address, a colon and the
+bytes to store from there, and an address followed by `R` runs it.
+[`WozMonitorHex`](../src/Retrocore.Machines.Apple1/WozMonitorHex.cs) writes that text for some bytes:
+
+```text
+0300: A9 C8 20 EF FF A9 C9 20
+0308: EF FF 4C 1F FF
+0300R
+```
+
+`WozMonitorHex.ToText(bytes, address, entry)` gives each line its address, so a line typed wrong can be typed again
+on its own, and ends with the `R` line unless `entry` is null. Lines hold 8 bytes by default, which keeps each one
+on a 40-column line of the screen. A line holds at most 40: the Monitor takes 127 keys before Return and drops a
+longer line with a backslash. Lines end with a carriage return and a line feed. Retrocore's keyboard
+(`Apple1Keyboard.Type`) skips the carriage return and types the line feed as Return; a Monitor sent both runs the
+line at the carriage return and skips the line feed, as it skips any character below `.`. The keyboard takes the
+whole text at once, as if it were pasted, and the Monitor stores at most about 20 bytes a second: each byte is three
+keys, and the terminal echoes about 60 keys a second.
+
 ## Apple-1 BASIC
 
 Steve Wozniak's BASIC for the Apple-1 came on cassette and runs in the 4K bank at $E000: `E000.EFFFR` at the

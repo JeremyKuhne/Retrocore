@@ -53,7 +53,7 @@ export interface ActiveTargets {
     readonly active: ProjectTarget | undefined;
     /** Every target of the workspace's projects, in their files' order. */
     readonly targets: readonly ProjectTarget[];
-    /** Fires when the active target, or what its project gives it, changes. */
+    /** Fires when the active target, its project's name or what its file gives the target changes. */
     readonly onDidChange: vscode.Event<ProjectTarget | undefined>;
     /** Reads the workspace's project files again. */
     refresh(): Promise<void>;

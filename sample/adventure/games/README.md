@@ -41,4 +41,4 @@ dotnet run ../tools/packer.cs -- play ../obj/pirate.bin pirate-die.in --echo > p
 ```
 
 CI does not play the Pirate transcripts yet: its step packs and plays only the test game's. Check them by hand with
-`play ../obj/pirate.bin pirate-win.in --echo --expect pirate-win.out` (and `pirate-die.in` with `pirate-die.out`).
+`dotnet run ../tools/packer.cs -- play ../obj/pirate.bin pirate-win.in --echo --expect pirate-win.out` (and `pirate-die.in` with `pirate-die.out`).

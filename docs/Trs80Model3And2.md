@@ -298,6 +298,8 @@ What the comparison has to allow for:
 ## What is not done yet
 
 - **The Model II's TRSDOS-II**, which needs an image. Its comparison with MAME covers only the boot ROMs.
+- **The Model II's boot ROM version 4**, MAME's `cpu_fc86` of 1982-11-18, which MAME lists but has no dump of, so
+  `Model2Boot.asm` has no source for it.
 - **The RS-232 ports**, the Model 4's sound beyond the speaker bit, its hi-res graphics board and hard disks, and the
   Model II's hard disks and serial devices.
 - **The Model 16's 68000.**

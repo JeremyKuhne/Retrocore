@@ -3,8 +3,8 @@
 The [Model III, 4, 4P, II, 12 and 16](../Trs80Model3And2.md) run the SDK's sources of their ROMs, which are
 byte-identical to MAME's dumps, and boot to their prompts. This is what remains for them to match the Model I.
 
-**Status:** every stage is built; what each still lacks is listed with it: TRSDOS-II on the Model II and its oracle,
-which need an image, and MAME's `cpu_fc86` Model II boot ROM.
+**Status:** every stage is built; what each still lacks is listed with it: TRSDOS-II on the Model II, with its oracle
+and its DMA and keyboard codes, which need an image; MAME's `cpu_fc86` Model II boot ROM; and TRSDOS 1.3 writing.
 
 ## Stages
 
@@ -41,4 +41,4 @@ which need an image, and MAME's `cpu_fc86` Model II boot ROM.
    DOS images save back byte for byte unchanged, and the JV3 ones to the same sectors (`Trs80DiskSaveTests`). LDOS
    5.1.3, TRSDOS 6.0 and 6.2 and LS-DOS 6.3 write a file that the saved image boots with and lists
    (`Trs80Model3RomTests.DosSavesAFile`). Still open: TRSDOS 1.3's `DUMP` stops with `ERROR 11` after reading its
-   directory, before it writes a sector.
+   directory, before it writes a sector, and its `COPY` does not finish.

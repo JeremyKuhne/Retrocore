@@ -16,7 +16,9 @@ public static class PascalLexer
     /// </summary>
     /// <param name="text">The text.</param>
     /// <param name="file">The file's path, which each token records.</param>
-    /// <returns>The tokens, in order; an unclosed comment or string runs to the end.</returns>
+    /// <returns>
+    ///  The tokens, in order; an unclosed comment runs to the end of the text, an unclosed string to the end of its line.
+    /// </returns>
     public static List<PascalToken> Tokenize(string text, string file)
     {
         ArgumentNullException.ThrowIfNull(text);

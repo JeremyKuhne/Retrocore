@@ -12,7 +12,7 @@ internal sealed class PascalWithBody
     /// <summary>
     ///  Creates a body.
     /// </summary>
-    /// <param name="depth">The BEGIN and CASE depth it ends at.</param>
+    /// <param name="depth">The BEGIN, CASE and REPEAT depth it ends at.</param>
     /// <param name="block">Whether it is a BEGIN block, which ends at its END.</param>
     internal PascalWithBody(int depth, bool block)
     {
@@ -21,7 +21,7 @@ internal sealed class PascalWithBody
     }
 
     /// <summary>
-    ///  Gets the BEGIN and CASE depth it ends at.
+    ///  Gets the BEGIN, CASE and REPEAT depth it ends at.
     /// </summary>
     public int Depth { get; }
 

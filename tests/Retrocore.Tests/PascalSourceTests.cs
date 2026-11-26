@@ -453,6 +453,59 @@ public sealed class PascalSourceTests
     }
 
     /// <summary>
+    ///  Text still being typed leaves the declarations after it declared, and the comments on them theirs.
+    /// </summary>
+    /// <param name="source">A program with something half typed before PROCEDURE Later.</param>
+    [TestMethod]
+    [DataRow("PROGRAM P;\nCONST\n  Max\nVAR X: INTEGER;\n(** L. *)\nPROCEDURE Later;\nBEGIN END;\nBEGIN END.")]
+    [DataRow("PROGRAM P;\nVAR\n  X: INTEGER;\n  Count\n  Total: INTEGER;\n(** L. *)\nPROCEDURE Later;\nBEGIN END;\nBEGIN END.")]
+    [DataRow("PROGRAM P;\nVAR X: INTEGER;\nPROCEDURE A;\nBEGIN\n  REPEAT\nEND;\n(** L. *)\nPROCEDURE Later;\nBEGIN END;\nBEGIN END.")]
+    [DataRow("PROGRAM P;\nVAR X: INTEGER;\nPROCEDURE A;\nBEGIN\n  X := 1;\n(** L. *)\nPROCEDURE Later;\nBEGIN END;\nBEGIN END.")]
+    [DataRow("PROGRAM P;\nVAR X: INTEGER;\nTYPE R = RECORD CASE Tag: BOOLEAN\nEND;\n(** L. *)\nPROCEDURE Later;\nBEGIN END;\nBEGIN END.")]
+    [DataRow("PROGRAM P;\nTYPE R = RECORD CASE Tag: BOOLEAN OF 1: (A: INTEGER);\n 2\nEND;\nVAR X: INTEGER;\n(** L. *)\nPROCEDURE Later;\nBEGIN END;\nBEGIN END.")]
+    [DataRow("PROGRAM P;\nPROCEDURE A(B: INTEGER\nVAR X: INTEGER;\nBEGIN END;\n(** L. *)\nPROCEDURE Later;\nBEGIN END;\nBEGIN END.")]
+    public void HalfTypedTextKeepsWhatFollows(string source)
+    {
+        PascalProgram program = Analyze(source);
+        PascalDeclaration later = program.Declarations.Single(declaration => declaration.Name == "Later");
+        later.Scope.Should().Be(program.Outer);
+        (later.Doc?.Summary).Should().Be("L.");
+        program.Declarations.Should().NotContain(declaration => declaration.Name == "BEGIN" || declaration.Name == "WRITELN");
+    }
+
+    /// <summary>
+    ///  A comment after a record's last field, which needs no ";", or after a FORWARD heading or an enumeration,
+    ///  documents what is on its line.
+    /// </summary>
+    [TestMethod]
+    public void TrailingCommentsWithoutASemicolon()
+    {
+        PascalProgram program = Analyze(
+            "PROGRAM P;\nTYPE Item = RECORD\n  Value: INTEGER; (** v *)\n  Next: INTEGER (** n *)\nEND;\n"
+                + "  Kind = (Red, Green); (** k *)\nPROCEDURE Q; FORWARD; (** q *)\nPROCEDURE S;\nBEGIN END;\n"
+                + "PROCEDURE Q;\nBEGIN END;\nBEGIN END.");
+
+        PascalDeclaration Find(string name) => program.Declarations.Single(declaration => declaration.Name == name);
+        (Find("Next").Doc?.Summary).Should().Be("n");
+        (Find("Kind").Doc?.Summary).Should().Be("k");
+        Find("Red").Doc.Should().BeNull();
+        (Find("Q").Doc?.Summary).Should().Be("q");
+        Find("S").Doc.Should().BeNull();
+        program.StrayDocs.Should().BeEmpty();
+    }
+
+    /// <summary>
+    ///  A file's documentation may follow ordinary comments, such as a copyright line.
+    /// </summary>
+    [TestMethod]
+    public void FileDocsMayFollowComments()
+    {
+        PascalProgram program = Analyze("(* Copyright *)\n(** The file. *)\n\nPROGRAM P;\nBEGIN END.");
+        (program.Files[0].Doc?.Summary).Should().Be("The file.");
+        program.Declarations.Single(declaration => declaration.Name == "P").Doc.Should().BeNull();
+    }
+
+    /// <summary>
     ///  A stray UNTIL, as while typing, doesn't end the statement part it is in, so what follows is still declared.
     /// </summary>
     [TestMethod]

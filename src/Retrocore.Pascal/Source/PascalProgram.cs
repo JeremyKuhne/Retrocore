@@ -134,8 +134,8 @@ public sealed partial class PascalProgram
         PascalDeclaration? found = reference.AfterDot ? null : reference.Scope.Find(reference.Token.Text);
 
         // A field: after a ".", or inside a WITH, whose record the scan does not follow; any record's field of that
-        // name. A standard identifier elsewhere is the standard one, not some record's field.
-        if (reference.AfterDot || reference.InWith || !PascalNames.IsStandard(reference.Token.Text))
+        // name. Elsewhere a bare name is never a field.
+        if (reference.AfterDot || reference.InWith)
         {
             found ??= Declarations.FirstOrDefault(
                 declaration => declaration.Kind == PascalDeclarationKind.Field && declaration.Key == key);
@@ -194,13 +194,18 @@ public sealed partial class PascalProgram
         Files.Add(file);
         reading.Add(path.ToUpperInvariant());
 
-        // The file's own documentation: its first token, a (** *) with a blank line or the end after it.
+        // The file's own documentation: its first (** *), after any ordinary comments and options, with a blank line or
+        // the end after it.
         PascalToken? fileDoc = null;
-        bool blankAfter = tokens.Count == 1 || (tokens.Count > 1 && tokens[1].Line > tokens[0].EndLine + 1);
-        if (tokens.Count > 0 && tokens[0].Kind == PascalTokenKind.DocComment && blankAfter)
+        int first = tokens.FindIndex(token => token.Kind is not (PascalTokenKind.Comment or PascalTokenKind.Option));
+        if (first >= 0 && tokens[first].Kind == PascalTokenKind.DocComment)
         {
-            fileDoc = tokens[0];
-            file.Doc = PascalDocComment.Parse(fileDoc);
+            bool blankAfter = first + 1 == tokens.Count || tokens[first + 1].Line > tokens[first].EndLine + 1;
+            if (blankAfter)
+            {
+                fileDoc = tokens[first];
+                file.Doc = PascalDocComment.Parse(fileDoc);
+            }
         }
 
         foreach (PascalToken token in tokens)
@@ -246,7 +251,10 @@ public sealed partial class PascalProgram
 
         body = body.Trim();
         if (body.Length < 2 || char.ToUpperInvariant(body[0]) != 'I' || body[1] is '+' or '-' or ',') { return null; }
+        // A name ends at a blank: an option still being typed has the rest of the text after it.
         string name = body[1..].Trim();
+        int blank = name.IndexOfAny([' ', '\t', '\n']);
+        name = blank >= 0 ? name[..blank] : name;
         int colon = name.IndexOf(':');
         name = colon >= 0 ? name[(colon + 1)..] : name;
         return name.Length > 0 ? name : null;

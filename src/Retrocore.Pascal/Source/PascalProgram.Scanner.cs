@@ -112,7 +112,13 @@ public sealed partial class PascalProgram
 
                 if (!section)
                 {
-                    return;
+                    // The statement part, or the unit's implementation, ends the declarations; anything else, such as
+                    // a name still being typed, is stepped over, so the declarations after it are still read.
+                    if (token.Is("BEGIN") || token.Is("IMPLEMENTATION") || token.Is("END")) { return; }
+                    if (token.IsSymbol(".") && IsEndOfProgram()) { return; }
+                    Use(scope);
+                    Next();
+                    continue;
                 }
 
                 Next();
@@ -189,7 +195,10 @@ public sealed partial class PascalProgram
                 Next();
                 while (Current is { Kind: PascalTokenKind.Identifier } value)
                 {
-                    Declare(value, PascalDeclarationKind.EnumValue, scope).IsInterface = interfacePart;
+                    // A comment after the type documents the type, not each of its values.
+                    PascalDeclaration declared = Declare(value, PascalDeclarationKind.EnumValue, scope);
+                    declared.IsInterface = interfacePart;
+                    _statement.Remove(declared);
                     Next();
                     if (Current is { } comma && comma.IsSymbol(",")) { Next(); }
                 }
@@ -243,13 +252,14 @@ public sealed partial class PascalProgram
                 Next();
             }
 
-            UseUntil(fields.Parent ?? fields, "OF");
+            // The tag's type, to OF; a variant part still being typed may have none yet.
+            if (!UseUntilBefore(fields.Parent ?? fields, "OF", "END", ";")) { return; }
             Next();
             // An inner variant part ends at the ")" that closes its variant; the outermost at the record's END.
             while (Current is { } token && !token.Is("END") && !token.IsSymbol(")"))
             {
                 // The variant's labels, a colon, and its fields in parentheses.
-                UseUntil(fields.Parent ?? fields, ":");
+                if (!UseUntilBefore(fields.Parent ?? fields, ":", "END", ";", ")")) { return; }
                 Next();
                 if (Current is not { } open || !open.IsSymbol("(")) { return; }
                 Next();
@@ -303,7 +313,8 @@ public sealed partial class PascalProgram
             if (Current is { } open && open.IsSymbol("("))
             {
                 Next();
-                while (Current is { } parameter && !parameter.IsSymbol(")"))
+                // A parameter list ends at its ")", or, still being typed, where the routine's block starts.
+                while (Current is { } parameter && !parameter.IsSymbol(")") && !EndsParameters(parameter))
                 {
                     if (parameter.Is("VAR")) { Next(); continue; }
                     if (parameter.Kind == PascalTokenKind.Identifier)
@@ -315,7 +326,7 @@ public sealed partial class PascalProgram
                     Next();
                 }
 
-                Next();
+                if (Current is { } close && close.IsSymbol(")")) { Next(); }
             }
 
             if (Current is { } colon && colon.IsSymbol(":")) { Next(); UseUntil(scope, ";"); }
@@ -338,7 +349,15 @@ public sealed partial class PascalProgram
             {
                 routine.IsHeadingOnly = true;
                 Next();
-                if (Current is { } end && end.IsSymbol(";")) { Next(); }
+                if (Current is { } end && end.IsSymbol(";"))
+                {
+                    // A documentation comment after the directive, on its line, documents the routine.
+                    Next();
+                    _statement.Clear();
+                    if (routine.Doc is null) { _statement.Add(routine); }
+                    EndStatement();
+                }
+
                 return;
             }
 
@@ -346,7 +365,6 @@ public sealed partial class PascalProgram
             if (Current is { } after && after.IsSymbol(";")) { Next(); }
         }
 
-        // A compound statement: BEGIN to its END, each name used recorded in the scope.
         // A statement part, BEGIN to its END, noting the WITH statements whose bodies may name fields bare: a body
         // that is a BEGIN ends at its END, any other at the ";", END or UNTIL that ends the statement, or an ELSE
         // that isn't its own IF's.
@@ -356,8 +374,11 @@ public sealed partial class PascalProgram
             bool awaitingDo = false;
             List<PascalWithBody> withs = [];
             Stack<int> repeats = [];
+            _statement.Clear();
             while (Current is { } token)
             {
+                // A declaration can't be in a statement: an END is missing, and the declaration is the enclosing one's.
+                if (StartsDeclaration(token)) { return; }
                 if (token.Is("WITH")) { awaitingDo = true; }
                 else if (token.Is("DO") && awaitingDo)
                 {
@@ -401,9 +422,16 @@ public sealed partial class PascalProgram
                 }
                 else if (token.Is("END"))
                 {
+                    // An END closes a BEGIN or CASE, after any REPEAT inside it its UNTIL never closed.
+                    while (repeats.TryPeek(out int unclosed) && unclosed == depth)
+                    {
+                        repeats.Pop();
+                        withs.RemoveAll(body => body.Depth >= depth);
+                        depth--;
+                    }
+
                     withs.RemoveAll(body => body.Depth >= depth);
                     depth--;
-                    while (repeats.TryPeek(out int unclosed) && unclosed > depth) { repeats.Pop(); }
                     Next();
                     if (depth == 0) { return; }
                     continue;
@@ -413,6 +441,22 @@ public sealed partial class PascalProgram
                 Next();
             }
         }
+
+        // Uses the names up to a symbol or word, and says whether it was found before one of the others.
+        private bool UseUntilBefore(PascalScope scope, string end, params string[] stops)
+        {
+            while (Current is { } token && !(token.IsSymbol(end) || token.Is(end)))
+            {
+                if (stops.Any(stop => token.IsSymbol(stop) || token.Is(stop))) { return false; }
+                if (token.Kind == PascalTokenKind.Identifier) { Use(scope); }
+                Next();
+            }
+
+            return Current is not null;
+        }
+
+        private static bool EndsParameters(PascalToken token) =>
+            token.Is("BEGIN") || token.Is("FORWARD") || token.Is("EXTERNAL") || StartsDeclaration(token);
 
         private void UseUntil(PascalScope scope, string end)
         {
@@ -480,8 +524,24 @@ public sealed partial class PascalProgram
         {
             while (_at < _tokens.Count && _tokens[_at].Kind == PascalTokenKind.DocComment)
             {
+                // One after a declaration on its line, as after a record's last field, which has no ";", documents it.
+                PascalToken doc = _tokens[_at];
+                PascalToken? before = _at > 0 ? _tokens[_at - 1] : null;
+                List<PascalDeclaration> undocumented = [.. _statement.Where(declaration => declaration.Doc is null)];
+                if (before is not null
+                    && before.Kind != PascalTokenKind.DocComment
+                    && before.EndLine == doc.Line
+                    && before.File == doc.File
+                    && undocumented.Count > 0)
+                {
+                    PascalDocComment trailing = PascalDocComment.Parse(doc);
+                    foreach (PascalDeclaration declaration in undocumented) { declaration.Doc = trailing; }
+                    _at++;
+                    continue;
+                }
+
                 if (_pending is { } stray) { _program.StrayDocs.Add(stray); }
-                _pending = PascalDocComment.Parse(_tokens[_at]);
+                _pending = PascalDocComment.Parse(doc);
                 _at++;
             }
 
@@ -521,6 +581,19 @@ public sealed partial class PascalProgram
 
             return false;
         }
+
+        // Whether the token is the last, as a program's final "." is.
+        private bool IsEndOfProgram() => Skip() + 1 >= _tokens.Count;
+
+        // Whether a token can only start a declaration, so a statement part that meets it was left without its END.
+        private static bool StartsDeclaration(PascalToken token) =>
+            token.Is("PROCEDURE")
+                || token.Is("FUNCTION")
+                || token.Is("SEGMENT")
+                || token.Is("CONST")
+                || token.Is("TYPE")
+                || token.Is("LABEL")
+                || token.Is("IMPLEMENTATION");
 
         private bool IsKeyword(int ahead, string word)
         {

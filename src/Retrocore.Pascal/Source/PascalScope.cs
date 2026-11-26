@@ -43,7 +43,8 @@ public sealed class PascalScope
     public List<PascalDeclaration> Declarations { get; } = [];
 
     /// <summary>
-    ///  Gets its path, as links qualify names: the routines it is nested in, outermost first, not the program.
+    ///  Gets its path, as links qualify names: the routines and named records it is nested in, outermost first, not the
+    ///  program. A record type written in a variable's declaration has no name, and the path stops there.
     /// </summary>
     public string Path
     {

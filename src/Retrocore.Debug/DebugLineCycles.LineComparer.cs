@@ -12,7 +12,7 @@ internal sealed partial class DebugLineCycles
     ///  Compares source lines as tuples do, with ordinal paths, but hashes each path string once: a module's lines
     ///  share their file's path, and hashing it again at every line change costs more than the counting.
     /// </summary>
-    private sealed class LineComparer : IEqualityComparer<(string Path, int Line)>
+    internal sealed class LineComparer : IEqualityComparer<(string Path, int Line)>
     {
         // Paths hashed recently, by identity. An entry is replaced whole, so another thread never sees a torn one.
         private readonly Tuple<string, int>?[] _paths = new Tuple<string, int>?[16];

@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: MIT
 // See LICENSE file in the project root for full license information
 
+using System.Runtime.InteropServices;
+
 namespace Retrocore.Debug;
 
 /// <summary>
@@ -13,7 +15,7 @@ internal sealed class DebugCallCycles
     private const int MaximumPending = 256;
 
     private readonly List<((string Path, int Line) Line, ushort Return, int Stack, ulong Start)> _pending = [];
-    private readonly Dictionary<(string Path, int Line), ulong> _last = [];
+    private readonly Dictionary<(string Path, int Line), ulong> _last = [with(new DebugLineCycles.LineComparer())];
 
     /// <summary>
     ///  Gets each calling line's latest completed call's cycles.
@@ -52,9 +54,10 @@ internal sealed class DebugCallCycles
             if (stack == callStack && pc == returnAddress)
             {
                 ulong duration = cycles - start;
-                if (!_last.TryGetValue(caller, out ulong previous) || previous != duration)
+                ref ulong previous = ref CollectionsMarshal.GetValueRefOrAddDefault(_last, caller, out bool exists);
+                if (!exists || previous != duration)
                 {
-                    _last[caller] = duration;
+                    previous = duration;
                     changed = true;
                 }
 

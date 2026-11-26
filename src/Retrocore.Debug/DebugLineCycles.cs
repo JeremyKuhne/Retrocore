@@ -15,6 +15,9 @@ internal sealed partial class DebugLineCycles
     // Null means the line was absent from the last event, rather than present with a zero count.
     private readonly Dictionary<(string Path, int Line), ulong?> _before;
 
+    // The lines in event order, until a line is added or the counts are forgotten.
+    private (string Path, int Line)[]? _ordered;
+
     /// <summary>
     ///  Creates an empty record.
     /// </summary>
@@ -31,6 +34,18 @@ internal sealed partial class DebugLineCycles
     internal IReadOnlyDictionary<(string Path, int Line), ulong> Last => _last;
 
     /// <summary>
+    ///  Gets the lines by path, ignoring case, then line number; lines whose paths differ only in case keep the order
+    ///  they were first counted in.
+    /// </summary>
+    /// <remarks>
+    ///  <para>
+    ///   The order is kept until a line is added or the counts are forgotten, since each event lists every line.
+    ///  </para>
+    /// </remarks>
+    internal IReadOnlyList<(string Path, int Line)> Ordered =>
+        _ordered ??= [.. _last.Keys.OrderBy(line => line.Path, StringComparer.OrdinalIgnoreCase).ThenBy(line => line.Line)];
+
+    /// <summary>
     ///  Gets whether any tracked line differs from its value at the last event.
     /// </summary>
     internal bool Changed => _before.Count != 0;
@@ -45,6 +60,7 @@ internal sealed partial class DebugLineCycles
     internal void Update((string Path, int Line) source, ulong cycles, bool entered, bool track)
     {
         ref ulong count = ref CollectionsMarshal.GetValueRefOrAddDefault(_last, source, out bool exists);
+        if (!exists) { _ordered = null; }
         ulong updated = entered ? cycles : count + cycles;
         if (!exists || count != updated)
         {
@@ -76,5 +92,6 @@ internal sealed partial class DebugLineCycles
     {
         _last.Clear();
         _before.Clear();
+        _ordered = null;
     }
 }

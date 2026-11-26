@@ -9,6 +9,7 @@ shows SOS's source wherever SOS runs. They are in the Apple III's ROM sources, u
 | `Sos/SosKernel.asm` | SOS 1.3's `SOS.KERNEL`, 22,016 bytes. |
 | `Sos/SosBoot.asm` | Block 0 of a SOS disk: Apple's bootstrap loader 1.1, which the boot ROM reads to `$A000`. `SYSTEM_DEMO = 1` builds the System Demo disk's copy, and `ON_THREE = 1` On Three's revision. |
 | `Sos/Drivers/<Name>/<Name>.asm` | One driver, as `SOS.DRIVER` holds it. |
+| `Sos/SosDriverHeader.asm` | `SOS.DRIVER`'s header: the built-in drives, Apple's STANDARD character set and its SHOLES keyboard layout. `DRIVES` sets the drive count, 3 by default. |
 
 [`Apple3.md`](Apple3.md) covers the machine.
 
@@ -71,6 +72,15 @@ the 1.10 that Apple's 1.30 listing revised; its source explains each difference 
 A driver with a comment, as SCP shows it, starts with its comment record: `$FFFF`, the comment's length and its
 text. `SOS.DRIVER` keeps the comment apart from the code, so the code's addresses count from the driver's first DIB.
 
+## SOS.DRIVER's header
+
+`SOS.DRIVER` starts with `SOS DRVR` and a header that SOS's loader reads at fixed offsets: the number of built-in
+floppy drives to configure, the character set (moved to `$0C00`) and the keyboard layout (moved to `$1700`), each
+of the two after a 16-character name the loader skips. The drivers follow. `SosDriverHeader.asm` builds the header
+as Apple's System Configuration Program wrote it. With `DRIVES = 3` it matches the Business BASIC 1.23 disk's,
+and with `DRIVES = 2` the System Utilities disk's; nothing else differs between them. The keyboard layout's
+comments explain how the console driver reads it.
+
 ## The bootstrap loader
 
 The boot ROM reads a SOS disk's block 0 to `$A000` and runs it. The loader finds `SOS.KERNEL` in the volume
@@ -96,5 +106,8 @@ more than 256K.
 - `SosDriverSourceTests` pins each driver build's code, and with the disks compares its code, relocation table and
   comment with the driver in that disk's `SOS.DRIVER`.
 - `SosVolumeTests` reads SOS volumes and driver files.
+- `SosDriverHeaderTests` pins the header by digest and compares it with the disks' headers. It checks that each Apple
+  driver build (`Apple3SdkModules.BuildSosDriver`) has the disk's code, relocations and comment, and that
+  `SosDriverFile.Write` writes files that read back and rewrites the disks' `SOS.DRIVER` byte for byte.
 - `node tools/Test-Apple3Dap.mjs` stops at a breakpoint in the kernel's source while the System Utilities boot,
   and binds one in the formatter driver's source once SOS has loaded it.

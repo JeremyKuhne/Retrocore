@@ -3,6 +3,8 @@
 // See LICENSE file in the project root for full license information
 
 using Retrocore.Assembler;
+using Retrocore.Media;
+using System.Text;
 
 namespace Retrocore.Debug;
 
@@ -101,6 +103,138 @@ internal static class Apple3SdkModules
     /// <exception cref="InvalidDataException">The source has errors.</exception>
     internal static byte[] BuildSosBoot(string? directory) =>
         AssembleSosBoot(SourcePath(directory, "SosBoot.asm"), "").Sections[0].Bytes.ToArray();
+
+    /// <summary>
+    ///  Builds SOS.DRIVER's header from the SDK's source, <c>Sos/SosDriverHeader.asm</c>: the built-in drives,
+    ///  Apple's STANDARD character set and its SHOLES keyboard layout.
+    /// </summary>
+    /// <param name="directory">The SDK ROM directory, or null for the copy beside the debug host.</param>
+    /// <param name="drives">The number of built-in floppy drives SOS is to configure, 1-4.</param>
+    /// <returns>The header's <see cref="SosDriverFile.HeaderSize"/> bytes, after its count.</returns>
+    /// <exception cref="ArgumentOutOfRangeException">The drive count is not 1-4.</exception>
+    /// <exception cref="FileNotFoundException">
+    ///  The Apple III sources (the directory, or its <c>Apple3</c> folder when it has no <c>BootRom.asm</c>) have no
+    ///  <c>Sos/SosDriverHeader.asm</c>.
+    /// </exception>
+    /// <exception cref="InvalidDataException">The source has errors.</exception>
+    internal static byte[] BuildSosDriverHeader(string? directory, int drives)
+    {
+        ArgumentOutOfRangeException.ThrowIfLessThan(drives, 1);
+        ArgumentOutOfRangeException.ThrowIfGreaterThan(drives, 4);
+        string path = SourcePath(directory, "SosDriverHeader.asm");
+        string wrapper = Path.Join(Path.GetDirectoryName(path), "_DRIVES.asm");
+        return Assemble(wrapper, 0, SosDriverFile.HeaderSize, $"DRIVES = {drives}\n.include \"SosDriverHeader.asm\"\n")
+            .Sections[0].Bytes.ToArray();
+    }
+
+    /// <summary>
+    ///  Builds a SOS driver from the SDK's source in <c>Sos/Drivers</c>, as SOS.DRIVER holds it: its comment, its
+    ///  code at origin 0, and the offsets of the words SOS relocates.
+    /// </summary>
+    /// <remarks>
+    ///  <para>
+    ///   The source is assembled at two origins. Its code is the first build's, after the comment record
+    ///   (<c>$FFFF</c>, a length and the comment's text) when it starts with one, up to the last byte it emits and
+    ///   padded with a 0 to a whole number of words from the start of the record, as Apple's assembler padded it;
+    ///   the words to relocate are those that differ by the distance between the origins. SOS relocates only words, so a
+    ///   driver keeps no byte of its own address alone, such as an immediate high byte; such a byte would read as a
+    ///   word with the byte before it.
+    ///  </para>
+    /// </remarks>
+    /// <param name="directory">The SDK ROM directory, or null for the copy beside the debug host.</param>
+    /// <param name="folder">The driver's folder, which holds its root of the same name, such as <c>Console</c>.</param>
+    /// <param name="define">
+    ///  A symbol to set to 1 for a build other than the default, such as <c>RELEASE_130</c> for the console's 1.30,
+    ///  or empty.
+    /// </param>
+    /// <returns>The driver.</returns>
+    /// <exception cref="FileNotFoundException">The SDK has no source for the driver.</exception>
+    /// <exception cref="InvalidDataException">
+    ///  The source has errors, emits no code, assembles to different lengths at the two origins, or its comment record
+    ///  runs past what it emits.
+    /// </exception>
+    internal static SosDriver BuildSosDriver(string? directory, string folder, string define = "")
+    {
+        ArgumentException.ThrowIfNullOrEmpty(folder);
+        ArgumentNullException.ThrowIfNull(define);
+        string root = SourcePath(directory, Path.Join("Drivers", folder, folder + ".asm"));
+        (byte[] code, string comment) = DriverCode(AssembleDriver(root, define, 0));
+        (byte[] moved, _) = DriverCode(AssembleDriver(root, define, DriverShift));
+        if (moved.Length != code.Length)
+        {
+            throw new InvalidDataException($"The driver {folder} assembles to different lengths at different origins.");
+        }
+
+        List<int> relocations = [];
+        for (int offset = 0; offset + 1 < code.Length; offset++)
+        {
+            int word = code[offset] | (code[offset + 1] << 8);
+            int movedWord = moved[offset] | (moved[offset + 1] << 8);
+            if (((movedWord - word) & 0xFFFF) == DriverShift) { relocations.Add(offset); }
+        }
+
+        return new SosDriver(comment, code, [.. relocations]);
+    }
+
+    /// <summary>
+    ///  Builds a SOS.DRIVER file from the SDK's sources: the header, then each driver.
+    /// </summary>
+    /// <param name="directory">The SDK ROM directory, or null for the copy beside the debug host.</param>
+    /// <param name="drives">The number of built-in floppy drives SOS is to configure, 1-4.</param>
+    /// <param name="folders">
+    ///  The drivers' folders in <c>Sos/Drivers</c>, in the file's order, such as <c>Console</c>; SOS
+    ///  needs the console's. The built-in disk's driver, <c>.D1</c> to <c>.D4</c>, is in the kernel.
+    /// </param>
+    /// <returns>The file.</returns>
+    /// <exception cref="ArgumentException">There are no drivers.</exception>
+    /// <exception cref="ArgumentOutOfRangeException">The drive count is not 1-4.</exception>
+    /// <exception cref="FileNotFoundException">The SDK has no source for the header or a driver.</exception>
+    /// <exception cref="InvalidDataException">A source has errors.</exception>
+    internal static byte[] BuildSosDriverFile(string? directory, int drives, IReadOnlyList<string> folders)
+    {
+        ArgumentNullException.ThrowIfNull(folders);
+        byte[] header = BuildSosDriverHeader(directory, drives);
+        return SosDriverFile.Write(header, [.. folders.Select(folder => BuildSosDriver(directory, folder))]);
+    }
+
+    // The distance between the two origins a driver is assembled at: a whole number of pages, so that a source
+    // that aligns to a page assembles the same.
+    private const int DriverShift = 0x1000;
+
+    // The space a driver's code may take.
+    private const int DriverSpace = 0x8000;
+
+    private static AssemblyResult AssembleDriver(string root, string define, int origin)
+    {
+        if (define.Length == 0) { return Assemble(root, origin, DriverSpace); }
+        string wrapper = Path.Join(Path.GetDirectoryName(root), $"_{define}.asm");
+        return Assemble(wrapper, origin, DriverSpace, $"{define} = 1\n.include \"{Path.GetFileName(root)}\"\n");
+    }
+
+    // A driver's code, after its comment record when it has one, up to the last byte its source emits and padded
+    // to a word, and the comment.
+    private static (byte[] Code, string Comment) DriverCode(AssemblyResult result)
+    {
+        ReadOnlySpan<byte> bytes = result.Sections[0].Bytes.Span;
+        int end = result.SourceMap.Where(entry => entry.Section == 0).Select(entry => entry.Offset + entry.Size).DefaultIfEmpty(0).Max();
+        int start = 0;
+        string comment = "";
+        if (end >= 4 && bytes[0] == 0xFF && bytes[1] == 0xFF)
+        {
+            int size = bytes[2] | (bytes[3] << 8);
+            if (4 + size > end) { throw new InvalidDataException("The driver's comment record runs past its code."); }
+            comment = Encoding.ASCII.GetString(bytes.Slice(4, size));
+            start = 4 + size;
+        }
+
+        if (end <= start) { throw new InvalidDataException("The driver's source emits no code."); }
+
+        // Apple's assembler padded the comment record and code to a whole number of words, and SOS.DRIVER keeps the
+        // pad byte.
+        byte[] code = new byte[(end + 1 & ~1) - start];
+        bytes[start..end].CopyTo(code);
+        return (code, comment);
+    }
 
     // A source in the Apple III's Sos folder, which must be there.
     private static string SourcePath(string? directory, string file)

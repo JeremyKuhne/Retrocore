@@ -343,7 +343,7 @@ What each starting environment's image needs, and what is there:
 | --- | --- | --- | --- |
 | `wozmon` | ACI tape (WAV) and hex text | `Apple1Tape.FromData` and `ToWave`; `WozMonitorHex.ToText` for the hex text (`0300: A9 C1 …` lines, then `0300R`) | |
 | `dos33` | DOS 3.3 disk | `DosDisk.Create` takes any files, and the launch's `dos: "3.3"` builds the disk with `HELLO` and a B file | more files than `HELLO` and the program, such as `PIRATE.DAT`. The launch's disk is documented for the IIe, so a test should show it boots a II Plus. |
-| `sos` | SOS boot disk | `SosVolumeBuilder` writes the volume and its files. `Apple3SdkModules` assembles the kernel and the boot blocks, though only inside the debug host | writing assembled boot blocks (`BootFrom` copies only from another volume); a `SOS.DRIVER` writer with its relocation, comment records and device chain (`SosDriverFile` only reads); the SOS assemblies moved where the build can use them; and the `SOS.INTERP` header |
+| `sos` | SOS boot disk | `SosVolumeBuilder` writes the volume, its files and assembled boot blocks. `Apple3SdkModules`, in the debug host, where the build runs, builds the kernel, the boot block, SOS.DRIVER's header and each driver with its relocations for the build, and `SosDriverFile.Write` writes SOS.DRIVER | the `SOS.INTERP` header, and the boot disk that puts them together |
 | `basic` | PET TAP tape, and a 4040 disk with dumps | [`PetSysProgram`](../../src/Retrocore.Media/Commodore/PetSysProgram.cs) builds the PRG with its `SYS` line and its TAP tape (through `CommodoreTapeBuilder.FromPrg` and `TapFormat.Write`); [`CbmDosDisk`](../../src/Retrocore.Media/Commodore/CbmDosDisk.cs) formats a DOS 2 disk and adds PRG and SEQ files; a `.prg` already loads and RUNs from a launch | |
 | `dfs` | DFS `.ssd` | `AcornDfsDisk` writes the files with their load and exec addresses, the title, `!BOOT` and the `*OPT 4` boot option, and boots under DNFS; `AcornTapeBuilder.BuildUef` writes the tape | nothing |
 
@@ -602,11 +602,17 @@ Checked against main once the PET and BBC Micro had landed:
 - **The media writers are their own work** ahead of the starting environments: Woz Monitor hex, more DOS 3.3 files,
   the PET's `SYS` stub, the DFS catalogue, the SOS boot disk, and later CBM DOS.
 - **The Apple II target reuses the launch's `dos: "3.3"` disk**, extended to more files.
+- **The SOS boot disk's `SOS.DRIVER` carries the console alone by default**, from the SDK's source. The built-in
+  disk's driver, `.D1` to `.D4`, is part of SOS.KERNEL, so the disk needs no entry. `SosDriverFile.Write` writes any
+  drivers it is given: it rewrites Apple's own files byte for byte, and the SDK builds every Apple driver it has a
+  source for (console, RS-232, printer, graphics, audio, Silentype, ProFile, formatter and RAM disk). A target can
+  add those by name. The drivers are relocated, because `SOS.DRIVER` has no fixed-address form: SOS's loader puts
+  each driver wherever it finds room below the interpreter and adds that address to the words its relocation table
+  lists. The build finds those words by assembling each driver at two origins. The header's character set and
+  keyboard layout come from a new SDK source, `Sos/SosDriverHeader.asm`: Apple's STANDARD set and SHOLES layout.
 
 ## Open questions
 
-- **The SOS boot disk's scope.** Should the first `SOS.DRIVER` writer carry only the drivers the SDK builds (console,
-  disk), or every driver `SosDriverFile` can read? And should it relocate them, or place them at fixed addresses?
 - **The packed format's budget.** How small Pirate Adventure packs, and so whether the Apple-1 could fit in 16K. This
   is measured in phase 3.
 - **Saving the game.** A save to disk on the disk targets, and to tape or nothing on the Apple-1. Is this in the first

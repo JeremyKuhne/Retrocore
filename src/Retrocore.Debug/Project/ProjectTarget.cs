@@ -17,6 +17,23 @@ internal sealed class ProjectTarget
     internal static readonly string[] Environments =
         ["bare", "wozmon", "dos33", "prodos", "sos", "basic", "dfs", "cpm", "level2", "trsdos", "colorbasic", "diskbasic"];
 
+    // The machines each environment runs on, by catalog id, as the SDK plan's targets table gives them; bare runs on
+    // every machine. CP/M runs on an Apple II with a SoftCard, which the build checks once cpm builds.
+    private static readonly Dictionary<string, string[]> s_machines = new()
+    {
+        ["wozmon"] = ["apple1"],
+        ["dos33"] = ["apple2-ii", "apple2-iiplus", "apple2-iie", "apple2-iie-enhanced"],
+        ["prodos"] = ["apple2-iiplus", "apple2-iie", "apple2-iie-enhanced"],
+        ["sos"] = ["apple3"],
+        ["basic"] = ["pet2001-basic2", "pet2001", "pet4032", "pet4032-business"],
+        ["dfs"] = ["bbcb", "bbca"],
+        ["cpm"] = ["apple2-ii", "apple2-iiplus", "apple2-iie", "apple2-iie-enhanced", "trs80-model4", "trs80-model4p", "altair", "kaypro2"],
+        ["level2"] = ["trs80-model1-level2", "trs80-model3"],
+        ["trsdos"] = ["trs80-model1-level2", "trs80-model3", "trs80-model4", "trs80-model4p"],
+        ["colorbasic"] = ["coco1", "coco2", "coco3"],
+        ["diskbasic"] = ["coco1", "coco2", "coco3"]
+    };
+
     /// <summary>
     ///  The environment a program loaded straight into RAM runs in, with the ROM's routines only.
     /// </summary>
@@ -57,7 +74,7 @@ internal sealed class ProjectTarget
     /// <summary>
     ///  Gets the environment, one of <see cref="Environments"/>.
     /// </summary>
-    internal string Environment { get; init; } = Bare;
+    internal required string Environment { get; init; }
 
     /// <summary>
     ///  Gets the CPU the target's code keeps to and its build starts with: the target's own <c>cpu</c>, or the
@@ -117,7 +134,10 @@ internal sealed class ProjectTarget
         List<string> problems =
         [
             .. Project.Unsupported.Select(field => $"the project's '{field}' is not yet supported"),
-            .. Unsupported.Select(field => $"'{field}' is not yet supported")
+            .. Unsupported.Select(field => $"'{field}' is not yet supported"),
+            .. Project.Sources.Concat(Sources)
+                .Where(source => source.Kind != "asm")
+                .Select(source => $"the source '{source.Path}' is {source.Kind}, which is not yet supported")
         ];
 
         if (Environment != Bare)
@@ -130,6 +150,15 @@ internal sealed class ProjectTarget
             throw new ProjectException($"{Project.File}: target {Name}: {string.Join("; ", problems)}.");
         }
     }
+
+    /// <summary>
+    ///  Tests whether a machine runs an environment, as the SDK plan's targets table pairs them.
+    /// </summary>
+    /// <param name="machine">The machine.</param>
+    /// <param name="environment">The environment, one of <see cref="Environments"/>.</param>
+    /// <returns>Whether it does; every machine runs <c>bare</c>.</returns>
+    internal static bool Runs(CatalogMachine machine, string environment) =>
+        environment == Bare || (s_machines.TryGetValue(environment, out string[]? ids) && ids.Contains(machine.Id));
 
     /// <summary>
     ///  Gets the source files the target assembles, in order: the project's <c>sources</c>, then the platform
@@ -160,37 +189,43 @@ internal sealed class ProjectTarget
 
     /// <summary>
     ///  Gets the platform folders' sources for the target: <c>src/platform/&lt;family&gt;/</c>'s, then
-    ///  <c>src/platform/&lt;model&gt;/</c>'s, each folder's sorted by relative path as file names compare. A model's file
-    ///  takes the place of its family's file of the same relative path.
+    ///  <c>src/platform/&lt;model&gt;/</c>'s, each folder's in ordinal order of their relative paths, the same on every
+    ///  system. A model's file takes the place of its family's file of the same relative path, compared as file
+    ///  names are.
     /// </summary>
     /// <returns>The files' full paths.</returns>
     internal List<string> PlatformFiles()
     {
-        SortedDictionary<string, string> family = Folder(Machine.Family);
-        if (Machine.Id == Machine.Family) { return [.. family.Values]; }
+        List<KeyValuePair<string, string>> family = Folder(Machine.Family);
+        if (Machine.Id == Machine.Family) { return [.. family.Select(entry => entry.Value)]; }
 
-        SortedDictionary<string, string> model = Folder(Machine.Id);
-        List<string> files = [.. family.Select(entry => model.GetValueOrDefault(entry.Key, entry.Value))];
-        files.AddRange(model.Where(entry => !family.ContainsKey(entry.Key)).Select(entry => entry.Value));
+        List<KeyValuePair<string, string>> model = Folder(Machine.Id);
+        Dictionary<string, string> replacements = [with(ProjectGlob.FileNames)];
+        foreach ((string name, string file) in model) { replacements[name] = file; }
+        HashSet<string> replaced = [with(ProjectGlob.FileNames)];
+        List<string> files = [];
+        foreach ((string name, string file) in family)
+        {
+            files.Add(replacements.GetValueOrDefault(name, file));
+            replaced.Add(name);
+        }
+
+        files.AddRange(model.Where(entry => !replaced.Contains(entry.Key)).Select(entry => entry.Value));
         return files;
     }
 
-    // A platform folder's sources by their paths relative to it, with '/' between folders. Paths compare, and sort,
-    // as file names do.
-    private SortedDictionary<string, string> Folder(string folder)
+    // A platform folder's sources by their paths relative to it, with '/' between folders, in ordinal order.
+    private List<KeyValuePair<string, string>> Folder(string folder)
     {
-        SortedDictionary<string, string> files = [with(ProjectGlob.FileNames)];
         string path = Path.Join(Project.Directory, "src", "platform", folder);
-        if (!Directory.Exists(path)) { return files; }
-        foreach (string file in Directory.EnumerateFiles(path, "*", SearchOption.AllDirectories))
-        {
-            if (PlatformExtensions.Contains(Path.GetExtension(file), StringComparer.OrdinalIgnoreCase))
-            {
-                files[Path.GetRelativePath(path, file).Replace('\\', '/')] = file;
-            }
-        }
-
-        return files;
+        if (!Directory.Exists(path)) { return []; }
+        return
+        [
+            .. Directory.EnumerateFiles(path, "*", SearchOption.AllDirectories)
+                .Where(file => PlatformExtensions.Contains(Path.GetExtension(file), StringComparer.OrdinalIgnoreCase))
+                .Select(file => KeyValuePair.Create(Path.GetRelativePath(path, file).Replace('\\', '/'), file))
+                .OrderBy(entry => entry.Key, StringComparer.Ordinal)
+        ];
     }
 
     private List<TargetSourceFile> Expand(ProjectSource source)

@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: MIT
 // See LICENSE file in the project root for full license information
 
-using Retrocore.Assembler;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 
@@ -280,12 +279,9 @@ internal sealed class RetrocoreProject
         }
 
         project.Name = json["name"] is { } name ? Text(file, "'name'", name) : Path.GetFileName(project.Directory);
-        if (project.Name.Length == 0
-            || project.Name.AsSpan().IndexOfAny(Path.GetInvalidFileNameChars()) >= 0
-            || project.Name.Contains('/')
-            || project.Name.Contains('\\'))
+        if (!IsFileName(project.Name))
         {
-            throw new ProjectException($"{file}: the name '{project.Name}' cannot name a file.");
+            throw new ProjectException($"{file}: the name '{project.Name}' must be letters, digits, '-', '_' and '.'.");
         }
 
         project.Cpu = json["cpu"] is { } cpu ? ReadCpu(file, "the project", cpu) : throw Missing(file, "the project", "cpu");
@@ -314,9 +310,7 @@ internal sealed class RetrocoreProject
     {
         string file = project.File;
         string where = $"target {name}";
-        if (name.Length == 0
-            || !name.All(character => char.IsAsciiLetterOrDigit(character) || character is '-' or '_' or '.')
-            || name is "." or "..")
+        if (!IsFileName(name))
         {
             throw new ProjectException($"{file}: the target name '{name}' must be letters, digits, '-', '_' and '.'.");
         }
@@ -340,6 +334,11 @@ internal sealed class RetrocoreProject
         {
             throw new ProjectException(
                 $"{file}: {where}: there is no environment '{environment}'; the environments are {string.Join(", ", ProjectTarget.Environments)}.");
+        }
+
+        if (!ProjectTarget.Runs(machine, environment))
+        {
+            throw new ProjectException($"{file}: {where}: {machine.Id} does not run the '{environment}' environment.");
         }
 
         ProjectCpu cpu = project.Cpu;
@@ -425,11 +424,10 @@ internal sealed class RetrocoreProject
                 Check(file, $"a source of {where}", source, SourceFields);
                 string path = source["path"] is { } pathNode ? Text(file, "a source's 'path'", pathNode) : throw Missing(file, $"a source of {where}", "path");
                 string kind = source["kind"] is { } kindNode ? Text(file, $"{path}'s 'kind'", kindNode) : "asm";
-                if (kind != "asm")
+                if (!Kinds.Contains(kind))
                 {
-                    throw new ProjectException(Kinds.Contains(kind)
-                        ? $"{file}: {path}: the source kind '{kind}' is not yet supported; only 'asm' builds."
-                        : $"{file}: {path}: there is no source kind '{kind}'; the kinds are {string.Join(", ", Kinds)}.");
+                    throw new ProjectException(
+                        $"{file}: {path}: there is no source kind '{kind}'; the kinds are {string.Join(", ", Kinds)}.");
                 }
 
                 string? dialect = source["dialect"] is { } dialectNode ? Text(file, $"{path}'s 'dialect'", dialectNode) : null;
@@ -439,7 +437,7 @@ internal sealed class RetrocoreProject
                         $"{file}: {path}: there is no dialect '{dialect}'; the dialects are {string.Join(", ", Dialects)}.");
                 }
 
-                sources.Add(new(path, SourceBuild.Dialect(dialect)));
+                sources.Add(new(path, SourceBuild.Dialect(dialect), kind));
                 continue;
             }
 
@@ -472,7 +470,7 @@ internal sealed class RetrocoreProject
                 _ => throw new ProjectException($"{file}: {where}'s {name} must be a number, true or false, or text such as \"$C000\".")
             };
 
-            if (!AssemblySyntax.IsDefinitionIdentifier(name) || !DefineArgument.TryParse($"{name}={text}", out _, out long parsed))
+            if (!IsSymbol(name) || !DefineArgument.TryParse($"{name}={text}", out _, out long parsed))
             {
                 throw new ProjectException(
                     $"{file}: {where}'s define {name} = {text} must name a symbol and give an integer, decimal, $hex or 0xhex.");
@@ -500,10 +498,23 @@ internal sealed class RetrocoreProject
         }
     }
 
-    private static string Text(string file, string what, JsonNode? node) =>
-        node?.GetValueKind() == JsonValueKind.String && node.GetValue<string>() is { Length: > 0 } text
-            ? text
-            : throw new ProjectException($"{file}: {what} must be text.");
+    private static string Text(string file, string what, JsonNode? node)
+    {
+        string? text = node?.GetValueKind() == JsonValueKind.String ? node.GetValue<string>() : null;
+        return !string.IsNullOrEmpty(text) && !text.Contains(' ') ? text : throw new ProjectException($"{file}: {what} must be text.");
+    }
+
+    // A project's or target's name, which names files and folders the same way on every system.
+    private static bool IsFileName(string name) =>
+        name.Length != 0
+            && name is not ("." or "..")
+            && name.All(character => char.IsAsciiLetterOrDigit(character) || character is '-' or '_' or '.');
+
+    // A symbol a define can name: a letter or '_', then letters, digits and '_'.
+    private static bool IsSymbol(string name) =>
+        name.Length != 0
+            && (char.IsAsciiLetter(name[0]) || name[0] == '_')
+            && name.All(character => char.IsAsciiLetterOrDigit(character) || character == '_');
 
     private static ProjectException Missing(string file, string where, string field) =>
         new($"{file}: {where} must give '{field}'.");

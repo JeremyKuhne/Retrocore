@@ -169,7 +169,11 @@ public sealed class ProjectFileTests
     [DataRow("""{ "sdk": "1", "cpu": "6502" }""", "must give 'targets'")]
     [DataRow("""{ "sdk": "1", "cpu": "6502", "targets": {} }""", "must give 'targets'")]
     [DataRow("""{ "sdk": "1", "cpu": "6502", "target": {} }""", "has no field 'target'")]
-    [DataRow("""{ "sdk": "1", "cpu": "6502", "name": "a/b", "targets": { "t": { "machine": "apple1", "environment": "bare" } } }""", "cannot name a file")]
+    [DataRow("""{ "sdk": "1", "cpu": "6502", "name": "a/b", "targets": { "t": { "machine": "apple1", "environment": "bare" } } }""", "the name 'a/b' must be letters")]
+    [DataRow("""{ "sdk": "1", "cpu": "6502", "name": "..", "targets": { "t": { "machine": "apple1", "environment": "bare" } } }""", "the name '..' must be letters")]
+    [DataRow("""{ "sdk": "1", "cpu": "6502", "name": "a:b", "targets": { "t": { "machine": "apple1", "environment": "bare" } } }""", "the name 'a:b' must be letters")]
+    [DataRow("""{ "sdk": "1", "cpu": "6502", "targets": { "t": { "machine": "pet4032", "environment": "wozmon" } } }""", "pet4032 does not run the 'wozmon' environment")]
+    [DataRow("""{ "sdk": "1", "cpu": "6502", "defines": { "@A": 1 }, "targets": { "t": { "machine": "apple1", "environment": "bare" } } }""", "define @A = 1 must name a symbol")]
     [DataRow("""{ "sdk": "1", "cpu": "6502", "targets": { "t": { "environment": "bare" } } }""", "target t must give 'machine'")]
     [DataRow("""{ "sdk": "1", "cpu": "6502", "targets": { "t": { "machine": "apple2" , "environment": "bare" } } }""", "there is no machine 'apple2'")]
     [DataRow("""{ "sdk": "1", "cpu": "6502", "targets": { "t": { "machine": "apple1" } } }""", "target t must give 'environment'")]
@@ -195,7 +199,6 @@ public sealed class ProjectFileTests
     [DataRow("""{ "sdk": "1", "cpu": "6502", "defines": { "1A": 1 }, "targets": { "t": { "machine": "apple1", "environment": "bare" } } }""", "define 1A = 1 must name a symbol")]
     [DataRow("""{ "sdk": "1", "cpu": "6502", "sources": "a.s", "targets": { "t": { "machine": "apple1", "environment": "bare" } } }""", "'sources' must be a list")]
     [DataRow("""{ "sdk": "1", "cpu": "6502", "sources": [{ "dialect": "ca65" }], "targets": { "t": { "machine": "apple1", "environment": "bare" } } }""", "must give 'path'")]
-    [DataRow("""{ "sdk": "1", "cpu": "6502", "sources": [{ "path": "a.bas", "kind": "basic" }], "targets": { "t": { "machine": "apple1", "environment": "bare" } } }""", "the source kind 'basic' is not yet supported")]
     [DataRow("""{ "sdk": "1", "cpu": "6502", "sources": [{ "path": "a.s", "kind": "assembly" }], "targets": { "t": { "machine": "apple1", "environment": "bare" } } }""", "there is no source kind 'assembly'")]
     [DataRow("""{ "sdk": "1", "cpu": "6502", "sources": [{ "path": "a.s", "dialect": "CA65" }], "targets": { "t": { "machine": "apple1", "environment": "bare" } } }""", "there is no dialect 'CA65'")]
     [DataRow("""{ "sdk": "1", "cpu": "6502", "sources": [{ "path": "a.s", "dialect": "tasm" }], "targets": { "t": { "machine": "apple1", "environment": "bare" } } }""", "there is no dialect 'tasm'")]
@@ -277,6 +280,60 @@ public sealed class ProjectFileTests
             "target disk: the project's 'steps' is not yet supported; 'memoryMap' is not yet supported; "
                 + "'files' is not yet supported; 'image' is not yet supported; 'bootImage' is not yet supported; "
                 + "the 'dos33' environment is not yet supported; only 'bare' builds.");
+    }
+
+    /// <summary>
+    ///  A source of a kind that does not build yet loads, and fails only the builds that assemble it.
+    /// </summary>
+    [TestMethod]
+    public void BasicSourcesFailOnlyTheirTargets()
+    {
+        Write("retrocore.json", """
+            { "sdk": "1", "cpu": "6502", "targets": {
+                "plain": { "machine": "apple2-iiplus", "environment": "bare" },
+                "menu": { "machine": "apple2-iiplus", "environment": "bare", "sources": [{ "path": "menu.bas", "kind": "basic" }] } } }
+            """);
+
+        RetrocoreProject project = RetrocoreProject.Load(_folder);
+        project.Target("plain").RequireSupported();
+        Error(project.Target("menu").RequireSupported).Should().EndWith(
+            "target menu: the source 'menu.bas' is basic, which is not yet supported.");
+    }
+
+    /// <summary>
+    ///  Each environment pairs with the machines the SDK plan gives it, and every machine runs bare.
+    /// </summary>
+    [TestMethod]
+    public void EnvironmentsPairWithTheirMachines()
+    {
+        foreach (CatalogMachine machine in CatalogMachine.All)
+        {
+            ProjectTarget.Runs(machine, "bare").Should().BeTrue(machine.Id);
+        }
+
+        foreach (string environment in ProjectTarget.Environments)
+        {
+            CatalogMachine.All.Should().Contain(machine => ProjectTarget.Runs(machine, environment), environment);
+        }
+
+        ProjectTarget.Runs(Machine("apple2-iiplus"), "dos33").Should().BeTrue();
+        ProjectTarget.Runs(Machine("apple2-ii"), "prodos").Should().BeFalse();
+        ProjectTarget.Runs(Machine("bbcb"), "dos33").Should().BeFalse();
+    }
+
+    /// <summary>
+    ///  A model's platform files sort in ordinal order on every system, so every build assembles them alike.
+    /// </summary>
+    [TestMethod]
+    public void PlatformFilesSortTheSameEverywhere()
+    {
+        Write("retrocore.json", """{ "sdk": "1", "cpu": "6502", "targets": { "t": { "machine": "apple2-iie", "environment": "bare" } } }""");
+        Write("src/platform/apple2/alpha.s", "");
+        Write("src/platform/apple2/Zed.s", "");
+        Write("src/platform/apple2-iie/beta.s", "");
+        Write("src/platform/apple2-iie/Able.s", "");
+        Relative(RetrocoreProject.Load(_folder).Target("t")).Should().Equal(
+            "src/platform/apple2/Zed.s", "src/platform/apple2/alpha.s", "src/platform/apple2-iie/Able.s", "src/platform/apple2-iie/beta.s");
     }
 
     /// <summary>
@@ -379,6 +436,9 @@ public sealed class ProjectFileTests
     [TestMethod]
     public void PatternsFollowTheFileSystemsCase() =>
         ProjectGlob.Matches("*.s", "main.S").Should().Be(OperatingSystem.IsWindows() || OperatingSystem.IsMacOS());
+
+    private static CatalogMachine Machine(string id) =>
+        CatalogMachine.Find(id) ?? throw new AssertFailedException($"There is no machine {id}.");
 
     private List<string> Relative(ProjectTarget target) =>
         [.. target.SourceFiles().Select(file => Path.GetRelativePath(_folder, file.Path).Replace('\\', '/'))];

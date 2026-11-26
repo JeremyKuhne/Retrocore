@@ -11,4 +11,5 @@ namespace Retrocore.Debug.Project;
 /// </summary>
 /// <param name="Path">The file or pattern, relative to the project's folder.</param>
 /// <param name="Dialect">The dialect, or null for native unless a file's first-line pragma names one.</param>
-internal sealed record ProjectSource(string Path, AssemblyDialect? Dialect);
+/// <param name="Kind">The language: <c>asm</c>, or <c>basic</c>, which does not build yet.</param>
+internal sealed record ProjectSource(string Path, AssemblyDialect? Dialect, string Kind = "asm");

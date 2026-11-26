@@ -62,14 +62,16 @@ jobs:
           mkdir -p artifacts/iie-sample
           dotnet artifacts/AnyCPU/Release/Retrocore.Debug/net11.0/Retrocore.Debug.dll --assemble sample/iie/main.s artifacts/iie-sample/main.bin --dialect ca65 --config sample/iie/link.cfg
 
-      # The packer packs the test game, and the reference engine plays each transcript as its .out shows it.
-      - name: Pack the adventure sample
+      # The packer packs the test game, the reference engine plays each transcript as its .out shows it, and the
+      # bare Apple II's program assembles with the game linked in.
+      - name: Pack and assemble the adventure sample
         working-directory: Retrocore/sample/adventure
         run: |
           dotnet run tools/packer.cs -- pack games/test.dat obj/test.bin
           for transcript in test-win test-fall test-drown; do
             dotnet run tools/packer.cs -- play obj/test.bin "games/$transcript.in" --echo --expect "games/$transcript.out"
           done
+          dotnet ../../artifacts/AnyCPU/Release/Retrocore.Debug/net11.0/Retrocore.Debug.dll --assemble src/platform/apple2-bare.s obj/apple2-bare.bin --config src/platform/apple2-bare.cfg
 
       - name: Debug adapter tests
         run: |
@@ -93,6 +95,7 @@ jobs:
           node tools/Test-BbcDap.mjs
           node tools/Test-AltairDap.mjs
           node tools/Test-AtariDap.mjs
+          node tools/Test-AdventureDap.mjs
           node tools/Test-OffMachine.mjs
 
       - name: Extension tests

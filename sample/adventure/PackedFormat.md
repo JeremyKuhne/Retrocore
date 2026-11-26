@@ -2,8 +2,9 @@
 
 The adventure engine plays games in a binary format of its own, which [`tools/packer.cs`](tools/packer.cs) writes from
 a game in the ScottFree `.dat` text format. This page gives the format, then the rules the engine plays it by. The
-C# reference engine in [`tools/ReferenceEngine.cs`](tools/ReferenceEngine.cs) follows them, and the 6502 engine is
-to follow them too, so a transcript of one matches the other's character for character.
+6502 engine in [`src/core`](src/core) and the C# reference engine in
+[`tools/ReferenceEngine.cs`](tools/ReferenceEngine.cs) both follow them, so a transcript of one matches the other's
+character for character.
 
 ## The layout
 

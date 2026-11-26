@@ -169,7 +169,8 @@ public sealed partial class ProjectHeaderTests
 
         Write("main.s", "    nop\n" + source + "\n.if 0\n.define RC_OFF 1\n.endif");
         Error(() => ProjectBuild.Build(RetrocoreProject.Load(_folder).Target("t")))
-            .Should().MatchRegex(@"main\.s\([23]\): [A-Za-z_:]*(RC_|rc_)").And.Contain("names starting with RC_ are the SDK's");
+            .Should().MatchRegex(@"main\.s\([23]\): [A-Za-z_:]*(RC_|rc_)").And.Contain("names starting with RC_ are the SDK's")
+            .And.NotContain("RC_OFF", "a definition in code the build leaves out is not one it makes");
     }
 
     /// <summary>

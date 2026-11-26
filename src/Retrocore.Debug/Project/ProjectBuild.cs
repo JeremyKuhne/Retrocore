@@ -281,16 +281,14 @@ internal static partial class ProjectBuild
 
         // Textual definitions and macros are not symbols: their directives are found in the text of the sources and
         // of the files they include, as the assembly opened them, on the lines it assembled, as the symbols are.
-        IReadOnlyDictionary<string, IReadOnlyList<AssemblyLineRange>> skipped =
-            result.SkippedLines?.Skipped ?? new Dictionary<string, IReadOnlyList<AssemblyLineRange>>();
-
-        foreach (string path in sources.Select(source => source.Path).Concat(skipped.Keys).Distinct(StringComparer.OrdinalIgnoreCase).Where(Own))
+        AssemblySkippedLines? skipped = result.SkippedLines;
+        IEnumerable<string> opened = skipped?.Skipped.Keys ?? [];
+        foreach (string path in sources.Select(source => source.Path).Concat(opened).Distinct(StringComparer.OrdinalIgnoreCase).Where(Own))
         {
             string[] lines = File.ReadAllLines(path);
-            IReadOnlyList<AssemblyLineRange> left = skipped.GetValueOrDefault(path) ?? [];
             for (int line = 0; line < lines.Length; line++)
             {
-                if (left.Any(range => line >= range.Start && line < range.End)) { continue; }
+                if (skipped?.IsAssembled(path, line) == false) { continue; }
                 Match match = DefinitionLine().Match(lines[line]);
                 if (match.Success && Reserved(match.Groups["name"].Value))
                 {

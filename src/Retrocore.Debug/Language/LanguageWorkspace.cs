@@ -383,13 +383,13 @@ internal sealed partial class LanguageWorkspace
     }
 
     // Whether a root owns a file it analyzed: any root but a project's target owns its members; a target owns those
-    // that prefer no other target, or whose preferred target's last analysis left them out, as one that failed before
-    // assembling does. A file a target only includes prefers none, so each target that includes it reports on it.
-    private bool Owns(string root, string path) =>
+    // that prefer no other target. A source's preferred target is the active one or the first that lists it, so its
+    // owner does not depend on which analysis finishes first; when that target cannot list its sources, its error is
+    // on the project file. A file a target only includes prefers none, so each target that includes it reports on it.
+    private static bool Owns(string root, string path) =>
         !root.EndsWith(ProjectSources.Extension, StringComparison.OrdinalIgnoreCase)
             || ProjectSources.RootOf(path) is not { } preferred
-            || string.Equals(preferred, root, StringComparison.OrdinalIgnoreCase)
-            || (_analyses.TryGetValue(preferred, out SourceAnalysis? other) && !other.Members.Contains(path));
+            || string.Equals(preferred, root, StringComparison.OrdinalIgnoreCase);
 
     private void Publish(SourceAnalysis analysis)
     {
@@ -434,7 +434,12 @@ internal sealed partial class LanguageWorkspace
         HashSet<string> previous = _published.GetOrAdd(analysis.Root, _ => [with(StringComparer.OrdinalIgnoreCase)]);
         lock (previous)
         {
-            foreach (string stale in previous.Where(path => !byFile.ContainsKey(path)).ToList()) { byFile[stale] = []; }
+            // A file that another target owns now is that target's to report on, so it is not cleared here.
+            foreach (string stale in previous.Where(path => !byFile.ContainsKey(path) && Owns(analysis.Root, path)).ToList())
+            {
+                byFile[stale] = [];
+            }
+
             previous.Clear();
             previous.UnionWith(byFile.Where(pair => pair.Value.Count != 0).Select(pair => pair.Key));
         }

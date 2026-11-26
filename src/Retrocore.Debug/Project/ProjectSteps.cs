@@ -279,7 +279,8 @@ internal static class ProjectSteps
     // A tool project's files: everything in its folder but what builds write there (its bin/ and obj/, the retrocore
     // project's output and intermediate folders, and every step's outputs, should the tool sit beside retrocore.json)
     // and folders whose names start with '.', such as .git/ and .vs/, which change as the repository is used.
-    // The walk does not go into the folders it leaves out, so a large .git/ costs nothing.
+    // The walk does not go into the folders it leaves out, so a large .git/ costs nothing, nor into links. Should the
+    // project's output or intermediate folder hold the tool's folder itself, that folder's files still count.
     private static List<string> ProjectFolderFiles(RetrocoreProject project, string folder)
     {
         List<string> files = [];
@@ -297,7 +298,13 @@ internal static class ProjectSteps
             files.AddRange(Directory.EnumerateFiles(current).Where(file => !outputs.Contains(file)));
             foreach (string child in Directory.EnumerateDirectories(current))
             {
-                if (!Path.GetFileName(child).StartsWith('.') && !skipped.Contains(child)) { Walk(child); }
+                // A link or junction is not followed, so one to a folder above cannot loop.
+                if (!Path.GetFileName(child).StartsWith('.')
+                    && !skipped.Contains(child)
+                    && !File.GetAttributes(child).HasFlag(FileAttributes.ReparsePoint))
+                {
+                    Walk(child);
+                }
             }
         }
 

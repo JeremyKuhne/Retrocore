@@ -91,7 +91,7 @@
         },
         "sources": {
           "$ref": "#/definitions/sources",
-          "description": "The files every target assembles, in order: paths or patterns (* and ? in a name, ** for any folders), relative to the project's folder. Each target assembles src/platform/<family>/'s .s and .asm files first, then src/platform/<model>/'s, a model's file taking the place of its family's file of the same name, and these after them."
+          "description": "The files every target assembles, in order: paths or patterns (* and ? in a name, ** for any folders), relative to the project's folder. Each target assembles src/platform/<family>/'s .s and .asm files first, then src/platform/<model>/'s, then src/platform/<environment>/'s, a later folder's file taking the place of an earlier one's at the same path within its folder, and these after them."
         },
         "steps": {
           "type": "array",

@@ -380,7 +380,8 @@ and image beside the binary and saying which of `files`, `image` and `bootImage`
 environment does not take fails naming it. [sdk/1/README.md](../../sdk/1/README.md#environments) is the contract.
 `wozmon` writes `<name>.hex` and the ACI tape `<name>.wav` (`"image": false` leaves the tape out), and its maps are the
 bare Apple-1's. The adventure's `apple1-wozmon` target plays Pirate Adventure's win under the debugger, and the test
-checks that its hex stores the bytes the launch loaded.
+checks that its hex stores the bytes the launch loaded. A target's `bootImage` is a path, relative to the project's folder; the
+lookup by hash, which phase 4 also gives, is still to come.
 
 ## Debugging in VS Code
 

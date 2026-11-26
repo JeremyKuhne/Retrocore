@@ -21,15 +21,17 @@ internal sealed record PascalAnalysis(PascalProgram Program, Dictionary<string, 
     public bool IsCurrent() => Stamps.All(stamp => Stamp(stamp.Key) == stamp.Value);
 
     /// <summary>
-    ///  Gets when a file was last written, or <see cref="DateTime.MinValue"/> when it isn't there or can't be read.
+    ///  Gets when a file or folder was last written, or <see cref="DateTime.MinValue"/> when it isn't there or can't
+    ///  be read.
     /// </summary>
-    /// <param name="path">The file.</param>
+    /// <param name="path">The file or folder.</param>
     /// <returns>The time, in UTC.</returns>
     public static DateTime Stamp(string path)
     {
         try
         {
-            return File.Exists(path) ? File.GetLastWriteTimeUtc(path) : DateTime.MinValue;
+            if (File.Exists(path)) { return File.GetLastWriteTimeUtc(path); }
+            return Directory.Exists(path) ? Directory.GetLastWriteTimeUtc(path) : DateTime.MinValue;
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {

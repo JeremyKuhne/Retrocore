@@ -41,7 +41,10 @@ internal sealed class CodeActionHandler
         // A BASIC or Pascal document, or one that is not a file (such as a machine's program), has no assembly lint to
         // fix: the assembly's exclusions are not Pascal.
         DocumentUri document = new(uri);
-        if (_basic.Get(document) is not null || _pascal?.IsOpen(document) is true || !Uri.TryCreate(uri, UriKind.Absolute, out Uri? parsed) || !parsed.IsFile)
+        if (_basic.Get(document) is not null
+            || _pascal?.IsOpen(document) is true
+            || !Uri.TryCreate(uri, UriKind.Absolute, out Uri? parsed)
+            || !parsed.IsFile)
         {
             return new JsonArray();
         }

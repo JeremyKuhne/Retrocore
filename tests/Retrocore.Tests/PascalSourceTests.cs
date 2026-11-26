@@ -432,6 +432,35 @@ public sealed class PascalSourceTests
     }
 
     /// <summary>
+    ///  Inside a WITH, a bare name may be a field's, in its own case, even one named like a standard identifier;
+    ///  after the WITH's statement, it is the standard one again.
+    /// </summary>
+    [TestMethod]
+    public void FieldsInAWithKeepTheirCase()
+    {
+        PascalProgram program = Analyze(
+            "PROGRAM P;\nTYPE R = RECORD Length: INTEGER END;\nVAR Item: R;\n"
+                + "BEGIN\n  WITH Item DO Length := 1;\n  WITH Item DO\n  BEGIN\n    Length := 2\n  END;\n"
+                + "  Length := 3\nEND.");
+
+        PascalDiagnostic problem = PascalLint.Check(program, bibliography: null).Should().ContainSingle().Which;
+        problem.Rule.Should().Be("case");
+        problem.Line.Should().Be(9);
+    }
+
+    /// <summary>
+    ///  A file with a line too long for a page is still measured for the Editor.
+    /// </summary>
+    [TestMethod]
+    public void OverlongLinesStillCount()
+    {
+        string comment = $"(* {new string('.', 70)} *)\n";
+        string source = $"PROGRAM P;\n(* {new string('.', 1100)} *)\n{string.Concat(Enumerable.Repeat(comment, 240))}BEGIN END.";
+        PascalLint.Check(Analyze(source), bibliography: null).Select(problem => problem.Rule).Distinct()
+            .Should().BeEquivalentTo(["line-length", "file-size"]);
+    }
+
+    /// <summary>
     ///  A line too long for a disk's page is reported for its length, not taken for a failure.
     /// </summary>
     [TestMethod]

@@ -143,7 +143,8 @@ internal static partial class PascalFeatures
             && position.Character < link.EndColumn);
 
         if (link is null || program.FindLink(link.Target) is not { } target) { return null; }
-        bool historical = !string.Equals(PascalNames.Key(link.Target.Split('.')[^1]), target.Key, StringComparison.Ordinal);
+        string last = link.Target.Split('.')[^1];
+        bool historical = !string.Equals(PascalNames.Key(last), target.Key, StringComparison.Ordinal);
         return (target, historical, new LspRange(link.Line, link.Column, link.Line, link.EndColumn), link.Target);
     }
 

@@ -139,7 +139,12 @@ internal static partial class LanguageHost
         server.OnNotification("textDocument/didOpen", parameters => sync.Open(LspParams.From(parameters)));
         server.OnNotification("textDocument/didChange", parameters => sync.Change(LspParams.From(parameters)));
         server.OnNotification("textDocument/didClose", parameters => sync.Close(LspParams.From(parameters)));
-        server.OnNotification("workspace/didChangeWatchedFiles", parameters => WatchedFilesChanged(workspace, parameters));
+        server.OnNotification("workspace/didChangeWatchedFiles", parameters =>
+        {
+            WatchedFilesChanged(workspace, parameters);
+            pascal.FilesChanged();
+        });
+
         server.OnNotification("retrocore/unlinkedNameWords", parameters => UnlinkedNameWordsChanged(workspace, parameters));
         server.OnNotification("retrocore/activeTarget", parameters => ActiveTargetChanged(workspace, parameters));
         server.OnRequest("retrocore/inactiveRanges", parameters => InactiveRanges(workspace, parameters));

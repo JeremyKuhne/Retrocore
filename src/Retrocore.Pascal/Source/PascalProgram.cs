@@ -133,14 +133,13 @@ public sealed partial class PascalProgram
         string key = PascalNames.Key(reference.Token.Text);
         PascalDeclaration? found = reference.AfterDot ? null : reference.Scope.Find(reference.Token.Text);
 
-        // A field: after a ".", or inside a WITH, which the scan does not follow; any record's field of that name. A
-        // standard identifier not after a "." is the standard one, not some record's field.
-        if (reference.AfterDot || !PascalNames.IsStandard(reference.Token.Text))
+        // A field: after a ".", or inside a WITH, whose record the scan does not follow; any record's field of that
+        // name. A standard identifier elsewhere is the standard one, not some record's field.
+        if (reference.AfterDot || reference.InWith || !PascalNames.IsStandard(reference.Token.Text))
         {
             found ??= Declarations.FirstOrDefault(
                 declaration => declaration.Kind == PascalDeclarationKind.Field && declaration.Key == key);
         }
-
 
         if (found is not null) { return (found, false); }
         return OldName(reference.Token.Text) is { } old ? (old, true) : null;
@@ -178,8 +177,11 @@ public sealed partial class PascalProgram
             ?? (parts.Length == 1 ? OldName(target) : null);
 
         // Whole names: "port.WriteLine" is not "Report.WriteLine".
-        bool InPath(PascalDeclaration declaration) => PathKey(declaration) is { } full
-            && (full == path || full.EndsWith($".{path}", StringComparison.Ordinal));
+        bool InPath(PascalDeclaration declaration)
+        {
+            string full = PathKey(declaration);
+            return full == path || full.EndsWith($".{path}", StringComparison.Ordinal);
+        }
 
         static string PathKey(PascalDeclaration declaration) =>
             string.Join('.', declaration.Scope.Path.Split('.').Select(PascalNames.Key));
@@ -204,7 +206,8 @@ public sealed partial class PascalProgram
         foreach (PascalToken token in tokens)
         {
             if (token == fileDoc) { continue; }
-            if (token.Kind is PascalTokenKind.Option or PascalTokenKind.BraceComment && IncludeName(token.Text) is { } name)
+            bool option = token.Kind is PascalTokenKind.Option or PascalTokenKind.BraceComment;
+            if (option && IncludeName(token.Text) is { } name)
             {
                 string? found = Locate(path, name, read);
                 Includes.Add(new(token, name, found));
@@ -262,7 +265,8 @@ public sealed partial class PascalProgram
             {
                 foreach (string candidate in Directory.EnumerateFiles(folder))
                 {
-                    if (string.Equals(System.IO.Path.GetFileName(candidate), wanted, StringComparison.OrdinalIgnoreCase))
+                    string candidateName = System.IO.Path.GetFileName(candidate);
+                    if (string.Equals(candidateName, wanted, StringComparison.OrdinalIgnoreCase))
                     {
                         return candidate;
                     }

@@ -347,20 +347,36 @@ public sealed partial class PascalProgram
         }
 
         // A compound statement: BEGIN to its END, each name used recorded in the scope.
+        // A statement part, BEGIN to its END, noting the WITH statements whose bodies may name fields bare: a body
+        // that is a BEGIN ends at its END, any other at the ";", ELSE or END that ends the statement.
         private void Compound(PascalScope scope)
         {
             int depth = 0;
+            bool awaitingDo = false;
+            List<(int Depth, bool Block)> withs = [];
             while (Current is { } token)
             {
-                if (token.Is("BEGIN") || token.Is("CASE")) { depth++; }
+                if (token.Is("WITH")) { awaitingDo = true; }
+                else if (token.Is("DO") && awaitingDo)
+                {
+                    awaitingDo = false;
+                    bool block = IsKeyword(1, "BEGIN");
+                    withs.Add((block ? depth + 1 : depth, block));
+                }
+                else if (token.Is("BEGIN") || token.Is("CASE")) { depth++; }
+                else if (token.IsSymbol(";") || token.Is("ELSE"))
+                {
+                    withs.RemoveAll(with => !with.Block && with.Depth == depth);
+                }
                 else if (token.Is("END"))
                 {
+                    withs.RemoveAll(with => with.Depth >= depth);
                     depth--;
                     Next();
                     if (depth == 0) { return; }
                     continue;
                 }
-                else if (token.Kind == PascalTokenKind.Identifier) { Use(scope); }
+                else if (token.Kind == PascalTokenKind.Identifier) { Use(scope, inWith: withs.Count > 0); }
 
                 Next();
             }
@@ -375,11 +391,11 @@ public sealed partial class PascalProgram
             }
         }
 
-        private void Use(PascalScope scope)
+        private void Use(PascalScope scope, bool inWith = false)
         {
             if (Current is not { Kind: PascalTokenKind.Identifier } token) { return; }
             bool afterDot = _at > 0 && Previous() is { } previous && previous.IsSymbol(".");
-            _program.References.Add(new(token, scope, afterDot));
+            _program.References.Add(new(token, scope, afterDot, inWith));
         }
 
         private PascalDeclaration Declare(PascalToken name, PascalDeclarationKind kind, PascalScope scope)
@@ -469,6 +485,18 @@ public sealed partial class PascalProgram
             {
                 if (_tokens[index].Kind == PascalTokenKind.DocComment) { continue; }
                 if (seen++ == ahead) { return _tokens[index].IsSymbol(symbol); }
+            }
+
+            return false;
+        }
+
+        private bool IsKeyword(int ahead, string word)
+        {
+            int index = Skip();
+            for (int seen = 0; index < _tokens.Count; index++)
+            {
+                if (_tokens[index].Kind == PascalTokenKind.DocComment) { continue; }
+                if (seen++ == ahead) { return _tokens[index].Is(word); }
             }
 
             return false;

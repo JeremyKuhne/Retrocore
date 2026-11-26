@@ -41,7 +41,11 @@ internal sealed class ReferencesHandler
 
         if (_pascal?.Get(request.TextDocument.Uri) is { } pascal)
         {
-            return PascalFeatures.References(pascal.Program, pascal.Path, request.Position, request.Context.IncludeDeclaration);
+            return PascalFeatures.References(
+                pascal.Program,
+                pascal.Path,
+                request.Position,
+                request.Context.IncludeDeclaration);
         }
 
         string path = LanguageHost.PathOf(request.TextDocument.Uri);

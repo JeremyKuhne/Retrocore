@@ -10,4 +10,5 @@ namespace Retrocore.Pascal.Source;
 /// <param name="Token">The name's token.</param>
 /// <param name="Scope">The scope it is in.</param>
 /// <param name="AfterDot">Whether it follows a <c>.</c>, so that it names a field.</param>
-public sealed record PascalReference(PascalToken Token, PascalScope Scope, bool AfterDot);
+/// <param name="InWith">Whether it is in a <c>WITH</c> statement's body, so that it may name a field.</param>
+public sealed record PascalReference(PascalToken Token, PascalScope Scope, bool AfterDot, bool InWith = false);

@@ -86,6 +86,8 @@ export async function startLanguageClient(context: vscode.ExtensionContext, targ
     const configurations = vscode.workspace.createFileSystemWatcher("**/*.cfg");
     // A project file's changes reach the server too, for its project support (phase 2) to analyze the sources again.
     const projects = vscode.workspace.createFileSystemWatcher("**/retrocore.json");
+    // A Pascal file changed on disk, such as an include no editor has open, changes the programs that read it.
+    const pascal = vscode.workspace.createFileSystemWatcher("**/*.{text,TEXT,pas,pascal}");
     const isConfiguration = (document: vscode.TextDocument): boolean =>
         document.uri.scheme === "file" && path.extname(document.uri.fsPath).toLowerCase() === ".cfg";
     const notify = (method: string, params: object): void => {
@@ -114,7 +116,7 @@ export async function startLanguageClient(context: vscode.ExtensionContext, targ
     });
     const updateTarget = (): void => notify("retrocore/activeTarget", activeTargetParams(targets?.active));
     if (targets !== undefined) context.subscriptions.push(targets.onDidChange(updateTarget));
-    context.subscriptions.push(configurations, projects, vscode.workspace.onDidOpenTextDocument(opened),
+    context.subscriptions.push(configurations, projects, pascal, vscode.workspace.onDidOpenTextDocument(opened),
         vscode.workspace.onDidChangeTextDocument(event => {
             if (isConfiguration(event.document)) notify("textDocument/didChange", {
                 textDocument: { uri: event.document.uri.toString(), version: event.document.version },
@@ -131,7 +133,7 @@ export async function startLanguageClient(context: vscode.ExtensionContext, targ
         vscode.commands.registerCommand("retrocore.lint.addUnlinkedNameWord", addUnlinkedNameWord));
 
     const start = async (): Promise<void> => {
-        await startFrom(context, host, [configurations, projects]);
+        await startFrom(context, host, [configurations, projects, pascal]);
         updateWords();
         updateTarget();
         for (const document of vscode.workspace.textDocuments) opened(document);

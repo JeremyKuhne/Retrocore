@@ -92,15 +92,8 @@ public static class PascalLint
             Add(0, 0, 0, "file-name", "Name the file as the disk does, in capitals ending .TEXT.");
         }
 
-        // A line too long for a page has no disk form at all; line-length reports it.
-        int stored = 0;
-        try
-        {
-            stored = StoredLength(PascalTextFile.Write(file.Text));
-        }
-        catch (ArgumentException)
-        {
-        }
+        // A line too long for a page has no disk form, which line-length reports; its size is counted in pieces.
+        int stored = StoredLength(PascalTextFile.Write(string.Join('\n', file.Lines.SelectMany(Pieces))));
 
         if (stored > EditorBytes)
         {
@@ -116,7 +109,11 @@ public static class PascalLint
         foreach (PascalToken token in file.Tokens.Where(token => token.Kind == PascalTokenKind.BraceComment))
         {
             int end = token.Line == token.EndLine ? token.EndColumn : token.Column + 1;
-            Add(token.Line, token.Column, end, "comment", "Write comments as (* *), and documentation as (** *).");
+            string message = token.Text.StartsWith("{$", StringComparison.Ordinal)
+                ? "Write options as (*$ *), not in braces."
+                : "Write comments as (* *), and documentation as (** *).";
+
+            Add(token.Line, token.Column, end, "comment", message);
         }
 
         void Add(int line, int column, int end, string rule, string message) =>
@@ -141,12 +138,28 @@ public static class PascalLint
         return total;
     }
 
+    // A line, or a line too long for a disk's page in pieces that each fit one.
+    private static IEnumerable<string> Pieces(string line)
+    {
+        const int Piece = PageSize / 2;
+        if (line.Length <= Piece)
+        {
+            yield return line;
+            yield break;
+        }
+
+        for (int start = 0; start < line.Length; start += Piece)
+        {
+            yield return line[start..Math.Min(start + Piece, line.Length)];
+        }
+    }
+
     private static void CheckIncludes(PascalProgram program, List<PascalDiagnostic> problems)
     {
         foreach (PascalInclude include in program.Includes.Where(include => include.Path is null))
         {
-            problems.Add(Diagnostic(include.Token, "include", $"There is no file '{include.Name}' beside this one to include.")
-                with { IsError = true });
+            string message = $"There is no file '{include.Name}' beside this one to include.";
+            problems.Add(Diagnostic(include.Token, "include", message) with { IsError = true });
         }
     }
 

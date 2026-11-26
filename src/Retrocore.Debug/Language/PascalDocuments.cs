@@ -114,6 +114,24 @@ internal sealed class PascalDocuments
         return true;
     }
 
+    /// <summary>
+    ///  Checks the open documents again after a file changed on disk, if one of their programs read it.
+    /// </summary>
+    internal void FilesChanged()
+    {
+        List<string> open;
+        lock (_lock)
+        {
+            if (_programs.Values.All(analysis => analysis.IsCurrent())) { return; }
+            open = [.. _open.Keys];
+        }
+
+        foreach (string path in open)
+        {
+            Publish(path);
+        }
+    }
+
     // Lints a file's program and publishes the problems of each of its open files.
     private void Publish(string path)
     {
@@ -125,14 +143,15 @@ internal sealed class PascalDocuments
             open = [.. _open.Keys.Where(file => program.File(file) is not null)];
         }
 
-        DocumentationBibliography bibliography;
+        // A bibliography that can't be read leaves the Also: keys unchecked, rather than every one unknown.
+        DocumentationBibliography? bibliography;
         try
         {
             bibliography = SourceBibliography.For(program.Root, program.Files.Select(file => file.Path));
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {
-            bibliography = DocumentationBibliography.Parse();
+            bibliography = null;
         }
 
         List<PascalDiagnostic> problems = PascalLint.Check(program, bibliography);
@@ -166,10 +185,15 @@ internal sealed class PascalDocuments
     private PascalAnalysis Analyze(string root)
     {
         PascalProgram program = PascalProgram.Analyze(root, Read);
+
+        // The files read from disk, and the folders an include was looked for in, whose times change as a file in
+        // them is added or removed.
         Dictionary<string, DateTime> stamps = [with(StringComparer.OrdinalIgnoreCase)];
-        foreach (PascalSourceFile file in program.Files.Where(file => !_open.ContainsKey(file.Path)))
+        foreach (PascalSourceFile file in program.Files)
         {
-            stamps[file.Path] = PascalAnalysis.Stamp(file.Path);
+            if (!_open.ContainsKey(file.Path)) { stamps[file.Path] = PascalAnalysis.Stamp(file.Path); }
+            string folder = Path.GetDirectoryName(file.Path) ?? "";
+            stamps.TryAdd(folder, PascalAnalysis.Stamp(folder));
         }
 
         return new(program, stamps);

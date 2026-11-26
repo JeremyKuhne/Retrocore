@@ -103,7 +103,8 @@ ViewLeft = $BF11
 ;; Also: ESCFLG (WK11), ESCNT (A2PBIOS)
 EscapeState = $BF12
 
-;; A 16-bit count of <ConsoleCheck>'s calls. Nothing in SYSTEM.APPLE reads it.
+;; A 16-bit count of <ConsoleCheck>'s calls: the seed of the system's built-in random function, Apple's BIOS document
+;; says (A2PBIOS). Nothing in SYSTEM.APPLE reads it.
 ;; Also: RANDH (A2PBIOS), RANDL (A2PBIOS), RANDNO (WK11)
 PollCount = $BF13
 
@@ -161,6 +162,7 @@ SlotTypes = $BF28
 ;; Also: XITLOC (A2PBIOS, WK11)
 ResetHandler = $BF2F
 
-;; 42 bytes <Initialize> copies from <Initialize::CopiedTableImage>. Its purpose is unknown: 1.2 and 1.3 copy the same
-;; bytes, and nothing in SYSTEM.APPLE or on the 1.1 disks reads it or <CopiedTablePointer>.
+;; 42 bytes <Initialize> copies from <Initialize::CopiedTableImage>, filling $BF56-$BF7F, which Apple's BIOS document
+;; gives to "FORTRAN PROTECTION" (A2PBIOS). What they are for is not known: 1.2 and 1.3 copy the same bytes, and nothing
+;; in SYSTEM.APPLE or on the 1.1 disks reads them or <CopiedTablePointer>.
 CopiedTable = $BF56

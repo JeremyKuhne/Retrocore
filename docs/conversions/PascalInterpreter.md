@@ -90,7 +90,7 @@ Settled by the owner on the rename table's review.
 - PI6. The mark stack frame is a `.struct MarkStack`, whose fields carry MSSTAT ... MSSP; MSCW, the record's own
   name, is in prose (an `Also:` on a named struct names nothing).
 - PI7. The execution errors' numbers are the `ERROR_*` constants, which carry XINVNDX ... XS2LONG; the reporting
-  entries carry only Kusche's labels (ERR1, OOMERR ...). SYSTEM.PASCAL's handler, EXECERROR, is named in prose on
+  entries carry Kusche's labels (ERR1, OOMERR ...), and `Unimplemented` the p-codes it runs for, EFJ and NFJ. SYSTEM.PASCAL's handler, EXECERROR, is named in prose on
   the call to it.
 - PI8. Only 1.1's documents and those of the system it descends from are cited. 1.2's device manual is added if 1.2's
   or 1.3's interpreter joins the SDK. The private conversion's names are not historical: no `Also:` keeps them.
@@ -109,7 +109,7 @@ Settled by the owner on the rename table's review.
 - **Layouts.** A segment table entry is a `.struct SegmentEntry` (CODEUNIT, DISKADDR, CODELENG; CODEDESC, UCSD's
   name for the last two together, in prose), and a directory entry a `.struct DirectoryEntry` (DFIRSTBLK, DTID and
   DVID; DIRENTRY in prose). Initialize's `SEGMENT_TABLE_BLOCK` was a second definition of a segment entry's block, and
-  is `SegmentEntry::BLOCK`. A segment dictionary entry stays a size, `DICTIONARY_ENTRY_SIZE` (DISKINFO, SEGDESC).
+  is `SegmentEntry::BLOCK`. A segment dictionary entry stays a size, `DICTIONARY_ENTRY_SIZE` (SEGDESC; DISKINFO, the array, in prose).
 - **SyscomExtra** was described as 32 bytes after SYSCOM. With SYSCOM 288 bytes long, they are its own last 32, which
   Initialize clears after the first 256: `Syscom::Rest`, and `SYSCOM_EXTRA_SIZE` is `.sizeof(SyscomRecord) - 256`.
 - **Clashes inside the assembly** go in prose: IDS on `IdSearch` (the standard procedure's), Kusche's NOTK on
@@ -151,7 +151,8 @@ The private conversion found these, each described where it happens:
 
 The checks against the documents found:
 
-- `CopiedTable` (`$BF56`-`$BF7F`), which the private notes left open, is A2PBIOS's "FORTRAN PROTECTION" area.
+- `CopiedTable` (`$BF56`-`$BF7F`), which the private notes left open, fills the area A2PBIOS gives to "FORTRAN
+  PROTECTION"; what its bytes are for is still not known.
 - RANDL and RANDH (`PollCount`) are the seed of the random-number function, which code outside SYSTEM.APPLE reads.
 
 ## Verification

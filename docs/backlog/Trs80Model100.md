@@ -40,13 +40,13 @@ cassette, printer and bar-code ports.
 | **T102** | Tandy 102 Service Manual (26-3803), seen only through search excerpts | Clock wiring, LCD drivers |
 | **HD** | Hitachi, *MOS LSI Data Book: LCD Driver LSI* (1983), the HD44102CH's pages; [bitsavers on archive.org](https://archive.org/details/bitsavers_hitachidatSLSIDataBookLCDDriverLSI_15075758) | The LCD driver's instructions, counters and dummy read |
 | **KYO** | MAME 0.264's `src/mame/kyocera/kyocera.cpp` and `kyocera.h` (Curt Coder, BSD-3-Clause), read, not copied (approved 2026-11-26) | Port decoding, RAM map by size, keyboard matrix, interrupt wiring |
+| **TRM** | Tandy, *TRS-80 Model 100 Technical Reference Manual* (26-3810), [text on archive.org](https://archive.org/details/trs-80-model-100-technical-reference-manual) (fetched 2026-11-26) | I/O map, circuits, timing; chapter 10 reprints the 80C85, 81C55, uPD1990AC, IM6402, MC14412 and LCD drivers' data sheets |
+| **MCS** | Intel, *MCS-80/85 Family User's Manual*, [on archive.org](https://archive.org/details/Mcs80_85FamilyUsersManual) (fetched 2026-11-26) | The 8155's data sheet: its timer modes, commands and count-by-twos |
 | **Z88** | [z88dk techdocs `targets/m100`](https://github.com/z88dk/techdocs/tree/master/targets/m100): `m100.asm`, `sysvars.txt`, `tokens.txt` | Disassembly, RAM variables for each model |
 
-Not yet read: Tandy's *Technical Reference Manual* (26-3810), the Model 100 service manual's text (downloaded for
-phase 1, approved 2026-11-26, not yet searched), the uPD1990AC's and 8155's data sheets (approved, not found on the
-hosts this environment reaches; the chips follow their well-known behaviour and MAME's wiring), and VirtualT's
-source and the disassemblies, which need the user's approval. Facts below from search
-excerpts only are marked *(excerpt)*.
+Not yet read: the Model 100 service manual's text (downloaded for phase 1, approved 2026-11-26, not yet searched),
+VirtualT's source and the disassemblies, which need the user's approval. The uPD1990AC's and 8155's data sheets
+came with TRM and MCS.
 
 ## The hardware
 
@@ -314,6 +314,19 @@ by the user first, and stays out of the repository.
   - BASIC scrolls one line at a time, about 50 ms a line, so a screen read mid-scroll shows a line twice. A loop
     printing numbers runs within a line in three seconds of MAME's.
   - `POWER OFF` comes back to the menu at power-on; `POWER OFF,RESUME` comes back to BASIC with its variables.
+- **Settled by TRM and MCS** (read after phase 1 was built, 2026-11-26):
+  - The uPD1990AC latches its register commands (C2 low) and its TP commands (C2 high) separately, so setting TP
+    keeps the register mode; the first build had a TP command end shift mode, now fixed and tested. TRM's "100" for
+    register shift and "110" for time read list C0 first, so they are commands 1 and 3, as built.
+  - The LCD's register select is A8, not A0; an `IN` or `OUT` puts the port on both halves of the address bus, so
+    A8 is the port's bit 0, as built.
+  - Port $E0's four bits are a 40H175 latch, cleared at reset; the cassette's input is SID and its output SOD.
+  - The 8155's timer matches MCS (odd counts high one count longer, a single square wave stops at TC, reset stops
+    the count) but for the count registers, which the chip reads back counting by twos; here they read the counts
+    left.
+  - TRM says one key scan each 4 ms TP period; the ROM's handler scans every third, as found above.
+  - The buzzer: with port B bit 2 high, bit 5 drives it; with bit 2 low and bit 5 high, the timer's square wave
+    does. The wand's signal goes inverted to port C bit 3 and RST 5.5.
 - **Not yet.** The UART, modem, cassette, beeper, printer and wand are unconnected; TRAP never fires; the battery
   never runs low.
 

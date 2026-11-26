@@ -13,7 +13,10 @@ namespace Retrocore.Machines.Chips;
 ///   A command on C0-C2 is taken when STB rises: 0 register hold (DATA OUT shows a 1 Hz square wave), 1 register
 ///   shift (DATA OUT shows the shift register's bit 0, and each rising CLK shifts it right, DATA IN entering bit 39),
 ///   2 time set (the counters are loaded from the shift register), 3 time read (the shift register is loaded from the
-///   counters), and 4, 5 and 6 set TP to 64, 256 and 2048 Hz. 7, the test mode, is taken as a hold.
+///   counters), and 4, 5 and 6 set TP to 64, 256 and 2048 Hz. 7, the test mode, is ignored. The register commands
+///   (C2 low) and the TP commands (C2 high) are latched separately, each held until another of its group is written,
+///   so setting TP leaves the register mode as it was (Tandy's <i>Model 100 Technical Reference Manual</i>,
+///   26-3810, chapter 10, which reprints NEC's data sheet).
 ///  </para>
 ///  <para>
 ///   The shift register's fields, from bit 0: seconds, minutes, hours and the day of the month, eight bits of BCD
@@ -189,7 +192,10 @@ public sealed class Rtc1990
                 break;
         }
 
-        _command = command is 1 ? 1 : command is 7 ? 0 : command;
+        // The register commands, C2 low, and the TP and test commands, C2 high, are latched apart: each holds until
+        // another of its own group.
+        if (command < 4) { _command = command; }
+
         if (_tpCount >= _tpHalfPeriod) { _tpCount = 0; }
     }
 

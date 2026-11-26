@@ -185,6 +185,30 @@ public sealed class Model100ChipTests
     }
 
     /// <summary>
+    ///  A TP command leaves the register mode as it was: after a time read and register shift, setting TP to 256 Hz
+    ///  still shifts the time out.
+    /// </summary>
+    [TestMethod]
+    public void TimingPulseCommandKeepsTheRegisterMode()
+    {
+        Rtc1990 clock = new(4096);
+        clock.SetTime(new DateTime(2026, 11, 26, 9, 30, 45));
+        Command(clock, 3);
+        Command(clock, 1);
+        Command(clock, 5);
+        clock.TimingPulseHertz.Should().Be(256);
+        int seconds = 0;
+        for (int bit = 0; bit < 8; bit++)
+        {
+            if (clock.DataOut) { seconds |= 1 << bit; }
+            clock.SetInputs(5, clock: true, dataIn: false);
+            clock.SetInputs(5, clock: false, dataIn: false);
+        }
+
+        seconds.Should().Be(0x45);
+    }
+
+    /// <summary>
     ///  Shifting a time in and a time-set command set the counters, which then count on with the clock.
     /// </summary>
     [TestMethod]

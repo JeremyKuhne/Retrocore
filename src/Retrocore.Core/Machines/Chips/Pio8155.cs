@@ -27,7 +27,9 @@ namespace Retrocore.Machines.Chips;
 ///   bits: 00 one square wave, 01 a continuous square wave, 10 one pulse at terminal count, 11 a pulse each terminal
 ///   count. A square wave of count n is high for the first n/2 counts, rounded up, and low for the rest; a pulse mode
 ///   holds TIMER OUT high but for the one count at terminal count. Counts below 2 are taken as 2. TIMER OUT is high
-///   while the timer is stopped.
+///   while the timer is stopped. This is the timer as Intel's <i>MCS-80/85 Family User's Manual</i> describes it, but
+///   for one thing: the chip counts down by twos, twice a cycle, so its count registers read an encoded value while
+///   it runs; here they read the counts left.
 ///  </para>
 /// </remarks>
 public sealed class Pio8155

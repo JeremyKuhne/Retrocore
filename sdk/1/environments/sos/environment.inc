@@ -63,12 +63,12 @@ CLOSE_CALL = $CC
 ;; CLOSE's count of parameters.
 CLOSE_COUNT = 1
 
-;; COLD_START, as SOS's listing names it: stops the system, blanking memory, and shows INSERT SYSTEM DISKETTE &
-;; REBOOT until Control-RESET. Its list: the count, 0.
-COLD_START_CALL = $65
+;; TERMINATE, as Apple's SOS documentation names it, COLD_START in the kernel's listing: stops the system, blanking
+;; memory, and shows INSERT SYSTEM DISKETTE & REBOOT until Control-RESET. Its list: the count, 0.
+TERMINATE_CALL = $65
 
-;; COLD_START's count of parameters.
-COLD_START_COUNT = 0
+;; TERMINATE's count of parameters.
+TERMINATE_COUNT = 0
 
 ; The console.
 

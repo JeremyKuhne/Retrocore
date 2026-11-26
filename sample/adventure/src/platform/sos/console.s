@@ -182,6 +182,7 @@ Written:
 .proc ReadLine
     lda #0
     sta ReadLength
+    sta ReadLength + 1
     SosCall READ_CALL, ReadList
     SosCall WRITE_CALL, NewLineList
     ldy #0

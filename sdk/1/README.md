@@ -33,7 +33,7 @@ A `source` launch and `--assemble` search only `Sdk/`.
 | `environments/wozmon/environment.inc` | `wozmon` | nothing yet: the program calls the Woz Monitor, as the Apple-1's `<machine.inc>` names it |
 | `environments/basic/environment.inc` | `basic` | `BASIC_START`, where the PRG loads, and `SYS_TOKEN`, the token of its BASIC line's `SYS` |
 | `environments/dfs/environment.inc` | `dfs` | OSFILE's loads and saves, the layout of its control block, and the Return that ends a file name |
-| `environments/sos/environment.inc` | `sos` | `SosCall`, SOS's call numbers and their parameter counts (OPEN, NEWLINE, READ, WRITE, CLOSE, COLD_START), the interpreter's extend page, and the console's Return, line feed and clear |
+| `environments/sos/environment.inc` | `sos` | `SosCall`, SOS's call numbers and their parameter counts (OPEN, NEWLINE, READ, WRITE, CLOSE, TERMINATE), the interpreter's extend page, and the console's Return, line feed and clear |
 | `environments/dos33/environment.inc` | `dos33` | DOS 3.3's page-3 vector from `$03D0`, from DosInit.asm, and `DOS_COMMAND`, the Ctrl-D that starts a command a program writes |
 | `machines/apple1/machine.inc` | `apple1` | the PIA, and the Woz Monitor's ECHO, PRBYTE, PRHEX and GETLINE, written here |
 | `machines/apple2/machine.inc` | every Apple II | `IIeEquates.asm`, `MonitorEntries.asm`, and nine more Monitor entries |

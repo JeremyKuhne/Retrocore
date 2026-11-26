@@ -134,8 +134,21 @@ Internet Archive.
 | Model 4 | TRSDOS 6.2.0 | `TRSDOS62.imd` (`T80M4DOS.IMD`) | `cpm22_202207` | `bed5f992…` |
 | Model 4 and 4P | LS-DOS 6.3.0 level J | `LSDOS63J.dsk` (JV3, `ldos63j.dsk`) | `cpm22_202207` | `c419e101…` |
 
-The item names are the download pages' last path segment, `https://archive.org/details/<item>`. The Model II's
-TRSDOS-II and the Model I's NEWDOS/80 are not there.
+The item names are the download pages' last path segment, `https://archive.org/details/<item>`.
+
+The Model II's DOSes are not among those items. They are in MAME's `trs80m2` software list, in the Internet Archive
+item `MAME_0.202_Software_List_ROMs_merged`, as `trs80m2.zip` (SHA-256 `813f8840…`). That holds a zip for each
+entry, named below with the file in it. The fixtures keep them under new names. None boots here yet (see the
+[backlog](backlog/Trs80Model3AndModel2.md#stages), stage 2).
+
+| Machine | DOS | File | In `trs80m2.zip` | SHA-256 |
+| --- | --- | --- | --- | --- |
+| Model II | TRSDOS 1.2 | `M2TRSDOS12.imd` | `tdos12.zip`: `trsdos12.imd` | `f5974034…` |
+| Model II | TRSDOS 2.0a | `M2TRSDOS20A.imd` | `tdos12.zip`: `tdos20/tdos20a.imd` | `d1ff42e4…` |
+| Model II | TRSDOS 2.0b | `M2TRSDOS20B.imd` | `tdos12.zip`: `tdos20/tdos20b.imd` | `33128ef8…` |
+| Model II | TRSDOS 2.0's calculator disk, not a DOS | `M2TDOSCALC.imd` | `tdos12.zip`: `tdos20/tdoscalc.imd` | `87baf052…` |
+| Model 16 | TRSDOS-II 4.2 | `M16TRSDOS42.td0` (Teledisk) | `tdos12.zip`: `tdos42/tr16sys.td0` | `d46c1c43…` |
+| Model II | LS-DOS 6.3.1 | `M2LSDOS631.dmk` | `lsdos631.zip`: `l2-631a.dmk` | `1870918f…` |
 
 ## Typed and pasted text
 
@@ -300,9 +313,11 @@ What the comparison has to allow for:
 
 ## What is not done yet
 
-- **The Model II's TRSDOS-II**, which needs an image. Its comparison with MAME covers only the boot ROMs, and its
-  DMA and keyboard codes are untested by real software; the keyboard codes also need checking against its keyboard's
-  ROM ([the Model II](#the-model-ii-12-and-16)).
+- **The Model II's DOSes.** TRSDOS 1.2, 2.0a and 2.0b stop at `BOOT ERROR DM 23`, LS-DOS 6.3.1 leaves the screen
+  blank, and TRSDOS-II 4.2 is a Teledisk image, which the media library does not read (see the
+  [backlog](backlog/Trs80Model3AndModel2.md#stages), stage 2). Until they boot, the Model II's comparison with MAME
+  covers only the boot ROMs, and its DMA and keyboard codes are untested by real software; the keyboard codes also
+  need checking against its keyboard's ROM ([the Model II](#the-model-ii-12-and-16)).
 - **The Model II's boot ROM version 4**, MAME's `cpu_fc86` of 1982-11-18, which MAME lists with no good dump known,
   so `Model2Boot.asm` has no source for it.
 - **The RS-232 ports**, the Model 4's sound beyond the speaker bit, its hi-res graphics board and hard disks, and the

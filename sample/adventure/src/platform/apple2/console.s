@@ -7,8 +7,8 @@
 
 ; What the engine needs of every platform.
 
-;; The screen's width, which the engine wraps its text to.
-SCREEN_COLUMNS = 40
+;; The screen's width, which the engine wraps its text to: the SDK's, 40 columns.
+SCREEN_COLUMNS = RC_SCREEN_COLUMNS
 
 ;; The engine's pointer into the game's string it is writing. The pointers are in bytes neither the Monitor nor
 ;; DOS 3.3 uses. AppleSoft keeps its number conversion vectors, for USR routines, in $06-$09, which the engine
@@ -24,48 +24,9 @@ ActionPointer = $FA
 ;; The engine's pointer to the word or text it is reading.
 WordPointer = $FC
 
-; The Monitor's routines and locations the console uses.
+; The Monitor's routines and locations the console uses, and the Apple II's hardware.
 
-;; Inherit: <Monitor:CharacterOut>
-;; Also: COUT (A2RM78, A2RM79, IIEROM82, IIETRM85)
-CharacterOut = $FDED
-
-;; Inherit: <Monitor:GetLine::NoPrompt>
-;; Also: GETLN1 (A2RM79, IIETRM85)
-GetLineNoPrompt = $FD6F
-
-;; Inherit: <Monitor:InitDisplay>
-;; Also: INIT (A2RM78, A2RM79, IIEROM82, IIETRM85)
-InitDisplay = $FB2F
-
-;; Inherit: <Monitor:SetNormal>
-;; Also: SETNORM (A2RM78, A2RM79, IIEROM82, IIETRM85)
-SetNormal = $FE84
-
-;; Inherit: <Monitor:SetKeyboard>
-;; Also: SETKBD (A2RM78, A2RM79, IIEROM82, IIETRM85)
-SetKeyboard = $FE89
-
-;; Inherit: <Monitor:SetScreen>
-;; Also: SETVID (A2RM78, A2RM79, IIEROM82, IIETRM85)
-SetScreen = $FE93
-
-;; Inherit: <Monitor:Home>
-;; Also: HOME (A2RM78, A2RM79, IIEROM82, IIETRM85)
-Home = $FC58
-
-;; Inherit: <Monitor:Delay>
-;; Also: WAIT (A2RM78, A2RM79, IIEROM82, IIETRM85)
-Delay = $FCA8
-
-;; The line <GetLineNoPrompt> reads, each character with its high bit set, ending in a Return.
-;; Also: IN (A2RM78, A2RM79, IIEROM82, IIETRM85)
-InputBuffer = $0200
-
-;; The character <GetLineNoPrompt> shows again after a line is cancelled: by Control-X, a backspace at its start, or
-;; a full buffer.
-;; Also: PROMPT (A2RM78, A2RM79, IIEROM82, IIETRM85)
-PromptCharacter = $33
+.include <machine.inc>
 
 ; Characters.
 

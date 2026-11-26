@@ -389,9 +389,9 @@ Each writer reads back through the existing readers in its tests, and boots unde
   folders for completion, hover and diagnostics. Changing the target re-checks the open files. Today the server's only
   inputs are `--sdk-roms`, `.cfg` files and the lint words. The extension sends the active target in a
   `retrocore/activeTarget` notification, `{ "project": "<retrocore.json path>", "target": "<name>" }` (both null
-  without one, when the server uses each source's first target that assembles it), at the server's start and
-  whenever the active target or what its file gives it changes. Other edits to a `retrocore.json` reach the server as
-  watched-file events; it loads the target's settings from the file itself.
+  without one), at the server's start and whenever the active target or what its file gives it changes. Other edits
+  to a `retrocore.json` reach the server as watched-file events. The server's side, in phase 2, loads the target's
+  settings from the file itself, and without a target uses each source's first target that assembles it.
 - **Inactive `.if` blocks are dimmed** with the `Unnecessary` diagnostic tag the server already uses for an unused
   `.using`.
 - **A build error** fails the launch, and its diagnostics name the target.

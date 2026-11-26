@@ -72,7 +72,7 @@ export async function startLanguageClient(context: vscode.ExtensionContext, targ
     }
 
     const configurations = vscode.workspace.createFileSystemWatcher("**/*.cfg");
-    // A project file's changes reach the server too, so it can analyze the project's sources again.
+    // A project file's changes reach the server too, for its project support (phase 2) to analyze the sources again.
     const projects = vscode.workspace.createFileSystemWatcher("**/retrocore.json");
     const isConfiguration = (document: vscode.TextDocument): boolean =>
         document.uri.scheme === "file" && path.extname(document.uri.fsPath).toLowerCase() === ".cfg";

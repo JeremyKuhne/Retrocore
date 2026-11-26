@@ -76,6 +76,11 @@ internal sealed partial class DebugSession
         internal int Reported { get; set; }
 
         /// <summary>
+        ///  Gets or sets the token of the instruction boundary it was last met at, which it is not met at again.
+        /// </summary>
+        internal long MetToken { get; set; }
+
+        /// <summary>
         ///  Gets or sets why the breakpoint cannot stop, or null when it is verified.
         /// </summary>
         internal string? Problem { get; set; }

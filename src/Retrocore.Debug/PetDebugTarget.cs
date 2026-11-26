@@ -120,6 +120,17 @@ internal sealed partial class PetDebugTarget : IDebugTarget
     public bool IsInstructionBoundary => _machine.Processor.IsInstructionBoundary;
 
     /// <inheritdoc/>
+    public bool IsTakingInterrupt => _machine.Processor.IsTakingInterrupt;
+
+    /// <inheritdoc/>
+    /// <remarks>
+    ///  <para>
+    ///   S is a byte: the stack is page one.
+    ///  </para>
+    /// </remarks>
+    public int StackMask => 0xFF;
+
+    /// <inheritdoc/>
     public bool InInstruction => _machine.Processor.CurrentOpCode is not null;
 
     /// <inheritdoc/>

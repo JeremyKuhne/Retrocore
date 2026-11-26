@@ -101,6 +101,12 @@ public sealed partial class M6809Processor<TBus> where TBus : IProcessorBus
         _state.Sequence == M6809Sequence.Instruction && _state.Operation == M6809Operation.None;
 
     /// <summary>
+    ///  Gets whether an NMI's, FIRQ's or IRQ's response is in flight: the stacking and vector fetch taken at an
+    ///  instruction boundary in place of the instruction there, which runs once the handler returns.
+    /// </summary>
+    public bool IsTakingInterrupt => _state.Sequence == M6809Sequence.Interrupt;
+
+    /// <summary>
     ///  Gets whether HALT holds the processor between instructions: it was asserted as the last cycle began and
     ///  still is, so the next cycle leaves the bus idle.
     /// </summary>

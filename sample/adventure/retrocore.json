@@ -1,0 +1,30 @@
+// The adventure on five machines, each a bare target: the engine's core, the same on every one, and the machine's
+// platform folder, src/platform/<family>/, with its console and its linker configuration. Pack the game first
+// (dotnet run tools/packer.cs -- pack games/test.dat obj/test.bin), then build with `retrocore build --all`.
+{
+  "sdk": "1",
+  "name": "adventure",
+  "cpu": "6502",
+  "sources": [
+    "src/core/game.s",
+    "src/core/text.s",
+    "src/core/phrases.s",
+    "src/core/numbers.s",
+    "src/core/parser.s",
+    "src/core/world.s",
+    "src/core/actions.s",
+    "src/core/conditions.s",
+    "src/core/codes.s",
+    "src/core/engine.s",
+    "src/linked-game.s"
+  ],
+  "entry": "Engine::Start",
+  "targets": {
+    "apple1": { "machine": "apple1", "environment": "bare", "options": { "ramKilobytes": 32 },
+                "linkerConfiguration": "src/platform/apple1/bare.cfg" },
+    "apple2": { "machine": "apple2-iiplus", "environment": "bare", "linkerConfiguration": "src/platform/apple2/bare.cfg" },
+    "apple3": { "machine": "apple3", "environment": "bare", "linkerConfiguration": "src/platform/apple3/bare.cfg" },
+    "pet": { "machine": "pet4032", "environment": "bare", "linkerConfiguration": "src/platform/pet/bare.cfg" },
+    "bbc": { "machine": "bbcb", "environment": "bare", "linkerConfiguration": "src/platform/bbc/bare.cfg" }
+  }
+}

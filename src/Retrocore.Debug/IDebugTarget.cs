@@ -259,6 +259,12 @@ internal interface IDebugTarget : IDebugMemory
     bool BasicInDirectMode => Basic is not { } dialect || dialect.InDirectMode(new TargetBasicMemory(this));
 
     /// <summary>
+    ///  Gets what to do when BASIC is not in direct mode and the debugger cannot bring it there, for a target where
+    ///  that can mean more than a program running; null for the session's own message.
+    /// </summary>
+    string? BasicAwayMessage => null;
+
+    /// <summary>
     ///  Gets the number of the BASIC line running, or last run.
     /// </summary>
     int BasicCurrentLine => Basic is { } dialect

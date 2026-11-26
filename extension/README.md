@@ -1479,9 +1479,9 @@ statement that called it; it shows **BASIC: ready** at the prompt.
 ### BASIC files
 
 `.applesoft.bas`, `.integer.bas`, `.apple1.bas`, `.business.bas`, `.level2.bas`, `.level1.bas`,
-`.colorbasic.bas`, `.mbasic.bas`, `.bbcbasic.bas` and `.atari.bas` files are AppleSoft, Integer BASIC, Apple-1 BASIC,
-Business BASIC, Level II BASIC, Level I BASIC, Color BASIC, MBASIC (BASIC-80 5.21, the Kaypro II's
-CP/M BASIC), BBC BASIC and Atari BASIC. Business BASIC and MBASIC take a reserved word only between separators,
+`.colorbasic.bas`, `.mbasic.bas`, `.model100.bas`, `.bbcbasic.bas` and `.atari.bas` files are AppleSoft, Integer
+BASIC, Apple-1 BASIC, Business BASIC, Level II BASIC, Level I BASIC, Color BASIC, MBASIC (BASIC-80 5.21, the Kaypro
+II's CP/M BASIC), Model 100 BASIC, BBC BASIC and Atari BASIC. Business BASIC and MBASIC take a reserved word only between separators,
 so their highlighting leaves `PRINTER` a name, and their names count in full, dots
 included (MBASIC's to 40 characters). A Color BASIC file may use every word of Disk Extended Color BASIC; a
 machine without those ROMs stores the words they add as letters. A plain `.bas` file

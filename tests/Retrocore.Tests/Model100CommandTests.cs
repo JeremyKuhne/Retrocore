@@ -43,6 +43,14 @@ public sealed class Model100CommandTests
             string unknown = Path.Join(folder, "x.bin");
             File.WriteAllBytes(unknown, [0]);
             ((Action)(() => Model100Command.FromHost(unknown))).Should().Throw<ArgumentException>().WithMessage("*.ba, .do, .co, .bas or .txt*");
+            ((Action)(() => Model100Command.FromHost(text, "NOTES.BA"))).Should().Throw<ArgumentException>().WithMessage("*makes a .DO file*");
+            ((Action)(() => Model100Command.FromHost(basic, "GAME.DO"))).Should().Throw<ArgumentException>().WithMessage("*makes a .BA file*");
+            string other = Path.Join(folder, "game.level2.bas");
+            File.WriteAllText(other, "10 PRINT 1\n");
+            ((Action)(() => Model100Command.FromHost(other))).Should().Throw<ArgumentException>().WithMessage("*is Level II BASIC, not Model 100 BASIC*");
+            string pragma = Path.Join(folder, "apple.bas");
+            File.WriteAllText(pragma, "REM retrocore applesoft\n10 HOME\n");
+            ((Action)(() => Model100Command.FromHost(pragma))).Should().Throw<ArgumentException>().WithMessage("*is AppleSoft*not Model 100 BASIC*");
             string longName = Path.Join(folder, "toolong.txt");
             File.WriteAllText(longName, "x");
             ((Action)(() => Model100Command.FromHost(longName))).Should().Throw<ArgumentException>().WithMessage("*TOOLONG.DO is not*");

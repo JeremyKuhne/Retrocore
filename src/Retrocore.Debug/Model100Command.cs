@@ -68,15 +68,22 @@ internal static class Model100Command
     /// <param name="path">The host file.</param>
     /// <param name="name">The name in RAM, with its extension; by default the host file's.</param>
     /// <returns>The name in RAM and the bytes.</returns>
-    /// <exception cref="ArgumentException">The file is not one of these kinds, or its name does not fit.</exception>
+    /// <exception cref="ArgumentException">
+    ///  The file is not one of these kinds or is another BASIC's, or its name does not fit or names another kind.
+    /// </exception>
     /// <exception cref="InvalidDataException">A BASIC program does not parse.</exception>
     internal static (string Name, byte[] Bytes) FromHost(string path, string? name = null)
     {
         string extension = Path.GetExtension(path).ToLowerInvariant();
         string stem = Path.GetFileNameWithoutExtension(path);
-        if (extension == ".bas" && Path.GetExtension(stem).Length > 0)
+        if (extension == ".bas" && BasicDialect.FromName(Path.GetExtension(stem).TrimStart('.')) is { } named)
         {
-            // game.model100.bas names GAME.BA.
+            // game.model100.bas names GAME.BA; game.level2.bas is another BASIC's.
+            if (named != BasicDialect.Model100)
+            {
+                throw new ArgumentException($"{path} is {named.DisplayName}, not Model 100 BASIC.");
+            }
+
             stem = Path.GetFileNameWithoutExtension(stem);
         }
 
@@ -88,9 +95,15 @@ internal static class Model100Command
             _ => throw new ArgumentException($"{path} is not a Model 100 file: give a .ba, .do, .co, .bas or .txt file.")
         };
 
-        string full = name ?? $"{stem}.{kind}";
+        string full = (name ?? $"{stem}.{kind}").ToUpperInvariant();
         Model100Files.ParseName(full);
-        return (full.ToUpperInvariant(), bytes);
+        string wanted = $".{kind.ToUpperInvariant()}";
+        if (!full.EndsWith(wanted, StringComparison.Ordinal))
+        {
+            throw new ArgumentException($"{path} makes a {wanted} file, so its name must end in {wanted}; {full} does not.");
+        }
+
+        return (full, bytes);
     }
 
     /// <summary>
@@ -112,11 +125,17 @@ internal static class Model100Command
 
     private static byte[] Tokenize(string path)
     {
-        BasicParseResult parsed = BasicProgram.Parse(File.ReadAllText(path), BasicDialect.Model100, path);
+        BasicParseResult parsed = BasicProgram.Parse(File.ReadAllText(path), BasicDialect.Model100);
         if (parsed.Program is not { } program)
         {
             throw new InvalidDataException(
                 $"{path} does not parse: {string.Join("; ", parsed.Diagnostics.Select(diagnostic => diagnostic.Message))}");
+        }
+
+        // A pragma may name another BASIC, whose tokens would not be the Model 100's.
+        if (program.Dialect != BasicDialect.Model100)
+        {
+            throw new ArgumentException($"{path} is {program.Dialect.DisplayName}, not Model 100 BASIC.");
         }
 
         return program.ToImage();

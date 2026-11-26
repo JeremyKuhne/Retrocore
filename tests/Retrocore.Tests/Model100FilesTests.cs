@@ -138,6 +138,63 @@ public sealed class Model100FilesTests
     }
 
     /// <summary>
+    ///  A file of a name already in RAM is replaced in its place, BASIC's open program too, and RAM is changed only once
+    ///  the new one is known to fit; after any change BASIC's DATA pointer is before its program and CONT is cleared,
+    ///  as the ROM leaves them.
+    /// </summary>
+    [TestMethod]
+    public void ReplacingKeepsThePlaceAndChecksTheRoomFirst()
+    {
+        byte[] ram = ColdStart();
+        IBasicMemory memory = DelegateBasicMemory.Of(ram);
+        Model100Files files = new(memory);
+        files.Write("PROG.BA", Parse("10 PRINT 1\n").ToImage());
+        files.Write("NOTE.DO", "ABC"u8);
+        files.Write("MC.CO", Convert.FromHexString(Machine));
+        BasicProgram.WriteWord(memory, 0xF67C, 0x8001);
+        BasicProgram.WriteWord(memory, 0xFBAC, 0x8005);
+
+        files.Write("PROG.BA", Parse("10 PRINT 1\n20 PRINT 2\n").ToImage());
+        files.List().Select(file => file.Name).Should().Equal("PROG.BA", "NOTE.DO", "MC.CO");
+        BasicProgram.Word(memory, 0xF67C).Should().Be(0x8001, "BASIC keeps its open program");
+        BasicProgram.Read(BasicDialect.Model100, memory).Lines.Select(line => line.Number).Should().Equal(10, 20);
+        Word(ram, 0xFBB8).Should().Be(0x8000, "DATA starts before BASIC's program");
+        Word(ram, 0xFBAC).Should().Be(0, "CONT is cleared");
+
+        byte[] before = (byte[])ram.Clone();
+        ((Action)(() => files.Write("NOTE.DO", new byte[0x8000]))).Should().Throw<InvalidOperationException>().WithMessage("*bytes free*");
+        ram.Should().Equal(before, "nothing changed, and the old NOTE.DO is still there");
+        Convert.ToHexString(files.Read("MC.CO")).Should().Be(Machine);
+    }
+
+    /// <summary>
+    ///  BASIC is at its prompt only when its current line is the direct mode's and BASIC is the program running, by
+    ///  the name the ROM keeps at $FDD9; a program is written only over a .BA file or BASIC's unsaved program.
+    /// </summary>
+    [TestMethod]
+    public void BasicIsAtItsPromptOnlyInBasic()
+    {
+        byte[] ram = ColdStart();
+        IBasicMemory memory = DelegateBasicMemory.Of(ram);
+        BasicProgram.WriteWord(memory, 0xF67A, 0xFFFF);
+        foreach ((string running, bool prompt) in (ValueTuple<string, bool>[])[
+            ("", false), ("TEXT", false), ("TELCOM", false), ("ADRS.DO", false), ("BASIC", true), ("PROG.BA", true)])
+        {
+            Array.Clear(ram, 0xFDD9, 9);
+            System.Text.Encoding.ASCII.GetBytes(running).CopyTo(ram, 0xFDD9);
+            BasicDialect.Model100.InDirectMode(memory).Should().Be(prompt, "with {0} running", running);
+        }
+
+        BasicProgram.WriteWord(memory, 0xF67A, 10);
+        BasicDialect.Model100.InDirectMode(memory).Should().BeFalse("BASIC is running line 10");
+
+        BasicProgram.WriteWord(memory, 0xF67C, 0x8003);
+        ((Action)(() => Parse("10 END\n").Write(memory))).Should().Throw<InvalidOperationException>().WithMessage("*not at a .BA file*");
+        BasicProgram.WriteWord(memory, 0xF67C, 0);
+        ((Action)(() => Parse("10 END\n").Write(memory))).Should().Throw<InvalidOperationException>();
+    }
+
+    /// <summary>
     ///  Names and contents that are not a Model 100 file's are refused, as are a full directory, a lack of room and
     ///  removing the program BASIC has open.
     /// </summary>
@@ -169,11 +226,14 @@ public sealed class Model100FilesTests
     ///  Files written into a Model 100's RAM at the menu lie byte for byte as the ROM's own SAVE, SAVEM and OPEN leave
     ///  them, and the ROM runs and reads them; inconclusive without the user's ROM.
     /// </summary>
+    /// <param name="rom">The ROM's file, the Model 100's or the Tandy 102's.</param>
     [TestMethod]
-    public void TheRomUsesWrittenFiles()
+    [DataRow("m100.bin")]
+    [DataRow("t102.bin")]
+    public void TheRomUsesWrittenFiles(string rom)
     {
         // The ROM saves the files itself.
-        Trs80Model100Machine saved = Trs80Model100RomTests.Boot("m100.bin");
+        Trs80Model100Machine saved = Trs80Model100RomTests.Boot(rom);
         Trs80Model100RomTests.Type(saved, "BASIC\r");
         saved.RunSeconds(1);
         foreach (string line in (string[])[
@@ -188,7 +248,7 @@ public sealed class Model100FilesTests
         Model100Files savedFiles = new(Memory(saved));
 
         // Then the library writes them into a machine at the menu.
-        Trs80Model100Machine written = Trs80Model100RomTests.Boot("m100.bin");
+        Trs80Model100Machine written = Trs80Model100RomTests.Boot(rom);
         IBasicMemory memory = Memory(written);
         Model100Files files = new(memory);
         foreach (Model100File file in savedFiles.List())

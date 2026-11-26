@@ -142,7 +142,7 @@ internal sealed partial class DebugSession
         {
             prompt = Target.BasicRom is { } rom && _debug.Position(Target, rom.StatementStart) is not null
                 ? rom
-                : throw new InvalidOperationException(NoPromptMessage);
+                : throw new InvalidOperationException(Target.BasicAwayMessage ?? NoPromptMessage);
 
             if (!ReachStatement(prompt))
             {

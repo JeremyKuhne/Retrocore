@@ -133,7 +133,7 @@ public sealed class Trs80Model100DebugTargetTests
         try
         {
             string basic = Path.Join(folder, "hello.model100.bas");
-            File.WriteAllText(basic, "10 PRINT \"HELLO\"\n");
+            File.WriteAllText(basic, "10 PRINT \"HI\";6*7\n");
             string notes = Path.Join(folder, "notes.txt");
             File.WriteAllText(notes, "first\nsecond\n");
             string code = Path.Join(folder, "mc.co");
@@ -151,7 +151,7 @@ public sealed class Trs80Model100DebugTargetTests
             Run(target, 1);
             Type(target, "RUN \"HELLO\"\r");
             Run(target, 1);
-            string.Join("\n", target.Machine.ScreenText()).Should().Contain("HELLO");
+            string.Join("\n", target.Machine.ScreenText()).Should().Contain("HI 42", "the program ran");
             target.Basic.Should().BeSameAs(BasicDialect.Model100);
 
             string text = Path.Join(folder, "TOOLONGNAME.txt");
@@ -160,6 +160,9 @@ public sealed class Trs80Model100DebugTargetTests
             JsonObject badOptions = new() { ["files"] = bad };
             Action refused = () => Launch(Path.Join(folder, "other.ram"), badOptions);
             refused.Should().Throw<ArgumentException>().WithMessage("*TOOLONGNAME.DO is not a Model 100 file name*");
+            JsonObject notList = new() { ["files"] = notes };
+            Action single = () => Launch(Path.Join(folder, "other.ram"), notList);
+            single.Should().Throw<ArgumentException>().WithMessage("files must be a list of paths.");
         }
         finally
         {

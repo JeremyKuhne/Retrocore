@@ -1214,7 +1214,7 @@
       "explorer/context": [
         {
           "command": "retrocore.basic.openListing",
-          "when": "resourceExtname == .cas || resourceFilename =~ /#f[ac]/i || resourceExtname == .bin",
+          "when": "resourceExtname == .cas || resourceExtname == .ba || resourceFilename =~ /#f[ac]/i || resourceExtname == .bin",
           "group": "navigation@9"
         }
       ],

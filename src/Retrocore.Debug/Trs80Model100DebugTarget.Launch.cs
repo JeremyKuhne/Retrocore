@@ -97,7 +97,11 @@ internal sealed partial class Trs80Model100DebugTarget
             target._ramImagePath = path;
         }
 
-        if (args["files"] is JsonArray files) { target.PlaceFiles(files); }
+        if (args["files"] is { } files)
+        {
+            target.PlaceFiles(files as JsonArray ?? throw new ArgumentException("files must be a list of paths."));
+        }
+
         return target;
     }
 
@@ -121,8 +125,9 @@ internal sealed partial class Trs80Model100DebugTarget
         return null;
     }
 
-    // Runs the ROM to its menu, so RAM's directory is set up, writes each file into it, then turns the power off and
-    // on, so the menu is drawn again with them; the files are checked before any is written.
+    // Runs the ROM to its menu, so RAM's directory is set up, writes each file into it, then resets the machine, so the
+    // menu is drawn again with them. Each file is read and named before any is written; one that then does not go in
+    // fails the launch, which leaves this machine unused.
     private void PlaceFiles(JsonArray files)
     {
         List<(string Name, byte[] Bytes)> read = [];
@@ -144,13 +149,12 @@ internal sealed partial class Trs80Model100DebugTarget
             {
                 ram.Write(name, bytes);
             }
-            catch (Exception exception) when (exception is InvalidOperationException or InvalidDataException)
+            catch (Exception exception) when (exception is InvalidOperationException or InvalidDataException or ArgumentException)
             {
                 throw new ArgumentException($"{name} cannot go into RAM: {exception.Message}", exception);
             }
         }
 
-        _placed = [.. read.Select(file => file.Name)];
         _machine.PowerOn();
     }
 

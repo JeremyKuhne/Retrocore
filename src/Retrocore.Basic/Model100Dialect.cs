@@ -13,9 +13,10 @@ namespace Retrocore.Basic;
 ///  <para>
 ///   The keywords are the ROM's table at <c>$0080</c>, one token each from <c>$80</c> (<c>END</c>) to <c>$FF</c>
 ///   (<c>'</c>); numbers and line numbers stay as their digits. The tokenizer stores lines as the ROM does when they
-///   are typed, checked against the Model 100's ROM: spaces are kept (but inside <c>GOTO</c>, which may have them), lowercase letters outside strings, DATA and REM
-///   become uppercase, <c>?</c> is <c>PRINT</c>, <c>ELSE</c> is stored with a colon before it and an apostrophe remark
-///   as a colon, <c>REM</c> and the apostrophe token, and one space after the line number is dropped.
+///   are typed, checked against the Model 100's ROM: spaces are kept as typed, and only <c>GOTO</c> may have spaces
+///   inside it; lowercase letters become uppercase, but in strings, DATA and remarks; <c>?</c> is <c>PRINT</c>;
+///   <c>ELSE</c> is stored with a colon before it, and an apostrophe remark as a colon, <c>REM</c> and the apostrophe
+///   token; and one space after the line number is dropped.
 ///  </para>
 ///  <para>
 ///   A program is a file in RAM: the <c>.BA</c> file BASIC has open, or its unsaved program, with the other files
@@ -26,6 +27,8 @@ namespace Retrocore.Basic;
 internal sealed class Model100Dialect : BasicDialect
 {
     private const int StackTop = 0xF678;
+    private const int RunningName = 0xFDD9;
+    private const int RunningNameLength = 9;
     private const byte GotoToken = 0x88;
     private const byte ElseToken = 0x91;
     private const byte PrintToken = 0xA3;
@@ -67,6 +70,12 @@ internal sealed class Model100Dialect : BasicDialect
     public override int MaximumLineNumber => 65529;
 
     /// <inheritdoc/>
+    /// <remarks>
+    ///  <para>
+    ///   The first file's address in a 32 KB machine. A smaller machine's file area starts lower; the ROM links a
+    ///   <c>.BA</c> file again where it goes, as Retrocore does when it writes one.
+    ///  </para>
+    /// </remarks>
     public override int DefaultLoadAddress => Model100Files.FileArea + 1;
 
     /// <inheritdoc/>
@@ -145,18 +154,32 @@ internal sealed class Model100Dialect : BasicDialect
     /// <inheritdoc/>
     /// <remarks>
     ///  <para>
-    ///   The stack grows down from the stack top toward the variables, so the program and every file after it must
-    ///   leave it room.
+    ///   The program ends at its zero link, as other files follow it; a program pointer with no program there gives no
+    ///   bounds.
     ///  </para>
     /// </remarks>
-    internal override int WriteLimit(IBasicMemory memory) => BasicProgram.Word(memory, StackTop) - Model100Files.StackRoom;
-
-    /// <inheritdoc/>
     internal override (int Start, int End) ProgramBounds(IBasicMemory memory)
     {
         int start = BasicProgram.Word(memory, Pointers.ProgramStart);
-        return (start, Model100Files.BasicEnd(memory, start));
+        try
+        {
+            return (start, Model100Files.BasicEnd(memory, start));
+        }
+        catch (InvalidDataException)
+        {
+            return (0, 0);
+        }
     }
+
+    /// <inheritdoc/>
+    /// <remarks>
+    ///  <para>
+    ///   The current line is $FFFF at the menu and in the ROM's other programs too, so BASIC is at its prompt only
+    ///   when it is also the program running: the name at <c>$FDD9</c> is BASIC's, or the <c>.BA</c> file it has
+    ///   open, where TEXT, TELCOM and ADDRSS put theirs and the menu a zero.
+    ///  </para>
+    /// </remarks>
+    public override bool InDirectMode(IBasicMemory memory) => base.InDirectMode(memory) && InBasic(memory);
 
     /// <summary>
     ///  Writes a program over the one BASIC has open, moving the files after it, and clears the variables.
@@ -168,8 +191,28 @@ internal sealed class Model100Dialect : BasicDialect
     {
         int start = BasicProgram.Word(memory, Pointers.ProgramStart);
         Model100Files files = new(memory);
+        if (!files.HoldsProgram(start))
+        {
+            throw new InvalidOperationException(
+                $"BASIC's program pointer, ${start:X4}, is not at a .BA file or BASIC's unsaved program; enter BASIC from the menu first.");
+        }
+
         files.Replace(start, Model100Files.BasicEnd(memory, start) - start, program.ToImage(start));
         Clear(memory);
+    }
+
+    // Whether BASIC is the program running, by the name the ROM keeps for it.
+    private static bool InBasic(IBasicMemory memory)
+    {
+        Span<char> name = stackalloc char[RunningNameLength];
+        int length = 0;
+        while (length < RunningNameLength && memory.Read(RunningName + length) is var value and not 0)
+        {
+            name[length++] = (char)value;
+        }
+
+        ReadOnlySpan<char> running = name[..length];
+        return running.SequenceEqual("BASIC") || running.EndsWith(".BA", StringComparison.Ordinal);
     }
 
     /// <inheritdoc/>

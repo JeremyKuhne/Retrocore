@@ -117,8 +117,8 @@ the bottom of RAM, so adding, changing or removing one moves those after it. Ret
 
 - **At launch**, `files` lists host files: `.ba`, `.do` and `.co` files as the Model 100 holds them, BASIC text as
   `.bas` (tokenized as Model 100 BASIC; `game.model100.bas` becomes `GAME.BA`), and text as `.txt` (its lines ended
-  with CR LF). The ROM runs to its menu, the files go into RAM, replacing any of the same name, and the menu is
-  drawn again with them. With a `ramImage`, they are kept in it when the session ends.
+  with CR LF). The ROM runs to its menu, the files go into RAM, each replacing any of the same name in its
+  place, and the menu is drawn again with them. With a `ramImage`, they are kept in it when the session ends.
 
   ```json
   "files": ["${workspaceFolder}/game.model100.bas", "${workspaceFolder}/notes.txt"]
@@ -146,10 +146,12 @@ the tokenizer stores lines as the ROM stores them when they are typed:
 - `?` is `PRINT`, and `GOTO` may have spaces inside it;
 - `ELSE` and an apostrophe remark are stored after a colon.
 
-`.ba` files open as listings with **Retrocore: Open as BASIC Listing**, and `--basic list`, `tokenize` and `renumber`
-take them (renumbering follows `RESTORE`'s line too, which the Model 100 takes).
+`.ba` files open as listings with **Retrocore: Open as BASIC Listing**, and `--basic list` lists them; `--basic
+tokenize` makes them from text, and renumbering follows `RESTORE`'s line, which the Model 100 takes. Hover help
+for its words is still to come.
 
-While BASIC is at its prompt, **Retrocore: Open BASIC Program** edits the program BASIC has open as text: a `.BA` file
+While BASIC is at its prompt (not at the menu, nor in TEXT or another program), **Retrocore: Open BASIC Program**
+edits the program BASIC has open as text: a `.BA` file
 after `LOAD`, or its unsaved program. Saving writes it back over that file, moving the files after it. A program
 can't yet be stepped through by its lines, and a `basic` launch is not offered: both follow the ROM's routines,
 which wait for the ROM as an SDK source.

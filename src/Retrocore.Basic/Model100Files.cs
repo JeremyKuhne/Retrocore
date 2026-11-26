@@ -20,8 +20,9 @@ namespace Retrocore.Basic;
 ///  </para>
 ///  <para>
 ///   Adding, replacing or removing a file moves every file after it, and the directory's addresses, the region
-///   pointers and BASIC's program and DATA pointers that point past it move with them, as the ROM's own routines move
-///   them. BASIC's variables are cleared. A <c>.BA</c> file that moves is linked again for its new address.
+///   pointers and BASIC's program pointer that point past it move with them, as the ROM's own routines move
+///   them. BASIC's variables, strings, DATA pointer and <c>CONT</c> are cleared, as typing a line clears them. A
+///   <c>.BA</c> file that moves is linked again for its new address.
 ///  </para>
 /// </remarks>
 public sealed class Model100Files
@@ -42,7 +43,7 @@ public sealed class Model100Files
     public const int EntrySize = 11;
 
     /// <summary>
-    ///  The bottom of a 32 KB machine's RAM, where the file area starts.
+    ///  The bottom of a 32 KB machine's RAM, where its file area starts, and the lowest address any machine has RAM at.
     /// </summary>
     internal const int FileArea = 0x8000;
 
@@ -52,7 +53,7 @@ public sealed class Model100Files
     internal const int StackRoom = 0x100;
 
     // The directory's types: bit 7 marks a file, bit 3 one the menu hides, and $B0 is the ROM's own programs; a free
-    // entry is 0, and RickY's $48 is neither.
+    // entry is 0. RickY's $48 is hidden but not a file, and not free either.
     private const byte BasicType = 0x80;
     private const byte TextType = 0xC0;
     private const byte MachineType = 0xA0;
@@ -67,9 +68,7 @@ public sealed class Model100Files
     private const int TextStart = 0xFBAE;
     private const int MachineStart = 0xFBB0;
     private const int VariableStart = 0xFBB2;
-    private const int ArrayStart = 0xFBB4;
     private const int FreeStart = 0xFBB6;
-    private const int DataPointer = 0xFBB8;
     private const int ProgramPointer = 0xF67C;
     private const int StackTop = 0xF678;
     private const byte EndOfText = 0x1A;
@@ -133,6 +132,13 @@ public sealed class Model100Files
     ///  Writes a file into RAM, replacing one of the same name, as the ROM's <c>SAVE</c>, <c>SAVEM</c> and text files
     ///  place them.
     /// </summary>
+    /// <remarks>
+    ///  <para>
+    ///   A new file takes the first free directory entry and goes at the end of its kind's region; one that replaces
+    ///   another takes its place and entry, so BASIC keeps a program it has open. RAM is changed only once the file
+    ///   is known to fit.
+    ///  </para>
+    /// </remarks>
     /// <param name="name">
     ///  The name and extension: up to six letters and digits, the first a letter, then <c>.BA</c>, <c>.DO</c> or
     ///  <c>.CO</c>.
@@ -141,13 +147,27 @@ public sealed class Model100Files
     ///  The file's bytes, as <see cref="Read"/> gives them. A <c>.BA</c> file is linked again for where it goes; a
     ///  <c>.DO</c> file without a <c>$1A</c> gets one.
     /// </param>
-    /// <exception cref="ArgumentException">The name or the bytes are not a file of its kind.</exception>
+    /// <exception cref="ArgumentException">
+    ///  The name is not a Model 100 file's, or a <c>.CO</c> file's length is wrong.
+    /// </exception>
+    /// <exception cref="InvalidDataException">A <c>.BA</c> file's lines do not end.</exception>
     /// <exception cref="InvalidOperationException">The directory is full, or RAM has no room.</exception>
     public void Write(string name, ReadOnlySpan<byte> bytes)
     {
         (string stem, Model100FileType type) = ParseName(name);
         byte[] contents = Contents(type, bytes);
-        if (Find(name) is not null) { Delete(name); }
+        if (Find(name) is { } old)
+        {
+            // In its place, so the directory and BASIC's open program stay as they were.
+            if (type == Model100FileType.Basic)
+            {
+                contents = BasicProgram.FromImage(BasicDialect.Model100, contents).ToImage(old.Address);
+            }
+
+            Move(old.Address, Length(type, old.Address), contents, keep: -1);
+            return;
+        }
+
         int entry = FreeEntry() ?? throw new InvalidOperationException("The Model 100's directory is full.");
 
         // .BA files go before BASIC's unsaved program, .DO before the paste buffer and .CO at the end of their region,
@@ -199,6 +219,23 @@ public sealed class Model100Files
         int entry = EntryOf(file.Address);
         for (int index = 0; index < EntrySize; index++) { _memory.Write(entry + index, 0); }
         Move(file.Address, Length(file.Type, file.Address), [], keep: -1);
+    }
+
+    /// <summary>
+    ///  Tests whether an address is a BASIC program's: a <c>.BA</c> file's or BASIC's unsaved program's.
+    /// </summary>
+    /// <param name="address">The address.</param>
+    /// <returns>Whether a directory entry for one has it.</returns>
+    internal bool HoldsProgram(int address)
+    {
+        if (address < FileArea) { return false; }
+        for (int entry = Directory; entry < Directory + (Entries * EntrySize); entry += EntrySize)
+        {
+            byte type = _memory.Read(entry);
+            if ((type == BasicType || entry == Unsaved) && Word(entry + 1) == address) { return true; }
+        }
+
+        return false;
     }
 
     /// <summary>
@@ -264,7 +301,7 @@ public sealed class Model100Files
             }
         }
 
-        foreach (int pointer in (int[])[ProgramPointer, TextStart, MachineStart, VariableStart, DataPointer])
+        foreach (int pointer in (int[])[ProgramPointer, TextStart, MachineStart, VariableStart])
         {
             Check(pointer);
         }
@@ -292,10 +329,10 @@ public sealed class Model100Files
 
         foreach (int word in moved) { WriteWord(word, Word(word) + delta); }
 
-        int variables = Word(VariableStart);
-        WriteWord(ArrayStart, variables);
-        WriteWord(FreeStart, variables);
         if (delta != 0) { Relink(); }
+
+        // BASIC's variables, strings, DATA pointer and CONT are cleared, as typing a line clears them.
+        Model100Dialect.Instance.Clear(_memory);
     }
 
     // Links each .BA file and BASIC's unsaved program for where it now is.
@@ -311,7 +348,14 @@ public sealed class Model100Files
             {
                 if (Word(address) == 0) { break; }
                 int at = address + 4;
-                while (_memory.Read(at) != 0) { at++; }
+                while (_memory.Read(at) != 0)
+                {
+                    if (++at > 0xFFFF)
+                    {
+                        throw new InvalidDataException($"The program at ${address:X4} has a line with no end.");
+                    }
+                }
+
                 WriteWord(address, at + 1);
                 address = at + 1;
             }
@@ -346,7 +390,14 @@ public sealed class Model100Files
                 return BasicEnd(_memory, address) - address;
             case Model100FileType.Text:
                 int at = address;
-                while (_memory.Read(at) != EndOfText) { at++; }
+                while (_memory.Read(at) != EndOfText)
+                {
+                    if (++at > 0xFFFF)
+                    {
+                        throw new InvalidDataException($"The text file at ${address:X4} has no end.");
+                    }
+                }
+
                 return at + 1 - address;
             default:
                 return 6 + Word(address + 2);

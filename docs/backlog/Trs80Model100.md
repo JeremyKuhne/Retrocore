@@ -1,7 +1,7 @@
 # Backlog: the TRS-80 Model 100
 
-Status: **phases 1 and 2 built (2026-11-26)**; [the guide](../Trs80Model100.md) covers them. Phase 3, files,
-BASIC and the cassette, is next.
+Status: **phases 1 and 2, and phase 3's first part, built (2026-11-26)**; [the guide](../Trs80Model100.md) covers
+them. Phase 3's second part, the cassette and the beeper, is next.
 
 ## Why the Model 100
 
@@ -381,12 +381,15 @@ and from a `CSAVE` MAME 0.264 recorded to WAV. No new downloads.
   rather than another dialect's. BASIC's pointers: the open program at `$F67C`, the current
   line at `$F67A`, the stack top at `$F678`, the memory top at `$FB67`, the string bottom at `$FB8C`, `CONT`'s text at
   `$FBAC`, the variables, arrays and free memory at `$FBB2`-`$FBB6`, and the DATA pointer at `$FBB8`, each found by
-  reading RAM after the ROM set them. Between `MENU` and the menu the ROM fixes the directory's addresses and links
-  every `.BA` file again; Retrocore does both as it moves the files.
+  reading RAM after the ROM set them. After BASIC's `MENU`, before it draws the menu, the ROM fixes the
+  directory's addresses and links every `.BA` file again; Retrocore does both as it moves the files. BASIC is at its
+  prompt when the current line is `$FFFF` and the name of the program running, at `$FDD9`, is BASIC's or a `.BA`
+  file's: the current line is `$FFFF` at the menu and in TEXT too.
 - **Files.** `Model100Files` lists, reads, writes and removes `.BA`, `.DO` and `.CO` files in RAM's directory, with
   the region rules the ROM keeps. Files written at the menu match the ROM's own `SAVE`, `SAVEM` and `OPEN` byte for
   byte, and the ROM runs and reads them. A program written through the debugger replaces the one BASIC has open,
-  moving the files after it. Removing the open program is refused, as the ROM's `KILL` refuses it (`?FC Error`).
+  moving the files after it. Removing the open program is refused, as the ROM's `KILL` refuses it (`?FC Error`);
+  replacing a file puts the new one in its place, so BASIC keeps a program it has open.
 - **The debugger.** The launch's `files` option; the Machine view's Files row; **Open BASIC Program** at BASIC's
   prompt; `.ba` files as listings; the `--model100` command on RAM images (`files`, `extract`, `add`, `delete`).
 - **Not yet.** Stepping by BASIC's lines, BASIC's variables (its numbers are BCD, which the variables view does not

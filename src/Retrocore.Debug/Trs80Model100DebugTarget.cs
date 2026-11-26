@@ -46,7 +46,6 @@ internal sealed partial class Trs80Model100DebugTarget : IDebugTarget, IRecordin
     private bool _acknowledged;
     private bool _resetPending;
     private string? _ramImagePath;
-    private string[] _placed = [];
 
     // The emulated seconds the ROM takes to reach its menu after the power comes on.
     private const double BootSeconds = 3;
@@ -176,6 +175,10 @@ internal sealed partial class Trs80Model100DebugTarget : IDebugTarget, IRecordin
     ///  </para>
     /// </remarks>
     public BasicDialect? Basic => BasicDialect.Model100;
+
+    /// <inheritdoc/>
+    public string? BasicAwayMessage =>
+        "BASIC is not at its prompt: choose BASIC on the menu, and stop any program it is running, then try again.";
 
     /// <inheritdoc/>
     public IReadOnlyDictionary<string, Func<JsonObject, JsonObject>> Requests { get; }
@@ -441,18 +444,11 @@ internal sealed partial class Trs80Model100DebugTarget : IDebugTarget, IRecordin
         ];
     }
 
-    // The files in RAM, or why they cannot be read, such as before the ROM has set up its directory.
+    // The files in RAM's directory; before the ROM has set it up, whatever its bytes say.
     private string Files()
     {
-        try
-        {
-            IReadOnlyList<Model100File> files = new Model100Files(new TargetBasicMemory(this)).List();
-            return files.Count == 0 ? "none" : string.Join(", ", files.Select(file => file.Name));
-        }
-        catch (InvalidDataException)
-        {
-            return "not readable";
-        }
+        IReadOnlyList<Model100File> files = new Model100Files(new TargetBasicMemory(this)).List();
+        return files.Count == 0 ? "none" : string.Join(", ", files.Select(file => file.Name));
     }
 
     private JsonObject VideoState() => new()

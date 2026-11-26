@@ -126,7 +126,7 @@ completions, document outlines, and workspace symbol search across your code and
 
 Retrocore supports **AppleSoft BASIC**, **Integer BASIC**, and **TRS-80 Level II and Level I BASIC**. **MBASIC**
 (Microsoft BASIC-80 5.21, the Kaypro II's CP/M BASIC) and **Model 100 BASIC** have `.mbasic.bas` and `.model100.bas`
-source files with the same editing support:
+source files with the same editing support (but Model 100 BASIC's keyword hovers, still to come):
 
 - **Source files with optional labels.** `.applesoft.bas`, `.integer.bas`, `.level2.bas`, `.level1.bas`, `.mbasic.bas`, `.model100.bas`, and `.bas` files can
   omit line numbers, indent freely, and jump to `label:` or `@label` targets. They get dialect-accurate

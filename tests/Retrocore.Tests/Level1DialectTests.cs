@@ -174,6 +174,11 @@ public class Level1DialectTests
         byte[] memory = [.. new byte[128], 0xA5, 0x41, 0xFE, 0x42, 0x03, .. code, checksum];
         FluentActions.Invoking(() => BasicTape.Read(memory, out _)).Should().Throw<InvalidDataException>()
             .WithMessage("This Level I tape loads $41FE-$4202, not a BASIC program from $4200*");
+
+        // A program whose tape ends before its checksum.
+        byte[] written = BasicTape.Write(recorded, 'A');
+        FluentActions.Invoking(() => BasicTape.Read(written.AsSpan(0, written.Length - 1), out _)).Should().Throw<InvalidDataException>()
+            .WithMessage("The Level I tape ends before*");
     }
 
     /// <summary>

@@ -105,7 +105,7 @@ public static class BasicTape
         if (block.Length < Level1HeaderLength + length + 1)
         {
             return start == Level1Dialect.ProgramStart
-                ? throw new InvalidDataException("The Level I tape ends before the program does.")
+                ? throw new InvalidDataException("The Level I tape ends before its program and the checksum after it do.")
                 : null;
         }
 

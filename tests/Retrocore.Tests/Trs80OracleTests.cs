@@ -49,10 +49,8 @@ public class Trs80OracleTests
     /// </summary>
     /// <remarks>
     ///  <para>
-    ///   The entries are far enough apart that the screen, cursor and program should come out the same whether MAME
-    ///   types each one at its fraction, at the next whole second, or early because the fraction was lost. So this
-    ///   checks that a fractional schedule runs end to end, not when each entry fires;
-    ///   <see cref="ScriptEntryKeepsFractionalSeconds"/> checks the text sent to MAME.
+    ///   Each entry must fire on its own frame, which <see cref="MameSchedule.ShouldHaveFiredOnTime"/> checks in
+    ///   every oracle run: an entry at 2.5 seconds that fired at 3, as when the script read only whole seconds, fails.
     ///  </para>
     /// </remarks>
     [TestMethod]
@@ -68,29 +66,6 @@ public class Trs80OracleTests
         ];
 
         Compare(script, finish: 15.5, disk: null, comparesProgram: true, landmark: "1  4  9");
-    }
-
-    /// <summary>
-    ///  The schedule's times reach the Lua scripts with their fraction and a decimal point, whatever the culture.
-    /// </summary>
-    [TestMethod]
-    public void ScriptEntryKeepsFractionalSeconds()
-    {
-        System.Globalization.CultureInfo culture = System.Globalization.CultureInfo.CurrentCulture;
-        try
-        {
-            // German writes 2,5; the Lua scripts read only digits and '.'.
-            System.Globalization.CultureInfo.CurrentCulture = new("de-DE");
-            ScriptEntry((2.5, "RUN\r")).Should().Be("2.5=RUN\\r");
-            ScriptEntry((12.125, "\r")).Should().Be("12.125=\\r");
-            ScriptEntry((3, "\r")).Should().Be("3=\\r");
-            CocoOracleTests.ScriptEntry((2.5, "RUN\r")).Should().Be("2.5=RUN\\r");
-            Trs80Model3OracleTests.ScriptEntry((2.5, "RUN\r")).Should().Be("2.5=RUN\\r");
-        }
-        finally
-        {
-            System.Globalization.CultureInfo.CurrentCulture = culture;
-        }
     }
 
     /// <summary>
@@ -170,6 +145,7 @@ public class Trs80OracleTests
             }
 
             string output = Path.Join(work, "memory.bin");
+            string fired = Path.Join(work, "fired.txt");
             string lua = Path.GetFullPath(Path.Join(AppContext.BaseDirectory, "..", "..", "..", "..", "tools", "Trs80Oracle.lua"));
             if (!File.Exists(lua)) { lua = FindTool("Trs80Oracle.lua"); }
             arguments.AddRange(["-video", "none", "-sound", "none", "-nothrottle", "-skip_gameinfo"]);
@@ -185,13 +161,18 @@ public class Trs80OracleTests
             };
 
             foreach (string argument in arguments) { start.ArgumentList.Add(argument); }
-            start.Environment["RETRO_SCRIPT"] = string.Join('|', script.Select(ScriptEntry));
-            start.Environment["RETRO_END"] = finish.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            start.Environment["RETRO_SCRIPT"] = MameSchedule.Script(script);
+            start.Environment["RETRO_FIRED"] = fired;
+            start.Environment["RETRO_END"] = MameSchedule.Seconds(finish);
             start.Environment["RETRO_OUT"] = output;
             using Process process = Process.Start(start) ?? throw new InvalidOperationException("MAME did not start.");
-            process.StandardOutput.ReadToEnd();
+            // Both streams drain as MAME runs, so a full pipe can't stall it, and its errors reach the message.
+            Task<string> errors = process.StandardError.ReadToEndAsync();
+            Task<string> standard = process.StandardOutput.ReadToEndAsync();
             process.WaitForExit(120_000).Should().BeTrue("MAME finishes");
-            File.Exists(output).Should().BeTrue("the Lua script dumps memory");
+            Task.WaitAll(errors, standard);
+            File.Exists(output).Should().BeTrue($"the Lua script dumps memory; MAME said: {errors.Result}");
+            MameSchedule.ShouldHaveFiredOnTime(script, File.ReadAllText(fired));
             return File.ReadAllBytes(output);
         }
         finally
@@ -229,18 +210,6 @@ public class Trs80OracleTests
 
         machine.Run((ulong)(finish * Trs80Timing.ClockHertz) - machine.Processor.CycleCount);
         return machine;
-    }
-
-    /// <summary>
-    ///  Formats a schedule entry for the Lua script's <c>RETRO_SCRIPT</c>: the time in seconds, with a '.' before any
-    ///  fraction whatever the culture; <c>=</c>; then the text, with <c>\r</c> for ENTER.
-    /// </summary>
-    /// <param name="entry">The emulated second to type at, and the text to type.</param>
-    /// <returns>The entry as <c>seconds=text</c>.</returns>
-    internal static string ScriptEntry((double At, string Text) entry)
-    {
-        string at = entry.At.ToString(System.Globalization.CultureInfo.InvariantCulture);
-        return $"{at}={entry.Text.Replace("\r", "\\r", StringComparison.Ordinal)}";
     }
 
     private static byte Normalize(byte value) => (byte)(value | ((~value & 0x20) << 1));

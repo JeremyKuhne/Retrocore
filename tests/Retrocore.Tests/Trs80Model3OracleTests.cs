@@ -418,6 +418,7 @@ public class Trs80Model3OracleTests
             }
 
             string output = Path.Join(work, "memory.bin");
+            string fired = Path.Join(work, "fired.txt");
             ProcessStartInfo start = new(mame)
             {
                 WorkingDirectory = work,
@@ -427,8 +428,9 @@ public class Trs80Model3OracleTests
             };
 
             foreach (string argument in arguments) { start.ArgumentList.Add(argument); }
-            start.Environment["RETRO_SCRIPT"] = string.Join('|', script.Select(ScriptEntry));
-            start.Environment["RETRO_END"] = finish.ToString(CultureInfo.InvariantCulture);
+            start.Environment["RETRO_SCRIPT"] = MameSchedule.Script(script);
+            start.Environment["RETRO_FIRED"] = fired;
+            start.Environment["RETRO_END"] = MameSchedule.Seconds(finish);
             start.Environment["RETRO_OUT"] = output;
             start.Environment["RETRO_SHARE"] = share;
             start.Environment["RETRO_CPU"] = cpu;
@@ -445,6 +447,7 @@ public class Trs80Model3OracleTests
 
             Task.WaitAll(errors, standard);
             File.Exists(output).Should().BeTrue($"the Lua script dumps memory: {errors.Result}");
+            MameSchedule.ShouldHaveFiredOnTime(script, File.ReadAllText(fired));
             return File.ReadAllBytes(output);
         }
         finally
@@ -463,19 +466,6 @@ public class Trs80Model3OracleTests
         string? found = candidates.FirstOrDefault(File.Exists);
         if (found is null) { Assert.Inconclusive("MAME is missing."); }
         return found;
-    }
-
-    /// <summary>
-    ///  Formats a schedule entry for the Lua script's <c>RETRO_SCRIPT</c>: the time in seconds, with a '.' before any
-    ///  fraction whatever the culture; <c>=</c>; then the text, with <c>\r</c> for ENTER, or a key's
-    ///  <c>@port,field,state</c> (see <see cref="Key"/>).
-    /// </summary>
-    /// <param name="entry">The emulated second to act at, and the text to type or the key to set.</param>
-    /// <returns>The entry as <c>seconds=text</c>.</returns>
-    internal static string ScriptEntry((double At, string Text) entry)
-    {
-        string at = entry.At.ToString(CultureInfo.InvariantCulture);
-        return $"{at}={entry.Text.Replace("\r", "\\r", StringComparison.Ordinal)}";
     }
 
     // Video RAM as text, a line to a row: graphics characters as #, control codes as dots.

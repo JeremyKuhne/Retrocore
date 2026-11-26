@@ -625,8 +625,9 @@ Checked against main once the PET and BBC Micro had landed:
 
 ## Open questions
 
-- **The packed format's budget.** How small Pirate Adventure packs, and so whether the Apple-1 could fit in 16K. This
-  is measured in phase 3.
+- **The packed format's budget.** How small Pirate Adventure packs, and so whether the Apple-1 could fit in 16K.
+  Measured in phase 3: it packs to 5,894 bytes, and the Apple-1's whole program, the game linked in, is 10,141 bytes
+  from `$0300` with about 0.5K of engine state after it, so it would fit in 16K. The target keeps 32K.
 - **Saving the game.** A save to disk on the disk targets, and to tape or nothing on the Apple-1. Is this in the first
   sample, or after it?
 - **Where the extension and tool disagree.** Should the extension refuse to build when the repository pins a tool it

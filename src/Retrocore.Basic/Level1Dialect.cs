@@ -539,6 +539,55 @@ internal sealed class Level1Dialect : BasicDialect
     }
 
     /// <summary>
+    ///  Tests whether a place in a stored line is in its READ list, as the place READ keeps on the stack while it stores
+    ///  a DATA item.
+    /// </summary>
+    /// <remarks>
+    ///  <para>
+    ///   The place is in a READ list when the last statement word before it, in its statement and outside quotes, is
+    ///   READ: the statement's own, or the one after an IF's condition. A FOR loop's place, after its FOR statement,
+    ///   has FOR last, after an IF's condition too. Level I's other words, such as THEN, TO and the functions, start
+    ///   with no statement word, so reading each position for one finds only statements.
+    ///  </para>
+    /// </remarks>
+    /// <param name="memory">The memory.</param>
+    /// <param name="line">The line's address.</param>
+    /// <param name="place">The place in it.</param>
+    /// <returns>Whether the place is after READ.</returns>
+    internal static bool InReadList(IBasicMemory memory, int line, int place)
+    {
+        const int MaximumLine = 256;
+        int text = line + Instance.LineHeader;
+        int end = text;
+        while (end - text < MaximumLine && end < 0x10000 && memory.Read(end) != EndOfLine) { end++; }
+        if (place <= text || place > end) { return false; }
+        int[] units = new int[end - text];
+        for (int index = 0; index < units.Length; index++) { units[index] = memory.Read(text + index); }
+        int before = place - text;
+        byte[] bytes = [.. units.Select(unit => (byte)unit)];
+        string? last = null;
+        bool quoted = false;
+        for (int x = StatementOffsets(bytes).Last(offset => offset < before); x < before; x++)
+        {
+            if (quoted)
+            {
+                quoted = units[x] != '"';
+            }
+            else if (units[x] == '"')
+            {
+                quoted = true;
+            }
+            else if (Match(units, x, s_statements, out int after) is { } word)
+            {
+                last = word;
+                x = after - 1;
+            }
+        }
+
+        return last == "READ";
+    }
+
+    /// <summary>
     ///  Gets the statement word a statement starts with, as <c>EXEC</c> finds it, or null for an implied LET.
     /// </summary>
     /// <param name="memory">The memory.</param>

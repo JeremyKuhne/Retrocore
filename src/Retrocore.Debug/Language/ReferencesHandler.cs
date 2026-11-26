@@ -12,16 +12,19 @@ internal sealed class ReferencesHandler
 {
     private readonly LanguageWorkspace _workspace;
     private readonly BasicDocuments _basic;
+    private readonly PascalDocuments? _pascal;
 
     /// <summary>
     ///  Creates the handler.
     /// </summary>
     /// <param name="workspace">The workspace.</param>
     /// <param name="basic">The open BASIC documents.</param>
-    public ReferencesHandler(LanguageWorkspace workspace, BasicDocuments basic)
+    /// <param name="pascal">The open Pascal documents, or null for none.</param>
+    public ReferencesHandler(LanguageWorkspace workspace, BasicDocuments basic, PascalDocuments? pascal = null)
     {
         _workspace = workspace;
         _basic = basic;
+        _pascal = pascal;
     }
 
     /// <summary>
@@ -34,6 +37,11 @@ internal sealed class ReferencesHandler
         if (_basic.Get(request.TextDocument.Uri) is { } basic)
         {
             return BasicFeatures.References(basic, request.Position, request.Context.IncludeDeclaration);
+        }
+
+        if (_pascal?.Get(request.TextDocument.Uri) is { } pascal)
+        {
+            return PascalFeatures.References(pascal.Program, pascal.Path, request.Position, request.Context.IncludeDeclaration);
         }
 
         string path = LanguageHost.PathOf(request.TextDocument.Uri);

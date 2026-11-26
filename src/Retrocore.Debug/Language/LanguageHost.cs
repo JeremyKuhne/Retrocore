@@ -126,12 +126,12 @@ internal static partial class LanguageHost
         PascalDocuments pascal = new(server);
         DocumentSyncHandler sync = new(workspace, basic, pascal);
         DefinitionHandler definition = new(workspace, basic, pascal);
-        ReferencesHandler references = new(workspace, basic);
+        ReferencesHandler references = new(workspace, basic, pascal);
         HoverHandler hover = new(workspace, basic, pascal);
-        CompletionHandler completion = new(workspace, basic);
+        CompletionHandler completion = new(workspace, basic, pascal);
         DocumentSymbolHandler documentSymbols = new(workspace, basic, pascal);
         WorkspaceSymbolHandler workspaceSymbols = new(workspace);
-        CodeActionHandler codeActions = new(workspace, basic);
+        CodeActionHandler codeActions = new(workspace, basic, pascal);
 
         server.OnRequest("initialize", _ => Capabilities());
         server.OnRequest("shutdown", (JsonObject? _) => (JsonNode?)null);

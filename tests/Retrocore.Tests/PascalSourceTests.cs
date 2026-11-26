@@ -40,7 +40,7 @@ public sealed class PascalSourceTests
 
         (** Adds one to a number, as <Increment> does.
 
-            Parameters: Number: the number.
+            Parameters: Number = the number
             Returns: the number and one.
             Also: INCR (UCSD20) *)
         FUNCTION Increment(Number: INTEGER): INTEGER;
@@ -191,7 +191,7 @@ public sealed class PascalSourceTests
         increment.Doc.Should().NotBeNull();
         PascalDocComment doc = increment.Doc;
         doc.Summary.Should().Be("Adds one to a number, as <Increment> does.");
-        (doc.Section("Parameters")?.Text).Should().Be("Number: the number.");
+        (doc.Section("Parameters")?.Text).Should().Be("Number = the number");
         (doc.Section("Returns")?.Text).Should().Be("the number and one.");
         doc.Also.Should().ContainSingle().Which.Item.Should().Be("INCR (UCSD20)");
         (doc.Also.Single().Also?.Name).Should().Be("INCR");
@@ -257,6 +257,9 @@ public sealed class PascalSourceTests
     [DataRow("also", "PROGRAM P;\n(** Q.\n    Also: R (UCSD20) *)\nPROCEDURE Q;\nBEGIN END;\nPROCEDURE R;\nBEGIN END;\nBEGIN END.")]
     [DataRow("also", "PROGRAM P;\n(** Q.\n    Also: X (UCSD20) *)\nPROCEDURE Q;\nBEGIN END;\n(** R.\n    Also: X (UCSD20) *)\nPROCEDURE R;\nBEGIN END;\nBEGIN END.")]
     [DataRow("link", "PROGRAM P;\n(** Q, not <Missing>. *)\nPROCEDURE Q;\nBEGIN END;\nBEGIN END.")]
+    [DataRow("link", "PROGRAM P;\nPROCEDURE Report;\n(** R, not <port.Inner>. *)\nPROCEDURE Inner;\nBEGIN END;\nBEGIN END;\nBEGIN END.")]
+    [DataRow("also", "PROGRAM P;\n(** Q.\n    Also: OLDQ (UCSD20), OLDQ (A2POSRM) *)\nPROCEDURE Q;\nBEGIN END;\nBEGIN END.")]
+    [DataRow("case", "PROGRAM P;\nTYPE R = RECORD Length: INTEGER END;\nVAR S: STRING;\nBEGIN WRITELN(Length(S)) END.")]
     public void RuleFindsItsProblem(string rule, string source)
     {
         List<PascalDiagnostic> problems = PascalLint.Check(Analyze(source), BasicAttribution.Bibliography);
@@ -331,6 +334,12 @@ public sealed class PascalSourceTests
                 .Where(file => file.EndsWith(".TEXT", StringComparison.OrdinalIgnoreCase))
         ];
 
+        // Until the first source lands there is nothing to check, which is not a pass.
+        if (sources.Count == 0)
+        {
+            Assert.Inconclusive("src/Retrocore.Pascal/Sdk has no Pascal source yet.");
+        }
+
         List<PascalProgram> programs =
         [
             .. sources.Select(file => PascalProgram.Analyze(file, path => File.Exists(path) ? File.ReadAllText(path) : null))
@@ -351,6 +360,106 @@ public sealed class PascalSourceTests
         ];
 
         problems.Should().BeEmpty($"the lint found:{Environment.NewLine}{string.Join(Environment.NewLine, problems)}");
+    }
+
+    /// <summary>
+    ///  A record's variant parts, nested, end where their parentheses do, and what follows is still declared.
+    /// </summary>
+    [TestMethod]
+    public void NestedVariantsEndAtTheirParentheses()
+    {
+        PascalProgram program = Analyze(
+            "PROGRAM P;\nTYPE T = RECORD CASE A: INTEGER OF 1: (CASE B: BOOLEAN OF TRUE: (X: INTEGER)) END;\n"
+                + "VAR Count: INTEGER;\nBEGIN END.");
+
+        program.Declarations.Select(declaration => declaration.Name).Should().Contain(["A", "B", "X", "Count"]);
+        program.Declarations.Single(declaration => declaration.Name == "Count").Kind
+            .Should().Be(PascalDeclarationKind.Variable);
+    }
+
+    /// <summary>
+    ///  An intrinsic unit's heading, with its CODE and DATA segments, comes before its interface.
+    /// </summary>
+    [TestMethod]
+    public void IntrinsicUnitsHaveTheirInterface()
+    {
+        PascalProgram program = Analyze(
+            "UNIT TURTLE; INTRINSIC CODE 20 DATA 21;\nINTERFACE\nPROCEDURE Move(Distance: INTEGER);\n"
+                + "IMPLEMENTATION\nPROCEDURE Move;\nBEGIN END;\nEND.");
+
+        PascalDeclaration move = program.Declarations.Single(declaration => declaration.Name == "Move");
+        move.IsInterface.Should().BeTrue();
+        move.IsHeadingOnly.Should().BeFalse();
+    }
+
+    /// <summary>
+    ///  A comment after a field or parameter documents only it, not the type or routine it is in.
+    /// </summary>
+    [TestMethod]
+    public void TrailingCommentsDocumentOnlyTheirDeclaration()
+    {
+        PascalProgram program = Analyze(
+            "PROGRAM P;\nTYPE Item = RECORD\n  Value: INTEGER; (** Its value. *)\n  Next: INTEGER\nEND;\n"
+                + "PROCEDURE Q(A: INTEGER; (** The first. *)\n  B: INTEGER);\nBEGIN END;\nBEGIN END.");
+
+        PascalDeclaration Find(string name) => program.Declarations.Single(declaration => declaration.Name == name);
+        (Find("Value").Doc?.Summary).Should().Be("Its value.");
+        Find("Item").Doc.Should().BeNull();
+        (Find("A").Doc?.Summary).Should().Be("The first.");
+        Find("Q").Doc.Should().BeNull();
+    }
+
+    /// <summary>
+    ///  A field after a "." may have a standard identifier's name, in its own case, even from a record the source
+    ///  doesn't declare.
+    /// </summary>
+    [TestMethod]
+    public void FieldsAfterADotKeepTheirCase()
+    {
+        PascalProgram program = Analyze("PROGRAM P;\nUSES Clock;\nVAR T: Clock.Stamp;\nBEGIN WRITELN(T.Time) END.");
+        PascalLint.Check(program, bibliography: null).Should().BeEmpty();
+    }
+
+    /// <summary>
+    ///  An include in braces is followed, and reported for its braces.
+    /// </summary>
+    [TestMethod]
+    public void BracedIncludesAreFollowed()
+    {
+        PascalProgram program = Analyze("PROGRAM P;\n{$I GONE}\nBEGIN END.");
+        program.Includes.Should().ContainSingle().Which.Name.Should().Be("GONE");
+        PascalLint.Check(program, bibliography: null).Select(problem => problem.Rule).Should().BeEquivalentTo(["comment", "include"]);
+    }
+
+    /// <summary>
+    ///  A line too long for a disk's page is reported for its length, not taken for a failure.
+    /// </summary>
+    [TestMethod]
+    public void OverlongLinesAreReported()
+    {
+        PascalProgram program = Analyze($"PROGRAM P;\n(* {new string('.', 1100)} *)\nBEGIN END.");
+        PascalLint.Check(program, bibliography: null).Should().ContainSingle().Which.Rule.Should().Be("line-length");
+    }
+
+    /// <summary>
+    ///  Text being typed, cut off anywhere, analyzes and lints without throwing, as the editor needs.
+    /// </summary>
+    [TestMethod]
+    public void PartialSourcesAnalyze()
+    {
+        string text = Sample + "\n(*$I PA";
+        for (int end = 0; end <= text.Length; end++)
+        {
+            string prefix = text[..end];
+            Dictionary<string, string> files = new()
+            {
+                [Path.Join("SRC", "SAMPLE.TEXT")] = prefix,
+                [Path.Join("SRC", "PART.TEXT")] = Part,
+            };
+
+            PascalProgram program = PascalProgram.Analyze(Path.Join("SRC", "SAMPLE.TEXT"), files.GetValueOrDefault);
+            PascalLint.Check(program, BasicAttribution.Bibliography).Should().NotBeNull();
+        }
     }
 
     /// <summary>

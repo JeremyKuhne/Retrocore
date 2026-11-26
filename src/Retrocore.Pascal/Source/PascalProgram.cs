@@ -133,9 +133,14 @@ public sealed partial class PascalProgram
         string key = PascalNames.Key(reference.Token.Text);
         PascalDeclaration? found = reference.AfterDot ? null : reference.Scope.Find(reference.Token.Text);
 
-        // A field: after a ".", or inside a WITH, which the scan does not follow; any record's field of that name.
-        found ??= Declarations.FirstOrDefault(
-            declaration => declaration.Kind == PascalDeclarationKind.Field && declaration.Key == key);
+        // A field: after a ".", or inside a WITH, which the scan does not follow; any record's field of that name. A
+        // standard identifier not after a "." is the standard one, not some record's field.
+        if (reference.AfterDot || !PascalNames.IsStandard(reference.Token.Text))
+        {
+            found ??= Declarations.FirstOrDefault(
+                declaration => declaration.Kind == PascalDeclarationKind.Field && declaration.Key == key);
+        }
+
 
         if (found is not null) { return (found, false); }
         return OldName(reference.Token.Text) is { } old ? (old, true) : null;
@@ -172,7 +177,9 @@ public sealed partial class PascalProgram
                 declaration => declaration.Key == key && (parts.Length == 1 || InPath(declaration)))
             ?? (parts.Length == 1 ? OldName(target) : null);
 
-        bool InPath(PascalDeclaration declaration) => PathKey(declaration).EndsWith(path, StringComparison.Ordinal);
+        // Whole names: "port.WriteLine" is not "Report.WriteLine".
+        bool InPath(PascalDeclaration declaration) => PathKey(declaration) is { } full
+            && (full == path || full.EndsWith($".{path}", StringComparison.Ordinal));
 
         static string PathKey(PascalDeclaration declaration) =>
             string.Join('.', declaration.Scope.Path.Split('.').Select(PascalNames.Key));
@@ -197,7 +204,7 @@ public sealed partial class PascalProgram
         foreach (PascalToken token in tokens)
         {
             if (token == fileDoc) { continue; }
-            if (token.Kind == PascalTokenKind.Option && IncludeName(token.Text) is { } name)
+            if (token.Kind is PascalTokenKind.Option or PascalTokenKind.BraceComment && IncludeName(token.Text) is { } name)
             {
                 string? found = Locate(path, name, read);
                 Includes.Add(new(token, name, found));
@@ -215,11 +222,26 @@ public sealed partial class PascalProgram
         reading.Remove(path.ToUpperInvariant());
     }
 
-    // The name an include option gives, without its volume: (*$I NAME*) or (*$I VOL:NAME.TEXT*), not (*$I+*) or
-    // (*$I-*).
+    // The name an include option gives, without its volume: (*$I NAME*), (*$I VOL:NAME.TEXT*) or {$I NAME}, not
+    // (*$I+*) or (*$I-*).
     private static string? IncludeName(string text)
     {
-        string body = text[3..^2].Trim();
+        // An option still being typed has no "*)" or "}" yet.
+        string body;
+        if (text.StartsWith("{$", StringComparison.Ordinal))
+        {
+            body = text.EndsWith('}') && text.Length >= 3 ? text[2..^1] : text[2..];
+        }
+        else if (text.StartsWith("(*$", StringComparison.Ordinal))
+        {
+            body = text.EndsWith("*)", StringComparison.Ordinal) && text.Length >= 5 ? text[3..^2] : text[3..];
+        }
+        else
+        {
+            return null;
+        }
+
+        body = body.Trim();
         if (body.Length < 2 || char.ToUpperInvariant(body[0]) != 'I' || body[1] is '+' or '-' or ',') { return null; }
         string name = body[1..].Trim();
         int colon = name.IndexOf(':');
@@ -234,16 +256,22 @@ public sealed partial class PascalProgram
         string wanted = name.Contains('.', StringComparison.Ordinal) ? name : name + ".TEXT";
         string direct = System.IO.Path.Join(folder, wanted);
         if (read(direct) is not null) { return direct; }
-        if (Directory.Exists(folder))
+        try
         {
-            foreach (string candidate in Directory.EnumerateFiles(folder))
+            if (Directory.Exists(folder))
             {
-                if (string.Equals(System.IO.Path.GetFileName(candidate), wanted, StringComparison.OrdinalIgnoreCase))
+                foreach (string candidate in Directory.EnumerateFiles(folder))
                 {
-                    return candidate;
+                    if (string.Equals(System.IO.Path.GetFileName(candidate), wanted, StringComparison.OrdinalIgnoreCase))
+                    {
+                        return candidate;
+                    }
                 }
-
             }
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            // A folder that can't be listed has no include to find.
         }
 
         return null;

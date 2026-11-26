@@ -10,9 +10,9 @@ covers the tools, decompiling and compiling.
 ## Checking a source
 
 The lint checks what can be checked without Apple's disks. In VS Code its problems appear as you type, in any
-`retrocore-pascal` file (`.text`, `.pas`). A test, `PascalSourceTests.SdkSourcesPassTheLint`, runs it over every
-`.TEXT` file under `src/Retrocore.Pascal/Sdk`, each program read from its main file through its includes. It checks
-the following rules:
+`retrocore-pascal` file (`.text`, `.pas`, `.pascal`). A test, `PascalSourceTests.SdkSourcesPassTheLint`, runs it over
+every `.TEXT` file under `src/Retrocore.Pascal/Sdk`, each program read from its main file through its includes; until
+the first source lands it reports itself inconclusive. It checks the following rules:
 
 | Rule | What it checks |
 | --- | --- |
@@ -26,8 +26,8 @@ the following rules:
 | `name` | Defined names in PascalCase, without `_`, except the names the code file keeps |
 | `name-8` | Names distinct in their first 8 letters from those in the same and enclosing scopes |
 | `doc-placement` | Each `(** *)` comment documents a declaration |
-| `doc-section` | Only the sections below; `Param:` or `Returns` misspelled is reported |
-| `also` | `Also:` items written `NAME (KEYS)`, with keys in [Bibliography.md](Bibliography.md); no name given twice |
+| `doc-section` | Only the sections below; a heading near one, such as `Param:` or `Return:`, is reported |
+| `also` | `Also:` items written `NAME (KEYS)`, keys in [Bibliography.md](Bibliography.md), each name given once |
 | `link` | Every `<Name>` link names a declaration |
 
 With the disks, the round trip checks the rest: the source compiles to the same segments (section 1).
@@ -120,9 +120,9 @@ assembly sources. The decompiler's own generated names (`P12`, `L059A`) aren't h
 ## 5. Doc comments
 
 - **Marker.** `(** … *)` documents a declaration; `(* … *)` is an ordinary comment; `(*$ … *)` is a compiler
-  option. Every Compiler in scope reads `(**` as an ordinary comment: a program with `(** *)` comments and the same program
-  with `(* *)` compile to the same segments on Apple Pascal 1.0, 1.2 and 1.3 and Apple III Pascal 1.0, 1.1 and 1.2.
-  `(**)` is an empty ordinary comment. `{ }` comments aren't used.
+  option. Every Compiler in scope reads `(**` as an ordinary comment: a program with `(** *)` comments and the same
+  program with `(* *)` compile to the same segments on Apple Pascal 1.0, 1.2 and 1.3 and Apple III Pascal 1.0, 1.1 and
+  1.2. `(**)` is an empty ordinary comment. `{ }` comments aren't used.
 - **Placement.** A doc comment goes above the declaration it documents, at its indentation: a procedure, function,
   segment, constant, type, variable, field, enumeration value or parameter. A short one may follow a field, variable
   or constant on its line. A file's first `(** *)`, with a blank line after it, documents the file.
@@ -169,13 +169,13 @@ procedures. The compilers' conversion starts it with what they use, and SYSTEM.P
 
 ## 8. In the editor
 
-The language server reads a Pascal file as part of its program: the file in its folder that starts `PROGRAM` or
-`UNIT` and includes it. It offers:
+The language server reads a Pascal file as part of its program: the file in its folder that starts `PROGRAM`, `UNIT`
+or `SEPARATE UNIT` and includes it. It offers:
 
 - **hover** on a declared or used name, or on a link in a doc comment. It shows what the name declares
   (`FUNCTION Outer.Inner`), its doc comment's summary, remarks and sections, and the documents an `Also:` item cites.
   Hover on a historical name says whose it is;
-- **go to definition**, by a name, a historical name, or a link;
+- **go to definition** and **find all references**, by a name, a historical name, or a link;
 - **the outline**: the file's routines, constants, types and variables, with what each routine or record declares
   under it;
 - **the lint's problems**, as you type.

@@ -9,20 +9,38 @@ namespace Retrocore.Debug.Language;
 
 /// <summary>
 ///  The open Apple Pascal documents, each read as part of its program: the file in its folder that starts
-///  <c>PROGRAM</c> or <c>UNIT</c> and includes it. The lint's problems are published for each open file.
+///  <c>PROGRAM</c>, <c>UNIT</c> or <c>SEPARATE UNIT</c> and includes it. The lint's problems are published for each
+///  open file.
 /// </summary>
 internal sealed class PascalDocuments
 {
+    // The suffixes of the files the extension opens as Pascal.
+    private static readonly string[] s_suffixes = [".TEXT", ".PAS", ".PASCAL"];
+
     private readonly ILanguageClient _server;
     private readonly Lock _lock = new();
     private readonly Dictionary<string, string> _open = [with(StringComparer.OrdinalIgnoreCase)];
-    private readonly Dictionary<string, PascalProgram> _programs = [with(StringComparer.OrdinalIgnoreCase)];
+    private readonly Dictionary<string, PascalAnalysis> _programs = [with(StringComparer.OrdinalIgnoreCase)];
 
     /// <summary>
     ///  Creates the store.
     /// </summary>
     /// <param name="server">The server, to publish diagnostics.</param>
     public PascalDocuments(ILanguageClient server) => _server = server;
+
+    /// <summary>
+    ///  Gets whether a document is an open Pascal document.
+    /// </summary>
+    /// <param name="uri">The document.</param>
+    /// <returns>Whether it is.</returns>
+    internal bool IsOpen(DocumentUri uri)
+    {
+        string path = LanguageHost.PathOf(uri);
+        lock (_lock)
+        {
+            return _open.ContainsKey(path);
+        }
+    }
 
     /// <summary>
     ///  Gets the program an open Pascal document is part of.
@@ -46,19 +64,76 @@ internal sealed class PascalDocuments
     internal void Update(DocumentUri uri, string text)
     {
         string path = LanguageHost.PathOf(uri);
-        PascalProgram program;
-        List<string> open;
         lock (_lock)
         {
             _open[path] = text;
             _programs.Clear();
+        }
+
+        Publish(path);
+    }
+
+    /// <summary>
+    ///  Updates an open document's text.
+    /// </summary>
+    /// <param name="uri">The document.</param>
+    /// <param name="text">Its text.</param>
+    /// <returns>Whether it is an open Pascal document.</returns>
+    internal bool Change(DocumentUri uri, string text)
+    {
+        if (!IsOpen(uri)) { return false; }
+        Update(uri, text);
+        return true;
+    }
+
+    /// <summary>
+    ///  Closes a document and clears its problems; the other open files of its program are checked again, with the
+    ///  closed file as it is on disk.
+    /// </summary>
+    /// <param name="uri">The document.</param>
+    /// <returns>Whether it was an open Pascal document.</returns>
+    internal bool Close(DocumentUri uri)
+    {
+        string path = LanguageHost.PathOf(uri);
+        List<string> others;
+        lock (_lock)
+        {
+            if (!_open.ContainsKey(path)) { return false; }
+            PascalProgram before = ProgramOf(path);
+            _open.Remove(path);
+            _programs.Clear();
+            others = [.. _open.Keys.Where(file => before.File(file) is not null)];
+        }
+
+        _server.PublishDiagnostics(uri, []);
+        foreach (string other in others)
+        {
+            Publish(other);
+        }
+
+        return true;
+    }
+
+    // Lints a file's program and publishes the problems of each of its open files.
+    private void Publish(string path)
+    {
+        PascalProgram program;
+        List<string> open;
+        lock (_lock)
+        {
             program = ProgramOf(path);
             open = [.. _open.Keys.Where(file => program.File(file) is not null)];
         }
 
-        DocumentationBibliography bibliography = SourceBibliography.For(
-            program.Root,
-            program.Files.Select(file => file.Path));
+        DocumentationBibliography bibliography;
+        try
+        {
+            bibliography = SourceBibliography.For(program.Root, program.Files.Select(file => file.Path));
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            bibliography = DocumentationBibliography.Parse();
+        }
 
         List<PascalDiagnostic> problems = PascalLint.Check(program, bibliography);
         foreach (string file in open)
@@ -70,86 +145,85 @@ internal sealed class PascalDocuments
         }
     }
 
-    /// <summary>
-    ///  Updates an open document's text.
-    /// </summary>
-    /// <param name="uri">The document.</param>
-    /// <param name="text">Its text.</param>
-    /// <returns>Whether it is an open Pascal document.</returns>
-    internal bool Change(DocumentUri uri, string text)
-    {
-        bool open;
-        lock (_lock)
-        {
-            open = _open.ContainsKey(LanguageHost.PathOf(uri));
-        }
-
-        if (open)
-        {
-            Update(uri, text);
-        }
-
-        return open;
-    }
-
-    /// <summary>
-    ///  Closes a document and clears its problems.
-    /// </summary>
-    /// <param name="uri">The document.</param>
-    /// <returns>Whether it was an open Pascal document.</returns>
-    internal bool Close(DocumentUri uri)
-    {
-        lock (_lock)
-        {
-            if (!_open.Remove(LanguageHost.PathOf(uri))) { return false; }
-            _programs.Clear();
-        }
-
-        _server.PublishDiagnostics(uri, []);
-        return true;
-    }
-
-    // The program a file is part of: the first main file in its folder that reads it, or else the file alone.
+    // The program a file is part of: the first main file in its folder that reads it, or else the file alone. An
+    // analysis is kept until a document changes, or a file it read from disk does.
     private PascalProgram ProgramOf(string path)
     {
         foreach (string root in Roots(path))
         {
-            if (!_programs.TryGetValue(root, out PascalProgram? program))
+            if (!_programs.TryGetValue(root, out PascalAnalysis? analysis) || !analysis.IsCurrent())
             {
-                program = PascalProgram.Analyze(root, Read);
-                _programs[root] = program;
+                analysis = Analyze(root);
+                _programs[root] = analysis;
             }
 
-            if (program.File(path) is not null) { return program; }
+            if (analysis.Program.File(path) is not null) { return analysis.Program; }
         }
 
-        return PascalProgram.Analyze(path, Read);
+        return Analyze(path).Program;
     }
 
-    // The files beside a file, itself first, that start PROGRAM or UNIT.
-    private IEnumerable<string> Roots(string path)
+    private PascalAnalysis Analyze(string root)
+    {
+        PascalProgram program = PascalProgram.Analyze(root, Read);
+        Dictionary<string, DateTime> stamps = [with(StringComparer.OrdinalIgnoreCase)];
+        foreach (PascalSourceFile file in program.Files.Where(file => !_open.ContainsKey(file.Path)))
+        {
+            stamps[file.Path] = PascalAnalysis.Stamp(file.Path);
+        }
+
+        return new(program, stamps);
+    }
+
+    // The Pascal files beside a file, itself first, that start a program or unit.
+    private List<string> Roots(string path)
     {
         string folder = Path.GetDirectoryName(path) ?? "";
-        IEnumerable<string> beside = Directory.Exists(folder)
-            ? Directory.EnumerateFiles(folder).Where(file => file.EndsWith(".TEXT", StringComparison.OrdinalIgnoreCase))
-            : [];
+        List<string> beside = [];
+        try
+        {
+            if (Directory.Exists(folder))
+            {
+                beside.AddRange(Directory.EnumerateFiles(folder).Where(IsPascal));
+            }
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            // A folder that can't be listed offers only its open files.
+        }
 
         IEnumerable<string> candidates = beside
-            .Concat(_open.Keys.Where(file => string.Equals(Path.GetDirectoryName(file), folder, StringComparison.OrdinalIgnoreCase)))
+            .Concat(_open.Keys.Where(file => string.Equals(
+                Path.GetDirectoryName(file),
+                folder,
+                StringComparison.OrdinalIgnoreCase)))
             .Prepend(path)
             .Distinct(StringComparer.OrdinalIgnoreCase);
 
-        return candidates.Where(file => Read(file) is { } text && IsMain(text));
+        return [.. candidates.Where(file => Read(file) is { } text && IsMain(text))];
     }
 
-    // Whether a file's first word is PROGRAM or UNIT.
+    private static bool IsPascal(string file) =>
+        s_suffixes.Any(suffix => file.EndsWith(suffix, StringComparison.OrdinalIgnoreCase));
+
+    // Whether a file's first word is PROGRAM, UNIT or SEPARATE.
     private static bool IsMain(string text) =>
         PascalLexer.Tokenize(text, "").FirstOrDefault(token => !token.IsComment) is { } first
-            && (first.Is("PROGRAM") || first.Is("UNIT"));
+            && (first.Is("PROGRAM") || first.Is("UNIT") || first.Is("SEPARATE"));
 
-    private string? Read(string path) => _open.TryGetValue(path, out string? text)
-        ? text
-        : File.Exists(path) ? File.ReadAllText(path) : null;
+    // An open document's text, or else the file's; null for a file that isn't there or can't be read.
+    private string? Read(string path)
+    {
+        if (_open.TryGetValue(path, out string? text)) { return text; }
+        try
+        {
+            return File.Exists(path) ? File.ReadAllText(path) : null;
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            return null;
+        }
+    }
 
     private static Diagnostic Convert(PascalDiagnostic problem) => new()
     {

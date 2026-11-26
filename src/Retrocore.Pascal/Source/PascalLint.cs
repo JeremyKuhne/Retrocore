@@ -92,7 +92,16 @@ public static class PascalLint
             Add(0, 0, 0, "file-name", "Name the file as the disk does, in capitals ending .TEXT.");
         }
 
-        int stored = StoredLength(PascalTextFile.Write(file.Text));
+        // A line too long for a page has no disk form at all; line-length reports it.
+        int stored = 0;
+        try
+        {
+            stored = StoredLength(PascalTextFile.Write(file.Text));
+        }
+        catch (ArgumentException)
+        {
+        }
+
         if (stored > EditorBytes)
         {
             Add(
@@ -136,15 +145,8 @@ public static class PascalLint
     {
         foreach (PascalInclude include in program.Includes.Where(include => include.Path is null))
         {
-            PascalToken token = include.Token;
-            problems.Add(new(
-                token.File,
-                token.Line,
-                token.Column,
-                token.EndColumn,
-                IsError: true,
-                "include",
-                $"There is no file '{include.Name}' beside this one to include."));
+            problems.Add(Diagnostic(include.Token, "include", $"There is no file '{include.Name}' beside this one to include.")
+                with { IsError = true });
         }
     }
 
@@ -165,11 +167,12 @@ public static class PascalLint
                 bool keyword = token.Kind == PascalTokenKind.Keyword;
 
                 // A standard identifier the source redeclares is the source's own name, in its own case.
+                // After a ".", a name is a field's, which the source's record or another unit's declares.
                 bool standard = token.Kind == PascalTokenKind.Identifier
                     && PascalNames.IsStandard(token.Text)
                     && !declared.Contains(token)
                     && (!references.TryGetValue(token, out PascalReference? reference)
-                        || program.Resolve(reference) is null);
+                        || (!reference.AfterDot && program.Resolve(reference) is null));
 
                 if ((keyword || standard) && token.Text != token.Text.ToUpperInvariant())
                 {
@@ -316,8 +319,14 @@ public static class PascalLint
         PascalDocComment doc,
         List<PascalDiagnostic> problems)
     {
+        HashSet<string> given = [with(StringComparer.OrdinalIgnoreCase)];
         foreach ((string item, DocumentationAlso? also) in doc.Also)
         {
+            if (also is not null && !given.Add(also.Name))
+            {
+                Add($"The historical name {also.Name} is given twice: give its documents in one item.");
+            }
+
             if (also is null)
             {
                 Add($"Write the historical name '{item}' as NAME (KEYS), such as GENLDC (UCSD20).");

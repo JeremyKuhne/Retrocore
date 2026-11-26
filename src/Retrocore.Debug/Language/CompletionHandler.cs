@@ -13,16 +13,19 @@ internal sealed class CompletionHandler
 {
     private readonly LanguageWorkspace _workspace;
     private readonly BasicDocuments _basic;
+    private readonly PascalDocuments? _pascal;
 
     /// <summary>
     ///  Creates the handler.
     /// </summary>
     /// <param name="workspace">The workspace.</param>
     /// <param name="basic">The open BASIC documents.</param>
-    public CompletionHandler(LanguageWorkspace workspace, BasicDocuments basic)
+    /// <param name="pascal">The open Pascal documents, or null for none.</param>
+    public CompletionHandler(LanguageWorkspace workspace, BasicDocuments basic, PascalDocuments? pascal = null)
     {
         _workspace = workspace;
         _basic = basic;
+        _pascal = pascal;
     }
 
     /// <summary>
@@ -34,6 +37,8 @@ internal sealed class CompletionHandler
     {
         // = and , ask only for an exclusion's rules, which BASIC has none of.
         bool ruleTrigger = request.TriggerCharacter is "=" or ",";
+        // Pascal has no completion yet, and the assembly's would be wrong for it.
+        if (_pascal?.IsOpen(request.TextDocument.Uri) is true) { return Task.FromResult(new List<CompletionItem>()); }
         if (_basic.Get(request.TextDocument.Uri) is { } basic)
         {
             if (ruleTrigger) { return Task.FromResult(new List<CompletionItem>()); }

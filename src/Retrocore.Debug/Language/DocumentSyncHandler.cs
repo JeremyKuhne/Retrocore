@@ -18,7 +18,9 @@ internal sealed class DocumentSyncHandler
     /// </summary>
     /// <param name="workspace">The workspace.</param>
     /// <param name="basic">The open BASIC documents.</param>
-    /// <param name="pascal">The open Pascal documents, or null to treat Pascal as any other text.</param>
+    /// <param name="pascal">
+    ///  The open Pascal documents, or null for none, as in tests of other languages, when Pascal goes to the workspace.
+    /// </param>
     public DocumentSyncHandler(LanguageWorkspace workspace, BasicDocuments basic, PascalDocuments? pascal = null)
     {
         _workspace = workspace;

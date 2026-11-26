@@ -2,7 +2,9 @@
 // SPDX-License-Identifier: MIT
 // See LICENSE file in the project root for full license information
 
+using System.Text.Json.Nodes;
 using Retrocore.Debug.Language;
+using Retrocore.Pascal.Source;
 
 namespace Retrocore.Tests;
 
@@ -35,7 +37,11 @@ public sealed class PascalLanguageTests
     [TestMethod]
     public async Task IncludedFileIsReadWithItsProgram()
     {
-        string part = Write("PART.TEXT", PascalSourceTests.Part.Replace("BEGIN\n  WriteLine", "begin\n  WriteLine", StringComparison.Ordinal));
+        // The routine's BEGIN, the one at the start of its line, in lower case: whatever the checkout's line endings.
+        string[] partLines = PascalLexer.Lines(PascalSourceTests.Part);
+        int begin = Array.FindLastIndex(partLines, text => text == "BEGIN");
+        partLines[begin] = "begin";
+        string part = Write("PART.TEXT", string.Join('\n', partLines));
         Write("SAMPLE.TEXT", PascalSourceTests.Sample);
         RecordingLanguageClient client = new();
         (DocumentSyncHandler sync, HoverHandler hover, DefinitionHandler definition, _) = Handlers(client);
@@ -54,7 +60,7 @@ public sealed class PascalLanguageTests
         text.Should().Contain("FUNCTION Increment");
         text.Should().Contain("`INCR` is a historical name of `Increment`.");
         text.Should().Contain("Adds one to a number, as `Increment` does.");
-        text.Should().Contain("**Parameters:** Number: the number.");
+        text.Should().Contain("**Parameters:** Number = the number");
         text.Should().Contain("UCSD Pascal");
 
         List<LspLocation> definitions = [.. await definition.Handle(Request(uri, at))];
@@ -110,6 +116,40 @@ public sealed class PascalLanguageTests
         DocumentSymbol report = symbols.Should().ContainSingle().Which;
         report.Name.Should().Be("Report");
         (report.Children ?? []).Select(child => child.Name).Should().Equal("WriteLine");
+    }
+
+    /// <summary>
+    ///  Find all references lists a declaration's uses by any of its names; completion and code actions offer the
+    ///  assembly's nothing.
+    /// </summary>
+    /// <returns>The test.</returns>
+    [TestMethod]
+    public async Task ReferencesAndNoAssemblyFeatures()
+    {
+        Write("SAMPLE.PAS", PascalSourceTests.Sample.Replace("(*$I PART*)", "(*$I PART.PAS*)", StringComparison.Ordinal));
+        string part = Write("PART.PAS", PascalSourceTests.Part);
+        RecordingLanguageClient client = new();
+        LanguageWorkspace workspace = new(client);
+        BasicDocuments basic = new(client);
+        PascalDocuments pascal = new(client);
+        DocumentSyncHandler sync = new(workspace, basic, pascal);
+        DocumentUri uri = Open(sync, part);
+
+        // The .pas main file beside it is its program, so Increment is found through it.
+        string[] lines = File.ReadAllLines(part);
+        int line = Array.FindIndex(lines, text => text.Contains("INCR(", StringComparison.Ordinal));
+        Position at = new(line, lines[line].IndexOf("INCR", StringComparison.Ordinal) + 1);
+        List<LspLocation> uses = [.. await new ReferencesHandler(workspace, basic, pascal).Handle(Request(uri, at)) ?? []];
+        uses.Select(use => Path.GetFileName(use.Uri.GetFileSystemPath())).Should().BeEquivalentTo(["SAMPLE.PAS", "SAMPLE.PAS", "PART.PAS"]);
+
+        (await new CompletionHandler(workspace, basic, pascal).Handle(Request(uri, at))).Should().BeEmpty();
+        JsonNode? actions = new CodeActionHandler(workspace, basic, pascal).Handle(new JsonObject
+        {
+            ["textDocument"] = new JsonObject { ["uri"] = uri.Text },
+            ["context"] = new JsonObject { ["diagnostics"] = new JsonArray() }
+        });
+
+        (actions as JsonArray).Should().BeEmpty();
     }
 
     private static (DocumentSyncHandler, HoverHandler, DefinitionHandler, DocumentSymbolHandler) Handlers(

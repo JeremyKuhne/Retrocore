@@ -13,16 +13,19 @@ internal sealed class CodeActionHandler
 {
     private readonly LanguageWorkspace _workspace;
     private readonly BasicDocuments _basic;
+    private readonly PascalDocuments? _pascal;
 
     /// <summary>
     ///  Creates the handler.
     /// </summary>
     /// <param name="workspace">The workspace, for the document's lines.</param>
     /// <param name="basic">The open BASIC documents, which have no assembly quick fixes.</param>
-    public CodeActionHandler(LanguageWorkspace workspace, BasicDocuments basic)
+    /// <param name="pascal">The open Pascal documents, which have none either; or null for none.</param>
+    public CodeActionHandler(LanguageWorkspace workspace, BasicDocuments basic, PascalDocuments? pascal = null)
     {
         _workspace = workspace;
         _basic = basic;
+        _pascal = pascal;
     }
 
     /// <summary>
@@ -35,9 +38,10 @@ internal sealed class CodeActionHandler
         if (parameters?["textDocument"]?["uri"]?.GetValue<string>() is not { } uri) { return new JsonArray(); }
         if (parameters["context"]?["diagnostics"] is not JsonArray diagnostics) { return new JsonArray(); }
 
-        // A BASIC document, or one that is not a file (such as a machine's program), has no lint to fix.
+        // A BASIC or Pascal document, or one that is not a file (such as a machine's program), has no assembly lint to
+        // fix: the assembly's exclusions are not Pascal.
         DocumentUri document = new(uri);
-        if (_basic.Get(document) is not null || !Uri.TryCreate(uri, UriKind.Absolute, out Uri? parsed) || !parsed.IsFile)
+        if (_basic.Get(document) is not null || _pascal?.IsOpen(document) is true || !Uri.TryCreate(uri, UriKind.Absolute, out Uri? parsed) || !parsed.IsFile)
         {
             return new JsonArray();
         }

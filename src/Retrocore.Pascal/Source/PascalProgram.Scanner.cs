@@ -30,6 +30,9 @@ public sealed partial class PascalProgram
             _tokens = tokens;
         }
 
+        private static bool IsIntrinsic(PascalToken? token) =>
+            token is { Kind: PascalTokenKind.Identifier } && PascalNames.Key(token.Text) == "INTRINSI";
+
         private PascalToken? Current => Skip() < _tokens.Count ? _tokens[_at] : null;
 
         /// <summary>
@@ -51,10 +54,16 @@ public sealed partial class PascalProgram
                     Next();
                 }
 
-                // The heading's files, and a unit's INTRINSIC CODE and DATA.
+                // The heading's files; then a unit's INTRINSIC CODE and DATA, its own clause.
                 SkipTo(";");
                 Next();
                 EndStatement();
+                if (unit && IsIntrinsic(Current))
+                {
+                    SkipTo(";");
+                    Next();
+                }
+
                 if (unit) { Unit(scope); }
             }
 
@@ -197,7 +206,13 @@ public sealed partial class PascalProgram
                     Next();
                     PascalScope fields = new(scope, owner, isRecord: true);
                     _program.Scopes.Add(fields);
+
+                    // A field's trailing comment documents the field, not the type being declared.
+                    List<PascalDeclaration> outer = [.. _statement];
+                    _statement.Clear();
                     Fields(fields, interfacePart);
+                    _statement.Clear();
+                    _statement.AddRange(outer);
                     if (Current is { } end && end.Is("END")) { Next(); }
                     continue;
                 }
@@ -230,7 +245,8 @@ public sealed partial class PascalProgram
 
             UseUntil(fields.Parent ?? fields, "OF");
             Next();
-            while (Current is { } token && !token.Is("END"))
+            // An inner variant part ends at the ")" that closes its variant; the outermost at the record's END.
+            while (Current is { } token && !token.Is("END") && !token.IsSymbol(")"))
             {
                 // The variant's labels, a colon, and its fields in parentheses.
                 UseUntil(fields.Parent ?? fields, ":");
@@ -281,6 +297,8 @@ public sealed partial class PascalProgram
                 _program.Scopes.Add(body);
             }
 
+            // A parameter's trailing comment documents the parameter; the routine's comes after its heading.
+            _statement.Clear();
             Next();
             if (Current is { } open && open.IsSymbol("("))
             {

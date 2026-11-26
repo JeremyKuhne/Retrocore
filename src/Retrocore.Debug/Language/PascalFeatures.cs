@@ -33,7 +33,8 @@ internal static partial class PascalFeatures
         List<string> parts = [$"```pascal\n{Heading(declaration)}\n```"];
         if (historical)
         {
-            parts.Add($"`{name.ToUpperInvariant()}` is a historical name of `{declaration.QualifiedName}`.");
+            string old = name.Split('.')[^1].ToUpperInvariant();
+            parts.Add($"`{old}` is a historical name of `{declaration.QualifiedName}`.");
         }
 
         if (declaration.Doc is { } doc)
@@ -68,6 +69,29 @@ internal static partial class PascalFeatures
     /// <returns>The declarations.</returns>
     internal static IEnumerable<LspLocation> Definition(PascalProgram program, string path, Position position) =>
         Find(program, path, position) is { } found ? [Location(found.Declaration.Token)] : [];
+
+    /// <summary>
+    ///  Finds where the name under the cursor's declaration is used, by any of its names.
+    /// </summary>
+    /// <param name="program">The program the document is part of.</param>
+    /// <param name="path">The document.</param>
+    /// <param name="position">The cursor.</param>
+    /// <param name="includeDeclaration">Whether to include the declaration itself.</param>
+    /// <returns>The uses.</returns>
+    internal static IEnumerable<LspLocation> References(
+        PascalProgram program,
+        string path,
+        Position position,
+        bool includeDeclaration)
+    {
+        if (Find(program, path, position) is not { } found) { return []; }
+        IEnumerable<PascalToken> uses = program.References
+            .Where(reference => program.Resolve(reference)?.Declaration == found.Declaration)
+            .Select(reference => reference.Token);
+
+        if (includeDeclaration) { uses = uses.Prepend(found.Declaration.Token); }
+        return [.. uses.Distinct().Select(Location)];
+    }
 
     /// <summary>
     ///  Lists a document's declarations as an outline: its routines and types, with what they declare under them.

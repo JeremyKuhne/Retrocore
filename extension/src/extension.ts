@@ -24,8 +24,7 @@ import { PictureCache } from "./pictures";
 import { groupCycleLines, type CycleLine } from "./cycles";
 
 export function activate(context: vscode.ExtensionContext): void {
-    void startLanguageClient(context);
-    registerActiveTarget(context);
+    void startLanguageClient(context, registerActiveTarget(context));
     registerLaunchBreakpoints(context);
     const basic = registerBasic(context);
     const saved = registerSavedMachines(context);

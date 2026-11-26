@@ -8,7 +8,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { after, test } from "node:test";
 import { fingerprint } from "../hardware";
-import { findTarget, loadTargets, parseJsonc, projectLaunch, projectTargetKey, qualifiedName, savedLabel, savedName, splitSavedName, withProjectMachine } from "../project";
+import { activeTargetParams, findTarget, loadTargets, parseJsonc, projectLaunch, projectTargetKey, qualifiedName, savedLabel, savedName, splitSavedName, withProjectMachine } from "../project";
 
 const sample = path.resolve(__dirname, "..", "..", "..", "sample", "project");
 
@@ -92,4 +92,10 @@ test("a target's launch, as F5 starts it, names its project file and its target 
         type: "retrocore", request: "launch", name: "hello · apple2-iiplus (Retrocore)",
         project: path.join(sample, "retrocore.json"), target: "hello/apple2-iiplus"
     });
+});
+
+test("the language server is told the active target's project file and name, or nulls without one", () => {
+    const [, iie] = loadTargets(sample);
+    assert.deepEqual(activeTargetParams(iie), { project: path.join(sample, "retrocore.json"), target: "apple2-iie" });
+    assert.deepEqual(activeTargetParams(undefined), { project: null, target: null });
 });

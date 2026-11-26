@@ -193,7 +193,7 @@ public sealed class SosDriverFile
                 throw new ArgumentException($"A driver's code is {DibFlags + 1}-{MaxField} bytes; {driver.Name}'s is {driver.Code.Length}.", nameof(drivers));
             }
 
-            CheckDibs(driver);
+            CheckDibs(driver, nameof(drivers));
 
             if (comment.Length > MaxField || driver.Relocations.Length * 2 > MaxField)
             {
@@ -232,26 +232,32 @@ public sealed class SosDriverFile
     private const int DibDcb = 0x20;
 
     // Walks the driver's chain of DIBs as SOS's loader does, from the first at the code's start along the links (each
-    // an offset in the code) to a link of 0 or one to itself, checking that each DIB's flags, and the DCB length an
-    // active page-aligned one makes the loader read, are inside the code.
-    private static void CheckDibs(SosDriver driver)
+    // an offset in the code) to the link of 0 that ends it, checking that each DIB's flags, and the DCB length an
+    // active page-aligned one makes the loader read, are inside the code. The loader ends the chain only at a link of
+    // 0, so a chain that comes back to a DIB, itself included, never ends.
+    private static void CheckDibs(SosDriver driver, string parameter)
     {
         byte[] code = driver.Code;
         HashSet<int> seen = [];
-        for (int dib = 0; seen.Add(dib);)
+        for (int dib = 0; ;)
         {
+            if (!seen.Add(dib))
+            {
+                throw new ArgumentException($"{driver.Name}'s chain of DIBs comes back to offset {dib}; it must end with a link of 0.", parameter);
+            }
+
             if (dib + DibFlags >= code.Length)
             {
-                throw new ArgumentException($"{driver.Name} links to a DIB at offset {dib}, which runs past its code.", "drivers");
+                throw new ArgumentException($"{driver.Name} links to a DIB at offset {dib}, whose flags are past its code.", parameter);
             }
 
             if ((code[dib + DibFlags] & DibActivePageAligned) == DibActivePageAligned && code.Length < DibDcb + 2)
             {
-                throw new ArgumentException($"{driver.Name} asks to be page-aligned but its code ends before its DCB's length.", "drivers");
+                throw new ArgumentException($"{driver.Name} asks to be page-aligned but its code ends before its DCB's length.", parameter);
             }
 
             int link = code[dib] | (code[dib + 1] << 8);
-            if (link == 0 || link == dib) { break; }
+            if (link == 0) { return; }
             dib = link;
         }
     }

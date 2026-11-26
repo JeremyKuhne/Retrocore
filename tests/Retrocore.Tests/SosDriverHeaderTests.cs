@@ -243,6 +243,22 @@ public sealed class SosDriverHeaderTests
         past[0] = 0x10;
         Action pastCode = () => SosDriverFile.Write(header, [new SosDriver("", past, [])]);
         pastCode.Should().Throw<ArgumentException>().WithParameterName("drivers");
+
+        // The loader ends a chain only at a link of 0: a DIB that links to itself, or a loop, never ends.
+        byte[] chain = new byte[0x30];
+        chain[0] = 0x10;
+        SosDriverFile.Read(SosDriverFile.Write(header, [new SosDriver("", chain, [])])).Drivers.Should().ContainSingle();
+        byte[] self = new byte[0x30];
+        self[0x10] = 0x10;
+        self[0] = 0x10;
+        Action selfLink = () => SosDriverFile.Write(header, [new SosDriver("", self, [])]);
+        selfLink.Should().Throw<ArgumentException>().WithParameterName("drivers");
+        byte[] loop = new byte[0x30];
+        loop[0] = 0x10;
+        loop[0x10] = 0x08;
+        loop[0x08] = 0x10;
+        Action loops = () => SosDriverFile.Write(header, [new SosDriver("", loop, [])]);
+        loops.Should().Throw<ArgumentException>().WithParameterName("drivers");
         Action outside = () => SosDriverFile.Write(header, [console with { Relocations = [console.Code.Length - 1] }]);
         outside.Should().Throw<ArgumentException>().WithParameterName("drivers");
         Action notAscii = () => SosDriverFile.Write(header, [console with { Comment = "café" }]);

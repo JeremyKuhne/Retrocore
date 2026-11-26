@@ -16,6 +16,8 @@ sample/adventure/
   tools/packer.cs             .dat to the packed format, and the C# reference engine
   games/test.dat              a small test adventure of our own, MIT
   games/test-*.in, *.out      its transcripts: the commands, and what the screen shows
+  games/pirate.dat            Pirate Adventure, by Scott and Alexis Adams (not ours: see games/README.md)
+  games/pirate-*.in, *.out    its transcripts: one that wins, one that dies
   PackedFormat.md             the packed format, and the rules the engines play by
 ```
 
@@ -81,5 +83,6 @@ section, which it clears itself.
 
 ## Pirate Adventure
 
-Pirate Adventure is Scott and Alexis Adams' game, and is not in this repository yet: it comes with the targets that
-load it from disk, with [games/README.md](games/README.md) recording where it is hosted and on what terms.
+Pirate Adventure is Scott and Alexis Adams' game. Its file, `games/pirate.dat`, is in this repository, with
+[games/README.md](games/README.md) recording where it is hosted and on what terms, and the reference engine plays it
+(`games/pirate-win.in` wins). It is not built into any target yet: the targets that link or load it are to come.

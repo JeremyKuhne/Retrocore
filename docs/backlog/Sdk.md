@@ -384,7 +384,10 @@ checks that its hex stores the bytes the launch loaded. `dos33` writes `<name>.d
 `HELLO` (AppleSoft, or Integer BASIC on the II), the program as a B file, and the target's `files` as B files; a launch
 boots it in slot 6, after the saved machine's and the journal's media, and runs to the program's entry. It boots the II
 Plus, the enhanced IIe, and the II with the Autostart ROM. The adventure's `apple2-dos` target loads `PIRATE.DAT` from
-its disk with `BLOAD`, printed through `COUT`, and plays both of Pirate Adventure's transcripts. A target's `bootImage` is a path, relative to the project's folder; the
+its disk with `BLOAD`, printed through `COUT`, and plays both of Pirate Adventure's transcripts. `dfs` writes
+`<name>.ssd`, the program as a `*RUN` file with the target's `files` and a `!BOOT` that runs it, and a UEF tape of
+the same files; a launch fits the disk interface, puts the disk in drive 0 and boots it holding SHIFT, on the model B
+and on a model A. The adventure's `bbc-dfs` target loads `$.PIRATE` with OSFILE and plays both transcripts. A target's `bootImage` is a path, relative to the project's folder; the
 lookup by hash, which phase 4 also gives, is still to come.
 
 ## Debugging in VS Code

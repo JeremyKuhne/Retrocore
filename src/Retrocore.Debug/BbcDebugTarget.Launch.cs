@@ -260,6 +260,14 @@ internal sealed partial class BbcDebugTarget
     }
 
     // An SSD or DSD image; a DSD's second side is drive 2 or 3, the other side of drive 0 or 1.
+
+    /// <summary>
+    ///  Gets the disk interface's drive 0, which SHIFT-BREAK boots.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">The machine has no disk interface.</exception>
+    internal BbcFloppyDrive BootDrive =>
+        _machine.Drives.Count != 0 ? _machine.Drives[0] : throw new InvalidOperationException("The machine has no disk interface.");
+
     private void InsertDisk(int drive, string path)
     {
         if (drive < 0 || drive >= _machine.Drives.Count)

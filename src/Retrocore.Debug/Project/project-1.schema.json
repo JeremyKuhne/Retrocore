@@ -133,7 +133,7 @@
         },
         "environment": {
           "$ref": "#/definitions/environment",
-          "description": "How the program is loaded and started, and which system calls it may make. Every machine runs bare; each other environment runs on the machines the SDK plan pairs it with. bare, wozmon and dos33 build yet."
+          "description": "How the program is loaded and started, and which system calls it may make. Every machine runs bare; each other environment runs on the machines the SDK plan pairs it with. bare, wozmon, dos33 and dfs build yet."
         },
         "cpu": {
           "$ref": "#/definitions/cpu",
@@ -294,7 +294,7 @@
         "A SYS or BIN file under ProDOS. The II Plus with 64K, and the IIe. Not yet supported.",
         "A SOS.INTERP on a SOS boot disk. The Apple III. Not yet supported.",
         "A PRG with a BASIC SYS line. The PET. Not yet supported.",
-        "A *RUN file on a DFS disk. The BBC Micro. Not yet supported.",
+        "A *RUN file on a DFS disk that its !BOOT runs, and a UEF tape. The BBC Micro.",
         "A .COM file under CP/M. The Apple II and IIe with a SoftCard, the TRS-80 Model 4, the Altair and the Kaypro II. Not yet supported.",
         "A SYSTEM tape. The TRS-80 Model I and III. Not yet supported.",
         "A /CMD load module. The TRS-80 Model I, III and 4. Not yet supported.",

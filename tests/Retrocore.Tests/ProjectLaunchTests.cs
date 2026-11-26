@@ -210,7 +210,7 @@ public sealed class ProjectLaunchTests
         JsonObject withExecutable = Launch("iiplus");
         withExecutable["executable"] = Path.Join(_folder, "game.xex");
         client.Fails("launch", withExecutable).Should().Contain("cannot give 'executable'");
-        client.Fails("launch", Launch("dos")).Should().EndWith("the 'prodos' environment is not yet supported; only 'bare', 'wozmon' and 'dos33' build.");
+        client.Fails("launch", Launch("dos")).Should().EndWith("the 'prodos' environment is not yet supported; only 'bare', 'wozmon', 'dos33' and 'dfs' build.");
 
         Write("main.s", "stz $00");
         client.Fails("launch", Launch("iiplus")).Should().Contain("target iiplus:").And.Contain("main.s(1)");
@@ -266,6 +266,52 @@ public sealed class ProjectLaunchTests
         files.Select(file => file.Name).Should().Equal("HELLO", "GAME", "DATA.BIN");
         client.Request("configurationDone", []);
         client.Event("stopped").String("reason").Should().Be("entry");
+    }
+
+    /// <summary>
+    ///  A <c>dfs</c> target's launch fits the disk interface, boots its disk holding SHIFT, and stops at its entry once
+    ///  !BOOT has run the program, on the model B and on a model A, whose disk interface the launch fits.
+    /// </summary>
+    /// <param name="machine">The catalog machine.</param>
+    [TestMethod]
+    [DataRow("bbcb")]
+    [DataRow("bbca")]
+    public void DfsLaunchBootsItsDisk(string machine)
+    {
+        Write("retrocore.json", $$"""
+            { "sdk": "1", "name": "game", "cpu": "6502", "sources": ["src/*.s"], "entry": "START",
+              "targets": { "dfs": { "machine": "{{machine}}", "environment": "dfs" } } }
+            """);
+
+        Write("src/main.s", "DATA:\n    nop\nSTART:\n    lda #1\nLoop:\n    jmp Loop\n");
+        using DapTestClient client = new();
+        client.Request("initialize", []);
+        client.Request("launch", Launch("dfs"))["project"]?["entry"]?.GetValue<int>().Should().Be(0x1901);
+        client.Request("evaluate", new JsonObject
+        {
+            ["expression"] = "PC"
+        }).String("result").Should().StartWith("$1901");
+
+        client.Request("configurationDone", []);
+        client.Event("stopped").String("reason").Should().Be("entry");
+    }
+
+    /// <summary>
+    ///  A <c>dfs</c> target, or its launch, cannot give the disks, the boot or the disk interface its launch decides.
+    /// </summary>
+    [TestMethod]
+    public void DfsLaunchRefusesWhatItsDiskDecides()
+    {
+        Write("retrocore.json", """
+            { "sdk": "1", "name": "game", "cpu": "6502", "sources": ["src/*.s"],
+              "targets": { "dfs": { "machine": "bbcb", "environment": "dfs", "options": { "disks": ["x.ssd"] } } } }
+            """);
+
+        Write("src/main.s", "rts\n");
+        using DapTestClient client = new();
+        client.Request("initialize", []);
+        client.Fails("launch", Launch("dfs")).Should().EndWith(
+            "a dfs target boots its own disk in drive 0, so its options and its launch cannot give 'disks'.");
     }
 
     /// <summary>

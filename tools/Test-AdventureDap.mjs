@@ -5,8 +5,8 @@
 // The adventure sample's 6502 engine through the debug adapter, from its project file. It plays Pirate Adventure,
 // linked in, from start to finish on bare targets of sample/adventure/retrocore.json (the win and the death on the
 // Apple-1 with 32K, the PET 4032, the Apple II Plus and the BBC Micro), its win on the Apple-1's wozmon target, which a
-// launch loads as if its hex had been typed in, both on the Apple II Plus's dos33 target, booted from its DOS 3.3 disk,
-// which loads the game from the disk as PIRATE.DAT, and the test game's transcripts on apple2-test,
+// launch loads as if its hex had been typed in, both on the Apple II Plus's dos33 target and the BBC Micro's dfs
+// target, each booted from its disk, which loads the game from the disk, and the test game's transcripts on apple2-test,
 // through project launches, each running the project's steps, which pack the games with the sample's packer, and
 // building the same core with its machine's platform folder. It checks that what the engine writes matches the C#
 // reference engine's transcript in the matching .out file character for character. A logpoint on the console's Write
@@ -35,6 +35,7 @@ const plays = {
     apple2: { family: "apple2", transcripts: ["pirate-win", "pirate-die"] },
     "apple2-dos": { family: "apple2", transcripts: ["pirate-win", "pirate-die"] },
     bbc: { family: "bbc", transcripts: ["pirate-win", "pirate-die"] },
+    "bbc-dfs": { family: "bbc", transcripts: ["pirate-win", "pirate-die"] },
     "apple2-test": { family: "apple2", transcripts: ["test-win", "test-fall", "test-drown"] }
 };
 const allTargets = Object.keys(plays);

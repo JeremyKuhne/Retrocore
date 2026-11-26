@@ -16,7 +16,8 @@ namespace Retrocore.Debug.Project;
 /// <remarks>
 ///  <para>
 ///   Each set is identified by the SHA-1 of each file, as its usual source publishes it (MAME's sets give SHA-1). The
-///   files are looked for in a target's <c>bootImage</c> folder, the launch's ROM folder, the folder the set's
+///   files are looked for in a target's <c>bootImage</c> folder, the launch's ROM folder and the set's folder beside
+///   it, the folder the set's
 ///   variable names (such as <c>RETROCORE_PET_ROMS</c>), and <c>RETROCORE_CACHE</c> (by default
 ///   <c>%USERPROFILE%\Retrocore</c>), each searched with its subfolders, a linked file read as its target is and a
 ///   linked folder left out, so no search loops. Only files of a set's sizes are read. A set is found when every
@@ -188,7 +189,7 @@ internal static class BootMedia
         {
             // A later launch may find the copy an earlier one made, which is already in place.
             string copy = Path.Join(folder, name);
-            if (!string.Equals(Path.GetFullPath(path), Path.GetFullPath(copy), StringComparison.OrdinalIgnoreCase))
+            if (!ProjectGlob.FileNames.Equals(Path.GetFullPath(path), Path.GetFullPath(copy)))
             {
                 File.Copy(path, copy, overwrite: true);
             }

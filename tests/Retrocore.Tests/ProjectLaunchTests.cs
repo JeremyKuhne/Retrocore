@@ -387,7 +387,7 @@ public sealed class ProjectLaunchTests
 
     /// <summary>
     ///  A <c>basic</c> target cannot boot its disk on BASIC 1's PET, whose IEEE-488 routines stop disk drives, nor name
-    ///  as its <c>bootImage</c> what is not a folder.
+    ///  as its <c>bootImage</c> what is not a folder when it boots the disk; a tape target never reads it.
     /// </summary>
     [TestMethod]
     public void BasicDiskLaunchRefusesBasic1AndAMissingFolder()
@@ -396,7 +396,8 @@ public sealed class ProjectLaunchTests
             { "sdk": "1", "name": "game", "cpu": "6502", "sources": ["src/*.s"],
               "targets": {
                 "basic1": { "machine": "pet2001", "environment": "basic", "image": { "boot": "disk" } },
-                "missing": { "machine": "pet4032", "environment": "basic", "image": { "boot": "disk" }, "bootImage": "no-such-folder" } } }
+                "missing": { "machine": "pet4032", "environment": "basic", "image": { "boot": "disk" }, "bootImage": "no-such-folder" },
+                "tape": { "machine": "pet4032", "environment": "basic", "bootImage": "no-such-folder" } } }
             """);
 
         Write("src/main.s", "rts\n");
@@ -410,6 +411,7 @@ public sealed class ProjectLaunchTests
 
         Action build = () => ProjectBuild.Build(RetrocoreProject.Load(_folder).Target("basic1"));
         build.Should().Throw<ProjectException>("the build refuses it too").WithMessage("*cannot boot its 4040 disk*");
+        RetrocoreProject.Load(_folder).Target("tape").RequireSupported();
     }
 
     /// <summary>

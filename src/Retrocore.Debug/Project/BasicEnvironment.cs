@@ -73,7 +73,8 @@ internal sealed class BasicEnvironment : TargetEnvironment
     /// <remarks>
     ///  <para>
     ///   The tape goes in cassette 1 with PLAY down. The disk goes in unit 8, connected for the launch, with the 4040's
-    ///   ROMs found by their hashes in the target's <c>bootImage</c>, the launch's <c>romDirectory</c>,
+    ///   ROMs found by their hashes in the target's <c>bootImage</c>, the launch's <c>romDirectory</c> and the
+    ///   <c>c4040</c> folder beside it,
     ///   <c>RETROCORE_PET_ROMS</c> and <c>RETROCORE_CACHE</c>, and copied to <c>obj/&lt;target&gt;/media/c4040/</c>
     ///   under their usual names; a launch that gives <c>driveRomDirectory</c> takes the ROMs from there instead. BASIC
     ///   1's PET, whose IEEE-488 routines stop disk drives working, boots only its tape.
@@ -107,7 +108,7 @@ internal sealed class BasicEnvironment : TargetEnvironment
     /// <remarks>
     ///  <para>
     ///   BASIC 1's PET cannot boot the disk, as its IEEE-488 routines have the bug that stops disk drives working, and a
-    ///   <c>bootImage</c> must be a folder, of the 4040's ROMs.
+    ///   target that boots the disk names in <c>bootImage</c> a folder, of the 4040's ROMs; a tape target never reads it.
     ///  </para>
     /// </remarks>
     protected override IEnumerable<string> OwnProblems(ProjectTarget target)
@@ -117,7 +118,7 @@ internal sealed class BasicEnvironment : TargetEnvironment
             yield return "BASIC 1's IEEE-488 routines have the bug that stops disk drives working, so it cannot boot its 4040 disk; boot the tape, or target a PET with BASIC 2 or 4";
         }
 
-        if (target.BootImage is { } folder && !Directory.Exists(folder))
+        if (target.ImageBoot == "disk" && target.BootImage is { } folder && !Directory.Exists(folder))
         {
             yield return $"its 'bootImage', {folder}, is not a folder of the 4040's ROMs";
         }

@@ -45,7 +45,7 @@ public sealed class Trs80Model100Machine : IMachine
         Configuration = configuration;
         Roms = roms;
         Variant = variant ?? Trs80Model100Roms.Identify(roms.Main) ?? Trs80Model100Variant.Model100;
-        Bus = new(configuration, roms) { PowerOff = () => IsPoweredOff = true };
+        Bus = new(configuration, roms) { PowerOff = TurnOff };
         Processor = new(Bus, I8080Variant.I8085);
         Processor.Signals = I8080Signals.SerialInput;
     }
@@ -103,6 +103,7 @@ public sealed class Trs80Model100Machine : IMachine
     public void PowerOn()
     {
         IsPoweredOff = false;
+        Bus.Lcd.Blank = false;
         Bus.Reset();
         Processor.Reset();
     }
@@ -181,6 +182,13 @@ public sealed class Trs80Model100Machine : IMachine
         }
 
         return lines;
+    }
+
+    // Software turns the power off: the CPU stops and the panel goes blank.
+    private void TurnOff()
+    {
+        IsPoweredOff = true;
+        Bus.Lcd.Blank = true;
     }
 
     string IMachine.Id => "trs80-model100";

@@ -54,6 +54,11 @@ public sealed class Trs80Model100Lcd : IVideoSource
     /// <returns>The driver.</returns>
     public Lcd44102 this[int index] => _drivers[index];
 
+    /// <summary>
+    ///  Gets or sets whether the panel is blank, as it is with the power off.
+    /// </summary>
+    public bool Blank { get; internal set; }
+
     int IVideoSource.Width => Width;
 
     int IVideoSource.Height => Height;
@@ -76,7 +81,7 @@ public sealed class Trs80Model100Lcd : IVideoSource
     ///  Renders the panel, a pixel to a dot.
     /// </summary>
     /// <param name="pixels">Exactly 240 x 64 x 4 bytes of RGBA.</param>
-    /// <param name="scanned">Not used: the panel shows the drivers' RAM as it is.</param>
+    /// <param name="scanned">Not used: the panel shows the drivers' RAM as it is, or nothing while it is blank.</param>
     public void Render(Span<byte> pixels, bool scanned)
     {
         if (pixels.Length != Width * Height * 4)
@@ -89,7 +94,7 @@ public sealed class Trs80Model100Lcd : IVideoSource
         {
             for (int x = 0; x < Width; x++)
             {
-                byte[] color = Dot(x, y) ? s_lit : s_unlit;
+                byte[] color = !Blank && Dot(x, y) ? s_lit : s_unlit;
                 pixels[offset] = color[0];
                 pixels[offset + 1] = color[1];
                 pixels[offset + 2] = color[2];

@@ -59,6 +59,8 @@ internal sealed record CatalogMachine(string Id, string Machine, string? Model, 
         Of("bbca", "bbc", "bbc", ProjectCpu.Mos6502, 0x2000, model: "bbca"),
         Of("atari800", "atari800", "atari", ProjectCpu.Mos6502, 0x2000, model: "atari800"),
         Of("atari400", "atari800", "atari", ProjectCpu.Mos6502, 0x2000, model: "atari400"),
+        Of("trs80-model100", "trs80-model100", "trs80", ProjectCpu.I8085, 0xE000, model: "100"),
+        Of("tandy102", "trs80-model100", "trs80", ProjectCpu.I8085, 0xE000, model: "102"),
         Of("altair", "altair", "altair", ProjectCpu.I8080, 0x0100),
         Of("kaypro2", "kaypro2", "kaypro", ProjectCpu.Z80, 0x0100)
     ];

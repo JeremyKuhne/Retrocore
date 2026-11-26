@@ -1032,6 +1032,7 @@ internal sealed partial class DebugSession
             DebugMachines.Altair => AltairDebugTarget.Launch(args),
             DebugMachines.Bbc => LaunchBbc(args, loads),
             DebugMachines.Kaypro2 => LaunchKaypro(args),
+            DebugMachines.Trs80Model100 => LaunchModel100(args, loads),
             DebugMachines.Atari => LaunchAtari(args, loads),
             _ => Apple2DebugTarget.Launch(args)
         };
@@ -1306,6 +1307,15 @@ internal sealed partial class DebugSession
     {
         KayproDebugTarget target = KayproDebugTarget.Launch(args);
         target.Boot(args.Double("bootSeconds") ?? 0);
+        return target;
+    }
+
+    // A program on a Model 100 or Tandy 102 calls the ROM, which sets up its RAM variables and hooks as it cold-starts
+    // to the menu, so the ROM runs first, as on a Model I.
+    private static Trs80Model100DebugTarget LaunchModel100(JsonObject args, bool loads)
+    {
+        Trs80Model100DebugTarget target = Trs80Model100DebugTarget.Launch(args);
+        target.Boot(args.Double("bootSeconds") ?? (loads ? 3 : 0));
         return target;
     }
 

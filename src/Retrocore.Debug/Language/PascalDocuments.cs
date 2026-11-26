@@ -22,6 +22,9 @@ internal sealed class PascalDocuments
     private readonly Dictionary<string, string> _open = [with(StringComparer.OrdinalIgnoreCase)];
     private readonly Dictionary<string, PascalAnalysis> _programs = [with(StringComparer.OrdinalIgnoreCase)];
 
+    // While every open file is published, each folder's main files, found once.
+    private Dictionary<string, List<string>>? _mains;
+
     /// <summary>
     ///  Creates the store.
     /// </summary>
@@ -128,17 +131,21 @@ internal sealed class PascalDocuments
         List<(PascalProgram Program, List<string> Files)> programs = [];
         lock (_lock)
         {
-            foreach (string path in _open.Keys)
+            // Each file's program is the one hover and the outline use; the folders' main files are found once.
+            _mains = [with(StringComparer.OrdinalIgnoreCase)];
+            try
             {
-                // A file a program already found reads is that program's, without looking for its main file again.
-                int index = programs.FindIndex(entry => entry.Program.File(path) is not null);
-                if (index >= 0)
+                foreach (string path in _open.Keys)
                 {
-                    programs[index].Files.Add(path);
-                    continue;
+                    PascalProgram program = ProgramOf(path);
+                    int index = programs.FindIndex(entry => entry.Program == program);
+                    if (index >= 0) { programs[index].Files.Add(path); }
+                    else { programs.Add((program, [path])); }
                 }
-
-                programs.Add((ProgramOf(path), [path]));
+            }
+            finally
+            {
+                _mains = null;
             }
         }
 
@@ -243,15 +250,35 @@ internal sealed class PascalDocuments
     private List<string> Roots(string path)
     {
         string folder = Path.GetDirectoryName(path) ?? "";
-        IEnumerable<string> candidates = Beside(folder)
-            .Concat(_open.Keys.Where(file => string.Equals(
-                Path.GetDirectoryName(file),
-                folder,
-                StringComparison.OrdinalIgnoreCase)))
-            .Prepend(path)
-            .Distinct(StringComparer.OrdinalIgnoreCase);
+        List<string> mains = MainsIn(folder);
+        bool main = mains.Contains(path, StringComparer.OrdinalIgnoreCase)
+            || (Read(path) is { } text && IsMain(text));
 
-        return [.. candidates.Where(file => Read(file) is { } text && IsMain(text))];
+        return
+        [
+            .. (main ? [path] : Array.Empty<string>())
+                .Concat(mains.Where(file => !string.Equals(file, path, StringComparison.OrdinalIgnoreCase)))
+        ];
+    }
+
+    // The main files in a folder, in name order: kept while every open file is published, or found anew.
+    private List<string> MainsIn(string folder)
+    {
+        if (_mains?.TryGetValue(folder, out List<string>? known) is true) { return known; }
+        List<string> found =
+        [
+            .. Beside(folder)
+                .Concat(_open.Keys.Where(file => string.Equals(
+                    Path.GetDirectoryName(file),
+                    folder,
+                    StringComparison.OrdinalIgnoreCase)))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .Order(StringComparer.OrdinalIgnoreCase)
+                .Where(file => Read(file) is { } text && IsMain(text))
+        ];
+
+        _mains?[folder] = found;
+        return found;
     }
 
     // The Pascal files in a folder; none when it can't be listed, which leaves only its open files.

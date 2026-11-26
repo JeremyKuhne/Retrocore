@@ -468,6 +468,8 @@ public sealed class PascalSourceTests
     [DataRow("PROGRAM P;\nCONST\n  Max =\nVAR X: INTEGER;\n(** L. *)\nPROCEDURE Later;\nBEGIN END;\nBEGIN END.")]
     [DataRow("PROGRAM P;\nFUNCTION F:\n(** L. *)\nPROCEDURE Later;\nBEGIN END;\nBEGIN END.")]
     [DataRow("PROGRAM P;\nPROCEDURE A;\nBEGIN END;\nEND;\n(** L. *)\nPROCEDURE Later;\nBEGIN END;\nBEGIN END.")]
+    [DataRow("PROGRAM P;\nVAR X: ARRAY[1..\n(** L. *)\nPROCEDURE Later;\nBEGIN END;\nBEGIN END.")]
+    [DataRow("PROGRAM P;\nVAR X: INTEGER;\nUSES\n(** L. *)\nPROCEDURE Later;\nBEGIN END;\nBEGIN END.")]
     public void HalfTypedTextKeepsWhatFollows(string source)
     {
         PascalProgram program = Analyze(source);
@@ -497,6 +499,24 @@ public sealed class PascalSourceTests
         (Find("F").Doc?.Summary).Should().Be("f");
         Find("S").Doc.Should().BeNull();
         program.StrayDocs.Should().BeEmpty();
+    }
+
+    /// <summary>
+    ///  A variant's tag and an enumeration take no comment meant for a field or a value.
+    /// </summary>
+    [TestMethod]
+    public void TagsAndEnumerationsKeepTheirOwnComments()
+    {
+        PascalProgram program = Analyze(
+            "PROGRAM P;\nTYPE S = RECORD CASE Kind: INTEGER OF\n  1: (Radius: INTEGER (** r *))\nEND;\n"
+                + "  Color = (Red,   (** red *)\n    Green); (** The colors. *)\nBEGIN END.");
+
+        PascalDeclaration Find(string name) => program.Declarations.Single(declaration => declaration.Name == name);
+        (Find("Radius").Doc?.Summary).Should().Be("r");
+        Find("Kind").Doc.Should().BeNull();
+        (Find("Color").Doc?.Summary).Should().Be("The colors.");
+        Find("Red").Doc.Should().BeNull();
+        Find("Green").Doc.Should().BeNull();
     }
 
     /// <summary>

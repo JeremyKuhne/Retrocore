@@ -129,9 +129,11 @@ public sealed partial class PascalProgram
                 else
                 {
                     // LABEL's labels, or the units USES names.
-                    UseUntil(scope, ";");
-                    Next();
-                    EndStatement();
+                    if (UseUntilBlock(scope, ";"))
+                    {
+                        Next();
+                        EndStatement();
+                    }
                 }
             }
         }
@@ -143,7 +145,12 @@ public sealed partial class PascalProgram
                 Declare(name, PascalDeclarationKind.Constant, scope).IsInterface = interfacePart;
                 Next();
                 Next();
-                if (!UseUntilBlock(scope, ";")) { return; }
+                if (!UseUntilBlock(scope, ";"))
+                {
+                    _statement.Clear();
+                    return;
+                }
+
                 Next();
                 EndStatement();
             }
@@ -199,18 +206,22 @@ public sealed partial class PascalProgram
         {
             if (Current is { } open && open.IsSymbol("("))
             {
+                // A comment after the type documents the type; one among its values documents none of them.
+                List<PascalDeclaration> outer = [.. _statement];
+                _statement.Clear();
                 Next();
                 while (Current is { Kind: PascalTokenKind.Identifier } value)
                 {
-                    // A comment after the type documents the type, not each of its values.
                     PascalDeclaration declared = Declare(value, PascalDeclarationKind.EnumValue, scope);
                     declared.IsInterface = interfacePart;
-                    _statement.Remove(declared);
+                    _statement.Clear();
                     Next();
                     if (Current is { } comma && comma.IsSymbol(",")) { Next(); }
                 }
 
-                if (Current is { } close && close.IsSymbol(")")) { Next(); }
+                bool closed = Current is { } close && close.IsSymbol(")");
+                _statement.AddRange(outer);
+                if (closed) { Next(); }
                 return;
             }
 
@@ -239,7 +250,7 @@ public sealed partial class PascalProgram
                     if (depth == 0) { return; }
                     depth--;
                 }
-                else if (depth == 0 && (token.IsSymbol(";") || token.Is("END") || StartsBlock(token))) { return; }
+                else if (StartsBlock(token) || (depth == 0 && (token.IsSymbol(";") || token.Is("END")))) { return; }
                 else if (token.Kind == PascalTokenKind.Identifier) { Use(scope); }
 
                 Next();
@@ -259,9 +270,11 @@ public sealed partial class PascalProgram
                 Next();
             }
 
-            // The tag's type, to OF; a variant part still being typed may have none yet.
+            // The tag's type, to OF; a variant part still being typed may have none yet. The tag takes no comment of
+            // the fields after it.
             if (!UseUntilBefore(fields.Parent ?? fields, "OF", "END", ";")) { return; }
             Next();
+            _statement.Clear();
             // An inner variant part ends at the ")" that closes its variant; the outermost at the record's END.
             while (Current is { } token && !token.Is("END") && !token.IsSymbol(")"))
             {
@@ -381,6 +394,8 @@ public sealed partial class PascalProgram
                 return;
             }
 
+            // A heading without its ";" leaves its routine to no later comment.
+            if (!ended) { _statement.Clear(); }
             Block(body);
             if (Current is { } after && after.IsSymbol(";")) { Next(); }
         }
@@ -578,7 +593,11 @@ public sealed partial class PascalProgram
                 }
 
                 if (_pending is { } stray) { _program.StrayDocs.Add(stray); }
-                _pending = PascalDocComment.Parse(doc);
+
+                // One after a "," on its line, among a list's names or values, documents nothing that follows.
+                bool afterComma = before is not null && before.IsSymbol(",") && before.EndLine == doc.Line;
+                _pending = afterComma ? null : PascalDocComment.Parse(doc);
+                if (afterComma) { _program.StrayDocs.Add(PascalDocComment.Parse(doc)); }
                 _at++;
             }
 

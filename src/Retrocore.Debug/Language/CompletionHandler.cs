@@ -46,6 +46,12 @@ internal sealed class CompletionHandler
         // Pascal has no completion yet, and the assembly's would be wrong for it.
         if (_pascal?.IsOpen(request.TextDocument.Uri) is true) { return Task.FromResult(new List<CompletionItem>()); }
 
+        // Any other document that is not a file, such as an untitled one, has no assembly to complete.
+        if (!Uri.TryCreate(request.TextDocument.Uri.Text, UriKind.Absolute, out Uri? parsed) || !parsed.IsFile)
+        {
+            return Task.FromResult(new List<CompletionItem>());
+        }
+
         string path = LanguageHost.PathOf(request.TextDocument.Uri);
         string[] lines = _workspace.LinesOf(path);
         int line = request.Position.Line;

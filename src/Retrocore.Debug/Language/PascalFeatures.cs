@@ -109,20 +109,21 @@ internal static partial class PascalFeatures
             }
         }
 
-        // The file's outermost declarations: the program's, or those of a routine declared in another file, such as
-        // the nested procedures an include holds for its segment.
+        // The file's outermost declarations: the program's own, and the routines of one declared in another file,
+        // such as the nested procedures an include holds for its segment, not that routine's other locals.
         return
         [
             .. program.Declarations
-                .Where(declaration => InFile(declaration, path) && !OwnedHere(declaration))
+                .Where(declaration => InFile(declaration, path) && IsOutermost(declaration))
                 .Select(declaration => Symbol(declaration, path, owned, top: true))
         ];
 
-        bool OwnedHere(PascalDeclaration declaration) =>
-            declaration.Kind is not (PascalDeclarationKind.Program or PascalDeclarationKind.Unit)
-                && declaration.Scope.Owner is { } owner
-                && owner.Kind is not (PascalDeclarationKind.Program or PascalDeclarationKind.Unit)
-                && InFile(owner, path);
+        bool IsOutermost(PascalDeclaration declaration) =>
+            declaration.Kind is PascalDeclarationKind.Program or PascalDeclarationKind.Unit
+                || declaration.Scope == program.Outer
+                || (declaration.Kind is PascalDeclarationKind.Procedure or PascalDeclarationKind.Function
+                    && declaration.Scope.Owner is { } owner
+                    && !InFile(owner, path));
     }
 
     // The declaration a position names: a declared or used name, or a link in a documentation comment.

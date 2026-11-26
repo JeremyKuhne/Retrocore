@@ -177,6 +177,17 @@ public sealed class PascalLanguageTests
         DocumentSymbol inner = symbols.Should().ContainSingle().Which;
         inner.Name.Should().Be("Inner");
         (inner.Children ?? []).Select(child => child.Name).Should().Equal("Count");
+
+        // A FORWARD routine's body in an include outlines nothing of it, as its heading is elsewhere; nor do an
+        // anonymous record's fields show at the top.
+        Write("MAIN2.TEXT", "PROGRAM Main2;\nVAR R: RECORD A: INTEGER END;\nPROCEDURE Foo(N: INTEGER); FORWARD;\n(*$I BODY2*)\nBEGIN END.\n");
+        string body2 = Write("BODY2.TEXT", "PROCEDURE Foo;\nVAR Count: INTEGER;\nBEGIN END;\n");
+        uri = Open(sync, body2);
+        symbols = [.. await outline.Handle(Request(uri, new Position(0, 0))) ?? []];
+        symbols.Should().BeEmpty();
+        uri = Open(sync, Path.Join(_folder, "MAIN2.TEXT"));
+        symbols = [.. await outline.Handle(Request(uri, new Position(0, 0))) ?? []];
+        symbols.Select(symbol => symbol.Name).Should().Equal("Main2", "R", "Foo");
     }
 
     private static (DocumentSyncHandler, HoverHandler, DefinitionHandler, DocumentSymbolHandler) Handlers(

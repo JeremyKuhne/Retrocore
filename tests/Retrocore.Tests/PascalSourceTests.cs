@@ -464,6 +464,10 @@ public sealed class PascalSourceTests
     [DataRow("PROGRAM P;\nVAR X: INTEGER;\nTYPE R = RECORD CASE Tag: BOOLEAN\nEND;\n(** L. *)\nPROCEDURE Later;\nBEGIN END;\nBEGIN END.")]
     [DataRow("PROGRAM P;\nTYPE R = RECORD CASE Tag: BOOLEAN OF 1: (A: INTEGER);\n 2\nEND;\nVAR X: INTEGER;\n(** L. *)\nPROCEDURE Later;\nBEGIN END;\nBEGIN END.")]
     [DataRow("PROGRAM P;\nPROCEDURE A(B: INTEGER\nVAR X: INTEGER;\nBEGIN END;\n(** L. *)\nPROCEDURE Later;\nBEGIN END;\nBEGIN END.")]
+    [DataRow("PROGRAM P;\nVAR\n  Y:\n(** L. *)\nPROCEDURE Later;\nBEGIN END;\nBEGIN END.")]
+    [DataRow("PROGRAM P;\nCONST\n  Max =\nVAR X: INTEGER;\n(** L. *)\nPROCEDURE Later;\nBEGIN END;\nBEGIN END.")]
+    [DataRow("PROGRAM P;\nFUNCTION F:\n(** L. *)\nPROCEDURE Later;\nBEGIN END;\nBEGIN END.")]
+    [DataRow("PROGRAM P;\nPROCEDURE A;\nBEGIN END;\nEND;\n(** L. *)\nPROCEDURE Later;\nBEGIN END;\nBEGIN END.")]
     public void HalfTypedTextKeepsWhatFollows(string source)
     {
         PascalProgram program = Analyze(source);
@@ -483,13 +487,14 @@ public sealed class PascalSourceTests
         PascalProgram program = Analyze(
             "PROGRAM P;\nTYPE Item = RECORD\n  Value: INTEGER; (** v *)\n  Next: INTEGER (** n *)\nEND;\n"
                 + "  Kind = (Red, Green); (** k *)\nPROCEDURE Q; FORWARD; (** q *)\nPROCEDURE S;\nBEGIN END;\n"
-                + "PROCEDURE Q;\nBEGIN END;\nBEGIN END.");
+                + "PROCEDURE Q;\nBEGIN END;\nFUNCTION F: INTEGER (** f *);\nBEGIN END;\nBEGIN END.");
 
         PascalDeclaration Find(string name) => program.Declarations.Single(declaration => declaration.Name == name);
         (Find("Next").Doc?.Summary).Should().Be("n");
         (Find("Kind").Doc?.Summary).Should().Be("k");
         Find("Red").Doc.Should().BeNull();
         (Find("Q").Doc?.Summary).Should().Be("q");
+        (Find("F").Doc?.Summary).Should().Be("f");
         Find("S").Doc.Should().BeNull();
         program.StrayDocs.Should().BeEmpty();
     }
@@ -497,10 +502,13 @@ public sealed class PascalSourceTests
     /// <summary>
     ///  A file's documentation may follow ordinary comments, such as a copyright line.
     /// </summary>
+    /// <param name="comment">The comment before it.</param>
     [TestMethod]
-    public void FileDocsMayFollowComments()
+    [DataRow("(* Copyright *)")]
+    [DataRow("{ Copyright }")]
+    public void FileDocsMayFollowComments(string comment)
     {
-        PascalProgram program = Analyze("(* Copyright *)\n(** The file. *)\n\nPROGRAM P;\nBEGIN END.");
+        PascalProgram program = Analyze($"{comment}\n(** The file. *)\n\nPROGRAM P;\nBEGIN END.");
         (program.Files[0].Doc?.Summary).Should().Be("The file.");
         program.Declarations.Single(declaration => declaration.Name == "P").Doc.Should().BeNull();
     }

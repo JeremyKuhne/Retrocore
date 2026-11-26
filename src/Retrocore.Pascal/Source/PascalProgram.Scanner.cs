@@ -114,7 +114,8 @@ public sealed partial class PascalProgram
                 {
                     // The statement part, or the unit's implementation, ends the declarations; anything else, such as
                     // a name still being typed, is stepped over, so the declarations after it are still read.
-                    if (token.Is("BEGIN") || token.Is("IMPLEMENTATION") || token.Is("END")) { return; }
+                    bool ends = token.Is("BEGIN") || token.Is("IMPLEMENTATION") || (token.Is("END") && IsSymbol(1, "."));
+                    if (ends) { return; }
                     if (token.IsSymbol(".") && IsEndOfProgram()) { return; }
                     Use(scope);
                     Next();
@@ -142,7 +143,7 @@ public sealed partial class PascalProgram
                 Declare(name, PascalDeclarationKind.Constant, scope).IsInterface = interfacePart;
                 Next();
                 Next();
-                UseUntil(scope, ";");
+                if (!UseUntilBlock(scope, ";")) { return; }
                 Next();
                 EndStatement();
             }
@@ -178,7 +179,13 @@ public sealed partial class PascalProgram
                     break;
                 }
 
-                if (Current is not { } colon || !colon.IsSymbol(":")) { return; }
+                if (Current is not { } colon || !colon.IsSymbol(":"))
+                {
+                    // A list still being typed: its names keep no comment that comes after.
+                    _statement.Clear();
+                    return;
+                }
+
                 Next();
                 Type(scope.IsRecord ? scope.Parent ?? scope : scope, owner: null, interfacePart);
                 if (Current is { } semicolon && semicolon.IsSymbol(end)) { Next(); EndStatement(); }
@@ -232,7 +239,7 @@ public sealed partial class PascalProgram
                     if (depth == 0) { return; }
                     depth--;
                 }
-                else if (depth == 0 && (token.IsSymbol(";") || token.Is("END"))) { return; }
+                else if (depth == 0 && (token.IsSymbol(";") || token.Is("END") || StartsBlock(token))) { return; }
                 else if (token.Kind == PascalTokenKind.Identifier) { Use(scope); }
 
                 Next();
@@ -329,8 +336,17 @@ public sealed partial class PascalProgram
                 if (Current is { } close && close.IsSymbol(")")) { Next(); }
             }
 
-            if (Current is { } colon && colon.IsSymbol(":")) { Next(); UseUntil(scope, ";"); }
-            if (Current is { } semicolon && semicolon.IsSymbol(";"))
+            // A comment after the heading on its line, with or without its ";", documents the routine.
+            _statement.Clear();
+            if (routine.Doc is null) { _statement.Add(routine); }
+            if (Current is { } colon && colon.IsSymbol(":"))
+            {
+                Next();
+                UseUntilBlock(scope, ";");
+            }
+
+            bool ended = Current is { } semicolon && semicolon.IsSymbol(";");
+            if (ended)
             {
                 // A documentation comment after the heading, on its line, documents the routine.
                 Next();
@@ -344,6 +360,10 @@ public sealed partial class PascalProgram
                 routine.IsHeadingOnly = true;
                 return;
             }
+
+            // A heading still being typed, with no ";" and a declaration after it, has no block yet: the declaration
+            // is the enclosing one's. After a ";", a routine there is a nested one.
+            if (!ended && Current is { } cut && StartsDeclaration(cut)) { return; }
 
             if (Current is { } directive && (directive.Is("FORWARD") || directive.Is("EXTERNAL")))
             {
@@ -454,6 +474,23 @@ public sealed partial class PascalProgram
 
             return Current is not null;
         }
+
+        // Uses the names up to a symbol, and says whether it was found before a declaration or block started.
+        private bool UseUntilBlock(PascalScope scope, string end)
+        {
+            while (Current is { } token && !token.IsSymbol(end))
+            {
+                if (StartsBlock(token)) { return false; }
+                if (token.Kind == PascalTokenKind.Identifier) { Use(scope); }
+                Next();
+            }
+
+            return Current is not null;
+        }
+
+        // Whether a token starts a declaration, a declaration section or a statement part, which no value or type has.
+        private static bool StartsBlock(PascalToken token) =>
+            StartsDeclaration(token) || token.Is("VAR") || token.Is("BEGIN") || token.Is("USES");
 
         private static bool EndsParameters(PascalToken token) =>
             token.Is("BEGIN") || token.Is("FORWARD") || token.Is("EXTERNAL") || StartsDeclaration(token);

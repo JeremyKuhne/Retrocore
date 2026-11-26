@@ -130,10 +130,15 @@ internal sealed class PascalDocuments
         {
             foreach (string path in _open.Keys)
             {
-                PascalProgram program = ProgramOf(path);
-                int index = programs.FindIndex(entry => entry.Program == program);
-                if (index < 0) { programs.Add((program, [path])); }
-                else { programs[index].Files.Add(path); }
+                // A file a program already found reads is that program's, without looking for its main file again.
+                int index = programs.FindIndex(entry => entry.Program.File(path) is not null);
+                if (index >= 0)
+                {
+                    programs[index].Files.Add(path);
+                    continue;
+                }
+
+                programs.Add((ProgramOf(path), [path]));
             }
         }
 

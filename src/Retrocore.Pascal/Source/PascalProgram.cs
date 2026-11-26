@@ -197,7 +197,7 @@ public sealed partial class PascalProgram
         // The file's own documentation: its first (** *), after any ordinary comments and options, with a blank line or
         // the end after it.
         PascalToken? fileDoc = null;
-        int first = tokens.FindIndex(token => token.Kind is not (PascalTokenKind.Comment or PascalTokenKind.Option));
+        int first = tokens.FindIndex(token => !token.IsComment || token.Kind == PascalTokenKind.DocComment);
         if (first >= 0 && tokens[first].Kind == PascalTokenKind.DocComment)
         {
             bool blankAfter = first + 1 == tokens.Count || tokens[first + 1].Line > tokens[first].EndLine + 1;

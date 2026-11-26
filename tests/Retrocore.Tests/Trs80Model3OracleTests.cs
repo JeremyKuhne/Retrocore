@@ -202,6 +202,61 @@ public class Trs80Model3OracleTests
         Match(dump[0x10000..(0x10000 + Cells)], [.. Enumerable.Range(0, Cells).Select(machine.Bus.Video.Read)], 80);
     }
 
+    /// <summary>
+    ///  Each Model II TRSDOS boots from drive 0, with version 5 of the boot ROM, MAME's default, and takes the date
+    ///  and time. MAME 0.264 asks for the date after about 31 seconds, where this side asks after about 16: in MAME,
+    ///  TRSDOS 1.2 restores the drive in single density and seeks again 17 times in its first 30 seconds, where here
+    ///  it seeks once, so the keys wait for MAME. TRSDOS 1.2 in MAME is as slow to list its directory, whose heading
+    ///  shows the time, so the comparison stops at the prompt; the listing is
+    ///  <c>Trs80Model2RomTests.BootsItsDos</c>'s.
+    /// </summary>
+    /// <param name="image">The image's file name, in <c>trs80-disks</c>.</param>
+    [TestMethod]
+    [TestCategory("Conformance")]
+    [DataRow("M2TRSDOS12.imd")]
+    [DataRow("M2TRSDOS20A.imd")]
+    [DataRow("M2TRSDOS20B.imd")]
+    public void Model2DosMatchesMame(string image)
+    {
+        string disk = Path.Join(Root, "trs80-disks", image);
+        if (!File.Exists(disk)) { Assert.Inconclusive($"{disk} is missing."); }
+        string mame = FindMame();
+        string sets = Path.Join(Root, "trs80-roms", "mame");
+        if (!Directory.Exists(sets) || !Directory.EnumerateFiles(sets, "trs80m2.*").Any())
+        {
+            Assert.Inconclusive("MAME's trs80m2 ROM set is missing.");
+        }
+
+        (double At, string Text)[] script =
+        [
+            (40, "11/14/1986\r"),
+            (44, "12.00.00\r")
+        ];
+
+        const double Finish = 60;
+        byte[] dump = RunMame(mame, sets, "trs80m2", ":video_ram", script, Finish, disk, cpu: ":u12");
+
+        Trs80Model2Machine machine = Trs80Model2RomTests.Create();
+        (FloppyDisk floppy, string format) = Trs80DiskImage.Read(File.ReadAllBytes(disk), Path.GetExtension(disk));
+        machine.Drives[0].Insert(floppy, image, format);
+        ulong time = 0;
+        foreach ((double at, string text) in script)
+        {
+            ulong target = (ulong)(at * Trs80Model2Timing.ClockHertz);
+            machine.Run(target - time);
+            time = target;
+            foreach (char character in text) { machine.Bus.Keyboard.Type((byte)character); }
+        }
+
+        machine.Run((ulong)(Finish * Trs80Model2Timing.ClockHertz) - time);
+
+        const int Cells = 80 * 24;
+        byte[] oracle = dump[0x10000..(0x10000 + Cells)];
+        Console.WriteLine(Screen(oracle, 80));
+        Encoding.Latin1.GetString(oracle).Should().Contain("TRSDOS READY", "MAME got through the script");
+        Match(oracle, [.. Enumerable.Range(0, Cells).Select(machine.Bus.Video.Read)], 80);
+    }
+
     private static string Root => ExternalTestData.Root;
 
     // Returns MAME's dump, the address space then video RAM, and the machine here, once their screens match.
@@ -403,7 +458,9 @@ public class Trs80Model3OracleTests
             ];
 
             arguments.AddRange(options ?? []);
-            if (disk is not null)
+            // The Model III's and 4's drives are a configuration switch, which a run with a disk turns on; the Model
+            // II's are always fitted.
+            if (disk is not null && driver != "trs80m2")
             {
                 Directory.CreateDirectory(Path.Join(work, "cfg"));
                 File.WriteAllText(Path.Join(work, "cfg", driver + ".cfg"), $$"""
@@ -412,7 +469,10 @@ public class Trs80Model3OracleTests
                     <port tag=":CONFIG" type="CONFIG" mask="128" defvalue="0" value="128" />
                     </input></system></mameconfig>
                     """);
+            }
 
+            if (disk is not null)
+            {
                 // MAME opens a disk to write it back, which locks the file; a copy keeps the fixture free for the tests
                 // that read it at the same time.
                 string copy = Path.Join(work, Path.GetFileName(disk));

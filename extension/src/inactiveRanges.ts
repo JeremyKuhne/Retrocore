@@ -35,8 +35,8 @@ export function rangeLines(range: { start: { line: number }; end: { line: number
  * retrocore/inactiveRanges, with the themable color retrocore.inactiveCodeBackground across the whole line, and marks
  * them in the overview ruler with retrocore.inactiveCodeOverviewRuler. The server also fades those lines' text, with
  * Unnecessary hints. A document is asked again each time the server publishes its diagnostics, which follow each
- * analysis, when the active target changes and when the server starts; when the server can't answer, as it stops, the shading goes with its
- * fading. `retrocore.inactiveCode.shade` turns the shading off.
+ * analysis, when the active target changes and when the server starts; when the server can't answer, as it stops,
+ * the shading goes with its fading. `retrocore.inactiveCode.shade` turns the shading off.
  */
 export function registerInactiveRanges(context: vscode.ExtensionContext, targets?: ActiveTargets): void {
     const decoration = vscode.window.createTextEditorDecorationType({

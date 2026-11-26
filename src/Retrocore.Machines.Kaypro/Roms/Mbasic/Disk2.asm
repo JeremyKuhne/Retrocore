@@ -997,7 +997,7 @@ ST_PUT:
 ;;          SNERR for anything after the statement
 ST_GET:
     XOR A
-    LD [PUTFLG],A                   ; PGTFLG: nonzero for PUT
+    LD [PUTFLG],A                   ; nonzero for PUT
     CALL FILSCN                     ; BC = the file's FDB, A = its mode
     CP MD_RND
     JP NZ,DERBFM

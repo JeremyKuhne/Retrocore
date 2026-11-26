@@ -64,10 +64,40 @@ public static class PascalLint
     // What a file's text alone decides: its lines, its name, its size, its comments.
     private static void CheckFile(PascalSourceFile file, List<PascalDiagnostic> problems)
     {
-        string path = file.Path;
-        for (int line = 0; line < file.Lines.Length; line++)
+        CheckLines(file.Path, file.Lines, problems);
+        foreach (PascalToken token in file.Tokens.Where(token => token.Kind == PascalTokenKind.BraceComment))
         {
-            string text = file.Lines[line];
+            int end = token.Line == token.EndLine ? token.EndColumn : token.Column + 1;
+            string message = token.Text.StartsWith("{$", StringComparison.Ordinal)
+                ? "Write options as (*$ *), not in braces."
+                : "Write comments as (* *), and documentation as (** *).";
+
+            problems.Add(new(file.Path, token.Line, token.Column, end, IsError: false, "comment", message));
+        }
+    }
+
+    /// <summary>
+    ///  Checks a text file for the Editor alone: its lines, its name and its size, as for a source of Apple's
+    ///  Assembler that a Pascal program's code links with.
+    /// </summary>
+    /// <param name="path">The file's path.</param>
+    /// <param name="text">Its text.</param>
+    /// <returns>The problems, by line.</returns>
+    public static List<PascalDiagnostic> CheckText(string path, string text)
+    {
+        ArgumentNullException.ThrowIfNull(path);
+        ArgumentNullException.ThrowIfNull(text);
+        List<PascalDiagnostic> problems = [];
+        CheckLines(path, PascalLexer.Lines(text), problems);
+        return problems;
+    }
+
+    // What a file's lines alone decide: their width, the file's name and its size.
+    private static void CheckLines(string path, string[] lines, List<PascalDiagnostic> problems)
+    {
+        for (int line = 0; line < lines.Length; line++)
+        {
+            string text = lines[line];
             if (text.Length > LineWidth)
             {
                 Add(line, LineWidth, text.Length, "line-length", $"Line is over {LineWidth} columns, the Editor's.");
@@ -93,7 +123,7 @@ public static class PascalLint
         }
 
         // A line too long for a page has no disk form, which line-length reports; its size is counted in pieces.
-        int stored = StoredLength(PascalTextFile.Write(string.Join('\n', file.Lines.SelectMany(Pieces))));
+        int stored = StoredLength(PascalTextFile.Write(string.Join('\n', lines.SelectMany(Pieces))));
 
         if (stored > EditorBytes)
         {
@@ -104,16 +134,6 @@ public static class PascalLint
                 "file-size",
                 $"The file is {stored:N0} bytes on a disk; Apple Pascal 1.1's Editor holds {EditorBytes:N0}. "
                     + "Move procedures to another (*$I*) file.");
-        }
-
-        foreach (PascalToken token in file.Tokens.Where(token => token.Kind == PascalTokenKind.BraceComment))
-        {
-            int end = token.Line == token.EndLine ? token.EndColumn : token.Column + 1;
-            string message = token.Text.StartsWith("{$", StringComparison.Ordinal)
-                ? "Write options as (*$ *), not in braces."
-                : "Write comments as (* *), and documentation as (** *).";
-
-            Add(token.Line, token.Column, end, "comment", message);
         }
 
         void Add(int line, int column, int end, string rule, string message) =>

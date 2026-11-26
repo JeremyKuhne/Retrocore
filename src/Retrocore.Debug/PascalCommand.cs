@@ -48,7 +48,7 @@ internal static partial class PascalCommand
                --pascal sos output.dsk NAME [--boot disk] --from disk FILE... [--from disk FILE...] [--add code NAME]
                --pascal decompile (file.code | disk NAME) [--library (file | disk NAME)] [--listing (file | disk NAME)] [--hints hints.json] [--pcode] [output.text]
                --pascal compile source.text APPLE1.dsk APPLE2.dsk output.code [listing.text] [--unit file.code]... [--iie]
-               --pascal compile main.text APPLE1.dsk APPLE2.dsk output.code --includes folder [--code-room blocks] [--iie]
+               --pascal compile main.text APPLE1.dsk APPLE2.dsk output.code --includes folder... [--code-room blocks] [--iie]
                --pascal assembly (file.code | disk NAME) output.text
                --pascal assemble-native source.text APPLE1.dsk APPLE2.dsk output.code [--iie]
                --pascal link host.code [library.code...] APPLE1.dsk APPLE2.dsk output.code [--iie]
@@ -543,14 +543,19 @@ internal static partial class PascalCommand
             rest.RemoveRange(room, 2);
         }
 
-        int includes = rest.IndexOf("--includes");
-        if (includes >= 0)
+        // Each --includes names a folder of files to include; a name is found in the first that has it.
+        List<string> folders = [];
+        for (int includes = rest.IndexOf("--includes"); includes >= 0; includes = rest.IndexOf("--includes"))
         {
             if (includes + 1 >= rest.Count) { return Fail(Usage, code: 2); }
-            string folder = rest[includes + 1];
+            folders.Add(rest[includes + 1]);
             rest.RemoveRange(includes, 2);
+        }
+
+        if (folders.Count > 0)
+        {
             return rest is [string main, string bootDisk, string compilerDisk, string written]
-                ? CompileFiles(main, folder, bootDisk, compilerDisk, written, model, codeRoom)
+                ? CompileFiles(main, folders, bootDisk, compilerDisk, written, model, codeRoom)
                 : Fail(Usage, code: 2);
         }
 
@@ -564,16 +569,17 @@ internal static partial class PascalCommand
         };
     }
 
-    // Compiles a main file and the files a folder holds, which it includes by name: each goes on a volume with room.
-    private static int CompileFiles(string main, string folder, string boot, string compiler, string output, Apple2Model model, int? codeRoom)
+    // Compiles a main file and the files folders hold, which it includes by name, the first folder's file of a name
+    // winning: each goes on a volume with room.
+    private static int CompileFiles(string main, List<string> folders, string boot, string compiler, string output, Apple2Model model, int? codeRoom)
     {
         Dictionary<string, string> included = [with(StringComparer.OrdinalIgnoreCase)];
         EnumerationOptions texts = new() { MatchCasing = MatchCasing.CaseInsensitive };
-        foreach (string path in Directory.EnumerateFiles(folder, "*.text", texts))
+        foreach (string path in folders.SelectMany(folder => Directory.EnumerateFiles(folder, "*.text", texts)))
         {
             if (Path.GetFullPath(path) != Path.GetFullPath(main))
             {
-                included[Path.GetFileName(path)] = File.ReadAllText(path);
+                included.TryAdd(Path.GetFileName(path), File.ReadAllText(path));
             }
         }
 

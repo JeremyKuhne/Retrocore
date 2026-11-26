@@ -316,7 +316,8 @@ public sealed class PascalSourceTests
     }
 
     /// <summary>
-    ///  Every Pascal source in the SDK passes the lint, each program from its main file: the one no other includes.
+    ///  Every Pascal source in the SDK passes the lint, each program read from its main file, and every Assembler
+    ///  source the text checks; every source is one or the other.
     /// </summary>
     [TestMethod]
     public void SdkSourcesPassTheLint()
@@ -341,26 +342,75 @@ public sealed class PascalSourceTests
             Assert.Inconclusive("src/Retrocore.Pascal/Sdk has no Pascal source yet.");
         }
 
+        // Programs from their main files; a source of Apple's Assembler, which starts with a directive, as text.
+        static string Read(string path) => File.ReadAllText(path);
+        List<string> mains = [.. sources.Where(file => PascalProgram.IsMainFile(Read(file)))];
+        List<string> assembled = [.. sources.Where(file => Read(file).TrimStart().StartsWith('.'))];
         List<PascalProgram> programs =
         [
-            .. sources.Select(file => PascalProgram.Analyze(file, path => File.Exists(path) ? File.ReadAllText(path) : null))
+            .. mains.Select(file => PascalProgram.Analyze(
+                file,
+                path => File.Exists(path) ? File.ReadAllText(path) : null,
+                PascalIncludeFolders.For(file)))
         ];
 
-        HashSet<string> included =
-        [
-            .. programs.SelectMany(program => program.Files.Skip(1)).Select(file => file.Path)
-        ];
-
+        HashSet<string> read = [.. programs.SelectMany(program => program.Files).Select(file => Path.GetFullPath(file.Path))];
         List<string> problems =
         [
             .. programs
-                .Where(program => !included.Contains(program.Root))
                 .SelectMany(program => PascalLint.Check(program, BasicAttribution.Bibliography))
+                .Concat(assembled.SelectMany(file => PascalLint.CheckText(file, Read(file))))
+                .Distinct()
                 .Select(problem => $"{Path.GetRelativePath(sdk, problem.File)}({problem.Line + 1},{problem.Column + 1}): "
-                    + $"{problem.Rule}: {problem.Message}")
+                    + $"{problem.Rule}: {problem.Message}"),
+            .. sources
+                .Where(file => !read.Contains(Path.GetFullPath(file)) && !assembled.Contains(file))
+                .Select(file => $"{Path.GetRelativePath(sdk, file)}: no program reads it, and it isn't an Assembler source")
         ];
 
         problems.Should().BeEmpty($"the lint found:{Environment.NewLine}{string.Join(Environment.NewLine, problems)}");
+    }
+
+    /// <summary>
+    ///  A Compiler's source includes the system's globals from the System folder of its machine and version.
+    /// </summary>
+    [TestMethod]
+    public void CompilersIncludeTheSystemsGlobals()
+    {
+        string root = Directory.CreateTempSubdirectory("pascal").FullName;
+        try
+        {
+            string compiler = Path.Join(root, "Compiler", "apple2-1.3");
+            string system = Path.Join(root, "System", "apple2-1.3");
+            Directory.CreateDirectory(compiler);
+            Directory.CreateDirectory(system);
+            string main = Path.Join(compiler, "COMPILER.TEXT");
+            File.WriteAllText(main, "PROGRAM P;\n(*$I SYSGLOBALS*)\nBEGIN Count := 1 END.\n");
+            File.WriteAllText(Path.Join(system, "SYSGLOBALS.TEXT"), "VAR Count: INTEGER;\n");
+
+            PascalIncludeFolders.For(main).Should().Equal(system);
+            PascalProgram program = PascalProgram.Analyze(
+                main,
+                path => File.Exists(path) ? File.ReadAllText(path) : null,
+                PascalIncludeFolders.For(main));
+
+            program.Includes.Should().ContainSingle().Which.Path.Should().Be(Path.Join(system, "SYSGLOBALS.TEXT"));
+            PascalLint.Check(program, bibliography: null).Should().BeEmpty();
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    /// <summary>
+    ///  An Assembler source has only the checks of its text: its lines, name and size.
+    /// </summary>
+    [TestMethod]
+    public void AssemblerSourcesHaveTheTextChecks()
+    {
+        PascalLint.CheckText(Path.Join("SRC", "ASSEMBLED.TEXT"), "         .PROC   SCANIDEN,2\n         RTS\n").Should().BeEmpty();
+        PascalLint.CheckText(Path.Join("SRC", "ASSEMBLED.TEXT"), "\t.PROC X\n").Should().ContainSingle().Which.Rule.Should().Be("tab");
     }
 
     /// <summary>

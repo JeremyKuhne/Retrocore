@@ -143,7 +143,8 @@ Conditions, hit counts and log messages work as on any breakpoint, with the CPU'
   `(*$L APPLE1:NAME.TEXT*)`; a Pascal file's name is at most 15 letters, so `HIL.LST.TEXT`, not `HILBERT.LST.TEXT`.
   Each `--unit` code file goes beside the source, for its `USES (*$U NAME.CODE*) NAME` to find. With
   `--includes folder`, the source is a main file that includes the folder's files by name, `(*$I NAME.TEXT*)`, each
-  put on SOURCE:, the boot disk or CODE:, whichever has room, and its directive given that volume (below);
+  put on SOURCE:, the boot disk or CODE:, whichever has room, and its directive given that volume (below); give
+  `--includes` again for each more folder, the first that has a name giving its file;
 - `--pascal assembly code output.text` writes each segment's assembled procedures as source for Apple's Assembler, as
   `output.SEGMENT.text`, a library's units naming their procedures from their interface text;
 - `--pascal assemble-native source.text APPLE1.dsk APPLE2.dsk output.code` assembles a 6502 source with Apple's own

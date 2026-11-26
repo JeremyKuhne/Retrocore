@@ -225,7 +225,7 @@ internal sealed class PascalDocuments
 
     private PascalAnalysis Analyze(string root)
     {
-        PascalProgram program = PascalProgram.Analyze(root, Read);
+        PascalProgram program = PascalProgram.Analyze(root, Read, PascalIncludeFolders.For(root));
 
         // The files read from disk; the folders an include was looked for in, whose times change as a file in them
         // is added or removed; and the Pascal files beside them, any of which may become a main file that reads one.
@@ -273,7 +273,7 @@ internal sealed class PascalDocuments
                     StringComparison.OrdinalIgnoreCase)))
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .Order(StringComparer.OrdinalIgnoreCase)
-                .Where(file => Read(file) is { } text && IsMain(text))
+                .Where(file => Read(file) is { } text && PascalProgram.IsMainFile(text))
         ];
 
         _mains?[folder] = found;
@@ -298,11 +298,6 @@ internal sealed class PascalDocuments
 
     private static bool IsPascal(string file) =>
         s_suffixes.Any(suffix => file.EndsWith(suffix, StringComparison.OrdinalIgnoreCase));
-
-    // Whether a file's first word is PROGRAM, UNIT or SEPARATE.
-    private static bool IsMain(string text) =>
-        PascalLexer.Tokenize(text, "").FirstOrDefault(token => !token.IsComment) is { } first
-            && (first.Is("PROGRAM") || first.Is("UNIT") || first.Is("SEPARATE"));
 
     // An open document's text, or else the file's; null for a file that isn't there or can't be read.
     private string? Read(string path)

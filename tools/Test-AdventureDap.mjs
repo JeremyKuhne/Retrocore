@@ -28,8 +28,8 @@ import assert from "node:assert/strict";
 const root = resolve(import.meta.dirname, "..");
 const sample = join(root, "sample", "adventure");
 
-// The targets played, each with its platform folder and the transcripts it plays. The Apple III's console is built
-// but not played: a bare Apple III has no character set loaded.
+// The targets played, each with its platform folder and the transcripts it plays. The bare Apple III's console is
+// built but not played: a bare Apple III has no character set loaded. Its sos target plays, with its own console.
 const plays = {
     apple1: { family: "apple1", transcripts: ["pirate-win", "pirate-die"] },
     "apple1-wozmon": { family: "apple1", transcripts: ["pirate-win"], hex: true },
@@ -193,6 +193,13 @@ try {
             if (family === "apple2") {
                 const screen = (await request("apple2/text")).rows.join("\n");
                 assert.match(screen, /^THE GAME IS NOW OVER\. *$/m, `${name}: the screen shows the game's end:\n${screen}`);
+            }
+
+            // The Apple III's console under SOS shows it too, through the console driver, in the character set SOS
+            // loaded.
+            if (family === "apple3") {
+                const screen = (await request("retro/display")).rows.join("\n");
+                assert.match(screen, /^The game is now over\. *$/m, `${target} ${name}: the screen shows the game's end:\n${screen}`);
             }
 
             // The PET's and BBC's screens show it too, so their consoles' output calls are checked as well as what the

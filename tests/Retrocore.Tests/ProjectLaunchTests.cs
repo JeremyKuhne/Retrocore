@@ -447,6 +447,46 @@ public sealed class ProjectLaunchTests
     }
 
     /// <summary>
+    ///  A <c>sos</c> target's launch puts its boot disk in .D1, and the Apple III boots SOS from it, which starts the
+    ///  interpreter: the launch stops at its entry, past its first byte's <c>JMP</c>, with its lines mapped where SOS
+    ///  runs it, so a breakpoint in its source binds and stops. Its target cannot give the disks.
+    /// </summary>
+    [TestMethod]
+    public void SosLaunchBootsItsDisk()
+    {
+        Write("retrocore.json", """
+            { "sdk": "1", "name": "game", "cpu": "6502", "sources": ["src/*.s"], "entry": "START",
+              "targets": {
+                "sos": { "machine": "apple3", "environment": "sos" },
+                "disks": { "machine": "apple3", "environment": "sos", "options": { "disks": ["x.dsk"] } } } }
+            """);
+
+        string main = Write("src/main.s", "    jmp START\nSTART:\n    lda #1\nLoop:\n    jmp Loop\n");
+        using DapTestClient client = new();
+        client.Request("initialize", []);
+        client.Fails("launch", Launch("disks")).Should().EndWith(
+            "a sos target boots its own disk in .D1, so its options and its launch cannot give 'disks'.");
+
+        client.Request("launch", Launch("sos"))["project"]?["entry"]?.GetValue<int>().Should().Be(0x2003);
+        client.Request("evaluate", new JsonObject
+        {
+            ["expression"] = "PC"
+        }).String("result").Should().StartWith("$2003");
+
+        JsonObject set = client.Request("setBreakpoints", new JsonObject
+        {
+            ["source"] = new JsonObject { ["path"] = main },
+            ["breakpoints"] = new JsonArray(new JsonObject { ["line"] = 5 })
+        });
+
+        (set["breakpoints"]?[0]?["verified"]?.GetValue<bool>()).Should().BeTrue();
+        client.Request("configurationDone", []);
+        client.Event("stopped").String("reason").Should().Be("entry");
+        client.Request("continue", new JsonObject { ["threadId"] = 1 });
+        client.Event("stopped").String("reason").Should().Be("breakpoint", "the program's lines are mapped where SOS runs it");
+    }
+
+    /// <summary>
     ///  On the Apple II, HELLO CALLs an entry at <c>$8000</c>, which Integer BASIC cannot write as a number, as
     ///  <c>-32767-1</c>, and the program starts there.
     /// </summary>

@@ -427,6 +427,72 @@ public sealed class ProjectEnvironmentTests
     }
 
     /// <summary>
+    ///  A <c>sos</c> target writes its SOS.INTERP, loading at <c>$2000</c>, and a SOS boot disk named for the project
+    ///  with SOS.KERNEL, SOS.DRIVER, the interpreter and its files, each a BIN file whose aux type is its address. A
+    ///  program whose entry is past its first byte starts with a <c>JMP</c>, or fails the build.
+    /// </summary>
+    [TestMethod]
+    public void SosWritesItsInterpreterAndDisk()
+    {
+        void Project(string source) => Write("main.s", source);
+        Write("retrocore.json", """
+            { "sdk": "1", "name": "my-game", "cpu": "6502", "sources": ["main.s"], "entry": "START",
+              "targets": { "sos": { "machine": "apple3", "environment": "sos",
+                "files": [{ "path": "data.bin", "name": "GAME.DAT", "address": "$4000" }] } } }
+            """);
+
+        Write("data.bin", "XYZ");
+        Project("    jmp START\nDATA:\n    .byte 1\nSTART:\n    rts\n");
+        TargetBuild build = ProjectBuild.Build(RetrocoreProject.Load(_folder).Target("sos"));
+        string output = Path.Join(_folder, "artifacts", "sos");
+        build.Media.Should().Be(new TargetMedia(
+            Path.Join(output, "my-game.interp"), "SOS.INTERP", Path.Join(output, "my-game.dsk"), "SOS boot disk",
+            "boot the disk in .D1, and SOS starts the program"));
+
+        byte[] program = [0x4C, 0x04, 0x20, 1, 0x60];
+        SosInterpreterFile interpreter = SosInterpreterFile.Read(File.ReadAllBytes(Path.Join(output, "my-game.interp")));
+        (interpreter.LoadAddress, interpreter.Code.ToArray()).Should().BeEquivalentTo((0x2000, program));
+
+        SosVolume volume = SosVolume.Read(File.ReadAllBytes(Path.Join(output, "my-game.dsk")), proDosOrder: false);
+        volume.Name.Should().Be("MYGAME");
+        volume.Files.Select(file => file.Name).Should().Contain(["SOS.KERNEL", "SOS.DRIVER", "SOS.INTERP", "GAME.DAT"]);
+        SosInterpreterFile.Read(volume.ReadFile("SOS.INTERP")).Code.ToArray().Should().Equal(program);
+        SosFileEntry data = volume.Files.Single(file => file.Name == "GAME.DAT");
+        (data.FileType, data.AuxType).Should().Be((SosEnvironment.BinaryType, 0x4000));
+        volume.ReadFile("GAME.DAT").Should().Equal("XYZ"u8.ToArray());
+
+        Project("DATA:\n    .byte 1\nSTART:\n    rts\n");
+        Action late = () => ProjectBuild.Build(RetrocoreProject.Load(_folder).Target("sos"));
+        late.Should().Throw<ProjectException>().WithMessage(
+            "*SOS starts an interpreter at its first byte, $2000, but the entry is $2001; start the program at its entry, or with jmp on to it.");
+    }
+
+    /// <summary>
+    ///  A <c>sos</c> target's files need SOS names, each once on the disk, beside SOS's own files.
+    /// </summary>
+    [TestMethod]
+    public void SosRefusesBadNames()
+    {
+        string Fails(string files)
+        {
+            Write("retrocore.json", $$"""
+                { "sdk": "1", "name": "game", "cpu": "6502", "sources": ["main.s"],
+                  "targets": { "sos": { "machine": "apple3", "environment": "sos", "files": {{files}} } } }
+                """);
+
+            Action build = () => ProjectBuild.Build(RetrocoreProject.Load(_folder).Target("sos"));
+            return build.Should().Throw<ProjectException>().Which.Message;
+        }
+
+        Write("main.s", "rts\n");
+        Write("data.bin", "1");
+        Fails("""[{ "path": "data.bin", "name": "GAME_DATA" }]""").Should().EndWith(
+            "'GAME_DATA' is not a SOS file name, 1 to 15 letters, digits and periods from a letter; give its file a 'name'.");
+
+        Fails("""[{ "path": "data.bin", "name": "sos.kernel" }]""").Should().EndWith("two files on the disk are named SOS.KERNEL.");
+    }
+
+    /// <summary>
     ///  <c>&lt;environment.inc&gt;</c> for <c>wozmon</c> refuses a target of another environment.
     /// </summary>
     [TestMethod]

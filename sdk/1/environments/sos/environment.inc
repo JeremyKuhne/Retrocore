@@ -18,8 +18,8 @@
 ;; absolute address does; with it set, the bank it names.
 EXTEND_PAGE = $1600
 
-;; Makes a SOS call: BRK, the call's number, then the address of its parameter list.
-;; In: number = the call, such as <OPEN_CALL>; parameters = the parameter list's address
+;; Makes a SOS call: BRK, then the call's number, its first argument, such as <OPEN_CALL>, then its second, the address
+;; of the call's parameter list.
 ;; Out: A = the error, 0 when there is none; Z = set when there is none
 .macro SosCall number, parameters
     brk
@@ -71,8 +71,12 @@ TERMINATE_COUNT = 0
 
 ; The console.
 
-;; The Return that ends a line the console reads, and that new-line mode ends a READ at.
+;; The Return that ends a line the console reads, and that new-line mode ends a READ at. Written, it moves the cursor
+;; to the start of its line, and down a line only when the console's automatic line feed is on, as it is not at first.
 CONSOLE_RETURN = $0D
+
+;; The line feed, which written moves the cursor down a line, scrolling at the bottom.
+CONSOLE_LINE_FEED = $0A
 
 ;; The console's control code that clears its viewport and puts the cursor at its top left corner.
 CONSOLE_CLEAR = $1C

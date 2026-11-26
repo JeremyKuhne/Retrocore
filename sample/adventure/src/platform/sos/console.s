@@ -30,7 +30,7 @@ WordPointer = $0C
 NEWLINE_ON = $80
 
 ;; The most characters a line <Console::ReadLine> reads holds, with its Return, as the engine's line is: the platform
-;; assembles before the engine, so before its INPUT_SIZE is known.
+;; assembles before the engine, so before its <INPUT_SIZE> is known.
 LINE_SIZE = 64
 
 ;; The bit that makes a lowercase letter a capital when cleared.
@@ -115,6 +115,20 @@ WriteReference:
 WriteCharacter:
     .byte 0
 
+;; WRITE's parameters, for a new line.
+NewLineList:
+    .byte WRITE_COUNT
+NewLineReference:
+    .byte 0
+    .word NewLineCharacters
+    .word NewLineEnd - NewLineCharacters
+
+;; A new line on the console, whose automatic line feed is off: a Return, then a line feed.
+NewLineCharacters:
+    .byte CONSOLE_RETURN, CONSOLE_LINE_FEED
+NewLineEnd:
+
+
 ;; READ's parameters, for a line.
 ReadList:
     .byte READ_COUNT
@@ -134,6 +148,7 @@ ReadLength:
     lda OpenReference
     sta NewlineReference
     sta WriteReference
+    sta NewLineReference
     sta ReadReference
     SosCall NEWLINE_CALL, NewlineList
     jmp Clear
@@ -141,7 +156,7 @@ Failed:
     jmp Finish
 .endproc
 
-;; Writes a character, a Return for a new line.
+;; Writes a character, or a Return and a line feed for a new line.
 ;; In: A = the character, <NEW_LINE> for a new line
 ;; Keeps: A, X, Y
 .proc Write
@@ -150,20 +165,23 @@ Failed:
     sty SavedY
     cmp #NEW_LINE
     bne Character
-    lda #CONSOLE_RETURN
+    SosCall WRITE_CALL, NewLineList
+    jmp Written
 Character:
     sta WriteCharacter
     SosCall WRITE_CALL, WriteList
+Written:
     lda SavedA
     ldx SavedX
     ldy SavedY
     rts
 .endproc
 
-;; Reads a line into <InputLine>, in capitals, ending in 0. The driver shows it as it is typed, its Return ending the
-;; screen's line.
+;; Reads a line into <InputLine>, in capitals, ending in 0. The driver shows it as it is typed, but not its Return, as
+;; it echoes no control characters, so a new line after it ends the screen's line.
 .proc ReadLine
     SosCall READ_CALL, ReadList
+    SosCall WRITE_CALL, NewLineList
     ldx ReadLength
 
     ; The line ends at its Return, or at the count; the engine takes at most INPUT_SIZE - 1.

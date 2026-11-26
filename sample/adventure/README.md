@@ -24,8 +24,8 @@ sample/adventure/
   src/core/                   the engine, which uses no machine's addresses
   src/linked-game.s           the packed game, linked in as Game: Pirate Adventure, or the test game
   src/platform/<family>/      console.s, the machine's screen and keyboard
-  src/platform/<environment>/ an environment's own platform files, after the family's: dos33/ and dfs/game.s load
-                              the game
+  src/platform/<environment>/ an environment's own platform files, after the family's: dos33/, dfs/ and sos/game.s
+                              load the game, and sos/console.s replaces the Apple III's console
   tools/packer.cs             .dat to the packed format, and the C# reference engine
   games/test.dat              a small test adventure of our own, MIT
   games/test-*.in, *.out      its transcripts: the commands, and what the screen shows
@@ -42,6 +42,7 @@ sample/adventure/
 | `apple2-dos` | Apple II Plus, from a DOS 3.3 disk, the game loaded from `PIRATE.DAT` | the Monitor's COUT and GETLN1 | `$6000` |
 | `apple2-test` | Apple II Plus, the test game | the Monitor's COUT and GETLN1 | `$6000` |
 | `apple3` | Apple III | its own text page 1 and keyboard routines | `$2000` |
+| `apple3-sos` | Apple III, from a SOS boot disk, the game read from `PIRATE.DAT` | SOS's `.CONSOLE`, through SOS calls | `$2000` |
 | `pet` | PET 4032 | the kernal's jump table | `$0800` |
 | `pet-basic` | PET 4032, from a TAP tape: `LOAD`, then `RUN` | the kernal's jump table | `$0410` |
 | `pet-disk` | PET 4032, from a 4040 disk, with the drive's ROMs | the kernal's jump table | `$0410` |
@@ -49,8 +50,10 @@ sample/adventure/
 | `bbc-dfs` | BBC Micro model B, from a DFS disk, the game loaded from `$.PIRATE` | the MOS's OSWRCH and OSWORD 0 | `$1900` |
 
 Each console includes the SDK's `<machine.inc>` for its machine's names, and takes the screen's width from the
-SDK's `RC_SCREEN_COLUMNS`. The Apple III's console is built but not yet played under the debugger: a bare program
-there shows text once a character set is loaded, which SOS does as it boots.
+SDK's `RC_SCREEN_COLUMNS`. The bare Apple III's console is built but not played under the debugger: a bare program
+there shows text once a character set is loaded, which SOS does as it boots. `apple3-sos` plays instead: its console,
+`src/platform/sos/console.s`, takes the bare one's place and calls SOS's console driver, and
+`src/platform/sos/game.s` reads `PIRATE.DAT` from the boot disk.
 
 ## Building and running
 
@@ -91,7 +94,7 @@ engine itself writes it. `--columns` sets the screen's width, 40 by default.
 win from start to finish and the death, on the Apple-1 with 32K, the PET 4032, the Apple II and the BBC Micro, the
 win on `apple1-wozmon`, whose hex it checks against what the launch loaded, both on `apple2-dos` and `bbc-dfs`, each
 booted from its disk, both on `pet-basic`, from its tape, the win on `pet-disk` (reported as skipped without the 4040's
-ROMs), and the test game's three on
+ROMs), both on `apple3-sos`, booted from its SOS disk, and the test game's three on
 `apple2-test` alone, under the debug adapter, through project launches, and checks that what the
 6502 engine writes matches the transcript's `.out`, character for character. Give target names to play only those,
 such as `node tools/Test-AdventureDap.mjs apple1 pet`.

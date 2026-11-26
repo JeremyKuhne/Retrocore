@@ -14,7 +14,7 @@
     <PackageId>retrocore</PackageId>
     <PackageVersion>0.1.0-dev</PackageVersion>
     <Authors>Jeremy W Kuhne</Authors>
-    <Description>Retrocore's debug host and command line: retrocore build builds a project's retrocore.json targets for retro machines, with the SDK's ROM sources and headers.</Description>
+    <Description>Retrocore's debug host and command line: retrocore build builds a project's retrocore.json targets for retro machines, with the SDK's ROM sources.</Description>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <!-- The host stays free of reflection so it can be compiled ahead of time; the analyzers report what would
          stop it. dotnet publish -p:RetrocoreAot=true builds it native. (PublishAot itself would also reach the

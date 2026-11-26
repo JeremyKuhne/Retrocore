@@ -314,9 +314,9 @@ CPU, an origin, a linker configuration and defines. The debugger builds through 
 produce the same bytes. The command also prints the deprecation warnings that only the editor shows today.
 
 The debug host packs as the tool (`dotnet pack src/Retrocore.Debug`, package `retrocore`, command `retrocore`), which
-CI installs from its own package folder and debugs the project sample with. Its `Sdk/` and `Schemas/` folders go in the
-package, as they go beside the host. The host is already AOT-compatible, but a tool runs on the .NET runtime the C# steps need
-anyway.
+CI installs from its own package folder and builds and debugs the project sample with. Its `Sdk/` and `Schemas/`
+folders go in the package, as they go beside the host. The host is already AOT-compatible, but a tool runs on the .NET
+runtime the C# steps need anyway.
 
 **Steps.** A step runs a host-side tool before assembly, with declared inputs and outputs. The build skips it when the
 hashes of its inputs and its tool are unchanged. A tool is a C# file-based app (`dotnet run tools/packer.cs`) or a

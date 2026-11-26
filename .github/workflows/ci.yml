@@ -104,8 +104,9 @@ jobs:
       # as the host itself does.
       - name: The retrocore tool
         run: |
+          rm -rf artifacts/tool-package artifacts/tool
           dotnet pack src/Retrocore.Debug/Retrocore.Debug.csproj -c Release --no-build -o artifacts/tool-package
-          unzip -l artifacts/tool-package/retrocore.0.1.0-dev.nupkg | grep -q tools/net11.0/any/Schemas/project-1.schema.json
+          unzip -l artifacts/tool-package/retrocore.0.1.0-dev.nupkg | grep -qF tools/net11.0/any/Schemas/project-1.schema.json
           printf '<configuration>\n  <packageSources>\n    <clear />\n    <add key="retrocore" value="." />\n  </packageSources>\n</configuration>\n' > artifacts/tool-package/nuget.config
           dotnet tool install retrocore --version 0.1.0-dev --tool-path artifacts/tool --configfile artifacts/tool-package/nuget.config
           RETROCORE_DAP_HOST="$PWD/artifacts/tool/retrocore" node tools/Test-ProjectDap.mjs

@@ -245,19 +245,59 @@ public sealed class MemoryMapTests
     }
 
     /// <summary>
-    ///  Every bare map the SDK ships reads, which checks that it accounts for every address from <c>$0100</c> once, and
-    ///  gives a description and a zero page.
+    ///  Every map the SDK ships reads, in each environment's folder, which checks that it accounts for every address
+    ///  from <c>$0100</c> once, and gives a description and a zero page; each is named for machines that run its
+    ///  environment.
     /// </summary>
     [TestMethod]
     public void EveryShippedMapReads()
     {
-        string[] files = Directory.GetFiles(Path.Join(SdkModules.SdkDirectory, "1", "environments", "bare"), "*.map.json");
-        files.Should().HaveCount(14, "the bare maps: the Apple II at 3 sizes, the Apple-1 at 4, the Apple III, the PET at 4 and the BBC Micro at 2");
-        foreach (string file in files)
+        Dictionary<string, int> counts = new()
         {
-            MemoryMap map = MemoryMap.Read(file);
-            map.Description.Should().NotBeNullOrWhiteSpace(file);
-            map.ZeroPage.Should().NotBeEmpty(file);
+            // The Apple II at 3 sizes, the Apple-1 at 4, the Apple III, the PET at 4 and the BBC Micro at 2.
+            ["bare"] = 14,
+
+            // The Apple-1 at 4 sizes.
+            ["wozmon"] = 4
+        };
+
+        string environments = Path.Join(SdkModules.SdkDirectory, "1", "environments");
+        Directory.GetDirectories(environments).Select(Path.GetFileName).Should().BeEquivalentTo(counts.Keys);
+        foreach ((string environment, int count) in counts)
+        {
+            string[] files = Directory.GetFiles(Path.Join(environments, environment), "*.map.json");
+            files.Should().HaveCount(count, environment);
+            foreach (string file in files)
+            {
+                MemoryMap map = MemoryMap.Read(file);
+                map.Description.Should().NotBeNullOrWhiteSpace(file);
+                map.ZeroPage.Should().NotBeEmpty(file);
+
+                // Each map is for machines that run its environment, by a catalog id or a family.
+                string name = Path.GetFileName(file)[..^".map.json".Length];
+                CatalogMachine.All.Should().Contain(
+                    machine => ProjectTarget.Runs(machine, environment) && (name == machine.Id || name == machine.Family || name.StartsWith(machine.Family + "-", StringComparison.Ordinal)),
+                    file);
+            }
+        }
+    }
+
+    /// <summary>
+    ///  The Woz Monitor is the Apple-1's bare environment as well, so each <c>wozmon</c> map is its <c>bare</c> map but
+    ///  for its description: the same load address, free RAM, zero page and reserved areas.
+    /// </summary>
+    [TestMethod]
+    public void WozmonMapsAreTheBareApple1Maps()
+    {
+        string environments = Path.Join(SdkModules.SdkDirectory, "1", "environments");
+        foreach (string file in Directory.GetFiles(Path.Join(environments, "wozmon"), "*.map.json"))
+        {
+            MemoryMap wozmon = MemoryMap.Read(file);
+            MemoryMap bare = MemoryMap.Read(Path.Join(environments, "bare", Path.GetFileName(file)));
+            (wozmon.Load, wozmon.Free, wozmon.ZeroPage, wozmon.Reserved).Should().BeEquivalentTo(
+                (bare.Load, bare.Free, bare.ZeroPage, bare.Reserved), options => options.WithStrictOrdering(), file);
+
+            wozmon.Description.Should().Contain("wozmon", file);
         }
     }
 

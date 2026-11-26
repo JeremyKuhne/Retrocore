@@ -50,4 +50,9 @@ internal sealed record TargetBuild(
     ///  Gets the project's steps as the build left them, each run or up to date.
     /// </summary>
     internal IReadOnlyList<StepResult> Steps { get; init; } = [];
+
+    /// <summary>
+    ///  Gets what the target's environment wrote beside the binary: its file and its image.
+    /// </summary>
+    internal TargetMedia Media { get; init; } = TargetMedia.None;
 }

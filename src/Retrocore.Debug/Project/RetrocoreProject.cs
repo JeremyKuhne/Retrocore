@@ -57,10 +57,14 @@ internal sealed class RetrocoreProject
     internal static readonly string[] SourceFields = ["path", "dialect", "kind"];
 
     /// <summary>
-    ///  The fields that are accepted but not supported yet: a target's <c>files</c>, <c>image</c> and
-    ///  <c>bootImage</c>.
+    ///  The fields an entry of a target's <c>files</c> can give, as an object.
     /// </summary>
-    internal static readonly string[] UnsupportedFields = ["files", "image", "bootImage"];
+    internal static readonly string[] FileFields = ["path", "name", "address"];
+
+    /// <summary>
+    ///  The fields a target's <c>image</c> can give, as an object.
+    /// </summary>
+    internal static readonly string[] ImageFields = ["template"];
 
     /// <summary>
     ///  The dialects a source object can name.
@@ -156,11 +160,6 @@ internal sealed class RetrocoreProject
     ///  Gets the targets, in the file's order.
     /// </summary>
     internal IReadOnlyList<ProjectTarget> Targets => _targets;
-
-    /// <summary>
-    ///  Gets the project fields given that are not supported yet, such as <c>steps</c>.
-    /// </summary>
-    internal IReadOnlyList<string> Unsupported { get; private set; } = [];
 
     /// <summary>
     ///  Finds a target by name.
@@ -305,7 +304,6 @@ internal sealed class RetrocoreProject
             json["output"] is { } output ? Text(file, "'output'", output) : "artifacts",
             project.Directory);
 
-        project.Unsupported = [.. UnsupportedFields.Where(json.ContainsKey)];
         if (json["targets"] is not JsonObject { Count: > 0 } targets)
         {
             throw new ProjectException($"{file}: the project must give 'targets', an object naming at least one target.");
@@ -412,8 +410,85 @@ internal sealed class RetrocoreProject
             LinkerConfiguration = json["linkerConfiguration"] is { } linker
                 ? Path.GetFullPath(Text(file, $"{where}'s 'linkerConfiguration'", linker), project.Directory)
                 : null,
-            Unsupported = [.. UnsupportedFields.Where(json.ContainsKey)]
+            Files = json["files"] is { } files ? ReadFiles(project, where, files) : [],
+            ImageGiven = json.ContainsKey("image"),
+            BuildsImage = json["image"] is not JsonValue { } image || image.GetValueKind() != JsonValueKind.False,
+            ImageTemplate = json["image"] is { } imageNode ? ReadTemplate(project, where, imageNode) : null,
+            BootImage = json["bootImage"] is { } boot ? MediaPath(project, where, Text(file, $"{where}'s 'bootImage'", boot)) : null
         };
+    }
+
+    // A target's files: each a path, or an object with its path and optionally its name on the disk and its address.
+    // A path, relative to the project's folder, may give ${obj}, as a step's output does. Two paths name one file as
+    // the system compares file names.
+    private static List<TargetFile> ReadFiles(RetrocoreProject project, string where, JsonNode node)
+    {
+        string file = project.File;
+        if (node is not JsonArray entries)
+        {
+            throw new ProjectException($"{file}: {where}'s 'files' must be a list of paths and file objects.");
+        }
+
+        List<TargetFile> files = [];
+        foreach (JsonNode? entry in entries)
+        {
+            string path;
+            string? name = null;
+            int? address = null;
+            if (entry is JsonObject fields)
+            {
+                Check(file, $"a file of {where}", fields, FileFields);
+                path = fields["path"] is { } pathNode ? Text(file, $"a file of {where}'s 'path'", pathNode) : throw Missing(file, $"a file of {where}", "path");
+                name = fields["name"] is { } nameNode ? Text(file, $"{path}'s 'name'", nameNode) : null;
+                if (fields["address"] is { } addressNode)
+                {
+                    address = addressNode.GetValueKind() == JsonValueKind.String && MemoryMap.TryAddress(addressNode.GetValue<string>(), out int value)
+                        ? value
+                        : throw new ProjectException($"{file}: {path}'s 'address' must be an address such as \"$6000\".");
+                }
+            }
+            else
+            {
+                path = Text(file, $"a file of {where}", entry);
+            }
+
+            string full = MediaPath(project, where, path);
+            if (files.Any(known => ProjectGlob.FileNames.Equals(known.Path, full)))
+            {
+                throw new ProjectException($"{file}: {where}'s 'files' names {path} twice.");
+            }
+
+            files.Add(new(full, name, address));
+        }
+
+        return files;
+    }
+
+    // A target's image: true or false, or an object whose template names the disk the image starts from.
+    private static string? ReadTemplate(RetrocoreProject project, string where, JsonNode node)
+    {
+        string file = project.File;
+        if (node is JsonValue value && value.GetValueKind() is JsonValueKind.True or JsonValueKind.False)
+        {
+            return null;
+        }
+
+        if (node is not JsonObject image)
+        {
+            throw new ProjectException($"{file}: {where}'s 'image' must be true, false or an object giving 'template'.");
+        }
+
+        Check(file, $"{where}'s 'image'", image, ImageFields);
+        return image["template"] is { } template
+            ? MediaPath(project, where, Text(file, $"{where}'s image 'template'", template))
+            : throw Missing(file, $"{where}'s 'image'", "template");
+    }
+
+    // A path a target's media fields give, relative to the project's folder, with ${obj} for its intermediate folder.
+    private static string MediaPath(RetrocoreProject project, string where, string path)
+    {
+        CheckVariables(project.File, where, path, allowLists: false);
+        return Path.GetFullPath(path.Replace(ProjectStep.Intermediate, project.Intermediate, StringComparison.Ordinal), project.Directory);
     }
 
     private static ProjectCpu ReadCpu(string file, string where, JsonNode node)

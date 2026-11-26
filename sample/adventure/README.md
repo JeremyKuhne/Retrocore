@@ -8,8 +8,9 @@ ScottFree `.dat` text format, once [`tools/packer.cs`](tools/packer.cs) has pack
 It runs on five machines as `bare` targets of its project file, [`retrocore.json`](retrocore.json): the Apple-1 with
 32K, the Apple II Plus, the Apple III, the PET 4032 and the BBC Micro model B. Every target assembles the same core,
 unchanged, with its machine's platform folder before it, and links Pirate Adventure in, packed by the project's
-step. A sixth target, `apple2-test`, links the test game instead (`TEST_GAME`, in `src/linked-game.s`). The disk and
-tape targets follow as the SDK's environments arrive.
+step. Another target, `apple2-test`, links the test game instead (`TEST_GAME`, in `src/linked-game.s`). The targets
+in each machine's own environment follow as the SDK's environments arrive: `apple1-wozmon` builds the Apple-1's
+program as Woz Monitor hex to type in and an ACI tape.
 
 ```text
 sample/adventure/
@@ -17,6 +18,7 @@ sample/adventure/
   src/core/                   the engine, which uses no machine's addresses
   src/linked-game.s           the packed game, linked in as Game: Pirate Adventure, or the test game
   src/platform/<family>/      console.s, the machine's screen and keyboard
+  src/platform/<environment>/ an environment's own platform files, after the family's (none yet)
   tools/packer.cs             .dat to the packed format, and the C# reference engine
   games/test.dat              a small test adventure of our own, MIT
   games/test-*.in, *.out      its transcripts: the commands, and what the screen shows
@@ -28,6 +30,7 @@ sample/adventure/
 | Target | Machine | Console | Loads at |
 | --- | --- | --- | --- |
 | `apple1` | Apple-1, 32K | the Woz Monitor's ECHO, and the PIA's keyboard | `$0300` |
+| `apple1-wozmon` | Apple-1, 32K, as Woz Monitor hex and an ACI tape | the Woz Monitor's ECHO, and the PIA's keyboard | `$0300` |
 | `apple2` | Apple II Plus | the Monitor's COUT and GETLN1 | `$6000` |
 | `apple2-test` | Apple II Plus, the test game | the Monitor's COUT and GETLN1 | `$6000` |
 | `apple3` | Apple III | its own text page 1 and keyboard routines | `$2000` |
@@ -74,8 +77,9 @@ dotnet run tools/packer.cs -- play obj/test.bin games/test-win.in --echo --expec
 engine itself writes it. `--columns` sets the screen's width, 40 by default.
 
 [`tools/Test-AdventureDap.mjs`](../../tools/Test-AdventureDap.mjs) plays both of Pirate Adventure's transcripts, the
-win from start to finish and the death, on the Apple-1 with 32K, the PET 4032, the Apple II and the BBC Micro, and the
-test game's three on `apple2-test` alone, under the debug adapter, through project launches, and checks that what the
+win from start to finish and the death, on the Apple-1 with 32K, the PET 4032, the Apple II and the BBC Micro, the
+win on `apple1-wozmon`, whose hex it checks against what the launch loaded, and the test game's three on
+`apple2-test` alone, under the debug adapter, through project launches, and checks that what the
 6502 engine writes matches the transcript's `.out`, character for character. Give target names to play only those,
 such as `node tools/Test-AdventureDap.mjs apple1 pet`.
 

@@ -17,8 +17,10 @@ namespace Retrocore.Debug.Project;
 /// <remarks>
 ///  <para>
 ///   <c>retrocore build</c> and a <c>project</c> launch (<see cref="ProjectLaunch"/>) both build through here, so the
-///   bytes the debugger loads are the bytes CI builds. Only the <c>bare</c> environment builds yet: a raw binary loaded
-///   straight into RAM, so the sections that emit bytes must make one block, with no gap between them.
+///   bytes the debugger loads are the bytes CI builds. Every environment's program is one binary, loaded at its
+///   memory map's load address, so the sections that emit bytes must make one block, with no gap between them. Its
+///   environment then writes its own file and its image beside it (<see cref="TargetEnvironment"/>), such as the Woz
+///   Monitor's hex and an ACI tape for <c>wozmon</c>.
 ///  </para>
 ///  <para>
 ///   The build starts at the target's CPU (its <c>cpu</c>, or the project's), as a <c>source</c> launch starts at the
@@ -27,8 +29,8 @@ namespace Retrocore.Debug.Project;
 ///  </para>
 ///  <para>
 ///   Output goes to <c>&lt;output&gt;/&lt;target&gt;/</c>: <c>&lt;name&gt;.bin</c>, <c>&lt;name&gt;.dbg</c> and
-///   <c>&lt;name&gt;.map</c>. <c>obj/&lt;target&gt;/build.json</c> records what was assembled, in order, with the
-///   CPU and the defines.
+///   <c>&lt;name&gt;.map</c>, and the environment's file and image. <c>obj/&lt;target&gt;/build.json</c> records
+///   what was assembled, in order, with the CPU, the defines, and the environment's file and image.
 ///  </para>
 /// </remarks>
 internal static partial class ProjectBuild
@@ -41,7 +43,8 @@ internal static partial class ProjectBuild
     /// <returns>The build.</returns>
     /// <exception cref="ProjectException">
     ///  A step fails, the target uses what is not supported yet, its sources are missing or have errors, it names a
-    ///  CPU its machine lacks, or its bytes are not one block.
+    ///  CPU its machine lacks, its sections overlap its memory map's reserved areas or do not fit its free RAM, or its
+    ///  bytes are not one block.
     /// </exception>
     /// <exception cref="IOException">The output cannot be written.</exception>
     /// <exception cref="UnauthorizedAccessException">The output cannot be written.</exception>
@@ -62,6 +65,16 @@ internal static partial class ProjectBuild
 
         TargetBuild build = Assemble(target) with { Steps = steps };
         Write(build);
+
+        // The record is written with the binary, then again with what the environment wrote: a failed environment
+        // leaves the record of this build, not the last one's.
+        TargetEnvironment.DeleteWritten(build);
+        WriteRecord(build);
+        TargetEnvironment environment = target.Built
+            ?? throw new ProjectException($"{target.Project.File}: target {target.Name}: the '{target.Environment}' environment does not build.");
+
+        build = build with { Media = environment.Write(build) };
+        WriteRecord(build);
         return build;
     }
 
@@ -240,7 +253,11 @@ internal static partial class ProjectBuild
         File.WriteAllBytes(build.Binary, Image(build).Bytes);
         File.WriteAllText(build.DebugFile, SourceBuild.DebugInfo(build.Result));
         File.WriteAllText(build.MapFile, Map(build));
+    }
 
+    // The build record, with what the environment wrote.
+    private static void WriteRecord(TargetBuild build)
+    {
         JsonObject defines = [];
         foreach ((string name, long value) in build.Target.Symbols().OrderBy(pair => pair.Key, StringComparer.Ordinal))
         {
@@ -254,13 +271,15 @@ internal static partial class ProjectBuild
             ["environment"] = build.Target.Environment,
             ["cpu"] = build.Target.Cpu.Name,
             ["sources"] = new JsonArray([.. build.Sources.Select(file => (JsonNode?)file.Path)]),
-            ["defines"] = defines
+            ["defines"] = defines,
+            ["file"] = build.Media.File,
+            ["image"] = build.Media.Image
         };
 
         File.WriteAllText(build.Record, record.ToJsonString(new() { WriteIndented = true }));
     }
 
-    // A bare binary is one block: each segment must start where the one below it ends.
+    // A program's binary is one block: each segment must start where the one below it ends.
     private static void RequireOneBlock(ProjectTarget target, List<(int Address, ReadOnlyMemory<byte> Bytes)> segments)
     {
         List<(int Address, ReadOnlyMemory<byte> Bytes)> ordered = [.. segments.OrderBy(segment => segment.Address)];
@@ -270,7 +289,7 @@ internal static partial class ProjectBuild
             if (ordered[index].Address != end)
             {
                 throw new ProjectException(
-                    $"{target.Project.File}: target {target.Name}: a bare binary is one block, but its code and data end at ${end - 1:X4} and the next part starts at ${ordered[index].Address:X4}.");
+                    $"{target.Project.File}: target {target.Name}: a program's binary is one block, but its code and data end at ${end - 1:X4} and the next part starts at ${ordered[index].Address:X4}.");
             }
         }
     }

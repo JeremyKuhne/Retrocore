@@ -13,9 +13,10 @@ namespace Retrocore.Debug.Project;
 ///   The project is the <c>retrocore.json</c> that <c>--project</c> names (a file or its folder), or else the nearest
 ///   one in the current folder or above it. A root file builds its projects' targets, and <c>--target</c> takes a
 ///   target's name or <c>project/target</c>. Without <c>--target</c> or <c>--all</c>, the only target there is
-///   builds. Each target's line, or its errors, is printed as it builds; with <c>--all</c> the rest still build
-///   after one fails. The build includes the SDK beside the host; <c>--sdk-roms</c>, which the host reads for every
-///   command, is accepted but changes only where machines load their ROMs.
+///   builds. Each target's lines, its binary and what its environment wrote, or its errors, are printed as it
+///   builds; with <c>--all</c> the rest still build after one fails. The build includes the SDK beside the host;
+///   <c>--sdk-roms</c>, which the host reads for every command, is accepted but changes only where machines load
+///   their ROMs.
 ///  </para>
 /// </remarks>
 internal static class BuildCommand
@@ -112,8 +113,14 @@ internal static class BuildCommand
                 TargetBuild build = ProjectBuild.Build(target);
                 Report(target.Project, build.Steps, output);
                 (int start, byte[] bytes) = ProjectBuild.Image(build);
+                string name = $"{target.Project.Name}/{target.Name}";
                 output.WriteLine(
-                    $"{target.Project.Name}/{target.Name}: {build.Binary} (${start:X4}-${start + bytes.Length - 1:X4}, {bytes.Length} {(bytes.Length == 1 ? "byte" : "bytes")}, entry ${build.Entry:X4})");
+                    $"{name}: {build.Binary} (${start:X4}-${start + bytes.Length - 1:X4}, {bytes.Length} {(bytes.Length == 1 ? "byte" : "bytes")}, entry ${build.Entry:X4})");
+
+                TargetMedia media = build.Media;
+                if (media.File is { } file) { output.WriteLine($"{name}: {file} ({media.FileKind})"); }
+                if (media.Image is { } image) { output.WriteLine($"{name}: {image} ({media.ImageKind})"); }
+                if (media.Note is { } note) { output.WriteLine($"{name}: {note}"); }
             }
             catch (Exception exception)
                 when (exception is ProjectException or ArgumentException or IOException or UnauthorizedAccessException or NotSupportedException)

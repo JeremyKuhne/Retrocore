@@ -4,7 +4,8 @@
 
 // The adventure sample's 6502 engine through the debug adapter, from its project file. It plays Pirate Adventure,
 // linked in, from start to finish on bare targets of sample/adventure/retrocore.json (the win and the death on the
-// Apple-1 with 32K, the PET 4032, the Apple II Plus and the BBC Micro), and the test game's transcripts on apple2-test,
+// Apple-1 with 32K, the PET 4032, the Apple II Plus and the BBC Micro), its win on the Apple-1's wozmon target, which a
+// launch loads as if its hex had been typed in, and the test game's transcripts on apple2-test,
 // through project launches, each running the project's steps, which pack the games with the sample's packer, and
 // building the same core with its machine's platform folder. It checks that what the engine writes matches the C#
 // reference engine's transcript in the matching .out file character for character. A logpoint on the console's Write
@@ -28,6 +29,7 @@ const sample = join(root, "sample", "adventure");
 // but not played: a bare Apple III has no character set loaded.
 const plays = {
     apple1: { family: "apple1", transcripts: ["pirate-win", "pirate-die"] },
+    "apple1-wozmon": { family: "apple1", transcripts: ["pirate-win"], hex: true },
     pet: { family: "pet", transcripts: ["pirate-win", "pirate-die"] },
     apple2: { family: "apple2", transcripts: ["pirate-win", "pirate-die"] },
     bbc: { family: "bbc", transcripts: ["pirate-win", "pirate-die"] },
@@ -69,6 +71,25 @@ function firstLine(consoleSource, routine) {
     return first + 1;
 }
 
+// Checks that a target's Woz Monitor hex stores, line by line, the bytes the launch loaded, and that its last line runs
+// the program at the entry the launch started at.
+async function checkHex(target, entry) {
+    const lines = readFileSync(join(sample, "artifacts", target, "adventure.hex"), "utf8").split("\r\n").filter(line => line);
+    const run = lines.pop();
+    let bytes = 0;
+    for (const line of lines) {
+        const [address, data] = line.split(": ");
+        const expected = data.split(" ").map(pair => parseInt(pair, 16));
+        const loaded = [...Buffer.from((await request("readMemory", {
+            memoryReference: `0x${address}`, count: expected.length
+        })).data, "base64")];
+        assert.deepEqual(loaded, expected, `${target}: the hex's line ${line} stores what the launch loaded`);
+        bytes += expected.length;
+    }
+    assert.equal(run, `${entry.toString(16).toUpperCase().padStart(4, "0")}R`, `${target}: the hex's last line runs the program at its entry`);
+    console.log(`${target}: its hex stores the ${bytes} bytes the launch loaded, and ${run} runs them.`);
+}
+
 const { request, event, events, fail, close, failure } = startDap(root);
 // A whole run takes about two minutes; each play may take three.
 const timeout = setTimeout(() => fail(new Error("Adventure DAP integration timed out.")),
@@ -104,8 +125,11 @@ try {
             if (commands.at(-1) === "") commands.pop();
             const expected = readFileSync(join(sample, "games", `${name}.out`), "utf8").replace(/\r\n/g, "\n");
             events.length = 0;
-            await request("launch", { project: sample, target, stopOnEntry: false, speed: "max", sound: "off",
-                logpointLimit: 0, checkContracts: "stop" });
+            const launched = await request("launch", { project: sample, target, stopOnEntry: false, speed: "max",
+                sound: "off", logpointLimit: 0, checkContracts: "stop" });
+
+            // A wozmon target's hex, typed in, stores what the launch loaded, and runs it at its entry.
+            if (plays[target].hex) await checkHex(target, launched.project.entry);
             const set = await request("setBreakpoints", { source: { path: consoleSource }, breakpoints: [
                 { line: readLine, logMessage: "READ" }, { line: write, logMessage: "{A,d}" }
             ] });

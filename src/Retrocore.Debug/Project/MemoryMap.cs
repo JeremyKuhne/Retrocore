@@ -443,7 +443,13 @@ internal sealed class MemoryMap
             : throw new ProjectException($"{file}: {what} must be an address such as \"$0800\".");
     }
 
-    private static bool TryAddress(string text, out int address)
+    /// <summary>
+    ///  Reads an address written as a map writes one, such as <c>$0800</c>.
+    /// </summary>
+    /// <param name="text">The text.</param>
+    /// <param name="address">The address.</param>
+    /// <returns>Whether the text is an address from <c>$0000</c> to <c>$FFFF</c>.</returns>
+    internal static bool TryAddress(string text, out int address)
     {
         address = 0;
         text = text.Trim();

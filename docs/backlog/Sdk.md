@@ -165,8 +165,10 @@ the same names Start Machine and favorites use: `apple1`, `apple2-iiplus`, `appl
 `bbcb` and the rest. The build maps it to the launch's `machine` and `model`, as `startFlow.ts` does today.
 
 **Sources for each target.** Besides `sources`, every target gets its family's folder `src/platform/<family>/`,
-then its model's folder `src/platform/<model>/`. A model's file replaces its family's file of the same name, so
-`platform/apple2-iie/console.s` replaces `platform/apple2/console.s` on IIe targets. The platform folders assemble
+then its model's folder `src/platform/<model>/`, then its environment's folder `src/platform/<environment>/`. A later
+folder's file replaces an earlier one's of the same name, so `platform/apple2-iie/console.s` replaces
+`platform/apple2/console.s` on IIe targets, and `platform/dos33/` can add the code that loads a game's data from the
+disk. The platform folders assemble
 first, then `sources`, then a target's own `sources`: the shared code builds on the platform, whose constants (a
 screen's width for a `.res`) and zero-page locations must be known before it. Most projects need no per-target
 lists.
@@ -372,6 +374,14 @@ Each writer reads back through the existing readers in its tests, and boots unde
 - A disk or tape target: boots its image and lets the environment start the program, as a user would.
 - `"image": false`: boots the environment to its ready point, then loads the file as that environment's loader would
   and starts it the way the environment starts programs.
+
+**As built (phase 4).** The environments are classes of the host's build (`TargetEnvironment`), each writing its file
+and image beside the binary and saying which of `files`, `image` and `bootImage` it takes; a target that gives one its
+environment does not take fails naming it. [sdk/1/README.md](../../sdk/1/README.md#environments) is the contract.
+`wozmon` writes `<name>.hex` and the ACI tape `<name>.wav` (`"image": false` leaves the tape out), and its maps are the
+bare Apple-1's. The adventure's `apple1-wozmon` target plays Pirate Adventure's win under the debugger, and the test
+checks that its hex stores the bytes the launch loaded. A target's `bootImage` is a path, relative to the project's folder; the
+lookup by hash, which phase 4 also gives, is still to come.
 
 ## Debugging in VS Code
 

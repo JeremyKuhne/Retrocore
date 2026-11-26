@@ -386,8 +386,8 @@ public sealed class AcornDfsDiskTests
 
         FloppyDisk saved = machine.Drives[0].Disk ?? throw new AssertFailedException("Drive 0 is empty.");
         AcornDfsDisk read = AcornDfsDisk.Read(new AcornDiskCodec().Encode(saved.Snapshot()).Bytes);
-        read.Entries.Select(entry => (entry.File.FullName, entry.StartSector))
-            .Should().Equal(("$.PROG", 3), ("$.HELLO", 2));
+        var placed = read.Entries.Select(entry => (entry.File.FullName, entry.StartSector));
+        placed.Should().Equal(("$.PROG", 3), ("$.HELLO", 2));
         AcornDfsEntry program = read.Find('$', "PROG") ?? throw new AssertFailedException("No PROG.");
         program.File.LoadAddress.Should().Be(0xFFFF1900);
         read.SequenceNumber.Should().Be(0x02, "the writer's one change and SAVE's");

@@ -5,6 +5,7 @@
 using Retrocore.Cpu;
 using Retrocore.Cpu.M6502;
 using Retrocore.Machines.Chips;
+using Retrocore.Machines.Commodore.Serial;
 using Retrocore.Machines.Devices;
 
 namespace Retrocore.Machines.Commodore.Vic20;
@@ -22,6 +23,13 @@ public sealed class Vic20Machine : IMachine
 {
     private static readonly string[] s_memoryAreas = Enum.GetNames<Vic20MemoryArea>();
 
+    // The drives' 1 MHz against the VIC-20's clock, 14.318 MHz / 14 or 4.434 MHz / 4: each of the computer's cycles
+    // adds the first to the count, and each drive cycle takes the second off.
+    private readonly long _driveStep;
+    private readonly long _cpuStep;
+    private long _driveTime;
+
+    private Cbm1541[] _disks = [];
     private bool _irq;
     private bool _nmi;
 
@@ -45,8 +53,51 @@ public sealed class Vic20Machine : IMachine
         Bus = new(roms, standard, expansion, cartridge);
         Processor = new(Bus, ProcessorVariant.Mos6502);
         Processor.Reset();
-        Devices = [Bus.Cassette];
+        (_driveStep, _cpuStep) = standard == VicVideoStandard.Ntsc ? (14_000_000L, 14_318_181L) : (4_000_000L, 4_433_618L);
+        UpdateDevices();
     }
+
+    /// <summary>
+    ///  Gets the disk drives on the serial bus, by device number.
+    /// </summary>
+    public IReadOnlyList<Cbm1541> Disks => _disks;
+
+    /// <summary>
+    ///  Connects a 1541 or 1540, as its ROMs say, to the serial bus, at power-on, as plugging one in and switching it
+    ///  on does.
+    /// </summary>
+    /// <param name="roms">The drive's ROMs.</param>
+    /// <param name="address">Its device number, 8-11.</param>
+    /// <returns>The drive.</returns>
+    /// <exception cref="ArgumentException">A drive already has the number.</exception>
+    public Cbm1541 AddDisk(Cbm1541Roms roms, int address = 8)
+    {
+        if (_disks.Any(unit => unit.Address == address))
+        {
+            throw new ArgumentException($"Device {address} is already on the bus.", nameof(address));
+        }
+
+        Cbm1541 added = new(roms, Bus.Serial, address);
+        _disks = [.. _disks.Append(added).OrderBy(unit => unit.Address)];
+        UpdateDevices();
+        return added;
+    }
+
+    /// <summary>
+    ///  Takes a drive off the serial bus, with any disk in it.
+    /// </summary>
+    /// <param name="address">Its device number.</param>
+    /// <returns>Whether there was one.</returns>
+    public bool RemoveDisk(int address)
+    {
+        if (_disks.FirstOrDefault(unit => unit.Address == address) is not { } unit) { return false; }
+        Bus.Serial.Detach(unit.Port);
+        _disks = [.. _disks.Where(other => other != unit)];
+        UpdateDevices();
+        return true;
+    }
+
+    private void UpdateDevices() => Devices = [Bus.Cassette, .. _disks.Select(unit => unit.Drive)];
 
     /// <summary>
     ///  Gets the video standard.
@@ -81,10 +132,10 @@ public sealed class Vic20Machine : IMachine
     /// <inheritdoc/>
     /// <remarks>
     ///  <para>
-    ///   The Datasette.
+    ///   The Datasette, then each disk drive.
     ///  </para>
     /// </remarks>
-    public IReadOnlyList<IDevice> Devices { get; }
+    public IReadOnlyList<IDevice> Devices { get; private set; } = [];
 
     /// <summary>
     ///  Gets the Datasette.
@@ -95,13 +146,16 @@ public sealed class Vic20Machine : IMachine
     public ProcessorCycle LastCycle => Processor.LastCycle;
 
     /// <summary>
-    ///  Resets the 6502 and the VIAs, keeping RAM, as the reset line does. The VIC-20 has no reset button; the
-    ///  expansion port's reset line, which cartridges and expansion boards switch, pulls it.
+    ///  Resets the 6502, the VIAs and the drives on the serial bus, keeping RAM, as the reset line does. The VIC-20
+    ///  has no reset button; the expansion port's reset line, which cartridges and expansion boards switch, pulls it.
     /// </summary>
     public void Reset()
     {
         Bus.ResetDevices();
         Processor.Reset();
+
+        // The reset line is on the serial bus too, and resets the drives.
+        foreach (Cbm1541 unit in _disks) { unit.Reset(); }
     }
 
     /// <summary>
@@ -123,6 +177,15 @@ public sealed class Vic20Machine : IMachine
 
         Processor.StepCycle();
         Bus.Tick();
+        if (_disks.Length == 0) { return; }
+
+        _driveTime += _driveStep;
+        while (_driveTime >= _cpuStep)
+        {
+            _driveTime -= _cpuStep;
+            foreach (Cbm1541 unit in _disks) { unit.StepCycle(); }
+            Bus.UpdateSerialInputs();
+        }
     }
 
     /// <summary>

@@ -426,7 +426,7 @@ internal sealed class MemoryMap
                 || end < start
                 || end > 0xFF)
             {
-                throw new ProjectException($"{file}: {what}'s '{text}' must be a byte or a run of them, such as \"$06-$09\".");
+                throw new ProjectException($"{file}: in {what}, '{text}' must be a byte or a run of them, such as \"$06-$09\".");
             }
 
             areas.Add(new(start, end));

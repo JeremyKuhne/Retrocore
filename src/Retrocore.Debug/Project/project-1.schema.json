@@ -168,7 +168,7 @@
         },
         "memoryMap": {
           "type": "object",
-          "description": "Changes to the SDK's memory map for the target's machine, environment and RAM (Sdk/1/environments/<environment>/<name>.map.json, the name the first of <catalog id>-<RAM>k, <catalog id>, <family>-<RAM>k and <family> the SDK has), which the build makes its linker configuration from when the target gives none, and checks every section against.",
+          "description": "Changes to the SDK's memory map for the target's machine, environment and RAM (Sdk/1/environments/<environment>/<name>.map.json, the name being the first the SDK has of <catalog id>-<RAM>k, <catalog id>, <family>-<RAM>k and <family>), which the build makes its linker configuration from when the target gives none, and checks every section against.",
           "additionalProperties": false,
           "properties": {
             "load": {

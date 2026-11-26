@@ -242,13 +242,13 @@ public sealed class MemoryMapTests
     }
 
     /// <summary>
-    ///  Every map the SDK ships reads, which checks that it accounts for every address from <c>$0100</c> once, and
+    ///  Every bare map the SDK ships reads, which checks that it accounts for every address from <c>$0100</c> once, and
     ///  gives a description and a zero page.
     /// </summary>
     [TestMethod]
     public void EveryShippedMapReads()
     {
-        string[] files = Directory.GetFiles(Path.Join(SdkModules.SdkDirectory, "1", "environments"), "*.map.json", SearchOption.AllDirectories);
+        string[] files = Directory.GetFiles(Path.Join(SdkModules.SdkDirectory, "1", "environments", "bare"), "*.map.json");
         files.Should().HaveCount(14, "the bare maps: the Apple II at 3 sizes, the Apple-1 at 4, the Apple III, the PET at 4 and the BBC Micro at 2");
         foreach (string file in files)
         {

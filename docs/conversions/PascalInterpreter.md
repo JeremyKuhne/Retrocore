@@ -23,17 +23,21 @@ unchanged first (`b190b20`), so the bytes prove each step after.
 ## Sources and citations
 
 1,851 definitions (1,001 labels, 850 equates; 970 in scopes), listed by script from the assembler's debug output with
-each one's address and bank. After the conversion, 591 definitions carry 733 old names:
+each one's address and bank. After the conversion, 591 definitions carry 731 old names:
 
-- **WK11** (427): Willi Kusche's 292-page disassembly of 1.1, read from the PDF's text layer, a typed listing with
+- **WK11** (453): Willi Kusche's 292-page disassembly of 1.1, read from the PDF's text layer, a typed listing with
   addresses and bytes. Kusche had no original listing and merged in what he found; many of his BIOS names are
   Apple's (A2PBIOS). His listing is conditional for five versions of the runtime and lists Initialize where it is
   loaded, so `$F29C`-`$F674` is mapped to `$6827`-`$6BFF`, where it runs (Restart runs where it is loaded; his
   listing's ORIG build, which is 1.1's, jumps there), and its line order gives the bank (bank 2 is its
   second `ORG $D000`).
   - A code label is cited where his address column gives it at the address and bank the build gives the definition.
-  - A label with no address of its own takes the next line's only when code follows it directly; a data map's
-    (`DSECT`) labels have no address, and are cited only through the instructions that use them.
+  - A label is a label even when named like an instruction (`INC LDY #1`, `EQU LDA #1`, his handlers' names). One
+    with no address of its own, on a line that assembles nothing in 1.1's build (`LOD RDAUX`) or above a conditional,
+    takes the next assembled line's, unless another label or a data map comes first; a data map's (`DSECT`) labels
+    have no address, and are cited only through the instructions that use them.
+  - His names at addresses where this source defines nothing (`SETHP`, `IMM2`, `IMM3`, `STESCF`, `JSRLST`, `JUOKX`,
+    `COMN`, `BNEUFM`) are not cited, as IBSM's are not, and nor are his value constants (`INTPGS`, `MAXVOL`).
   - A name for a byte in zero page or memory is cited where his instruction and ours at the same address use it and
     our symbol: his operand's value comes from the instruction's bytes, and our symbol is the one defined in the routine
     that holds the instruction. Where he gives one byte several names, each goes on our alias for that use; where one
@@ -45,10 +49,11 @@ each one's address and bank. After the conversion, 591 definitions carry 733 old
   pages where the OCR is illegible. The registers (Appendix A), SYSCOM's fields, the mark stack's fields (figure 6),
   the execution errors (XINVNDX ... XS2LONG), the procedure attributes, and the p-codes and standard procedures, each
   checked by its number against `Pcode.asm` and `OpcodeTable` or `CspTable`.
-- **A2PBIOS** (152): Barry Haynes's *ATTACH-BIOS Document for Apple II Pascal 1.1* (Apple, January 1980), whose text
+- **A2PBIOS** (148): Barry Haynes's *ATTACH-BIOS Document for Apple II Pascal 1.1* (Apple, January 1980), whose text
   layer is clean. Its excerpts of Apple's BIOS source are matched to the build instruction for instruction (SAVERET is
   `BiosCall`, UDRWIS `AttachedDriver`, CONCK `ConsoleCheck`), and its equates by address (WPTR `$BF19` is
-  `TypeAheadIn`). A name it gives only in prose or a comment is not cited.
+  `TypeAheadIn`). A name it gives only in prose or a comment is not cited; BIOSTBL and WRITTBL, which it gives so, are
+  in prose.
 - **UCSD20** (154): UCSD's II.0 system source listings. SYSCOMREC's offsets are computed from its declaration,
   allocating each identifier list backward as its own comment says; the Compiler's p-code and standard-procedure
   comments by their numbers; the mark stack (MSCW), segment description and directory entry records by their fields.
@@ -90,8 +95,8 @@ Settled by the owner on the rename table's review.
 - PI6. The mark stack frame is a `.struct MarkStack`, whose fields carry MSSTAT ... MSSP; MSCW, the record's own
   name, is in prose (an `Also:` on a named struct names nothing).
 - PI7. The execution errors' numbers are the `ERROR_*` constants, which carry XINVNDX ... XS2LONG; the reporting
-  entries carry Kusche's labels (ERR1, OOMERR ...), and `Unimplemented` the p-codes it runs for, EFJ and NFJ. SYSTEM.PASCAL's handler, EXECERROR, is named in prose on
-  the call to it.
+  entries carry Kusche's labels (ERR1, OOMERR ...), and `Unimplemented` the p-codes it runs for, EFJ and NFJ.
+  SYSTEM.PASCAL's handler, EXECERROR, is named in prose on the call to it.
 - PI8. Only 1.1's documents and those of the system it descends from are cited. 1.2's device manual is added if 1.2's
   or 1.3's interpreter joins the SDK. The private conversion's names are not historical: no `Also:` keeps them.
 - PI9. The source is in `src/Retrocore.Pascal/Sdk/Interpreter/1.1`, its file names as they were; the private
@@ -109,17 +114,20 @@ Settled by the owner on the rename table's review.
 - **Layouts.** A segment table entry is a `.struct SegmentEntry` (CODEUNIT, DISKADDR, CODELENG; CODEDESC, UCSD's
   name for the last two together, in prose), and a directory entry a `.struct DirectoryEntry` (DFIRSTBLK, DTID and
   DVID; DIRENTRY in prose). Initialize's `SEGMENT_TABLE_BLOCK` was a second definition of a segment entry's block, and
-  is `SegmentEntry::BLOCK`. A segment dictionary entry stays a size, `DICTIONARY_ENTRY_SIZE` (SEGDESC; DISKINFO, the array, in prose).
+  is `SegmentEntry::BLOCK`. A segment dictionary entry stays a size, `DICTIONARY_ENTRY_SIZE` (SEGDESC; DISKINFO, the
+  array, in prose).
 - **SyscomExtra** was described as 32 bytes after SYSCOM. With SYSCOM 288 bytes long, they are its own last 32, which
   Initialize clears after the first 256: `Syscom::Rest`, and `SYSCOM_EXTRA_SIZE` is `.sizeof(SyscomRecord) - 256`.
 - **Clashes inside the assembly** go in prose: IDS on `IdSearch` (the standard procedure's), Kusche's NOTK on
   `WordsN` (A2PBIOS's label in `ConsoleCheck`), and A2PBIOS's CH, BAS2L and BAS2H, the Monitor's names in
-  `IIeEquates.asm`. A2PBIOS's TEMP2 is `CardPointer`'s high byte, in prose. Old names on the shared `IIeEquates.asm`
+  `IIeEquates.asm`. A2PBIOS's TEMP2 is `CardPointer`'s high byte and FLAVOR `BootValues`' second byte, both in prose.
+  Old names on the shared `IIeEquates.asm`
   (Kusche's KBD, LCBNK1 ...) are not added there: those switches carry Apple's own documents' names.
 - **The review** found names placed by a local's bare name on another routine's local of the same name (HCKSUM,
   FPRETA, NB8, PCDSIZ, TJTPTR, HSLOT1, SEGNO), and names a pattern for generated ones had dropped (BUFF6B, BUFF2B,
   FREAD1, READAF, READDF), and Restart's MINITC, lost to Initialize's mapping. Each was placed again by its address
-  or the instructions that use it. UCSD's MAXSEG is the last segment, 15, not the count, and Apple's DISKINFO the dictionary's entries, not an entry's size: both are in prose. Apple's
+  or the instructions that use it. UCSD's MAXSEG is the last segment, 15, not the count, and Apple's DISKINFO the
+  dictionary's entries, not an entry's size: both are in prose. Apple's
   DISKNUM and READTBL start at unit 1, a word above ours, and SLTTYPS at a slot 0, a byte below ours; they stay on
   our tables, as the rename table's review settled, with the difference in prose.
 - **Locals that a document names** got a `;;` summary to carry the `Also:`; where a step heading said what happens

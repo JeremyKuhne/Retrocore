@@ -2,7 +2,7 @@
 ;; The console: polling the keyboard or the console's card into the type-ahead buffer, and the BIOS's console init
 ;; and read calls.
 
-; Keys ConsoleCheck acts on.
+; Keys.
 
 ;; The bits of a key's ASCII code, without bit 7.
 ASCII_BITS = $7F

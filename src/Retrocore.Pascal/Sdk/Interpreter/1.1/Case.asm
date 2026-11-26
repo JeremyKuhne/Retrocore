@@ -20,7 +20,7 @@ XJP_TABLE = 7
 
 ;; <XJP at Pcodes::CaseJump>: pops a value and jumps to its case through the jump table, or runs the
 ;; <UJP at Jump::Always> after the bounds when the value is out of range. The bounds are signed.
-;; Also: XJP (A2POSRM, UCSD20)
+;; Also: XJP (A2POSRM, UCSD20, WK11)
 .proc CaseJump
 
 ;; The value.

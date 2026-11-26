@@ -10,7 +10,7 @@ LDM_STACK_MARGIN = 8
 ;; <LDC at Pcodes::LoadMultipleConstant>: pushes a constant of several words, which follows the opcode's count byte at
 ;; the next even address. The words are pushed from the first, so the last ends on top. The count is at least 1.
 ;; In: Y = 0, as <Fetch> leaves it
-;; Also: LDC (A2POSRM, UCSD20)
+;; Also: LDC (A2POSRM, UCSD20, WK11)
 .proc LoadMultipleConstant
 
 ;; The bytes to step <InstructionPointer> over, once it is even: the opcode, the count and the words.
@@ -65,7 +65,7 @@ Done:
 ;; the first ends on top. Reports a stack overflow unless the 6502 stack pointer is at least the bytes to push plus
 ;; <LDM_STACK_MARGIN>. The count is at least 1.
 ;; In: Y = 0, as <Fetch> leaves it
-;; Also: LDM (A2POSRM, UCSD20)
+;; Also: LDM (A2POSRM, UCSD20, WK11)
 .proc LoadMultiple
 
 ;; The count of words.
@@ -116,7 +116,7 @@ Overflow:
 ;; <STM at Pcodes::StoreMultiple>: pops the operand's count of words, the top first, into consecutive words at the
 ;; address under them, and pops the address.
 ;; In: Y = 0, as <Fetch> leaves it
-;; Also: STM (A2POSRM, UCSD20)
+;; Also: STM (A2POSRM, UCSD20, WK11)
 .proc StoreMultiple
 
 ;; The count of words.
@@ -160,7 +160,7 @@ CountWord:
 
 ;; <LDB at Pcodes::LoadByte>: pops an index, then a byte array's address, and pushes the byte at the index.
 ;; In: Y = 0, as <Fetch> leaves it
-;; Also: LDB (A2POSRM, UCSD20)
+;; Also: LDB (A2POSRM, UCSD20, WK11)
 .proc LoadByte
 
 ;; The index, then the byte's address.

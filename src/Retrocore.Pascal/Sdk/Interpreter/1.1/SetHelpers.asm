@@ -134,8 +134,8 @@ Done:
     rts
 .endproc
 
-;; Compares the two sets on the stack for equality, popping both. Its compare loop's BEQ is bank 1's last byte;
-;; its offset, <SetsEqualOffset>, is the first byte of $E000-$FFFF, and the loop goes on there.
+;; Compares the two sets on the stack for equality, popping both. The BEQ that skips its compare loop is bank 1's last
+;; byte; its offset, <SetsEqualOffset>, is the first byte of $E000-$FFFF, and the loop goes on there.
 ;;
 ;; The sets are under its return address, so it pulls that into Return for <PopSets>, and its rest returns by
 ;; jumping to it plus 1.

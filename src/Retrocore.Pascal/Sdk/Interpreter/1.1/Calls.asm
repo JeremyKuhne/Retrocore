@@ -2,9 +2,6 @@
 ;; Procedure calls and returns: finding a procedure's attributes, building its mark stack frame, and the call and
 ;; return handlers.
 
-; A procedure's attributes, at these offsets from its JumpTable, at the end of its code. The words below JumpTable are
-; self-relative: each holds how far below itself the address it means is.
-
 ; Procedure dictionaries.
 
 ;; Where a segment's procedure dictionary, at <ProcedureDictionary>, keeps the segment's number, a byte.
@@ -45,7 +42,8 @@ NO_SEGMENT = $FF
 ;; An assembled procedure is jumped to, with <FindProcedure::NativeReturn> as its return address, and FindProcedure does
 ;; not return. For a p-code procedure, FindProcedure builds its mark stack frame below <ProgramStackTop>, pulls its
 ;; parameters from the stack into the frame's locals, makes it the current procedure (<LocalFrame>, <JumpTable>,
-;; <ProcedureDictionary>, <InstructionPointer> and <ProgramStackTop>, and SYSCOM's copies) and returns.
+;; <ProcedureDictionary>, <InstructionPointer> and <ProgramStackTop>, and SYSCOM's copies of the first three) and
+;; returns.
 ;; In: ProcedureNumber = the procedure, InstructionPointer = the 2-byte call (or a 3-byte <CXP at
 ;;     Pcodes::CallExternalProcedure>, already stepped once)
 ;; Out:
@@ -180,6 +178,7 @@ FollowEntry:
 
 ;; Where an assembled procedure's RTS returns to: runs the p-code after the call, as <InstructionPointer> already points
 ;; there.
+;; Also: JXEM1 (WK11)
 NativeReturn:
     jmp Fetch::Next
 
@@ -367,7 +366,7 @@ Return:
 
 ;; <CIP at Pcodes::CallIntermediateProcedure>: calls an intermediate procedure, whose static link is the frame of the
 ;; latest active procedure one lexical level out.
-;; Also: CIP (A2POSRM, UCSD20)
+;; Also: CIP (A2POSRM, UCSD20, WK11)
 .proc CallIntermediateProcedure
 
 ;; The lexical level of the procedure whose frame the static link must be.
@@ -439,7 +438,7 @@ CheckCaller:
 
 ;; <CLP at Pcodes::CallLocalProcedure>: calls a procedure local to the current one, whose static link is the caller's
 ;; frame.
-;; Also: CLP (A2POSRM, UCSD20)
+;; Also: CLP (A2POSRM, UCSD20, WK11)
 .proc CallLocalProcedure
     ; Find the procedure and build its frame.
     ldy #1
@@ -460,7 +459,7 @@ CheckCaller:
 .endproc
 
 ;; <CGP at Pcodes::CallGlobalProcedure>: calls a global procedure, whose static link is <GlobalFrame>.
-;; Also: CGP (A2POSRM, UCSD20)
+;; Also: CGP (A2POSRM, UCSD20, WK11)
 .proc CallGlobalProcedure
     ; Find the procedure and build its frame.
     ldy #1
@@ -481,7 +480,7 @@ CheckCaller:
 ;; <CXP at Pcodes::CallExternalProcedure>: calls a procedure of another segment, loading the segment first unless it is
 ;; segment 0, the system's, which stays in memory. A procedure at lexical level 0 or below is called as
 ;; <CBP at Pcodes::CallBaseProcedure> calls one, and the others as <CIP at Pcodes::CallIntermediateProcedure> does.
-;; Also: CXP (A2POSRM, UCSD20)
+;; Also: CXP (A2POSRM, UCSD20, WK11)
 .proc CallExternalProcedure
 
 ;; The segment, for <LoadSegment> and <FindProcedureIn>.
@@ -516,7 +515,7 @@ Find:
 ;; <CBP at Pcodes::CallBaseProcedure>: calls a base procedure, an outer block, which becomes <GlobalFrame>. The old
 ;; <GlobalFrame> is pushed before the frame keeps the stack pointer, so <RBP at Pcodes::ReturnFromBaseProcedure> finds
 ;; it on top once it puts the stack back.
-;; Also: CBP (A2POSRM, UCSD20)
+;; Also: CBP (A2POSRM, UCSD20, WK11)
 .proc CallBaseProcedure
     ; Find the procedure and build its frame.
     ldy #1

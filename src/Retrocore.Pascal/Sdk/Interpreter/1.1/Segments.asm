@@ -2,8 +2,6 @@
 ;; Segments: reading them in below <ProgramStackTop>, relocating their assembled procedures, counting their uses, and
 ;; giving them back.
 
-; Units.
-
 ; Assembled procedures.
 
 ;; Where an assembled procedure's attributes, at these offsets from its <JumpTable> as <ATTR_ENTER> is, start its
@@ -405,7 +403,7 @@ FollowEntry:
     bcs FindDataSegment
     dec Procedure+1
 
-    ; The globals: a data segment's, after its last word, when the procedure names one.
+    ; The globals: a data segment's, 2 bytes past its SegmentAddresses entry, when the procedure names one.
 FindDataSegment:
     ldy #ATTR_LEXICAL_LEVEL - ATTR_RELOCATION
     lda (Procedure),y

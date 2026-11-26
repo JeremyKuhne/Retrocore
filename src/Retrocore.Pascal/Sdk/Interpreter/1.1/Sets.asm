@@ -293,7 +293,7 @@ MoveByte:
 
 ;; <ADJ at Pcodes::AdjustSet>: pops a set's length and makes its bytes as many words as its operand says: cuts bytes off
 ;; its end, or adds zeros. The set stays on the stack without its length.
-;; Also: ADJ (A2POSRM, UCSD20)
+;; Also: ADJ (A2POSRM, UCSD20, WK11)
 .proc AdjustSet
 
 ;; The set's size in bytes.

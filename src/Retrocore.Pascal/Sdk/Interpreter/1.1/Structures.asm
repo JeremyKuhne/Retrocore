@@ -35,7 +35,7 @@ WordAddress = ProcedureNumber
 .endproc
 
 ;; INC: adds its big operand, a word offset, to the address on top of the stack, as a field's address.
-;; Also: INC (A2POSRM, UCSD20)
+;; Also: INC (A2POSRM, UCSD20, WK11)
 .proc IncrementField
     ; Add the operand's byte offset to the address, and push it back.
     ldy #1
@@ -116,7 +116,7 @@ AddIndex:
 ;;
 ;; Its operands are two bytes: the elements in each word, and their width in bits. The lowest bit's number is pushed in
 ;; both bytes of its word; <LDP at Pcodes::LoadPackedField> and STP read only the low byte.
-;; Also: IXP (A2POSRM, UCSD20)
+;; Also: IXP (A2POSRM, UCSD20, WK11)
 .proc IndexPackedArray
 
 ;; The elements in each word, the divisor.

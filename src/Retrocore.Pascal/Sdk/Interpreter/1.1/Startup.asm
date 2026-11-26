@@ -41,10 +41,6 @@ ROM_FIRMWARE_ID = $0B
 ;; Also: SIGVALUE (A2PBIOS)
 FIRMWARE_CARD_ID = 1
 
-; The BIOS's results, which its calls return in X.
-
-; Flags.
-
 ;; One entry of <Startup::CardId05> or <Startup::CardId07>: the byte a card type's slot ROM has at that table's offset.
 ;; Parameters:
 ;;   table = <Startup::CardId05> or <Startup::CardId07>

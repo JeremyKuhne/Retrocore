@@ -2,8 +2,6 @@
 ;; Character devices: the BIOS's printer, remote and graphics calls and console output, and the card drivers they
 ;; share, by slot type.
 
-; Characters.
-
 ; A CARD_SERIAL card's ACIA, as a 6850 reads its control and status bits.
 
 ;; The control value that resets the ACIA.
@@ -38,7 +36,8 @@ FIRMWARE_STATUS = $10
 
 ;; The BIOS's printer init, for the card in the printer's slot: a <CARD_PARALLEL> card needs nothing, and any other
 ;; goes on into <CardInit>.
-;; Out: X = <IO_OK>, or <IO_NO_DEVICE> for a card the BIOS cannot drive
+;; Out: X = <IO_OK>, <IO_NO_DEVICE> for a card the BIOS cannot drive, or what a <CARD_PASCAL_FIRMWARE> card's
+;;   init returns
 ;; Also: PINIT (A2PBIOS, WK11)
 .proc PrinterInit
     ldy #PRINTER_SLOT * 16
@@ -94,7 +93,8 @@ FIRMWARE_STATUS = $10
 .endproc
 
 ;; The BIOS's remote init, for the card in the remote units' slot.
-;; Out: X = <IO_OK>, or <IO_NO_DEVICE> for a card the BIOS cannot drive
+;; Out: X = <IO_OK>, <IO_NO_DEVICE> for a card the BIOS cannot drive, or what a <CARD_PASCAL_FIRMWARE> card's
+;;   init returns
 ;; Also: RINIT (A2PBIOS, WK11)
 .proc RemoteInit
     lda SlotTypes + REMOTE_SLOT - 1
@@ -327,7 +327,8 @@ NoCard:
 .endproc
 
 ;; The BIOS's remote read, from the card in the remote units' slot, by its type.
-;; Out: A = the character, X = <IO_OK>; or X = <IO_NO_DEVICE> for a card the BIOS cannot drive
+;; Out: A = the character, X = <IO_OK> or what a <CARD_PASCAL_FIRMWARE> card's read returns; or X = <IO_NO_DEVICE>
+;;   for a card the BIOS cannot drive
 ;; Also: RREAD (A2PBIOS, WK11)
 .proc RemoteRead
     lda SlotTypes + REMOTE_SLOT - 1

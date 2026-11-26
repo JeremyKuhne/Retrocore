@@ -29,7 +29,7 @@ TREE_GREATER = 1
 
 ;; <CSP at Pcodes::CallStandardProcedure>: runs the standard procedure its operand numbers, through <CspDispatch> and
 ;; <CspTable>.
-;; Also: CSP (A2POSRM, UCSD20)
+;; Also: CSP (A2POSRM, UCSD20, WK11)
 .proc CallStandardProcedure
     ldy #1
     lda (InstructionPointer),y
@@ -245,7 +245,8 @@ Mode = Work3
 ;; The limit's high byte: negative to scan down.
 Direction = Work1
 
-;; The limit, made positive. Nothing reads it.
+;; The limit; when the scan's end address is $8000 or above, its low byte negated and the end address's high byte
+;; negated in place of its own. Nothing reads it.
 Distance = Offset
 
     ; Pull the parameters.

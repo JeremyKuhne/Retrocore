@@ -82,7 +82,7 @@ FirmwareSlot = $06F8
 
 ;; 4 bytes <Startup> fills with JSR <BiosConsoleCheck> and RTS, reaching <ConsoleCheck> from RAM. Nothing in
 ;; SYSTEM.APPLE calls it.
-;; Also: CONCKVEC (A2PBIOS), CONCKVECTOR (A2PBIOS)
+;; Also: CONCKVECTOR (A2PBIOS)
 ConsoleCheckHook = $BF0A
 
 ;; Startup sets bit 2 when slot 3's card initializes as the console. Initialize then starts the heap at $0804
@@ -144,8 +144,9 @@ BreakAddress = $BF1D
 ;; Also: ISYSC (WK11), ISYSCOM (A2PBIOS)
 SyscomAddress = $BF1F
 
-;; Two bytes <Initialize> sets to 2 and 1.
-;; Also: FLAVOR (A2PBIOS, WK11), VER (WK11), VERSION (A2PBIOS)
+;; Two bytes <Initialize> sets to 2 and 1. Apple's BIOS document and Kusche's listing call the second FLAVOR (A2PBIOS,
+;; WK11).
+;; Also: VER (WK11), VERSION (A2PBIOS)
 BootValues = $BF21
 
 ;; <CopiedTable>'s address, which <Initialize> puts here.

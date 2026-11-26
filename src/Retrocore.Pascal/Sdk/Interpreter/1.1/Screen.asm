@@ -36,8 +36,6 @@ SCREEN_CHARACTER_BITS = $3F
 ;; A space, as a normal screen code.
 SCREEN_SPACE = ' ' | SCREEN_NORMAL
 
-; The control characters ScreenWrite acts on, besides CTRL_K and ASCII_LF.
-
 ; ScreenWrite's states, in EscapeState.
 
 ;; No sequence: <ScreenWrite> writes the character.

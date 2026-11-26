@@ -6,7 +6,7 @@
 .scope Pcodes continued
 
 ;; <LAND at Pcodes::LogicalAnd>: pops two words and pushes their bitwise AND.
-;; Also: AND (UCSD20), LAND (A2POSRM)
+;; Also: AND (UCSD20), LAND (A2POSRM, WK11)
 .proc LogicalAnd
 
 ;; The top word.
@@ -31,7 +31,7 @@ Operand = Pointer
 .endproc
 
 ;; <LOR at Pcodes::LogicalOr>: pops two words and pushes their bitwise OR.
-;; Also: LOR (A2POSRM)
+;; Also: LOR (A2POSRM, WK11)
 .proc LogicalOr
 
 ;; The top word.

@@ -15,10 +15,6 @@ ATTACHED_DRIVER_MASK = $7F
 ;; The drivers <AttachedDrivers> has room for.
 ATTACHED_DRIVERS = 16
 
-; The requests a unit call makes of a driver, which it passes in X.
-
-; I/O results, as Syscom::IoResult holds them, numbered as SYSTEM.PASCAL numbers its I/O error messages.
-
 ; A UNITREAD or UNITWRITE control word's bits.
 
 ;; Raw transfer: no DLE expansion, and a read does not stop at the end-of-file character.
@@ -64,8 +60,8 @@ BreakHandler:
     .word ExecutionError::Interrupted
 
 ;; Each character unit's BIOS write call, a word a unit from unit 0, or 0 for none. Its unit 0 slot is <BreakHandler>'s
-;; high byte and <SavedIoControl>; its unit 8 entry is <UnitReaders>' unit 0 slot.
-;; Also: WRITTBL (A2PBIOS)
+;; high byte and <SavedIoControl>; its unit 8 entry is <UnitReaders>' unit 0 slot. Apple's BIOS document calls the table
+;; WRITTBL in prose, starting at unit 1, at UnitWriters+2.
 UnitWriters = BreakHandler + 1
 
 ;; <IoControl> as it was before a <UNITREAD at StandardProcedures::UnitRead> or
@@ -347,7 +343,8 @@ NoDevice:
 .endproc
 
 ;; <UCLEAR at StandardProcedures::UnitClear>, the standard procedure <UNITCLEAR at StandardProcedures::UnitClear>: pops
-;; a unit number and has its device reset. The graphics screen is reset, but gets <IO_NO_DEVICE> all the same.
+;; a unit number and has its device reset, or for a disk its drive's slot checked. The graphics screen is reset, but
+;; gets <IO_NO_DEVICE> all the same.
 ;; Also: CSP38 (WK11), UNITCLEAR (UCSD20, UCSD20IO)
 .proc UnitClear
     ; Pop the unit and check it.
@@ -396,7 +393,7 @@ CallDriver:
     jsr BiosUnitDriver
     jmp UnitIo::Finish
 
-    ; A disk: reset its drive.
+    ; A disk: check its drive's slot.
 Disk:
     lda UnitTable,y
     jsr BiosDiskInit

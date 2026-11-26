@@ -10,12 +10,6 @@ BIOS_STUB_SIZE = 3
 ;; How far a stub's vector is past its JSR's return address, the stub's address plus 2. <BiosCall> adds it.
 BIOS_VECTOR_OFFSET = $5A
 
-; The console's flags.
-
-; The 80-column screen's two halves.
-
-; The keys ConsoleCheck turns into others.
-
 ;; One of the BIOS's stubs, <BiosConsoleRead> and the 21 after it: a JSR to <BiosCall>, which runs the vector
 ;; <BIOS_VECTOR_OFFSET> bytes past the JSR's return address.
 ;; Parameters:
@@ -75,8 +69,9 @@ BIOS_VECTOR_OFFSET = $5A
     rts
 .endproc
 
-;; BIOS call 0: reads a character from the console, with <ConsoleRead>.
-;; Also: BIOS (A2PBIOS, WK11), BIOSTBL (A2PBIOS), CONSOLEREAD (UCSD20IO), JCREAD (WK11)
+;; BIOS call 0: reads a character from the console, with <ConsoleRead>. The stubs are the table Apple's BIOS document
+;; calls BIOSTBL in a comment.
+;; Also: BIOS (A2PBIOS, WK11), CONSOLEREAD (UCSD20IO), JCREAD (WK11)
 BiosConsoleRead:
     BiosStub 0, VectorConsoleRead
 

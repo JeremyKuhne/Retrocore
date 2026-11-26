@@ -64,7 +64,7 @@ Offset = $5E
 Frame = $62
 
 ;; A variable's address, as the load and store handlers work it out.
-;; Also: VARPTR (WK11)
+;; Also: SUM (WK11), VARPTR (WK11)
 Address = $64
 
 ;; A byte of working storage.

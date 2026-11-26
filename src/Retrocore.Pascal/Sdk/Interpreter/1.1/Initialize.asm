@@ -10,8 +10,6 @@ COPY_ADDRESS = $6800
 ;; The 256-byte pages <Restart> copies.
 COPY_PAGES = 4
 
-; Units.
-
 ; SYSCOM.
 
 ;; The bytes at <Syscom::Rest>, SYSCOM's last, that <Initialize> clears after its first 256.
@@ -100,10 +98,10 @@ COPIED_TABLE_SIZE = 42
 
 ;; Addresses <Initialize> reads, a word each. <UCLEAR at StandardProcedures::UnitClear> reads <BootSyscom> too, as
 ;; BootAddresses+4.
-;; Also: ADRHIM (WK11)
 BootAddresses:
 
 ;; <MemoryTop>'s address, where <ProgramStackTop> and <LocalFrame> start.
+;; Also: ADRHIM (WK11)
 BootMemoryTop:
     .word MemoryTop
 
@@ -214,6 +212,7 @@ InitializeImage:
 ;; Sets up the BIOS's and the p-machine's state, finds SYSTEM.PASCAL on the boot unit, reads its segments' places into
 ;; <Syscom::SegmentTable>, loads segments 15 and 0, and runs segment 0's procedure 1. Runs at <COPY_ADDRESS> + $27, and
 ;; does not return.
+;; Also: RELOC (WK11)
 .proc Initialize
 
 ;; The directory entry being checked: the buffer's start, then the entry's name, then the entry's start.
@@ -613,8 +612,8 @@ StartSystem:
     lda #UNNAMED_SEGMENT
     jsr ReadSegment
 
-    ; Load segment 0 down from SEGMENT_0_TOP, keeping ProgramStackTop below segment 15. LoadSegment leaves SegmentNumber
-    ; at 0.
+    ; Load segment 0 down from SEGMENT_0_TOP, keeping ProgramStackTop below segment 15. LoadSegment leaves
+    ; FindProcedure::Segment at 0.
     lda ProgramStackTop
     sta SavedKp
     lda ProgramStackTop+1
@@ -720,8 +719,7 @@ InitTail:
     .res 9
     .byte $70, $25, $00, $00, $02, $00, $01, $01
 
-    ; ReadDirectory's last instructions to ReadSegmentDictionary's first, as assembled with other addresses for
-    ; BreakHandler and the BIOS's stubs.
+    ; The same bytes as ReadDirectory's last instructions to ReadSegmentDictionary's first, $200 further on.
     .byte $A0, $08, $20, $3C, $FF, $18, $90, $03, $20, $12, $FF, $A2, $4E, $18, $A5
     .byte $80, $69, $06, $85, $80, $90, $0D, $E6, $81, $18, $A5, $80, $69, $1A, $85, $80
     .byte $90, $02, $E6, $81, $CA, $D0, $53, $A9, $00, $85, $97, $85, $98, $AD, $AB, $EE

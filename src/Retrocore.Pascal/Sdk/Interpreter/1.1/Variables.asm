@@ -235,7 +235,7 @@ Push:
 
 ;; <LOD at Pcodes::LoadIntermediate>: pushes an intermediate variable: the first operand gives how many lexical levels
 ;; out its procedure is, and the big operand after it the variable.
-;; Also: LOD (A2POSRM, UCSD20)
+;; Also: LOD (A2POSRM, UCSD20, WK11)
 .proc LoadIntermediate
     ; Find the procedure's frame, and the variable in it.
     ldy #1
@@ -263,7 +263,7 @@ Push:
 .endproc
 
 ;; LDA: pushes the address of an intermediate variable, given as <LOD at Pcodes::LoadIntermediate> gives it.
-;; Also: LDA (A2POSRM, UCSD20)
+;; Also: LDA (A2POSRM, UCSD20, WK11)
 .proc LoadIntermediateAddress
     ; Find the procedure's frame, and work out the variable's address in it.
     ldy #1
@@ -297,7 +297,7 @@ Push:
 
 ;; <STR at Pcodes::StoreIntermediate>: pops a word into an intermediate variable, given as
 ;; <LOD at Pcodes::LoadIntermediate> gives it.
-;; Also: STR (A2POSRM, UCSD20)
+;; Also: STR (A2POSRM, UCSD20, WK11)
 .proc StoreIntermediate
     ; Find the procedure's frame, and the variable in it.
     ldy #1
@@ -326,7 +326,7 @@ Push:
 
 ;; <LDE at Pcodes::LoadExtended>: pushes a word of a data segment: the first operand gives the segment, and the big
 ;; operand after it the word, n at 2n bytes above the segment's <SegmentAddresses> entry.
-;; Also: LDE (A2POSRM)
+;; Also: LDE (A2POSRM, WK11)
 .proc LoadExtended
 
 ;; The word's address.
@@ -359,7 +359,7 @@ Word = Pointer
 
 ;; <STE at Pcodes::StoreExtended>: pops a word into a data segment's word, given as <LDE at Pcodes::LoadExtended> gives
 ;; it.
-;; Also: STE (A2POSRM)
+;; Also: STE (A2POSRM, WK11)
 .proc StoreExtended
 
 ;; The word's address.
@@ -392,7 +392,7 @@ Word = Pointer
 
 ;; <LAE at Pcodes::LoadExtendedAddress>: pushes the address of a data segment's word, given as
 ;; <LDE at Pcodes::LoadExtended> gives it.
-;; Also: LAE (A2POSRM)
+;; Also: LAE (A2POSRM, WK11)
 .proc LoadExtendedAddress
     ; Work out its address, and push it.
     ldy #1

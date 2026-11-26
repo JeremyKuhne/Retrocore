@@ -57,15 +57,15 @@ ERROR_NO_PROC_IN_SEG_TABLE = 2
 ;; Also: XNOEXIT (A2POSRM)
 ERROR_EXIT_FROM_UNCALLED_PROC = 3
 
-;; Execution error 4, "<Stack> overflow".
+;; Execution error 4, `Stack overflow`.
 ;; Also: XSTKOVR (A2POSRM)
 ERROR_STACK_OVERFLOW = 4
 
-;; Execution error 5, "<RealMath::PopIntegerAsReal::Integer> overflow".
+;; Execution error 5, `Integer overflow`.
 ;; Also: XINTOVR (A2POSRM)
 ERROR_INTEGER_OVERFLOW = 5
 
-;; Execution error 6, "<Divide> by zero".
+;; Execution error 6, `Divide by zero`.
 ;; Also: XDIVZER (A2POSRM)
 ERROR_DIVIDE_BY_ZERO = 6
 
@@ -81,7 +81,7 @@ ERROR_SYSTEM_IO = 9
 ;; Also: XUIOERR (A2POSRM)
 ERROR_USER_IO = 10
 
-;; Execution error 11, "<ExecutionError::Unimplemented> instruction".
+;; Execution error 11, `Unimplemented instruction`.
 ;; Also: XNOTIMP (A2POSRM)
 ERROR_UNIMPLEMENTED = 11
 

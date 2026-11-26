@@ -144,7 +144,6 @@ Multiplier = Work3
 Product = Work4
 
 ;; The product's high word, which the multiplicand is added to.
-;; Also: SUM (WK11)
 ProductHigh = Address
 
     ; Clear the high word. The low word's old bits are all shifted out.

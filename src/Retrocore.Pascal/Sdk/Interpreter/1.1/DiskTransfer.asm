@@ -49,7 +49,7 @@ DRIVE_PAIRS = 3
 ;; What a slot is added to for drive 2's entry in <ArmTracks>, and <DriveIndex>.
 DRIVE2_INDEX = $80
 
-;; The interrupt-disable bit in the 6502's P register.
+;; The interrupt-disable bit in the 6502's P register, which <DiskSavedIrq> keeps.
 INTERRUPT_DISABLE = $04
 
 ; TransferTrack's timing and retries.
@@ -84,14 +84,15 @@ SECTOR_DONE = $FF
 ;; What <PreparedSector> holds when no sector's data is ready to write.
 NO_PREPARED_SECTOR = $FF
 
-;; The interrupt-disable flag of <DiskTransfer>'s caller, its P register AND <INTERRUPT_DISABLE>, kept while a
-;; transfer runs with interrupts off so that <DiskPoll> can give it back.
+;; The interrupt-disable flag of <DiskTransfer>'s caller, its P register AND <INTERRUPT_DISABLE>, kept while a transfer
+;; runs with interrupts off so that <DiskPoll> can give it back, for one instruction.
 ;; Also: SVFLGS (WK11)
 DiskSavedIrq:
     .res 1
 
-;; Runs <ConsoleCheck> during a disk wait with the disk caller's interrupt-disable flag, then disables interrupts
-;; again.
+;; Runs <ConsoleCheck> during a disk wait, with interrupts disabled. First it gives back the disk caller's
+;; interrupt-disable flag for one instruction, a NOP, so that an interrupt waiting while interrupts are allowed is
+;; taken.
 ;; Keeps: A, X, Y, P
 ;; Also: CCONCK (WK11)
 .proc DiskPoll
@@ -99,7 +100,7 @@ DiskSavedIrq:
     php
     pha
 
-    ; Give back the caller's interrupt-disable flag while ConsoleCheck runs.
+    ; Give back the caller's interrupt-disable flag for one NOP, then disable interrupts for ConsoleCheck.
     lda DiskSavedIrq
     pha
     plp

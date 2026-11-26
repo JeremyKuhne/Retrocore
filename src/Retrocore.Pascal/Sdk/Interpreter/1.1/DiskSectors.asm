@@ -672,8 +672,7 @@ NextTwoBits:
 ReadTwoBits:
     ldx DiskLatch + MAIN_DISK_SLOT * 16
 
-;; The low byte of the data latch's address in <ReadSector>'s first LDX, which it patches, as <ReadLatch2>-5, to the
-;; slot's data latch.
+;; The low byte of the data latch's address in <ReadSector>'s first LDX, which it patches to the slot's data latch.
 ReadLatch1 = *-2
 
     bpl ReadTwoBits

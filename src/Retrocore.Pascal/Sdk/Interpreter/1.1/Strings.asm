@@ -8,7 +8,7 @@
 ;; <LPA at Pcodes::LoadPackedArrayAddress>: pushes the address of the characters in its operand, a length byte and that
 ;; many characters, and steps <InstructionPointer> past them.
 ;; In: Y = 0, as <Fetch::Next> leaves it
-;; Also: LPA (A2POSRM)
+;; Also: LPA (A2POSRM, WK11)
 .proc LoadPackedArrayAddress
     ; Step past the opcode, and read the length.
     inc InstructionPointer
@@ -34,7 +34,7 @@ PushAddress:
 ;; characters), and steps <InstructionPointer> past it.
 ;; In: Y = 0, as <Fetch::Next> leaves it
 ;; Entry: SkipCharacters = steps <InstructionPointer> past X characters and runs the next p-code
-;; Also: LCA (UCSD20), LSA (A2POSRM)
+;; Also: LCA (UCSD20), LSA (A2POSRM, WK11)
 .proc LoadStringAddress
     ; Step past the opcode, and push the string's address.
     inc InstructionPointer
@@ -98,7 +98,7 @@ Next:
     sta (Target),y
     jmp Fetch::Skip2
 
-    ; A string: it must fit. Copy it, the length byte last.
+    ; A string: it must fit. Copy it, the length byte first, then its characters from the last.
 String:
     ldy #0
     cmp (Source),y

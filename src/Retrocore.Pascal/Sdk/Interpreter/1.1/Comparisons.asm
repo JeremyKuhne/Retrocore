@@ -7,9 +7,6 @@
 ;; Each handler loads its kind of comparison, and they share the rest. The comparison finds whether the lower
 ;; operand is less than, equal to or greater than the top one, and pushes true when that outcome is in the kind.
 
-; The kinds of comparison the handlers leave in Comparison, for CompareSets too. A kind is the outcomes that make it
-; true, a bit for each.
-
 ; The types EQU to GEQ compare, their first operand.
 
 ;; Two reals.
@@ -29,8 +26,6 @@ COMPARE_BYTES = 10
 
 ;; Two arrays of words, whose size in words follows as a big operand. The handlers take any type not above as this.
 COMPARE_WORDS = 12
-
-; Reals, as the comparisons pop them.
 
 ; How the reals' bytes compare, in Y.
 
@@ -86,7 +81,7 @@ REALS_REVERSED = $F4
 ;;
 ;; Its operand is the type it compares, <COMPARE_REAL> to <COMPARE_WORDS>, followed for arrays by their size.
 ;; Entry: Compare = makes the comparison in A instead, a kind such as <COMPARISON_LESS_OR_EQUAL>
-;; Also: EQU (A2POSRM, UCSD20), EQUBOOL (A2POSRM), EQUBYT (A2POSRM), EQUPOWR (A2POSRM), EQUREAL (A2POSRM),
+;; Also: EQU (A2POSRM, UCSD20, WK11), EQUBOOL (A2POSRM), EQUBYT (A2POSRM), EQUPOWR (A2POSRM), EQUREAL (A2POSRM),
 ;;   EQUSTR (A2POSRM), EQUWORD (A2POSRM)
 .proc Equal
 
@@ -302,7 +297,7 @@ PushFalse:
     pha
     jmp Fetch::Skip2
 
-;; Compares two reals, popping both, most significant byte first.
+;; Compares two reals, popping both, and comparing them from their most significant byte.
 ;; Also: CMPR (WK11)
 CompareReals:
     ldx #2 * REAL_SIZE - 1

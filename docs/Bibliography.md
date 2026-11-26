@@ -48,8 +48,8 @@ SYSTEM.APPLE, which is byte-identical to Apple Pascal 1.1's. The full method, wi
 [`docs/conversions/PascalInterpreter.md`](conversions/PascalInterpreter.md).
 
 - **WK11:** the PDF's text layer, a typed listing with addresses and bytes. A code label is cited where its address
-  column gives it at the address the build gives the definition (Restart and Initialize, which Kusche lists where
-  they are loaded, `$F275`-`$F674`, mapped to where Restart copies them, `$6800`-`$6BFF`); a name for a byte in zero page or memory is cited where Kusche's
+  column gives it at the address the build gives the definition (Initialize, which Kusche lists where it is loaded,
+  `$F29C`-`$F674`, mapped to where Restart copies it to run, `$6827`-`$6BFF`); a name for a byte in zero page or memory is cited where Kusche's
   instruction and ours at the same address use it and our symbol, decoded from the instruction's bytes. His
   generated names (the sequential `INTxx` ... `INZxx`, `A` and an address, his macros' locals) are not cited.
 - **A2PBIOS:** its excerpts of Apple's BIOS source, matched to the build instruction for instruction, and its

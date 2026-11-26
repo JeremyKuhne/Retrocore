@@ -153,7 +153,7 @@ CopiedTablePointer = $BF23
 ;; Each slot's card type, from <Startup>, slots 1-7 at SlotTypes+0 to +6: 0 for none, 1 for an unknown ROM, or one of
 ;; the CARD_ types. Slot 1 is the printer's slot, slot 2 the remote units', and slot 3 the console's when its type is
 ;; <CARD_SERIAL>, <CARD_PASCAL_FIXED> or <CARD_PASCAL_FIRMWARE>. Apple's SLTTYPS and Kusche's SLTYPS start a byte lower,
-;; at a slot 0 that has no byte of its own: their slot n is at SLTTYPS+n, which is SlotTypes+n-1.
+;; at slot 0, which this table leaves out: their slot n is at SLTTYPS+n, which is SlotTypes+n-1.
 ;; Also: SLTTYPS (A2PBIOS), SLTYPS (WK11)
 SlotTypes = $BF28
 

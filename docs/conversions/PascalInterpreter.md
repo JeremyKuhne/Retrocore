@@ -23,12 +23,12 @@ unchanged first (`b190b20`), so the bytes prove each step after.
 ## Sources and citations
 
 1,851 definitions (1,001 labels, 850 equates; 970 in scopes), listed by script from the assembler's debug output with
-each one's address and bank. After the conversion, 590 definitions carry 731 old names:
+each one's address and bank. After the conversion, 591 definitions carry 733 old names:
 
-- **WK11** (425): Willi Kusche's 292-page disassembly of 1.1, read from the PDF's text layer, a typed listing with
+- **WK11** (427): Willi Kusche's 292-page disassembly of 1.1, read from the PDF's text layer, a typed listing with
   addresses and bytes. Kusche had no original listing and merged in what he found; many of his BIOS names are
-  Apple's (A2PBIOS). His listing is conditional for five versions of the runtime and lists Restart and Initialize
-  where they are loaded, so `$F275`-`$F674` is mapped to `$6800`-`$6BFF`, where they run, and its line order gives the bank (bank 2 is its
+  Apple's (A2PBIOS). His listing is conditional for five versions of the runtime and lists Initialize where it is
+  loaded, so `$F29C`-`$F674` is mapped to `$6827`-`$6BFF`, where it runs (Restart runs where it is loaded), and its line order gives the bank (bank 2 is its
   second `ORG $D000`).
   - A code label is cited where his address column gives it at the address and bank the build gives the definition.
   - A label with no address of its own takes the next line's only when code follows it directly; a data map's
@@ -52,7 +52,7 @@ each one's address and bank. After the conversion, 590 definitions carry 731 old
   allocating each identifier list backward as its own comment says; the Compiler's p-code and standard-procedure
   comments by their numbers; the mark stack (MSCW), segment description and directory entry records by their fields.
 - **UCSD20IO** (31): UCSD's II.0 I/O System: the unit numbers, the unit calls and the BIOS entry points, matched by
-  function (Apple has no PRINTERREAD and puts DISKWRITE before DISKREAD).
+  function (Apple's printer read does nothing, and it puts DISKWRITE before DISKREAD).
 
 Not cited: SofTech's *Internal Architecture Guide* (1981), which describes Version IV, a different p-machine; Apple's
 1.2 *Device and Interrupt Support Tools Manual* (PI8); and the low-confidence matches below. The documents stay out of
@@ -63,8 +63,8 @@ where II.0's has 16 (288 bytes against 192); Apple's mark stack frame adds MSSP 
 locals; II.0 writes LCA, AND, MOD and NOT for LSA, LAND, MODI and LNOT; II.0 has one remote unit (8) and nothing at 3 or
 7, where Apple has graphics at 3 and splits remote into 7 and 8. The manual misprints five standard procedures'
 numbers (TNC 22, RND 23, MRK 31, RLS 32 and POT 35, where `CspTable`, `Pcode.asm` and II.0 agree on 23, 24, 32, 33 and
-36), GRTREAL as GTRREAL, and BOMBIPC as BOMIPC. The standard procedures are cited at their right numbers; GTRREAL and
-BOMIPC are cited as the manual prints them, with BOMBIPC from UCSD20.
+36), GRTREAL as GTRREAL, and BOMBIPC as BOMIPC. The standard procedures are cited at their right numbers; the manual's
+misprinted names, GTRREAL and BOMIPC, are cited as it prints them, beside BOMBIPC from UCSD20.
 
 ## Decisions
 
@@ -117,7 +117,7 @@ Settled by the owner on the rename table's review.
   (Kusche's KBD, LCBNK1 ...) are not added there: those switches carry Apple's own documents' names.
 - **The review** found names placed by a local's bare name on another routine's local of the same name (HCKSUM,
   FPRETA, NB8, PCDSIZ, TJTPTR, HSLOT1, SEGNO), and names a pattern for generated ones had dropped (BUFF6B, BUFF2B,
-  FREAD1, READAF, READDF). Each was placed again by the instruction that uses it. UCSD's MAXSEG is the last segment,
+  FREAD1, READAF, READDF), and Restart's MINITC, lost to Initialize's mapping. Each was placed again by the instruction that uses it. UCSD's MAXSEG is the last segment,
   15, not the count, and Apple's DISKINFO the dictionary's entries, not an entry's size: both are in prose. Apple's
   DISKNUM and READTBL start at unit 1, a word above ours, and SLTTYPS at a slot 0, a byte below ours; they stay on
   our tables, as the rename table's review settled, with the difference in prose.

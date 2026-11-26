@@ -60,7 +60,7 @@ DICTIONARY_READ_SIZE = $0100
 DICTIONARY_SEGMENTS = 16
 
 ;; The size of a dictionary entry: the segment's first block, counted from the file's start, then its size in bytes. The
-;; entries are Apple's DISKINFO (A2POSRM), which prints the two fields the other way round.
+;; entries make up Apple's DISKINFO array (A2POSRM), which prints their two fields the other way round.
 ;; Also: SEGDESC (UCSD20)
 DICTIONARY_ENTRY_SIZE = 4
 
@@ -169,6 +169,7 @@ RestartAddress:
     .word Restart
 
 ;; Copies itself and <Initialize>, <COPY_PAGES> pages, to <COPY_ADDRESS>, and runs <Initialize> there.
+;; Also: MINITC (WK11)
 .proc Restart
 
 ;; Where the copy reads from. Zero page's first bytes have no other use at this point.

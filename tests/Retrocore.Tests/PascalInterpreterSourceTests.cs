@@ -12,7 +12,8 @@ using System.Security.Cryptography;
 namespace Retrocore.Tests;
 
 /// <summary>
-///  Verifies the SDK's native source for Apple Pascal 1.1's interpreter, <c>Pascal/Interpreter/1.1/SYSTEM.APPLE.asm</c>.
+///  Verifies the SDK's native source for Apple Pascal 1.1's interpreter,
+///  <c>Pascal/Interpreter/1.1/SYSTEM.APPLE.asm</c>.
 /// </summary>
 /// <remarks>
 ///  <para>
@@ -24,7 +25,8 @@ namespace Retrocore.Tests;
 [TestClass]
 public sealed class PascalInterpreterSourceTests
 {
-    // The SHA-256 of SYSTEM.APPLE on Apple Pascal 1.1's APPLE1 and APPLE3 (SHA-1 b87851c389c5325da55cfbea5f16401c4e881832).
+    // The SHA-256 of SYSTEM.APPLE on Apple Pascal 1.1's APPLE1 and APPLE3
+    // (SHA-1 b87851c389c5325da55cfbea5f16401c4e881832).
     private const string InterpreterHash = "2443C23E7538EBFC0227525E4A80878DFAE0B96A8A445CB1C4B4332F433A8AE6";
 
     private const int InterpreterSize = 0x4000;

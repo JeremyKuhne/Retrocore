@@ -107,8 +107,8 @@ public class Trs80Model3OracleTests
     /// <summary>
     ///  The Model 4 ROM's clock at 2 MHz: after the same 20 seconds, its count of interrupts (<c>TICKIT</c> and the
     ///  seconds and minutes at <c>$4216</c>-<c>$4218</c>) is MAME's, within two ticks. MAME, 0.264 and 0.289 alike,
-    ///  keeps the clock at 30 Hz at 4 MHz too, where the Model 4's technical reference gives 60 Hz, so the fast clock is
-    ///  tested against the reference instead (<c>Trs80Model3RomTests.Model4RomClockCountsTheInterrupts</c>).
+    ///  keeps the clock at 30 Hz at 4 MHz too, where the Model 4's technical reference gives 60 Hz, so the fast clock
+    ///  is tested against the reference instead (<c>Trs80Model3RomTests.Model4RomClockCountsTheInterrupts</c>).
     /// </summary>
     [TestMethod]
     [TestCategory("Conformance")]

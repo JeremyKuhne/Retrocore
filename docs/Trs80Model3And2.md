@@ -257,9 +257,8 @@ T-states while the Model 4 runs at 4 MHz. The screens must then match, cell for 
 mame` puts it in `/usr/games`). The tests target MAME 0.289; Ubuntu 24.04's package is 0.264, which passes all but
 the DMK images' tests. Retrocore's cloud environment sets up 0.289 from Ubuntu 26.10's package as
 `/usr/local/bin/mame-0.289`, in `RETROCORE_MAME`. Its ROM sets, `trs80m3`, `trs80m4` and `trs80m2`, are in
-`trs80-roms/mame`. Without
-its set the Model 4's tests build MAME's `trs80m4` set from the SDK's sources, after checking that the builds have the SHA-1s
-MAME lists for it (`mame -listroms trs80m4`), and the others are inconclusive.
+`trs80-roms/mame`. Without its set the Model 4's tests build MAME's `trs80m4` set from the SDK's sources, after checking
+that the builds have the SHA-1s MAME lists for it (`mame -listroms trs80m4`), and the others are inconclusive.
 
 What the comparison has to allow for:
 

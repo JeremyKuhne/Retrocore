@@ -4,8 +4,7 @@ The [Model III, 4, 4P, II, 12 and 16](../Trs80Model3And2.md) run the SDK's sourc
 byte-identical to MAME's dumps, and boot to their prompts. This is what remains for them to match the Model I.
 
 **Status:** every stage is built; what each still lacks is listed with it: TRSDOS-II on the Model II and its oracle,
-and a rerun of the Model 4 DOSes' oracle after the clock's fix, which need images, and MAME's `cpu_fc86` Model II boot
-ROM.
+which need an image, and MAME's `cpu_fc86` Model II boot ROM.
 
 ## Stages
 
@@ -18,16 +17,16 @@ ROM.
    [the Model III, 4 and 4P](../Trs80Model3And2.md#the-model-iii-4-and-4p)): F1, F2 and F3 give `$60`, `$1B` and
    `$08`, with or without shift, and match MAME. The clock was 30 Hz at both speeds; a Model 4 at 4 MHz now
    interrupts 60 times a second, as the references say (MAME, 0.264 and 0.289, keeps 30), and the interrupt
-   latches only while its mask enables it. The Model 4 DOS comparisons with MAME now run, with the images, and
-   match.
+   latches only while its mask enables it. The Model 4 DOS comparisons with MAME 0.289 now run, with the images,
+   and match.
 2. **Boot their DOSes.** Done for the Model III family: TRSDOS 1.3 and LDOS 5.1.3 on the Model III, TRSDOS 6.0 and
    6.2 and LS-DOS 6.3 on the Model 4, and LS-DOS 6.3 on the 4P boot from DMK, JV3 and IMD images, take the date and
    list their directories (see [DOSes](../Trs80Model3And2.md#doses)). Booting them found that drive select's wait
    was only masked by INTRQ, so the ROM's NMI handler hung reading the status; INTRQ and DRQ now end it. Still open:
    TRSDOS-II on the Model II, which needs an image, and its DMA and keyboard codes against it.
 3. **An oracle.** Done: `Trs80Model3OracleTests` compares video RAM with MAME's `trs80m3`, `trs80m4` and `trs80m2`
-   after the same keystrokes. It covers BASIC on the Model III and 4, the five DOS images booting and listing their
-   directories, and each Model II boot ROM asking for a diskette (see
+   after the same keystrokes. It covers BASIC on the Model III and 4, the five DOSes, from seven images, booting and
+   listing their directories, and each Model II boot ROM asking for a diskette (see
    [Comparing with MAME](../Trs80Model3And2.md#comparing-with-mame)). Still open: the Model II with TRSDOS-II, once
    there is an image.
 4. **ROM sources.** Done: `Model3.asm` (sharing Level II's BASIC through `Level2.asm`), `Model4PBoot.asm`,

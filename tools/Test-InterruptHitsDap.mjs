@@ -57,7 +57,7 @@ const machines = [
         name: "PET (6502)",
         launch: { machine: "pet", sdkRoms: join(root, "src", "Retrocore.Machines.Commodore", "Roms") },
         // X and Y count 65,536 runs of INX in about a third of a second: some twenty IRQs, most taken at INX. The
-        // hook goes in the kernal's CINV.
+        // hook goes in the kernal's CINV. S starts at $01, so each IRQ's six pushes wrap page one.
         lines: [
             ".cpu Mos6502",
             "CINV = $90",
@@ -70,6 +70,8 @@ const machines = [
             "        sta CINV",
             "        lda #>Count",
             "        sta CINV+1",
+            "        ldx #$01",
+            "        txs",
             "        ldx #0",
             "        ldy #0",
             "        cli",
@@ -238,7 +240,8 @@ const machines = [
 
 // A breakpoint at Tick stops each run, with the interrupt due: stepping in goes into the handler, stepping out
 // comes back to Tick, and stepping on runs it once. Continuing from Tick runs it and stops at its next run, not
-// where the interrupt returns. Stepping over Tick runs the handler and Tick, and meets Tick's logpoint once.
+// where the interrupt returns. Stepping over Tick from its stop runs the handler and Tick, and meets Tick no more;
+// its next run meets Tick's logpoint once.
 async function steps(machine, source, tick, entry) {
     at = `${machine.name}: stepping across the interrupt`;
     const lines = machine.steps.lines ?? machine.lines;
@@ -285,6 +288,23 @@ async function steps(machine, source, tick, entry) {
     assert.equal(await shown(), line + 1);
     assert.equal(await runs(), second + 2);
     assert.equal(logged("met"), 0, `${machine.name}: stepping over Tick from its stop meets it no more`);
+    const later = await stop("continue");
+    assert.equal(later.reason, "breakpoint");
+    assert.equal(await pc(), tick);
+    assert.equal(logged("met"), 1, `${machine.name}: Tick's next run meets its logpoint`);
+
+    // A breakpoint set in the handler stops where it returns; the line's breakpoint, met there already, does not.
+    await request("setInstructionBreakpoints", { breakpoints: [] });
+    const third = await runs();
+    assert.equal((await stop("stepIn", { granularity: "instruction" })).reason, "step");
+    assert.equal(await pc(), entry);
+    const set = await request("setInstructionBreakpoints", { breakpoints: [{ instructionReference: `0x${tick.toString(16)}` }] });
+    const returned = await stop("continue");
+    assert.equal(returned.reason, "instruction breakpoint");
+    assert.deepEqual(returned.hitBreakpointIds, [set.breakpoints[0].id],
+        `${machine.name}: the breakpoint set in the handler stops at Tick, which the line's met before`);
+    assert.equal(await pc(), tick);
+    assert.equal(await runs(), third, `${machine.name}: the return stops before Tick runs`);
     await request("setInstructionBreakpoints", { breakpoints: [] });
 }
 

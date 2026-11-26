@@ -282,7 +282,7 @@ public class Z80CoreTests
         cpu.Registers = cpu.Registers with
         {
             PC = 0x0001,
-            SP = 0x7000,
+            SP = 0x6000,
             Iff1 = true,
             Iff2 = true,
             InterruptMode = (byte)Math.Max(mode, 0)
@@ -295,7 +295,7 @@ public class Z80CoreTests
         while (!cpu.IsInstructionBoundary) { cpu.StepCycle(); }
         cpu.IsTakingInterrupt.Should().BeFalse();
         cpu.Registers.PC.Should().Be((ushort)handler);
-        (cpu.Bus.Memory[0x6FFE] | (cpu.Bus.Memory[0x6FFF] << 8)).Should().Be(0x0001, "the NOP runs on return");
+        (cpu.Bus.Memory[0x5FFE] | (cpu.Bus.Memory[0x5FFF] << 8)).Should().Be(0x0001, "the NOP runs on return");
     }
 
     private static Z80Processor<Z80TestBus> Create(params byte[] program)

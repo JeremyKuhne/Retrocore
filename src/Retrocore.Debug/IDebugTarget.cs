@@ -92,6 +92,12 @@ internal interface IDebugTarget : IDebugMemory
     bool IsTakingInterrupt => false;
 
     /// <summary>
+    ///  Gets the bits of <see cref="DebugFrame.StackPointer"/> the stack wraps within: $FFFF for a 16-bit stack
+    ///  pointer.
+    /// </summary>
+    int StackMask => 0xFFFF;
+
+    /// <summary>
     ///  Gets whether an instruction has started and not finished, as opposed to an interrupt's response.
     /// </summary>
     bool InInstruction { get; }

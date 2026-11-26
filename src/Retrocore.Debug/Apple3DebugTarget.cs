@@ -155,6 +155,14 @@ internal sealed partial class Apple3DebugTarget : IZ80CardHost
     public bool IsTakingInterrupt => _machine.Processor.IsTakingInterrupt;
 
     /// <inheritdoc/>
+    /// <remarks>
+    ///  <para>
+    ///   S is a byte: the stack is page one.
+    ///  </para>
+    /// </remarks>
+    public int StackMask => 0xFF;
+
+    /// <inheritdoc/>
     public bool InInstruction => _machine.Processor.CurrentOpCode is not null;
 
     /// <inheritdoc/>

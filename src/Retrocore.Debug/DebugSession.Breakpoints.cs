@@ -929,10 +929,10 @@ internal sealed partial class DebugSession
         if (sites.Count == 0 && _systemCallBreakpoints.Count == 0) { return null; }
 
         // Breakpoints apply to the CPU running: an address with no bank or module is the machine CPU's, and a
-        // coprocessor's are in its bank, such as z80:0x0100, or in its modules. They are met once each time the
-        // instruction runs, so not again where an interrupt taken there returns, or while the CPU idles there.
+        // coprocessor's are in its bank, such as z80:0x0100, or in its modules. Each is met once at a boundary, so
+        // not again where an interrupt taken there returns, or while the CPU idles there.
         IDebugTarget cpu = Cpu;
-        if (_metBoundaries.Count != 0 && Met(cpu, pc)) { return null; }
+        long here = BoundaryToken(cpu, pc);
         bool machineCpu = IsMachineCpu(cpu);
         List<BreakpointState> stops = [];
         HashSet<BreakpointState> seen = [];
@@ -958,7 +958,9 @@ internal sealed partial class DebugSession
                 }
             }
 
-            if (!seen.Add(site.Breakpoint) || !Triggers(site.Breakpoint, access: null, out string? error)) { continue; }
+            if (!seen.Add(site.Breakpoint) || site.Breakpoint.MetToken == here) { continue; }
+            site.Breakpoint.MetToken = here;
+            if (!Triggers(site.Breakpoint, access: null, out string? error)) { continue; }
             stops.Add(site.Breakpoint);
             hidden ??= levels;
             description ??= error;
@@ -968,12 +970,13 @@ internal sealed partial class DebugSession
         {
             foreach ((byte? number, BreakpointState state) in _systemCallBreakpoints)
             {
-                if ((number is { } only && only != call.Number)
-                    || !seen.Add(state)
-                    || !Triggers(state, access: null, out string? error))
+                if ((number is { } only && only != call.Number) || !seen.Add(state) || state.MetToken == here)
                 {
                     continue;
                 }
+
+                state.MetToken = here;
+                if (!Triggers(state, access: null, out string? error)) { continue; }
 
                 stops.Add(state);
                 description ??= error ?? $"SOS call {call.Name} (${call.Number:X2}) at ${pc:X4}.";

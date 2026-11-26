@@ -4,8 +4,8 @@
 
 // Copies the project file's schema, which the debug host ships as Schemas/project-1.schema.json, into out/schemas,
 // where package.json's jsonValidation names it: the VSIX packages out/, and a self-hosted extension has no packaged
-// host to read it from. The copy also says, in VS Code's own schema keywords, that the file takes comments and
-// trailing commas, as the host reads it.
+// host to read it from. The copy also says, in VS Code's own allowTrailingCommas keyword, that the file takes trailing
+// commas, as the host reads it; comments it takes as the jsonc language package.json gives retrocore.json.
 
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -16,4 +16,4 @@ const source = join(extension, "..", "src", "Retrocore.Debug", "Project", "proje
 const output = join(extension, "out", "schemas", "project-1.schema.json");
 mkdirSync(dirname(output), { recursive: true });
 const schema = JSON.parse(readFileSync(source, "utf8"));
-writeFileSync(output, JSON.stringify({ ...schema, allowComments: true, allowTrailingCommas: true }, undefined, 2) + "\n");
+writeFileSync(output, JSON.stringify({ ...schema, allowTrailingCommas: true }, undefined, 2) + "\n");

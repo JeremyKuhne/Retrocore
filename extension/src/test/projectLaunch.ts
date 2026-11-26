@@ -64,6 +64,7 @@ export async function testProjectLaunch(workspace: vscode.WorkspaceFolder): Prom
         }
         assert.ok(await until(() => vscode.debug.activeDebugSession === undefined, 5000));
         console.log(`The off machines were: ${offModels.join(", ")}.`);
+        console.log("Isolated VS Code passed: a project launch builds and debugs each target, its session names the target's machine, and the off machine it leaves is that target's.");
 
         // The active target: picked by its project's file and name, as the status bar's quick pick does, named by
         // retrocore.activeTarget, and launched through ${command:retrocore.activeTarget}.
@@ -109,7 +110,6 @@ export async function testProjectLaunch(workspace: vscode.WorkspaceFolder): Prom
             "and only the unknown field is a problem");
         await vscode.commands.executeCommand("workbench.action.closeActiveEditor");
         console.log("Isolated VS Code passed: the project file's schema checks retrocore.json.");
-        console.log("Isolated VS Code passed: a project launch builds and debugs each target, its session names the target's machine, and the off machine it leaves is that target's.");
     } finally {
         await vscode.debug.stopDebugging();
     }

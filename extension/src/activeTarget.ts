@@ -2,9 +2,9 @@
 // SPDX-License-Identifier: MIT
 // See LICENSE file in the project root for full license information
 
-// The active target: the project target F5 builds and debugs, ${command:retrocore.activeTarget} names and the
-// language server assembles for. It shows in the status bar, which picks it from the targets of the workspace's
-// retrocore.json files, and is kept in workspace state.
+// The active target: the project target ${command:retrocore.activeTarget} names in a launch configuration. It shows
+// in the status bar, which picks it from the targets of the workspace's retrocore.json files, and is kept in
+// workspace state.
 
 import * as path from "node:path";
 import * as vscode from "vscode";
@@ -16,6 +16,36 @@ const stateKey = "retrocore.activeTarget";
 
 // Folders a project file is never looked for in: packages, build output and version control.
 const excluded = "**/{node_modules,artifacts,obj,.git}/**";
+
+// The active target as last read, for what resolves ${command:retrocore.activeTarget} itself, such as the off
+// machine reading launch.json; none until the workspace's projects are read, or without any.
+let current: ProjectTarget | undefined;
+// The read of the workspace's projects in progress, or the last one.
+let lastRead: Promise<void> = Promise.resolve();
+
+/** Waits for the workspace's projects to be read, so activeTargetName gives the active target. */
+export function activeTargetRead(): Promise<void> {
+    return lastRead;
+}
+
+/** The active target's name as retrocore.activeTarget gives it (project/target), if the workspace has one. */
+export function activeTargetName(): string | undefined {
+    return current === undefined ? undefined : qualifiedName(current);
+}
+
+/**
+ * A launch configuration with ${command:retrocore.activeTarget} in its target replaced by the active target, as VS
+ * Code's launch substitutes it, so what reads launch.json without launching gets the target the launch would.
+ */
+export function withActiveTarget<T extends Record<string, unknown>>(configuration: T): T {
+    const name = activeTargetName();
+    if (name === undefined || typeof configuration.target !== "string" || !configuration.target.includes(activeTargetVariable)) {
+        return configuration;
+    }
+    return { ...configuration, target: configuration.target.replaceAll(activeTargetVariable, name) };
+}
+
+const activeTargetVariable = "${command:retrocore.activeTarget}";
 
 /** The workspace's project targets and the one chosen. */
 export interface ActiveTargets {
@@ -48,7 +78,7 @@ export function registerActiveTarget(context: vscode.ExtensionContext): ActiveTa
     };
     const show = (): void => {
         const target = active();
-        const text = target === undefined ? "" : JSON.stringify([target.file, target.name, target.definition]);
+        const text = target === undefined ? "" : JSON.stringify([target.file, target.project, target.name, target.definition]);
         if (target === undefined) {
             item.hide();
         } else {
@@ -56,7 +86,9 @@ export function registerActiveTarget(context: vscode.ExtensionContext): ActiveTa
             item.text = `$(target) ${target.project} · ${target.name}`;
             item.tooltip = new vscode.MarkdownString(`**Retrocore target:** ${target.project} · ${target.name}`
                 + `${machine === undefined ? "" : `, on the ${machine.label}`}\n\n`
-                + `F5 builds and debugs it. Click to pick another of the workspace's targets.\n\n${target.file}`);
+                + "A launch whose target is `${command:retrocore.activeTarget}` builds and debugs it, when the launch's "
+                + "project is this target's retrocore.json or a root file that lists it. "
+                + `Click to pick another of the workspace's targets.\n\n${target.file}`);
             item.show();
         }
         if (text !== shown) {
@@ -67,8 +99,15 @@ export function registerActiveTarget(context: vscode.ExtensionContext): ActiveTa
 
     let reading: Promise<void> | undefined;
     const refresh = async (): Promise<void> => {
-        const files = (await vscode.workspace.findFiles(`**/${projectFileName}`, excluded)).map(uri => uri.fsPath)
-            .sort((a, b) => a.localeCompare(b));
+        let files: string[];
+        try {
+            files = (await vscode.workspace.findFiles(`**/${projectFileName}`, excluded)).map(uri => uri.fsPath)
+                .sort((a, b) => a.localeCompare(b));
+        } catch (error) {
+            // The targets stay as they were; the next change to a project file looks again.
+            console.warn(`retrocore: could not look for ${projectFileName} files: ${String(error)}`);
+            return;
+        }
         const found: ProjectTarget[] = [];
         // A root file's projects are found as files of their own too, and are listed once, under their own file.
         for (const file of files) {
@@ -90,10 +129,12 @@ export function registerActiveTarget(context: vscode.ExtensionContext): ActiveTa
         }
         targets = found;
         show();
+        current = active();
     };
     const queue = (): Promise<void> => {
         const next = (reading ?? Promise.resolve()).then(refresh, refresh);
         reading = next;
+        lastRead = next;
         return next;
     };
 
@@ -128,6 +169,7 @@ export function registerActiveTarget(context: vscode.ExtensionContext): ActiveTa
         if (picked === undefined) return undefined;
         await context.workspaceState.update(stateKey, { file: picked.file, target: picked.name });
         show();
+        current = active();
         return qualifiedName(picked);
     }));
 
@@ -146,7 +188,7 @@ export function registerActiveTarget(context: vscode.ExtensionContext): ActiveTa
 }
 
 /** Shows the workspace's targets, one group per project when there are several, the active one checked. */
-async function pick(targets: readonly ProjectTarget[], current: ProjectTarget | undefined): Promise<ProjectTarget | undefined> {
+async function pick(targets: readonly ProjectTarget[], chosen: ProjectTarget | undefined): Promise<ProjectTarget | undefined> {
     if (targets.length === 0) {
         void vscode.window.showInformationMessage(`Retrocore: the workspace has no ${projectFileName} with targets.`);
         return undefined;
@@ -163,7 +205,7 @@ async function pick(targets: readonly ProjectTarget[], current: ProjectTarget | 
             const machine = machineById(target.machine);
             const environment = typeof target.definition.environment === "string" ? target.definition.environment : "bare";
             items.push({
-                label: `${target === current ? "$(check)" : "$(blank)"} ${target.name}`,
+                label: `${target === chosen ? "$(check)" : "$(blank)"} ${target.name}`,
                 description: machine?.label ?? target.machine,
                 detail: `${environment === "bare" ? "On the bare machine" : `In ${environment}`}${machine === undefined ? "" : `: ${machine.detail}`}`,
                 target
@@ -172,7 +214,7 @@ async function pick(targets: readonly ProjectTarget[], current: ProjectTarget | 
     }
     const picked = await vscode.window.showQuickPick(items, {
         title: "Retrocore: Pick Target",
-        placeHolder: "Which target does F5 build and debug?",
+        placeHolder: "Which target do launches of the active target use?",
         matchOnDescription: true
     });
     return picked?.target;

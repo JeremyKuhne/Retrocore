@@ -4,10 +4,10 @@ Retrocore emulates and debugs 8-bit computers in one .NET codebase: cycle-exact 
 peripherals built around them, a multi-dialect assembler and disassembler, BASIC language and program tools, a
 source-level debugger for assembly and BASIC, and a VS Code extension.
 
-Every ROM the machines run is also maintained here as documented assembly sources that rebuild byte-identically to
-the original chips wherever a good dump of the chip is known, but for the newest machine's. No external ROM dumps are
-needed to run or debug those machines, and you can step from your own code straight into the ROM or DOS source. The
-TRS-80 Model 100 runs the ROM you supply until its source is written.
+Every ROM the machines run but the TRS-80 Model 100's is also maintained here as documented assembly sources that
+rebuild byte-identically to the original chips wherever a good dump of the chip is known. No external ROM dumps are
+needed to run or debug the other machines, and you can step from your own code straight into the ROM or DOS source.
+The Model 100 runs the ROM you supply until its source is written.
 
 | Machine | CPU | ROMs (SDK sources, or dumps you supply) | Media and peripherals |
 | --- | --- | --- | --- |

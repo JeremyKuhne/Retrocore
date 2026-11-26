@@ -6,7 +6,7 @@
 // external test data (RETROCORE_TRS80M100_ROMS, or the cache's trs80m100-roms folder), the ROM boots to its menu, and
 // an 8085 source loaded at $E000 prints through the ROM's RST 4 onto the LCD; it stops at a breakpoint in its Print
 // routine with the 80C85's call stack and registers, steps out to the caller, and shows the LCD's frames and the
-// hardware. A logpoint in a loop the ROM's RST 7.5 keeps interrupting logs once a run, and one at $003C once an
+// hardware. A logpoint in a loop the ROM's RST 7.5 keeps interrupting logs once per run, and one at $003C once per
 // interrupt. Then a launch with no program boots to the menu, enters BASIC with ENTER, runs a line typed at it, and
 // turns the power off and back on with Reset. The Tandy 102's ROM, when present, boots to the menu too. Without the
 // ROM, everything after the first launch is skipped, which is not a pass.
@@ -164,13 +164,19 @@ try {
         await request("setInstructionBreakpoints", { breakpoints: [{ instructionReference: "0x3c", logMessage: "interrupt" }] });
         await request("configurationDone");
         assert.equal((await event("stopped")).reason, "entry");
+        const startCycles = (await request("retro/video", {})).cycles;
         await request("continue", { threadId: 1 });
         assert.equal((await event("stopped")).reason, "breakpoint");
         assert.equal((await request("stackTrace", { threadId: 1 })).stackFrames[0].line, countingLine("Done"));
+
+        // RST 7.5 comes once each 9,600 cycles, 256 Hz, so the handler's logpoint logs that often, give or take one.
+        const periods = ((await request("retro/video", {})).cycles - startCycles) / 9600;
         const interrupts = logged("interrupt");
         assert.ok(interrupts >= 20, `the loop is interrupted (${interrupts} times)`);
-        assert.equal(logged("tick"), 30000, "the loop's logpoint logs once a run");
+        assert.ok(Math.abs(interrupts - periods) <= 1.5, `the handler's logpoint logs once an interrupt (${interrupts} for ${periods.toFixed(1)} periods)`);
+        assert.equal(logged("tick"), 30000, "the loop's logpoint logs once per run");
         await request("setInstructionBreakpoints", { breakpoints: [] });
+        await request("setBreakpoints", { source: { path: source }, breakpoints: [] });
         writeFileSync(source, program.join("\n"));
 
         // No program: the menu, then BASIC.

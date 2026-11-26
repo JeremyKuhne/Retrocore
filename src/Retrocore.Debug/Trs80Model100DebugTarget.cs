@@ -101,14 +101,21 @@ internal sealed partial class Trs80Model100DebugTarget : IDebugTarget, IRecordin
     }
 
     /// <inheritdoc/>
-    public bool IsInstructionBoundary => _machine.Processor.IsInstructionBoundary;
+    /// <remarks>
+    ///  <para>
+    ///   A halted 8085, as the ROM halts waiting for a key, is between instructions in each idle state, with PC past
+    ///   its HLT; it is not at a boundary for the debugger until an interrupt or reset sends it on, nor while the
+    ///   power is off, as the Altair's 8080 is not.
+    ///  </para>
+    /// </remarks>
+    public bool IsInstructionBoundary => _machine.Processor.IsInstructionBoundary && !IsIdle;
 
     /// <inheritdoc/>
     public bool InInstruction => _instruction;
 
     /// <inheritdoc/>
-    /// <remarks>Turned off, the CPU waits for the power switch.</remarks>
-    public bool IsIdle => _machine.IsPoweredOff;
+    /// <remarks>Halted, the CPU waits for an interrupt; turned off, for the power switch.</remarks>
+    public bool IsIdle => _machine.IsPoweredOff || _machine.Processor.IsHalted;
 
     /// <inheritdoc/>
     /// <remarks>

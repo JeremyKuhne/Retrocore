@@ -85,8 +85,17 @@ internal sealed partial class DebugSession
         MetBoundary met = _metBoundaries[index];
         foreach (BreakpointState state in met.Breakpoints) { state.MetToken = met.Token; }
         if (met.Trap) { _trapToken = met.Token; }
-        if (met.Basic && ReferenceEquals(met.BasicGoal, _basicGoal)) { _basicToken = met.Token; }
-        if (met.Pascal && ReferenceEquals(met.PascalGoal, _pascalGoal)) { _pascalToken = met.Token; }
+
+        // BASIC's and Pascal's stops are met again only for a goal set since: a step asked for in the handler.
+        if (met.Basic && (_basicGoal is null || ReferenceEquals(met.BasicGoal, _basicGoal)))
+        {
+            _basicToken = met.Token;
+        }
+
+        if (met.Pascal && (_pascalGoal is null || ReferenceEquals(met.PascalGoal, _pascalGoal)))
+        {
+            _pascalToken = met.Token;
+        }
 
         boundary.Token = met.Token;
         return met.Token;

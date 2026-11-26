@@ -861,7 +861,8 @@ const models: Record<string, Record<string, string>> = {
     bbc: { "": "bbcb" },
     atari800: { "": "atari800" },
     "trs80-model3": { "": "3", III: "3", model3: "3", model4: "4", "4P": "4p", model4p: "4p" },
-    "trs80-model2": { "": "2", II: "2", model2: "2", model12: "12", "16b": "16", "6000": "16", model16: "16" }
+    "trs80-model2": { "": "2", II: "2", model2: "2", model12: "12", "16b": "16", "6000": "16", model16: "16" },
+    "trs80-model100": { "": "100", m100: "100", model100: "100", t102: "102", tandy102: "102" }
 };
 
 // The machine names the debug host takes for another: the Model 4 is the Model III's machine, a 4 unless it says.

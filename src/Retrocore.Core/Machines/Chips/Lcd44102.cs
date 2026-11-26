@@ -15,7 +15,8 @@ namespace Retrocore.Machines.Chips;
 ///   <c>pp111110</c> sets the display start page; otherwise <c>ppyyyyyy</c> sets the page (X) and the column (Y, 0 to
 ///   49). Each data read or write moves the column on by one, up or down, wrapping between 0 and 49; the page does
 ///   not change. A read returns the output register, then loads it from the current address, so the first read after
-///   setting an address is a dummy. Status: bit 7 busy, bit 6 counting up, bit 5 display off, bit 4 in reset.
+///   setting an address is a dummy. Status: bit 7 busy, bit 6 counting up, bit 5 display off, bit 4 in reset (0
+///   here, as reset is taken at once).
 ///  </para>
 ///  <para>
 ///   Instructions are taken at once, so busy always reads 0; the chip's few microseconds of busy time are shorter

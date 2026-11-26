@@ -40,6 +40,22 @@ public sealed class Model100ChipTests
     }
 
     /// <summary>
+    ///  A stopped timer's count registers read back the count and mode written, and a running one's the mode it runs.
+    /// </summary>
+    [TestMethod]
+    public void StoppedTimerReadsWhatWasWritten()
+    {
+        Pio8155 pio = new();
+        pio.Write(4, 6);
+        pio.Write(5, 0x40);
+        pio.Peek(4).Should().Be(6);
+        pio.Peek(5).Should().Be(0x40);
+        pio.Write(0, 0xC0);
+        pio.Write(5, 0x80);
+        pio.Peek(5).Should().Be(0x40, "the running timer keeps its mode until the next start");
+    }
+
+    /// <summary>
     ///  An odd count's square wave is high one count longer than it is low.
     /// </summary>
     [TestMethod]

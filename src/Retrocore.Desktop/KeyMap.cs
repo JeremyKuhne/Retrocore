@@ -157,7 +157,7 @@ internal static class KeyMap
         },
 
         // The Model 100's keys are ASCII, with its arrows as the codes its ROM gives them, $1C-$1F (right, left, up,
-        // down), PAUSE/BREAK as 139 and F1-F8 as 128-135, the debug host's codes for the keys that type nothing.
+        // down), PAUSE as 139 and F1-F8 as 128-135, the debug host's codes for the keys that type nothing.
         ["trs80-model100"] = new()
         {
             [Key.Enter] = 13,

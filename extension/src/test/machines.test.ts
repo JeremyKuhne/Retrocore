@@ -176,6 +176,8 @@ test("a launch configuration finds its catalog machine as the host reads its mod
     assert.equal(catalogMachine({ machine: "trs80-model2" })?.id, "trs80-model2");
     assert.equal(catalogMachine({ machine: "trs80-model2", model: "16b" })?.id, "trs80-model16");
     assert.equal(catalogMachine({ machine: "altair" })?.id, "altair");
+    assert.equal(catalogMachine({ machine: "trs80-model100" })?.id, "trs80-model100", "a Model 100 unless it says");
+    assert.equal(catalogMachine({ machine: "trs80-model100", model: "t102" })?.id, "tandy102");
     assert.equal(catalogMachine({ machine: "pet" })?.id, "pet2001-basic2", "BASIC 2 is the PET's default");
     assert.equal(catalogMachine({ machine: "pet", model: "pet2001" })?.id, "pet2001");
     assert.equal(catalogMachine({ machine: "pet", model: "pet4032-business" })?.id, "pet4032-business");

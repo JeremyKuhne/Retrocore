@@ -20,9 +20,10 @@ namespace Retrocore.Debug;
 ///   copy of the screen at <c>$FE00</c>, so a program that draws on the LCD itself shows only as pixels.
 ///  </para>
 ///  <para>
-///   Keys are ASCII, with the control codes 1 to 26 as CTRL and a letter, and these codes for the Model 100's own
-///   keys: 28 to 31 the arrows, right, left, up and down (the codes its ROM gives them); 128 to 135 F1 to F8; 136
-///   LABEL; 137 PRINT; 138 PASTE; 139 PAUSE/BREAK.
+///   Keys are ASCII, with 8, 9 and 13 as DEL, TAB and ENTER and the other control codes from 1 to 26 as CTRL and a
+///   letter, and these codes for the Model 100's own keys: 28 to 31 the arrows, right, left, up and down (the codes
+///   its ROM gives them); 128 to 135 F1 to F8; 136 LABEL; 137 PRINT; 138 PASTE; 139 PAUSE, the PAUSE/BREAK key; 140
+///   BREAK, the same key with SHIFT.
 ///  </para>
 /// </remarks>
 internal sealed partial class Trs80Model100DebugTarget : IDebugTarget, IRecordingTarget
@@ -144,7 +145,7 @@ internal sealed partial class Trs80Model100DebugTarget : IDebugTarget, IRecordin
     public (string Name, ushort Start, int Length) MemoryScope => ("System RAM", 0xF5F0, 256);
 
     /// <inheritdoc/>
-    public int MaximumKey => 139;
+    public int MaximumKey => 140;
 
     /// <inheritdoc/>
     public IReadOnlyDictionary<string, Func<JsonObject, JsonObject>> Requests { get; }
@@ -270,7 +271,7 @@ internal sealed partial class Trs80Model100DebugTarget : IDebugTarget, IRecordin
     public bool InRom(ushort address) => _machine.Bus.Area(address) is Trs80Model100MemoryArea.Rom or Trs80Model100MemoryArea.OptionRom;
 
     /// <inheritdoc/>
-    public bool Key(int code) => code is >= 0 and <= 139 && _machine.Keyboard.Type((byte)code);
+    public bool Key(int code) => code is >= 0 and <= 140 && _machine.Keyboard.Type((byte)code);
 
     /// <inheritdoc/>
     /// <remarks>

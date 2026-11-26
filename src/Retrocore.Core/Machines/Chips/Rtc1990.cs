@@ -87,7 +87,7 @@ public sealed class Rtc1990
     public int TimingPulseHertz => _cyclesPerSecond / (2 * _tpHalfPeriod);
 
     /// <summary>
-    ///  Gets the time the counters hold. The year is the one given to <see cref="SetTime"/>, as the chip keeps none.
+    ///  Gets the time the counters hold, in a year the caller gives, as the chip keeps none.
     /// </summary>
     /// <param name="year">The year to give the result.</param>
     /// <returns>The time.</returns>

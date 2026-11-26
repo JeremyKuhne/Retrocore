@@ -105,8 +105,8 @@ character ROM, the Atari 400 and 800 their OS, floating point package, Atari BAS
 The quickest way is the **Run and Debug** dropdown. Under Retrocore it lists each
 machine: Apple IIe (enhanced), Apple IIe, Apple II Plus, Apple II, Apple III, TRS-80
 Model I (Level II), TRS-80 Model I (Level I), TRS-80 Model III, Model III (Level I), Model 4, Model 4P,
-Model II, Model 12 and Model 16 (Z80 side), Apple-1, the TRS-80 Color Computer,
-Color Computer 2 and Color Computer 3, the Commodore PET 2001 (BASIC 2), PET 2001, PET 4032 and PET 4032 (business keyboard), the BBC Micro Model B and Model A, the Atari 800 and Atari 400, the TRS-80 Model 100 and Tandy 102 (from your ROM), the MITS Altair 8800, and the Kaypro II. Pick one and press F5, and it boots as it is. **Debug: Select and Start Debugging** lists them too.
+Model II, Model 12 and Model 16 (Z80 side), the TRS-80 Model 100 and Tandy 102 (from your ROM), Apple-1, the TRS-80 Color Computer,
+Color Computer 2 and Color Computer 3, the Commodore PET 2001 (BASIC 2), PET 2001, PET 4032 and PET 4032 (business keyboard), the BBC Micro Model B and Model A, the Atari 800 and Atari 400, the MITS Altair 8800, and the Kaypro II. Pick one and press F5, and it boots as it is. **Debug: Select and Start Debugging** lists them too.
 
 To start a machine with something in it, run **Retrocore: Start Machine…**. It is in
 the Command Palette and on the **Machine** view's **...** menu. It asks three things:
@@ -1027,7 +1027,7 @@ supply: `rom` names its file, or it is found in `romDirectory` (or `RETROCORE_TR
 - `time`: the clock's start, the host's time by default.
 
 A program (`source` or `program`, loaded at `$E000` by default) runs once the ROM has set up its RAM, and can print
-with `RST 4`. The display is the 240x64 LCD; its buttons are F1-F8, LABEL, PRINT, PASTE and BREAK, and Reset turns
+with `RST 4`. The display is the 240x64 LCD; its buttons are F1-F8, LABEL, PRINT, PASTE, PAUSE and BREAK, and Reset turns
 the machine back on after `POWER OFF`. [The Model 100 guide](../docs/Trs80Model100.md) has the rest.
 
 ## Debugging on the Altair 8800

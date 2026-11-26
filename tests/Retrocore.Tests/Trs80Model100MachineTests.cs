@@ -64,7 +64,7 @@ public sealed class Trs80Model100MachineTests
     }
 
     /// <summary>
-    ///  A key pulls its row low in port $E8's read while its column is strobed low, column 8 from port B bit 0. Port B
+    ///  A key pulls its row low in port $E8's read (the ROM's port of $E0-$EF) while its column is strobed low, column 8 from port B bit 0. Port B
     ///  keeps bit 4 low, which would turn the power off.
     /// </summary>
     [TestMethod]
@@ -101,6 +101,43 @@ public sealed class Trs80Model100MachineTests
         machine.Bus.Peek(0xF000).Should().Be(0xBE, "Z is row 0 and M row 6 of column 0");
         machine.Bus.Peek(0xF001).Should().Be(0x7E, "SHIFT is row 0 and BREAK row 7 of column 8");
         machine.Bus.Peek(0xF002).Should().Be(0xFF, "nothing is down in column 1");
+    }
+
+    /// <summary>
+    ///  The Model 100's own keys type from the debugger's codes: 28-31 the arrows, 128 F1, 139 PAUSE and 140 BREAK,
+    ///  which is PAUSE/BREAK with SHIFT; 8 is DEL and 1 CTRL with A.
+    /// </summary>
+    [TestMethod]
+    public void TypedCodesPressTheirKeys()
+    {
+        Trs80Model100Machine machine = Build($"{Setup}\n        hlt");
+        (byte Code, Trs80Model100Key Key, Trs80Model100Key? Modifier)[] cases =
+        [
+            (28, Trs80Model100Key.Right, null),
+            (29, Trs80Model100Key.Left, null),
+            (30, Trs80Model100Key.Up, null),
+            (31, Trs80Model100Key.Down, null),
+            (128, Trs80Model100Key.F1, null),
+            (139, Trs80Model100Key.Break, null),
+            (140, Trs80Model100Key.Break, Trs80Model100Key.Shift),
+            (8, Trs80Model100Key.Delete, null),
+            (1, Trs80Model100Key.A, Trs80Model100Key.Control)
+        ];
+
+        foreach ((byte code, Trs80Model100Key key, Trs80Model100Key? modifier) in cases)
+        {
+            machine.Keyboard.Type(code).Should().BeTrue();
+            machine.Run(1000);
+            machine.Keyboard.IsPressed(key).Should().BeTrue($"code {code} presses {key}");
+            machine.Keyboard.IsPressed(Trs80Model100Key.Shift).Should().Be(modifier == Trs80Model100Key.Shift);
+            machine.Keyboard.IsPressed(Trs80Model100Key.Control).Should().Be(modifier == Trs80Model100Key.Control);
+            while (machine.Keyboard.IsTyping) { machine.Run(10_000); }
+
+            // The release before the next key.
+            machine.RunSeconds(0.06);
+        }
+
+        machine.Keyboard.Type(141).Should().BeFalse();
     }
 
     /// <summary>

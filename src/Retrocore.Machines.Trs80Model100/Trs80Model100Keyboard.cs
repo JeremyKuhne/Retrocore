@@ -66,9 +66,9 @@ public sealed class Trs80Model100Keyboard
     /// </summary>
     /// <param name="code">
     ///  The ASCII code: letters, digits and punctuation as the keycaps have them, carriage return for ENTER, backspace
-    ///  for DEL, tab, escape, space, and the control codes 1 to 26 as CTRL and a letter; and for the Model 100's own
-    ///  keys, 28 to 31 for the arrows, right, left, up and down (the codes the ROM gives them), 128 to 135 for F1 to
-    ///  F8, 136 LABEL, 137 PRINT, 138 PASTE and 139 PAUSE/BREAK.
+    ///  for DEL, tab, escape, space, and the other control codes from 1 to 26 as CTRL and a letter; and for the Model
+    ///  100's own keys, 28 to 31 for the arrows, right, left, up and down (the codes the ROM gives them), 128 to 135
+    ///  for F1 to F8, 136 LABEL, 137 PRINT, 138 PASTE, 139 PAUSE (the PAUSE/BREAK key) and 140 BREAK (it with SHIFT).
     /// </param>
     /// <returns>Whether the keyboard can type it.</returns>
     public bool Type(byte code)
@@ -166,6 +166,7 @@ public sealed class Trs80Model100Keyboard
             '\u0089' => (Trs80Model100Key.Print, null),
             '\u008A' => (Trs80Model100Key.Paste, null),
             '\u008B' => (Trs80Model100Key.Break, null),
+            '\u008C' => (Trs80Model100Key.Break, Shift),
             >= '\u0001' and <= '\u001A' => (Letter(code - 1), Trs80Model100Key.Control),
             _ => null
         };

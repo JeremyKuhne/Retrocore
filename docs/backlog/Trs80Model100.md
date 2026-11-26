@@ -32,7 +32,7 @@ BASIC and the cassette, is next.
 | **ROMS** | [Model and ROM information](https://bitchin100.com/wiki/index.php?title=Model_and_ROM_information) (S. Adolph, 2022) | ROM markings, checksums, regional variants |
 | **OPT** | [OPTROM Switching](https://bitchin100.com/wiki/index.php?title=OPTROM_Switching), [M100 TS-DOS ROM OptROM Support](https://bitchin100.com/wiki/index.php?title=M100_TS-DOS_ROM_OptROM_Support) | Option-ROM switching and interrupt handling |
 | **TPDD** | [TPDD](https://bitchin100.com/wiki/index.php?title=TPDD), [bkw777/pdd.sh](https://github.com/bkw777/pdd.sh), [bkw777/dlplus](https://github.com/bkw777/dlplus) | Disk drive protocol |
-| **MAME** | MAME 0.264's `kyocera/kyocera.cpp`, through `mame -listxml` and `-listdevices` of the copy installed in the session (the source itself was not read) | ROM names and digests, chips, RAM options, clocks |
+| **MAME** | MAME 0.264's `kyocera/kyocera.cpp`, through `mame -listxml` and `-listdevices` of the copy installed in the session; its source is KYO | ROM names and digests, chips, RAM options, clocks |
 | **SMAN** | Model 100 Service Manual (26-3801/3802), [text on archive.org](https://archive.org/stream/m100service/m100service_djvu.txt), seen only through search excerpts | Circuit description |
 | **T102** | Tandy 102 Service Manual (26-3803), seen only through search excerpts | Clock wiring, LCD drivers |
 | **HD** | Hitachi, *MOS LSI Data Book: LCD Driver LSI* (1983), the HD44102CH's pages; [bitsavers on archive.org](https://archive.org/details/bitsavers_hitachidatSLSIDataBookLCDDriverLSI_15075758) | The LCD driver's instructions, counters and dummy read |
@@ -120,7 +120,7 @@ characters at `$FE00`-`$FF3F` (SM7). Since the key scan rewrites ports A and B, 
 
 ### The keyboard
 
-The matrix (SM0), rows read at `$E8` with the column's strobe bit low:
+The matrix (SM0), rows read at any port of `$E0`-`$EF` (the ROM uses `$E8`) with the column's strobe bit low:
 
 | Row | Col 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 (`$BA` bit 0) |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -147,19 +147,19 @@ SM0's; MAME's order, left, right, up, down, is the right one (see "Where the sou
 | INTR | | | Not used, as far as the sources say |
 
 SM7 shows the RST 7.5 handler counting: `$F92F` from 125 to 0 copies the time, `$F930` from 12 to 1 and `$F931`
-counts down to power-off. Whether every interrupt scans the keyboard needs the ROM.
+counts down to power-off. The handler scans the keyboard every third interrupt (see Phase 1).
 
 ### The clock
 
 The uPD1990AC takes a command on C0-C2 (port A bits 0-2) latched by STB (`$E0` bit 2), shifts 40 bits of BCD time
 in on DATA IN with CLK (port A bits 4 and 3), and out on DATA OUT (port C bit 0). TP's rate is a command too, set
-to 256 Hz by the ROM. The command set comes from NEC's data sheet (to read); the ROM keeps the time at `$F923`-`$F92E`
+to 256 Hz by the ROM. The command set is NEC's data sheet's, which TRM reprints; the ROM keeps the time at `$F923`-`$F92E`
 (SM7). MAME models it as a shared device (`upd1990a`), as Retrocore should.
 
 ### Memory and the option ROM
 
 - **Map.** ROM `$0000`-`$7FFF`; RAM down from `$FFFF`, so an 8 KB machine has `$E000`-`$FFFF` and addresses below
-  read as open bus (to check). RAM survives power off, so the machine's state between sessions is a RAM image.
+  read `$FF`, as MAME has them unmapped and high. RAM survives power off, so the machine's state between sessions is a RAM image.
 - **Option ROM.** Writing 1 to `$E0` bit 0 maps the option ROM over all of `$0000`-`$7FFF`, interrupt vectors
   included, so option ROMs carry their own vectors and call back into the main ROM through a RAM stub (OPT;
   `OUT $E0` from code at `$F605`, copied there at boot). At boot the main ROM looks for "TC" at option-ROM `$0040`
@@ -176,7 +176,7 @@ From MAME 0.264 (`-listxml`) and ROMS:
 | Model | MAME set | ROM file (32 KB) | CRC32 | SHA-1 | Notes |
 | --- | --- | --- | --- | --- | --- |
 | TRS-80 Model 100 (US) | `trsm100` | `m100rom.m12` | `730a3611` | `094dbc4a…bb25d` | Checksum A2D4; Y2K-patched A2CC (ROMS). Early boards a custom pinout, later 27C256 |
-| Tandy 102 (US) | `tandy102` | `m102rom.m12` | `08e9f89c` | `b6ede773…bb36d11` | Fixes and a different character set |
+| Tandy 102 (US) | `tandy102` | `m102rom.m12` | `08e9f89c` | `b6ede773…0c36d11` | Fixes and a different character set |
 | Kyotronic 85 (Japan) | `kc85` | `kc85rom.bin` | `8a9ddd6b` | `9d18cb52…6356c0` | The original; 16 KB default RAM in MAME |
 | Olivetti M10 | `m10` (clone of `kc85`) | `m10rom.m12` | `f0e8447a` | `d5886727…7ce02e8a3af` | European, no modem |
 | NEC PC-8201 / 8201A | `pc8201`, `pc8201a` | `pc8201rom.rom` (A) | `30555035` | `96f33ff2…37c596` | N82-BASIC, different tokens; up to 96 KB banked RAM, cassette cartridge |
@@ -213,8 +213,9 @@ Every program the Model 100 ran is copyrighted, so the user supplies it, as for 
   six-character name, a checksum) and 256-byte data blocks (`$8D`, data, checksum)
   ([model-100-interface](https://github.com/Basicprogrammer10/model-100-interface/blob/main/formats/data_formats.md)).
   Tapes as WAV and as a byte-level `.cas`, if a standard exists (VirtualT's or MAME's).
-- **RAM images**: the whole of `$8000`-`$FFFF` and the machine's state, saved on exit and restored at start, as
-  battery-backed RAM. VirtualT's and MAME's (`nvram`) formats to compare.
+- **RAM images**: the fitted RAM, from its first address to `$FFFF`, saved as a session ends and loaded before the
+  power comes on, as battery-backed RAM; the CPU's state is not kept, as it is not when the power goes (built in phase
+  2). VirtualT's and MAME's (`nvram`) formats to compare.
 - **The TPDD and TPDD-2** on the serial port at 19,200 baud: requests are `ZZ`, a command, a length, up to 128 bytes
   and a checksum. Both have a file-access mode (6.2 names) and a sector-access mode; the TPDD-2 has two sides and a
   different sector protocol (TPDD). TS-DOS and Ultimate ROM II talk to it; `.pdd1` and `.pdd2` are dl2's images.
@@ -224,7 +225,7 @@ Every program the Model 100 ran is copyrighted, so the user supplies it, as for 
 - **MAME** (`trsm100`, `tandy102` and the rest in `kyocera.cpp`, by Curt Coder): MAME 0.264 is already installed in
   this session by the environment's setup script, so it runs without a download, once the user supplies the ROM.
   Its keyboard, LCD and clock are emulated; its cycle accuracy is MAME's 8085's (which, per [the CPU
-  backlog](I8080.md), does not model V and K). The driver's licence header was not read.
+  backlog](I8080.md), does not model V and K). The driver is BSD-3-Clause (KYO).
 - **VirtualT** (Ken Pettit; BSD per [SourceForge](https://sourceforge.net/projects/virtualt/); 1.7 released 2015,
   1.8 in source): Model 100, 102 and 200 (forks add the KC85, M10, PC-8201 and PC-8300), with a debugger, memory
   editor and TPDD server. Built from source, so a download to approve.
@@ -249,7 +250,7 @@ Covington's names kept as historical names. Covington's map is a second set of n
 ## The debug target
 
 - **Launch id** `trs80-model100` (the TRS-80s are `trs80-model1`, `trs80-model3`, `trs80-model2`), with options for
-  RAM (8-32 KB), ROM (`100`, `102`), an option ROM, the clock's starting time (the host's by default), and a RAM
+  RAM (8-32 KB), the model (`100`, `102`), an option ROM, the clock's starting time (the host's by default), and a RAM
   image.
 - **The LCD** as the machine's screen, 240x64 at a chosen scale, with the gray-green panel; **the keyboard** mapped
   from the host's, with F1-F8, PASTE, LABEL, PRINT, GRPH, CODE, NUM and PAUSE/BREAK.
@@ -298,8 +299,9 @@ by the user first, and stays out of the repository.
   as `IVideoSource`, the clock's TP on RST 7.5, and the power-off bit with a `PowerOn` switch. Three chips joined
   `Retrocore.Core`'s shared ones: `Pio8155` (the 8155 and 81C55), `Lcd44102` (the HD44102, from Hitachi's 1983 data
   book) and `Rtc1990` (the uPD1990AC).
-- **Checked against MAME 0.264.** Both ROMs cold-start to the menu with MAME's bytes free at every RAM size (5062,
-  13254, 21446, 29638); BASIC's banner (29382 free at 32 KB) and output; and the menu's LCD dots, which match MAME's
+- **Checked against MAME 0.264.** Both ROMs cold-start to the menu with the bytes free MAME shows at each RAM size
+  (5062, 13254, 21446, 29638), checked at all four on the Model 100 and at 24 and 32 KB on the 102, the sizes MAME's
+  `tandy102` offers; BASIC's banner (29382 free at 32 KB) and output; and the menu's LCD dots, which match MAME's
   screen exactly but for the seconds of the clock. `Trs80Model100RomTests` pins them; `Trs80Model100MachineTests`
   and `Model100ChipTests` need no ROM.
 - **Found on the way.**

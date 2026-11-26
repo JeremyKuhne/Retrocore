@@ -70,7 +70,7 @@ public sealed class Trs80Model100Lcd : IVideoSource
     /// </summary>
     /// <param name="x">The column, 0 to 239.</param>
     /// <param name="y">The row, 0 to 63.</param>
-    /// <returns>Whether it is dark.</returns>
+    /// <returns>Whether it is lit, which the panel shows dark.</returns>
     public bool Dot(int x, int y)
     {
         int driver = (y >> 5) * 5 + x / Lcd44102.Columns;

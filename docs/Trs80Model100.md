@@ -15,7 +15,7 @@ The ROM is Microsoft's and Tandy's, so it is not part of Retrocore. A launch fin
 - `rom`: the ROM's file, as a path or a name in `romDirectory`;
 - otherwise in `romDirectory`, or in the folder `RETROCORE_TRS80M100_ROMS` names, or in either's `trs80m100`,
   `tandy102` or `trs80m100-roms` folder, under MAME's names, `m100rom.m12` for the Model 100 and `m102rom.m12` for
-  the Tandy 102, or as `m100.bin` and `t102.bin`.
+  the Tandy 102, or as `m100.bin` (`m100rom.bin`) and `t102.bin` (`t102_rom.bin`, `m102rom.bin`).
 
 `model` picks which: `100` (the default) or `102`. The dumps known here are the US Model 100's (CRC32 `730a3611`)
 and the US Tandy 102's (`08e9f89c`), as MAME has them; other 32 KB ROMs, such as the regional and Y2K-patched ones,
@@ -55,12 +55,13 @@ start the ROM ignores the keyboard, though its menu shows sooner.
 
 **The clock.** The uPD1990AC counts seconds to month and the day of the week; the year is the ROM's, in RAM. A
 command on C0-C2 is taken when STB rises; the register commands and the TP commands are held apart, as NEC's data
-sheet has it. A cold start sets it to January 1 (the menu shows "Jan 01,1900"); `time` starts it at a time of your
-choosing (the host's by default), which a warm start from a RAM image keeps.
+sheet has it. A cold start sets it to January 1 (the menu shows "Jan 01,1900"); `time` starts the chip at a time of
+your choosing (the host's by default) when the machine is built, which a cold start then clears but a warm start
+from a RAM image shows.
 
 **Power.** Software turns the power off with port B bit 4 (BASIC's `POWER OFF`, or the automatic power-off): the CPU
-stops, the panel goes blank, and RAM and the clock go on. Reset is the power switch: the CPU starts at `$0000` with
-the devices reset, the ROM finds RAM valid, and it comes back to the menu, or to where it was after
+stops, the panel goes blank, and RAM and the clock go on. The debugger's Reset does what the power switch and the
+RESET button both do: the CPU starts at `$0000` with the devices reset, the ROM finds RAM valid, and it comes back to the menu, or to where it was after
 `POWER OFF,RESUME`.
 
 ## Debugging
@@ -97,11 +98,12 @@ so a breakpoint in a program shows the RST 7.5 handler's interruptions above it.
 its flags by name.
 
 **Keys.** Typed keys are ASCII, with Ctrl and a letter for CTRL; the arrows are the codes the ROM gives them (28-31),
-and Pause is PAUSE/BREAK. The display panel's buttons are F1-F8, LABEL, PRINT, PASTE and BREAK, since VS Code keeps
-its F keys; the Desktop takes F1-F8 from the keyboard.
+and Pause is PAUSE; 8, 9 and 13 (Ctrl+H, I and M) are DEL, TAB and ENTER. The display panel's buttons are F1-F8,
+LABEL, PRINT, PASTE, PAUSE and BREAK (PAUSE/BREAK with SHIFT), since VS Code keeps its F keys; the Desktop takes
+F1-F8 from the keyboard.
 
 **The display** is the LCD, a pixel to a dot, in its dark dots on a gray-green ground, and the ROM's screen copy as
-text. Retro Devices lists the ROM, the option ROM, the RAM and its image, the clock's TP and the power.
+text. The Machine view lists the ROM, the option ROM, the RAM and its image, the clock's TP and the power.
 
 ## Testing
 
@@ -109,7 +111,8 @@ text. Retro Devices lists the ROM, the option ROM, the RAM and its image, the cl
   the uPD1990AC's shift register, commands and TP, as their data sheets describe them.
 - `Trs80Model100MachineTests`: small 8085 programs in place of the ROM drive the clock's RST 7.5 at 256 Hz, the
   keyboard matrix, the option ROM's switch, the LCD's ports, the RAM sizes and the power-off bit. They need no ROM.
-- `Trs80Model100RomTests`: both ROMs boot to the menu with the bytes free MAME 0.264 shows at every RAM size, BASIC
+- `Trs80Model100RomTests`: both ROMs boot to the menu with the bytes free MAME 0.264 shows at each RAM size (MAME's
+  Tandy 102 offers only 24 and 32 KB), BASIC
   runs what is typed, sets the clock and keeps its variables through `POWER OFF,RESUME`, and the menu's LCD dots
   match MAME's screen. They read `m100.bin` and `t102.bin` from `RETROCORE_TRS80M100_ROMS` or the external test
   data's `trs80m100-roms` folder, and are inconclusive without them.

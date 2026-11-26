@@ -85,7 +85,8 @@ select{font-family:inherit;font-size:12px;padding:1px 4px;border-radius:2px;back
 <button data-code="136" title="LABEL: shows the function keys' labels">Label</button>
 <button data-code="137" title="PRINT: prints the screen">Print</button>
 <button data-code="138" title="PASTE: types the paste buffer">Paste</button>
-<button data-code="139" title="PAUSE/BREAK (or Pause): pauses; with SHIFT, BREAK stops a BASIC program">Break</button>
+<button data-code="139" title="PAUSE (or Pause): the PAUSE/BREAK key, which pauses a listing or program">Pause</button>
+<button data-code="140" title="BREAK: PAUSE/BREAK with SHIFT, which stops a BASIC program">Break</button>
 <button id="model100-reset" title="The RESET button (or Ctrl+F12 or Ctrl+Break): the 80C85 starts again, keeping RAM, and turns the machine on after POWER OFF">Reset</button>
 </span>
 <span class="keys" data-machine="kaypro2">
@@ -412,7 +413,8 @@ const keys={
     // The Model II's keyboard sends ASCII, with its arrows as $1C-$1F and BREAK as $03.
     'trs80-model2':{Enter:13,Backspace:8,Tab:9,ArrowLeft:28,ArrowRight:29,ArrowUp:30,ArrowDown:31,Escape:3},
     // The Model 100's keys are ASCII, with its arrows as the codes its ROM gives them, $1C-$1F (right, left, up,
-    // down), and PAUSE/BREAK as 139; its function keys are the buttons, as F1-F11 stay with VS Code.
+    // down), and PAUSE/BREAK as 139 (with SHIFT, BREAK, 140); its function keys are the buttons, as F1-F11 stay
+    // with VS Code.
     'trs80-model100':{Enter:13,Backspace:8,Tab:9,Escape:27,ArrowRight:28,ArrowLeft:29,ArrowUp:30,ArrowDown:31,Pause:139},
     // The Kaypro II's keyboard sends ASCII, with its arrows as $F1-$F4; it has no BREAK.
     'kaypro2':{Enter:13,Backspace:8,Tab:9,Escape:27,Delete:127,ArrowUp:0xF1,ArrowDown:0xF2,ArrowLeft:0xF3,ArrowRight:0xF4},
@@ -437,7 +439,7 @@ const hints={
     'trs80-model3':'Esc: BREAK · Home: CLEAR · arrows: the arrow keys · Ctrl+F12: reset',
     'trs80-model2':'Esc: BREAK · Ctrl+letter: control character · arrows: the arrow keys · Ctrl+F12: reset',
     'kaypro2':'Ctrl+letter: control character · Esc: ESC · arrows: the arrow keys · Ctrl+F12: reset',
-    'trs80-model100':'Ctrl+letter: CTRL · Esc: ESC · arrows: the arrow keys · Pause: PAUSE/BREAK · the buttons: F1-F8, LABEL, PRINT, PASTE · Ctrl+F12: RESET',
+    'trs80-model100':'Ctrl+letter: CTRL (but Ctrl+H, I and M: DEL, TAB, ENTER) · Esc: ESC · arrows: the arrow keys · Pause: PAUSE · the buttons: F1-F8, LABEL, PRINT, PASTE, PAUSE, BREAK · Ctrl+F12: RESET',
     'apple3':'Ctrl+letter: control character · arrows and Esc: the arrow and ESCAPE keys · Ctrl+F12: CONTROL-RESET · left/right Alt: Open/Solid Apple',
     'apple1':'Backspace: the back arrow (_) · Esc: ESC · Ctrl+F12: RESET · letters arrive as capitals',
     'coco':'Esc: BREAK · Home: CLEAR · arrows: the arrow keys · Ctrl+F12: RESET',

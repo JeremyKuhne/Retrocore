@@ -244,7 +244,7 @@ has Level I's, as [above](#level-i).
 | `Trs80RomSourceTests` | Each source builds to its ROM's SHA-256, and with the dumps, byte for byte. |
 | `Trs80Model3RomTests` | The real ROMs, built from source: the Model III and Model 4 boot through `Cass?` and `Memory Size?` to BASIC and run a statement; the 4P, with no disk, says the drive is not ready; each Model II boot ROM asks for a diskette; the Model 4 ROM's clock counting the interrupts at 2 and 4 MHz; the Model 4's function keys' codes, with and without shift; `CSAVE` and `CLOAD` at 1500 and 500 baud, a hand-written 1500 baud CAS image loading; Level I booting to `READY`, taking a statement typed in lowercase, and saving and loading at 250 baud; and, with the [DOS images](#doses), each DOS booting to its prompt and listing its directory, and the Model 4's DOSes showing typed text in the case it was typed. |
 | `Trs80Model2Tests` | Banked RAM; the CTC's mode 2 keyboard interrupt with `RETI`, and an NMI's ignored fetch reading as `RETI`; the clock NMI; the 6845; the DMA reading a sector; IMD and DMK images. |
-| `Trs80Model3OracleTests` | Against MAME 0.264, video RAM cell for cell after the same keystrokes on the same ROMs: Model III and Model 4 BASIC running a program; the Model 4's function keys and its clock's count at 2 MHz; with the [DOS images](#doses), TRSDOS 1.3, LDOS 5.1.3, TRSDOS 6.0 and 6.2 and LS-DOS 6.3 booting, taking the date and listing their directories; and the Model II's boot ROMs, versions 1, 2, 3 and 5, asking for a diskette. See [Comparing with MAME](#comparing-with-mame). |
+| `Trs80Model3OracleTests` | Against MAME 0.289, video RAM cell for cell after the same keystrokes on the same ROMs: Model III and Model 4 BASIC running a program; the Model 4's function keys and its clock's count at 2 MHz; with the [DOS images](#doses), TRSDOS 1.3 and 6.0 from their DMK and IMD images, LDOS 5.1.3, TRSDOS 6.2 and LS-DOS 6.3 booting, taking the date and listing their directories; and the Model II's boot ROMs, versions 1, 2, 3 and 5, asking for a diskette. See [Comparing with MAME](#comparing-with-mame). |
 | [`tools/Test-Trs80Model3Dap.mjs`](../tools/Test-Trs80Model3Dap.mjs) | Each machine launching from stand-in dumps it writes, and the Model III and II from the SDK's sources, with source in the stack trace; the missing-dump error, threads, hardware rows, and the Model II's reset stop. |
 
 ## Comparing with MAME
@@ -254,7 +254,10 @@ types the same keystrokes at the same emulated seconds and dumps the screen's vi
 `:video_ram` share. The machine here runs the SDK's builds of the same ROMs over the same devices' time, counting 2 MHz
 T-states while the Model 4 runs at 4 MHz. The screens must then match, cell for cell. MAME comes from
 `RETROCORE_MAME`, `mame/mame` or `mame/mame.exe` in the external data folder, or a Linux package's (`apt install
-mame` puts it in `/usr/games`). Its ROM sets, `trs80m3`, `trs80m4` and `trs80m2`, are in `trs80-roms/mame`. Without
+mame` puts it in `/usr/games`). The tests target MAME 0.289; Ubuntu 24.04's package is 0.264, which passes all but
+the DMK images' tests. Retrocore's cloud environment sets up 0.289 from Ubuntu 26.10's package as
+`/usr/local/bin/mame-0.289`, in `RETROCORE_MAME`. Its ROM sets, `trs80m3`, `trs80m4` and `trs80m2`, are in
+`trs80-roms/mame`. Without
 its set the Model 4's tests build MAME's `trs80m4` set from the SDK's sources, after checking that the builds have the SHA-1s
 MAME lists for it (`mame -listroms trs80m4`), and the others are inconclusive.
 
@@ -263,7 +266,8 @@ What the comparison has to allow for:
 - **Drives.** MAME's Model III and 4 drives are a configuration switch, off by default: its controller then reads
   `$FF` and the ROM starts BASIC. The DOS tests turn the switch on. The BASIC tests run without the controller here.
   With the switch on and drive 0 empty, MAME's ROM waits at `Diskette?`, as this one does.
-- **Images.** MAME 0.264 does not read the TRSDOS 1.3 and 6.0 DMK images, so those tests use their IMD copies.
+- **Images.** TRSDOS 1.3 and 6.0 run from both their DMK images and their IMD copies. MAME 0.264 does not read the
+  DMK images, so with it the two DMK tests fail, and only the IMD copies' tests cover those DOSes.
 - **Keys.** MAME types an uppercase letter with shift and a lowercase one without, as `Trs80Keyboard.Type` does for
   Level II on the Model III and 4 and the DOSes ([Typed and pasted text](#typed-and-pasted-text)), so both press
   the same keys. Where they differed, TRSDOS 6.0, which starts with caps lock off, echoed `dir` here and `DIR` in
@@ -276,7 +280,8 @@ What the comparison has to allow for:
   It logs when each entry fired, and every comparison checks that each one fired within 0.025 s, a frame and a
   margin, after its time (`MameSchedule.ShouldHaveFiredOnTime`). `MameSchedule` writes the times in plain decimal
   and refuses a `|` in an entry's text, which the script would split.
-- **The Model 4's clock at 4 MHz.** MAME 0.264 keeps it at 30 Hz, where the technical references give 60 Hz, so the
+- **The Model 4's clock at 4 MHz.** MAME, 0.264 and 0.289 alike, keeps it at 30 Hz, where the technical references
+  give 60 Hz: its clock interrupt is periodic, at 20.2752 MHz / 10 / 67584, whatever the CPU's speed. So the
   clock's count is compared at 2 MHz only. The Model 4 DOSes run at 4 MHz, so their comparisons run with the two
   clocks at different rates; their screens after `DIR` show no time, but the cursor's blink, which the clock drives,
   may be in a different phase.

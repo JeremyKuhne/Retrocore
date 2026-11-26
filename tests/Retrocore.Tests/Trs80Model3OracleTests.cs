@@ -106,9 +106,9 @@ public class Trs80Model3OracleTests
 
     /// <summary>
     ///  The Model 4 ROM's clock at 2 MHz: after the same 20 seconds, its count of interrupts (<c>TICKIT</c> and the
-    ///  seconds and minutes at <c>$4216</c>-<c>$4218</c>) is MAME's, within two ticks. MAME 0.264 keeps the clock at
-    ///  30 Hz at 4 MHz too, where the Model 4's technical reference gives 60 Hz, so the fast clock is tested against
-    ///  the reference instead (<c>Trs80Model3RomTests.Model4RomClockCountsTheInterrupts</c>).
+    ///  seconds and minutes at <c>$4216</c>-<c>$4218</c>) is MAME's, within two ticks. MAME, 0.264 and 0.289 alike,
+    ///  keeps the clock at 30 Hz at 4 MHz too, where the Model 4's technical reference gives 60 Hz, so the fast clock is
+    ///  tested against the reference instead (<c>Trs80Model3RomTests.Model4RomClockCountsTheInterrupts</c>).
     /// </summary>
     [TestMethod]
     [TestCategory("Conformance")]
@@ -133,8 +133,8 @@ public class Trs80Model3OracleTests
 
     /// <summary>
     ///  Each DOS boots from drive 0, takes the date and time and lists its directory. The images are in
-    ///  <c>trs80-disks</c>; see <c>docs/Trs80Model3And2.md</c>. TRSDOS 1.3 and 6.0 use their IMD copies, as MAME 0.264
-    ///  does not read their DMK images.
+    ///  <c>trs80-disks</c>; see <c>docs/Trs80Model3And2.md</c>. TRSDOS 1.3 and 6.0 run from both their DMK images and
+    ///  their IMD copies; MAME 0.264 does not read the DMK images, so those two need MAME 0.289.
     /// </summary>
     /// <param name="variant">The model.</param>
     /// <param name="image">The image's file name.</param>
@@ -142,8 +142,10 @@ public class Trs80Model3OracleTests
     [TestMethod]
     [TestCategory("Conformance")]
     [DataRow(Trs80Model3Variant.Model3, "TRSDOS13.imd", "MEMTEST/CMD")]
+    [DataRow(Trs80Model3Variant.Model3, "TRSDOS13.dmk", "MEMTEST/CMD")]
     [DataRow(Trs80Model3Variant.Model3, "LDOS513.dsk", "ALEDIT/CMD")]
     [DataRow(Trs80Model3Variant.Model4, "TRSDOS60.imd", "REPAIR/CMD")]
+    [DataRow(Trs80Model3Variant.Model4, "TRSDOS60.dmk", "REPAIR/CMD")]
     [DataRow(Trs80Model3Variant.Model4, "TRSDOS62.imd", "REPAIR/CMD")]
     [DataRow(Trs80Model3Variant.Model4, "LSDOS63J.dsk", "REPAIR/CMD")]
     public void DosMatchesMame(Trs80Model3Variant variant, string image, string listed)

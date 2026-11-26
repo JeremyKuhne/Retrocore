@@ -17,8 +17,9 @@ ROM.
    function keys are tested against its ROM, MAME and the technical references (see
    [the Model III, 4 and 4P](../Trs80Model3And2.md#the-model-iii-4-and-4p)): F1, F2 and F3 give `$60`, `$1B` and
    `$08`, with or without shift, and match MAME. The clock was 30 Hz at both speeds; a Model 4 at 4 MHz now
-   interrupts 60 times a second, as the references say (MAME 0.264 keeps 30), and the interrupt latches only while
-   its mask enables it. Still open: rerunning the Model 4 DOS comparisons with MAME, which need the images.
+   interrupts 60 times a second, as the references say (MAME, 0.264 and 0.289, keeps 30), and the interrupt
+   latches only while its mask enables it. The Model 4 DOS comparisons with MAME now run, with the images, and
+   match.
 2. **Boot their DOSes.** Done for the Model III family: TRSDOS 1.3 and LDOS 5.1.3 on the Model III, TRSDOS 6.0 and
    6.2 and LS-DOS 6.3 on the Model 4, and LS-DOS 6.3 on the 4P boot from DMK, JV3 and IMD images, take the date and
    list their directories (see [DOSes](../Trs80Model3And2.md#doses)). Booting them found that drive select's wait

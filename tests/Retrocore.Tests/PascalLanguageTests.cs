@@ -146,10 +146,37 @@ public sealed class PascalLanguageTests
         JsonNode? actions = new CodeActionHandler(workspace, basic, pascal).Handle(new JsonObject
         {
             ["textDocument"] = new JsonObject { ["uri"] = uri.Text },
-            ["context"] = new JsonObject { ["diagnostics"] = new JsonArray() }
+            ["context"] = new JsonObject
+            {
+                ["diagnostics"] = new JsonArray(new Diagnostic
+                {
+                    Range = new LspRange(line, 0, line, 4),
+                    Code = "line-length",
+                    Message = "Line is over 80 columns, the Editor's."
+                }.ToJson())
+            }
         });
 
         (actions as JsonArray).Should().BeEmpty();
+    }
+
+    /// <summary>
+    ///  An include that holds a segment's nested procedures outlines them, though the segment is declared in the
+    ///  file that includes it.
+    /// </summary>
+    /// <returns>The test.</returns>
+    [TestMethod]
+    public async Task OutlineOfAnIncludedSegmentBody()
+    {
+        Write("MAIN.TEXT", "PROGRAM Main;\nSEGMENT PROCEDURE BODYPART;\n(*$I BODY*)\nBEGIN END;\nBEGIN END.\n");
+        string body = Write("BODY.TEXT", "PROCEDURE Inner;\nVAR Count: INTEGER;\nBEGIN END;\n");
+        (DocumentSyncHandler sync, _, _, DocumentSymbolHandler outline) = Handlers(new RecordingLanguageClient());
+        DocumentUri uri = Open(sync, body);
+
+        List<DocumentSymbol> symbols = [.. await outline.Handle(Request(uri, new Position(0, 0))) ?? []];
+        DocumentSymbol inner = symbols.Should().ContainSingle().Which;
+        inner.Name.Should().Be("Inner");
+        (inner.Children ?? []).Select(child => child.Name).Should().Equal("Count");
     }
 
     private static (DocumentSyncHandler, HoverHandler, DefinitionHandler, DocumentSymbolHandler) Handlers(

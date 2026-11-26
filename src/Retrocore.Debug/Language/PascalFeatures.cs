@@ -25,9 +25,7 @@ internal static partial class PascalFeatures
     {
         if (Find(program, path, position) is not { } found) { return null; }
         (PascalDeclaration declaration, bool historical, LspRange range, string name) = found;
-        DocumentationBibliography bibliography = SourceBibliography.For(
-            program.Root,
-            program.Files.Select(file => file.Path));
+        DocumentationBibliography? bibliography = PascalDocuments.Bibliography(program);
 
         // Paragraphs, a blank line between each.
         List<string> parts = [$"```pascal\n{Heading(declaration)}\n```"];
@@ -111,16 +109,20 @@ internal static partial class PascalFeatures
             }
         }
 
-        // The program's own scope holds the outermost declarations; a program's heading is outside it.
+        // The file's outermost declarations: the program's, or those of a routine declared in another file, such as
+        // the nested procedures an include holds for its segment.
         return
         [
             .. program.Declarations
-                .Where(declaration => declaration.Kind is PascalDeclarationKind.Program or PascalDeclarationKind.Unit)
-                .Concat(program.Outer.Declarations)
-                .Distinct()
-                .Where(declaration => InFile(declaration, path))
+                .Where(declaration => InFile(declaration, path) && !OwnedHere(declaration))
                 .Select(declaration => Symbol(declaration, path, owned, top: true))
         ];
+
+        bool OwnedHere(PascalDeclaration declaration) =>
+            declaration.Kind is not (PascalDeclarationKind.Program or PascalDeclarationKind.Unit)
+                && declaration.Scope.Owner is { } owner
+                && owner.Kind is not (PascalDeclarationKind.Program or PascalDeclarationKind.Unit)
+                && InFile(owner, path);
     }
 
     // The declaration a position names: a declared or used name, or a link in a documentation comment.

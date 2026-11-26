@@ -37,13 +37,14 @@ internal sealed class CompletionHandler
     {
         // = and , ask only for an exclusion's rules, which BASIC has none of.
         bool ruleTrigger = request.TriggerCharacter is "=" or ",";
-        // Pascal has no completion yet, and the assembly's would be wrong for it.
-        if (_pascal?.IsOpen(request.TextDocument.Uri) is true) { return Task.FromResult(new List<CompletionItem>()); }
         if (_basic.Get(request.TextDocument.Uri) is { } basic)
         {
             if (ruleTrigger) { return Task.FromResult(new List<CompletionItem>()); }
             return Task.FromResult(BasicFeatures.Complete(basic, request.Position));
         }
+
+        // Pascal has no completion yet, and the assembly's would be wrong for it.
+        if (_pascal?.IsOpen(request.TextDocument.Uri) is true) { return Task.FromResult(new List<CompletionItem>()); }
 
         string path = LanguageHost.PathOf(request.TextDocument.Uri);
         string[] lines = _workspace.LinesOf(path);

@@ -35,7 +35,7 @@ internal sealed class PascalDocuments
     /// <returns>Whether it is.</returns>
     internal bool IsOpen(DocumentUri uri)
     {
-        string path = LanguageHost.PathOf(uri);
+        if (PathOf(uri) is not { } path) { return false; }
         lock (_lock)
         {
             return _open.ContainsKey(path);
@@ -49,7 +49,7 @@ internal sealed class PascalDocuments
     /// <returns>The program and the document's path, or null when it is not an open Pascal document.</returns>
     internal (PascalProgram Program, string Path)? Get(DocumentUri uri)
     {
-        string path = LanguageHost.PathOf(uri);
+        if (PathOf(uri) is not { } path) { return null; }
         lock (_lock)
         {
             return _open.ContainsKey(path) ? (ProgramOf(path), path) : null;
@@ -63,14 +63,15 @@ internal sealed class PascalDocuments
     /// <param name="text">Its text.</param>
     internal void Update(DocumentUri uri, string text)
     {
-        string path = LanguageHost.PathOf(uri);
+        if (PathOf(uri) is not { } path) { return; }
         lock (_lock)
         {
             _open[path] = text;
             _programs.Clear();
         }
 
-        Publish(path);
+        // Every open file: one this changes may have joined or left this file's program.
+        PublishAll();
     }
 
     /// <summary>
@@ -87,80 +88,96 @@ internal sealed class PascalDocuments
     }
 
     /// <summary>
-    ///  Closes a document and clears its problems; the other open files of its program are checked again, with the
-    ///  closed file as it is on disk.
+    ///  Closes a document and clears its problems; the other open files are checked again, with the closed file as it
+    ///  is on disk.
     /// </summary>
     /// <param name="uri">The document.</param>
     /// <returns>Whether it was an open Pascal document.</returns>
     internal bool Close(DocumentUri uri)
     {
-        string path = LanguageHost.PathOf(uri);
-        List<string> others;
+        if (PathOf(uri) is not { } path) { return false; }
         lock (_lock)
         {
-            if (!_open.ContainsKey(path)) { return false; }
-            PascalProgram before = ProgramOf(path);
-            _open.Remove(path);
+            if (!_open.Remove(path)) { return false; }
             _programs.Clear();
-            others = [.. _open.Keys.Where(file => before.File(file) is not null)];
         }
 
         _server.PublishDiagnostics(uri, []);
-        foreach (string other in others)
-        {
-            Publish(other);
-        }
-
+        PublishAll();
         return true;
     }
 
     /// <summary>
-    ///  Checks the open documents again after a file changed on disk, if one of their programs read it.
+    ///  Checks the open documents again after a file changed on disk, if one of their programs read it or a file
+    ///  beside it.
     /// </summary>
     internal void FilesChanged()
     {
-        List<string> open;
+        // Each open file's program is kept from when it was last published, so a current set has nothing new.
         lock (_lock)
         {
             if (_programs.Values.All(analysis => analysis.IsCurrent())) { return; }
-            open = [.. _open.Keys];
         }
 
-        foreach (string path in open)
+        PublishAll();
+    }
+
+    // Lints each open file's program, once for each, and publishes each open file's problems.
+    private void PublishAll()
+    {
+        List<(PascalProgram Program, List<string> Files)> programs = [];
+        lock (_lock)
         {
-            Publish(path);
+            foreach (string path in _open.Keys)
+            {
+                PascalProgram program = ProgramOf(path);
+                int index = programs.FindIndex(entry => entry.Program == program);
+                if (index < 0) { programs.Add((program, [path])); }
+                else { programs[index].Files.Add(path); }
+            }
+        }
+
+        foreach ((PascalProgram program, List<string> files) in programs)
+        {
+            List<PascalDiagnostic> problems = PascalLint.Check(program, Bibliography(program));
+            foreach (string file in files)
+            {
+                _server.PublishDiagnostics(
+                    DocumentUri.FromFileSystemPath(file),
+                    problems.Where(problem => string.Equals(problem.File, file, StringComparison.OrdinalIgnoreCase))
+                        .Select(Convert));
+            }
         }
     }
 
-    // Lints a file's program and publishes the problems of each of its open files.
-    private void Publish(string path)
+    /// <summary>
+    ///  Gets the documents a program's <c>Also:</c> sections may cite, or null when they can't be read, which leaves
+    ///  the keys unchecked rather than every one unknown.
+    /// </summary>
+    /// <param name="program">The program.</param>
+    /// <returns>The bibliography, or null.</returns>
+    internal static DocumentationBibliography? Bibliography(PascalProgram program)
     {
-        PascalProgram program;
-        List<string> open;
-        lock (_lock)
-        {
-            program = ProgramOf(path);
-            open = [.. _open.Keys.Where(file => program.File(file) is not null)];
-        }
-
-        // A bibliography that can't be read leaves the Also: keys unchecked, rather than every one unknown.
-        DocumentationBibliography? bibliography;
         try
         {
-            bibliography = SourceBibliography.For(program.Root, program.Files.Select(file => file.Path));
+            return SourceBibliography.For(program.Root, program.Files.Select(file => file.Path));
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {
-            bibliography = null;
+            return null;
         }
+    }
 
-        List<PascalDiagnostic> problems = PascalLint.Check(program, bibliography);
-        foreach (string file in open)
+    // A file document's path; null for one that is not a file.
+    private static string? PathOf(DocumentUri uri)
+    {
+        try
         {
-            _server.PublishDiagnostics(
-                DocumentUri.FromFileSystemPath(file),
-                problems.Where(problem => string.Equals(problem.File, file, StringComparison.OrdinalIgnoreCase))
-                    .Select(Convert));
+            return LanguageHost.PathOf(uri);
+        }
+        catch (ArgumentException)
+        {
+            return null;
         }
     }
 
@@ -237,7 +254,10 @@ internal sealed class PascalDocuments
     {
         try
         {
-            return Directory.Exists(folder) ? [.. Directory.EnumerateFiles(folder).Where(IsPascal)] : [];
+            // In name order, so that the main file a shared include is read with is the same everywhere.
+            return Directory.Exists(folder)
+                ? [.. Directory.EnumerateFiles(folder).Where(IsPascal).Order(StringComparer.OrdinalIgnoreCase)]
+                : [];
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {

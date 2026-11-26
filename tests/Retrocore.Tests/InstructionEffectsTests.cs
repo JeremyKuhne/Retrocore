@@ -26,6 +26,7 @@ public class InstructionEffectsTests
         flag N negative "Negative."
         flag V overflow "Overflow."
         flag C carry "Carry."
+        stack S
         effects ADD                 reads A carry       writes A negative carry
         effects ADD:Imm             reads A             writes A carry=0
         effects :Idx                reads X
@@ -114,6 +115,76 @@ public class InstructionEffectsTests
     }
 
     /// <summary>
+    ///  Parts make a pair stand for its halves, operand slots take the form's registers, a bracketed operand
+    ///  reads its address register, may-write and may-push mark one path's changes, and a push can name its
+    ///  stack.
+    /// </summary>
+    [TestMethod]
+    public void PartsSlotsAndConditionalEffects()
+    {
+        const string Pairs = """
+            [isa]
+            literal-forms
+            registers A:8 F:8 H:8 L:8 AF:16 HL:16 IX:16 SP:16 U:16 PC:16
+            flags F Z=6 C=0
+            flag Z zero "Zero."
+            flag C carry "Carry."
+            parts AF=A,F HL=H,L IX=IXH,IXL
+            stack SP
+            effects LD                  reads $2            writes $1
+            effects ADD                 reads $1 $2         writes $1 zero carry
+            effects CALL:Z,nn           reads zero SP       may-write SP        may-push 2
+            effects PSHU                reads A U           writes U            push U 1
+            effects POP                 reads SP            writes $1 SP        pull 2
+            [forms]
+            Implied ""
+            [Cpu]
+            00 LD A,H
+            01 LD [HL],A
+            02 LD IXH,A
+            03 ADD HL,IX
+            04 CALL Z,nn
+            05 PSHU Implied
+            06 POP AF
+            """;
+
+        IsaDescription description = IsaParser.Parse(Pairs);
+        InstructionSet set = description.InstructionSets["Cpu"];
+        uint a = description.RegisterMask("A"), h = description.RegisterMask("H"), l = description.RegisterMask("L");
+        uint ixh = description.RegisterMask("IXH"), ixl = description.RegisterMask("IXL"), sp = description.RegisterMask("SP");
+        description.RegisterMask("HL").Should().Be(h | l);
+        description.RegisterMask("IX").Should().Be(ixh | ixl);
+        description.EffectRegisters.Should().HaveCount(12, "IXH and IXL follow the registers line");
+
+        Effects(set, 0x00).RegistersRead.Should().Be(h);
+        Effects(set, 0x00).RegistersWritten.Should().Be(a);
+        Effects(set, 0x01).RegistersRead.Should().Be(h | l | a, "[HL] reads HL for its address");
+        Effects(set, 0x01).RegistersWritten.Should().Be(0);
+        Effects(set, 0x02).RegistersWritten.Should().Be(ixh);
+
+        InstructionEffects add = Effects(set, 0x03);
+        add.RegistersRead.Should().Be(h | l | ixh | ixl);
+        add.RegistersWritten.Should().Be(h | l);
+        add.FlagsWritten.Should().Be(0x41);
+
+        InstructionEffects call = Effects(set, 0x04);
+        call.FlagsRead.Should().Be(0x40);
+        call.RegistersWritten.Should().Be(0);
+        call.RegistersMayWrite.Should().Be(sp);
+        call.ChangesAny(sp).Should().BeTrue();
+        (call.Pushed, call.MayPush).Should().Be(((byte)0, (byte)2));
+        (1u << call.StackRegister).Should().Be(sp);
+
+        InstructionEffects push = Effects(set, 0x05);
+        (1u << push.StackRegister).Should().Be(description.RegisterMask("U"));
+        push.Pushed.Should().Be(1);
+
+        InstructionEffects pop = Effects(set, 0x06);
+        pop.RegistersWritten.Should().Be(a | description.RegisterMask("F") | sp);
+        pop.FlagsWritten.Should().Be(0x41, "writing AF writes F, every flag");
+    }
+
+    /// <summary>
     ///  An <c>effects in Set</c> line wins over the description's in that set and the sets built on it.
     /// </summary>
     [TestMethod]
@@ -143,16 +214,19 @@ public class InstructionEffectsTests
     /// <param name="with">What replaces it.</param>
     /// <param name="message">The expected message pattern.</param>
     [TestMethod]
-    [DataRow("reads A carry ", "reads A Q ", "Line 7: 'Q' is not a register*")]
-    [DataRow("reads A carry ", "reads A carry=1 ", "Line 7: Only written flags take a value*")]
-    [DataRow("writes A carry=0", "writes A carry=2", "Line 8: Expected flag=0, flag=1 or flag=bitN*")]
-    [DataRow("effects NOP none", "effects NOP none\neffects TSX reads S", "Line 14: No encoding takes the effects for 'TSX'.")]
-    [DataRow("effects NOP none", "effects NOP none\neffects ADD:Abs none\neffects ADD:Idx none", "Line 7: No encoding takes the effects for 'ADD'.")]
+    [DataRow("reads A carry ", "reads A Q ", "Line 8: 'Q' is not a register*")]
+    [DataRow("reads A carry ", "reads A carry=1 ", "Line 8: Only written flags take a value*")]
+    [DataRow("writes A carry=0", "writes A carry=2", "Line 9: Expected flag=0, flag=1 or flag=bitN*")]
+    [DataRow("effects NOP none", "effects NOP none\neffects TSX reads S", "Line 15: No encoding takes the effects for 'TSX'.")]
+    [DataRow("effects NOP none", "effects NOP none\neffects ADD:Abs none\neffects ADD:Idx none", "Line 8: No encoding takes the effects for 'ADD'.")]
     [DataRow("effects in Big ", "effects in Huge ", "Effects name an unknown instruction set 'Huge'.")]
-    [DataRow("effects PUL ", "effects PUL PSH ", "Line 11: Effects for 'PSH' are malformed or already given.")]
-    [DataRow("push 1", "push", "Line 10: Expected 'push n'*")]
-    [DataRow("effects NOP none", "effects NOP none reads A", "Line 13: Expected 'effects*")]
-    [DataRow("effects NOP none", "effects NOP", "Line 13: Expected 'effects*")]
+    [DataRow("effects PUL ", "effects PUL PSH ", "Line 12: Effects for 'PSH' are malformed or already given.")]
+    [DataRow("push 1", "push", "Line 11: Expected 'push [Register] n'*")]
+    [DataRow("stack S\n", "", "Line 10: 'push' needs a 'stack' line*")]
+    [DataRow("reads P S           writes S", "reads P             writes S", "Line 11: Pushes and pulls read and write S*")]
+    [DataRow("effects NOP none", "effects NOP none\nparts P=A,X", "Line 15: Expected 'parts Register=Part,Part ...' before any effects line.")]
+    [DataRow("effects NOP none", "effects NOP none reads A", "Line 14: Expected 'effects*")]
+    [DataRow("effects NOP none", "effects NOP", "Line 14: Expected 'effects*")]
     [DataRow("effects NOP none", "# no NOP", "Instruction set 'Small': no effects line gives NOP Imp.")]
     public void MalformedEffectsFail(string replace, string with, string message)
     {

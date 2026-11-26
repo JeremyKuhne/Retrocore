@@ -83,7 +83,7 @@ public sealed partial class InstructionSet
                 : rules.Targets.TryGetValue(entry.Instruction, out ushort generalTarget) ? generalTarget : null;
 
             InstructionEffects effects = set.HasEffects
-                ? EffectsOf(rules, scopes, entry.Instruction, specificKey, formKeys[form.Id] ??= ":" + form.Name)
+                ? EffectsOf(rules, scopes, entry.Instruction, specificKey, formKeys[form.Id] ??= ":" + form.Name, form.Name)
                     ?? throw new FormatException($"Instruction set '{name}': no effects line gives {entry.Instruction} {form.Name}.")
                 : default;
 
@@ -124,7 +124,8 @@ public sealed partial class InstructionSet
         IReadOnlyList<string> scopes,
         string instruction,
         string instructionAndForm,
-        string formKey)
+        string formKey,
+        string form)
     {
         EffectsLine? own = null;
         foreach (string scope in scopes)
@@ -138,7 +139,7 @@ public sealed partial class InstructionSet
 
         if (own is null) { return null; }
         own.Used = true;
-        InstructionEffects effects = own.Effects;
+        InstructionEffects effects = Resolve(rules, own, form);
         foreach (string scope in scopes)
         {
             if (!rules.Effects.TryGetValue(scope, out Dictionary<string, EffectsLine>? lines)
@@ -148,22 +149,79 @@ public sealed partial class InstructionSet
             }
 
             added.Used = true;
-            InstructionEffects other = added.Effects;
-            return effects with
-            {
-                RegistersRead = effects.RegistersRead | other.RegistersRead,
-                RegistersWritten = effects.RegistersWritten | other.RegistersWritten,
-                FlagsRead = (byte)(effects.FlagsRead | other.FlagsRead),
-                FlagsWritten = (byte)(effects.FlagsWritten | other.FlagsWritten),
-                FlagsSet = (byte)(effects.FlagsSet | other.FlagsSet),
-                FlagsCleared = (byte)(effects.FlagsCleared | other.FlagsCleared),
-                FlagsFromOperand = (byte)(effects.FlagsFromOperand | other.FlagsFromOperand),
-                OperandBits = effects.OperandBits | other.OperandBits,
-                Pushed = (byte)(effects.Pushed + other.Pushed),
-                Pulled = (byte)(effects.Pulled + other.Pulled)
-            };
+            return Combine(effects, Resolve(rules, added, form));
         }
 
         return effects;
+    }
+
+    // A line's effects with its operand slots filled in from the form's name, such as A and [HL] for A,[HL].
+    private static InstructionEffects Resolve(IsaRules rules, EffectsLine line, string form)
+    {
+        InstructionEffects effects = line.Effects;
+        if ((line.ReadSlots | line.WriteSlots | line.MayWriteSlots) == 0 || rules.EffectRegisters is not { } map)
+        {
+            return effects;
+        }
+
+        uint read = 0, written = 0, may = 0;
+        int slot = 0;
+        for (int start = 0; start <= form.Length && slot < 8; slot++)
+        {
+            int end = form.IndexOf(',', start);
+            if (end < 0) { end = form.Length; }
+            string operand = form[start..end];
+            start = end + 1;
+            byte bit = (byte)(1 << slot);
+            if ((bit & (line.ReadSlots | line.WriteSlots | line.MayWriteSlots)) == 0) { continue; }
+
+            // A bracketed operand is memory, whose address register is read wherever the line names it.
+            if (operand.Length > 2 && operand[0] == '[' && operand[^1] == ']')
+            {
+                string inside = operand[1..^1];
+                int offset = inside.IndexOfAny(['+', '-']);
+                read |= map.Mask(offset < 0 ? inside : inside[..offset]);
+                continue;
+            }
+
+            uint mask = map.Mask(operand);
+            if ((line.ReadSlots & bit) != 0) { read |= mask; }
+            if ((line.WriteSlots & bit) != 0) { written |= mask; }
+            else if ((line.MayWriteSlots & bit) != 0) { may |= mask; }
+        }
+
+        return Combine(effects, new InstructionEffects
+        {
+            RegistersRead = read,
+            RegistersWritten = written,
+            RegistersMayWrite = may,
+            FlagsRead = map.FlagsOf(read),
+            FlagsWritten = map.FlagsOf(written),
+            FlagsMayWrite = map.FlagsOf(may)
+        });
+    }
+
+    private static InstructionEffects Combine(InstructionEffects effects, InstructionEffects other)
+    {
+        uint written = effects.RegistersWritten | other.RegistersWritten;
+        byte flagsWritten = (byte)(effects.FlagsWritten | other.FlagsWritten);
+        return effects with
+        {
+            RegistersRead = effects.RegistersRead | other.RegistersRead,
+            RegistersWritten = written,
+            RegistersMayWrite = (effects.RegistersMayWrite | other.RegistersMayWrite) & ~written,
+            FlagsRead = (byte)(effects.FlagsRead | other.FlagsRead),
+            FlagsWritten = flagsWritten,
+            FlagsMayWrite = (byte)((effects.FlagsMayWrite | other.FlagsMayWrite) & ~flagsWritten),
+            FlagsSet = (byte)(effects.FlagsSet | other.FlagsSet),
+            FlagsCleared = (byte)(effects.FlagsCleared | other.FlagsCleared),
+            FlagsFromOperand = (byte)(effects.FlagsFromOperand | other.FlagsFromOperand),
+            OperandBits = effects.OperandBits | other.OperandBits,
+            Pushed = (byte)(effects.Pushed + other.Pushed),
+            Pulled = (byte)(effects.Pulled + other.Pulled),
+            MayPush = (byte)(effects.MayPush + other.MayPush),
+            MayPull = (byte)(effects.MayPull + other.MayPull),
+            StackRegisterPlusOne = effects.StackRegisterPlusOne != 0 ? effects.StackRegisterPlusOne : other.StackRegisterPlusOne
+        };
     }
 }

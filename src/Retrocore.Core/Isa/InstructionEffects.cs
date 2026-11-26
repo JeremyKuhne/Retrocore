@@ -10,14 +10,17 @@ namespace Retrocore.Isa;
 /// </summary>
 /// <remarks>
 ///  <para>
-///   Registers are bits by their index in <see cref="IsaDescription.Registers"/>; flags are bits by their bit in
-///   the flags register (<see cref="IsaFlag.Bit"/>). Reading or writing the flags register as a whole, as the
-///   6502's <c>PHP</c> and <c>PLP</c> do, sets its register bit and every flag's bit. The program counter is left
-///   to <see cref="InstructionFlow"/>, and a memory operand to <see cref="MemoryAccess"/>.
+///   Registers are bits by their index in <see cref="IsaDescription.EffectRegisters"/>, which
+///   <see cref="IsaDescription.RegisterMask"/> gives for a name: a register with parts, such as the Z80's HL, is
+///   its parts' bits. Flags are bits by their bit in the flags register (<see cref="IsaFlag.Bit"/>). Reading or
+///   writing the flags register as a whole, as the 6502's <c>PHP</c> and <c>PLP</c> do, sets its register bit and
+///   every flag's bit. The program counter is left to <see cref="InstructionFlow"/>, and a memory operand to
+///   <see cref="MemoryAccess"/>.
 ///  </para>
 ///  <para>
 ///   A written register or flag is assigned on every path through the instruction, so its old value is dead
-///   afterwards; one not written keeps its value.
+///   afterwards; one that may be written, as by a conditional call's push, changes on some paths only; the rest
+///   keep their values.
 ///  </para>
 /// </remarks>
 public readonly record struct InstructionEffects
@@ -39,6 +42,12 @@ public readonly record struct InstructionEffects
     public uint RegistersWritten { get; init; }
 
     /// <summary>
+    ///  Gets the registers written on some paths only, such as the stack pointer of a conditional call, as bits by
+    ///  register index; none of them is in <see cref="RegistersWritten"/>.
+    /// </summary>
+    public uint RegistersMayWrite { get; init; }
+
+    /// <summary>
     ///  Gets the flags read, as bits of the flags register.
     /// </summary>
     public byte FlagsRead { get; init; }
@@ -48,6 +57,12 @@ public readonly record struct InstructionEffects
     ///  <see cref="FlagsCleared"/> and <see cref="FlagsFromOperand"/>.
     /// </summary>
     public byte FlagsWritten { get; init; }
+
+    /// <summary>
+    ///  Gets the flags written on some paths only, as bits of the flags register; none of them is in
+    ///  <see cref="FlagsWritten"/>.
+    /// </summary>
+    public byte FlagsMayWrite { get; init; }
 
     /// <summary>
     ///  Gets the flags always set to 1, such as the carry after <c>SEC</c>.
@@ -82,18 +97,53 @@ public readonly record struct InstructionEffects
     public byte Pulled { get; init; }
 
     /// <summary>
+    ///  Gets the number of bytes pushed on the paths that push, as a conditional call's return address; 0 when
+    ///  the pushes are in <see cref="Pushed"/> or there are none.
+    /// </summary>
+    public byte MayPush { get; init; }
+
+    /// <summary>
+    ///  Gets the number of bytes pulled on the paths that pull, as a conditional return's address.
+    /// </summary>
+    public byte MayPull { get; init; }
+
+    /// <summary>
+    ///  Gets the register, by bit, whose stack the pushes and pulls use, or -1 when there are none.
+    /// </summary>
+    public int StackRegister => StackRegisterPlusOne - 1;
+
+    /// <summary>
+    ///  Gets one more than <see cref="StackRegister"/>, so a default value has none.
+    /// </summary>
+    internal byte StackRegisterPlusOne { get; init; }
+
+    /// <summary>
     ///  Gets whether a register is read.
     /// </summary>
-    /// <param name="register">The register's index in <see cref="IsaDescription.Registers"/>.</param>
+    /// <param name="register">The register's bit in <see cref="IsaDescription.EffectRegisters"/>.</param>
     /// <returns>Whether it is read.</returns>
     public bool Reads(int register) => (uint)register < 32 && (RegistersRead & (1u << register)) != 0;
 
     /// <summary>
-    ///  Gets whether a register is written.
+    ///  Gets whether a register is written on every path.
     /// </summary>
-    /// <param name="register">The register's index in <see cref="IsaDescription.Registers"/>.</param>
+    /// <param name="register">The register's bit in <see cref="IsaDescription.EffectRegisters"/>.</param>
     /// <returns>Whether it is written.</returns>
     public bool Writes(int register) => (uint)register < 32 && (RegistersWritten & (1u << register)) != 0;
+
+    /// <summary>
+    ///  Gets whether any of some registers is read, as any of a pair's halves.
+    /// </summary>
+    /// <param name="mask">The registers' bits, from <see cref="IsaDescription.RegisterMask"/>.</param>
+    /// <returns>Whether one is read.</returns>
+    public bool ReadsAny(uint mask) => (RegistersRead & mask) != 0;
+
+    /// <summary>
+    ///  Gets whether any of some registers may change, on every path or some.
+    /// </summary>
+    /// <param name="mask">The registers' bits, from <see cref="IsaDescription.RegisterMask"/>.</param>
+    /// <returns>Whether one may change.</returns>
+    public bool ChangesAny(uint mask) => ((RegistersWritten | RegistersMayWrite) & mask) != 0;
 
     /// <summary>
     ///  Gets whether a flag is read.

@@ -38,6 +38,12 @@ internal sealed class IsaRules
         [with(StringComparer.OrdinalIgnoreCase)];
 
     /// <summary>
+    ///  Gets or sets the registers effects are kept on, made by the first <c>parts</c>, <c>stack</c> or
+    ///  <c>effects</c> line.
+    /// </summary>
+    internal EffectRegisterMap? EffectRegisters { get; set; }
+
+    /// <summary>
     ///  Gets whether an opcode line may name a form the <c>[forms]</c> section does not declare, which then
     ///  is a literal form whose pattern is its name, such as <c>A,[HL]</c>.
     /// </summary>

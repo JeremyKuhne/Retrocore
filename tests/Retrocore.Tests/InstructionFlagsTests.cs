@@ -41,41 +41,45 @@ public sealed class InstructionFlagsTests
     {
         FlagsOf([0x89, 0x80], M6502Isa.Get(ProcessorVariant.Wdc65C02)).Should().Be("Z");
         FlagsOf([0x2C, 0x00, 0xC0], M6502Isa.Get(ProcessorVariant.Wdc65C02)).Should().Be("N V Z");
-        FlagsOf([0x00, 0x00], M6502Isa.Get(ProcessorVariant.Mos6502)).Should().Be("B I");
-        FlagsOf([0x00, 0x00], M6502Isa.Get(ProcessorVariant.Wdc65C02)).Should().Be("B I D");
+        FlagsOf([0x00, 0x00], M6502Isa.Get(ProcessorVariant.Mos6502)).Should().Be("I");
+        FlagsOf([0x00, 0x00], M6502Isa.Get(ProcessorVariant.Wdc65C02)).Should().Be("D I");
+        FlagsOf([0x28], M6502Isa.Get(ProcessorVariant.Mos6502)).Should().Be("all");
+        FlagsOf([0x0B, 0x00], M6502Isa.Get(ProcessorVariant.Mos6502)).Should().Be("N Z C", "undocumented ANC has effects too");
     }
 
     /// <summary>
-    ///  The inspector's flags for each documented 6502 family encoding, written by hand, are the flags the
-    ///  description's effects say it writes; B, which exists only in the byte BRK and PHP push, is not one.
+    ///  The hover's flags for each documented 6502 family mnemonic, which come from the description's effects
+    ///  lines, are those the hover listed by hand before; B, only a bit of the byte BRK and PHP push, is no
+    ///  flag, and the 65C02's BRK also clears D.
     /// </summary>
-    /// <param name="variant">The CPU variant.</param>
     [TestMethod]
-    [DataRow(ProcessorVariant.Mos6502)]
-    [DataRow(ProcessorVariant.Wdc65C02)]
-    [DataRow(ProcessorVariant.Rockwell65C02)]
-    public void M6502AgreesWithTheEffects(ProcessorVariant variant)
+    public void M6502HoverFlagsComeFromTheEffects()
     {
-        InstructionSet set = M6502Isa.Get(variant);
-        byte all = 0;
-        foreach (IsaFlag flag in set.Description.Flags) { all |= (byte)(1 << flag.Bit); }
-        for (int opcode = 0; opcode < 256; opcode++)
-        {
-            Disassembler.TryDecode([(byte)opcode, 0x00, 0x10], 0x1000, set, out DisassembledInstruction instruction).Should().BeTrue();
-            if (instruction.IsUndocumented || InstructionDocs.FlagsOf(instruction) is not { } text) { continue; }
-            byte flags = 0;
-            foreach (string letter in text.Split(' '))
-            {
-                flags |= letter switch
-                {
-                    "none" or "B" => 0,
-                    "all" => all,
-                    _ => (byte)(1 << set.Description.Flags.Single(flag => flag.Name == letter).Bit)
-                };
-            }
+        (string Mnemonic, string Flags)[] expected =
+        [
+            ("ADC", "N V Z C"), ("AND", "N Z"), ("ASL", "N Z C"), ("BBR0", "none"), ("BBS7", "none"),
+            ("BCC", "none"), ("BCS", "none"), ("BEQ", "none"), ("BIT", "N V Z"), ("BMI", "none"), ("BNE", "none"),
+            ("BPL", "none"), ("BRA", "none"), ("BRK", "D I"), ("BVC", "none"), ("BVS", "none"), ("CLC", "C"),
+            ("CLD", "D"), ("CLI", "I"), ("CLV", "V"), ("CMP", "N Z C"), ("CPX", "N Z C"), ("CPY", "N Z C"),
+            ("DEC", "N Z"), ("DEX", "N Z"), ("DEY", "N Z"), ("EOR", "N Z"), ("INC", "N Z"), ("INX", "N Z"),
+            ("INY", "N Z"), ("JMP", "none"), ("JSR", "none"), ("LDA", "N Z"), ("LDX", "N Z"), ("LDY", "N Z"),
+            ("LSR", "N Z C"), ("NOP", "none"), ("ORA", "N Z"), ("PHA", "none"), ("PHP", "none"), ("PHX", "none"),
+            ("PHY", "none"), ("PLA", "N Z"), ("PLP", "all"), ("PLX", "N Z"), ("PLY", "N Z"), ("RMB2", "none"),
+            ("ROL", "N Z C"), ("ROR", "N Z C"), ("RTI", "all"), ("RTS", "none"), ("SBC", "N V Z C"), ("SEC", "C"),
+            ("SED", "D"), ("SEI", "I"), ("SMB5", "none"), ("STA", "none"), ("STP", "none"), ("STX", "none"),
+            ("STY", "none"), ("STZ", "none"), ("TAX", "N Z"), ("TAY", "N Z"), ("TRB", "Z"), ("TSB", "Z"),
+            ("TSX", "N Z"), ("TXA", "N Z"), ("TXS", "none"), ("TYA", "N Z"), ("WAI", "none")
+        ];
 
-            flags.Should().Be(instruction.Effects.FlagsWritten, $"{variant} ${opcode:X2} {instruction}: \"{text}\"");
+        InstructionSet set = M6502Isa.Get(ProcessorVariant.Rockwell65C02);
+        foreach ((string mnemonic, string flags) in expected)
+        {
+            InstructionDocs.Brief(mnemonic, set)?.Flags.Should().Be(flags, mnemonic);
+            InstructionDocs.Describe(mnemonic, ProcessorVariant.Rockwell65C02).Should().Contain($"Flags: {flags}\n", mnemonic);
         }
+
+        InstructionDocs.Brief("BRK", M6502Isa.Get(ProcessorVariant.Mos6502))?.Flags.Should().Be("I");
+        InstructionDocs.Describe("PHX", ProcessorVariant.Mos6502).Should().Contain("Flags: none");
     }
 
     /// <summary>

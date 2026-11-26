@@ -158,7 +158,7 @@ and validation in VS Code.
 | `steps` | Host-side build steps that run before assembly ([building](#building)). |
 | `defines` | Project-wide symbols, added to the SDK's own. |
 | `targets` | Named targets: `machine` (as Start Machine lists it), `environment`, and optionally `cpu`, `options` (the machine's launch options), `cards`, `defines`, `sources` added for this target only, `linkerConfiguration`, `memoryMap` overrides, `files` (data files put beside the program on its disk), `bootImage`, `image`, and `machineFile` once [machine files](MachineFiles.md) exist. |
-| `entry` | The entry point's label; defaults to the first section, as a `source` launch does today. |
+| `entry` | The entry point's label; defaults to the first byte the project's own sources emit, after the platform folders' code. |
 
 A target's `machine` is a machine as the extension's catalog names it ([`machines.ts`](../../extension/src/machines.ts)),
 the same names Start Machine and favorites use: `apple1`, `apple2-iiplus`, `apple3`, `pet2001-basic2`, `pet4032`,
@@ -228,7 +228,7 @@ thing on every machine that has it.
 
 - **ROM entry points come from the entries files the SDK already has.** At first a machine's header includes them:
   `MonitorEntries.asm` and `IIeEquates.asm` on the Apple II, `MosEntries.asm` and `MosEquates.asm` on the BBC Micro,
-  `Commodore.Equates.asm` on the PET, `Apple3Equates.asm` on the Apple III. Their names inherit the ROMs'
+  `PetEquates.asm` on the PET, `Apple3Equates.asm` on the Apple III. Their names inherit the ROMs'
   documentation, so hover in a project shows the Monitor's own documentation of `COUT`, and their `Also:` names
   keep the period names working.
 - **Generated headers come later**, where a machine has no entries file or its file covers too little. They reuse

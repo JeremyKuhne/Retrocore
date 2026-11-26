@@ -435,7 +435,7 @@ internal sealed partial class SourceAnalysis
 
     // A project's target, assembled as retrocore build assembles it: its platform folders' and sources' files as one
     // stream, with its headers and defines. A target its project no longer has, or whose sources are missing, is an
-    // analysis with that error and no files.
+    // analysis with that error on the project file, its one member.
     private static SourceAnalysis AssembleTarget(string root, Func<string, string?> openText, SourceFileCache files)
     {
         WorkspaceSourceResolver resolver = new(openText, files);
@@ -454,9 +454,10 @@ internal sealed partial class SourceAnalysis
         }
         catch (Exception exception) when (exception is ProjectException or IOException or UnauthorizedAccessException)
         {
-            AssemblyDiagnostic error = new(exception.Message, new AssemblyLocation(root, line: 0));
+            string file = target?.Project.File ?? ProjectSources.FileOf(root) ?? root;
+            AssemblyDiagnostic error = new(exception.Message, new AssemblyLocation(file, line: 0));
             AssemblyProject empty = new(0);
-            return new(root, Assembler.Assembler.Failed(new(empty, [error])), empty, [], TextOf(openText), _ => []);
+            return new(root, Assembler.Assembler.Failed(new(empty, [error])), empty, [file], TextOf(openText), _ => []);
         }
 
         List<AssemblySource> sources =

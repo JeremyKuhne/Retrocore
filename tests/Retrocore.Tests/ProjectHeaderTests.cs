@@ -66,12 +66,12 @@ public sealed partial class ProjectHeaderTests
             ["RC_MACHINE_APPLE2"] = 1,
             ["RC_MODEL_APPLE2_IIE_ENHANCED"] = 1,
             ["RC_ENV_BARE"] = 1,
-            ["RC_RAM_KB"] = 64,
+            ["RC_RAM_KB"] = 48,
             ["RC_SCREEN_COLUMNS"] = 40,
             ["RC_SCREEN_ROWS"] = 24
         });
 
-        File.ReadAllBytes(ProjectBuild.Build(project.Target("iie")).Binary).Should().Equal((byte)'i', (byte)'i', (byte)'e', 64, 40, 24);
+        File.ReadAllBytes(ProjectBuild.Build(project.Target("iie")).Binary).Should().Equal((byte)'i', (byte)'i', (byte)'e', 48, 40, 24);
         File.ReadAllBytes(ProjectBuild.Build(project.Target("apple1")).Binary).Should().Equal([.. "apple1"u8, 32, 40, 24]);
         File.ReadAllBytes(ProjectBuild.Build(project.Target("pet")).Binary).Should().Equal([.. "pet"u8, 32, 40, 25]);
         project.Target("pet").Symbols().Should().ContainKey("RC_MODEL_PET4032").And.ContainKey("RC_MACHINE_PET")
@@ -129,6 +129,28 @@ public sealed partial class ProjectHeaderTests
     }
 
     /// <summary>
+    ///  The Model I's RAM follows its Expansion Interface as its launch does: 48K with it, which Level II has unless
+    ///  its target says not and Level I only when it says so.
+    /// </summary>
+    /// <param name="machine">The catalog machine.</param>
+    /// <param name="options">The target's options.</param>
+    /// <param name="ram">Its RAM, in kilobytes.</param>
+    [TestMethod]
+    [DataRow("trs80-model1-level2", "{}", 48)]
+    [DataRow("trs80-model1-level2", "{ \"expansionInterface\": false }", 16)]
+    [DataRow("trs80-model1-level1", "{}", 4)]
+    [DataRow("trs80-model1-level1", "{ \"expansionInterface\": true }", 48)]
+    [DataRow("trs80-model1-level1", "{ \"ramKilobytes\": 16 }", 16)]
+    public void ModelIRamFollowsTheExpansionInterface(string machine, string options, int ram)
+    {
+        Write("retrocore.json", $$"""
+            { "sdk": "1", "cpu": "z80", "targets": { "t": { "machine": "{{machine}}", "environment": "bare", "options": {{options}} } } }
+            """);
+
+        RetrocoreProject.Load(_folder).Target("t").Symbols()["RC_RAM_KB"].Should().Be(ram);
+    }
+
+    /// <summary>
     ///  A source may use the SDK's names but not define one: a constant or label starting with RC_, in any case, is an
     ///  error naming the file and line.
     /// </summary>
@@ -136,6 +158,9 @@ public sealed partial class ProjectHeaderTests
     [TestMethod]
     [DataRow("RC_COLUMNS = 40")]
     [DataRow("rc_putchar:\n    rts")]
+    [DataRow(".proc Main\nRC_LOOP:\n    rts\n.endproc")]
+    [DataRow(".define RC_FAST 1")]
+    [DataRow(".macro rc_getkey\n    rts\n.endmacro")]
     public void SourcesCannotDefineTheSdksNames(string source)
     {
         Write("retrocore.json", """
@@ -144,7 +169,7 @@ public sealed partial class ProjectHeaderTests
 
         Write("main.s", "    nop\n" + source);
         Error(() => ProjectBuild.Build(RetrocoreProject.Load(_folder).Target("t")))
-            .Should().Contain("main.s(2):").And.Contain("names starting with RC_ are the SDK's");
+            .Should().MatchRegex(@"main\.s\([23]\): [A-Za-z_:]*(RC_|rc_)").And.Contain("names starting with RC_ are the SDK's");
     }
 
     /// <summary>

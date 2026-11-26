@@ -20,7 +20,7 @@ namespace Retrocore.Debug.Project;
 ///   <c>RC_MODEL_&lt;machine&gt;</c>, 1 for the exact machine by its catalog id (<c>RC_MODEL_APPLE2_IIE_ENHANCED</c>,
 ///   <c>RC_MODEL_PET4032</c>); <c>RC_ENV_&lt;environment&gt;</c>, 1 for the environment (<c>RC_ENV_BARE</c>);
 ///   <c>RC_RAM_KB</c>, the machine's RAM, its <c>ramKilobytes</c> option or the launch's default;
-///   <c>RC_SCREEN_COLUMNS</c> and <c>RC_SCREEN_ROWS</c>, the text screen the environment starts in; and
+///   <c>RC_SCREEN_COLUMNS</c> and <c>RC_SCREEN_ROWS</c>, the text screen the machine's ROM starts in; and
 ///   <c>RC_TARGET</c>, the target's name, as a textual definition of a quoted string.
 ///  </para>
 ///  <para>
@@ -40,11 +40,12 @@ internal static class TargetDefines
     /// </summary>
     internal const string TargetName = "RC_TARGET";
 
-    // Each machine's RAM, in kilobytes, when its target gives no ramKilobytes: the launch's own default.
+    // Each machine's RAM, in kilobytes, when its target gives no ramKilobytes: the launch's own default, counted as the
+    // option counts it, so the Apple II's is the RAM on its board, 48K, without a language card or auxiliary memory.
     private static readonly Dictionary<string, int> s_ram = new()
     {
-        ["apple2-iie-enhanced"] = 64,
-        ["apple2-iie"] = 64,
+        ["apple2-iie-enhanced"] = 48,
+        ["apple2-iie"] = 48,
         ["apple2-iiplus"] = 48,
         ["apple2-ii"] = 48,
         ["apple3"] = 256,
@@ -73,8 +74,8 @@ internal static class TargetDefines
         ["kaypro2"] = 64
     };
 
-    // Each family's text screen as its ROM starts it, columns by rows; the Model II's, the Model 4's own mode, and
-    // the CP/M machines' terminals are 80 columns.
+    // Each family's text screen as its ROM starts it, columns by rows: the Model 4 and 4P start in the Model III's
+    // 64 by 16, the Model II, 12 and 16 in 80 by 24, and the Altair's and Kaypro's terminals are 80 by 24.
     private static readonly Dictionary<string, (int Columns, int Rows)> s_screens = new()
     {
         ["apple1"] = (40, 24),
@@ -161,7 +162,9 @@ internal static class TargetDefines
     /// <returns>The define's part, such as <c>APPLE2_IIE_ENHANCED</c>.</returns>
     internal static string Part(string name) => name.ToUpperInvariant().Replace('-', '_').Replace('.', '_');
 
-    // The target's RAM: its ramKilobytes, or the machine's default; the Model I's Expansion Interface brings 48K.
+    // The target's RAM: its ramKilobytes, or the machine's default. The Model I's default follows its Expansion
+    // Interface, which a Level II machine has unless its target says not and a Level I one only when it says so:
+    // 48K with it, otherwise 16K under Level II and 4K under Level I, as the launch has it.
     private static int RamKilobytes(ProjectTarget target)
     {
         if (target.Options["ramKilobytes"] is { } ram && ram.GetValueKind() == System.Text.Json.JsonValueKind.Number)
@@ -169,11 +172,17 @@ internal static class TargetDefines
             return ram.GetValue<int>();
         }
 
-        if (target.Machine.Id == "trs80-model1-level2"
-            && target.Options["expansionInterface"] is { } expansion
-            && expansion.GetValueKind() == System.Text.Json.JsonValueKind.False)
+        if (target.Machine.Machine == "trs80-model1")
         {
-            return 16;
+            bool level1 = target.Machine.Rom == "level1";
+            bool expansion = target.Options["expansionInterface"]?.GetValueKind() switch
+            {
+                System.Text.Json.JsonValueKind.True => true,
+                System.Text.Json.JsonValueKind.False => false,
+                _ => !level1
+            };
+
+            return expansion ? 48 : level1 ? 4 : 16;
         }
 
         return s_ram.GetValueOrDefault(target.Machine.Id);

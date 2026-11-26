@@ -94,6 +94,15 @@ public sealed class ProjectLanguageTests
 
         answer?.ToJsonString().Should().Be("""{"ranges":[{"start":{"line":3,"character":0},"end":{"line":5,"character":0}}]}""");
 
+        // The editor fades the lines left out, as an unnecessary hint over them.
+        DocumentUri uri = DocumentUri.FromFileSystemPath(main);
+        for (int attempt = 0; attempt < 600 && !client.Inactive(uri).Any(hint => hint.Range.Start.Line == 3); attempt++)
+        {
+            await Task.Delay(50);
+        }
+
+        client.Inactive(uri).Should().ContainSingle().Which.Range.Should().Be(new LspRange(3, 0, 5, 0));
+
         // Clearing it goes back to the first target that assembles the source.
         LanguageHost.ActiveTargetChanged(workspace, new JsonObject
         {

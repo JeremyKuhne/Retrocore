@@ -44,11 +44,6 @@ internal static class ProjectSources
     private static volatile Tuple<string, string>? s_active;
 
     /// <summary>
-    ///  Occurs when the active target changes, with the project file it is in, or null when none is active.
-    /// </summary>
-    internal static event Action<string?>? ActiveChanged;
-
-    /// <summary>
     ///  Gets the active target: the project file, a project's own <c>retrocore.json</c>, and the target's name.
     /// </summary>
     internal static (string File, string Target)? Active => s_active is { } active ? (active.Item1, active.Item2) : null;
@@ -85,14 +80,28 @@ internal static class ProjectSources
             active = (file, name);
         }
 
-        (string File, string Target)? previous = Active;
         s_active = active is { } set ? Tuple.Create(set.File, set.Target) : null;
-        if (previous != active)
+    }
+
+    /// <summary>
+    ///  Forgets the source lists of the targets of the projects in a folder, so the next lookup lists them again:
+    ///  after a project file changed, or the files its patterns match.
+    /// </summary>
+    /// <param name="folder">The folder, with its separator at the end.</param>
+    internal static void Forget(string folder)
+    {
+        foreach ((string File, string Target) key in s_sources.Keys)
         {
-            if (previous is { } old) { ActiveChanged?.Invoke(old.File); }
-            if (active is { } now) { ActiveChanged?.Invoke(now.File); }
+            if (key.File.StartsWith(folder, StringComparison.OrdinalIgnoreCase)) { s_sources.TryRemove(key, out _); }
         }
     }
+
+    /// <summary>
+    ///  Gets the project file a target root's target is in.
+    /// </summary>
+    /// <param name="root">The target root.</param>
+    /// <returns>The project file, or null for a path that is not a target root.</returns>
+    internal static string? FileOf(string root) => s_roots.TryGetValue(root, out var named) ? named.File : null;
 
     /// <summary>
     ///  Gets the target root a source is analyzed through.

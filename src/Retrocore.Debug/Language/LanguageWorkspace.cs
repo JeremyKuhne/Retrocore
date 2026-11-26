@@ -132,9 +132,9 @@ internal sealed partial class LanguageWorkspace
     }
 
     /// <summary>
-    ///  Analyzes a project's open sources again, through the targets they now belong to, after its file or its active
-    ///  target changed. Its targets' analyses are forgotten and their diagnostics cleared first, since a source may
-    ///  now be analyzed through another target.
+    ///  Analyzes a project's targets and open sources again, each source through the target it now belongs to, after
+    ///  its file or its active target changed. Its targets' analyses are forgotten and their diagnostics cleared
+    ///  first, since a source may now be analyzed through another target.
     /// </summary>
     /// <param name="projectFile">The project's <c>retrocore.json</c>.</param>
     internal void ProjectChanged(string projectFile)
@@ -143,12 +143,14 @@ internal sealed partial class LanguageWorkspace
         bool InProject(string path) => path.StartsWith(folder, StringComparison.OrdinalIgnoreCase);
         bool IsTarget(string root) => root.EndsWith(ProjectSources.Extension, StringComparison.OrdinalIgnoreCase) && InProject(root);
 
+        ProjectSources.Forget(folder);
         foreach ((string path, string root) in _owners)
         {
             if (IsTarget(root) || InProject(path)) { _owners.TryRemove(KeyValuePair.Create(path, root)); }
         }
 
-        foreach (string root in _analyses.Keys.Where(IsTarget).ToList())
+        List<string> dropped = [.. _analyses.Keys.Where(IsTarget)];
+        foreach (string root in dropped)
         {
             _analyses.TryRemove(root, out _);
             _lastGood.TryRemove(root, out _);
@@ -162,7 +164,10 @@ internal sealed partial class LanguageWorkspace
             }
         }
 
-        foreach (string root in _open.Keys.Where(InProject).Select(RootOf).Distinct(StringComparer.OrdinalIgnoreCase).ToList())
+        // Every target analyzed before is analyzed again, for workspace search, as is each open source's, which may be
+        // another target now; scheduling a root again cancels an attempt still running.
+        List<string> roots = [.. dropped, .. _open.Keys.Where(InProject).Select(RootOf)];
+        foreach (string root in roots.Distinct(StringComparer.OrdinalIgnoreCase))
         {
             Schedule(root);
         }
@@ -178,9 +183,10 @@ internal sealed partial class LanguageWorkspace
     /// </returns>
     internal async Task<IReadOnlyList<AssemblyLineRange>?> InactiveLinesAsync(string path, CancellationToken cancellation)
     {
-        string root = RootOf(path);
         await AnalysisOfAsync(path, cancellation).ConfigureAwait(continueOnCapturedContext: false);
-        if (!_analyses.TryGetValue(root, out SourceAnalysis? latest) || latest.Result.SkippedLines is not { } skipped)
+
+        // The latest analysis, as its hints are the ones published, of the root the file belongs to after the wait.
+        if (!_analyses.TryGetValue(RootOf(path), out SourceAnalysis? latest) || latest.Result.SkippedLines is not { } skipped)
         {
             return null;
         }
@@ -364,10 +370,24 @@ internal sealed partial class LanguageWorkspace
         cancellation.ThrowIfCancellationRequested();
         _analyses[root] = analysis;
         if (analysis.Result.Success) { _lastGood[root] = analysis; }
-        foreach (string member in analysis.Members) { _owners[member] = root; }
+
+        // A project's source in several targets belongs only to the one it prefers: the active target, or the first
+        // that assembles it.
+        foreach (string member in analysis.Members.Where(member => Owns(root, member)))
+        {
+            _owners[member] = root;
+        }
+
         Release(root);
         Publish(analysis);
     }
+
+    // Whether a root owns a file it analyzed: any root but a project's target owns its members; a target owns those
+    // that prefer no other target.
+    private static bool Owns(string root, string path) =>
+        !root.EndsWith(ProjectSources.Extension, StringComparison.OrdinalIgnoreCase)
+            || ProjectSources.RootOf(path) is not { } preferred
+            || string.Equals(preferred, root, StringComparison.OrdinalIgnoreCase);
 
     private void Publish(SourceAnalysis analysis)
     {
@@ -399,6 +419,15 @@ internal sealed partial class LanguageWorkspace
             list.AddRange(documentation);
         }
 
+        // The lines the conditional assembly left out fade, as hints an editor leaves out of its problems.
+        foreach ((string path, List<Diagnostic> list) in byFile)
+        {
+            list.AddRange(InactiveHints(analysis, path));
+        }
+
+        // A target reports only on the sources it owns, so a source two targets assemble shows its own target's.
+        foreach (string path in byFile.Keys.Where(path => !Owns(analysis.Root, path)).ToList()) { byFile.Remove(path); }
+
         // Files this root reported before but no longer includes get their diagnostics cleared.
         HashSet<string> previous = _published.GetOrAdd(analysis.Root, _ => [with(StringComparer.OrdinalIgnoreCase)]);
         lock (previous)
@@ -412,6 +441,31 @@ internal sealed partial class LanguageWorkspace
         {
             _server.PublishDiagnostics(DocumentUri.FromFileSystemPath(path), list);
         }
+    }
+
+    /// <summary>
+    ///  Gets a hint marking each run of a file's lines that its analysis's conditional assembly left out as
+    ///  unnecessary, which an editor fades: the inactive branches of the target's <c>.if</c> blocks.
+    /// </summary>
+    /// <param name="analysis">The analysis.</param>
+    /// <param name="path">A file the analysis opened.</param>
+    /// <returns>The hints, none when the file had nothing left out.</returns>
+    internal static IEnumerable<Diagnostic> InactiveHints(SourceAnalysis analysis, string path)
+    {
+        if (analysis.Result.SkippedLines is not { } skipped
+            || !skipped.Skipped.TryGetValue(path, out IReadOnlyList<AssemblyLineRange>? lines))
+        {
+            return [];
+        }
+
+        return lines.Select(range => new Diagnostic
+        {
+            Range = new LspRange(range.Start, 0, range.End, 0),
+            Severity = DiagnosticSeverity.Hint,
+            Source = "retrocore",
+            Message = "This build leaves these lines out.",
+            IsUnnecessary = true
+        });
     }
 
     private (string Path, Diagnostic Diagnostic) Convert(AssemblyDiagnostic diagnostic, string root)

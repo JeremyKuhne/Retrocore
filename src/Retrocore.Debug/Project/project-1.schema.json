@@ -233,7 +233,7 @@
         "bootImage": {
           "type": "string",
           "minLength": 1,
-          "description": "The folder of the boot media or device dumps the environment needs where they are not SDK sources, relative to the project's folder (${obj} is its obj/ folder), such as the 4040's ROMs a basic target's disk boots with. The launch finds them there by their hashes, then in the machine's ROM folder variable and RETROCORE_CACHE. An environment that boots from the SDK's sources alone takes none."
+          "description": "The folder of the boot media or device dumps the environment needs where they are not SDK sources, relative to the project's folder (${obj} is its obj/ folder), such as the 4040's ROMs a basic target's disk boots with. The launch finds them there by their hashes, then in the launch's romDirectory and the set's folder beside it, the machine's ROM folder variable and RETROCORE_CACHE. An environment that boots from the SDK's sources alone takes none."
         }
       }
     },

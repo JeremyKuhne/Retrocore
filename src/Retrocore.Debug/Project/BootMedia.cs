@@ -92,7 +92,7 @@ internal static class BootMedia
 
     /// <summary>
     ///  Gets the folders a set's files are looked for in, in order: a target's <c>bootImage</c>, the launch's ROM
-    ///  folder, the folder the set's variable names, and the cache.
+    ///  folder and the set's folder beside it, the folder the set's variable names, and the cache.
     /// </summary>
     /// <param name="set">The set.</param>
     /// <param name="bootImage">The target's <c>bootImage</c>, or null.</param>
@@ -102,7 +102,14 @@ internal static class BootMedia
     {
         List<string> roots = [];
         if (bootImage is not null) { roots.Add(bootImage); }
-        if (!string.IsNullOrWhiteSpace(romDirectory)) { roots.Add(Path.GetFullPath(romDirectory)); }
+        if (!string.IsNullOrWhiteSpace(romDirectory))
+        {
+            // The machine's folder, and the set's folder beside it, as a MAME folder of sets has them.
+            string full = Path.GetFullPath(romDirectory);
+            roots.Add(full);
+            if (Path.GetDirectoryName(full) is { } parent) { roots.Add(Path.Join(parent, set.Folder)); }
+        }
+
         string? folder = set.Variable is { } variable ? Environment.GetEnvironmentVariable(variable) : null;
         if (!string.IsNullOrEmpty(folder)) { roots.Add(folder); }
         roots.Add(CacheDirectory);
@@ -179,7 +186,12 @@ internal static class BootMedia
         Directory.CreateDirectory(folder);
         foreach ((string name, string path) in found)
         {
-            File.Copy(path, Path.Join(folder, name), overwrite: true);
+            // A later launch may find the copy an earlier one made, which is already in place.
+            string copy = Path.Join(folder, name);
+            if (!string.Equals(Path.GetFullPath(path), Path.GetFullPath(copy), StringComparison.OrdinalIgnoreCase))
+            {
+                File.Copy(path, copy, overwrite: true);
+            }
         }
 
         return folder;

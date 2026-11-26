@@ -403,10 +403,13 @@ public sealed class ProjectLaunchTests
         using DapTestClient client = new();
         client.Request("initialize", []);
         client.Fails("launch", Launch("basic1")).Should().EndWith(
-            "it boots its 4040 disk, but BASIC 1's IEEE-488 routines have the bug that stops disk drives working; boot the tape, or target a PET with BASIC 2 or 4.");
+            "BASIC 1's IEEE-488 routines have the bug that stops disk drives working, so it cannot boot its 4040 disk; boot the tape, or target a PET with BASIC 2 or 4.");
 
         client.Fails("launch", Launch("missing")).Should().EndWith(
             $"its 'bootImage', {Path.Join(_folder, "no-such-folder")}, is not a folder of the 4040's ROMs.");
+
+        Action build = () => ProjectBuild.Build(RetrocoreProject.Load(_folder).Target("basic1"));
+        build.Should().Throw<ProjectException>("the build refuses it too").WithMessage("*cannot boot its 4040 disk*");
     }
 
     /// <summary>

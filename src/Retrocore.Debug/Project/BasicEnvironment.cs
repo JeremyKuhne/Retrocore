@@ -92,17 +92,6 @@ internal sealed class BasicEnvironment : TargetEnvironment
         }
 
         if (target.ImageBoot != "disk") { return; }
-        if (target.Machine.Id == "pet2001")
-        {
-            throw new ProjectException(
-                $"{where}: it boots its 4040 disk, but BASIC 1's IEEE-488 routines have the bug that stops disk drives working; boot the tape, or target a PET with BASIC 2 or 4.");
-        }
-
-        if (target.BootImage is { } folder && !Directory.Exists(folder))
-        {
-            throw new ProjectException($"{where}: its 'bootImage', {folder}, is not a folder of the 4040's ROMs.");
-        }
-
         launch["diskUnits"] = new JsonArray(8);
         if (launch.String("driveRomDirectory") is { Length: > 0 }) { return; }
 
@@ -112,6 +101,26 @@ internal sealed class BasicEnvironment : TargetEnvironment
             ?? throw new ProjectException($"{where}: it boots its 4040 disk, but {BootMedia.Missing(set, roots)}.");
 
         launch["driveRomDirectory"] = BootMedia.Gather(set, found, Path.Join(target.Project.Intermediate, target.Name, "media"));
+    }
+
+    /// <inheritdoc/>
+    /// <remarks>
+    ///  <para>
+    ///   BASIC 1's PET cannot boot the disk, as its IEEE-488 routines have the bug that stops disk drives working, and a
+    ///   <c>bootImage</c> must be a folder, of the 4040's ROMs.
+    ///  </para>
+    /// </remarks>
+    protected override IEnumerable<string> OwnProblems(ProjectTarget target)
+    {
+        if (target.ImageBoot == "disk" && target.Machine.Id == "pet2001")
+        {
+            yield return "BASIC 1's IEEE-488 routines have the bug that stops disk drives working, so it cannot boot its 4040 disk; boot the tape, or target a PET with BASIC 2 or 4";
+        }
+
+        if (target.BootImage is { } folder && !Directory.Exists(folder))
+        {
+            yield return $"its 'bootImage', {folder}, is not a folder of the 4040's ROMs";
+        }
     }
 
     /// <inheritdoc/>

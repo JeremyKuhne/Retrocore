@@ -129,6 +129,7 @@ internal abstract class TargetEnvironment
     /// <returns>The problems; none when the environment takes all of it.</returns>
     internal IEnumerable<string> Problems(ProjectTarget target)
     {
+        foreach (string problem in OwnProblems(target)) { yield return problem; }
         if (target.Files.Count != 0 && !TakesFiles)
         {
             yield return NoFiles;
@@ -158,6 +159,13 @@ internal abstract class TargetEnvironment
             yield return $"the '{Name}' environment boots from the SDK's sources, so it takes no 'bootImage'";
         }
     }
+
+    /// <summary>
+    ///  Gets what else of a target the environment cannot build or boot, as phrases that end a build's error.
+    /// </summary>
+    /// <param name="target">The target.</param>
+    /// <returns>The problems; none by default.</returns>
+    protected virtual IEnumerable<string> OwnProblems(ProjectTarget target) => [];
 
     /// <summary>
     ///  Writes the environment's file and its image for a built target, beside its binary.

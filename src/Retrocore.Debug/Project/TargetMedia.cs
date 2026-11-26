@@ -13,7 +13,7 @@ namespace Retrocore.Debug.Project;
 /// <param name="Image">
 ///  The image, or null when the environment builds none or the target's <c>image</c> is false.
 /// </param>
-/// <param name="ImageKind">What the image is, such as <c>ACI tape (WAV)</c>, or null with no image.</param>
+/// <param name="ImageKind">What the image is, such as <c>ACI tape</c>, or null with no image.</param>
 /// <param name="Note">How to load the file or image by hand, or null.</param>
 internal sealed record TargetMedia(string? File, string? FileKind, string? Image, string? ImageKind, string? Note = null)
 {

@@ -28,6 +28,9 @@ internal sealed class WozmonEnvironment : TargetEnvironment
     internal override bool BuildsImage => true;
 
     /// <inheritdoc/>
+    internal override IReadOnlyList<string> Extensions { get; } = [".hex", ".wav"];
+
+    /// <inheritdoc/>
     internal override TargetMedia Write(TargetBuild build)
     {
         (int start, byte[] bytes) = ProjectBuild.Image(build);
@@ -43,7 +46,7 @@ internal sealed class WozmonEnvironment : TargetEnvironment
         }
 
         string note = tape is null
-            ? $"type it at the Woz Monitor's prompt"
+            ? "type it at the Woz Monitor's prompt"
             : $"type it at the Woz Monitor's prompt, or play the tape after C100R and {start:X4}.{end:X4}R, then {build.Entry:X4}R";
 
         return new(hex, "Woz Monitor hex", tape, tape is null ? null : "ACI tape", note);

@@ -224,7 +224,7 @@
               "required": ["template"],
               "additionalProperties": false,
               "properties": {
-                "template": { "type": "string", "minLength": 1, "description": "The disk the image starts from, relative to the project's folder." }
+                "template": { "type": "string", "minLength": 1, "description": "The disk the image starts from, relative to the project's folder; ${obj} is its obj/ folder." }
               }
             }
           ]
@@ -232,7 +232,7 @@
         "bootImage": {
           "type": "string",
           "minLength": 1,
-          "description": "The boot media the environment needs, where it is not an SDK source, relative to the project's folder; without it, the build looks for the media by hash. An environment that boots from the SDK's sources takes none."
+          "description": "The boot media the environment needs, where it is not an SDK source, relative to the project's folder (${obj} is its obj/ folder). An environment that boots from the SDK's sources takes none; none that builds yet needs any."
         }
       }
     },

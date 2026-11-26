@@ -414,14 +414,13 @@ internal sealed class RetrocoreProject
             ImageGiven = json.ContainsKey("image"),
             BuildsImage = json["image"] is not JsonValue { } image || image.GetValueKind() != JsonValueKind.False,
             ImageTemplate = json["image"] is { } imageNode ? ReadTemplate(project, where, imageNode) : null,
-            BootImage = json["bootImage"] is { } boot
-                ? Path.GetFullPath(Text(file, $"{where}'s 'bootImage'", boot), project.Directory)
-                : null
+            BootImage = json["bootImage"] is { } boot ? MediaPath(project, where, Text(file, $"{where}'s 'bootImage'", boot)) : null
         };
     }
 
     // A target's files: each a path, or an object with its path and optionally its name on the disk and its address.
-    // A path, relative to the project's folder, may give ${obj}, as a step's output does.
+    // A path, relative to the project's folder, may give ${obj}, as a step's output does. Two paths name one file as
+    // the system compares file names.
     private static List<TargetFile> ReadFiles(RetrocoreProject project, string where, JsonNode node)
     {
         string file = project.File;
@@ -453,8 +452,8 @@ internal sealed class RetrocoreProject
                 path = Text(file, $"a file of {where}", entry);
             }
 
-            string full = Path.GetFullPath(path.Replace(ProjectStep.Intermediate, project.Intermediate, StringComparison.Ordinal), project.Directory);
-            if (files.Any(known => string.Equals(known.Path, full, StringComparison.OrdinalIgnoreCase)))
+            string full = MediaPath(project, where, path);
+            if (files.Any(known => ProjectGlob.FileNames.Equals(known.Path, full)))
             {
                 throw new ProjectException($"{file}: {where}'s 'files' names {path} twice.");
             }
@@ -481,8 +480,15 @@ internal sealed class RetrocoreProject
 
         Check(file, $"{where}'s 'image'", image, ImageFields);
         return image["template"] is { } template
-            ? Path.GetFullPath(Text(file, $"{where}'s image 'template'", template), project.Directory)
+            ? MediaPath(project, where, Text(file, $"{where}'s image 'template'", template))
             : throw Missing(file, $"{where}'s 'image'", "template");
+    }
+
+    // A path a target's media fields give, relative to the project's folder, with ${obj} for its intermediate folder.
+    private static string MediaPath(RetrocoreProject project, string where, string path)
+    {
+        CheckVariables(project.File, where, path, allowLists: false);
+        return Path.GetFullPath(path.Replace(ProjectStep.Intermediate, project.Intermediate, StringComparison.Ordinal), project.Directory);
     }
 
     private static ProjectCpu ReadCpu(string file, string where, JsonNode node)

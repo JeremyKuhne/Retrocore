@@ -107,30 +107,36 @@ public sealed class ProjectEnvironmentTests
     }
 
     /// <summary>
-    ///  With <c>"image": false</c>, a <c>wozmon</c> target writes its hex and no tape; a <c>bare</c> target writes
-    ///  nothing beyond its binary.
+    ///  With <c>"image": false</c>, a <c>wozmon</c> target writes its hex and no tape, and deletes the tape an earlier
+    ///  build wrote; a <c>bare</c> target writes nothing beyond its binary, and deletes the hex and tape a <c>wozmon</c>
+    ///  build of it wrote.
     /// </summary>
     [TestMethod]
     public void ImageFalseLeavesTheTapeOut()
     {
-        Write("retrocore.json", """
+        void Project(string woz) => Write("retrocore.json", $$"""
             { "sdk": "1", "name": "hello", "cpu": "6502", "sources": ["hello.s"],
-              "targets": {
-                "woz": { "machine": "apple1", "environment": "wozmon", "image": false },
-                "bare": { "machine": "apple1", "environment": "bare" } } }
+              "targets": { "woz": {{woz}} } }
             """);
 
+        string output = Path.Join(_folder, "artifacts", "woz");
         Write("hello.s", Hello.Replace(".include <environment.inc>", "", StringComparison.Ordinal));
-        RetrocoreProject project = RetrocoreProject.Load(_folder);
-        TargetBuild woz = ProjectBuild.Build(project.Target("woz"));
-        woz.Media.File.Should().Be(Path.Join(_folder, "artifacts", "woz", "hello.hex"));
+        Project("""{ "machine": "apple1", "environment": "wozmon" }""");
+        ProjectBuild.Build(RetrocoreProject.Load(_folder).Target("woz"));
+        File.Exists(Path.Join(output, "hello.wav")).Should().BeTrue();
+
+        Project("""{ "machine": "apple1", "environment": "wozmon", "image": false }""");
+        TargetBuild woz = ProjectBuild.Build(RetrocoreProject.Load(_folder).Target("woz"));
+        woz.Media.File.Should().Be(Path.Join(output, "hello.hex"));
         (woz.Media.Image, woz.Media.ImageKind).Should().Be((null, null));
         woz.Media.Note.Should().Be("type it at the Woz Monitor's prompt");
-        File.Exists(Path.Join(_folder, "artifacts", "woz", "hello.wav")).Should().BeFalse();
+        File.Exists(Path.Join(output, "hello.wav")).Should().BeFalse("the earlier build's tape goes");
 
-        ProjectBuild.Build(project.Target("bare")).Media.Should().Be(TargetMedia.None);
-        Directory.GetFiles(Path.Join(_folder, "artifacts", "bare")).Select(Path.GetFileName)
-            .Should().BeEquivalentTo("hello.bin", "hello.dbg", "hello.map");
+        Project("""{ "machine": "apple1", "environment": "wozmon" }""");
+        ProjectBuild.Build(RetrocoreProject.Load(_folder).Target("woz"));
+        Project("""{ "machine": "apple1", "environment": "bare" }""");
+        ProjectBuild.Build(RetrocoreProject.Load(_folder).Target("woz")).Media.Should().Be(TargetMedia.None);
+        Directory.GetFiles(output).Select(Path.GetFileName).Should().BeEquivalentTo("hello.bin", "hello.dbg", "hello.map");
     }
 
     /// <summary>

@@ -262,7 +262,7 @@ public sealed class ProjectFileTests
         RetrocoreProject project = RetrocoreProject.Load(_folder);
         project.Target("cpm").Cpu.Should().BeSameAs(ProjectCpu.I8080);
         project.Target("cpm-z80").Cpu.Should().BeSameAs(ProjectCpu.Z80);
-        Error(project.Target("cpm").RequireSupported).Should().EndWith("the 'cpm' environment is not yet supported; 'bare', 'wozmon' build.");
+        Error(project.Target("cpm").RequireSupported).Should().EndWith("the 'cpm' environment is not yet supported; only 'bare' and 'wozmon' build.");
     }
 
     /// <summary>
@@ -330,11 +330,12 @@ public sealed class ProjectFileTests
         Error(wozFiles.RequireSupported).Should().EndWith(
             "target wozfiles: the 'wozmon' environment has no disk to put 'files' on; the 'wozmon' environment's image does not start from a template.");
 
-        Error(project.Target("disk").RequireSupported).Should().EndWith("target disk: the 'dos33' environment is not yet supported; 'bare', 'wozmon' build.");
+        Error(project.Target("disk").RequireSupported).Should().EndWith("target disk: the 'dos33' environment is not yet supported; only 'bare' and 'wozmon' build.");
     }
 
     /// <summary>
-    ///  A malformed <c>files</c> or <c>image</c> names what is wrong.
+    ///  A malformed <c>files</c>, <c>image</c> or <c>bootImage</c> names what is wrong, as does a path in them with a
+    ///  variable other than <c>${obj}</c>.
     /// </summary>
     [TestMethod]
     public void MalformedMediaFieldsFail()
@@ -352,6 +353,8 @@ public sealed class ProjectFileTests
         Fails("\"files\": [{ \"path\": \"a.bin\", \"kind\": \"B\" }]").Should().Contain("a file of target t has no field 'kind'");
         Fails("\"image\": \"disk\"").Should().EndWith("target t's 'image' must be true, false or an object giving 'template'.");
         Fails("\"image\": {}").Should().EndWith("target t's 'image' must give 'template'.");
+        Fails("\"files\": [\"${in}/a.bin\"]").Should().EndWith("target t: '${in}/a.bin' uses a variable it cannot; a path can use ${obj} only.");
+        Fails("\"bootImage\": \"${objs}/boot.dsk\"").Should().EndWith("target t: '${objs}/boot.dsk' uses a variable it cannot; a path can use ${obj} only.");
     }
 
     /// <summary>

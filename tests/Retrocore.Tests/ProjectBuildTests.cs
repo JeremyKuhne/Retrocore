@@ -237,7 +237,7 @@ public sealed class ProjectBuildTests
 
         Write("main.s", "rts");
         RetrocoreProject project = RetrocoreProject.Load(_folder);
-        Error(() => ProjectBuild.Build(project.Target("dos"))).Should().EndWith("the 'dos33' environment is not yet supported; 'bare', 'wozmon' build.");
+        Error(() => ProjectBuild.Build(project.Target("dos"))).Should().EndWith("the 'dos33' environment is not yet supported; only 'bare' and 'wozmon' build.");
         Error(() => ProjectBuild.Build(project.Target("bare"))).Should().EndWith("target bare: the entry 'GO' is not an address the sources define.");
         Directory.Exists(Path.Join(_folder, "artifacts")).Should().BeFalse();
     }

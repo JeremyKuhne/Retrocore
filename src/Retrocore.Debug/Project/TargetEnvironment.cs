@@ -46,9 +46,41 @@ internal abstract class TargetEnvironment
     internal virtual bool TakesBootImage => false;
 
     /// <summary>
+    ///  Gets the extensions of the files the environment can write beside a binary, which a build of any environment
+    ///  first deletes, so a file an earlier build wrote never outlives the build that changed the target.
+    /// </summary>
+    internal virtual IReadOnlyList<string> Extensions => [];
+
+    /// <summary>
     ///  Gets the environments that build, by name.
     /// </summary>
     internal static IEnumerable<string> Built => s_built.Select(environment => environment.Name);
+
+    /// <summary>
+    ///  Gets the environments that build, by name, as a phrase: <c>'bare' and 'wozmon'</c>.
+    /// </summary>
+    internal static string BuiltPhrase
+    {
+        get
+        {
+            List<string> names = [.. Built.Select(name => $"'{name}'")];
+            return names.Count == 1 ? names[0] : $"{string.Join(", ", names[..^1])} and {names[^1]}";
+        }
+    }
+
+    /// <summary>
+    ///  Deletes the files any environment could have written beside a build's binary.
+    /// </summary>
+    /// <param name="build">The build.</param>
+    /// <exception cref="IOException">A file cannot be deleted.</exception>
+    /// <exception cref="UnauthorizedAccessException">A file cannot be deleted.</exception>
+    internal static void DeleteWritten(TargetBuild build)
+    {
+        foreach (string extension in s_built.SelectMany(environment => environment.Extensions).Distinct(StringComparer.Ordinal))
+        {
+            File.Delete(Beside(build, extension));
+        }
+    }
 
     /// <summary>
     ///  Finds an environment that builds.
@@ -89,9 +121,6 @@ internal abstract class TargetEnvironment
     /// </summary>
     /// <param name="build">The build, whose binary is written.</param>
     /// <returns>What it wrote.</returns>
-    /// <exception cref="ProjectException">
-    ///  The program or its files do not fit the environment's file or image.
-    /// </exception>
     /// <exception cref="IOException">A file cannot be read or written.</exception>
     /// <exception cref="UnauthorizedAccessException">A file cannot be read or written.</exception>
     internal abstract TargetMedia Write(TargetBuild build);

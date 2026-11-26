@@ -43,8 +43,7 @@ internal static partial class ProjectBuild
     /// <returns>The build.</returns>
     /// <exception cref="ProjectException">
     ///  A step fails, the target uses what is not supported yet, its sources are missing or have errors, it names a
-    ///  CPU its machine lacks, its bytes are not one block, or they or its files do not fit its environment's file or
-    ///  image.
+    ///  CPU its machine lacks, or its bytes are not one block.
     /// </exception>
     /// <exception cref="IOException">The output cannot be written.</exception>
     /// <exception cref="UnauthorizedAccessException">The output cannot be written.</exception>
@@ -65,6 +64,11 @@ internal static partial class ProjectBuild
 
         TargetBuild build = Assemble(target) with { Steps = steps };
         Write(build);
+
+        // The record is written with the binary, then again with what the environment wrote: a failed environment
+        // leaves the record of this build, not the last one's.
+        TargetEnvironment.DeleteWritten(build);
+        WriteRecord(build);
         TargetEnvironment environment = target.Built
             ?? throw new ProjectException($"{target.Project.File}: target {target.Name}: the '{target.Environment}' environment does not build.");
 

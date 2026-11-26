@@ -213,7 +213,7 @@ internal sealed class ProjectTarget
         else
         {
             problems.Add(
-                $"the '{Environment}' environment is not yet supported; {string.Join(", ", TargetEnvironment.Built.Select(name => $"'{name}'"))} build");
+                $"the '{Environment}' environment is not yet supported; only {TargetEnvironment.BuiltPhrase} build");
         }
 
         if (problems.Count != 0)

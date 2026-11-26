@@ -14,9 +14,13 @@ let client: LanguageClient | undefined;
 // The current client's start, which requests wait for.
 let starting: Promise<void> | undefined;
 const stopped = new vscode.EventEmitter<void>();
+const startedEvent = new vscode.EventEmitter<void>();
 
 /** Fires when the language server is stopped, as it is before a restart, so what it reported can be cleared. */
 export const onDidStopLanguageClient = stopped.event;
+
+/** Fires when a language server has started, after a restart as well as the first time, so it can be asked again. */
+export const onDidStartLanguageClient = startedEvent.event;
 
 /** The Retrocore.Debug host: the setting, or the packaged host or the workspace's build (see host.ts). */
 export function hostPath(context: vscode.ExtensionContext): string | undefined {
@@ -68,6 +72,7 @@ export function shadowCopy(host: string, storage: string, folder = "language-ser
 export async function startLanguageClient(context: vscode.ExtensionContext, targets?: ActiveTargets): Promise<void> {
     const settings = vscode.workspace.getConfiguration("retrocore");
     if (!settings.get<boolean>("languageServer.enabled", true)) return;
+    context.subscriptions.push(stopped, startedEvent);
     const host = hostPath(context);
     if (host === undefined || !fs.existsSync(host)) {
         void vscode.window.showWarningMessage(
@@ -189,6 +194,7 @@ async function startFrom(context: vscode.ExtensionContext, host: string, watcher
     context.subscriptions.push({ dispose: () => { void started.stop().catch(() => undefined); } });
     starting = started.start();
     await starting;
+    startedEvent.fire();
 }
 
 /** The BASIC languages: one per dialect, and one whose pragma, file name or session decides. */

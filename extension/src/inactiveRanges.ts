@@ -4,7 +4,7 @@
 
 import * as vscode from "vscode";
 import type { ActiveTargets } from "./activeTarget";
-import { languageRequest, onDidStopLanguageClient } from "./languageClient";
+import { languageRequest, onDidStartLanguageClient, onDidStopLanguageClient } from "./languageClient";
 
 /** The server's answer to retrocore/inactiveRanges: whole lines, each range ending at the start of the line after it. */
 interface InactiveRangesResult {
@@ -16,8 +16,9 @@ const inactive = new Map<string, number[]>();
 
 /**
  * The lines, 0-based, that the last answer for a document left out, or undefined before it has one or after the
- * server stopped: a .if block's other branch, for the target the source is assembled for. A document no analysis has
- * opened yet has none.
+ * server stopped: a .if block's other branch, for the target the source is assembled for. An empty list means the
+ * answer left out none, or that no analysis covers the document, as for a file no project target assembles, or none
+ * has yet.
  */
 export function inactiveLines(uri: vscode.Uri): number[] | undefined {
     return inactive.get(uri.toString());
@@ -71,7 +72,7 @@ export function registerInactiveRanges(context: vscode.ExtensionContext, targets
             try {
                 const result = await languageRequest<InactiveRangesResult>("retrocore/inactiveRanges", { textDocument: { uri: key } });
                 if (asked.get(key) !== request) return;
-                // No analysis has opened the document yet: nothing is shaded until one publishes its diagnostics.
+                // No analysis covers the document, or none has yet; one that does publishes diagnostics, which asks again.
                 inactive.set(key, result.ranges === null ? [] : result.ranges.flatMap(rangeLines));
             } catch {
                 // No server, or it stopped, which clears its fading too: the shading goes until the next answer.
@@ -112,7 +113,8 @@ export function registerInactiveRanges(context: vscode.ExtensionContext, targets
             inactive.delete(document.uri.toString());
             asked.delete(document.uri.toString());
         }),
-        // A stopped server's fading is gone, so its shading goes too; its next start publishes again, which asks again.
+        // A stopped server's fading is gone, so its shading goes too; a started one is asked for what it shades.
+        onDidStartLanguageClient(() => askVisible()),
         onDidStopLanguageClient(() => {
             const shaded = [...inactive.keys()];
             inactive.clear();

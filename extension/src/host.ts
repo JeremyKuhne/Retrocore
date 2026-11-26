@@ -4,7 +4,8 @@
 
 // Finds Retrocore.Debug.dll, which runs both the language server and the debug adapter. An installed extension uses
 // the host packaged with it, so it works in any folder and stays on a known build. A self-hosted one (Extension
-// Development Host or tests) uses the workspace's Release build first, so a rebuild shows at once.
+// Development Host or tests) uses the workspace's Release build first, or its repository's when a folder inside it
+// is the workspace, so a rebuild shows at once.
 
 import * as fs from "node:fs";
 import * as path from "node:path";
@@ -19,15 +20,25 @@ export function bundledHost(context: vscode.ExtensionContext): string | undefine
 }
 
 /**
- * The Release build in an open workspace folder, such as this repository's, or in a folder above one, as when one of
- * the repository's samples is opened as the workspace.
+ * The Release build in an open workspace folder, such as this repository's, or in a folder above one up to its
+ * repository's root (the first with a .git), as when one of the repository's samples is opened as the workspace. Each
+ * folder's own build comes before any folder's above it, and a worktree's root stops the search at its own build.
  */
 export function workspaceHost(): string | undefined {
-    for (const folder of vscode.workspace.workspaceFolders ?? []) {
-        for (let directory = folder.uri.fsPath; ; directory = path.dirname(directory)) {
-            const candidate = path.join(directory, "artifacts", "AnyCPU", "Release", "Retrocore.Debug", "net11.0", hostName);
-            if (fs.existsSync(candidate)) return candidate;
-            if (path.dirname(directory) === directory) break;
+    const build = (directory: string): string | undefined => {
+        const candidate = path.join(directory, "artifacts", "AnyCPU", "Release", "Retrocore.Debug", "net11.0", hostName);
+        return fs.existsSync(candidate) ? candidate : undefined;
+    };
+    const folders = (vscode.workspace.workspaceFolders ?? []).map(folder => folder.uri.fsPath);
+    for (const folder of folders) {
+        const own = build(folder);
+        if (own !== undefined) return own;
+    }
+    for (const folder of folders) {
+        for (let directory = folder; !fs.existsSync(path.join(directory, ".git")) && path.dirname(directory) !== directory;) {
+            directory = path.dirname(directory);
+            const above = build(directory);
+            if (above !== undefined) return above;
         }
     }
     return undefined;

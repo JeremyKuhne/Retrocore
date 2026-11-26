@@ -155,7 +155,8 @@ another of the workspace's targets, grouped by project when there are several. T
 choice is kept for the workspace.
 
 **F5 with no launch.json** builds the active target and debugs it on its machine,
-stopping at the program's entry. To keep breakpoints or other launch options, or to
+stopping at the program's entry. VS Code chooses the debugger from the open editor, so
+press it from one of the project's sources; elsewhere, pick Retrocore when it asks. To keep breakpoints or other launch options, or to
 debug one launch configuration on whichever target is active:
 
 ```jsonc

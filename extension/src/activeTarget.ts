@@ -175,11 +175,11 @@ export function registerActiveTarget(context: vscode.ExtensionContext): ActiveTa
     }));
 
     // F5 with no launch.json sends an empty configuration: in a workspace with a project, that debugs the active
-    // target. VS Code asks the providers of the debugger it guesses from the editor, and those registered for every
-    // type, so both take it; the first fills it in and the other sees a configuration of its own.
+    // target. VS Code gives it to the providers of the debugger the editor's language picks, or the one picked when
+    // it asks, without setting its type. Only Retrocore's own provider takes it, so another debugger's F5 is its own.
     const provider: vscode.DebugConfigurationProvider = {
         async resolveDebugConfiguration(_folder, configuration) {
-            // VS Code may have set the type it guessed; a configuration with a request or a name is someone's own.
+            // A configuration with a type other than Retrocore's, a request or a name is someone's own.
             const empty = (configuration.type === undefined || configuration.type === "retrocore")
                 && configuration.request === undefined && configuration.name === undefined;
             if (!empty) return configuration;
@@ -188,8 +188,7 @@ export function registerActiveTarget(context: vscode.ExtensionContext): ActiveTa
             return target === undefined ? configuration : { ...configuration, ...projectLaunch(target) };
         }
     };
-    context.subscriptions.push(vscode.debug.registerDebugConfigurationProvider("retrocore", provider),
-        vscode.debug.registerDebugConfigurationProvider("*", provider));
+    context.subscriptions.push(vscode.debug.registerDebugConfigurationProvider("retrocore", provider));
 
     // For the tests: what the status bar shows, which they cannot read from VS Code.
     context.subscriptions.push(vscode.commands.registerCommand("retrocore.activeTarget.statusBar", async () => {
@@ -232,7 +231,7 @@ async function pick(targets: readonly ProjectTarget[], chosen: ProjectTarget | u
     }
     const picked = await vscode.window.showQuickPick(items, {
         title: "Retrocore: Pick Target",
-        placeHolder: "Which target does F5 build and debug?",
+        placeHolder: "Which target do F5 and launches of the active target build and debug?",
         matchOnDescription: true
     });
     return picked?.target;

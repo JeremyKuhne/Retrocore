@@ -694,6 +694,39 @@ public class M6809CoreTests
         outOfRange.Should().Throw<ArgumentOutOfRangeException>();
     }
 
+    /// <summary>
+    ///  The debugger tells an interrupt's response from the instruction at PC, which it replaces: from its first
+    ///  cycle until the handler's first instruction.
+    /// </summary>
+    /// <param name="signal">The interrupt.</param>
+    /// <param name="vector">Its vector.</param>
+    [TestMethod]
+    [DataRow(M6809Signals.InterruptRequest, 0xFFF8)]
+    [DataRow(M6809Signals.FastInterruptRequest, 0xFFF6)]
+    [DataRow(M6809Signals.NonMaskableInterrupt, 0xFFFC)]
+    public void TakingInterruptMarksTheResponse(M6809Signals signal, int vector)
+    {
+        // NOP / NOP, and each vector to $3000.
+        M6809Processor<RamBus> cpu = Create(0x12, 0x12);
+        cpu.Bus.Memory[vector] = 0x30;
+        cpu.Registers = new() { S = 0x1000, NmiArmed = true };
+        cpu.StepCycle();
+        cpu.IsTakingInterrupt.Should().BeFalse("NOP is an instruction");
+        while (!cpu.IsInstructionBoundary) { cpu.StepCycle(); }
+
+        cpu.Signals = signal;
+        cpu.StepCycle();
+        cpu.IsTakingInterrupt.Should().BeTrue();
+        while (!cpu.IsInstructionBoundary)
+        {
+            cpu.IsTakingInterrupt.Should().BeTrue();
+            cpu.StepCycle();
+        }
+
+        cpu.IsTakingInterrupt.Should().BeFalse();
+        cpu.Registers.PC.Should().Be(0x3000);
+    }
+
     private static M6809Processor<RamBus> Create(params byte[] program)
     {
         byte[] memory = new byte[0x10000];

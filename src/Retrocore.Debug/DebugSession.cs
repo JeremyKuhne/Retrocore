@@ -162,6 +162,7 @@ internal sealed partial class DebugSession
     private CancellationToken _running;
     private bool _stopOnContracts;
     private ushort _instructionStart;
+    private int _instructionStack;
 
     /// <summary>
     ///  Registers the DAP and machine-view request handlers.
@@ -1020,6 +1021,7 @@ internal sealed partial class DebugSession
         CloseJournal();
         ReleaseTarget();
         _target = null;
+        _metBoundaries.Clear();
         _target = machine switch
         {
             DebugMachines.Trs80Model1 => LaunchModelI(args, loads),
@@ -1808,8 +1810,8 @@ internal sealed partial class DebugSession
         return true;
     }
 
-    // Runs the rest of the current instruction, or the next one; an interrupt's response runs with the
-    // instruction after it. A Z80 interrupt response and an indexed bit instruction together stay under 64.
+    // Runs the rest of the current instruction, or the next one, or an interrupt's response. A Z80 interrupt
+    // response, which counts as an instruction, and an indexed bit instruction together stay under 64.
     private const int InstructionCycleBudget = 64;
 
     private bool Execute()
@@ -1823,6 +1825,15 @@ internal sealed partial class DebugSession
         // CPU's own view; the SoftCard's Z80 runs its last T-states beside the 6502.
         IDebugTarget cpu = Cpu;
         bool instruction = cpu.InInstruction;
+
+        // Starting between instructions, the CPU leaves the boundary for the instruction there or for an interrupt's
+        // response, or stays while it idles. Only the instruction meets the boundary's breakpoints again.
+        bool atBoundary = !instruction && cpu.IsInstructionBoundary;
+        bool met = atBoundary && _metBoundaries.Count != 0 && Met(cpu, cpu.ProgramCounter);
+        bool left = false;
+
+        // An interrupt's response that fetches no opcode, as on the 6502 and 6809, is not an instruction.
+        bool responding = false;
 
         // What the 6502 hit beside the Z80 counts toward the 6502's instruction, which goes on here.
         if (_hostDataHits.Count != 0 && IsMachineCpu(cpu))
@@ -1859,6 +1870,19 @@ internal sealed partial class DebugSession
             }
 
             instruction |= cpu.StepCycle();
+            responding |= !instruction && cpu.IsTakingInterrupt;
+            if (atBoundary && !left && !cpu.IsInstructionBoundary && !cpu.IsIdle)
+            {
+                left = true;
+                if (cpu.IsTakingInterrupt)
+                {
+                    if (!met) { MeetBoundary(cpu); }
+                }
+                else if (met)
+                {
+                    LeaveBoundary(cpu);
+                }
+            }
 
             if (_frozen.Count is > 0 and <= FreezesChecked) { FreezeCycle(cpu); }
             if (_watches.Count != 0)
@@ -1874,26 +1898,92 @@ internal sealed partial class DebugSession
 
             if (instruction && cpu.IsInstructionBoundary) { return _dataHits.Count == 0 || DataStop(cpu); }
 
+            // That response ends at the handler's first instruction, whose breakpoints the caller checks. The
+            // watchpoints its stacking hit stop now.
+            if (responding && cpu.IsInstructionBoundary) { return _dataHits.Count == 0 || DataStop(cpu); }
+
             // A Z80 that handed the bus back mid-instruction, as a 16-bit store to the switch does, waits there.
             if (cpu is SoftCardDebugTarget { Card.Running: false }) { return _dataHits.Count == 0 || DataStop(cpu); }
 
             // An idle CPU may stay so for any time, so its cycles go back to the run loop a few at a time; the next
             // instruction is observed once the CPU goes on. An instruction that ends by waiting, as CWAI does, has
-            // made its writes, so the watchpoints they hit stop now.
-            if (cpu.IsIdle) { return !instruction || _dataHits.Count == 0 || DataStop(cpu); }
+            // made its writes, so the watchpoints they hit stop now. A CPU idle at a boundary has met it.
+            if (cpu.IsIdle)
+            {
+                if (atBoundary && !left && !met) { MeetBoundary(cpu); }
+                return !instruction || _dataHits.Count == 0 || DataStop(cpu);
+            }
 
             // A held CPU may stay so for any time too. Its instruction has not finished, so the watchpoints it hit
             // wait for the instruction's end.
-            if (cpu.IsHeld) { return true; }
+            if (cpu.IsHeld)
+            {
+                if (atBoundary && !left && !met) { MeetBoundary(cpu); }
+                return true;
+            }
         }
 
         throw new InvalidOperationException($"Instruction execution exceeded its {InstructionCycleBudget}-cycle budget.");
     }
 
+    // The instruction boundaries each CPU has met without running their instruction, innermost last: one it took an
+    // interrupt at, which its handler returns to, or one it idles or is held at. The breakpoints there have been met
+    // (checked, or passed by continuing from them), so they are not met again until the instruction runs.
+    private readonly List<(IDebugTarget Cpu, ushort Address, int Stack)> _metBoundaries = [];
+
+    // Interrupts nest only so deep; a handler that never returns leaves its boundary behind.
+    private const int MaximumMetBoundaries = 64;
+
+    // Notes the boundary Observe found the CPU at as met.
+    private void MeetBoundary(IDebugTarget cpu)
+    {
+        if (_metBoundaries.Count == MaximumMetBoundaries) { _metBoundaries.RemoveAt(0); }
+        _metBoundaries.Add((cpu, _instructionStart, _instructionStack));
+    }
+
+    // Forgets the CPU's innermost met boundary, as the instruction there starts.
+    private void LeaveBoundary(IDebugTarget cpu)
+    {
+        int index = _metBoundaries.FindLastIndex(boundary => ReferenceEquals(boundary.Cpu, cpu));
+        if (index >= 0) { _metBoundaries.RemoveAt(index); }
+    }
+
+    /// <summary>
+    ///  Tests whether a CPU between instructions is at a boundary it has met without running the instruction there:
+    ///  back from an interrupt it took there, or still idle there. A met boundary the CPU has come back past
+    ///  elsewhere is forgotten.
+    /// </summary>
+    /// <param name="cpu">The CPU.</param>
+    /// <param name="address">Its program counter.</param>
+    /// <returns>Whether the boundary's breakpoints have been met.</returns>
+    private bool Met(IDebugTarget cpu, ushort address)
+    {
+        int? stack = null;
+        for (int index = _metBoundaries.Count - 1; index >= 0; index--)
+        {
+            (IDebugTarget owner, ushort boundary, int boundaryStack) = _metBoundaries[index];
+            if (!ReferenceEquals(owner, cpu)) { continue; }
+
+            // Stacks grow down: deeper than the boundary's stack is inside the handler of the interrupt taken there.
+            // Returning restores it, or leaves it higher, as for a 6809's CWAI, which stacked before it waited.
+            stack ??= cpu.Frame.StackPointer;
+            int depth = (boundaryStack - stack.Value) & 0xFFFF;
+            if (depth is > 0 and < 0x8000) { return false; }
+            if (boundary == address) { return true; }
+            _metBoundaries.RemoveAt(index);
+        }
+
+        return false;
+    }
+
     // Stops where a reset reaches its handler, at a breakpoint there if one hits, so that the two stop once.
     private bool ResetStops()
     {
-        if (!Target.TakeResetStop() || !BreaksOn(MachineResetFilter)) { return false; }
+        if (!Target.TakeResetStop()) { return false; }
+
+        // The reset abandons the interrupts it cut short, and the boundaries they would return to.
+        _metBoundaries.Clear();
+        if (!BreaksOn(MachineResetFilter)) { return false; }
         if (Hit(Cpu.ProgramCounter) is { } hit)
         {
             Stopped(hit);
@@ -1912,6 +2002,7 @@ internal sealed partial class DebugSession
     {
         DebugFrame before = cpu.Frame;
         _instructionStart = before.ProgramCounter;
+        _instructionStack = before.StackPointer;
         bool machineCpu = IsMachineCpu(cpu);
         if (machineCpu)
         {
@@ -2023,9 +2114,11 @@ internal sealed partial class DebugSession
                                 break;
                             }
 
+                            // A boundary the CPU has met already, coming back to it from an interrupt or idling
+                            // there, stops for nothing until its instruction runs.
                             IDebugTarget cpu = Cpu;
                             ushort pc = cpu.ProgramCounter;
-                            bool boundary = cpu.IsInstructionBoundary;
+                            bool boundary = cpu.IsInstructionBoundary && (_metBoundaries.Count == 0 || !Met(cpu, pc));
                             if (boundary
                                 && !first
                                 && Hit(pc) is { } hit)

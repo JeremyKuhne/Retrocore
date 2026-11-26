@@ -92,6 +92,15 @@ public sealed partial class Z80Processor<TBus> where TBus : IProcessorBus, IIoBu
     public bool IsInstructionBoundary => _state.Operation == Z80Operation.None && _state.Cycle == Z80MachineCycle.None;
 
     /// <summary>
+    ///  Gets whether an interrupt's or NMI's response is in flight, taken at an instruction boundary in place of the
+    ///  instruction there, which runs once the handler returns. In mode 0 it holds through the acknowledge, after
+    ///  which the opcode the device gave runs as an instruction would.
+    /// </summary>
+    public bool IsTakingInterrupt =>
+        _state.Cycle is Z80MachineCycle.Acknowledge or Z80MachineCycle.NonMaskableFetch
+            || _state.Operation is Z80Operation.Interrupt or Z80Operation.NonMaskable;
+
+    /// <summary>
     ///  Gets whether <c>HALT</c> holds the processor until an interrupt or reset.
     /// </summary>
     public bool IsHalted => _state.Halted;

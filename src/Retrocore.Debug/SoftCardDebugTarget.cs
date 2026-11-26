@@ -162,6 +162,9 @@ internal sealed class SoftCardDebugTarget : IDebugTarget
     public bool IsInstructionBoundary => Card.Processor.IsInstructionBoundary || Card.WaitingAtInstruction;
 
     /// <inheritdoc/>
+    public bool IsTakingInterrupt => Card.Processor.IsTakingInterrupt;
+
+    /// <inheritdoc/>
     public bool InInstruction => !IsInstructionBoundary;
 
     /// <inheritdoc/>

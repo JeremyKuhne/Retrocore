@@ -101,6 +101,9 @@ internal sealed partial class Trs80Model3DebugTarget : IDebugTarget
     public bool IsInstructionBoundary => _machine.Processor.IsInstructionBoundary;
 
     /// <inheritdoc/>
+    public bool IsTakingInterrupt => _machine.Processor.IsTakingInterrupt;
+
+    /// <inheritdoc/>
     /// <remarks>
     ///  <para>
     ///   Drive select's wait bit holds the Z80 until the disk controller asks for data or finishes, which can take

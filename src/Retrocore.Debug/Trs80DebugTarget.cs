@@ -104,6 +104,9 @@ internal sealed partial class Trs80DebugTarget : IDebugTarget
     public bool IsInstructionBoundary => _machine.Processor.IsInstructionBoundary;
 
     /// <inheritdoc/>
+    public bool IsTakingInterrupt => _machine.Processor.IsTakingInterrupt;
+
+    /// <inheritdoc/>
     public bool InInstruction => _instruction;
 
     /// <inheritdoc/>

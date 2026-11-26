@@ -86,6 +86,12 @@ internal interface IDebugTarget : IDebugMemory
     bool IsInstructionBoundary { get; }
 
     /// <summary>
+    ///  Gets whether the CPU has left an instruction boundary for an interrupt's response rather than the
+    ///  instruction there, which runs once the handler returns. Read on the first cycle after the boundary.
+    /// </summary>
+    bool IsTakingInterrupt => false;
+
+    /// <summary>
     ///  Gets whether an instruction has started and not finished, as opposed to an interrupt's response.
     /// </summary>
     bool InInstruction { get; }

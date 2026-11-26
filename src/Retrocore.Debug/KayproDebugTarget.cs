@@ -83,6 +83,9 @@ internal sealed partial class KayproDebugTarget : IDebugTarget
     public bool IsInstructionBoundary => _machine.Processor.IsInstructionBoundary;
 
     /// <inheritdoc/>
+    public bool IsTakingInterrupt => _machine.Processor.IsTakingInterrupt;
+
+    /// <inheritdoc/>
     public bool InInstruction => _instruction;
 
     /// <inheritdoc/>

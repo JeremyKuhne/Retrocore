@@ -929,8 +929,10 @@ internal sealed partial class DebugSession
         if (sites.Count == 0 && _systemCallBreakpoints.Count == 0) { return null; }
 
         // Breakpoints apply to the CPU running: an address with no bank or module is the machine CPU's, and a
-        // coprocessor's are in its bank, such as z80:0x0100, or in its modules.
+        // coprocessor's are in its bank, such as z80:0x0100, or in its modules. They are met once each time the
+        // instruction runs, so not again where an interrupt taken there returns, or while the CPU idles there.
         IDebugTarget cpu = Cpu;
+        if (_metBoundaries.Count != 0 && Met(cpu, pc)) { return null; }
         bool machineCpu = IsMachineCpu(cpu);
         List<BreakpointState> stops = [];
         HashSet<BreakpointState> seen = [];

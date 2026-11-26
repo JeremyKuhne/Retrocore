@@ -142,6 +142,16 @@ export function findTarget(targets: readonly ProjectTarget[], name: string): Pro
     return named.length === 1 ? named[0] : undefined;
 }
 
+/** Whether a file is in a project's folder or below it, by the folders of the workspace's project files. */
+export function inProject(file: string, projectFolders: readonly string[]): boolean {
+    const key = (name: string): string => process.platform === "win32" ? path.resolve(name).toLowerCase() : path.resolve(name);
+    const own = key(file);
+    return projectFolders.some(folder => {
+        const relative = path.relative(key(folder), own);
+        return relative !== "" && relative !== ".." && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative);
+    });
+}
+
 /** The launch configuration that builds and debugs a target: F5's, in a workspace with no launch.json. */
 export function projectLaunch(target: ProjectTarget): { type: string; request: string; name: string; project: string; target: string } {
     return {

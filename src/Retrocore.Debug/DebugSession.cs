@@ -1740,11 +1740,9 @@ internal sealed partial class DebugSession
             IDebugTarget ran = Cpu;
             if (!Execute()) { return; }
 
-            // A reset whose response ended here stops for the reset filter, as running does, not as the step's end.
-            if (Cpu.IsInstructionBoundary && ResetStops()) { return; }
 
-            // The other CPU's instruction: only its breakpoints can stop the step. While the stepping CPU is idle no
-            // instruction of its has finished, so the step neither ends nor meets a breakpoint of its own.
+            // The other CPU's instruction: only its breakpoints can stop the step. While the stepping CPU is idle off
+            // a boundary no instruction of its has finished, so the step neither ends nor meets a breakpoint of its own.
             if (!ReferenceEquals(ran, cpu) || !cpu.IsInstructionBoundary)
             {
                 if (Cpu.IsInstructionBoundary && Hit(Cpu.ProgramCounter) is { } other)
@@ -1911,9 +1909,9 @@ internal sealed partial class DebugSession
 
             if (instruction && cpu.IsInstructionBoundary) { return _dataHits.Count == 0 || DataStop(cpu); }
 
-            // That response, or a reset's, ends at the handler's first instruction, whose breakpoints the caller
-            // checks. The watchpoints its stacking hit stop now.
-            if ((responding || left) && cpu.IsInstructionBoundary) { return _dataHits.Count == 0 || DataStop(cpu); }
+            // That response ends at the handler's first instruction, whose breakpoints the caller checks. The
+            // watchpoints its stacking hit stop now.
+            if (responding && cpu.IsInstructionBoundary) { return _dataHits.Count == 0 || DataStop(cpu); }
 
             // A Z80 that handed the bus back mid-instruction, as a 16-bit store to the switch does, waits there.
             if (cpu is SoftCardDebugTarget { Card.Running: false }) { return _dataHits.Count == 0 || DataStop(cpu); }

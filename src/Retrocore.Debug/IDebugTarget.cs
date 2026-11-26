@@ -104,7 +104,8 @@ internal interface IDebugTarget : IDebugMemory
 
     /// <summary>
     ///  Gets whether the CPU idles between instructions for as long as something outside it decides, such as a 6809
-    ///  held by HALT or waiting in <c>SYNC</c>; it is then not at an instruction boundary until it goes on.
+    ///  held by HALT or waiting in <c>SYNC</c>; it is then not at an instruction boundary until it goes on. A halted
+    ///  Z80 is at one, the instruction after its <c>HALT</c>, between the refresh fetches it runs as it waits.
     /// </summary>
     bool IsIdle => false;
 

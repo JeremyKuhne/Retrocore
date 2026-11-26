@@ -23,9 +23,9 @@ namespace Retrocore.Media.Commodore;
 ///   A file is a chain of blocks, each its next track and sector and 254 bytes; the last block's track is 0 and its
 ///   sector byte is the index of its last byte. A program file's first two bytes are its load address, as in a
 ///   <c>.prg</c> file. Blocks are taken from the track nearest the directory with a free sector, 17, then 19, 16, 20
-///   and outwards, ten sectors apart within a track, and directory sectors three apart, the 1541's spacings. Any
-///   spacing reads; it changes only how long a read waits for the next block to come round. An empty sequential file
-///   takes one block holding nothing.
+///   and outwards, ten sectors apart within a track, and directory sectors three apart, the 1541's intervals, though
+///   not its exact order. Any order reads; it changes only how long a read waits for the next block to come round. A
+///   file holds at least a byte: how the DOS writes and reads back an empty one is not checked here.
 ///  </para>
 /// </remarks>
 public sealed class CbmDosDisk
@@ -61,9 +61,10 @@ public sealed class CbmDosDisk
     ///  Formats a blank disk, as the drive's <c>N0:name,id</c> command does: an empty directory, and every sector free
     ///  but track 18's first two.
     /// </summary>
-    /// <param name="name">The disk's name, at most 16 characters of PETSCII.</param>
+    /// <param name="name">The disk's name, 1 to 16 characters of PETSCII.</param>
     /// <param name="id">The disk's ID, two characters of PETSCII.</param>
     /// <returns>The disk.</returns>
+    /// <exception cref="ArgumentNullException">The name or ID is null.</exception>
     /// <exception cref="ArgumentException">
     ///  The name or ID is the wrong length or holds a character DOS reserves.
     /// </exception>
@@ -142,7 +143,8 @@ public sealed class CbmDosDisk
     }
 
     /// <summary>
-    ///  Gets the files in the directory, in its order.
+    ///  Gets the entries in use in the directory, in its order: every entry whose type byte is not zero, so a closed
+    ///  <c>DEL</c> entry is listed, as the drive lists it.
     /// </summary>
     public IReadOnlyList<CbmDosFile> Files
     {
@@ -169,20 +171,21 @@ public sealed class CbmDosDisk
     /// <summary>
     ///  Adds a program file.
     /// </summary>
-    /// <param name="name">The file's name, at most 16 characters of PETSCII.</param>
+    /// <param name="name">The file's name, 1 to 16 characters of PETSCII.</param>
     /// <param name="prg">
     ///  The file's bytes: its load address, low byte first, then the program, as a <c>.prg</c> file.
     /// </param>
     /// <exception cref="ArgumentException">
-    ///  The name is empty, too long, holds a character DOS reserves or is taken, or the file is shorter than its load
-    ///  address.
+    ///  The name is empty, too long, holds a character DOS reserves or is taken by a listed entry, or the file is
+    ///  shorter than its load address and a byte.
     /// </exception>
+    /// <exception cref="ArgumentNullException">The name is null.</exception>
     /// <exception cref="IOException">The disk or its directory is full; the disk is unchanged.</exception>
     public void AddProgram(string name, ReadOnlySpan<byte> prg)
     {
-        if (prg.Length < 2)
+        if (prg.Length < 3)
         {
-            throw new ArgumentException("A program file starts with its load address.", nameof(prg));
+            throw new ArgumentException("A program file is its load address and at least a byte.", nameof(prg));
         }
 
         Add(name, CbmDosFileType.Program, prg);
@@ -191,20 +194,26 @@ public sealed class CbmDosDisk
     /// <summary>
     ///  Adds a sequential file.
     /// </summary>
-    /// <param name="name">The file's name, at most 16 characters of PETSCII.</param>
-    /// <param name="data">The file's bytes, which may be none.</param>
+    /// <param name="name">The file's name, 1 to 16 characters of PETSCII.</param>
+    /// <param name="data">The file's bytes, at least one.</param>
     /// <exception cref="ArgumentException">
-    ///  The name is empty, too long, holds a character DOS reserves or is taken.
+    ///  The name is empty, too long, holds a character DOS reserves or is taken by a listed entry, or there are no
+    ///  bytes.
     /// </exception>
+    /// <exception cref="ArgumentNullException">The name is null.</exception>
     /// <exception cref="IOException">The disk or its directory is full; the disk is unchanged.</exception>
-    public void AddSequential(string name, ReadOnlySpan<byte> data) => Add(name, CbmDosFileType.Sequential, data);
+    public void AddSequential(string name, ReadOnlySpan<byte> data)
+    {
+        if (data.IsEmpty) { throw new ArgumentException("A file holds at least a byte.", nameof(data)); }
+        Add(name, CbmDosFileType.Sequential, data);
+    }
 
     /// <summary>
     ///  Reads a file's bytes by following its chain of blocks.
     /// </summary>
-    /// <param name="name">The file's name, as <see cref="Files"/> gives it.</param>
+    /// <param name="name">The file's name, as <see cref="Files"/> gives it; the first entry with it is read.</param>
     /// <returns>The bytes; a program file's start with its load address.</returns>
-    /// <exception cref="FileNotFoundException">No file has the name.</exception>
+    /// <exception cref="FileNotFoundException">No listed entry has the name.</exception>
     /// <exception cref="InvalidDataException">The chain leaves the disk or loops.</exception>
     public byte[] ReadFile(string name)
     {
@@ -236,7 +245,7 @@ public sealed class CbmDosDisk
     }
 
     /// <summary>
-    ///  Writes the disk as a D64 image, without error codes.
+    ///  Gets the disk as a D64 image, without error codes.
     /// </summary>
     /// <returns>The image.</returns>
     public byte[] ToD64() => (byte[])_sectors.Clone();
@@ -261,7 +270,7 @@ public sealed class CbmDosDisk
         (int entryTrack, int entrySector, int entryIndex) = work.FreeEntry()
             ?? throw new IOException("The disk's directory is full.");
 
-        int blocks = Math.Max(1, (data.Length + BlockData - 1) / BlockData);
+        int blocks = (data.Length + BlockData - 1) / BlockData;
         if (blocks > work.BlocksFree)
         {
             throw new IOException($"The disk is full: {key} needs {blocks} blocks, and {work.BlocksFree} are free.");
@@ -332,14 +341,14 @@ public sealed class CbmDosDisk
         return null;
     }
 
-    // Each directory entry's place, following the chain from 18, 1.
+    // Each directory entry's place, following the chain from 18, 1 while it stays on the directory's track.
     private List<(int Track, int Sector, int Index)> Entries()
     {
         List<(int, int, int)> entries = [];
         HashSet<int> seen = [];
         int track = DirectoryTrack;
         int sector = 1;
-        while (track != 0 && IsSector(track, sector) && seen.Add((track << 8) | sector))
+        while (track == DirectoryTrack && IsSector(track, sector) && seen.Add(sector))
         {
             for (int index = 0; index < EntriesPerSector; index++) { entries.Add((track, sector, index)); }
             ReadOnlySpan<byte> block = Sector(track, sector);
@@ -406,7 +415,7 @@ public sealed class CbmDosDisk
         _sectors.AsSpan((GcrLayout.FirstSector(track) + sector) * GcrLayout.SectorSize, GcrLayout.SectorSize);
 
     // A name or ID as the DOS stores it: upper case, each character its PETSCII code, refusing the characters the DOS's
-    // command parser reads as punctuation or wildcards.
+    // command parser reads as punctuation or wildcards, a leading @ (save and replace) and a name of $ alone.
     private static byte[] Petscii(string text, string parameter, int minimum, int maximum)
     {
         ArgumentNullException.ThrowIfNull(text, parameter);
@@ -419,11 +428,14 @@ public sealed class CbmDosDisk
                 parameter);
         }
 
+        // The DOS reads a name of $ as the directory.
+        if (text == "$") { throw new ArgumentException("A name of $ is read as the directory.", parameter); }
+
         byte[] bytes = new byte[text.Length];
         for (int i = 0; i < text.Length; i++)
         {
             char c = char.ToUpperInvariant(text[i]);
-            if (c is < ' ' or > ']' or '"' or ',' or ':' or '*' or '?' or '=')
+            if (text[i] > 0x7F || c is < ' ' or > ']' or '"' or ',' or ':' or '*' or '?' or '=' || (i == 0 && c == '@'))
             {
                 throw new ArgumentException($"'{text[i]}' cannot be in a name on a Commodore disk.", parameter);
             }

@@ -47,6 +47,7 @@ public class CbmDosDiskTests
         header[0xAB..].Should().AllBeEquivalentTo((byte)0);
         Sector(image, 18, 1).Should().Equal([0x00, 0xFF, .. new byte[254]]);
         image.AsSpan(0, Track18 * 256).IndexOfAnyExcept((byte)0).Should().Be(-1);
+        image.AsSpan((Track18 + 2) * 256).IndexOfAnyExcept((byte)0).Should().Be(-1);
 
         disk.Name.Should().Be("RETROCORE");
         disk.Id.Should().Be("RC");
@@ -68,8 +69,7 @@ public class CbmDosDiskTests
         disk.AddProgram("program", program);
         disk.AddSequential("exact", exact);
         disk.AddSequential("longer", longer);
-        disk.AddSequential("empty", []);
-        disk.BlocksFree.Should().Be(664 - 1 - 1 - 3 - 1);
+        disk.BlocksFree.Should().Be(664 - 1 - 1 - 3);
 
         byte[] image = disk.ToD64();
         CommodoreDisk gcr = D64Format.Read(image);
@@ -85,15 +85,13 @@ public class CbmDosDiskTests
         [
             ("PROGRAM", CbmDosFileType.Program, true, 1),
             ("EXACT", CbmDosFileType.Sequential, true, 1),
-            ("LONGER", CbmDosFileType.Sequential, true, 3),
-            ("EMPTY", CbmDosFileType.Sequential, true, 1)
+            ("LONGER", CbmDosFileType.Sequential, true, 3)
         ];
 
         read.Files.Select(file => (file.Name, file.Type, file.IsClosed, file.Blocks)).Should().Equal(expected);
         read.ReadFile("PROGRAM").Should().Equal(program);
         read.ReadFile("EXACT").Should().Equal(exact);
         read.ReadFile("LONGER").Should().Equal(longer);
-        read.ReadFile("EMPTY").Should().BeEmpty();
     }
 
     /// <summary>
@@ -111,7 +109,7 @@ public class CbmDosDiskTests
         byte[] image = disk.ToD64();
         List<(int, int)> chain = [];
         (int track, int sector) = (file.Track, file.Sector);
-        while (true)
+        for (int guard = 0; guard < 30; guard++)
         {
             chain.Add((track, sector));
             byte[] block = Sector(image, track, sector);
@@ -124,6 +122,7 @@ public class CbmDosDiskTests
             (track, sector) = (block[0], block[1]);
         }
 
+        chain.Should().HaveCount(23);
         chain.Take(4).Should().Equal((17, 0), (17, 10), (17, 20), (17, 9));
         chain.Where(place => place.Item1 == 17).Should().HaveCount(21).And.OnlyHaveUniqueItems();
         chain.Skip(21).Should().Equal((19, 0), (19, 10));
@@ -160,7 +159,8 @@ public class CbmDosDiskTests
     }
 
     /// <summary>
-    ///  Names the DOS would misread, and a name already taken, are refused.
+    ///  Names the DOS would misread, a name already taken, an empty file and a program file of its load address
+    ///  alone are refused.
     /// </summary>
     /// <param name="name">The name.</param>
     [TestMethod]
@@ -174,13 +174,17 @@ public class CbmDosDiskTests
     [DataRow("A\"B")]
     [DataRow("café")]
     [DataRow("taken")]
+    [DataRow("$")]
+    [DataRow("@replace")]
+    [DataRow("ı")]
     public void BadNamesAreRefused(string name)
     {
         CbmDosDisk disk = CbmDosDisk.Format("names", "nm");
-        disk.AddSequential("TAKEN", []);
+        disk.AddSequential("TAKEN", [1]);
         FluentActions.Invoking(() => disk.AddSequential(name, [])).Should().ThrowExactly<ArgumentException>();
         FluentActions.Invoking(() => CbmDosDisk.Format("disk", "x")).Should().ThrowExactly<ArgumentException>();
-        FluentActions.Invoking(() => disk.AddProgram("short", [1])).Should().ThrowExactly<ArgumentException>();
+        FluentActions.Invoking(() => disk.AddProgram("short", [1, 4])).Should().ThrowExactly<ArgumentException>();
+        FluentActions.Invoking(() => disk.AddSequential("empty", [])).Should().ThrowExactly<ArgumentException>();
         disk.Files.Should().ContainSingle();
     }
 

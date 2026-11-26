@@ -251,8 +251,7 @@ internal sealed class PascalDocuments
     {
         string folder = Path.GetDirectoryName(path) ?? "";
         List<string> mains = MainsIn(folder);
-        bool main = mains.Contains(path, StringComparer.OrdinalIgnoreCase)
-            || (Read(path) is { } text && IsMain(text));
+        bool main = mains.Contains(path, StringComparer.OrdinalIgnoreCase);
 
         return
         [

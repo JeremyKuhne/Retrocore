@@ -368,6 +368,8 @@ public sealed partial class PascalProgram
                 EndStatement();
             }
 
+            // A heading without its ";", still being typed, leaves its routine to no later comment.
+            if (!ended) { _statement.Clear(); }
             if (interfacePart)
             {
                 routine.IsHeadingOnly = true;
@@ -394,8 +396,6 @@ public sealed partial class PascalProgram
                 return;
             }
 
-            // A heading without its ";" leaves its routine to no later comment.
-            if (!ended) { _statement.Clear(); }
             Block(body);
             if (Current is { } after && after.IsSymbol(";")) { Next(); }
         }
@@ -576,28 +576,24 @@ public sealed partial class PascalProgram
         {
             while (_at < _tokens.Count && _tokens[_at].Kind == PascalTokenKind.DocComment)
             {
-                // One after a declaration on its line, as after a record's last field, which has no ";", documents it.
+                // One that trails code on its line documents the undocumented names declared before it on that
+                // line, or the routine among them; with none, it documents nothing. One on a line of its own
+                // documents the next declaration.
                 PascalToken doc = _tokens[_at];
                 PascalToken? before = _at > 0 ? _tokens[_at - 1] : null;
-                List<PascalDeclaration> undocumented = [.. _statement.Where(declaration => declaration.Doc is null)];
-                if (before is not null
-                    && before.Kind != PascalTokenKind.DocComment
-                    && before.EndLine == doc.Line
-                    && before.File == doc.File
-                    && undocumented.Count > 0)
+                bool trailing = before is not null && before.EndLine == doc.Line && before.File == doc.File;
+                if (trailing)
                 {
-                    PascalDocComment trailing = PascalDocComment.Parse(doc);
-                    foreach (PascalDeclaration declaration in undocumented) { declaration.Doc = trailing; }
+                    List<PascalDeclaration> targets = OnLineBefore(doc);
+                    PascalDocComment parsed = PascalDocComment.Parse(doc);
+                    if (targets.Count == 0) { _program.StrayDocs.Add(parsed); }
+                    foreach (PascalDeclaration target in targets) { target.Doc = parsed; }
                     _at++;
                     continue;
                 }
 
                 if (_pending is { } stray) { _program.StrayDocs.Add(stray); }
-
-                // One after a "," on its line, among a list's names or values, documents nothing that follows.
-                bool afterComma = before is not null && before.IsSymbol(",") && before.EndLine == doc.Line;
-                _pending = afterComma ? null : PascalDocComment.Parse(doc);
-                if (afterComma) { _program.StrayDocs.Add(PascalDocComment.Parse(doc)); }
+                _pending = PascalDocComment.Parse(doc);
                 _at++;
             }
 
@@ -636,6 +632,37 @@ public sealed partial class PascalProgram
             }
 
             return false;
+        }
+
+        // The undocumented declarations on a comment's line before it, at its own level: none inside a "(" or RECORD
+        // the comment is outside of, nor one outside a "(" or RECORD the comment is inside of.
+        private List<PascalDeclaration> OnLineBefore(PascalToken doc)
+        {
+            Dictionary<PascalToken, PascalDeclaration> candidates = [];
+            for (int index = _program.Declarations.Count - 1; index >= 0; index--)
+            {
+                PascalDeclaration declaration = _program.Declarations[index];
+                if (declaration.Token.File != doc.File || declaration.Token.Line < doc.Line) { break; }
+                if (declaration.Token.Line == doc.Line && declaration.Doc is null)
+                {
+                    candidates.TryAdd(declaration.Token, declaration);
+                }
+            }
+
+            List<PascalDeclaration> found = [];
+            int level = 0;
+            for (int index = _at - 1; index >= 0 && _tokens[index].Line == doc.Line; index--)
+            {
+                PascalToken token = _tokens[index];
+                if (token.IsSymbol(")") || token.Is("END")) { level++; }
+                else if (token.IsSymbol("(") || token.Is("RECORD")) { level--; }
+                else if (level == 0 && candidates.TryGetValue(token, out PascalDeclaration? declaration))
+                {
+                    found.Add(declaration);
+                }
+            }
+
+            return found;
         }
 
         // Whether the token is the last, as a program's final "." is.

@@ -502,20 +502,24 @@ public sealed class PascalSourceTests
     }
 
     /// <summary>
-    ///  A variant's tag and an enumeration take no comment meant for a field or a value.
+    ///  A comment that trails code documents what its line declared before it: a variant's tag and an enumeration
+    ///  take none meant for a field or a value, nor the next value one meant for the one before.
     /// </summary>
     [TestMethod]
     public void TagsAndEnumerationsKeepTheirOwnComments()
     {
         PascalProgram program = Analyze(
-            "PROGRAM P;\nTYPE S = RECORD CASE Kind: INTEGER OF\n  1: (Radius: INTEGER (** r *))\nEND;\n"
-                + "  Color = (Red,   (** red *)\n    Green); (** The colors. *)\nBEGIN END.");
+            "PROGRAM P;\nTYPE S = RECORD CASE Kind: INTEGER OF (** k *)\n  1: (Radius: INTEGER (** r *))\nEND;\n"
+                + "  Color = (Red,   (** red *)\n    Green); (** The colors. *)\n  Shade = (Light (** l *), Dark);\n"
+                + "BEGIN END.");
 
         PascalDeclaration Find(string name) => program.Declarations.Single(declaration => declaration.Name == name);
         (Find("Radius").Doc?.Summary).Should().Be("r");
-        Find("Kind").Doc.Should().BeNull();
+        (Find("Kind").Doc?.Summary).Should().Be("k");
+        (Find("Light").Doc?.Summary).Should().Be("l");
+        Find("Dark").Doc.Should().BeNull();
         (Find("Color").Doc?.Summary).Should().Be("The colors.");
-        Find("Red").Doc.Should().BeNull();
+        (Find("Red").Doc?.Summary).Should().Be("red");
         Find("Green").Doc.Should().BeNull();
     }
 

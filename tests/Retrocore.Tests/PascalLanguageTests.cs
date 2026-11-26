@@ -190,6 +190,28 @@ public sealed class PascalLanguageTests
         symbols.Select(symbol => symbol.Name).Should().Equal("Main2", "R", "Foo");
     }
 
+    /// <summary>
+    ///  An include two main files read is checked with the first in name order, the one hover uses, whichever was
+    ///  opened first.
+    /// </summary>
+    /// <returns>The test.</returns>
+    [TestMethod]
+    public async Task SharedIncludeIsCheckedWithTheFirstMainFile()
+    {
+        // In A's program, Length is its variable; in B's, the standard identifier, which the lint wants in capitals.
+        Write("AMAIN.TEXT", "PROGRAM AMain;\nVAR Length: INTEGER;\n(*$I SHARED*)\nBEGIN END.\n");
+        string second = Write("BMAIN.TEXT", "PROGRAM BMain;\n(*$I SHARED*)\nBEGIN END.\n");
+        string shared = Write("SHARED.TEXT", "PROCEDURE Store;\nBEGIN\n  Length := 1\nEND;\n");
+        RecordingLanguageClient client = new();
+        (DocumentSyncHandler sync, HoverHandler hover, _, _) = Handlers(client);
+        Open(sync, second);
+        DocumentUri uri = Open(sync, shared);
+
+        (await client.Wait(uri, _ => true)).Should().BeEmpty();
+        string text = (await hover.Handle(Request(uri, new Position(2, 3))))?.Contents.Value ?? "";
+        text.Should().Contain("VAR Length");
+    }
+
     private static (DocumentSyncHandler, HoverHandler, DefinitionHandler, DocumentSymbolHandler) Handlers(
         RecordingLanguageClient client)
     {

@@ -148,3 +148,10 @@ export function changesFrom(saved: unknown, base: unknown): Record<string, Recor
     }
     return changes;
 }
+
+/** Saved changes with the media of drives a machine lacks left out, given that machine's own configuration. */
+export function fitting(changes: Record<string, Record<string, unknown>>, machine: unknown): Record<string, Record<string, unknown>> {
+    const drives = (machine as { media?: Record<string, unknown> } | undefined)?.media;
+    if (changes.media === undefined || drives === undefined) return changes;
+    return { ...changes, media: Object.fromEntries(Object.entries(changes.media).filter(([id]) => id in drives)) };
+}

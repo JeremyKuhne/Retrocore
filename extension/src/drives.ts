@@ -41,6 +41,10 @@ export interface Media {
     kept?: boolean;
     /** How the running machine's recovery journal keeps the changed disk, when it keeps one. */
     recovery?: MediaRecovery;
+    /** What the media holds, where the drive can tell, such as Level I tape (250 baud). */
+    contents?: string;
+    /** Why the machine cannot read the media, such as a tape for the other Level's ROM. */
+    warning?: string;
 }
 
 /** How the recovery journal keeps a changed disk, as retro/devices gives it. */
@@ -147,9 +151,10 @@ export function isReadOnlyImage(device: Device): boolean {
 
 /**
  * The mark at the row's end, as Git marks a file: changed, a disk with changes not saved; stale, its image changed on
- * disk; conflict, both.
+ * disk; conflict, both; unreadable, media the machine cannot read, such as a tape for the other Level's ROM.
  */
-export function mark(device: Device): "changed" | "stale" | "conflict" | "behind" | undefined {
+export function mark(device: Device): "changed" | "stale" | "conflict" | "behind" | "unreadable" | undefined {
+    if (device.media?.warning !== undefined) return "unreadable";
     if (!saves(device)) return undefined;
     const changed = device.media?.changed === true;
     const stale = isStale(device);
@@ -175,6 +180,7 @@ export function summary(device: Device): string {
         parts.push(`track ${track}` + (device.sides > 1 ? ` side ${device.head.side}` : "")
             + (device.head.sector !== null ? ` sector ${device.head.sector}` : ""));
     }
+    if (device.media?.contents !== undefined) parts.push(device.media.warning === undefined ? device.media.contents : `${device.media.contents}, which this ROM can't read`);
     if (device.transport && device.media) parts.push(`${device.transport.position.toLocaleString()} of ${device.transport.length.toLocaleString()} bytes`);
     if (device.blocks?.last !== null && device.blocks?.last !== undefined) parts.push(`block ${device.blocks.last}`);
     if (device.media?.kept) parts.push("kept from the last run");
@@ -238,6 +244,8 @@ export function tooltipLines(device: Device, now: Date = new Date(), changes?: s
     if (media === null) return ["Empty"];
     const source = media.source;
     const lines = [source?.path !== undefined ? `${path.basename(media.label)} (${media.format}), ${source.path}` : `${media.label} (${media.format})`];
+    if (media.contents !== undefined) lines.push(media.contents);
+    if (media.warning !== undefined) lines.push(`⚠ ${media.warning}`);
     if (saves(device)) {
         lines.push(source?.kind === "built" ? (media.changed ? "Changed: built by the launch, and not saved anywhere" : "Built by the launch")
             : media.changed ? `Changed${media.kept ? " in the last run" : ""}: ${changes === undefined ? "" : `${changes}, `}not saved to the image`

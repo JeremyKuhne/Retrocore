@@ -131,8 +131,11 @@ the Command Palette and on the **Machine** view's **...** menu. It asks three th
    - **Start** boots it with the machine's defaults. Cards and disks the machine
      last ran with come back, as [Machine and Drives](#machine-and-drives) describes.
    - **Options…** lists that machine's own choices, such as the II's Monitor, the II
-     and II Plus's memory and slot 0 card, the Mockingboard, the Model I's
-     Expansion Interface and lowercase, the Apple-1's memory and cassette interface, the PET's memory, sound and snow, and the Atari's BASIC revision, video standard, disk drives and sound. Each shows its current value; Esc goes back.
+     and II Plus's memory and slot 0 card, the Mockingboard, the Model I's ROM, memory,
+     Expansion Interface and lowercase, the Model III's ROM and memory, the Apple-1's memory and cassette interface, the PET's memory, sound and snow, and the Atari's BASIC revision, video standard, disk drives and sound. Each shows its current value; Esc goes back.
+     The ROM picks Level I or Level II BASIC (and on the Model I, Level II 1.3 or 1.2), so
+     the Level I and Level II entries are the same machine with a different ROM; Level I
+     cannot start from a disk or run a BASIC file, so it is refused for those.
    - **Save as Launch Configuration** adds the setup to the workspace's launch.json,
      under a name you confirm, replacing one of the same name.
 
@@ -939,7 +942,8 @@ the bus, until its `OUT ($00),A` gives it back.
 stack, cycle counts and `Keeps:` checks; a Z80 `CALL` or `RST` line shows its latest
 call's cycles as a `JSR` line does. The machine is configured by:
 
-- `rom`: `level2` (the default) or `level1`;
+- `rom`: `level2` (the default) or `level1`, the **ROM** setting in the Machine view
+  and Start Machine's options;
 - `revision`: Level II `1.3` (the default) or `1.2`;
 - `ramKilobytes`, `expansionInterface`, `diskController`, `lowercase` and `doubler`
   (`percom` for NEWDOS/80's double density, `tandy` for Radio Shack's, or `both`);
@@ -1489,8 +1493,14 @@ add and remove cards, insert and eject disks and tapes, and write-protect them. 
 **Settings** are the choices **Start Machine → Options…** offers, such as memory, slot
 0, the II's Monitor or the Model I's Expansion Interface: click one to change it. The
 cards and disks you added stay, where they still fit. A machine from launch.json gets
-the setting written into its configuration. While it runs, the settings show what it
-was built with. Its ▶
+the setting written into its configuration. A TRS-80 Model I's or Model III's **ROM**
+keeps the tape; Level I, which has no disks, takes out the disks and disk controller,
+and the memory becomes the new ROM's own unless you chose a size. The Model I's
+**Memory** offers 4, 16, 32 or 48 KB: 32 and 48 KB bring the Expansion Interface, and
+taking the interface out brings memory down to 16 KB. While it runs, the settings show
+what it was built with, except the ROM: its setting, and the **Change ROM** button on
+the ROM row, start the machine again with the other ROM, after asking, since whatever
+is only in its memory is lost; its tape stays in. Its ▶
 starts it with those changes, and when the session ends the views show it off again,
 with what changed while it ran. The **...** menu has **Start Machine**
 ([Starting a machine](#starting-a-machine)) and **Start Last Machine**. Before any
@@ -1511,7 +1521,10 @@ and Debug's icon still has the call stack and variables.
 
 The Drives view lists each part that has drives, with its drives under it: slot 6's
 two Disk II drives, the Model I's cassette and its disk drives. Its badge counts the
-disks changed in the machine and not yet saved to their images.
+disks changed in the machine and not yet saved to their images. A TRS-80 cassette's row
+says what its tape holds, a Level I tape, a Level II BASIC program or a Level II SYSTEM
+tape, and a tape the machine's ROM cannot read, such as a Level I tape in Level II, is
+marked ⚠ with the reason in its tooltip, and in the debug console as it goes in.
 
 The machine's row has a heart, running or off. Empty, the machine is not in your
 favorites, and clicking it saves it at once, named for the machine (such as **Apple II

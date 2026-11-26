@@ -8,7 +8,7 @@
 // The ROMs are assembled from the SDK's sources unless RETROCORE_TRS80_ROMS names the dumps.
 
 import { resolve, join } from "node:path";
-import { readFileSync, existsSync, unlinkSync, statSync } from "node:fs";
+import { readFileSync, existsSync, unlinkSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import assert from "node:assert/strict";
 import { startDap } from "./DapClient.mjs";
@@ -96,7 +96,17 @@ async function stoppedAt(reason, threadId, description) {
     return (await request("stackTrace", { threadId })).stackFrames[0];
 }
 
+// Waits for the debug console to say something, while the machine runs.
+async function consoleSays(pattern) {
+    phase(`waiting for the console to say ${pattern}`);
+    for (;;) {
+        const output = await event("output");
+        if (pattern.test(output.output)) return output.output;
+    }
+}
+
 const cassette = join(tmpdir(), `retrocore-${process.pid}.cas`);
+const levelOneTape = join(tmpdir(), `retrocore-${process.pid}-level1.cas`);
 try {
     await request("initialize", { adapterID: "retrocore", linesStartAt1: true, columnsStartAt1: true });
     phase("initialized");
@@ -342,12 +352,38 @@ try {
     assert.ok(seconds < playing * 0.9, `the fast cassette loaded in ${seconds.toFixed(1)} s, not faster than the tape's ${playing.toFixed(1)} s`);
     await screen(text => /CLOAD "A"\s*\n\s*READY/.test(text), "the fast CLOAD's READY");
 
+    // A tape for the other Level goes in, and the console and the cassette's media say once that the ROM cannot
+    // read it: Level II's recording in Level I, put back by a saved machine as a change of ROM's restart does it, and
+    // a Level I tape put in Level II.
+    await launch({ rom: "level1", machineState: { media: { cassette: { path: cassette, writeProtected: true } } } });
+    await screen(text => text.includes("READY"), "Level I's READY");
+    await consoleSays(/Cassette: .*\.cas: This tape was recorded by Level II BASIC \(500 baud\); Level I can't read it\. Switch the ROM to Level II\./);
+    let deck = (await request("retro/devices")).devices.find(device => device.id === "cassette");
+    assert.equal(deck.media?.label, cassette, "the saved machine's tape is in Level I's deck");
+    assert.equal(deck.media.contents, "Level II BASIC program (500 baud)");
+    assert.match(deck.media.warning, /Level I can't read it/);
+    await type("PRINT 6*7\r");
+    await screen(text => text.includes("42"), "Level I running with the tape in");
+    assert.equal(events.filter(message => message.event === "output" && /can't read it/.test(message.body.output)).length, 0,
+        "the warning is said once");
+
+    writeFileSync(levelOneTape, Buffer.from([...new Array(128).fill(0), 0xA5, 0x42, 0x00, 0x42, 0x02, 0x0D, 0x0D, 0xE6]));
+    await launch({});
+    await screen(text => text.includes("MEM SIZE?"), "MEM SIZE? before the Level I tape");
+    await request("retro/media", { device: "cassette", action: "insert", path: levelOneTape });
+    await consoleSays(/This tape was recorded by Level I BASIC \(250 baud\); Level II can't read it\. Switch the ROM to Level I\./);
+    deck = (await request("retro/devices")).devices.find(device => device.id === "cassette");
+    assert.equal(deck.media.contents, "Level I tape (250 baud)");
+    await request("retro/media", { device: "cassette", action: "insert", path: cassette });
+    deck = (await request("retro/devices")).devices.find(device => device.id === "cassette");
+    assert.deepEqual([deck.media.contents, deck.media.warning], ["Level II BASIC program (500 baud)", undefined], "Level II's own tape is fine");
+
     await request("disconnect");
     console.log("Model I DAP passed: boot to READY, a Level II source breakpoint with the Z80 call stack, a cassette round trip, RUN and CONT stops, the reset button, power-on and entry stops, 1x and 2x speed, stepping from a Z80 source into Level2.asm"
-        + (existsSync(dos) ? ", a NEWDOS/80 boot" : "") + " and a fast cassette load at real speed.");
+        + (existsSync(dos) ? ", a NEWDOS/80 boot" : "") + ", a fast cassette load at real speed, and tapes for the other Level warned of.");
 } finally {
     clearTimeout(timeout);
     close();
-    if (existsSync(cassette)) unlinkSync(cassette);
+    for (const file of [cassette, levelOneTape]) if (existsSync(file)) unlinkSync(file);
 }
 if (failure()) throw failure();

@@ -13,8 +13,12 @@ namespace Retrocore.Machines.Trs80;
 public sealed class Trs80CassetteDrive : ITapeDrive
 {
     private readonly Trs80Cassette _cassette;
+    private readonly bool _level1;
+    private readonly string _rom;
+    private readonly bool _romSwitches;
     private CassetteImage? _tape;
     private string _label = "";
+    private CassetteContents _contents;
 
     /// <summary>
     ///  Creates the drive.
@@ -22,13 +26,21 @@ public sealed class Trs80CassetteDrive : ITapeDrive
     /// <param name="cassette">The cassette interface.</param>
     /// <param name="baud">The ROM's rate: 500 for Level II, 250 for Level I.</param>
     /// <param name="motorPort">Where the motor relay is driven.</param>
-    internal Trs80CassetteDrive(Trs80Cassette cassette, int baud, string motorPort = "$FF")
+    /// <param name="rom">The ROM, as a warning names it, such as <c>Level II</c> or <c>the Model 4's ROM</c>.</param>
+    /// <param name="romSwitches">Whether the machine's launch can switch it to the other Level's ROM.</param>
+    /// <param name="highSpeed">
+    ///  Whether the ROM also plays and records 1500 baud tapes, as the Model III's and Model 4's do.
+    /// </param>
+    internal Trs80CassetteDrive(Trs80Cassette cassette, int baud, string motorPort, string rom, bool romSwitches, bool highSpeed = false)
     {
         _cassette = cassette;
+        _level1 = baud == 250;
+        _rom = rom;
+        _romSwitches = romSwitches;
         Info = new()
         {
             Name = "Cassette",
-            Description = $"Cassette recorder, {baud} baud",
+            Description = highSpeed ? $"Cassette recorder, {baud} or 1500 baud" : $"Cassette recorder, {baud} baud",
             Controller = $"the cassette port, with the motor relay on port {motorPort}",
             Formats = ["cas"],
             Operations = MediaOperations.Insert | MediaOperations.Eject | MediaOperations.Record
@@ -57,9 +69,18 @@ public sealed class Trs80CassetteDrive : ITapeDrive
         {
             if (Tape is null) { return null; }
             bool recording = _cassette.Mode == TapeMode.Recording;
-            return new(_label, "CAS", WriteProtected: !recording, Changed: recording && _cassette.Length != 0);
+            return new(_label, "CAS", WriteProtected: !recording, Changed: recording && _cassette.Length != 0)
+            {
+                Contents = recording ? null : Describe(_contents),
+                Warning = recording ? null : Warning(_contents)
+            };
         }
     }
+
+    /// <summary>
+    ///  Gets what the tape in the deck holds, as its first recording says; unknown for a recording or no tape.
+    /// </summary>
+    public CassetteContents Contents => Tape is null || _cassette.Mode == TapeMode.Recording ? CassetteContents.Unknown : _contents;
 
     /// <inheritdoc/>
     public DeviceActivity Activity => !_cassette.MotorOn || _cassette.Mode == TapeMode.Stopped
@@ -79,6 +100,7 @@ public sealed class Trs80CassetteDrive : ITapeDrive
         _cassette.Play(tape);
         _tape = tape;
         _label = label;
+        _contents = CassetteFormat.Detect(tape.Bytes);
     }
 
     /// <summary>
@@ -91,6 +113,7 @@ public sealed class Trs80CassetteDrive : ITapeDrive
         _cassette.Record(tape);
         _tape = tape;
         _label = label;
+        _contents = CassetteContents.Unknown;
     }
 
     /// <summary>
@@ -105,4 +128,24 @@ public sealed class Trs80CassetteDrive : ITapeDrive
         _label = "";
         return tape;
     }
+
+    private static string? Describe(CassetteContents contents) => contents switch
+    {
+        CassetteContents.Level1 => "Level I tape (250 baud)",
+        CassetteContents.Level2Basic => "Level II BASIC program (500 baud)",
+        CassetteContents.Level2System => "Level II SYSTEM tape (500 baud)",
+        _ => null
+    };
+
+    // Neither Level's ROM reads the other's tapes: Level I's are 250 baud, Level II's 500.
+    private string? Warning(CassetteContents contents) => (contents, _level1) switch
+    {
+        (CassetteContents.Level1, false) => $"This tape was recorded by Level I BASIC (250 baud); {_rom} can't read it. "
+            + (_romSwitches ? "Switch the ROM to Level I." : "Play it on a Model I or Model III with the ROM set to Level I."),
+        (CassetteContents.Level2Basic, true) => "This tape was recorded by Level II BASIC (500 baud); Level I can't read it. "
+            + "Switch the ROM to Level II.",
+        (CassetteContents.Level2System, true) => "This is a Level II SYSTEM tape (500 baud); Level I can't read it. "
+            + "Switch the ROM to Level II.",
+        _ => null
+    };
 }

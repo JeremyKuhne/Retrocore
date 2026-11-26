@@ -181,7 +181,9 @@ copy of the sources.
 
 **Level I.** A Model III with `"rom": "level1"` runs Level I BASIC from its 4K ROM, the ROM space above it empty, with
 250 baud tapes (`CSAVE` and `CLOAD`) and `LPRINT` and `LLIST` on the printer. It has no BASIC thread, as Level I on the
-Model I has none.
+Model I has none. Neither ROM reads the other's tapes; a tape recorded for the other one still goes in, and the debug
+console and the Drives view say so, as on the [Model I](Trs80ModelI.md#the-machine). The Model 4 has only the Model III
+ROM, so its warning for a Level I tape names the machines that play one.
 
 Dumps are under MAME's names, in `romDirectory` (or `RETROCORE_TRS80_ROMS`), or its `trs80m3`, `trs80m4`,
 `trs80m4p`, `trs80m2` or `trs80m16` folder:
@@ -217,6 +219,11 @@ The machines are in the Run and Debug dropdown and **Retrocore: Start Machine…
 The options are `romDirectory`, `sdkRoms`, `rom` (Model III: `level2`, the default, or `level1`), `ramKilobytes`, `disks`, `diskController` (the Model III family's; on when disks are
 given), `cassette` and `fastCassette` (Model III and 4), `fastDisk` (Model II: flat out while the controller works),
 `bootRom` (Model II), `bootSeconds`, `screen` and `speed`. A `source` or `program` loads at `$7000`.
+
+The Model III's **ROM**, the Model III ROM or Level I BASIC, is a setting in Start Machine's options and the Machine
+view, as the Model I's is ([Debugging](Trs80ModelI.md#debugging)): changed while off, the tape and memory (16, 32 or
+48 KB under either ROM) stay, and Level I takes out the disks and the disk controller; while it runs, the ROM row
+starts the machine again with the other ROM, after asking.
 
 The display panel types the Model I's keys on the Model III family (Esc is BREAK, Home is CLEAR), and ASCII on the
 Model II (Esc is BREAK, the arrows `$1C`-`$1F`), with buttons for BREAK, HOLD, F1 and F2. **Machine reset** stops at

@@ -449,7 +449,9 @@ internal sealed partial class Trs80Model3DebugTarget : IDebugTarget
                 "cassette",
                 "Cassette",
                 "Cassette recorder",
-                "The cassette port, at 500 baud; the 1500 baud rate is not emulated yet.",
+                configuration.Rom == Trs80Rom.Level1
+                    ? "The cassette port, at 250 baud for Level I."
+                    : "The cassette port, at 500 or 1500 baud.",
                 [cassette.Id]));
         }
 

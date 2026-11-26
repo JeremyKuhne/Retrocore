@@ -9,9 +9,10 @@
 import * as path from "node:path";
 import * as vscode from "vscode";
 import { favoriteChoices } from "./favorites";
-import { machines, type Machine } from "./machines";
+import { machineById, machines, type Machine } from "./machines";
 import {
-    crowdsCartridge, describeSetup, isUsable, optionValue, removesDrives, runChoices, setupConfiguration, startOrigin, withOption, type RunChoice, type Setup
+    describeSetup, isUsable, optionDefault, optionValue, refusal, runChoices, setupConfiguration, startOrigin, withOption, type RunChoice,
+    type Setup
 } from "./startFlow";
 
 const lastKey = "retrocore.lastSetup";
@@ -92,18 +93,19 @@ async function pickSetup(previous: Setup | undefined): Promise<{ setup: Setup; a
     if (run === undefined) return undefined;
     let setup: Setup = { machineId: machine.id, kind: run.kind, path: run.path, basicDisk: run.basicDisk, options: {} };
 
-    // Start or save, after any options.
+    // Start or save, after any options. A change of ROM makes it the other Level's machine.
     for (;;) {
+        const current = machineById(setup.machineId) ?? machine;
         const actions: ActionItem[] = [{ label: "$(play) Start", detail: describeSetup(setup), action: "start" }];
-        if (machine.choices.length !== 0) {
-            actions.push({ label: "$(settings) Options…", detail: "Change " + machine.choices.map(choice => choice.label.toLowerCase()).join(", "), action: "options" });
+        if (current.choices.length !== 0) {
+            actions.push({ label: "$(settings) Options…", detail: "Change " + current.choices.map(choice => choice.label.toLowerCase()).join(", "), action: "options" });
         }
 
         actions.push({ label: "$(save) Save as Launch Configuration", detail: "Adds it to the workspace's launch.json", action: "save" });
-        const action = await vscode.window.showQuickPick(actions, { title: `Start ${machine.label}` });
+        const action = await vscode.window.showQuickPick(actions, { title: `Start ${current.label}` });
         if (action === undefined) return undefined;
         if (action.action !== "options") return { setup, action: action.action };
-        setup = await pickOptions(machine, setup);
+        setup = await pickOptions(setup);
     }
 }
 
@@ -148,9 +150,11 @@ async function pickRun(machine: Machine): Promise<{ kind: RunChoice["kind"]; pat
 }
 
 // One option at a time: which, then its value; back to Start when nothing more is picked.
-async function pickOptions(machine: Machine, setup: Setup): Promise<Setup> {
+async function pickOptions(setup: Setup): Promise<Setup> {
     let current = setup;
     for (;;) {
+        const machine = machineById(current.machineId);
+        if (machine === undefined) return current;
         const items = machine.choices.map(choice => {
             const value = optionValue(machine, current, choice.option);
             return { label: choice.label, description: choice.values.find(candidate => candidate.value === value)?.label, choice };
@@ -162,21 +166,17 @@ async function pickOptions(machine: Machine, setup: Setup): Promise<Setup> {
             picked.choice.values.map(candidate => ({
                 label: candidate.label,
                 detail: candidate.detail,
-                description: candidate.value === picked.choice.default ? "default" : undefined,
+                description: candidate.value === optionDefault(machine, current, picked.choice.option) ? "default" : undefined,
                 picked: candidate.value === optionValue(machine, current, picked.choice.option),
                 value: candidate.value
             })),
             { title: picked.choice.label });
 
         if (value === undefined) continue;
-        if (removesDrives(current, picked.choice.option, value.value)) {
-            // The disk it starts from needs a drive.
-            void vscode.window.showWarningMessage(`${machine.label} starts from a disk, so it keeps its ${picked.choice.label.toLowerCase()}.`);
-            continue;
-        }
-        if (crowdsCartridge(setupConfiguration(current), picked.choice.option, value.value)) {
-            // The cartridge holds the left slot.
-            void vscode.window.showWarningMessage(`${machine.label} starts with a cartridge in BASIC's slot, so BASIC stays out.`);
+        // The disk it starts from needs a drive, a cartridge holds BASIC's slot, and Level I runs no disk or BASIC file.
+        const refused = refusal(machine, current, picked.choice.option, value.value);
+        if (refused !== undefined) {
+            void vscode.window.showWarningMessage(refused);
             continue;
         }
 

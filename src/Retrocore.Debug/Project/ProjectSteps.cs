@@ -268,11 +268,6 @@ internal static class ProjectSteps
                 string projectFolder = Directory.Exists(path) ? path : Path.GetDirectoryName(path) ?? "";
                 files.UnionWith(ProjectFolderFiles(project, projectFolder));
             }
-            else if (text.Length != 0 && !text.StartsWith('#') && !text.StartsWith("//", StringComparison.Ordinal))
-            {
-                // Directives come before the code.
-                break;
-            }
         }
     }
 
@@ -298,10 +293,11 @@ internal static class ProjectSteps
             files.AddRange(Directory.EnumerateFiles(current).Where(file => !outputs.Contains(file)));
             foreach (string child in Directory.EnumerateDirectories(current))
             {
-                // A link or junction is not followed, so one to a folder above cannot loop.
+                // A symbolic link or junction is not followed, so one to a folder above cannot loop; other reparse
+                // points, such as cloud files' placeholders, are walked. A folder that has gone reads as no link.
                 if (!Path.GetFileName(child).StartsWith('.')
                     && !skipped.Contains(child)
-                    && !File.GetAttributes(child).HasFlag(FileAttributes.ReparsePoint))
+                    && new DirectoryInfo(child).LinkTarget is null)
                 {
                     Walk(child);
                 }

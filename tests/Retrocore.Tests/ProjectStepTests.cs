@@ -201,6 +201,50 @@ public sealed class ProjectStepTests
         output.ToString().Should().NotContain(": ran ").And.Contain("steps/t:");
     }
 
+    /// <summary>
+    ///  <c>retrocore build --all</c> runs a failing step once, shows its error once, and builds none of the project's
+    ///  targets.
+    /// </summary>
+    [TestMethod]
+    public void AFailingStepFailsEveryTargetOnce()
+    {
+        Write("retrocore.json", """
+            { "sdk": "1", "name": "steps", "cpu": "6502", "sources": ["main.s"],
+              "steps": [{ "tool": "tools/fail.cs", "out": "${obj}/never.bin" }],
+              "targets": { "a": { "machine": "apple2-iiplus", "environment": "bare" },
+                           "b": { "machine": "apple2-iiplus", "environment": "bare" } } }
+            """);
+
+        Write("tools/fail.cs", """
+            /* A tool that fails. */
+            Console.WriteLine("broken");
+            return 4;
+            """);
+
+        Write("main.s", "rts");
+        using StringWriter output = new() { NewLine = "\n" };
+        using StringWriter error = new() { NewLine = "\n" };
+        BuildCommand.Run(["--project", _folder, "--all"], output, error).Should().Be(1);
+        string errors = error.ToString();
+        errors.Split("failed (exit code 4)").Should().HaveCount(2, errors);
+        errors.Should().Contain("broken").And.Contain("steps/b: not built, as the project's steps failed.");
+        output.ToString().Should().BeEmpty();
+    }
+
+    /// <summary>
+    ///  A file-based app's directives count wherever its comments put them.
+    /// </summary>
+    [TestMethod]
+    public void DirectivesAfterABlockCommentCount()
+    {
+        Project("""[{ "tool": "tools/pack.cs", "in": "game.dat", "out": "${obj}/game.bin" }]""");
+        Write("tools/pack.cs", "/*\n * A header.\n */\n#:include Part.cs\nConsole.WriteLine();\n");
+        Write("tools/Part.cs", "class Part;\n");
+        RetrocoreProject project = RetrocoreProject.Load(_folder);
+        ProjectSteps.ToolFiles(project, project.Steps[0]).Should().Equal(
+            Path.Join(_folder, "tools", "pack.cs"), Path.Join(_folder, "tools", "Part.cs"));
+    }
+
     private bool Ran() =>
         ProjectSteps.Run(RetrocoreProject.Load(_folder), Copy).Should().ContainSingle().Subject.Ran;
 

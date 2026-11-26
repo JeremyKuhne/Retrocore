@@ -86,20 +86,31 @@ internal static class BuildCommand
             return 1;
         }
 
+        // Each project's steps run once, before its first target that can build, and what they print is shown once. When
+        // they fail, the error is shown once and the project's other targets are not built.
         int failed = 0;
+        Dictionary<RetrocoreProject, bool> steps = [];
         foreach (ProjectTarget target in targets)
         {
+            if (steps.TryGetValue(target.Project, out bool stepsRan) && !stepsRan)
+            {
+                error.WriteLine($"{target.Project.Name}/{target.Name}: not built, as the project's steps failed.");
+                failed++;
+                continue;
+            }
+
             try
             {
-                TargetBuild build = ProjectBuild.Build(target);
-                foreach (StepResult step in build.Steps.Where(step => step.Ran))
+                if (!steps.ContainsKey(target.Project) && Supported(target))
                 {
-                    string Relative(string path) => Path.GetRelativePath(target.Project.Directory, path).Replace('\\', '/');
-                    string files = string.Join(", ", step.Step.Inputs.Select(Relative)) + " -> " + string.Join(", ", step.Step.Outputs.Select(Relative));
-                    output.WriteLine($"{target.Project.Name}: ran {Relative(step.Step.Tool)} ({files})");
-                    if (step.Output.Length != 0) { output.Write(step.Output); }
+                    steps[target.Project] = false;
+                    List<StepResult> results = ProjectSteps.Run(target.Project);
+                    steps[target.Project] = true;
+                    Report(target.Project, results, output);
                 }
 
+                TargetBuild build = ProjectBuild.Build(target);
+                Report(target.Project, build.Steps, output);
                 (int start, byte[] bytes) = ProjectBuild.Image(build);
                 output.WriteLine(
                     $"{target.Project.Name}/{target.Name}: {build.Binary} (${start:X4}-${start + bytes.Length - 1:X4}, {bytes.Length} {(bytes.Length == 1 ? "byte" : "bytes")}, entry ${build.Entry:X4})");
@@ -113,6 +124,32 @@ internal static class BuildCommand
         }
 
         return failed == 0 ? 0 : 1;
+    }
+
+    // Each step that ran, with what it read and wrote and what it printed.
+    private static void Report(RetrocoreProject project, IEnumerable<StepResult> results, TextWriter output)
+    {
+        string Relative(string path) => Path.GetRelativePath(project.Directory, path).Replace('\\', '/');
+        foreach (StepResult step in results.Where(step => step.Ran))
+        {
+            string files = string.Join(", ", step.Step.Inputs.Select(Relative)) + " -> " + string.Join(", ", step.Step.Outputs.Select(Relative));
+            output.WriteLine($"{project.Name}: ran {Relative(step.Step.Tool)} ({files})");
+            if (step.Output.Length != 0) { output.Write(step.Output); }
+        }
+    }
+
+    // Whether a target builds at all, so its project's steps are worth running for it.
+    private static bool Supported(ProjectTarget target)
+    {
+        try
+        {
+            target.RequireSupported();
+            return true;
+        }
+        catch (ProjectException)
+        {
+            return false;
+        }
     }
 
     /// <summary>
@@ -162,4 +199,4 @@ internal static class BuildCommand
     }
 
     private static string Qualified(ProjectTarget target) => $"{target.Project.Name}/{target.Name}";
-}
+}

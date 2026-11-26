@@ -40,6 +40,7 @@ public class BranchConditionTests
         IsaDescription description = set.Description;
         Random random = new(name.GetHashCode(StringComparison.Ordinal) & 0xFFFF);
         byte[] bytes = new byte[8];
+        byte[] reads = new byte[8];
         int[] registers = new int[description.EffectRegisters.Count];
         List<string> failures = [];
         int checkedEncodings = 0;
@@ -69,7 +70,8 @@ public class BranchConditionTests
                 registers = Widen(description, registers, random);
                 int flags = random.Next(256);
                 bool expected = effects.Taken(0xFF, (byte)flags) == true;
-                if (!evaluator.TryRun(pc, bytes.AsSpan(0, size), registers, ref flags, Memory, out ushort next))
+                random.NextBytes(reads);
+                if (!evaluator.TryRun(pc, bytes.AsSpan(0, size), registers, ref flags, reads, out _, out ushort next))
                 {
                     failures.Add($"{label}: did not run");
                     break;
@@ -138,8 +140,6 @@ public class BranchConditionTests
 
         return registers;
     }
-
-    private static int Memory(ushort address) => (int)((address * 2654435761u) >> 13) & 0xFF;
 
     private static int Encode(InstructionSet set, int encoding, Random random, byte[] bytes)
     {

@@ -12,14 +12,14 @@ using Retrocore.Isa;
 namespace Retrocore.Assembler;
 
 /// <summary>
-///  Runs one instruction on the CPU's own core, from known register and flag values, to learn the values it leaves:
-///  the flags of <c>LDA #0</c>, the sum of <c>ADC #1</c> with a known carry.
+///  Runs one instruction on the CPU's own core, from given register, flag and memory values, to learn the values it
+///  leaves: the flags of <c>LDA #0</c>, the sum of <c>ADC #1</c> with a known carry.
 /// </summary>
 /// <remarks>
 ///  <para>
 ///   The core is the one the emulator runs, so the analysis needs no rules of its own for how each instruction
-///   computes its flags. The instruction reads only its own bytes and memory whose value the caller knows; any
-///   other read, and any port, ends the run without a result.
+///   computes its flags. The instruction's own bytes and the code after them come from the image; its other reads
+///   get the values the caller gives, in order, and a read past them, or any port, ends the run without a result.
 ///  </para>
 /// </remarks>
 internal sealed class AnalysisEvaluator
@@ -112,24 +112,39 @@ internal sealed class AnalysisEvaluator
     ///  not read; receives their values after it.
     /// </param>
     /// <param name="flags">The flags register's value; receives its value after.</param>
-    /// <param name="memory">The value of a byte of memory, or -1 when it is not known.</param>
+    /// <param name="reads">
+    ///  The values the instruction's reads of memory get, other than its own bytes and the code after them, in the
+    ///  order it reads.
+    /// </param>
+    /// <param name="readCount">Receives how many such reads it made.</param>
     /// <param name="next">Receives where execution goes next.</param>
-    /// <returns>Whether the instruction ran without reading anything unknown.</returns>
+    /// <param name="read">
+    ///  The registers to set, by bit; the others keep what an earlier run left, which an instruction that does not
+    ///  read them does not see.
+    /// </param>
+    /// <param name="written">The registers to receive the values of, by bit.</param>
+    /// <returns>
+    ///  Whether the instruction ran, with no more reads than <paramref name="reads"/> has and no port.
+    /// </returns>
     internal bool TryRun(
         ushort pc,
         ReadOnlySpan<byte> bytes,
         Span<int> registers,
         ref int flags,
-        Func<ushort, int> memory,
-        out ushort next)
+        ReadOnlySpan<byte> reads,
+        out int readCount,
+        out ushort next,
+        uint read = uint.MaxValue,
+        uint written = uint.MaxValue)
     {
         next = pc;
-        _bus.Start(pc, bytes, memory);
+        readCount = 0;
+        _bus.Start(pc, bytes, reads);
         try
         {
             for (int bit = 0; bit < _names.Length; bit++)
             {
-                if (_names[bit] is { } name && name != _flagsRegister && name != _programCounter)
+                if ((read & (1u << bit)) != 0 && _names[bit] is { } name && name != _flagsRegister && name != _programCounter)
                 {
                     _view.TrySetRegister(name, registers[bit]);
                 }
@@ -137,6 +152,7 @@ internal sealed class AnalysisEvaluator
 
             foreach ((string name, int high, int low) in _pairs)
             {
+                if ((read & ((1u << high) | (1u << low))) == 0) { continue; }
                 _view.TrySetRegister(name, ((registers[high] & 0xFF) << 8) | (registers[low] & 0xFF));
             }
 
@@ -149,15 +165,20 @@ internal sealed class AnalysisEvaluator
         }
 
         ProcessorExecutionResult result = _step();
+        readCount = _bus.ReadCount;
         if (_bus.Failed || result.Status != ProcessorExecutionStatus.InstructionComplete) { return false; }
 
         for (int bit = 0; bit < _names.Length; bit++)
         {
-            if (_names[bit] is { } name && _view.TryGetRegister(name, out int value)) { registers[bit] = value; }
+            if ((written & (1u << bit)) != 0 && _names[bit] is { } name && _view.TryGetRegister(name, out int value))
+            {
+                registers[bit] = value;
+            }
         }
 
         foreach ((string name, int high, int low) in _pairs)
         {
+            if ((written & ((1u << high) | (1u << low))) == 0) { continue; }
             _view.TryGetRegister(name, out int value);
             registers[high] = value >> 8;
             registers[low] = value & 0xFF;

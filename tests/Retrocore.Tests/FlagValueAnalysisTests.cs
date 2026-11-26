@@ -142,6 +142,76 @@ public class FlagValueAnalysisTests
     }
 
     /// <summary>
+    ///  Some bits known decide a branch: ORA with a constant that has a bit set leaves a non-zero result whatever
+    ///  memory held, as the MOS's <c>lda #CFS_AT_EOF</c> then <c>ora CFS_STATUS</c>; AND with $0F leaves bit 7 clear
+    ///  whatever A was; a byte read from memory alone decides nothing.
+    /// </summary>
+    [TestMethod]
+    public void SomeKnownBitsDecideBranches()
+    {
+        const string Source = """
+            ;; Branches on results with only some bits known.
+            ;; Keeps: X
+            Partial:
+                lda #$04
+                ora $10
+                beq Change
+                and #$0F
+                bmi Change
+                ora #$80
+                bpl Change
+                lda $11
+                bne Done
+            Change:
+                ldx #0
+            Done:
+                rts
+            """;
+
+        (List<string> findings, AnalysisContracts contracts) = Check(Source, "Mos6502");
+        findings.Should().Equal("Partial ($1000) documents Keeps: X, but X is changed by the instruction at $1012.");
+        Summary(contracts, 0x1000).FixedConditions.Should().Equal(
+            new Dictionary<ushort, bool> { [0x1004] = false, [0x1008] = false, [0x100C] = false });
+    }
+
+    /// <summary>
+    ///  Known bits on the Z80 and the 6809: OR 1 leaves A non-zero, ANDA #$0F leaves it positive.
+    /// </summary>
+    [TestMethod]
+    public void OtherCpusUseKnownBits()
+    {
+        const string Z80 = """
+            ;; A is not zero after OR 1.
+            ;; Keeps: BC
+            NotZero:
+                or 1
+                ret nz
+                ld b,0
+                ret
+            """;
+
+        (List<string> findings, AnalysisContracts contracts) = Check(Z80, "Z80");
+        findings.Should().BeEmpty();
+        Summary(contracts, 0x1000).FixedConditions.Should().Equal(new Dictionary<ushort, bool> { [0x1002] = true });
+
+        const string M6809 = """
+            ;; A is positive after ANDA #$0F.
+            ;; Keeps: B
+            Positive:
+                anda #$0F
+                bmi Change
+                rts
+            Change:
+                ldb #0
+                rts
+            """;
+
+        (findings, contracts) = Check(M6809, "M6809");
+        findings.Should().BeEmpty();
+        Summary(contracts, 0x1000).FixedConditions.Should().Equal(new Dictionary<ushort, bool> { [0x1002] = false });
+    }
+
+    /// <summary>
     ///  A part the core does not name, as the Z80's IXH, is run through its pair, the first part high.
     /// </summary>
     [TestMethod]

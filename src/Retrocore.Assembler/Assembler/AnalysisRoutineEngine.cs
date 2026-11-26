@@ -40,6 +40,10 @@ internal sealed class AnalysisRoutineEngine
 
     private const int MaximumSteps = 200_000;
 
+    // The most unknown bits an instruction is run for every value of, and the most bytes of memory it may read.
+    private const int MaximumUnknownBits = 12;
+    private const int MaximumReads = 4;
+
     private readonly InstructionSet _set;
     private readonly byte[] _memory;
     private readonly bool[] _defined;
@@ -52,6 +56,9 @@ internal sealed class AnalysisRoutineEngine
     private readonly byte _allFlags;
     private readonly AnalysisEvaluator? _evaluator;
     private readonly int[] _registers;
+    private readonly int[] _first;
+    private readonly int[] _varying;
+    private readonly int[] _widths;
 
     /// <summary>
     ///  Creates an engine over a 64 KiB image.
@@ -81,6 +88,19 @@ internal sealed class AnalysisRoutineEngine
     {
         _evaluator = evaluator;
         _registers = new int[set.Description.EffectRegisters.Count];
+        _first = new int[_registers.Length];
+        _varying = new int[_registers.Length];
+
+        // Each slot's bits: a register's width, 8 for a part the registers line lacks, and 1 for a flag.
+        _widths = new int[SlotCount];
+        for (int bit = 0; bit < set.Description.EffectRegisters.Count; bit++)
+        {
+            string name = set.Description.EffectRegisters[bit];
+            IsaRegister? register = set.Description.Registers.FirstOrDefault(candidate => candidate.Name == name);
+            _widths[bit] = (int)((1L << (register?.Bits ?? 8)) - 1);
+        }
+
+        for (int bit = 0; bit < 8; bit++) { _widths[FlagSlot + bit] = 1; }
         _set = set;
         _memory = memory;
         _defined = defined;
@@ -355,9 +375,9 @@ internal sealed class AnalysisRoutineEngine
         for (int bit = 0; bit < 8; bit++)
         {
             AnalysisValue flag = state.Slots[FlagSlot + bit];
-            if (!flag.IsConstant) { continue; }
+            if ((flag.Known & 1) == 0) { continue; }
             known |= (byte)(1 << bit);
-            if (flag.Constant != 0) { values |= (byte)(1 << bit); }
+            if ((flag.Bits & 1) != 0) { values |= (byte)(1 << bit); }
         }
     }
 
@@ -372,7 +392,7 @@ internal sealed class AnalysisRoutineEngine
         {
             if ((implied & (1 << bit)) == 0) { continue; }
             int slot = FlagSlot + bit;
-            state.Slots[slot] = state.Slots[slot] with { Constant = (impliedValues >> bit) & 1 };
+            state.Slots[slot] = state.Slots[slot].WithBits(1, (impliedValues >> bit) & 1);
         }
 
         return state;
@@ -406,8 +426,8 @@ internal sealed class AnalysisRoutineEngine
         byte writtenFlags = (byte)(effects.FlagsWritten | effects.FlagsMayWrite);
         AnalysisRoutineOutcome outcome = AnalysisRoutineOutcome.Next;
 
-        // What the core leaves when every register and flag the instruction reads is a known constant.
-        bool evaluated = Evaluate(state, instruction, effects, pc, out int evaluatedFlags);
+        // The bits the core leaves known, from the bits of what the instruction reads that are known.
+        bool evaluated = Evaluate(state, instruction, effects, pc, out int flagsKnown, out int flagsBits);
 
         // The values the instruction leaves in registers it writes, where they are known: copies, loads and pulls.
         Dictionary<int, AnalysisValue> results = [];
@@ -450,7 +470,7 @@ internal sealed class AnalysisRoutineEngine
             {
                 // Memory keeps where the value came from but not a constant: without the machine's memory map, a
                 // fixed address may be I/O, as the BBC's keyboard scan writes a VIA register and tests it.
-                state.Memory[instruction.Operand] = state.Slots[stored] with { Constant = -1 };
+                state.Memory[instruction.Operand] = state.Slots[stored].WithoutBits;
             }
             else if (direct)
             {
@@ -474,53 +494,77 @@ internal sealed class AnalysisRoutineEngine
         {
             if ((written & (1u << bit)) == 0) { continue; }
             AnalysisValue value = results.TryGetValue(bit, out AnalysisValue result) ? result : AnalysisValue.Of(Changed(pc));
-            state.Slots[bit] = evaluated ? value with { Constant = _registers[bit] } : value;
+            int width = _widths[bit];
+            int known = value.Known & width, bits = value.Bits;
+            if (evaluated)
+            {
+                // What the core leaves known adds to what a copy or a pull carried.
+                int found = width & ~_varying[bit];
+                bits = (bits & known) | (_first[bit] & found & ~known);
+                known |= found;
+            }
+
+            state.Slots[bit] = value.WithBits(known, bits);
         }
 
-        // A flag the instruction sets or clears, or the core computed, is a constant.
+        // A flag the instruction sets or clears, or the core leaves known, is a constant.
         for (int bit = 0; bit < 8; bit++)
         {
             byte mask = (byte)(1 << bit);
             if ((writtenFlags & mask) == 0) { continue; }
-            int constant = -1;
-            if (evaluated) { constant = (evaluatedFlags >> bit) & 1; }
-            else if ((effects.FlagsSet & mask) != 0) { constant = 1; }
-            else if ((effects.FlagsCleared & mask) != 0) { constant = 0; }
-            state.Slots[FlagSlot + bit] = new AnalysisValue(Changed(pc), constant);
+            AnalysisValue flag = AnalysisValue.Of(Changed(pc));
+            if (evaluated && (flagsKnown & mask) != 0) { flag = flag.WithBits(1, (flagsBits >> bit) & 1); }
+            else if ((effects.FlagsSet & mask) != 0) { flag = flag.WithBits(1, 1); }
+            else if ((effects.FlagsCleared & mask) != 0) { flag = flag.WithBits(1, 0); }
+            state.Slots[FlagSlot + bit] = flag;
         }
 
         return outcome == AnalysisRoutineOutcome.Returned && state.StackLost ? AnalysisRoutineOutcome.Lost : outcome;
     }
 
-    // Runs an instruction on the core when every register and flag it reads is known, and nothing it does is a
-    // jump, a stack access or a write the analysis must see itself; the registers it leaves are in _registers.
+    // Runs an instruction on the core for every value of the bits it reads that are not known, its reads of
+    // memory among them, at most MaximumUnknownBits in all; a bit it writes that comes out the same every time is
+    // known. _first and _varying receive the registers' values from the first run and the bits that varied; the
+    // flags' come out as known and bits. Instructions that push or pull are not run, and nothing is learned when
+    // every bit written varies, which the first few runs usually show.
     private bool Evaluate(
         AnalysisRoutineState state,
         DisassembledInstruction instruction,
         InstructionEffects effects,
         ushort pc,
-        out int flags)
+        out int flagsKnown,
+        out int flagsBits)
     {
-        flags = 0;
+        flagsKnown = 0;
+        flagsBits = 0;
         if (_evaluator is null || (effects.Pushed | effects.Pulled | effects.MayPush | effects.MayPull) != 0)
         {
             return false;
         }
 
+        // The unknown bits read: (slot, bit) pairs, registers by bit and flags at FlagSlot.
+        Span<(int Slot, int Bit)> unknown = stackalloc (int, int)[MaximumUnknownBits];
+        int unknownCount = 0;
         uint read = effects.RegistersRead;
-        for (int bit = 0; bit < _registers.Length; bit++)
+        int baseFlags = 0;
+        for (int slot = 0; slot < SlotCount; slot++)
         {
-            AnalysisValue value = state.Slots[bit];
-            bool needed = (read & (1u << bit)) != 0;
-            if (needed && (!value.IsConstant || (_leaves & (1u << bit)) == 0)) { return false; }
-            _registers[bit] = value.IsConstant ? value.Constant : 0;
-        }
-
-        for (int bit = 0; bit < 8; bit++)
-        {
-            AnalysisValue flag = state.Slots[FlagSlot + bit];
-            if ((effects.FlagsRead & (1 << bit)) != 0 && !flag.IsConstant) { return false; }
-            if (flag.IsConstant && flag.Constant != 0) { flags |= 1 << bit; }
+            bool register = slot < FlagSlot;
+            if (register && slot >= _registers.Length) { continue; }
+            AnalysisValue value = state.Slots[slot];
+            int width = _widths[slot];
+            bool needed = register ? (read & (1u << slot)) != 0 : (effects.FlagsRead & (1 << (slot - FlagSlot))) != 0;
+            if (register) { _registers[slot] = value.Bits & width; }
+            else if ((value.Bits & 1) != 0) { baseFlags |= 1 << (slot - FlagSlot); }
+            if (!needed) { continue; }
+            if (register && (_leaves & (1u << slot)) == 0) { return false; }
+            int missing = width & ~value.Known;
+            for (int bit = 0; missing != 0; bit++, missing >>= 1)
+            {
+                if ((missing & 1) == 0) { continue; }
+                if (unknownCount == MaximumUnknownBits) { return false; }
+                unknown[unknownCount++] = (slot, bit);
+            }
         }
 
         // The instruction's bytes and the code after them, which a core may read ahead, as the 6502 reads the byte
@@ -533,7 +577,75 @@ internal sealed class AnalysisRoutineEngine
         }
 
         bytes = bytes[..count];
-        return _evaluator.TryRun(pc, bytes, _registers, ref flags, static _ => -1, out _);
+
+        // The first run, with every unknown bit and memory byte 0, says how many bytes of memory it reads.
+        Span<byte> reads = stackalloc byte[MaximumReads];
+        reads.Clear();
+        _registers.CopyTo(_first, 0);
+        int firstFlags = baseFlags;
+        uint writtenRegisters = (effects.RegistersWritten | effects.RegistersMayWrite) & _leaves;
+        if (!_evaluator.TryRun(pc, bytes, _first, ref firstFlags, reads, out int readCount, out _, read, writtenRegisters))
+        {
+            return false;
+        }
+
+        int total = unknownCount + (readCount * 8);
+        if (total > MaximumUnknownBits) { return false; }
+        int writtenFlags = effects.FlagsWritten | effects.FlagsMayWrite;
+
+        // Flags the effects lines set or clear are known without running; the runs stop once the others all vary.
+        int sought = writtenFlags & ~(effects.FlagsSet | effects.FlagsCleared);
+        Array.Clear(_varying);
+        int varyingFlags = 0;
+        int combinations = 1 << total;
+        Span<int> registers = stackalloc int[_registers.Length];
+
+        // All ones and two alternations first, as they show most bits varying, then every combination.
+        for (int run = 0; run < combinations + 3; run++)
+        {
+            if (total == 0) { break; }
+            int assignment = run switch
+            {
+                0 => combinations - 1,
+                1 => 0x5555 & (combinations - 1),
+                2 => 0xAAAA & (combinations - 1),
+                _ => run - 3
+            };
+
+            _registers.CopyTo(registers);
+            int flags = baseFlags;
+            for (int index = 0; index < unknownCount; index++)
+            {
+                if ((assignment & (1 << index)) == 0) { continue; }
+                (int slot, int bit) = unknown[index];
+                if (slot < FlagSlot) { registers[slot] |= 1 << bit; }
+                else { flags |= 1 << (slot - FlagSlot); }
+            }
+
+            for (int index = 0; index < readCount; index++)
+            {
+                reads[index] = (byte)(assignment >> (unknownCount + (index * 8)));
+            }
+
+            bool ran = _evaluator.TryRun(pc, bytes, registers, ref flags, reads[..readCount], out int again, out _, read, writtenRegisters);
+            if (!ran || again != readCount) { return false; }
+
+            bool all = true;
+            for (int bit = 0; bit < registers.Length; bit++)
+            {
+                if ((writtenRegisters & (1u << bit)) == 0) { continue; }
+                _varying[bit] |= (registers[bit] ^ _first[bit]) & _widths[bit];
+                all &= _varying[bit] == _widths[bit];
+            }
+
+            varyingFlags |= (flags ^ firstFlags) & writtenFlags;
+            all &= (varyingFlags | (~sought & 0xFF)) == 0xFF;
+            if (all) { return false; }
+        }
+
+        flagsKnown = writtenFlags & ~varyingFlags;
+        flagsBits = firstFlags & flagsKnown;
+        return true;
     }
 
     // A pull restores the values a push saved when it takes back exactly that push's bytes into as many registers;
@@ -704,7 +816,7 @@ internal sealed class AnalysisRoutineEngine
     // Two paths' values of one slot: the same value; else surely changed if either path changed it, keeping where;
     // else unknown if either is; else, two different entry values, changed.
     private static AnalysisValue JoinValue(AnalysisValue first, AnalysisValue second) =>
-        new(JoinOrigin(first.Origin, second.Origin), first.Constant == second.Constant ? first.Constant : -1);
+        first.Join(second, JoinOrigin(first.Origin, second.Origin));
 
     private static int JoinOrigin(int first, int second)
     {

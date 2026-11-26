@@ -458,18 +458,26 @@ and the documentation:
 ## Flag values
 
 The first slice of item 5, in the same engine as the Keeps and Uses check (`AnalysisRoutineEngine`). Each
-register, flag and stacked value now carries a constant where one is known, beside where its value came from
-(`AnalysisValue`).
+register, flag and stacked value now carries the bits of it that are known, all of them for a constant, beside
+where its value came from (`AnalysisValue`). Two paths that meet keep the bits both know alike.
 
 ### How values are found
 
 - The effects lines give constants: `CLC`, `SEC`, `XOR A`'s flags.
-- Otherwise, when every register and flag an instruction reads is a constant, `AnalysisEvaluator` runs it on the
-  CPU's own core and takes the registers and flags it leaves: `LDA #0`'s zero flag, `DEX` from a known X, `ADC #0`
-  with a known carry (and, on the 6502, a known decimal flag; `CLD` gives one). The core is the emulator's, checked
-  against the single-step vectors, so the analysis has no rules of its own for how flags are computed. The core
-  reads only the instruction's bytes and the code after them, which the 6502 reads ahead; any other read, and any
-  port, ends the run without a result. Instructions that push or pull are not run.
+- Otherwise `AnalysisEvaluator` runs the instruction on the CPU's own core, for every value of the bits it reads
+  that are not known, the bytes it reads from memory among them, up to 12 bits in all. A bit it writes that comes
+  out the same every time is known: `LDA #0`'s zero flag, `DEX` from a known X, `ADC #0` with a known carry (and,
+  on the 6502, a known decimal flag; `CLD` gives one), and with only some bits known, `ORA` with a constant that
+  has a bit set, which leaves the result non-zero whatever memory held, or `AND #$0F`, which leaves it positive.
+  The core is the emulator's, checked against the single-step vectors, so the analysis has no rules of its own
+  for how flags are computed.
+- The instruction's bytes and the code after them, which the 6502 reads ahead, come from the image; its other
+  reads take the values being tried, one byte each in the order it reads, at most four. A run that reads more, or
+  a different number from the first, or touches a port, gives no result, nor does one that pushes or pulls.
+- The runs try all ones and two alternations first, and stop as soon as every bit written has varied, so an
+  instruction whose result is unknown costs a few runs. Flags the effects lines set or clear are not waited for.
+  Only the registers an instruction reads are set and only those it writes read back, which the effects lines'
+  exactness allows.
 - Memory holds where a value came from, as before, but no constant: without the machine's memory map a fixed
   address may be I/O. The BBC's keyboard scan stores 1 in the VIA's IFR and tests it with `BIT`, and a remembered
   constant there decided a branch the hardware decides.
@@ -491,34 +499,38 @@ register, flag and stacked value now carries a constant where one is known, besi
 ### What it found
 
 `FlagValueAnalysisTests` cover constants from loads, the core's results, what branches imply, the Z80's `XOR A`
-with `JR NZ` and `RET Z`, the 6809's two-flag `BHI` and `BLS`, and an untaken `CALL C`.
+with `JR NZ` and `RET Z`, the 6809's two-flag `BHI` and `BLS` from A (a part of D), the Z80's IXH and IXL through
+IX, an untaken `CALL C`, and bits known after `ORA`, `AND`, `OR` and `ANDA` with memory or A unknown.
 
 `SdkSourcesReport` now also compares the fixed conditions with the sources' own comments. Of the branches the
-sources mark `always`, 120 are proved; 125 are not, mostly because memory or a caller decides them, or because a
-routine the analysis gave up on reaches them. 10 conditions are fixed without the mark, and each was checked by hand:
-real always-branches such as `ldy #TEXT_INVERSE` then `bne`, `clc` then `bcc`, and a `bvs` followed by a `bvc`.
-One is fixed only in the routines the analysis follows into it: OSBYTE &0C's `bne`, whose other callers come
-through a table.
+sources mark `always`, 125 are proved (120 with whole constants alone); 120 are not, mostly because a value from
+memory or from a caller decides them, as SET_VDU_STATUS's `ora VDU_STATUS` with the A its caller passes, or
+because a routine the analysis gave up on reaches them. 10 conditions are fixed without the mark, and each was
+checked by hand: real always-branches such as `ldy #TEXT_INVERSE` then `bne`, `clc` then `bcc`, a `bvs` followed
+by a `bvc`, and the Enhanced firmware's `ora #MODE_CURSOR_OFF` then `bne`, whose comment is on the line above.
 
-For the Keeps and Uses check: 1,023 routines checked (from 990), 29 findings (from 30), 31 `Keeps:` items not
+For the Keeps and Uses check: 1,023 routines checked (from 990), 26 findings (from 30), 30 `Keeps:` items not
 verified. Gone: the Monitor's ScreenOutNoInverse, the MOS's START_TRANSMITTING, VDU_PAGED_MODE_ON,
-SET_CURSOR_START and INVERT_TEXT_CELL, whose paths only an impossible fall-through reached. Routines followed now
-for the first time found three documentation errors in MBASIC, fixed:
+SET_CURSOR_START and INVERT_TEXT_CELL, whose paths only an impossible fall-through reached, and with known bits,
+the Enhanced firmware's CursorOff and the MOS's SET_EOF. Routines followed now for the first time found three
+documentation errors in MBASIC, fixed:
 
 - DHALVE underflows into ZERO, which clears A; its `Uses:` now lists A.
 - DEL's `Out: VARTAB = HL = ...` named only VARTAB; it is now `HL, VARTAB = ...`.
 - CHKRES's `Out:` had HL inside the zero flag's meaning; HL now has its own entry.
 
-What it costs, measured in Release over the MOS, the DFS and MBASIC: about 150 to 200 ms for the three, as before,
-and 58 MB allocated against 52 MB without the core, from more revisits as constants are learned and then joined
-away. Most of the allocation is the engine's copies of states, which a follow-up could cut.
+What it costs, measured in Release over the MOS, the DFS and MBASIC: about 125 to 150 ms for the three once warm,
+less than the 150 to 200 ms with whole constants alone, because each run now sets and reads back only the
+registers the instruction uses; a run on the core takes 1 to 3 us. They allocate 88 MB, against 52 MB without the
+core and 58 MB with whole constants, from more revisits as known bits are joined away one at a time; the engine's
+copies of states are most of it, and a follow-up could cut them.
 
 ### Limits and follow-ups
 
 - **Memory constants** need the machine's memory map, to tell RAM, ROM and I/O apart; ROM tables and RAM flags
   would then decide branches too.
-- **Partly known values:** `ORA` with a non-zero constant leaves a non-zero result whatever memory held, as the
-  MOS's `ora VDU_STATUS` relies on. Known bits, not just whole constants, would prove these.
+- **Wider unknowns:** an instruction with more than 12 unknown bits, as a compare of two unknown bytes or a
+  16-bit index, is not run; known bits of its result would need rules per operation, or ranges.
 - **What a caller passes:** `In:` sections such as `carry = set` could seed an entry's flags.
 - **Code no documented routine reaches** is not analyzed, so a fixed condition is fixed in the routines followed;
   item 6's reachability would say which code that is.

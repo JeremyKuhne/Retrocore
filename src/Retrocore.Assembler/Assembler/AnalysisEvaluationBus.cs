@@ -15,25 +15,35 @@ internal sealed class AnalysisEvaluationBus : IProcessorBus, IIoBus
     private readonly byte[] _bytes = new byte[8];
     private ushort _start;
     private int _length;
-    private Func<ushort, int>? _memory;
+    private byte[] _reads = new byte[8];
+    private int _readLength;
 
     /// <summary>
-    ///  Gets whether the instruction read something the analysis does not know.
+    ///  Gets whether the instruction did something the analysis cannot follow: more reads than it was given values
+    ///  for, or a port.
     /// </summary>
     internal bool Failed { get; private set; }
+
+    /// <summary>
+    ///  Gets how many bytes the instruction read other than its own and the code after them.
+    /// </summary>
+    internal int ReadCount { get; private set; }
 
     /// <summary>
     ///  Gets the bus ready for an instruction.
     /// </summary>
     /// <param name="pc">Where the instruction is.</param>
     /// <param name="bytes">Its bytes.</param>
-    /// <param name="memory">The value of a byte of memory, or -1 when it is not known.</param>
-    internal void Start(ushort pc, ReadOnlySpan<byte> bytes, Func<ushort, int> memory)
+    /// <param name="reads">The values its reads of other memory get, in the order it reads.</param>
+    internal void Start(ushort pc, ReadOnlySpan<byte> bytes, ReadOnlySpan<byte> reads)
     {
         _start = pc;
         _length = Math.Min(bytes.Length, _bytes.Length);
         bytes[.._length].CopyTo(_bytes);
-        _memory = memory;
+        if (reads.Length > _reads.Length) { _reads = new byte[reads.Length]; }
+        reads.CopyTo(_reads);
+        _readLength = reads.Length;
+        ReadCount = 0;
         Failed = false;
     }
 
@@ -42,14 +52,10 @@ internal sealed class AnalysisEvaluationBus : IProcessorBus, IIoBus
     {
         int offset = (ushort)(address - _start);
         if (offset < _length) { return _bytes[offset]; }
-        int value = _memory?.Invoke(address) ?? -1;
-        if (value < 0)
-        {
-            Failed = true;
-            return 0;
-        }
-
-        return (byte)value;
+        int read = ReadCount++;
+        if (read < _readLength) { return _reads[read]; }
+        Failed = true;
+        return 0;
     }
 
     /// <inheritdoc/>

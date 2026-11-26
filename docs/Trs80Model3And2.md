@@ -164,7 +164,7 @@ keyboard sends it.
 ## ROMs
 
 The SDK's sources, in [`src/Retrocore.Machines.Trs80/Roms`](../src/Retrocore.Machines.Trs80/Roms), are maintained by
-hand and assemble byte-identically to each chip:
+hand and assemble byte-identically to each chip they cover:
 
 | Source | ROM |
 | --- | --- |

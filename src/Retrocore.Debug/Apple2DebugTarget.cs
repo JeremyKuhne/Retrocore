@@ -1404,6 +1404,17 @@ internal sealed partial class Apple2DebugTarget : DisposableBase, IZ80CardHost
         _machine.Drives[0].Insert(media, $"DOS {Dos} disk with {name}", thirteen ? "D13" : "DSK");
     }
 
+    /// <summary>
+    ///  Puts a 16-sector disk, a <c>.dsk</c> image's bytes in DOS 3.3's sector order, in slot 6's drive 1, from no
+    ///  file.
+    /// </summary>
+    /// <param name="image">The image's 143,360 bytes.</param>
+    /// <param name="label">What the host calls the disk.</param>
+    /// <exception cref="ArgumentException">The image is not a 16-sector disk.</exception>
+    /// <exception cref="InvalidOperationException">Slot 6 has no Disk II with its firmware.</exception>
+    internal void InsertDisk(ReadOnlySpan<byte> image, string label) =>
+        _machine.Drives[0].Insert(SectorDiskConverter.Convert(image.ToArray(), proDosOrder: false), label, "DSK");
+
     /// <inheritdoc/>
     public IReadOnlyList<HardwareRow> Hardware()
     {

@@ -53,6 +53,20 @@ internal static partial class MediaActions
         return kept;
     }
 
+    /// <summary>
+    ///  Keeps the changed medium a drive holds, as a changed one the machine ejects is kept, before the host puts
+    ///  another in its place.
+    /// </summary>
+    /// <param name="device">The drive.</param>
+    /// <param name="why">Why it came out, as the kept disks list it.</param>
+    internal static void KeepReplaced(IDevice device, string why)
+    {
+        if (device is IMediumSlot { Medium: { IsDirty: true } medium } && device.Media is { } state)
+        {
+            s_ejected.GetValue(device, _ => []).Add(new(medium, state.Label, state.Format, why));
+        }
+    }
+
     // Reads the drive's image again in place of its disk, through the machine's own insert, and keeps the disk it
     // replaces for Undo when it had changes. A bad image leaves the disk where it was, as an insert does.
     private static JsonObject Revert(IDevice device, Action<string, JsonObject> machine)

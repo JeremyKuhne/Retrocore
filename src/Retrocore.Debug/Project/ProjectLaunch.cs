@@ -92,6 +92,7 @@ internal static class ProjectLaunch
             if (!launch.ContainsKey(option)) { launch[option] = value?.DeepClone(); }
         }
 
+        target.Built?.Launch(target, launch);
         if (!launch.ContainsKey("hints"))
         {
             launch["hints"] = Path.Join(target.Project.Directory, $"{target.Project.Name}.{target.Name}.hints.json");

@@ -1,8 +1,9 @@
-// The adventure on five machines as bare targets, and in their own environments as they arrive (apple1-wozmon): the
+// The adventure on five machines as bare targets, and in their own environments as they arrive (apple1-wozmon, and
+// apple2-dos, which loads the game from its disk as PIRATE.DAT, GAME_LINKED being 0): the
 // engine's core, the same on every one, and the machine's platform folder, src/platform/<family>/, with its console.
 // Each links by the SDK's memory map for its machine and environment. `retrocore build --all`
-// first packs the games with the packer, a step it skips while the packer and the games are unchanged. Every target
-// links Pirate Adventure in but apple2-test, which links the test game (TEST_GAME, src/linked-game.s).
+// first packs the games with the packer, a step it skips while the packer and the games are unchanged. Every other
+// target links Pirate Adventure in, but apple2-test, which links the test game (TEST_GAME, src/linked-game.s).
 {
   "sdk": "1",
   "name": "adventure",
@@ -22,14 +23,17 @@
   ],
   "steps": [
     { "tool": "tools/packer.cs", "args": ["pack", "${in}", "${out}"], "in": "games/test.dat", "out": "${obj}/test.bin" },
-    { "tool": "tools/packer.cs", "args": ["pack", "${in}", "${out}"], "in": "games/pirate.dat", "out": "${obj}/pirate.bin" }
+    { "tool": "tools/packer.cs", "args": ["pack", "${in}", "${out}"], "in": "games/pirate.dat",
+      "out": ["${obj}/pirate.bin", "${obj}/pirate.inc"] }
   ],
-  "defines": { "TEST_GAME": 0 },
+  "defines": { "TEST_GAME": 0, "GAME_LINKED": 1 },
   "entry": "Engine::Start",
   "targets": {
     "apple1": { "machine": "apple1", "environment": "bare", "options": { "ramKilobytes": 32 } },
     "apple1-wozmon": { "machine": "apple1", "environment": "wozmon", "options": { "ramKilobytes": 32 } },
     "apple2": { "machine": "apple2-iiplus", "environment": "bare" },
+    "apple2-dos": { "machine": "apple2-iiplus", "environment": "dos33", "defines": { "GAME_LINKED": 0 },
+                    "files": [{ "path": "${obj}/pirate.bin", "name": "PIRATE.DAT" }] },
     "apple2-test": { "machine": "apple2-iiplus", "environment": "bare",
                      "defines": { "TEST_GAME": 1 } },
     "apple3": { "machine": "apple3", "environment": "bare" },

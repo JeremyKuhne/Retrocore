@@ -231,13 +231,13 @@ public sealed class ProjectBuildTests
     {
         Write("retrocore.json", """
             { "sdk": "1", "cpu": "6502", "sources": ["main.s"], "entry": "GO", "targets": {
-                "dos": { "machine": "apple2-iiplus", "environment": "dos33" },
+                "dos": { "machine": "apple2-iiplus", "environment": "prodos" },
                 "bare": { "machine": "apple2-iiplus", "environment": "bare" } } }
             """);
 
         Write("main.s", "rts");
         RetrocoreProject project = RetrocoreProject.Load(_folder);
-        Error(() => ProjectBuild.Build(project.Target("dos"))).Should().EndWith("the 'dos33' environment is not yet supported; only 'bare' and 'wozmon' build.");
+        Error(() => ProjectBuild.Build(project.Target("dos"))).Should().EndWith("the 'prodos' environment is not yet supported; only 'bare', 'wozmon' and 'dos33' build.");
         Error(() => ProjectBuild.Build(project.Target("bare"))).Should().EndWith("target bare: the entry 'GO' is not an address the sources define.");
         Directory.Exists(Path.Join(_folder, "artifacts")).Should().BeFalse();
     }

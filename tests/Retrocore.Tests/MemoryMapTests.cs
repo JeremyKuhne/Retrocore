@@ -258,7 +258,10 @@ public sealed class MemoryMapTests
             ["bare"] = 14,
 
             // The Apple-1 at 4 sizes.
-            ["wozmon"] = 4
+            ["wozmon"] = 4,
+
+            // The Apple II with 48K, which DOS 3.3 as the SDK builds it runs on.
+            ["dos33"] = 1
         };
 
         string environments = Path.Join(SdkModules.SdkDirectory, "1", "environments");

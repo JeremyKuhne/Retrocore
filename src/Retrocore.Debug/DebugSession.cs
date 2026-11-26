@@ -960,14 +960,22 @@ internal sealed partial class DebugSession
             throw new ProjectException($"{target.Project.File}: target {target.Name}: {target.Machine.Id} has no slots for its cards.");
         }
 
+        JsonObject? current = Target.Cards();
         foreach ((string slot, JsonNode? card) in cards)
         {
             if (card?.GetValueKind() == JsonValueKind.String
                 && card.GetValue<string>() is { } name
-                && (name.StartsWith("diskII", StringComparison.Ordinal) || name == "blockStorage"))
+                && LaunchOwned(name))
             {
                 throw new ProjectException(
                     $"{target.Project.File}: target {target.Name}: slot {slot}'s {card} comes with its media from the target's options, such as diskImage, not from its cards.");
+            }
+
+            // A slot the options filled with a Disk II or block storage keeps it, which a saved machine leaves alone too.
+            if (current?[slot] is JsonValue held && held.GetValueKind() == JsonValueKind.String && LaunchOwned(held.GetValue<string>()))
+            {
+                throw new ProjectException(
+                    $"{target.Project.File}: target {target.Name}: slot {slot} holds the {held} its options give, so it cannot take {card}.");
             }
         }
 
@@ -977,6 +985,9 @@ internal sealed partial class DebugSession
             throw new ProjectException($"{target.Project.File}: target {target.Name}'s cards: {string.Join(" ", problems)}");
         }
     }
+
+    // The cards a launch's media options put in, which a saved machine and a target's cards leave to the launch.
+    private static bool LaunchOwned(string card) => card.StartsWith("diskII", StringComparison.Ordinal) || card == "blockStorage";
 
     private JsonObject Launch(JsonObject args)
     {

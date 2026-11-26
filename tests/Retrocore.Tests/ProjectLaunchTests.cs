@@ -173,6 +173,7 @@ public sealed class ProjectLaunchTests
                 "iiplus": { "machine": "apple2-iiplus", "environment": "bare" },
                 "disk": { "machine": "apple2-iiplus", "environment": "bare", "cards": { "6": "diskII" } },
                 "disk16": { "machine": "apple2-iiplus", "environment": "bare", "cards": { "6": "diskII16" } },
+                "held": { "machine": "apple2-iie", "environment": "bare", "options": { "diskImage": "BOOT" }, "cards": { "7": "mouse" } },
                 "dos": { "machine": "apple2-iiplus", "environment": "dos33" } } }
             """);
 
@@ -195,6 +196,10 @@ public sealed class ProjectLaunchTests
 
         JsonObject sixteenSector = Launch("disk16");
         client.Fails("launch", sixteenSector).Should().Contain("slot 6's diskII16 comes with its media");
+
+        File.WriteAllBytes(Path.Join(_folder, "boot.po"), new byte[143360]);
+        Write("retrocore.json", File.ReadAllText(Path.Join(_folder, "retrocore.json")).Replace("BOOT", Path.Join(_folder, "boot.po").Replace('\\', '/'), StringComparison.Ordinal));
+        client.Fails("launch", Launch("held")).Should().EndWith("target held: slot 7 holds the blockStorage its options give, so it cannot take mouse.");
 
         JsonObject longBoot = Launch("iiplus");
         longBoot["bootSeconds"] = 61;

@@ -4,9 +4,10 @@ Retrocore emulates and debugs 8-bit computers in one .NET codebase: cycle-exact 
 peripherals built around them, a multi-dialect assembler and disassembler, BASIC language and program tools, a
 source-level debugger for assembly and BASIC, and a VS Code extension.
 
-Every machine's ROMs are also maintained here as documented assembly sources that rebuild byte-identically to the
-original chips. No external ROM dumps are needed to run or debug a machine, and you can step from your own code
-straight into the ROM or DOS source.
+Every machine's ROMs but the newest machine's are also maintained here as documented assembly sources that rebuild
+byte-identically to the original chips. No external ROM dumps are needed to run or debug those machines, and you
+can step from your own code straight into the ROM or DOS source. The TRS-80 Model 100 runs the ROM you supply until
+its source is written.
 
 | Machine | CPU | ROMs (SDK sources, or dumps you supply) | Media and peripherals |
 | --- | --- | --- | --- |
@@ -21,13 +22,14 @@ straight into the ROM or DOS source.
 | BBC Micro Model B and Model A | MOS 6502 at 2 MHz | MOS 1.20, BBC BASIC II, DNFS 1.20 and the SAA5050's characters | 6845 and video ULA in modes 0-6, SAA5050 teletext in mode 7, SN76489 sound, UEF tapes (play and record) and `.inf` files, the Intel 8271 with SSD and DSD disks, the analogue port |
 | Commodore PET 2001 and 4032 | MOS 6502 | BASIC 1 and 4 (original and revised) and BASIC 2, their screen editors (BASIC 4's for the graphics and business keyboards) and kernals, with the machine-language monitor, and the 901447-08 and -10 character ROMs | 4-32 KB RAM, two 6520 PIAs and a 6522 VIA, 40x25 video with the 2001's timing and snow, the chiclet, graphics and business keyboards, CB2 sound, two Datasettes (TAP, WAV and PRG tapes, play and record), the IEEE-488 bus with 4040 and 2040 dual drives as devices 8-15 (D64, D67 and G64 disks, which save) |
 | Atari 400 and 800 | MOS 6502 | OS rev. A and B and the PAL OS, the floating point package, Atari BASIC rev. A, B and C, and the 810's firmware | ANTIC and GTIA (or CTIA) with every display mode, players and missiles, POKEY's sound, keyboard and timers, joysticks, 8-48 KB, both cartridge slots with bank-switched cartridges, the 410 recorder (CAS), 810 disk drives at the hardware level (ATR, XFD), and `.xex` files |
+| TRS-80 Model 100 and Tandy 102 | OKI 80C85 | None of their own; your ROM runs | 8-32 KB RAM kept between sessions in a RAM image, the 240x64 LCD's ten HD44102 drivers, the keyboard matrix, the uPD1990AC clock on RST 7.5, the 81C55, the option ROM socket and the power-off bit; boots the menu and runs BASIC from your ROM |
 | MITS Altair 8800 | Intel 8080 | None of its own; DBL and MBL PROMs from SDK sources | 1-64 KB RAM, the 88-2SIO's MC6850 ACIAs or the 88-SIO with an 80x24 ADM-3A-style terminal, the 88-ACR cassette, sense switches, the front panel's EXAMINE and DEPOSIT, the 88-DCDD with 8-inch drives and the DBL and MBL boot PROMs; runs Altair BASIC and CP/M 2.2 from your images |
 | Kaypro II | Z80 | Monitor ROM 81-149C and its character generator; MBASIC 5.21 too, which loads from disk | 64 KB RAM under the banked ROM and 4 KB of video RAM, 80x24 text, serial keyboard, FD1793 with two drives (raw IMG, IMD and DMK disks), Z80 SIO and PIOs; runs CP/M 2.2 and MBASIC from your disks |
 
 The Disk II controller's boot and state-sequencer ROMs, Apple DOS 3.3 and 3.2, and the firmware of the emulated
 slot-7 ProDOS block device, mouse card and ProFile card are documented SDK sources too. See the
 [Apple-1](docs/Apple1.md), [Apple II family](docs/Apple2.md), [Apple III](docs/Apple3.md),
-[TRS-80 Model I](docs/Trs80ModelI.md), [Model III, 4 and II](docs/Trs80Model3And2.md),
+[TRS-80 Model I](docs/Trs80ModelI.md), [Model III, 4 and II](docs/Trs80Model3And2.md), [Model 100](docs/Trs80Model100.md),
 [Color Computer](docs/Coco.md), [PET](docs/Pet.md), [BBC Micro](docs/BbcMicro.md), [Atari 400 and 800](docs/Atari800.md), [Altair 8800](docs/Altair8800.md) and [Kaypro II](docs/Kaypro.md) guides for hardware details and launch options. On the Color Computer, Color, Extended and Disk BASIC and the CoCo 3's ROM are all SDK sources, so every
 model runs with nothing external, and so are all of the PET's ROMs, the BBC Micro's MOS, BASIC, DFS and character ROM, and the Atari's OS,
 floating point package, Atari BASIC and 810 firmware.
@@ -398,6 +400,7 @@ Design notes for upcoming work live in [`docs/backlog`](docs/backlog):
   [its ROM sources](docs/backlog/CocoRomSources.md);
 - [the Apple III's open checks and later work](docs/backlog/Apple3.md);
 - [the Intel 8080 and 8085](docs/backlog/I8080.md), and [the Altair 8800](docs/backlog/Altair8800.md): CP/M's sources and its front panel view;
+- [the TRS-80 Model 100](docs/backlog/Trs80Model100.md): its files, cassette, serial port and disk drive, its ROM as an SDK source, and its relatives;
 - [the 3.5 disk controller at the hardware level](docs/backlog/Disk35Hardware.md), running Apple's EPROM on an emulated 65C02 and SWIM;
 - [SOS sources: the Apple III's kernel and drivers](docs/backlog/SosSources.md);
 - [Business BASIC's other versions, modules and DEF FN view](docs/backlog/BusinessBasic.md);

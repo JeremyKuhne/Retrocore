@@ -1,10 +1,7 @@
 # Backlog: the TRS-80 Model 100
 
-Status: **phase 1 built (2026-11-26)**: the machine boots both ROMs to the menu and runs BASIC; phase 2, the
-debug target, is next. The first machine for the 8085 ([CPU backlog](I8080.md)), and
-the laptop that, with its relatives, made the portable computer a product. An OKI 80C85, a 240x64 LCD, 32 KB of ROM
-holding Microsoft BASIC and four built-in programs, 8 to 32 KB of RAM that a battery keeps, and serial, modem,
-cassette, printer and bar-code ports.
+Status: **phases 1 and 2 built (2026-11-26)**; [the guide](../Trs80Model100.md) covers them. Phase 3, files,
+BASIC and the cassette, is next.
 
 ## Why the Model 100
 
@@ -329,6 +326,36 @@ by the user first, and stays out of the repository.
     does. The wand's signal goes inverted to port C bit 3 and RST 5.5.
 - **Not yet.** The UART, modem, cassette, beeper, printer and wand are unconnected; TRAP never fires; the battery
   never runs low.
+
+## Phase 2 (built 2026-11-26)
+
+- **The debug target.** `trs80-model100` (`model` 100 or 102), with the ROM from `rom`, `romDirectory` or
+  `RETROCORE_TRS80M100_ROMS` under MAME's or the fixtures' names; `ramKilobytes`, `optionRom` and `time`. The LCD is
+  the display and the ROM's screen copy its text; the call stack follows the 8085's TRAP and RST 5.5-7.5, which push
+  the program counter with no opcode fetch; programs load at `$E000` after 3 seconds of boot. Keys are ASCII with the
+  ROM's arrow codes (28-31) and 128-139 for F1-F8, LABEL, PRINT, PASTE and PAUSE/BREAK. Reset is the power switch.
+- **The RAM image.** `ramImage` keeps the RAM between sessions, as the battery does: loaded before the power comes
+  on, so the ROM resumes, and saved as the session ends or another launch replaces the machine, through a file beside
+  it so a failed save leaves the old image and can be retried, as `IRecordingTarget` has it. `coldStart` starts
+  empty.
+- **The extension and Desktop** list the Model 100 and Tandy 102, with their RAM choices, keys, buttons and hints;
+  the project catalog has `trs80-model100` and `tandy102`.
+- **Tests.** `Trs80Model100DebugTargetTests` and `tools/Test-Trs80Model100Dap.mjs`, which CI runs; without the ROM
+  the script checks the missing-ROM messages and reports the rest skipped.
+- **Found on the way.** The ROM ignores the keyboard for its first second or so after a cold start (its scan
+  counter at `$FF90` starts near 116 scans), though the menu is up by 0.8 s, so a key typed at once is lost, in MAME
+  too. A cold start sets the clock to January 1 whatever the launch's `time`.
+
+## Still open
+
+- **The RAM image and the recovery journal.** The image is saved when the session ends cleanly; a host that crashes
+  loses the session's changes since the last image, as the journal keeps disks but not this. Saving it from Retro
+  Devices on demand, and journalling it, wait for the media work in phase 3.
+- **Speed against MAME.** A BASIC loop printing numbers runs within a line in three seconds of MAME's, a little
+  slower; MAME's 8085 counts TRAP and the RST 5.5-7.5 entries as 11 states and this core as 12, and the 8155's
+  count-by-twos and the LCD's busy times are not modelled. A longer timed comparison would settle it.
+- **The timer and beeper.** The 81C55's timer runs but drives nothing; the beeper and the UART's clock come with it.
+- **The ROM's source map**, once the ROM is an SDK source (phase 5).
 
 ## Decisions (agreed 2026-11-26)
 

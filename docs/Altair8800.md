@@ -74,7 +74,7 @@ tracks of 32 sectors of 137 bytes. Its timing is the one Mike Douglas's FDC+ boa
   as the controller reads it from the bus.
 
 The controller's sector interrupts are not modeled, as none of the software here uses them, nor is the
-controller's wait for the index hole after a drive is selected: the sector position shows once the head has settled.
+FDC+'s wait for the index hole after a drive is selected: the sector position shows once the head has settled.
 
 **Disk images** ([`AltairDisk`](../src/Retrocore.Media/Altair/AltairDisk.cs)) are SIMH's `.dsk` files: the
 sectors in order, track by track, 337,568 bytes. Many archive images have 96 more bytes, which are kept, so an image

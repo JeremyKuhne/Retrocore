@@ -126,13 +126,15 @@ Every download (SIMH, software images, ROM dumps) is approved first, as before.
 
 ## Still open
 
-- **CP/M's sources**, the BIOS and boot sector, as SDK sources or documented disassemblies.
+- **CP/M's sources**, the BIOS and boot sector, as SDK sources or documented disassemblies. The BIOS and boot
+  sources of CP/M 2.2b and Burcon's CP/M (`BIOS.ASM`, `BOOT.ASM`) were downloaded with the images.
 - **The 88-MDS Minidisk** (5.25-inch, 16 sectors of 137 bytes on 35 tracks), and HDBL, MDBL and DBL 3.3.
 - **Sector interrupts.** The controller's interrupt at each sector's start is not modeled, as nothing here uses it.
 - **DBL's loader** runs from RAM at `$2C00`, which the PROM's source map does not cover, so stepping it shows
   disassembly.
 - **Index sync.** The FDC+ waits for the index pulse after a drive is selected before it shows sectors; here the
-  sector position shows once the head is settled. Whether MITS's board waits too needs the manual.
+  sector position shows once the head is settled. Whether MITS's board waits too needs the 88-DCDD manual, which is
+  downloaded but scanned, so it needs reading rather than searching.
 - **A drive picture.** Retro Devices shows the drives as text; there is no 8-inch drive image.
 - **The other disk images.** Disk BASIC 4.0, 4.1, 300-5-C and 300-5-F, Altair DOS 1.0 with Fortran, the 24K CP/M
   2.2b and Burcon's 48K CP/M were downloaded with the rest (approved 2026-11-20) but have not been booted. Disk
@@ -151,7 +153,8 @@ Every download (SIMH, software images, ROM dumps) is approved first, as before.
   fall back to the SDK's copy is open.
 - **The 1975 source listing** on gatesnotes.com, which the user named: its host is allowed now, but its CDN answers
   automated downloads with "Access Denied", so it needs downloading by hand.
-- **The 88-SIO's status bits** other than 0, 4 and 7 read 0 here; the board's manual would settle them.
+- **The 88-SIO's status bits** other than 0, 4 and 7 read 0 here; the board's manual would settle them. Its output
+  interrupt is not tested.
 - **The CP/M disk format**, for CP/M's sources. Reading the MITS Tapes disk worked out the layout CP/M uses on Altair
   8-inch disks in SIMH's 137-byte-sector images. Two system tracks, then 2 KB blocks, 16 records to a block, two
   blocks a track. Tracks 0-5 have the 128 data bytes at offset 3 of each sector, tracks 6-76 at offset 7. A track's

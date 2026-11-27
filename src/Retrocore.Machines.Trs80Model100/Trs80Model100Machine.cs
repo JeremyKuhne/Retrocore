@@ -16,8 +16,8 @@ namespace Retrocore.Machines.Trs80Model100;
 ///  <para>
 ///   The clock's TP output, which the ROM sets to 256 Hz, drives RST 7.5; the ROM's handler scans the keyboard,
 ///   blinks the cursor and counts down to the automatic power-off. TRAP (power failing), RST 6.5 (the UART) and
-///   RST 5.5 (the bar-code wand) are not driven yet, and SID, the cassette's input, reads high, as MAME's does with no
-///   tape. The battery never runs low.
+///   RST 5.5 (the bar-code wand) are not driven yet. SOD and SID are the cassette's output and input (see
+///   <see cref="Trs80Model100Cassette"/>). The battery never runs low.
 ///  </para>
 ///  <para>
 ///   Software turns the power off with port B bit 4: the CPU stops, RAM and the clock keep going, and
@@ -48,6 +48,7 @@ public sealed class Trs80Model100Machine : IMachine
         Bus = new(configuration, roms) { PowerOff = TurnOff };
         Processor = new(Bus, I8080Variant.I8085);
         Processor.Signals = I8080Signals.SerialInput;
+        Devices = [Bus.CassetteDrive];
     }
 
     /// <summary>
@@ -91,7 +92,7 @@ public sealed class Trs80Model100Machine : IMachine
     public bool IsPoweredOff { get; private set; }
 
     /// <inheritdoc/>
-    public IReadOnlyList<IDevice> Devices { get; } = [];
+    public IReadOnlyList<IDevice> Devices { get; }
 
     /// <inheritdoc/>
     public ProcessorCycle LastCycle => Processor.LastCycle;
@@ -118,8 +119,10 @@ public sealed class Trs80Model100Machine : IMachine
     {
         if (!IsPoweredOff) { Processor.StepCycle(); }
         Bus.Tick();
+        Bus.Cassette.Tick(Bus.CassetteMotor && !IsPoweredOff, Processor.Registers.SerialOutput);
         I8080Signals signals = Processor.Signals;
         I8080Signals next = Bus.Clock.TimingPulse ? signals | I8080Signals.Restart75 : signals & ~I8080Signals.Restart75;
+        next = Bus.Cassette.SerialInput ? next | I8080Signals.SerialInput : next & ~I8080Signals.SerialInput;
         if (next != signals) { Processor.Signals = next; }
     }
 

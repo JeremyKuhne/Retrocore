@@ -4,6 +4,8 @@
 
 using Retrocore.Basic;
 using Retrocore.Debug;
+using Retrocore.Machines.Devices;
+using Retrocore.Machines.Trs80Model100;
 using System.Text.Json.Nodes;
 
 namespace Retrocore.Tests;
@@ -168,6 +170,187 @@ public sealed class Trs80Model100DebugTargetTests
         {
             Directory.Delete(folder, recursive: true);
         }
+    }
+
+    /// <summary>
+    ///  A tape recorded through the cassette's record action takes the ROM's CSAVE, the machine runs fast while the
+    ///  motor moves it, ejecting it writes its WAV file, and the launch's cassette option plays that file to CLOAD; a
+    ///  record to a folder that does not exist is refused and leaves the deck as it was.
+    /// </summary>
+    [TestMethod]
+    public void CassettesRecordAndPlay()
+    {
+        string folder = Folder();
+        try
+        {
+            string wave = Path.Join(folder, "prog.wav");
+            Trs80Model100DebugTarget saver = Launch(Path.Join(folder, "a.ram"));
+            Run(saver, 3);
+            Type(saver, "BASIC\r");
+            Run(saver, 1);
+            Type(saver, "10 PRINT \"CAS\";6*7\r");
+            IDevice drive = saver.Devices.Single();
+            JsonObject missing = new() { ["path"] = Path.Join(folder, "no", "x.wav") };
+            Action nowhere = () => saver.DeviceAction(drive, "record", missing);
+            nowhere.Should().Throw<ArgumentException>().WithMessage("*does not exist*");
+            JsonObject recording = new() { ["path"] = wave };
+            saver.DeviceAction(drive, "record", recording);
+            saver.Hardware().Single(row => row.Id == "cassette").Value.Should().Be(wave);
+            saver.Accelerated.Should().BeFalse("the motor is off");
+            Type(saver, "CSAVE \"PROG\"\r");
+            Run(saver, 1);
+            saver.Accelerated.Should().BeTrue("CSAVE runs the motor");
+            Run(saver, 14);
+            File.Exists(wave).Should().BeFalse("nothing is written until the tape comes out");
+            saver.DeviceAction(drive, "eject", []);
+            File.Exists(wave).Should().BeTrue();
+            Directory.GetFiles(folder, "*.tmp").Should().BeEmpty();
+
+            JsonObject options = new() { ["cassette"] = wave, ["sound"] = "off" };
+            Trs80Model100DebugTarget loader = Launch(Path.Join(folder, "b.ram"), options);
+            loader.Hardware().Single(row => row.Id == "sound").Value.Should().Be("off");
+            loader.TakeAudio().Should().BeNull();
+            Run(loader, 3);
+            Type(loader, "BASIC\r");
+            Run(loader, 1);
+            Type(loader, "CLOAD \"PROG\"\r");
+            Run(loader, 15);
+            Type(loader, "RUN\r");
+            Run(loader, 1);
+            string.Join("\n", loader.Machine.ScreenText()).Should().Contain("CAS 42");
+        }
+        finally
+        {
+            Directory.Delete(folder, recursive: true);
+        }
+    }
+
+    /// <summary>
+    ///  A recording that holds nothing writes nothing when it comes out; one whose file cannot be written stays in the
+    ///  recorder when it is ejected, with nothing left beside it, and comes out once its path can be written; a tape
+    ///  that is not a WAV file is refused with the recording saved and left in, and one that does not exist is
+    ///  refused with the recording left in, unwritten; a recording put in again from its own path is saved first and
+    ///  plays.
+    /// </summary>
+    [TestMethod]
+    public void FailedRecordingsStayIn()
+    {
+        string folder = Folder();
+        try
+        {
+            string wave = Path.Join(folder, "rec.wav");
+            File.WriteAllText(wave, "was here");
+            Trs80Model100DebugTarget target = Launch(Path.Join(folder, "m100.ram"));
+            IDevice drive = target.Devices.Single();
+            JsonObject recording = new() { ["path"] = wave };
+            target.DeviceAction(drive, "record", recording);
+            target.DeviceAction(drive, "eject", []);
+            File.ReadAllText(wave).Should().Be("was here", "a recording that holds nothing writes nothing");
+
+            // A recording with changes on it: SOD toggled while the motor runs.
+            target.DeviceAction(drive, "record", recording);
+            Record(target, changes: 4);
+            string bad = Path.Join(folder, "bad.wav");
+            File.WriteAllText(bad, "not a wave");
+            JsonObject insertBad = new() { ["path"] = bad };
+            Action insert = () => target.DeviceAction(drive, "insert", insertBad);
+            insert.Should().Throw<InvalidDataException>();
+            drive.Media.Should().NotBeNull("the recording is still in");
+            drive.Media?.Label.Should().Be(wave);
+            File.Delete(wave);
+
+            Directory.CreateDirectory(wave);
+            Action eject = () => target.DeviceAction(drive, "eject", []);
+            Exception thrown = eject.Should().Throw<Exception>().Which;
+            (thrown is IOException or UnauthorizedAccessException).Should().BeTrue(thrown.ToString());
+            drive.Media.Should().NotBeNull("the recording is still in");
+            drive.Media?.Label.Should().Be(wave);
+            Directory.GetFiles(folder, "*.tmp").Should().BeEmpty();
+
+            Directory.Delete(wave);
+            target.DeviceAction(drive, "eject", []);
+            drive.Media.Should().BeNull();
+            Trs80Model100Tape.FromWave(File.ReadAllBytes(wave)).HalfCycles.Should().NotBeEmpty();
+
+            // A recording to a new file, put in again from its own path, is saved first and plays.
+            string fresh = Path.Join(folder, "fresh.wav");
+            JsonObject freshRecording = new() { ["path"] = fresh };
+            target.DeviceAction(drive, "record", freshRecording);
+            Record(target, changes: 4);
+            JsonObject missingTape = new() { ["path"] = Path.Join(folder, "missing.wav") };
+            Action missing = () => target.DeviceAction(drive, "insert", missingTape);
+            missing.Should().Throw<ArgumentException>().WithMessage("*does not exist*");
+            File.Exists(fresh).Should().BeFalse("a refused insert writes nothing");
+            drive.Media?.Label.Should().Be(fresh, "the recording is still in");
+            Directory.GetFiles(folder, "*.tmp").Should().BeEmpty();
+            target.DeviceAction(drive, "insert", freshRecording);
+            Trs80Model100Tape.FromWave(File.ReadAllBytes(fresh)).HalfCycles.Should().NotBeEmpty("the recording was saved first");
+            drive.Media.Should().NotBeNull();
+            drive.Media?.Label.Should().Be(fresh);
+            drive.Media?.WriteProtected.Should().BeTrue("the tape now plays");
+        }
+        finally
+        {
+            Directory.Delete(folder, recursive: true);
+        }
+    }
+
+    /// <summary>
+    ///  Saving the session's recordings writes the cassette's recording and the RAM image, and a recording that cannot
+    ///  be written does not keep the RAM image from saving.
+    /// </summary>
+    [TestMethod]
+    public void SessionsSaveTheRecordingAndTheRam()
+    {
+        string folder = Folder();
+        try
+        {
+            string image = Path.Join(folder, "m100.ram");
+            string wave = Path.Join(folder, "rec.wav");
+            Trs80Model100DebugTarget target = Launch(image);
+            IDevice drive = target.Devices.Single();
+            JsonObject recording = new() { ["path"] = wave };
+            target.DeviceAction(drive, "record", recording);
+            Record(target, changes: 4);
+            target.SaveRecordings();
+            File.Exists(wave).Should().BeTrue();
+            File.Exists(image).Should().BeTrue();
+            drive.Media.Should().NotBeNull("the recording stays in");
+
+            File.Delete(wave);
+            File.Delete(image);
+            Directory.CreateDirectory(wave);
+            Action save = target.SaveRecordings;
+            Exception thrown = save.Should().Throw<Exception>().Which;
+            (thrown is IOException or UnauthorizedAccessException).Should().BeTrue(thrown.ToString());
+            File.Exists(image).Should().BeTrue("the RAM image is saved all the same");
+
+            // When neither can be written, both are named.
+            File.Delete(image);
+            Directory.CreateDirectory(image);
+            Exception both = save.Should().Throw<IOException>().Which;
+            both.Message.Should().StartWith("Neither the recording nor the RAM image was saved");
+            Directory.Delete(image);
+            Directory.Delete(wave);
+        }
+        finally
+        {
+            Directory.Delete(folder, recursive: true);
+        }
+    }
+
+    // Runs the cassette's motor and toggles SOD, as CSAVE does, on the cassette alone.
+    private static void Record(Trs80Model100DebugTarget target, int changes)
+    {
+        Trs80Model100Cassette cassette = target.Machine.Bus.Cassette;
+        bool level = false;
+        for (int change = 0; change < changes; change++)
+        {
+            level = !level;
+            for (int cycle = 0; cycle < 500; cycle++) { cassette.Tick(motor: true, output: level); }
+        }
+
+        cassette.Tick(motor: false, output: level);
     }
 
     /// <summary>

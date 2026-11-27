@@ -7,6 +7,7 @@ using Retrocore.Isa;
 using Retrocore.Machines.Devices;
 using Retrocore.Basic;
 using Retrocore.Machines.Trs80Model100;
+using System.Runtime.ExceptionServices;
 using System.Text.Json.Nodes;
 
 namespace Retrocore.Debug;
@@ -60,7 +61,13 @@ internal sealed partial class Trs80Model100DebugTarget : IDebugTarget, IRecordin
         _calls = new(this, is8085: true);
         Requests = new Dictionary<string, Func<JsonObject, JsonObject>>
         {
-            ["retro/video"] = _ => VideoFrame()
+            ["retro/video"] = _ => VideoFrame(),
+            ["retro/media"] = Media,
+            ["retro/sound"] = args =>
+            {
+                SetSound(args.String("mode") ?? throw new ArgumentException("mode is required."));
+                return new JsonObject { ["mode"] = _soundMode };
+            }
         };
     }
 
@@ -135,9 +142,6 @@ internal sealed partial class Trs80Model100DebugTarget : IDebugTarget, IRecordin
 
     /// <inheritdoc/>
     public int ClockHertz => Trs80Model100Timing.ClockHertz;
-
-    /// <inheritdoc/>
-    public bool Accelerated => false;
 
     /// <inheritdoc/>
     public IDebugCallStack CallStack => _calls;
@@ -333,9 +337,6 @@ internal sealed partial class Trs80Model100DebugTarget : IDebugTarget, IRecordin
         return true;
     }
 
-    /// <inheritdoc/>
-    public IEnumerable<(string Event, JsonObject Body)> StatusEvents() => [];
-
     /// <summary>
     ///  Gets the file the RAM is kept in between sessions, or null when the launch named none.
     /// </summary>
@@ -349,8 +350,37 @@ internal sealed partial class Trs80Model100DebugTarget : IDebugTarget, IRecordin
     ///   tried again. The CPU's state is not kept, as it is not when the power goes, so the next session starts with
     ///   the power coming on.
     ///  </para>
+    ///  <para>
+    ///   A recording on the cassette is written to its file first, the same way, and stays in the recorder.
+    ///  </para>
     /// </remarks>
     public void SaveRecordings()
+    {
+        // The cassette's recording is saved first, and a failure of it does not keep the RAM image from saving; it is
+        // reported once the image is saved, or with the image's own failure.
+        Exception? failure = null;
+        try
+        {
+            SaveCassetteRecording();
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            failure = exception;
+        }
+
+        try
+        {
+            SaveRamImage();
+        }
+        catch (Exception exception) when (failure is not null && (exception is IOException or UnauthorizedAccessException))
+        {
+            throw new IOException($"Neither the recording nor the RAM image was saved: {failure.Message} {exception.Message}", exception);
+        }
+
+        if (failure is not null) { ExceptionDispatchInfo.Throw(failure); }
+    }
+
+    private void SaveRamImage()
     {
         if (_ramImagePath is not { } path) { return; }
         string temporary = $"{path}.{Environment.ProcessId}.tmp";
@@ -366,10 +396,6 @@ internal sealed partial class Trs80Model100DebugTarget : IDebugTarget, IRecordin
     }
 
     /// <inheritdoc/>
-    public void DeviceAction(IDevice device, string action, JsonObject args) =>
-        throw new ArgumentException($"{device.Info.Name} does not support {action}.");
-
-    /// <inheritdoc/>
     public JsonObject DisplayState(bool running) => new()
     {
         ["machine"] = DebugMachines.Trs80Model100,
@@ -379,6 +405,8 @@ internal sealed partial class Trs80Model100DebugTarget : IDebugTarget, IRecordin
         ["cycles"] = CycleCount,
         ["poweredOff"] = _machine.IsPoweredOff,
         ["video"] = VideoState(),
+        ["media"] = MediaState(),
+        ["sound"] = _soundMode,
         ["screen"] = LcdScreen,
         ["screens"] = Screens.ToJsonArray(),
         ["running"] = running
@@ -440,7 +468,18 @@ internal sealed partial class Trs80Model100DebugTarget : IDebugTarget, IRecordin
                 "Files",
                 Files(),
                 "The files in RAM's directory, without the ROM's own programs and its hidden entries; the launch's files option puts host files in it."),
-            new("io", "Serial, modem, cassette, printer, wand", "not connected", "Coming in later phases.")
+            new(
+                "cassette",
+                "Cassette",
+                _machine.Bus.CassetteDrive.Media?.Label ?? "empty",
+                "SOD and SID, the motor on port $E0 bit 3; the launch's cassette option puts a WAV file's tape in.",
+                [_machine.Bus.CassetteDrive.Id]),
+            new(
+                "sound",
+                "Sound",
+                _soundMode == "off" ? "off" : "piezo buzzer",
+                "The launch's sound option: the buzzer, from port B bit 5 or the 81C55's timer."),
+            new("io", "Serial, modem, printer, wand", "not connected", "Coming in later phases.")
         ];
     }
 

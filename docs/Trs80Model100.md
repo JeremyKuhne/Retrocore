@@ -3,10 +3,10 @@
 Retrocore's Model 100 is [`Trs80Model100Machine`](../src/Retrocore.Machines.Trs80Model100/Trs80Model100Machine.cs):
 an OKI 80C85, the 32 KB ROM with Microsoft BASIC and the built-in TEXT, TELCOM, ADDRSS and SCHEDL, 8 to 32 KB of
 RAM, an option ROM socket, the 240x64 LCD, the keyboard, the uPD1990AC clock, and the 81C55 that ties them
-together. It runs the ROM you supply, boots to its menu and runs BASIC, and keeps its RAM between sessions as the
-battery does. This guide covers what it emulates and how to debug on it. [The backlog](backlog/Trs80Model100.md) has
-the sources behind it and what comes next: files, the cassette, the serial port and the disk drive, and the ROM as
-an SDK source.
+together. It runs the ROM you supply, boots to its menu and runs BASIC, keeps its RAM between sessions as the
+battery does, saves and loads tapes, and sounds its buzzer. This guide covers what it emulates and how to debug on
+it. [The backlog](backlog/Trs80Model100.md) has the sources behind it and what comes next: the serial port, the
+printer and the disk drive, and the ROM as an SDK source.
 
 ## The ROM
 
@@ -28,18 +28,19 @@ run as well.
 | CPU | | The 80C85 at 2.4576 MHz, state for state ([`Retrocore.Cpu.I8080`](../src/Retrocore.Cpu.I8080)). |
 | ROM | `$0000`-`$7FFF` | The main ROM, or the option ROM while port `$E0` bit 0 is set. |
 | RAM | `$8000`-`$FFFF` | 8, 16, 24 or 32 KB (`ramKilobytes`, 32 by default), filled down from `$FFFF`. Addresses below it read `$FF` and lose writes. |
-| 81C55 | Ports `$B0`-`$BF` | [`Pio8155`](../src/Retrocore.Core/Machines/Chips/Pio8155.cs): ports A and B strobe the keyboard and select the LCD drivers; port A also drives the clock; port B turns the power off; port C reads the clock. Its timer runs but drives nothing yet. |
+| 81C55 | Ports `$B0`-`$BF` | [`Pio8155`](../src/Retrocore.Core/Machines/Chips/Pio8155.cs): ports A and B strobe the keyboard and select the LCD drivers; port A also drives the clock; port B turns the power off and drives the buzzer; port C reads the clock. Its timer can drive the buzzer. |
 | LCD | Ports `$F0`-`$FF` | Ten HD44102 drivers ([`Lcd44102`](../src/Retrocore.Core/Machines/Chips/Lcd44102.cs)); even ports take instructions and give status, odd ports display data. |
 | Keyboard | Ports `$E0`-`$EF` (the ROM reads `$E8`) | The 9x8 matrix ([`Trs80Model100Keyboard`](../src/Retrocore.Machines.Trs80Model100/Trs80Model100Keyboard.cs)). |
 | Clock | Port A, port C, `$E0` bit 2 | The uPD1990AC ([`Rtc1990`](../src/Retrocore.Core/Machines/Chips/Rtc1990.cs)); its TP output drives RST 7.5 at 256 Hz. |
 | Option ROM | `$0000`-`$7FFF` | Up to 32 KB (`optionRom`); an empty socket reads `$FF`. |
 
-The UART (`$C0` and `$D0`), the modem (`$A0`), the cassette, the beeper, the printer and the bar-code wand are not
-connected yet: the UART's status reads its transmitter empty and the power good, and the printer is never busy.
+The cassette and the buzzer are connected (see [The cassette](#the-cassette) and [Sound](#sound)). The UART (`$C0`
+and `$D0`), the modem (`$A0`), the printer and the bar-code wand are not yet: the UART's status reads its
+transmitter empty and the power good, and the printer is never busy.
 
 **The CPU and interrupts.** The clock's TP drives RST 7.5, whose handler at `$003C` scans the keyboard every third
 time (about every 11.7 ms), blinks the cursor and counts down to the automatic power-off. TRAP, RST 6.5 and RST 5.5
-are not driven yet. SID, the cassette's input, reads high.
+are not driven yet. SID is the cassette's input, and SOD its output.
 
 **The LCD.** Ten HD44102 column drivers, five across the top half of the panel and five across the bottom. Each holds
 four pages of 50 columns of 8 dots, bit 0 the top dot; the rightmost two show 40 of their columns. Port A's bits
@@ -90,7 +91,10 @@ view and breakpoints as the other machines:
   fails leaves the old image and can be tried again. The CPU's state is not kept, as it is not when the power goes;
 - `coldStart`: start from empty RAM even when `ramImage` exists;
 - `time`: the clock's start, such as `2026-11-26T09:30:00`;
-- `files`: host files to put in RAM's directory, so the menu lists them (see [Files](#files)).
+- `files`: host files to put in RAM's directory, so the menu lists them (see [Files](#files));
+- `cassette`: a WAV file's tape to put in the recorder (see [The cassette](#the-cassette)); `fastCassette`, true by
+  default, runs the machine as fast as it can while the motor moves a tape;
+- `sound`: `speaker` (the default) plays the buzzer, `off` doesn't.
 
 A `source` or `program` loads at `$E000` by default, once the ROM has had 3 seconds to set up its RAM
 (`bootSeconds`), and can call the ROM: `RST 4` writes the character in A to the screen. The call stack follows
@@ -136,6 +140,35 @@ the bottom of RAM, so adding, changing or removing one moves those after it. Ret
   `--list` writes a `.BA` file's listing instead of its bytes. A change is written back only when it succeeds. Like
   the ROM's `KILL`, `delete` refuses the program BASIC has open.
 
+## The cassette
+
+The ROM writes a tape through the 8085's SOD and reads one through SID, and port `$E0` bit 3 runs the recorder's
+motor through its REM jack. A bit is one cycle: 2400 Hz for a 1 and 1200 Hz for a 0. A block is a leader of `$55`
+bytes, a `$7F`, then bytes of eight bits, most significant first, each with a ninth after it. `CSAVE` writes a header
+block (`$D3`, the six-character name, the length and a checksum) and a data block (`$8D`, the program and a
+checksum).
+
+Retrocore keeps a tape as its level changes, timed in the 80C85's cycles while the motor runs, and reads and writes
+WAV files (8 or 16-bit PCM in, 16-bit 44.1 kHz out). The tape moves only while the motor runs. SID reads the tape's
+level inverted, as MAME's driver has it, and is high with no tape playing.
+
+- **Playing:** `cassette` in the launch, or **Insert** on the cassette in Retro Devices, puts a WAV file's tape in.
+  It plays from its start once the ROM runs the motor, as `CLOAD` does.
+- **Recording:** **Record** in Retro Devices names the WAV file to write. The tape takes SOD's changes while the motor
+  runs, as `CSAVE` runs it, and is written to the file, through a file beside it, when it comes out: on
+  **Eject**, on **Insert** of another tape, or when the session ends, replacing what is at that path; a recording that
+  holds nothing writes nothing.
+
+Checked by hand against MAME 0.264 (2026-11-27): `CLOAD` read MAME's recording of a `CSAVE`, and MAME's `CLOAD`
+read Retrocore's. The tests check Retrocore's own `CSAVE` and `CLOAD` against each other, and the recording's blocks
+against the format MAME's showed.
+
+## Sound
+
+The piezo buzzer follows port B bit 5 while bit 2 is set. With bit 2 clear, it follows the 81C55's timer output while
+bit 5 is set, and keeps its level while bit 5 is clear, as MAME's driver has it. BASIC's `BEEP` and `SOUND` use the
+timer. The display panel plays it while the machine runs at its own speed, as it does for the other machines.
+
 ## BASIC
 
 Model 100 BASIC is a dialect of its own, `model100`, with `.model100.bas` source files and `' retrocore model100` as
@@ -166,7 +199,8 @@ menu, in TEXT or while a program runs, it is refused. A program can't yet be ste
   match MAME's screen. They read `m100.bin` and `t102.bin` from `RETROCORE_TRS80M100_ROMS` or the external test
   data's `trs80m100-roms` folder, and are inconclusive without them.
 - `Trs80Model100DebugTargetTests`: the launch's messages for a missing ROM, the RAM image across sessions, cold
-  starts, a mismatched size and failed saves, and the launch's files on the menu.
+  starts, a mismatched size and failed saves, the launch's files on the menu, a tape recorded and played through the
+  cassette's actions, and a recording that cannot be written staying in the recorder.
 - `Model100BasicTests`: the tokenizer against the bytes the ROM stored for typed lines (pinned, so they need no ROM),
   listings, renumbering, and with the ROM, its keyword table, typed lines read back, and a program written into RAM
   that BASIC runs.
@@ -174,7 +208,11 @@ menu, in TEXT or while a program runs, it is refused. A program can't yet be ste
   replacing them, programs moved and linked again, bad names and full RAM; and with the ROM, files written at the
   menu matched byte for byte against the ROM's own `SAVE`, `SAVEM` and `OPEN`, then run and read by BASIC.
 - `Model100CommandTests`: the `--model100` command on a RAM image, and host files read by kind.
+- `Trs80Model100CassetteTests`:
+  - tapes through WAV files, the motor, SID's polarity, and the buzzer's two sources, without the ROM;
+  - with the ROM, `CSAVE` decoded into MAME's blocks and loaded back with `CLOAD`, and `BEEP`'s sound.
 - [`tools/Test-Trs80Model100Dap.mjs`](../tools/Test-Trs80Model100Dap.mjs): a source's breakpoint, call stack, registers
   and output, the menu, BASIC, POWER OFF and Reset, a RAM image resumed in a new session, a launch's files on the menu,
-  BASIC's program read and written, and the Tandy 102, through the debug adapter. Without the ROM it checks the
+  BASIC's program read and written, a tape `CSAVE`d through the cassette's actions and `CLOAD`ed in a new launch, and
+  the Tandy 102, through the debug adapter. Without the ROM it checks the
   missing-ROM messages and reports the rest skipped.

@@ -140,7 +140,8 @@ internal sealed class MachineHost : DisposableBase
             or Trs80Model3DebugTarget
             or AltairDebugTarget
             or BbcDebugTarget
-            or AtariDebugTarget => "tape",
+            or AtariDebugTarget
+            or Trs80Model100DebugTarget => "tape",
         _ => null
     };
 
@@ -168,6 +169,7 @@ internal sealed class MachineHost : DisposableBase
                     AltairDebugTarget altair => altair.FastCassette,
                     BbcDebugTarget bbc => bbc.FastCassette,
                     AtariDebugTarget atari => atari.FastCassette,
+                    Trs80Model100DebugTarget model100 => model100.FastCassette,
                     _ => false
                 };
             }
@@ -213,6 +215,9 @@ internal sealed class MachineHost : DisposableBase
                         break;
                     case AtariDebugTarget atari:
                         atari.FastCassette = value;
+                        break;
+                    case Trs80Model100DebugTarget model100:
+                        model100.FastCassette = value;
                         break;
                 }
             }

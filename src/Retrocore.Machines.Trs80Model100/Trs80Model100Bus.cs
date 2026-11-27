@@ -60,6 +60,11 @@ namespace Retrocore.Machines.Trs80Model100;
 ///   Other ports read $FF. Neither the UART nor the modem is connected yet: the UART reads no data, its transmitter is
 ///   always empty, and there is never a carrier. No printer is connected, so BUSY reads not busy.
 ///  </para>
+///  <para>
+///   The buzzer follows port B bit 5 while bit 2 is set; with bit 2 clear, it follows the 81C55's timer output while
+///   bit 5 is set, and keeps its level while bit 5 is clear, as MAME's driver has it. BASIC's <c>BEEP</c> and
+///   <c>SOUND</c> use the timer.
+///  </para>
 /// </remarks>
 public sealed class Trs80Model100Bus : IProcessorBus, IIoBus
 {
@@ -84,7 +89,29 @@ public sealed class Trs80Model100Bus : IProcessorBus, IIoBus
         Clock.SetTime(configuration.StartTime ?? DateTime.Now);
         Pio.PortAWritten = PortAWritten;
         Pio.PortBWritten = PortBWritten;
+        Pio.TimerOutputChanged = TimerOutputChanged;
+        CassetteDrive = new(Cassette);
     }
+
+    /// <summary>
+    ///  Gets the cassette port.
+    /// </summary>
+    public Trs80Model100Cassette Cassette { get; } = new();
+
+    /// <summary>
+    ///  Gets the cassette recorder.
+    /// </summary>
+    public Trs80Model100CassetteDrive CassetteDrive { get; }
+
+    /// <summary>
+    ///  Gets the sound output.
+    /// </summary>
+    public Trs80Model100Audio Audio { get; } = new();
+
+    /// <summary>
+    ///  Gets the buzzer's level.
+    /// </summary>
+    public bool Speaker { get; private set; }
 
     /// <summary>
     ///  Gets the 81C55.
@@ -225,6 +252,7 @@ public sealed class Trs80Model100Bus : IProcessorBus, IIoBus
         Pio.Tick();
         Clock.Tick();
         Keyboard.Tick();
+        Audio.Tick(Speaker);
     }
 
     /// <summary>
@@ -269,9 +297,16 @@ public sealed class Trs80Model100Bus : IProcessorBus, IIoBus
         Clock.SetInputs(value & 7, (value & 8) != 0, (value & 0x10) != 0);
     }
 
+    // With port B bit 2 clear and bit 5 set, the timer's output is the buzzer's.
+    private void TimerOutputChanged(bool level)
+    {
+        if ((Pio.PortB & 0x24) == 0x20) { Speaker = level; }
+    }
+
     private void PortBWritten(byte value)
     {
         _select = (_select & 0xFF) | ((value & 3) << 8);
+        if ((value & 0x04) != 0) { Speaker = (value & 0x20) != 0; }
         if ((value & 0x10) != 0) { PowerOff?.Invoke(); }
     }
 }

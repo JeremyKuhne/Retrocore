@@ -1,7 +1,7 @@
 # Backlog: the TRS-80 Model 100
 
-Status: **phases 1 and 2, and phase 3's first part, built (2026-11-26)**; [the guide](../Trs80Model100.md) covers
-them. Phase 3's second part, the cassette and the beeper, is next.
+Status: **phases 1, 2 and 3 built (2026-11-27)**, with WAV tapes but not yet byte tapes; [the
+guide](../Trs80Model100.md) covers them. Phase 4, the serial port, the printer and the TPDD, is next.
 
 ## Why the Model 100
 
@@ -286,7 +286,8 @@ Covington's names kept as historical names. Covington's map is a second set of n
 - Boot and keystroke tests against MAME's `trsm100`: the menu's text, bytes free, a BASIC program's output, the
   clock's display. Inconclusive, not passing, without the ROM in the external fixture root.
 - The ROM's SDK source pinned by digest: CRC32 `730a3611`, SHA-1 `094dbc4a…bb25d` for the US Model 100.
-- The 8085's interrupt timing exercised by the real key scan; the cassette's bit timing against MAME's WAV output.
+- The 8085's interrupt timing exercised by the real key scan; the cassette against MAME's WAV output (checked by hand
+  in phase 3: each machine's `CLOAD` read the other's `CSAVE`).
 - The DAP script.
 
 Every download (the ROM, option ROMs, software, manuals, MAME's and VirtualT's sources, disassemblies) is approved
@@ -396,15 +397,31 @@ and from a `CSAVE` MAME 0.264 recorded to WAV. No new downloads.
   read), the `basic` launch and BASIC's errors and call stack all follow the ROM's routines, and wait for the ROM as an
   SDK source (phase 5). Part 2 is the cassette and the beeper.
 
+## Phase 3, part 2 (built 2026-11-27)
+
+- **The cassette.** `Trs80Model100Tape` keeps a tape as its level changes in the 80C85's cycles, read from and written
+  to WAV; `Trs80Model100Cassette` drives it from SOD and gives SID its level inverted, as MAME's driver does, while
+  port `$E0` bit 3 runs the motor. The ROM's `CSAVE` and `CLOAD` round-trip; by hand, `CLOAD` read MAME 0.264's
+  recording of a `CSAVE`, and MAME's `CLOAD` read Retrocore's. The recording decodes to MAME's blocks; the header's bytes after the
+  name are RAM the ROM leaves unset, `$00` here and `$FF` in MAME, which fills RAM with `$FF`.
+- **The buzzer.** Port B bit 5 while bit 2 is set; the 81C55's timer output while bit 2 is clear and bit 5 set (MAME's
+  `i8155_pb_w` and `i8155_to_w`). `BEEP` sounds.
+- **The debugger.** The `cassette`, `fastCassette` and `sound` launch options; the cassette in Retro Devices (Insert,
+  Record and Eject), saved through a file beside the recording when it comes out or the session ends; the Machine
+  view's Cassette and Sound rows; the display panel's sound. A recording goes to the file Record names, replacing it; one that holds
+  nothing writes nothing.
+- **Not yet.** A byte-level tape format (no common one for the Model 100 was found), and the cassette's tape in the
+  recovery journal.
+
 ## Still open
 
 - **The RAM image and the recovery journal.** The image is saved when the session ends cleanly; a host that crashes
   loses the session's changes since the last image, as the journal keeps disks but not this. Saving it from Retro
-  Devices on demand, and journalling it, wait for the cassette's media work in phase 3's part 2.
+  Devices on demand, and journalling it, are still to do.
 - **Speed against MAME.** A BASIC loop printing numbers runs within a line in three seconds of MAME's, a little
   slower; MAME's 8085 counts TRAP and the RST 5.5-7.5 entries as 11 states and this core as 12, and the 8155's
   count-by-twos and the LCD's busy times are not modelled. A longer timed comparison would settle it.
-- **The timer and beeper.** The 81C55's timer runs but drives nothing; the beeper and the UART's clock come with it.
+- **The UART's clock.** The 81C55's timer drives the buzzer; the UART's baud clock comes with the serial port.
 - **The ROM's source map**, once the ROM is an SDK source (phase 5).
 - **GRPH, CODE and NUM** have no key codes yet, so their characters cannot be typed from the debugger; the
   machine's keyboard has the keys.

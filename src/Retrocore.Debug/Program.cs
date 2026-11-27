@@ -25,6 +25,18 @@ if (args.Length > 0 && args[0] == "build")
     return;
 }
 
+if (args.Length > 0 && args[0] is "new" or "init")
+{
+    Environment.ExitCode = Retrocore.Debug.Project.NewCommand.Run(args[0] == "init", args[1..], Console.Out, Console.Error);
+    return;
+}
+
+if (args is ["--version"])
+{
+    Console.WriteLine(Retrocore.Debug.Project.ProjectScaffold.ToolVersion);
+    return;
+}
+
 if (args.Length > 0 && args[0] == "--assemble")
 {
     Environment.ExitCode = AssembleCommand.Run(args[1..]);

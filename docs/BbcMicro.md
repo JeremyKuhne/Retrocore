@@ -49,8 +49,8 @@ Every ROM the machine runs is an SDK source, maintained by hand and byte-identic
 
 The paged ROMs name the MOS calls they make through `MosEntries.asm`, whose entries inherit the MOS's documentation.
 
-Nothing external is needed: without dumps, the ROMs are built from the sources, and debugging steps into them. Dumps
-can still take their place, from a directory of dumps under MAME's names: `romDirectory`, or `RETROCORE_BBC_ROMS`,
+Debugging steps into these sources whether the machine builds its ROMs from them (the default when no dumps are given)
+or loads matching dumps from a directory under MAME's names: `romDirectory`, or `RETROCORE_BBC_ROMS`,
 in the directory itself or its `bbcb`, `bbc_acorn8271` and `saa5050` folders. A ROM the directory lacks is built
 from its source. A blank `romDirectory`, as `${env:RETROCORE_BBC_ROMS}` gives when the variable is not set, names no
 dumps.

@@ -1,0 +1,56 @@
+# Builds every target of the adventure with the retrocore tool the repository pins in .config/dotnet-tools.json, then
+# plays each game's transcripts with the reference engine, and keeps what each target built. The restore needs the tool
+# on a NuGet source; retrocore is on no feed yet, so until it is, the restore fails unless the restore step adds
+# a source or the repository has a nuget.config that does. In Retrocore's own repository this file does nothing, as
+# GitHub runs only the root's workflows; Retrocore's CI builds the sample there and plays its transcripts, and checks
+# that a fresh clone of its files alone restores the tool from a local pack and builds every target
+# (tools/Test-FreshClone.mjs).
+
+name: Build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  DOTNET_NOLOGO: "true"
+  DOTNET_CLI_TELEMETRY_OPTOUT: "true"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out
+        uses: actions/checkout@v7
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: 11.0.x
+
+      - name: Restore the retrocore tool
+        run: dotnet tool restore
+
+      - name: Build every target
+        run: dotnet retrocore build --all
+
+      - name: Play the transcripts
+        run: |
+          for transcript in test-win test-fall test-drown; do
+            dotnet run tools/packer.cs -- play obj/test.bin "games/$transcript.in" --echo --expect "games/$transcript.out"
+          done
+          for transcript in pirate-win pirate-die; do
+            dotnet run tools/packer.cs -- play obj/pirate.bin "games/$transcript.in" --echo --expect "games/$transcript.out"
+          done
+
+      - name: Keep what the targets built
+        uses: actions/upload-artifact@v7
+        with:
+          name: targets
+          path: artifacts/
+          if-no-files-found: error

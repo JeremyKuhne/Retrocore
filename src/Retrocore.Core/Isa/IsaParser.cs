@@ -127,6 +127,8 @@ public static partial class IsaParser
             AddressBits = addressBits,
             Registers = registers,
             Flags = flags,
+            EffectRegisters = rules.EffectRegisters?.Names ?? [],
+            EffectMasks = rules.EffectRegisters?.Masks,
             Forms = forms,
             Vectors = rules.Vectors,
             EntryPoints = rules.EntryPoints,
@@ -158,7 +160,8 @@ public static partial class IsaParser
                 excluded: null,
                 message: null,
                 postbytes?.Invoke(name),
-                EntryPointsOf(name, sets[name].Base));
+                EntryPointsOf(name, sets[name].Base),
+                ScopesOf(name, sets[name].Base));
         }
 
         foreach ((string name, string baseName, HashSet<string> excluded, string message) in subsets)
@@ -176,11 +179,26 @@ public static partial class IsaParser
                 excluded,
                 message,
                 postbytes?.Invoke(name),
-                EntryPointsOf(name, baseName));
+                EntryPointsOf(name, baseName),
+                ScopesOf(name, baseName));
         }
 
         description.InstructionSets = result;
+        CheckEffects(rules, result);
         return description;
+
+        // The set, the sets it is built on, then the description: where its effects lines are looked for.
+        List<string> ScopesOf(string name, string? baseName)
+        {
+            List<string> scopes = [name];
+            for (string? current = baseName; current is not null; current = sets.TryGetValue(current, out var set) ? set.Base : null)
+            {
+                scopes.Add(current);
+            }
+
+            scopes.Add("");
+            return scopes;
+        }
 
         // The description's entry points, then the set's own and those of the sets it is built on.
         List<ushort> EntryPointsOf(string name, string? baseName)
@@ -317,15 +335,27 @@ public static partial class IsaParser
                 for (int index = 2; index < tokens.Count; index++) { rules.Flows[tokens[index]] = flow; }
                 break;
             case "access":
-                MemoryAccess access = tokens.Count < 2 ? MemoryAccess.Read : tokens[1] switch
+                // Reads need no entry, but 'read' overrides an instruction's access for a form, as ASL:Accumulator.
+                if (tokens.Count < 3) { throw Error(number, "Expected 'access kind Instruction ...'."); }
+                MemoryAccess access = tokens[1] switch
                 {
+                    "read" => MemoryAccess.Read,
                     "write" => MemoryAccess.Write,
                     "read-write" => MemoryAccess.ReadWrite,
-                    _ => throw Error(number, $"Unknown access '{tokens[1]}'; reads need no entry.")
+                    "address" => MemoryAccess.Address,
+                    _ => throw Error(number, $"Unknown access '{tokens[1]}'.")
                 };
 
-                if (access == MemoryAccess.Read) { throw Error(number, "Expected 'access kind Instruction ...'."); }
                 for (int index = 2; index < tokens.Count; index++) { rules.Access[tokens[index]] = access; }
+                break;
+            case "parts":
+                Parts(tokens, number, registers, flags, rules);
+                break;
+            case "stack":
+                Stack(tokens, number, registers, flags, rules);
+                break;
+            case "effects":
+                Effects(tokens, number, registers, flags, rules);
                 break;
             case "literal-forms":
                 rules.LiteralForms = tokens.Count == 1 ? true : throw Error(number, "Expected 'literal-forms'.");

@@ -90,10 +90,11 @@ Convert a routine or two at a time, assembling and comparing every build after e
 - **Bytes**: every build assembles to the same bytes as before (the digest tests, or a script comparing each
   build).
 - **Lint**: `; retrocore: style=strict` on each converted file, and the editor's lint clean
-  (`SdkDocumentationTests`).
+  (`SdkDocumentationTests` and `EveryRepositorySourceIsCleanInTheEditor`).
 - **Contracts**: run the machine in the debugger with contract checking on and exercise the code (each model),
-  so a wrong `Keeps:` is caught; byte identity proves nothing about a comment. Routine tests cover what the run
-  doesn't reach ([Checks that make a conversion safe](#checks-that-make-a-conversion-safe)).
+  so a wrong `Keeps:` is caught (`ContractAnalysisSdkTests` checks register contracts statically as well); byte
+  identity proves nothing about a comment. Routine tests cover what the run doesn't reach
+  ([Checks that make a conversion safe](#checks-that-make-a-conversion-safe)).
 - **Names and comments**: the module comparisons, the rename gate and the scripted checks, in the same section.
 - **Everything else**: the full test suite, and every source that includes or names the converted one.
 
@@ -364,10 +365,12 @@ Run these by script after every change, rather than by eye:
 - **Links per build**: a link in a comment must name a definition in every build that assembles the comment. A
   check that resolves a conditional source's links against all its builds at once can accept a definition some
   builds lack, so check each build; [BuildLinkTests](../tests/Retrocore.Tests/BuildLinkTests.cs) does
-  for the nine BASIC builds.
+  for the nine BASIC builds and the VIC-20 kernal's two.
 - **Citations**: every key in the bibliography, every name in the document it cites, and each lineage complete
   (`FirmwareLineagesCiteBothListings` and `DosLineagesCiteBothVersions` in
-  [ConvertedSourceTests](../tests/Retrocore.Tests/ConvertedSourceTests.cs), and the conversion tests above).
+  [ConvertedSourceTests](../tests/Retrocore.Tests/ConvertedSourceTests.cs), the conversion tests above, and
+  `KernalOldNamesCiteItsDocuments` in [Vic20RomSourceTests](../tests/Retrocore.Tests/Vic20RomSourceTests.cs), per
+  build).
 - **Old names left behind**: code in a converted file uses the current names (`ConvertedSourcesUseCurrentNames`, for
   the Apple II's sources and Business BASIC), and nothing else still uses an old one: other sources, `Software/`, C#, docs and the
   rename table.

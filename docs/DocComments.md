@@ -203,28 +203,29 @@ checked line by line:
 
 - **Registers** are the CPU's own letters: `A X Y S P PC` on the 6502; `A F B C D E H L I R`, the pairs
   `AF BC DE HL IX IY SP PC` and the alternates `AF' BC' DE' HL'` on the Z80, where alternates may run
-  together, as in `C'H'L'`.
+  together, as in `C'H'L'`; `A B D X Y U S DP CC PC` on the 6809; and `A F B C D E H L BC DE HL PSW SP PC` on
+  the 8080 and 8085.
 - **Flags** are always words, the same on every CPU, so a flag never reads as a register: the Z80's `C` is
   the register and its carry is `carry`. An entry says what the flag means when set, or says set and clear:
   `Out: zero = found`, `Out: carry = clear on success`.
 
-| Word | 6502 | Z80 | 6809 | Meaning |
-| --- | --- | --- | --- | --- |
-| `carry` | C | C | C | Carry out of the top bit, or no borrow (6502) or a borrow (Z80, 6809) from a subtract or compare |
-| `zero` | Z | Z | Z | A zero result, or an equal compare |
-| `negative` | N | S | N | Most significant bit of the result, a negative number in two's complement; Zilog calls it the sign |
-| `overflow` | V | P/V | V | A signed result out of range |
-| `parity` | | P/V | | An even number of 1 bits, after logical operations, rotates and IN |
-| `half-carry` | | H | H | A carry out of or borrow into bit 3, for DAA |
-| `subtract` | | N | | The last arithmetic was a subtract, for DAA |
-| `decimal` | D | | | Binary-coded decimal arithmetic |
-| `interrupt` | I | | I | IRQ masked |
-| `fast-interrupt` | | | F | FIRQ masked |
-| `entire` | | | E | Complete register state stacked for RTI |
+| Word | 6502 | Z80 | 6809 | 8080 / 8085 | Meaning |
+| --- | --- | --- | --- | --- | --- |
+| `carry` | C | C | C | CY | Carry out of the top bit, or no borrow (6502) or a borrow (Z80, 6809, 8080) from a subtract or compare |
+| `zero` | Z | Z | Z | Z | A zero result, or an equal compare |
+| `negative` | N | S | N | S | Most significant bit of the result, a negative number in two's complement; Zilog and Intel call it the sign |
+| `overflow` | V | P/V | V | | A signed result out of range |
+| `parity` | | P/V | | P | An even number of 1 bits, after logical operations, rotates and IN (or arithmetic and logical operations on the 8080) |
+| `half-carry` | | H | H | AC | A carry out of or borrow into bit 3, for DAA (Intel calls it auxiliary carry) |
+| `subtract` | | N | | | The last arithmetic was a subtract, for DAA |
+| `decimal` | D | | | | Binary-coded decimal arithmetic |
+| `interrupt` | I | | I | | IRQ masked |
+| `fast-interrupt` | | | F | | FIRQ masked |
+| `entire` | | | E | | Complete register state stacked for RTI |
 
 A flag's letter is reported with its word (`name the C flag by its word, 'carry'`), as are branch conditions
 such as `NZ`, which say the same as `zero` with its meaning turned around. The words come from the CPU's
-instruction-set description (the `flag` lines of `OpcodeTables.txt` and `Z80Isa.txt`), with what each flag
+instruction-set description (the `flag` lines of `OpcodeTables.txt`, `Z80Isa.txt`, `M6809Isa.txt` and `I8080Isa.txt`), with what each flag
 means. Comment hovers are shown only for explicit links, not for bare symbol or flag names. Hovering anywhere
 inside a link shows its target's documentation, including on its display text or module qualifier. A
 new CPU names its flags with the same words, adding one only for a flag no CPU has had. Instruction-link
@@ -466,8 +467,13 @@ broken link.
   its Keeps: promise** exception filter in VS Code's Breakpoints view also stops; its hover explains it. The
   filter is listed only when some loaded source has a `Keeps:` section and `checkContracts` is not `off`.
 - **`Uses:`** is checked the same way when the launch option `checkUses` is true: a change to `A`, `X` or
-  `Y` (on the 6502) or `A`, `B`, `C`, `D`, `E`, `H`, `L`, `IX` or `IY` (on the Z80) that the routine's
-  `Uses:`, `Out:` and `Keeps:` sections don't mention is reported.
+  `Y` (on the 6502), `A`, `B`, `C`, `D`, `E`, `H`, `L`, `IX` or `IY` (on the Z80), `A`, `B`, `X`, `Y` or `U`
+  (on the 6809), or `A`, `B`, `C`, `D`, `E`, `H` or `L` (on the 8080 and 8085) that the routine's `Uses:`,
+  `Out:` and `Keeps:` sections don't mention is reported.
+- **Static contract analysis** ([`AnalysisContracts`](../src/Retrocore.Assembler/Assembler/AnalysisContracts.cs),
+  exercised in `ContractAnalysisSdkTests`) also checks documented `Keeps:` and `Uses:` register contracts across an
+  assembled program's control-flow paths without running the machine, using the instruction effects in each CPU's ISA
+  description.
 - **The lint** (language server) checks:
   - section names and entries against section 2.1, and registers and flags against the routine's CPU
     (section 2.2);

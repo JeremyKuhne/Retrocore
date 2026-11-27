@@ -57,7 +57,8 @@ and every ROM they run is an SDK source, except the PET's 4040 and 2040 disk dri
 What is missing:
 
 - a project that names its targets, and a build of it that runs outside the editor;
-- a published `retrocore` .NET tool: the debug host packs as one, but no preview build ships it;
+- a published `retrocore` .NET tool: the debug host packs as one, and preview builds of it and the extension are
+  workflow artifacts ([below](#setting-up-a-repository)), but no feed or release publishes them;
 - per-target SDK roots: every host searches the one `Sdk/` folder;
 - headers that describe each target to the program, and `RC_` defines;
 - user-set symbols outside `--assemble`: the debug launch and the language server pass none;
@@ -93,6 +94,7 @@ The workflow a developer follows, and the one this plan's sample is built with:
      retrocore.json                 the project, its targets and steps
      src/main.s                     a hello world that builds for every target
      src/platform/<family>/         each family's console layer, started for you
+     src/platform/<environment>/    how a program ends in each environment, and bare's
      .config/dotnet-tools.json      retrocore, pinned
      .vscode/extensions.json        recommends the Retrocore extension
      .gitignore                     artifacts/ and obj/
@@ -113,8 +115,35 @@ The workflow a developer follows, and the one this plan's sample is built with:
 **Delivery.** `retrocore` is a .NET tool carrying the SDK majors it supports. A repository pins its version in
 `.config/dotnet-tools.json`, so everyone, CI included, builds with the same tool and headers. The VS Code extension
 uses the repository's pinned tool when there is one and its own bundled copy otherwise, and it says so when the two
-differ. Retrocore is not published yet, so the tool and the extension need preview builds first. Until then the
-workflow runs from a local build of this repository.
+differ. Retrocore is not published to a feed yet; its preview builds are workflow artifacts (below), and a project's
+workflow restores the tool only once it is given a source for them.
+
+**As built so far (phase 5).** `retrocore new <template> <name> [--machines list] [--output folder]` and
+`retrocore init <template> [--name name] [--machines list] [--output folder]`, from the templates in
+[`sdk/1/templates/`](../../sdk/1/templates/README.md), which is their contract. The one template so far is `6502`: the
+Apple-1 (`wozmon`), the Apple II (`dos33`), the Apple III (`sos`), the PET (`basic`) and the BBC Micro (`dfs`), any of
+their machines by catalog id, with a family's console in `src/platform/<family>/` (SOS's in `src/platform/sos/`,
+as SOS owns the screen), each environment's `Exit` in `src/platform/<environment>/`, and a `LOWERCASE` build switch
+that the machines showing lowercase set. `init` adds to the repository's tool manifest, extension recommendations and
+root `projects`, and the `.gitignore` beside the project, rather than replacing them, and gives a project below the
+root a workflow of its own. `retrocore --version` prints the version `new` pins.
+
+A fresh clone builds every target with `dotnet tool restore` and `dotnet retrocore build --all`, with the tool from a
+local pack until a feed exists: [`tools/Test-FreshClone.mjs`](../../tools/Test-FreshClone.mjs) commits and clones a
+project `retrocore new` makes and the adventure sample's files alone, and builds each, in CI on Linux, Windows and
+macOS. The sample is ready to move to its own repository: it pins the tool, recommends the extension, ignores its
+output and has its own workflow, which builds every target and plays the transcripts once the tool is on a source it
+can restore from. Its README lists what else changes on the move.
+
+In VS Code, *Retrocore: New Project* asks for the machines, a name and a folder and runs the host's `retrocore new`.
+The extension runs a repository's pinned tool once it is restored; until then it runs its own host, with a warning
+and a Restore button when its version differs ([open questions](#open-questions)).
+
+Preview builds: [`.github/workflows/preview.yml`](../../.github/workflows/preview.yml), on each push to main or by
+hand, packs the tool as `0.1.0-preview.<run>` (checking that it installs from its package alone, says its version and
+makes a project that pins it) and the extension's VSIX with a host of that same version, and keeps both as the run's
+artifacts. They are published nowhere: a NuGet feed for the tool, a release, or the Marketplace each wait for a
+decision of their own.
 
 ## The project
 
@@ -669,4 +698,9 @@ Checked against main once the PET and BBC Micro had landed:
 - **Saving the game.** A save to disk on the disk targets, and to tape or nothing on the Apple-1. Is this in the first
   sample, or after it?
 - **Where the extension and tool disagree.** Should the extension refuse to build when the repository pins a tool it
-  cannot run, or fall back to its own copy with a warning?
+  cannot run, or fall back to its own copy with a warning? Answered in phase 5: it falls back with a warning. A
+  restored pinned tool that runs as its version runs, as language server and debugger. One not restored, or that does
+  not run, gives way to the extension's own host, with a warning naming the pinned version, and the one that runs
+  when it can be read, and a Restore button; there is none when the versions are the same. The fallback refuses only
+  what it cannot build: a project on an SDK major it does not carry fails with the host's own message.
+  `retrocore.languageServer.host` and a launch's `debugHost` each choose their own process's host over the pin.

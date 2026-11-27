@@ -1030,6 +1030,7 @@ internal sealed partial class DebugSession
             DebugMachines.Apple1 => LaunchApple1(args, loads || args.String("basic") is not null),
             DebugMachines.Coco => LaunchCoco(args, loads),
             DebugMachines.Pet => LaunchPet(args, loads),
+            DebugMachines.Vic20 => LaunchVic20(args, loads),
             DebugMachines.Altair => AltairDebugTarget.Launch(args),
             DebugMachines.Bbc => LaunchBbc(args, loads),
             DebugMachines.Kaypro2 => LaunchKaypro(args),
@@ -1161,6 +1162,11 @@ internal sealed partial class DebugSession
             {
                 // A PET program file gives its own address; one at BASIC's start is a BASIC program, which RUN starts.
                 pet.LoadPrg(File.ReadAllBytes(program), args.Bool("run") ?? true, args.Int("entryAddress"));
+            }
+            else if (Target is Vic20DebugTarget vic20 && Path.GetExtension(program).Equals(".prg", StringComparison.OrdinalIgnoreCase))
+            {
+                // As on the PET; a BASIC program moves to where this machine's BASIC starts, which its RAM decides.
+                vic20.LoadPrg(File.ReadAllBytes(program), args.Bool("run") ?? true, args.Int("entryAddress"));
             }
             else
             {
@@ -1377,6 +1383,15 @@ internal sealed partial class DebugSession
     {
         PetDebugTarget target = PetDebugTarget.Launch(args);
         target.Boot(args.Double("bootSeconds") ?? (loads ? 3 : 0));
+        return target;
+    }
+
+    // As on the PET: the kernal tests RAM and BASIC starts before a program loads; with 32K the RAM test alone takes
+    // over two seconds.
+    private static Vic20DebugTarget LaunchVic20(JsonObject args, bool loads)
+    {
+        Vic20DebugTarget target = Vic20DebugTarget.Launch(args);
+        target.Boot(args.Double("bootSeconds") ?? (loads ? 4 : 0));
         return target;
     }
 

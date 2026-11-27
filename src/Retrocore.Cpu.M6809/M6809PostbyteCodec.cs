@@ -308,6 +308,67 @@ internal sealed class M6809PostbyteCodec : PostbyteCodec
         }
     }
 
+    /// <inheritdoc/>
+    public override bool TryGetEffects(
+        OperandFieldKind kind,
+        byte postbyte,
+        Func<string, uint> registers,
+        out PostbyteEffects effects)
+    {
+        ArgumentNullException.ThrowIfNull(registers);
+        switch (kind)
+        {
+            case OperandFieldKind.IndexedPostbyte:
+                effects = IndexedEffects(postbyte, registers);
+                return true;
+            case OperandFieldKind.RegisterPair:
+                // TFR's source and destination, as EXG's two registers.
+                effects = new()
+                {
+                    First = registers(M6809Postbyte.TransferRegisterName(postbyte >> 4)),
+                    Second = registers(M6809Postbyte.TransferRegisterName(postbyte & 0x0F))
+                };
+
+                return true;
+            case OperandFieldKind.SystemStackMask or OperandFieldKind.UserStackMask:
+                // Bits 0 to 7: CC, A, B, DP, X, Y, the other stack pointer and PC; the last four are words.
+                string other = kind == OperandFieldKind.SystemStackMask ? "U" : "S";
+                ReadOnlySpan<string> names = ["CC", "A", "B", "DP", "X", "Y", other, "PC"];
+                uint listed = 0;
+                int bytes = 0;
+                for (int bit = 0; bit < names.Length; bit++)
+                {
+                    if ((postbyte & (1 << bit)) == 0) { continue; }
+                    listed |= registers(names[bit]);
+                    bytes += bit < 4 ? 1 : 2;
+                }
+
+                effects = new() { First = listed, Bytes = (byte)bytes };
+                return true;
+            default:
+                effects = default;
+                return false;
+        }
+    }
+
+    // An indexed postbyte's address registers: the index register in bits 5 and 6, an accumulator offset, PC for
+    // PCR; auto-increment and auto-decrement also write the index register. Extended indirect uses none.
+    private static PostbyteEffects IndexedEffects(byte postbyte, Func<string, uint> registers)
+    {
+        uint index = registers(((postbyte >> 5) & 3) switch { 0 => "X", 1 => "Y", 2 => "U", _ => "S" });
+        if ((postbyte & 0x80) == 0) { return new() { AddressRead = index }; }
+        return (postbyte & 0x0F) switch
+        {
+            0 or 1 or 2 or 3 => new() { AddressRead = index, AddressWritten = index },
+            5 => new() { AddressRead = index | registers("B") },
+            6 => new() { AddressRead = index | registers("A") },
+            11 => new() { AddressRead = index | registers("D") },
+            12 or 13 => new() { AddressRead = registers("PC") },
+            15 => default,
+            _ => new() { AddressRead = index }
+        };
+    }
+
     private static M6809IndexedKind IndexedKind(in PostbyteOperand operand) => (M6809IndexedKind)(operand.Detail & 0x03);
 
     private static bool IsIndirect(in PostbyteOperand operand) => (operand.Detail & IndirectDetail) != 0;

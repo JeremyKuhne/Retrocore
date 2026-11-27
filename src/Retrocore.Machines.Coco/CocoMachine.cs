@@ -175,5 +175,14 @@ public sealed class CocoMachine : IMachine
 
     int IMachine.MemoryArea(ushort address) => (int)Bus.Area(address);
 
+    /// <inheritdoc/>
+    MemoryKind IMachine.AreaKind(int area) => (CocoMemoryArea)area switch
+        {
+            CocoMemoryArea.None => MemoryKind.None,
+            CocoMemoryArea.Ram => MemoryKind.Ram,
+            CocoMemoryArea.Io => MemoryKind.Io,
+            _ => MemoryKind.Rom
+        };
+
     void IMachine.QueueKey(byte code) => Bus.Keyboard.Type(code);
 }

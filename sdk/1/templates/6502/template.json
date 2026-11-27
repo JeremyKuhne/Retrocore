@@ -1,0 +1,22 @@
+{
+  "description": "6502 assembly: a hello world for the Apple-1, the Apple II, the Apple III, the Commodore PET and the BBC Micro",
+  "cpu": "6502",
+  "sources": ["src/*.s"],
+  "entry": "Main",
+  "defines": { "LOWERCASE": 0 },
+  "families": {
+    "apple1": { "machine": "apple1", "environment": "wozmon", "suffix": "wozmon" },
+    "apple2": { "machine": "apple2-iiplus", "environment": "dos33", "suffix": "dos" },
+    "apple3": { "machine": "apple3", "environment": "sos", "suffix": "sos" },
+    "pet": { "machine": "pet4032", "environment": "basic", "suffix": "basic" },
+    "bbc": { "machine": "bbcb", "environment": "dfs", "suffix": "dfs" }
+  },
+  "machineDefines": {
+    "apple2-iie": { "LOWERCASE": 1 },
+    "apple2-iie-enhanced": { "LOWERCASE": 1 },
+    "apple3": { "LOWERCASE": 1 },
+    "bbcb": { "LOWERCASE": 1 },
+    "bbca": { "LOWERCASE": 1 },
+    "pet4032-business": { "LOWERCASE": 1 }
+  }
+}

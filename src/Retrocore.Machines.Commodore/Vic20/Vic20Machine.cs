@@ -342,5 +342,16 @@ public sealed class Vic20Machine : IMachine
     int IMachine.MemoryArea(ushort address) => (int)Bus.Area(address);
 
     /// <inheritdoc/>
+    MemoryKind IMachine.AreaKind(int area) => (Vic20MemoryArea)area switch
+        {
+            Vic20MemoryArea.None => MemoryKind.None,
+            Vic20MemoryArea.Ram or Vic20MemoryArea.ExpansionRam => MemoryKind.Ram,
+
+            // Colour RAM keeps four bits, so a byte stored does not read back.
+            Vic20MemoryArea.Vic or Vic20MemoryArea.Via or Vic20MemoryArea.ColourRam => MemoryKind.Io,
+            _ => MemoryKind.Rom
+        };
+
+    /// <inheritdoc/>
     void IMachine.QueueKey(byte code) => Bus.Keyboard.Type(code);
 }

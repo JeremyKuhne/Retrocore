@@ -740,7 +740,8 @@ PUTGOS:
 ;; Compares the text at HL, in uppercase, with the zero-ended word at DE.
 ;;
 ;; In:    HL = the text, DE = the word
-;; Out:   zero = set when it matches: HL = the text after it; else HL = the first character that differs
+;; Out:   HL = the text after the word when it matches, else the first character that differs, zero = set when
+;;        it matches
 ;; Uses:  A, C, DE
 ;; Keeps: B
 CHKRES:

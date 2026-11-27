@@ -20,14 +20,16 @@ public static partial class DocumentationParser
         string? name = null;
         int headingLine = 0;
         List<string> content = [];
+        List<int> depths = [];
         bool compact = false;
 
         void Close()
         {
             if (name is null) { return; }
-            sections.Add(Section(name, headingLine, content, compact));
+            sections.Add(Section(name, headingLine, content, compact, depths));
             name = null;
             content = [];
+            depths = [];
         }
 
         foreach ((int line, string raw) in body)
@@ -40,6 +42,7 @@ public static partial class DocumentationParser
                 if (name is not null && DocumentationSections.IsFreeText(name))
                 {
                     content.Add("");
+                    depths.Add(0);
                 }
                 else
                 {
@@ -58,7 +61,12 @@ public static partial class DocumentationParser
                 name = heading.Name;
                 headingLine = line;
                 compact = heading.Content.Length != 0;
-                if (compact) { content.Add(heading.Content); }
+                if (compact)
+                {
+                    content.Add(heading.Content);
+                    depths.Add(0);
+                }
+
                 inSummary = false;
                 afterBlank = false;
                 continue;
@@ -70,6 +78,7 @@ public static partial class DocumentationParser
                 if (DocumentationSections.IsFreeText(name) || indented)
                 {
                     content.Add(DocumentationSections.IsFreeText(name) ? text : trimmed);
+                    depths.Add(text.Length - text.TrimStart().Length);
                     continue;
                 }
 
@@ -111,7 +120,7 @@ public static partial class DocumentationParser
         return plain ? (text[..^1].Trim(), "") : null;
     }
 
-    private static DocumentationSection Section(string name, int line, List<string> content, bool compact)
+    private static DocumentationSection Section(string name, int line, List<string> content, bool compact, List<int> depths)
     {
         while (content.Count != 0 && IsBlank(content[^1])) { content.RemoveAt(content.Count - 1); }
         List<DocumentationEntry> entries = [];
@@ -131,23 +140,35 @@ public static partial class DocumentationParser
             {
                 foreach (string part in SplitEntries(joined))
                 {
-                    if (Entry(part, line) is { } entry) { entries.Add(entry); }
+                    AddEntries(entries, part, line);
                 }
             }
             else
             {
                 int offset = 1;
-                foreach (string text in content)
+                int added = 0;
+                int indent = -1;
+                for (int index = 0; index < content.Count; index++)
                 {
-                    if (Entry(text.Trim(), line + offset) is { } entry)
+                    // Names that share a meaning start a line as an entry does; indented deeper, they are a wrapped
+                    // meaning, as "bytes, carry = set" may be.
+                    string text = content[index];
+                    int depth = index < depths.Count ? depths[index] : 0;
+                    int before = entries.Count;
+                    AddEntries(entries, text.Trim(), line + offset, shared: indent < 0 || depth <= indent);
+                    if (entries.Count != before)
                     {
-                        entries.Add(entry);
+                        added = entries.Count - before;
+                        indent = indent < 0 ? depth : indent;
                     }
                     else if (entries.Count != 0)
                     {
-                        // A wrapped meaning continues the entry above.
-                        DocumentationEntry previous = entries[^1];
-                        entries[^1] = previous with { Meaning = $"{previous.Meaning} {text.Trim()}" };
+                        // A wrapped meaning continues the entry above, each of its names where they share it.
+                        for (int entry = entries.Count - added; entry < entries.Count; entry++)
+                        {
+                            string meaning = $"{entries[entry].Meaning} {text.Trim()}";
+                            entries[entry] = entries[entry] with { Meaning = meaning };
+                        }
                     }
 
                     offset++;
@@ -190,7 +211,12 @@ public static partial class DocumentationParser
             while (separator < text.Length && text[separator] == ' ') { separator++; }
             bool equals = separator < text.Length && text[separator] == '=';
             bool dash = separator + 1 < text.Length && text[separator] == '-' && text[separator + 1] == ' ' && separator > end;
-            if (end > name && (equals || dash))
+
+            // Names that start the text share the meaning after them, as HL and DE do in "HL, DE = ...". Later in
+            // the text, names before a comma stay in the meaning before them, as "normalised" does in "the fraction,
+            // normalised, zero = ...", so a list of names there is not read as entries.
+            bool shares = start == 0 && IsNames(text[..index]);
+            if (end > name && !shares && (equals || dash))
             {
                 parts.Add(text[start..index]);
                 start = index + 2;
@@ -199,6 +225,54 @@ public static partial class DocumentationParser
 
         parts.Add(text[start..]);
         return parts;
+    }
+
+    // Whether text is names, as a register, flag or symbol is written, separated by a comma and a space.
+    private static bool IsNames(string text)
+    {
+        if (text.Length == 0) { return false; }
+        bool start = true;
+        for (int index = 0; index < text.Length; index++)
+        {
+            char character = text[index];
+            if (character == ',' && !start && index + 1 < text.Length && text[index + 1] == ' ')
+            {
+                index++;
+                start = true;
+            }
+            else if (char.IsLetterOrDigit(character) || character is '_' or '\'' or '.' or '$' or '+' or '[' or ']')
+            {
+                start = false;
+            }
+            else
+            {
+                return false;
+            }
+        }
+
+        return !start;
+    }
+
+    // An entry, or where shared names are allowed, one per name when names share a meaning, as "HL, DE = past the
+    // bytes" and "HL, DE - past the bytes" do.
+    private static void AddEntries(List<DocumentationEntry> entries, string text, int line, bool shared = true)
+    {
+        if (Entry(text, line) is { } entry) { entries.Add(entry); }
+        else if (shared && Shared(text, line) is { } names) { entries.AddRange(names); }
+    }
+
+    private static List<DocumentationEntry>? Shared(string text, int line)
+    {
+        // The first separator, of either kind, after names alone: "HL, DE - the names = x" shares at the dash.
+        int equals = text.IndexOf(" = ", StringComparison.Ordinal);
+        int dash = text.IndexOf(" - ", StringComparison.Ordinal);
+        int separator = equals < 0 || (dash >= 0 && dash < equals) ? dash : equals;
+        if (separator <= 0) { return null; }
+        string[] names = text[..separator].Split(", ");
+        if (names.Length < 2 || !IsNames(text[..separator])) { return null; }
+
+        string meaning = text[(separator + 3)..].Trim();
+        return [.. names.Select(name => new DocumentationEntry(name, meaning, line))];
     }
 
     private static DocumentationEntry? Entry(string text, int line)

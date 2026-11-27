@@ -47,6 +47,11 @@ internal sealed partial class Trs80Model100DebugTarget
     ///   them: <c>.ba</c>, <c>.do</c> and <c>.co</c> files, BASIC text as <c>.bas</c>, and text as <c>.txt</c>. The ROM
     ///   runs to its menu first, and the menu is drawn again with them; one of a name already in RAM replaces it.
     ///  </para>
+    ///  <para>
+    ///   <c>cassette</c> puts a WAV file's tape in the recorder, to play when the ROM runs the motor, as
+    ///   <c>CLOAD</c> does; <c>fastCassette</c>, true by default, runs the machine as fast as it can while the motor
+    ///   moves a tape; <c>sound</c> is <c>speaker</c> (the default) or <c>off</c>.
+    ///  </para>
     /// </remarks>
     /// <param name="args">The arguments.</param>
     /// <returns>The target, powered on.</returns>
@@ -96,6 +101,10 @@ internal sealed partial class Trs80Model100DebugTarget
 
             target._ramImagePath = path;
         }
+
+        target.FastCassette = args.Bool("fastCassette") ?? true;
+        target.SetSound(args.String("sound") ?? "speaker");
+        if (args.String("cassette") is { } tape) { target.Insert(tape); }
 
         if (args["files"] is { } files)
         {

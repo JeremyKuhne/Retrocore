@@ -7,9 +7,9 @@ using System.Text;
 namespace Retrocore.Basic;
 
 /// <summary>
-///  Commodore BASIC for the PET: BASIC 1, the 2001's first ROMs; BASIC 2, the 2001-N's and the upgrade ROMs; and
-///  BASIC 4, the 4000 series', with its disk commands. All derive from Microsoft's 6502 BASIC and use the shared
-///  native interpreter or the corresponding <c>m6502.asm</c> MACRO-10 overlay.
+///  Commodore BASIC for the PET and the VIC-20: BASIC 1, the 2001's first ROMs; BASIC 2, the 2001-N's and the upgrade
+///  ROMs, and the VIC-20's; and BASIC 4, the 4000 series', with its disk commands. All derive from Microsoft's 6502
+///  BASIC and use the shared native interpreter or the corresponding <c>m6502.asm</c> MACRO-10 overlay.
 /// </summary>
 /// <remarks>
 ///  <para>
@@ -27,8 +27,10 @@ namespace Retrocore.Basic;
 ///   escapes, such as <c>{$93}</c> for clear screen.
 ///  </para>
 ///  <para>
-///   Programs start at <c>$0401</c>. Variables are laid out as AppleSoft's are: two name characters whose high bits
-///   give the type, and five-byte floats, two-byte integers high byte first, and three-byte string descriptors.
+///   Programs start at <c>$0401</c> on the PET; on the VIC-20 where its RAM puts them, <c>$1001</c> unexpanded, and
+///   its page-zero pointers are three bytes above BASIC 2's. Variables are laid out as AppleSoft's are: two name
+///   characters whose high bits give the type, and five-byte floats, two-byte integers high byte first, and three-byte
+///   string descriptors.
 ///  </para>
 /// </remarks>
 internal sealed class PetBasicDialect : BasicDialect
@@ -79,11 +81,26 @@ internal sealed class PetBasicDialect : BasicDialect
         DataPointer = 0x3E
     };
 
+    // The VIC-20's BASIC 2 keeps the same pointers three bytes higher, after its kernal's page zero.
+    private static readonly BasicPointers s_vic20Pointers = new()
+    {
+        ProgramStart = 0x2B,
+        Variables = 0x2D,
+        Arrays = 0x2F,
+        FreeStart = 0x31,
+        StringBottom = 0x33,
+        MemoryTop = 0x37,
+        CurrentLine = 0x39,
+        ContinueText = 0x3D,
+        DataPointer = 0x41
+    };
+
     private readonly string[] _keywords;
     private readonly bool _spacesInWords;
 
-    private PetBasicDialect(int version)
+    private PetBasicDialect(int version, bool vic20 = false)
     {
+        IsVic20 = vic20;
         Version = version;
         _spacesInWords = version == 1;
         _keywords = version switch
@@ -93,8 +110,8 @@ internal sealed class PetBasicDialect : BasicDialect
             _ => s_keywords
         };
 
-        DisplayName = $"Commodore BASIC {version} (PET)";
-        Pointers = version == 1 ? s_basic1Pointers : s_basic2Pointers;
+        DisplayName = vic20 ? "Commodore BASIC 2 (VIC-20)" : $"Commodore BASIC {version} (PET)";
+        Pointers = vic20 ? s_vic20Pointers : version == 1 ? s_basic1Pointers : s_basic2Pointers;
     }
 
     /// <summary>
@@ -111,6 +128,16 @@ internal sealed class PetBasicDialect : BasicDialect
     ///  Gets BASIC 4, the 4000 series' ROMs.
     /// </summary>
     internal static PetBasicDialect Basic4 { get; } = new(version: 4);
+
+    /// <summary>
+    ///  Gets the VIC-20's BASIC 2, whose words and tokens are the PET's BASIC 2's, its page zero moved.
+    /// </summary>
+    internal static PetBasicDialect Vic20 { get; } = new(version: 2, vic20: true);
+
+    /// <summary>
+    ///  Gets whether this is the VIC-20's BASIC rather than a PET's.
+    /// </summary>
+    internal bool IsVic20 { get; }
 
     /// <summary>
     ///  Gets the version: 1, 2 or 4.
@@ -177,15 +204,17 @@ internal sealed class PetBasicDialect : BasicDialect
     /// <inheritdoc/>
     /// <remarks>
     ///  <para>
-    ///   BASIC's RAM starts at <c>$0400</c>, whose zero comes before the first line.
+    ///   BASIC's RAM starts at <c>$0400</c>, whose zero comes before the first line. On the VIC-20 the unexpanded
+    ///   machine's starts at <c>$1000</c>; its BASIC reads where from <c>TXTTAB</c>, which the RAM decides.
     ///  </para>
     /// </remarks>
-    public override int DefaultLoadAddress => 0x0401;
+    public override int DefaultLoadAddress => IsVic20 ? 0x1001 : 0x0401;
 
     /// <inheritdoc/>
     /// <remarks>
     ///  <para>
-    ///   BASIC 1 keeps its input buffer in page zero, so its pointers are higher there than BASIC 2's and 4's.
+    ///   BASIC 1 keeps its input buffer in page zero, so its pointers are higher there than BASIC 2's and 4's; the
+    ///   VIC-20's are three bytes above BASIC 2's.
     ///  </para>
     /// </remarks>
     public override BasicPointers Pointers { get; }
@@ -193,10 +222,10 @@ internal sealed class PetBasicDialect : BasicDialect
     /// <inheritdoc/>
     /// <remarks>
     ///  <para>
-    ///   The screen editor's logical line: two rows of 40 columns.
+    ///   The screen editor's logical line: two rows of 40 columns, or on the VIC-20 four rows of 22.
     ///  </para>
     /// </remarks>
-    public override int InputLimit => 80;
+    public override int InputLimit => IsVic20 ? 88 : 80;
 
     /// <inheritdoc/>
     internal override byte RemToken => 0x8F;

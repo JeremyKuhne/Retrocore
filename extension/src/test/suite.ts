@@ -25,6 +25,7 @@ import { testMemorySubscriptions } from "./memorySubscriptions";
 import { testMemoryRestart } from "./memoryRestart";
 import { testProjectLaunch } from "./projectLaunch";
 import { testNoLaunchJson } from "./noLaunch";
+import { testNewProject } from "./newProject";
 import { testTargetDimming } from "./targetDimming";
 
 export async function run(): Promise<void> {
@@ -32,6 +33,7 @@ export async function run(): Promise<void> {
     if (workspace === undefined) throw new Error("M1 tests need the project workspace.");
     if (process.env.RETROCORE_TEST_PROJECT_ONLY === "1") {
         await testNoLaunchJson(workspace);
+        await testNewProject(workspace);
         return;
     }
     if (process.env.RETROCORE_TEST_MEMORY_ONLY === "1") {

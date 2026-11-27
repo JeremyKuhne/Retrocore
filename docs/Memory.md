@@ -54,12 +54,13 @@ the address asked for. A bank's gaps show as `··`. The design for what comes n
 - **Align to labels**, the toggle in the Label heading, shown once there are labels, starts a row where each label starts, so a
   label's bytes begin a row of their own; each byte stays in its column, and **Up** and **Down** keep the column,
   or go to the nearest byte the row has. Each editor remembers the choice.
-- **The machine's characters.** On the Apple-1, the Apple II, the Apple III, the TRS-80 Models I, II, III and 4
-  and the CoCo 1, 2 and 3, the text column draws each byte as the machine's own character generator does under its
-  current modes: the Apple II's inverse and flashing text, flashing as it does, the Apple III's character set as
-  SOS loaded it, the Model I's block graphics, the CoCo's semigraphics, and the CoCo 3's GIME text once it is on.
-  The Apple-1 keeps its screen in the terminal rather than memory, so a byte draws as the terminal would show it
-  written to the display.
+- **The machine's characters.** On the Apple-1, the Apple II, the Apple III, the Commodore PET, the TRS-80
+  Models I, II, III and 4, the Kaypro II, and the CoCo 1, 2 and 3, the text column draws each byte as the
+  machine's own character generator does under its current modes: the Apple II's inverse and flashing text,
+  flashing as it does, the Apple III's character set as SOS loaded it, the PET's uppercase/graphics or
+  lowercase/uppercase set, the Model I's block graphics, the Kaypro's blinking high-bit cells, the CoCo's
+  semigraphics, and the CoCo 3's GIME text once it is on. The Apple-1 keeps its screen in the terminal rather than
+  memory, so a byte draws as the terminal would show it written to the display.
   Elsewhere it shows each byte's low seven bits as ASCII, so the Apple II's text, kept with bit 7 set, still reads.
   **ASCII**, the toggle in the Text heading, shows ASCII instead, for typing, finding and copying too; each
   editor remembers the choice.

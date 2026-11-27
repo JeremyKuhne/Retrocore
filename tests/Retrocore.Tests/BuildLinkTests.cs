@@ -16,8 +16,8 @@ namespace Retrocore.Tests;
 ///  In each build of a source that builds several variants with <c>.if</c>, every link in a comment the build
 ///  assembles reaches a definition the build assembles. The resolver resolves a link only to what its set's build
 ///  assembles and the lint reports the rest, so each build's lint finds the links only another build can follow;
-///  this lints AppleSoft's, PET BASIC's and the VIC-20's BASIC builds, and <see cref="RomBuildLinkTests"/> the
-///  Apple II's ROM and DOS builds.
+///  this lints AppleSoft's, PET BASIC's and the VIC-20's BASIC and kernal builds, and <see cref="RomBuildLinkTests"/>
+///  the Apple II's ROM and DOS builds.
 /// </summary>
 /// <remarks>
 ///  <para>
@@ -73,6 +73,20 @@ public sealed class BuildLinkTests
         string inputs = BasicNames.Inputs;
         AssemblyResult result = Vic20SdkModules.AssembleBasic(Path.Join(inputs, "Pet", "Vic20"), VicVideoStandard.Ntsc);
         AssertLinksAssembled(result, "Vic20Basic", sdkBuild: false, others: false);
+    }
+
+    /// <summary>
+    ///  The VIC-20's kernal's links reach what the standard's build assembles: 901486-06's for NTSC, -07's for PAL.
+    /// </summary>
+    /// <param name="standard">The video standard.</param>
+    [TestMethod]
+    [DataRow(VicVideoStandard.Ntsc)]
+    [DataRow(VicVideoStandard.Pal)]
+    public void Vic20KernalLinksOnlyWhatItsBuildAssembles(VicVideoStandard standard)
+    {
+        string inputs = BasicNames.Inputs;
+        AssemblyResult result = Vic20SdkModules.AssembleKernal(Path.Join(inputs, "Pet", "Vic20"), standard);
+        AssertLinksAssembled(result, "Vic20Kernal", sdkBuild: false, others: false);
     }
 
     /// <summary>

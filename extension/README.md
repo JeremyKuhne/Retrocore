@@ -189,6 +189,28 @@ in the overview ruler; both move when you pick another target. The colors are
 `retrocore.inactiveCodeBackground` and `retrocore.inactiveCodeOverviewRuler`, and
 `retrocore.inactiveCode.shade` turns the shading off.
 
+**Retrocore: New Project...** starts a repository: pick the template when there is more
+than one, the machines to build for (each becomes a target in its usual environment), a
+name and a folder, and it runs `retrocore new` from the same templates as the command
+line, then offers to open the folder. The project pins the `retrocore` tool at the
+version of the host that made it.
+
+**The repository's pinned tool.** When `.config/dotnet-tools.json` pins `retrocore` (for
+the first workspace folder whose repository pins it), the extension runs that tool, as
+language server and debugger, once `dotnet tool restore` has restored it into the NuGet
+packages folder (`NUGET_PACKAGES`, or `~/.nuget/packages`) and it runs as the version
+pinned, so the editor builds what CI builds. Until then it runs its own host and, when
+that host's version differs, says so with a **Restore** button. **Retrocore: Restore
+Pinned Tool**, the button's command, runs `dotnet tool restore` and restarts the language
+server on the pinned tool; a debug launch picks its host at each launch. After a restore
+from a terminal, run it, or **Retrocore: Restart Language Server**, so the language
+server follows. Its own host builds a project whose SDK major it carries; one it does not
+carry fails with the host's own message. `retrocore.languageServer.host` sets the
+language server's host and a launch's `debugHost` that launch's, each over the pin; with
+the setting, the warning concerns only the debugger. In
+the Extension Development Host a Release build of this repository comes first, with no
+warning.
+
 ## What is highlighted
 
 - All three current CPU maps: MOS 6502, WDC 65C02 and Rockwell 65C02, including
@@ -226,7 +248,8 @@ is not marked as a compiler error; that is the language server's job, below.
 ## Language features
 
 The extension starts `Retrocore.Debug --language-server` for `retrocore-asm` documents. It
-uses `retrocore.languageServer.host`, or by default the host packaged with the installed
+uses `retrocore.languageServer.host`, or by default the repository's pinned tool once it is
+restored (see [Projects](#projects)), and otherwise the host packaged with the installed
 extension; a self-hosted extension uses the workspace's Release build,
 `artifacts/AnyCPU/Release/Retrocore.Debug/net11.0/Retrocore.Debug.dll`, first.
 `retrocore.languageServer.enabled` turns it off.
@@ -1004,6 +1027,8 @@ The ROMs are dumps from `romDirectory` or `RETROCORE_TRS80_ROMS`, under MAME's n
 byte-identical to them, so the Model I needs no external files. Those sources
 (`Level2.asm` or `Level1.asm`) also debug as ROM modules, so a breakpoint in a ROM
 routine stops there, and stepping into a ROM call from a program goes into its source.
+A dump that is not the same bytes as its source's build, `Level1.asm`'s or the revision's
+`Level2.asm` build, gets neither the source nor the BASIC thread.
 
 A program (`source` or `program`, loaded at `$7000` by default) runs after the ROM
 has booted for `bootSeconds` (1 by default), so the ROM's RAM vectors and device
@@ -1070,7 +1095,10 @@ supply: `rom` names its file, or it is found in `romDirectory` (or `RETROCORE_TR
   ends; `coldStart` starts from empty RAM anyway;
 - `time`: the clock's start, the host's time by default;
 - `files`: host files to put in RAM's directory, so the menu lists them: `.ba`, `.do` and `.co` files, BASIC text
-  as `.bas` and text as `.txt`.
+  as `.bas` and text as `.txt`;
+- `cassette`: a `.wav` tape, which plays when the ROM runs the motor (`CLOAD`); Record in Retro Devices makes one;
+- `fastCassette`: run as fast as possible while the motor moves a tape, true by default;
+- `sound`: `speaker` (the buzzer) or `off`.
 
 Model 100 BASIC has `.model100.bas` source files, and `.ba` files open as listings. While BASIC is at its prompt,
 **Retrocore: Open BASIC Program** edits the program it has open. A program (`source` or `program`, loaded at `$E000` by

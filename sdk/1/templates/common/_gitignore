@@ -1,0 +1,3 @@
+# What retrocore build writes: each target's program, debug information and media, and its intermediate files.
+artifacts/
+obj/

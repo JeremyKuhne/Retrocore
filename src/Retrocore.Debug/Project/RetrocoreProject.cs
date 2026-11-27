@@ -683,8 +683,13 @@ internal sealed class RetrocoreProject
         return !string.IsNullOrEmpty(text) && !text.Contains('\0') ? text : throw new ProjectException($"{file}: {what} must be text.");
     }
 
-    // A project's or target's name, which names files and folders the same way on every system.
-    private static bool IsFileName(string name) =>
+    /// <summary>
+    ///  Gets whether a name can be a project's or a target's, which names files and folders the same way on every
+    ///  system: letters, digits, <c>-</c>, <c>_</c> and <c>.</c>, but not <c>.</c> or <c>..</c>.
+    /// </summary>
+    /// <param name="name">The name.</param>
+    /// <returns>True when it can.</returns>
+    internal static bool IsFileName(string name) =>
         name.Length != 0
             && name is not ("." or "..")
             && name.All(character => char.IsAsciiLetterOrDigit(character) || character is '-' or '_' or '.');

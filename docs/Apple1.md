@@ -8,7 +8,7 @@ Cassette Interface. This guide covers what it emulates, its ROMs and their sourc
 
 | Area | Addresses | Emulated |
 | --- | --- | --- |
-| RAM | $0000-$0FFF, $0000-$1FFF, $0000-$3FFF or $0000-$7FFF | 4K as shipped, 8K, or 16K or 32K of expansion RAM (`RamKilobytes`). |
+| RAM | $0000-$0FFF, $0000-$1FFF, $0000-$3FFF or $0000-$7FFF | 4K or 8K on the board, or 16K or 32K of expansion RAM (`RamKilobytes`). |
 | RAM | $E000-$EFFF | The 4K bank where BASIC loads and runs (`HighRam`, on by default). |
 | Cassette interface | $C000-$C1FF | The ACI: its tape flip-flop and input at $C000-$C0FF, its PROM at $C100 (`CassetteInterface`, on by default). |
 | PIA | $D010-$D013 | KBD, KBDCR, DSP and DSPCR, repeated through $D000-$DFFF wherever address bit 4 is set. |

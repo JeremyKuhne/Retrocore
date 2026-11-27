@@ -1,7 +1,8 @@
 # Builds Retrocore and runs every test that needs nothing outside the repository: the .NET tests (those that need
 # ROM dumps, disk images or other external files report inconclusive), the debug adapter scripts, and the
 # extension's grammar and unit tests. A second job runs the extension's editor tests in a pinned VS Code, which
-# they download, under xvfb, against the Release debug host, which also runs the language servers.
+# they download, under xvfb, against the Release debug host, which also runs the language servers. A third, on Linux,
+# Windows and macOS, checks that fresh clones of a retrocore new project and of the adventure sample build.
 
 name: CI
 
@@ -83,6 +84,8 @@ jobs:
           node tools/Test-Apple1BasicDap.mjs
           node tools/Test-PetDap.mjs
           node tools/Test-PetBasicDap.mjs
+          node tools/Test-Vic20Dap.mjs
+          node tools/Test-Vic20BasicDap.mjs
           node tools/Test-IntegerBasicDap.mjs
           node tools/Test-Breakpoints.mjs
           node tools/Test-InterruptHitsDap.mjs
@@ -101,11 +104,13 @@ jobs:
           node tools/Test-AtariDap.mjs
           node tools/Test-AdventureDap.mjs
           node tools/Test-ProjectDap.mjs
+          node tools/Test-NewProjectDap.mjs
           node tools/Test-OffMachine.mjs
 
       # The host packed as the .NET tool retrocore, installed from that package alone into a local folder (it is
       # published nowhere, and no other source may supply a package of its name), builds and debugs the project sample
-      # as the host itself does.
+      # as the host itself does, and makes a project with retrocore new from the templates it carries, builds it and runs
+      # each target.
       - name: The retrocore tool
         run: |
           rm -rf artifacts/tool-package artifacts/tool
@@ -114,6 +119,7 @@ jobs:
           printf '<configuration>\n  <packageSources>\n    <clear />\n    <add key="retrocore" value="." />\n  </packageSources>\n</configuration>\n' > artifacts/tool-package/nuget.config
           dotnet tool install retrocore --version 0.1.0-dev --tool-path artifacts/tool --configfile artifacts/tool-package/nuget.config
           RETROCORE_DAP_HOST="$PWD/artifacts/tool/retrocore" node tools/Test-ProjectDap.mjs
+          RETROCORE_DAP_HOST="$PWD/artifacts/tool/retrocore" node tools/Test-NewProjectDap.mjs
 
       - name: Extension tests
         working-directory: Retrocore/extension
@@ -196,3 +202,39 @@ jobs:
           name: vscode-logs
           path: Retrocore/artifacts/vscode-m1-tests/profile/logs
           if-no-files-found: ignore
+
+  # A repository that develops with Retrocore builds from a fresh clone on each system the tool runs on: the host packed
+  # as the retrocore tool, then a project retrocore new makes and the adventure sample's files alone, each committed,
+  # cloned, restored with dotnet tool restore (the tool from the local pack) and built with dotnet retrocore build --all.
+  fresh-clone:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, windows-2025, macos-15]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: bash
+        working-directory: Retrocore
+    steps:
+      - name: Check out Retrocore
+        uses: actions/checkout@v7
+        with:
+          path: Retrocore
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: Retrocore/global.json
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+
+      - name: Build the tool
+        run: dotnet build src/Retrocore.Debug/Retrocore.Debug.csproj -c Release
+
+      - name: Fresh clones
+        run: node tools/Test-FreshClone.mjs

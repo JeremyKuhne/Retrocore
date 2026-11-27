@@ -1,0 +1,482 @@
+THIRD-PARTY NOTICES
+
+Retrocore incorporates, derives from, or distributes material from the projects and works below.
+Individual packaged outputs and assets in the repository also retain their adjacent license files
+(extension/ThirdPartyNotices.txt, extension/media/codicons/LICENSE, extension/media/codicons/LICENSE-CODE,
+src/Retrocore.Desktop/Assets/codicon-LICENSE.txt, src/AppleSharp/ThirdPartyNotices.txt, and
+src/Retrocore.Basic/Roms/Microsoft6502Basic/LICENSE). External ROM dumps and disk or tape images belong to
+their respective copyright holders and are not distributed in this repository.
+
+-------------------------------------------------------------------------------
+
+1. Microsoft BASIC for 6502 Microprocessor, Version 1.1 (https://github.com/microsoft/BASIC-M6502)
+
+   src/Retrocore.Basic/Roms/Microsoft6502Basic/m6502.asm is Microsoft's m6502.asm, with its tabs expanded to
+   spaces at its own 8 columns; Microsoft's LICENSE file is beside it and ships in Sdk/Roms/Microsoft6502Basic/.
+   The native MsBasic.*.asm modules in src/Retrocore.Basic/Roms/Microsoft6502Basic are derived from Microsoft's
+   m6502.asm, and the license below applies to the Microsoft code in them; the Apple and Commodore code some of
+   them carry is not Microsoft's.
+
+   Copyright (c) Microsoft Corporation, 1976-1978.
+
+   MIT License
+
+   Copyright (c) Microsoft Corporation.
+
+   Permission is hereby granted, free of charge, to any person obtaining a copy
+   of this software and associated documentation files (the "Software"), to deal
+   in the Software without restriction, including without limitation the rights
+   to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+   copies of the Software, and to permit persons to whom the Software is
+   furnished to do so, subject to the following conditions:
+
+   The above copyright notice and this permission notice shall be included in all
+   copies or substantial portions of the Software.
+
+   THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+   IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+   FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+   AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+   LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+   OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+   SOFTWARE.
+
+-------------------------------------------------------------------------------
+
+2. Microsoft GW-BASIC (https://github.com/microsoft/GW-BASIC)
+
+   Routine and variable names in src/Retrocore.Machines.Kaypro/Roms/Mbasic/ (MBASIC 5.21 for CP/M) follow
+   Microsoft's GW-BASIC source where GW-BASIC or Level2.asm gives them.
+
+   MIT License
+
+   Copyright (c) Microsoft Corporation.
+
+   Permission is hereby granted, free of charge, to any person obtaining a copy
+   of this software and associated documentation files (the "Software"), to deal
+   in the Software without restriction, including without limitation the rights
+   to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+   copies of the Software, and to permit persons to whom the Software is
+   furnished to do so, subject to the following conditions:
+
+   The above copyright notice and this permission notice shall be included in all
+   copies or substantial portions of the Software.
+
+   THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+   IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+   FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+   AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+   LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+   OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+   SOFTWARE.
+
+-------------------------------------------------------------------------------
+
+3. xtrs (https://github.com/TimothyPMann/xtrs)
+
+   src/Retrocore.Machines.Trs80/Roms/CharacterGeneratorKit.asm, the Radio Shack 26-1104 lowercase kit's font,
+   follows xtrs's trs_chars.c (character set 2, at commit 3a2180c063811a715faa28d39a94739c33e0abd0).
+
+   Copyright (C) 1992 Clarendon Hill Software.
+
+   Permission is granted to any individual or institution to use, copy,
+   or redistribute this software, provided this copyright notice is retained.
+
+   This software is provided "as is" without any expressed or implied
+   warranty.  If this software brings on any sort of damage -- physical,
+   monetary, emotional, or brain -- too bad.  You've got no one to blame
+   but yourself.
+
+   The software may be modified for your own purposes, but modified versions
+   must retain this notice.
+
+   ***
+
+   Copyright (c) 1996-2020, Timothy P. Mann
+
+   Permission is hereby granted, free of charge, to any person
+   obtaining a copy of this software and associated documentation
+   files (the "Software"), to deal in the Software without
+   restriction, including without limitation the rights to use, copy,
+   modify, merge, publish, distribute, sublicense, and/or sell copies
+   of the Software, and to permit persons to whom the Software is
+   furnished to do so, subject to the following conditions:
+
+   The above copyright notice and this permission notice shall be
+   included in all copies or substantial portions of the Software.
+
+   THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+   EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+   MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+   NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS
+   BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN
+   ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
+   CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+   SOFTWARE.
+
+-------------------------------------------------------------------------------
+
+4. Seti UI (https://github.com/jesseweed/seti-ui)
+
+   The A, S, and M letterforms in extension/media/basic.svg and extension/media/macro10.svg are the outlines of
+   Seti UI's ASM icon, as VS Code ships it in seti.woff.
+
+   Copyright (c) 2014 Jesse Weed
+
+   Permission is hereby granted, free of charge, to any person obtaining
+   a copy of this software and associated documentation files (the
+   "Software"), to deal in the Software without restriction, including
+   without limitation the rights to use, copy, modify, merge, publish,
+   distribute, sublicense, and/or sell copies of the Software, and to
+   permit persons to whom the Software is furnished to do so, subject to
+   the following conditions:
+
+   The above copyright notice and this permission notice shall be
+   included in all copies or substantial portions of the Software.
+
+   THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+   EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+   MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+   NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
+   LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+   OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
+   WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+-------------------------------------------------------------------------------
+
+5. Codicons (https://github.com/microsoft/vscode-codicons)
+
+   extension/media/codicons/codicon.ttf and codicon.css (version 0.0.46-24, used by Retrocore Memory) and
+   src/Retrocore.Desktop/Assets/codicon.ttf (version 0.0.45, used by Retrocore Desktop) are copied from
+   Microsoft's @vscode/codicons package.
+
+   - The icons (codicon.ttf) are licensed under the Creative Commons Attribution 4.0 International Public License
+     (https://creativecommons.org/licenses/by/4.0/); full text in extension/media/codicons/LICENSE and
+     src/Retrocore.Desktop/Assets/codicon-LICENSE.txt. (Git Logo by Jason Long is licensed under the Creative
+     Commons Attribution 3.0 Unported License, https://creativecommons.org/licenses/by/3.0/.)
+   - The package's code and stylesheet (codicon.css) are licensed under the MIT License below; full text in
+     extension/media/codicons/LICENSE-CODE.
+
+   MIT License
+
+   Copyright (c) Microsoft Corporation.
+
+   Permission is hereby granted, free of charge, to any person obtaining a copy
+   of this software and associated documentation files (the "Software"), to deal
+   in the Software without restriction, including without limitation the rights
+   to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+   copies of the Software, and to permit persons to whom the Software is
+   furnished to do so, subject to the following conditions:
+
+   The above copyright notice and this permission notice shall be included in all
+   copies or substantial portions of the Software.
+
+   THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+   IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+   FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+   AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+   LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+   OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+   SOFTWARE.
+
+-------------------------------------------------------------------------------
+
+6. SDL3-CS (https://github.com/edwardgushchin/SDL3-CS)
+
+   Used by Retrocore.Input, Retrocore.Debug, Retrocore.Desktop, and AppleSharp for SDL3 audio and game
+   controller support.
+
+   Copyright (C) 2024-2026 Eduard Gushchin <eduardgushchin@yandex.ru>
+
+   This software is provided 'as-is', without any express or implied
+   warranty.  In no event will the authors be held liable for any damages
+   arising from the use of this software.
+
+   Permission is granted to anyone to use this software for any purpose,
+   including commercial applications, and to alter it and redistribute it
+   freely, subject to the following restrictions:
+
+   1. The origin of this software must not be misrepresented; you must not
+      claim that you wrote the original software. If you use this software
+      in a product, an acknowledgment in the product documentation would be
+      appreciated but is not required.
+   2. Altered source versions must be plainly marked as such, and must not be
+      misrepresented as being the original software.
+   3. This notice may not be removed or altered from any source distribution.
+
+-------------------------------------------------------------------------------
+
+7. SDL / Simple DirectMedia Layer 3 (https://github.com/libsdl-org/SDL)
+
+   Native SDL3 library used by Retrocore.Debug (and the VS Code extension), Retrocore.Desktop, and AppleSharp for
+   audio output and game controller input.
+
+   Copyright (C) 1997-2026 Sam Lantinga <slouken@libsdl.org>
+
+   This software is provided 'as-is', without any express or implied
+   warranty. In no event will the authors be held liable for any damages
+   arising from the use of this software.
+
+   Permission is granted to anyone to use this software for any purpose,
+   including commercial applications, and to alter it and redistribute it
+   freely, subject to the following restrictions:
+
+   1. The origin of this software must not be misrepresented; you must not
+      claim that you wrote the original software. If you use this software
+      in a product, an acknowledgment in the product documentation would be
+      appreciated but is not required.
+   2. Altered source versions must be plainly marked as such, and must not be
+      misrepresented as being the original software.
+   3. This notice may not be removed or altered from any source distribution.
+
+-------------------------------------------------------------------------------
+
+8. MAME — mc6847.cpp and gime.cpp character sets (https://github.com/mamedev/mame)
+
+   Character glyph patterns in src/Retrocore.Machines.Coco/CocoCharacterSet.cs (MC6847/MC6847T1),
+   src/Retrocore.Machines.Coco/GimeCharacterSet.cs (CoCo 3 GIME), and
+   src/Retrocore.Machines.Altair/AltairTerminalFont.cs follow MAME 0.289's mc6847.cpp and gime.cpp.
+
+   BSD-3-Clause License
+
+   Copyright (c) Nathan Woods
+   All rights reserved.
+
+   Redistribution and use in source and binary forms, with or without modification, are permitted provided that
+   the following conditions are met:
+
+   1. Redistributions of source code must retain the above copyright notice, this list of conditions and the
+      following disclaimer.
+   2. Redistributions in binary form must reproduce the above copyright notice, this list of conditions and the
+      following disclaimer in the documentation and/or other materials provided with the distribution.
+   3. Neither the name of the copyright holder nor the names of its contributors may be used to endorse or promote
+      products derived from this software without specific prior written permission.
+
+   THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED
+   WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A
+   PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY
+   DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+   PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+   CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
+   OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH
+   DAMAGE.
+
+-------------------------------------------------------------------------------
+
+9. Avalonia, MicroCom.Runtime, and Tmds.DBus.Protocol
+
+   Used by Retrocore.Desktop:
+   - Avalonia, Avalonia.Desktop, and Avalonia.Themes.Fluent (https://github.com/AvaloniaUI/Avalonia) —
+     Copyright 2013-2026 (c) The AvaloniaUI Project / .NET Foundation and Contributors
+   - MicroCom.Runtime (https://github.com/kekekeks/MicroCom) — Copyright 2021 (c) Nikita Tsukanov
+   - Tmds.DBus.Protocol (https://github.com/tmds/Tmds.DBus) — Copyright (c) Tom Deseyn
+
+   MIT License
+
+   Permission is hereby granted, free of charge, to any person obtaining a copy
+   of this software and associated documentation files (the "Software"), to deal
+   in the Software without restriction, including without limitation the rights
+   to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+   copies of the Software, and to permit persons to whom the Software is
+   furnished to do so, subject to the following conditions:
+
+   The above copyright notice and this permission notice shall be included in all
+   copies or substantial portions of the Software.
+
+   THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+   IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+   FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+   AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+   LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+   OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+   SOFTWARE.
+
+-------------------------------------------------------------------------------
+
+10. ANGLE — Almost Native Graphics Layer Engine (https://chromium.googlesource.com/angle/angle)
+
+   Distributed via Avalonia.Angle.Windows.Natives for Retrocore.Desktop on Windows.
+
+   Copyright 2018 The ANGLE Project Authors.
+   All rights reserved.
+
+   Redistribution and use in source and binary forms, with or without
+   modification, are permitted provided that the following conditions
+   are met:
+
+       Redistributions of source code must retain the above copyright
+       notice, this list of conditions and the following disclaimer.
+
+       Redistributions in binary form must reproduce the above
+       copyright notice, this list of conditions and the following
+       disclaimer in the documentation and/or other materials provided
+       with the distribution.
+
+       Neither the name of TransGaming Inc., Google Inc., 3DLabs Inc.
+       Ltd., nor the names of their contributors may be used to endorse
+       or promote products derived from this software without specific
+       prior written permission.
+
+   THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+   "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+   LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
+   FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE
+   COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT,
+   INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING,
+   BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+   LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+   CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
+   LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN
+   ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+   POSSIBILITY OF SUCH DAMAGE.
+
+-------------------------------------------------------------------------------
+
+11. SkiaSharp, Skia, HarfBuzzSharp, and HarfBuzz
+
+   Used by Retrocore.Desktop via Avalonia for GPU-accelerated 2D rendering and text shaping:
+   - SkiaSharp and HarfBuzzSharp (https://github.com/mono/SkiaSharp) — Copyright (c) 2015-2016 Xamarin, Inc.;
+     Copyright (c) 2017-2018 Microsoft Corporation (MIT License, below; third-party notices for bundled native
+     libraries are maintained upstream at https://github.com/mono/SkiaSharp/blob/main/THIRD-PARTY-NOTICES.txt).
+   - Skia (https://skia.org) — Copyright (c) 2011 Google Inc. All rights reserved. (BSD-3-Clause License, below.)
+   - HarfBuzz (https://github.com/harfbuzz/harfbuzz) — Copyright (c) 2010-2022 Google, Inc.; Copyright (c)
+     2015-2020 Ebrahim Byagowi; Copyright (c) 2019,2020 Facebook, Inc.; Copyright (c) 2012,2015 Mozilla
+     Foundation; Copyright (c) 2011 Codethink Limited; Copyright (c) 2008,2010 Nokia Corporation and/or its
+     subsidiary(-ies); Copyright (c) 2009 Keith Stribley; Copyright (c) 2011 Martin Hosken and SIL International;
+     Copyright (c) 2007 Chris Wilson; Copyright (c) 2005,2006,2020,2021,2022,2023 Behdad Esfahbod; Copyright (c)
+     2004,2007,2008,2009,2010,2013,2021,2022,2023 Red Hat, Inc.; Copyright (c) 1998-2005 David Turner and Werner
+     Lemberg (Old-MIT License, below).
+
+   SkiaSharp / HarfBuzzSharp MIT License:
+
+   Permission is hereby granted, free of charge, to any person obtaining a copy of
+   this software and associated documentation files (the "Software"), to deal in
+   the Software without restriction, including without limitation the rights to
+   use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of
+   the Software, and to permit persons to whom the Software is furnished to do so,
+   subject to the following conditions:
+
+   The above copyright notice and this permission notice shall be included in all
+   copies or substantial portions of the Software.
+
+   THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+   IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
+   FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
+   COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
+   IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
+   CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+   Skia BSD-3-Clause License:
+
+   Redistribution and use in source and binary forms, with or without
+   modification, are permitted provided that the following conditions are
+   met:
+
+     * Redistributions of source code must retain the above copyright
+       notice, this list of conditions and the following disclaimer.
+     * Redistributions in binary form must reproduce the above
+       copyright notice, this list of conditions and the following disclaimer
+       in the documentation and/or other materials provided with the
+       distribution.
+     * Neither the name of Google Inc. nor the names of its
+       contributors may be used to endorse or promote products derived from
+       this software without specific prior written permission.
+
+   THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+   "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+   LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+   A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+   OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+   SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+   LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+   DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+   THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+   (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+   OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+   HarfBuzz License:
+
+   Permission is hereby granted, without written agreement and without
+   license or royalty fees, to use, copy, modify, and distribute this
+   software and its documentation for any purpose, provided that the
+   above copyright notice and the following two paragraphs appear in
+   all copies of this software.
+
+   IN NO EVENT SHALL THE COPYRIGHT HOLDER BE LIABLE TO ANY PARTY FOR
+   DIRECT, INDIRECT, SPECIAL, INCIDENTAL, OR CONSEQUENTIAL DAMAGES
+   ARISING OUT OF THE USE OF THIS SOFTWARE AND ITS DOCUMENTATION, EVEN
+   IF THE COPYRIGHT HOLDER HAS BEEN ADVISED OF THE POSSIBILITY OF SUCH
+   DAMAGE.
+
+   THE COPYRIGHT HOLDER SPECIFICALLY DISCLAIMS ANY WARRANTIES, INCLUDING,
+   BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND
+   FITNESS FOR A PARTICULAR PURPOSE.  THE SOFTWARE PROVIDED HEREUNDER IS
+   ON AN "AS IS" BASIS, AND THE COPYRIGHT HOLDER HAS NO OBLIGATION TO
+   PROVIDE MAINTENANCE, SUPPORT, UPDATES, ENHANCEMENTS, OR MODIFICATIONS.
+
+-------------------------------------------------------------------------------
+
+12. vscode-languageclient / vscode-languageserver-node (https://github.com/microsoft/vscode-languageserver-node)
+
+   Used by the Retrocore VS Code extension (extension/).
+
+   Copyright (c) Microsoft Corporation
+
+   All rights reserved.
+
+   MIT License
+
+   Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated
+   documentation files (the "Software"), to deal in the Software without restriction, including without limitation
+   the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and
+   to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+
+   The above copyright notice and this permission notice shall be included in all copies or substantial portions of
+   the Software.
+
+   THE SOFTWARE IS PROVIDED *AS IS*, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO
+   THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+   AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF
+   CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
+   IN THE SOFTWARE.
+
+-------------------------------------------------------------------------------
+
+13. ConsoleAppFramework (https://github.com/Cysharp/ConsoleAppFramework)
+
+   Build-time command-line source generator used by AppleSharp and tools/DosDisk.
+
+   MIT License
+
+   Copyright (c) 2020 Cysharp, Inc.
+
+   Permission is hereby granted, free of charge, to any person obtaining a copy
+   of this software and associated documentation files (the "Software"), to deal
+   in the Software without restriction, including without limitation the rights
+   to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+   copies of the Software, and to permit persons to whom the Software is
+   furnished to do so, subject to the following conditions:
+
+   The above copyright notice and this permission notice shall be included in all
+   copies or substantial portions of the Software.
+
+   THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+   IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+   FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+   AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+   LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+   OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+   SOFTWARE.
+
+-------------------------------------------------------------------------------
+
+14. Pirate Adventure — Adventure #2 (https://ifarchive.org/indexes/if-archive/scott-adams/games/scottfree)
+
+   sample/adventure/games/pirate.dat is adv02.dat from AdamsGames.zip in the Interactive Fiction Archive's Scott
+   Adams collection, by Scott and Alexis Adams (ScottFree conversion by Paul David Doherty); see
+   sample/adventure/games/README.md. The repository's MIT license does NOT cover this file.
+
+   Per SA-Copyright.txt (24 November 1997, https://ifarchive.org/if-archive/scott-adams/SA-Copyright.txt):
+   "These Scott Adams original text Adventure games are still copyrighted by Scott Adams and are not Public Domain.
+   They may be freely downloaded and enjoyed though. They are shareware but the contribution is strictly voluntary
+   and the amount left to your own discretion."

@@ -214,5 +214,12 @@ public sealed class KayproMachine : IMachine
 
     int IMachine.MemoryArea(ushort address) => (int)Bus.Area(address);
 
+    /// <inheritdoc/>
+    MemoryKind IMachine.AreaKind(int area) => (KayproMemoryArea)area switch
+        {
+            KayproMemoryArea.Rom => MemoryKind.Rom,
+            _ => MemoryKind.Ram
+        };
+
     void IMachine.QueueKey(byte code) => Bus.Keyboard.Type(code);
 }

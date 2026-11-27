@@ -2,8 +2,9 @@
 
 Retrocore's Atari is [`AtariMachine`](../src/Retrocore.Machines.Atari/AtariMachine.cs): a 6502 sharing its bus
 with ANTIC, cycle by cycle, with GTIA, POKEY and the PIA, the 400's and 800's memory maps and cartridge slots, the 410
-Program Recorder and up to four disk drives on the serial bus. Every ROM it runs is an SDK source, so it runs with
-nothing external. This guide covers what it emulates, its ROMs, and how to debug on it.
+Program Recorder and up to four disk drives on the serial bus. Every ROM it runs—the 810 drive's firmware included—is a
+documented SDK source, and stepping into the OS, BASIC, or floating-point package on the host 6502 debugs at its source.
+This guide covers what it emulates, its ROMs, and how to debug on it.
 
 ## The machine
 

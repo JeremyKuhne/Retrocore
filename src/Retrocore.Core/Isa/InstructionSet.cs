@@ -41,6 +41,18 @@ public sealed partial class InstructionSet
     private uint[] _firstByteMap = [];
     private OperandForm[] _formArray = [];
     private readonly List<MemoryAccess> _access = [];
+    // Only a set whose description has effects lines keeps them, one per encoding, without the list once built.
+    private List<InstructionEffects>? _effects = [];
+    private InstructionEffects[] _effectsArray = [];
+    private static readonly InstructionEffects s_noEffects;
+
+    // For encodings whose postbyte names registers: the rule by encoding while building, then by array, and the
+    // registers each postbyte of a field kind names, by kind.
+    private Dictionary<int, PostbyteRule>? _postbyteRules;
+    private PostbyteRule[]? _postbyteArray;
+    private PostbyteEffects[]?[]? _postbyteTables;
+    private uint _flagsRegisterMask;
+    private byte _allFlags;
     private readonly List<MemoryAccess> _encodingAccess = [];
     private MemoryAccess[] _encodingAccessArray = [];
     private List<(uint Prefix, int PrefixLength, int OperandSize, int OpcodeLength)>? _splits;
@@ -278,6 +290,123 @@ public sealed partial class InstructionSet
     public MemoryAccess EncodingAccess(int encoding) => _encodingAccessArray[encoding];
 
     /// <summary>
+    ///  Gets whether the description says what every encoding reads and writes, through its <c>effects</c> lines.
+    /// </summary>
+    public bool HasEffects { get; private init; }
+
+    /// <summary>
+    ///  Gets the registers and flags an encoding reads and writes, and what it does to the stack, for analysis.
+    /// </summary>
+    /// <param name="encoding">The encoding ID.</param>
+    /// <returns>
+    ///  The effects, by reference into the set's table so a lookup copies nothing;
+    ///  <see cref="InstructionEffects.IsKnown"/> is false when the set has none (see <see cref="HasEffects"/>).
+    /// </returns>
+    /// <exception cref="IndexOutOfRangeException">The set has effects and no such encoding.</exception>
+    public ref readonly InstructionEffects Effects(int encoding) =>
+        ref HasEffects ? ref _effectsArray[encoding] : ref s_noEffects;
+
+    /// <summary>
+    ///  Gets an encoding's effects with the registers its postbyte names, as the MC6809's <c>PULS</c> list, its
+    ///  <c>TFR</c> pair and its indexed modes' index registers, computed from tables built with the set.
+    /// </summary>
+    /// <param name="encoding">The encoding ID.</param>
+    /// <param name="postbyte">The byte after the opcode; ignored where the encoding has none.</param>
+    /// <returns>
+    ///  The effects; the same as <see cref="Effects(int)"/> unless
+    ///  <see cref="InstructionEffects.DependsOnPostbyte"/>, which stays set to say the postbyte was taken in.
+    /// </returns>
+    public InstructionEffects Effects(int encoding, byte postbyte)
+    {
+        ref readonly InstructionEffects effects = ref Effects(encoding);
+        if (!effects.DependsOnPostbyte || _postbyteArray is not { } rules || _postbyteTables is not { } tables)
+        {
+            return effects;
+        }
+
+        PostbyteRule rule = rules[encoding];
+        if (tables[(int)rule.Kind] is not { } table) { return effects; }
+        PostbyteEffects field = table[postbyte];
+        uint read = field.AddressRead, written = field.AddressWritten, may = 0;
+        if ((rule.ReadSlots & 1) != 0) { read |= field.First; }
+        if ((rule.ReadSlots & 2) != 0) { read |= field.Second; }
+        if ((rule.WriteSlots & 1) != 0) { written |= field.First; }
+        if ((rule.WriteSlots & 2) != 0) { written |= field.Second; }
+        if ((rule.MayWriteSlots & 1) != 0) { may |= field.First; }
+        if ((rule.MayWriteSlots & 2) != 0) { may |= field.Second; }
+        InstructionEffects named = new()
+        {
+            RegistersRead = read,
+            RegistersWritten = written,
+            RegistersMayWrite = may,
+            FlagsRead = (read & _flagsRegisterMask) != 0 ? _allFlags : (byte)0,
+            FlagsWritten = (written & _flagsRegisterMask) != 0 ? _allFlags : (byte)0,
+            FlagsMayWrite = (may & _flagsRegisterMask) != 0 ? _allFlags : (byte)0,
+            Pushed = rule.PushSlot == 1 ? field.Bytes : (byte)0,
+            Pulled = rule.PullSlot == 1 ? field.Bytes : (byte)0
+        };
+
+        // A copy between the postbyte's registers, as TFR X,Y; one naming a register with parts, as D, or two of
+        // different widths, as A and X, copies nothing.
+        foreach ((int destination, int source) in rule.SlotCopies ?? [])
+        {
+            int to = SingleBit(destination == -1 ? field.First : destination == -2 ? field.Second : 0);
+            int from = SingleBit(source == -1 ? field.First : source == -2 ? field.Second : 0);
+            if (to >= 0 && from >= 0 && to != from && Width(to) == Width(from)) { named = named.WithCopy(to, from); }
+        }
+
+        return Combine(effects, named);
+    }
+
+    // A register's width in bits, by its bit in the effects' registers; a part the registers line lacks is 8.
+    private int Width(int bit)
+    {
+        string name = Description.EffectRegisters[bit];
+        foreach (IsaRegister register in Description.Registers)
+        {
+            if (register.Name == name) { return register.Bits; }
+        }
+
+        return 8;
+    }
+
+    private static int SingleBit(uint mask)
+    {
+        if (mask == 0 || (mask & (mask - 1)) != 0) { return -1; }
+        int bit = 0;
+        while ((mask & 1) == 0)
+        {
+            mask >>= 1;
+            bit++;
+        }
+
+        return bit;
+    }
+
+    /// <summary>
+    ///  Builds the table of what each postbyte of a field kind names, once per kind.
+    /// </summary>
+    /// <param name="kind">The field kind.</param>
+    /// <param name="codec">The set's codec.</param>
+    /// <returns>Whether the codec describes the kind's effects.</returns>
+    private bool PostbyteTable(OperandFieldKind kind, PostbyteCodec codec)
+    {
+        PostbyteEffects[]?[] tables = _postbyteTables ??= new PostbyteEffects[]?[(int)OperandFieldKind.UserStackMask + 8];
+        if ((uint)kind >= (uint)tables.Length) { return false; }
+        if (tables[(int)kind] is not null) { return true; }
+        Func<string, uint> registers = Description.RegisterMask;
+        if (!codec.TryGetEffects(kind, 0, registers, out _)) { return false; }
+        PostbyteEffects[] table = new PostbyteEffects[256];
+        for (int postbyte = 0; postbyte < table.Length; postbyte++)
+        {
+            codec.TryGetEffects(kind, (byte)postbyte, registers, out table[postbyte]);
+        }
+
+        tables[(int)kind] = table;
+        return true;
+    }
+
+    /// <summary>
     ///  Finds the encoding whose opcode starts some bytes.
     /// </summary>
     /// <param name="bytes">Bytes starting at an instruction.</param>
@@ -425,6 +554,19 @@ public sealed partial class InstructionSet
         _sizeArray = [.. _sizes];
         _flowArray = [.. _flows];
         _encodingAccessArray = [.. _encodingAccess];
+        _effectsArray = HasEffects && _effects is { } effects ? [.. effects] : [];
+        _effects = null;
+        if (_postbyteRules is { } postbyteRules)
+        {
+            _postbyteArray = new PostbyteRule[_encodingArray.Length];
+            foreach (KeyValuePair<int, PostbyteRule> rule in postbyteRules)
+            {
+                _postbyteArray[rule.Key] = rule.Value;
+            }
+
+            _postbyteRules = null;
+        }
+
         _formArray = [.. Description.Forms];
         foreach (IsaEncoding encoding in _encodingArray)
         {
@@ -475,7 +617,8 @@ public sealed partial class InstructionSet
         MemoryAccess encodingAccess,
         bool prefer,
         ushort? target,
-        bool conditional)
+        bool conditional,
+        InstructionEffects effects)
     {
         if (!_ids.TryGetValue(mnemonic, out int id))
         {
@@ -511,6 +654,7 @@ public sealed partial class InstructionSet
 
         _flows.Add(flow);
         _encodingAccess.Add(encodingAccess);
+        if (HasEffects) { _effects?.Add(effects); }
         _sizes.Add(checked((byte)(entry.Length + form.Size)));
         if (entry.SplitAt != 0) { AddSplit(entry, form); }
 

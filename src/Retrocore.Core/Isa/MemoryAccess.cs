@@ -22,5 +22,11 @@ public enum MemoryAccess : byte
     /// <summary>
     ///  It reads and then writes the operand.
     /// </summary>
-    ReadWrite
+    ReadWrite,
+
+    /// <summary>
+    ///  It works out the operand's address without reading or writing it, as the 6809's <c>LEAX</c> does; an
+    ///  indirect form still reads the pointer.
+    /// </summary>
+    Address
 }

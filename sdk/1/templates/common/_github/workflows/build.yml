@@ -1,0 +1,44 @@
+# Builds every target of the Retrocore project with the retrocore tool the repository pins in
+# .config/dotnet-tools.json, and keeps what each target built: its program, its debug information and its disk or
+# tape image. The restore needs the tool on a NuGet source; retrocore is on no feed yet, so until it is, the restore
+# fails unless it is given one (--add-source).
+
+name: Build {{name}}
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  DOTNET_NOLOGO: "true"
+  DOTNET_CLI_TELEMETRY_OPTOUT: "true"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out
+        uses: actions/checkout@v7
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: 11.0.x
+
+      - name: Restore the retrocore tool
+        run: dotnet tool restore
+
+      - name: Build every target
+        run: dotnet retrocore build --all{{projectOption}}
+
+      - name: Keep what the targets built
+        uses: actions/upload-artifact@v7
+        with:
+          name: targets
+          path: {{projectFolder}}artifacts/
+          if-no-files-found: error

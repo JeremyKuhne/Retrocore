@@ -248,5 +248,14 @@ public sealed class PetMachine : IMachine
     int IMachine.MemoryArea(ushort address) => (int)Bus.Area(address);
 
     /// <inheritdoc/>
+    MemoryKind IMachine.AreaKind(int area) => (PetMemoryArea)area switch
+        {
+            PetMemoryArea.None => MemoryKind.None,
+            PetMemoryArea.Ram or PetMemoryArea.VideoRam => MemoryKind.Ram,
+            PetMemoryArea.Io => MemoryKind.Io,
+            _ => MemoryKind.Rom
+        };
+
+    /// <inheritdoc/>
     void IMachine.QueueKey(byte code) => Bus.Keyboard.Type(code);
 }

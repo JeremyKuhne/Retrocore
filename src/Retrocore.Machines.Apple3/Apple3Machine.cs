@@ -409,6 +409,15 @@ public sealed class Apple3Machine : IMachine
     int IMachine.MemoryArea(ushort address) => (int)Bus.ReadArea(address);
 
     /// <inheritdoc/>
+    MemoryKind IMachine.AreaKind(int area) => (Apple3MemoryArea)area switch
+        {
+            Apple3MemoryArea.Rom => MemoryKind.Rom,
+            Apple3MemoryArea.Io or Apple3MemoryArea.Vias => MemoryKind.Io,
+            Apple3MemoryArea.None => MemoryKind.None,
+            _ => MemoryKind.Ram
+        };
+
+    /// <inheritdoc/>
     void IMachine.QueueKey(byte code) => Bus.QueueKey(code);
 
     private bool StepProcessor()

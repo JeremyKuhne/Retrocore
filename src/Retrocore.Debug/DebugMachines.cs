@@ -60,6 +60,11 @@ internal static class DebugMachines
     internal const string Pet = "pet";
 
     /// <summary>
+    ///  The Commodore VIC-20; the launch's <c>video</c> says NTSC or PAL.
+    /// </summary>
+    internal const string Vic20 = "vic20";
+
+    /// <summary>
     ///  The MITS Altair 8800.
     /// </summary>
     internal const string Altair = "altair";
@@ -100,6 +105,7 @@ internal static class DebugMachines
         Apple1 => Apple1,
         Coco => Coco,
         Pet => Pet,
+        Vic20 => Vic20,
         Altair => Altair,
         Kaypro2 => Kaypro2,
         Trs80Model100 => Trs80Model100,
@@ -108,6 +114,6 @@ internal static class DebugMachines
         null => throw new ArgumentException($"machine is required, such as \"{Apple2}\", \"{Apple3}\", \"{Trs80Model1}\" or \"{Coco}\"."),
         _ => throw new ArgumentException(
             $"Unknown machine \"{machine}\"; the known machines are \"{Apple2}\", \"{Apple1}\", \"{Apple3}\", \"{Trs80Model1}\", "
-                + $"\"{Trs80Model2}\", \"{Trs80Model3}\", \"{Trs80Model4}\", \"{Trs80Model100}\", \"{Coco}\", \"{Pet}\", \"{Altair}\", \"{Kaypro2}\", \"{Bbc}\" and \"{Atari}\".")
+                + $"\"{Trs80Model2}\", \"{Trs80Model3}\", \"{Trs80Model4}\", \"{Trs80Model100}\", \"{Coco}\", \"{Pet}\", \"{Vic20}\", \"{Altair}\", \"{Kaypro2}\", \"{Bbc}\" and \"{Atari}\".")
     };
 }

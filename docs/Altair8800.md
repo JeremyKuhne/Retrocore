@@ -206,7 +206,7 @@ Things to know:
   or give it less RAM. SIMH avoids this only because its boot ROM sits at `$FF00`, and hangs the same way without
   it.
 - **Tapes.** 8K BASIC's `CSAVE "P"` saves the program to the 88-ACR's tape, and `CLOAD "P"` reads it back. Record
-  from the Hardware view's cassette, or with `retro/media`; the recording is saved when the tape is ejected. To
+  from the **Drives** view's cassette, or with `retro/media`; the recording is saved when the tape is ejected. To
   load, type `CLOAD`, then insert the tape, since it starts playing as it goes in.
 
 ## Disks and CP/M
@@ -234,7 +234,7 @@ These 8-inch images, from deramp.com's Altair software archive, boot this way:
 | MITS Disk BASIC 5.0 | Asks `MEMORY SIZE?`. |
 | Altair DOS | Asks `MEMORY SIZE?`. |
 
-The drives are `disk0`-`disk3` in Retro Devices, where disks go in and come out, and a disk the machine has changed
+The drives are `disk0`-`disk3` in the **Drives** view, where disks go in and come out, and a disk the machine has changed
 can be saved to its image, saved as another, reverted or undone, as for the other machines' disks. Drive 0 is A: to
 CP/M.
 

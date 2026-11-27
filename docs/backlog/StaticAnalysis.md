@@ -494,7 +494,8 @@ where its value came from (`AnalysisValue`). Two paths that meet keep the bits b
   built, so a `HALT` or `WAI` before leaves nothing behind.
 - Code a store may change is not the code assembled, so the analysis stops where it reaches it: a byte in RAM that
   a store at a fixed address may write, with the byte after, as `STA Patch+1` does, or that an indexed store may
-  reach from its base, as `STA Patch,Y` may reach any of the 256 bytes from Patch. MBASIC's LPTOUT stops so: its
+  reach from its base, with the byte after, as `STA Patch,Y` may reach Patch to Patch+256 (within the zero page
+  for a zero-page form). MBASIC's LPTOUT stops so: its
   `CALL $0000` takes the BIOS's address from Init.asm.
 - The runs try all ones and two alternations first, and stop as soon as every bit written has varied, so an
   instruction whose result is unknown costs a few runs. Flags the effects lines set or clear are not waited for.

@@ -269,12 +269,13 @@ public class AnalysisSoundnessTests
             """, "Mos6502", "X");
 
         NotKept("""
-            ;; Stores CLC over the SEC two bytes on through an index.
+            ;; Stores CLC over the SEC two bytes on through an index, and goes straight there.
             ;; Keeps: X
             Holder:
                 ldy #2
                 lda #$18
                 sta Patch,y
+                jmp Patch+2
             Patch:
                 nop
                 nop
@@ -308,8 +309,7 @@ public class AnalysisSoundnessTests
 
         report.FixedConditions.Should().BeEmpty();
 
-        // A table naming a local label reaches it, wherever another scope has one of the same name: each is taken
-        // as named, as which one a name means is the assembler's to say.
+        // A table naming a local label reaches every label of that name, whichever scope the name means.
         (_, report) = Analyze("""
             .proc Other
             Loop:

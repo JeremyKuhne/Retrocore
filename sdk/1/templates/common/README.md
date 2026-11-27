@@ -20,8 +20,9 @@ These run at the repository's root. Each target's program, debug information and
 `artifacts/<target>/` beside `retrocore.json`, and intermediate files in `obj/`.
 `dotnet retrocore build --target {{firstTarget}}{{projectOption}}` builds one target.
 
-`retrocore` is not published yet. Until it is, restore it from a folder that holds its package, made by
-`dotnet pack src/Retrocore.Debug -c Release -o <folder>` in a clone of Retrocore; the workflow's restore fails until
+`retrocore` is on no feed yet. Until it is, restore it from a folder that holds `retrocore.{{version}}.nupkg`: the
+tool's artifact from the Retrocore preview build of that version, or what `dotnet pack src/Retrocore.Debug -c Release
+-o <folder>` makes in a clone of Retrocore when that is the version it builds. The workflow's restore fails until
 then, or until it is given such a source:
 
 ```text

@@ -1,7 +1,7 @@
 # Builds every target of the Retrocore project with the retrocore tool the repository pins in
 # .config/dotnet-tools.json, and keeps what each target built: its program, its debug information and its disk or
-# tape image. The restore needs the tool on a NuGet source; retrocore is published nowhere yet, so until it is, the
-# restore fails unless it is given one (--add-source).
+# tape image. The restore needs the tool on a NuGet source; retrocore is on no feed yet, so until it is, the restore
+# fails unless it is given one (--add-source).
 
 name: Build {{name}}
 

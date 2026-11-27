@@ -164,8 +164,9 @@ internal static class NewCommand
             output.WriteLine("  dotnet tool restore");
             string relativeProject = Path.GetRelativePath(repository, folder).Replace('\\', '/');
             output.WriteLine($"  dotnet retrocore build --all{(relativeProject == "." ? "" : $" --project {relativeProject}")}");
-            output.WriteLine($"retrocore {ProjectScaffold.ToolVersion} is published nowhere yet. Until it is, make its package in Retrocore with");
-            output.WriteLine("dotnet pack src/Retrocore.Debug -c Release -o <folder>, then restore it with dotnet tool restore --add-source <folder>.");
+            output.WriteLine("retrocore is on no feed yet: restore it with dotnet tool restore --add-source <folder>, from a folder that holds");
+            output.WriteLine($"retrocore.{ProjectScaffold.ToolVersion}.nupkg: a preview build's artifact, or what dotnet pack src/Retrocore.Debug -c Release");
+            output.WriteLine("-o <folder> makes in Retrocore when it builds that version.");
             return 0;
         }
         catch (Exception exception)

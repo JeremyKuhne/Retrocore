@@ -276,8 +276,13 @@ export function activate(context: vscode.ExtensionContext): void {
                     const newPanel = panel === undefined;
                     if (panel === undefined) {
                         // The page is kept while another editor covers it, as the BASIC program's editor can: else
-                        // VS Code reloads it on return, without its picture, sound, BASIC button or Machine off.
-                        panel = vscode.window.createWebviewPanel("retrocore", title, vscode.ViewColumn.Beside,
+                        // VS Code reloads it on return, without its picture, sound, BASIC button or Machine off. A
+                        // first frame of a stopped machine, as a stop on entry sends just after its stopped event,
+                        // opens the screen without its focus, so the stop's source keeps it whichever VS Code shows
+                        // first. A running machine's first frame gives the screen the keyboard; a stop after it, as a
+                        // BASIC file's first statement can be, then takes the focus back to its source.
+                        panel = vscode.window.createWebviewPanel("retrocore", title,
+                            { viewColumn: vscode.ViewColumn.Beside, preserveFocus: !running },
                             { enableScripts: true, retainContextWhenHidden: true });
                         panel.iconPath = icon;
                         context.subscriptions.push(panel);

@@ -422,10 +422,11 @@ internal sealed partial class DebugSession
         return true;
     }
 
-    private bool ObserveInteraction(InteractionRun run, bool canAdvance)
+    private bool ObserveInteraction(InteractionRun run, IDebugTarget cpu, bool boundary, bool canAdvance)
     {
         ulong cycles = Target.CycleCount;
-        bool deadline = cycles >= run.Deadline;
+        // Execute can yield during a device hold, before the instruction or interrupt response has finished.
+        bool deadline = cycles >= run.Deadline && (boundary || cpu is { IsIdle: true, InInstruction: false });
         InputBatch? batch = run.Input;
         GuestInputPath? demand = null;
         DebugTextSurface? captured = null;
@@ -435,8 +436,8 @@ internal sealed partial class DebugSession
             reason = "inputNotAccepted";
         }
         else if (run.Condition == "instruction"
-            && ReferenceEquals(Cpu, Target)
-            && Target.IsInstructionBoundary
+            && ReferenceEquals(cpu, Target)
+            && boundary
             && Target.ProgramCounter == run.Address)
         {
             reason = "matched";

@@ -41,11 +41,13 @@ input.
 `scripted` (the default) runs unthrottled and parks the whole guest, including its devices, on completion.
 `live` uses the session's configured speed and observes without parking on a match or budget expiry. If a
 machine was already running, the adapter attaches to that worker. The deadline is relative to the request's
-starting cycle and defaults to 60 emulated seconds. The adapter checks the starting state and the first execution
-boundary at or beyond the deadline, so advancement can round up by one instruction or interrupt response.
+starting cycle and defaults to 60 emulated seconds. The adapter checks the starting state and completes budget expiry
+at the first instruction or interrupt-response boundary at or beyond the deadline, or while the CPU is idle between
+instructions. A device holding the CPU mid-instruction can extend the run until the hold clears. If the device never
+releases the CPU, cancel or pause the run.
 Instruction, demand, and transcript observations win ties with the budget. Text is sampled initially, at about
-30 Hz of guest time, and at the deadline; it can miss text between samples. Breakpoints and other debugger stops
-take precedence. No polling instructions, IRQs, or device cycles are skipped.
+30 Hz of guest time, and where the budget expires; it can miss text between samples. Breakpoints and other debugger
+stops take precedence. No polling instructions, IRQs, or device cycles are skipped.
 
 Pause, breakpoints, exceptions, cancellation, reset, replacement, and disconnect retire the run. `retro/run/cancel`
 takes both IDs, parks the guest if it cancelled the active run, and returns `cancelled: false` for stale IDs.

@@ -2148,7 +2148,10 @@ internal sealed partial class DebugSession
                             }
 
                             if ((_consoleCapture is not null && StopOnCaptureOverflow())
-                                || (interaction is not null && ObserveInteraction(interaction, canAdvance))) { return; }
+                                || (interaction is not null && ObserveInteraction(interaction, cpu, boundary, canAdvance)))
+                            {
+                                return;
+                            }
 
                             if (!canAdvance) { break; }
                             first = false;

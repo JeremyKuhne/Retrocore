@@ -273,7 +273,11 @@ public sealed class Model100FilesTests
         for (int index = 0; index < 19; index++) { files.Write($"F{index}.DO", "X"u8); }
         ((Action)(() => files.Write("LAST.DO", "X"u8))).Should().Throw<InvalidOperationException>().WithMessage("*directory is full*");
 
+        // A removal needs no room, even with RAM full past the stack's margin.
+        BasicProgram.WriteWord(DelegateBasicMemory.Of(ram), 0xF678, Word(ram, 0xFBB6) + 0x10);
         files.Delete("F0.DO");
+        files.List().Select(file => file.Name).Should().NotContain("F0.DO");
+        BasicProgram.WriteWord(DelegateBasicMemory.Of(ram), 0xF678, 0xF3D8);
         files.Write("OPEN.BA", Model100FilesTests.Parse("10 END\n").ToImage());
         BasicProgram.WriteWord(DelegateBasicMemory.Of(ram), 0xF67C, 0x8001);
         ((Action)(() => files.Delete("OPEN.BA"))).Should().Throw<InvalidOperationException>().WithMessage("*open*");

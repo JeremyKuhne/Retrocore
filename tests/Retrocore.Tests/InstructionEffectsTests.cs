@@ -275,8 +275,10 @@ public class InstructionEffectsTests
     [DataRow("copies X=A", "copies X=A X=A X=A X=A X=A", "Line 16: Expected one to four copies.")]
     public void MalformedEffectsFail(string replace, string with, string message)
     {
-        Tiny.Should().Contain(replace);
-        Action parse = () => IsaParser.Parse(Tiny.Replace(replace, with, StringComparison.Ordinal));
+        // In LF, as the rows' text is, so a replacement that spans a line finds it in a checkout with CRLF endings.
+        string tiny = Tiny.ReplaceLineEndings("\n");
+        tiny.Should().Contain(replace);
+        Action parse = () => IsaParser.Parse(tiny.Replace(replace, with, StringComparison.Ordinal));
         parse.Should().Throw<FormatException>().WithMessage(message);
     }
 

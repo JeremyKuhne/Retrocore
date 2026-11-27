@@ -187,6 +187,9 @@ public class Trs80Model2Tests
 
         disk.Sides.Should().Be(1);
         (bus.In(0xE0) & 0x02).Should().Be(0);
+        FloppySector tooLong = new(3, 1, 1, new byte[16384], doubleDensity: true);
+        disk.Invoking(target => target.Add(3, 1, tooLong)).Should().Throw<InvalidDataException>("the sector is longer than a track");
+        disk.Sides.Should().Be(1, "the sector that did not fit left side 1 empty");
         disk.Add(1, 1, new FloppySector(1, 1, 1, new byte[256], doubleDensity: true));
         disk.Sides.Should().Be(2);
         (bus.In(0xE0) & 0x02).Should().Be(0x02);

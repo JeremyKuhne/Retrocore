@@ -5,10 +5,11 @@ known good dump, byte-identical to MAME's dumps, and boot to their prompts. This
 the Model I. Hardware beyond that, such as the RS-232 ports, hard disks and the Model 16's 68000, is out of its
 scope; the page's [What is not done yet](../Trs80Model3And2.md#what-is-not-done-yet) lists it.
 
-**Status:** every stage is built; what each still lacks is listed with it: TRSDOS on the Model II, which stops at
-`BOOT ERROR DM 23`, with its DMA and keyboard codes; LS-DOS 6.3.1 on the Model II, whose screen stays blank; the
-Model II's oracle with both, once they boot; Teledisk images, for TRSDOS-II 4.2; the Model II's keyboard codes
-against its keyboard's ROM; MAME's `cpu_fc86` Model II boot ROM, which needs a good dump; and TRSDOS 1.3 writing.
+**Status:** every stage is built; what each still lacks is listed with it: LS-DOS 6.3.1 on the Model II, whose
+screen is reported to stay blank; the Model II's oracle past TRSDOS's prompt, and with LS-DOS; TRSDOS on the Model II
+writing a file; the PIO's bit-mode interrupt when its condition already holds; Teledisk images, for TRSDOS-II 4.2;
+the Model II's keyboard codes against its keyboard's ROM; MAME's `cpu_fc86` Model II boot ROM, which needs a good
+dump; and TRSDOS 1.3 writing.
 
 ## Stages
 
@@ -33,20 +34,37 @@ against its keyboard's ROM; MAME's `cpu_fc86` Model II boot ROM, which needs a g
      `trs80-disks` as `M2TRSDOS12.imd`, `M2TRSDOS20A.imd`, `M2TRSDOS20B.imd`, `M16TRSDOS42.td0` and
      `M2LSDOS631.dmk`, with the TRSDOS 2.0 set's calculator disk as `M2TDOSCALC.imd`. The
      [DOSes](../Trs80Model3And2.md#doses) table gives each one's source file and SHA-256.
-   - **TRSDOS stops at `BOOT ERROR DM 23`.** TRSDOS 1.2, 2.0a and 2.0b load their boot sector and stop there, on
-     main at `5c7ce12`. MAME 0.264 boots TRSDOS 1.2 and 2.0a from the same images to their logo, so the fault is
-     ours, probably in the DMA or the FD1791's single-density track 0. Then check the DMA and the keyboard codes
-     against TRSDOS. The keyboard codes also need checking against the Model II keyboard's ROM.
+   - **TRSDOS.** Done: TRSDOS 1.2, 2.0a and 2.0b boot, take the date and time and list their directories
+     (`Trs80Model2RomTests.BootsItsDos`), and match MAME 0.264 and 0.289 at their prompt
+     (`Trs80Model3OracleTests.Model2DosMatchesMame`). They had stopped at `BOOT ERROR DM 23`. The boot code the ROM
+     loads first checks the machine (at `$1404`, `DIAG`), and its DMA test copies 80 bytes to video RAM, interrupting at
+     the block's end with vector `$A8` and status affecting it, then looks for the flag set by the routine its table
+     names at `$AC`. Zilog's DMA puts the cause in the vector's bits 1-2, 10 for the end of a block, but ours put 01, a
+     match's, so the interrupt took the table's entry at `$AA`, and the test failed with its code `23`. Still open:
+     - **The PIO's bit-mode interrupt.** In the same checks, ours interrupts as soon as port A's interrupt is enabled
+       with the controller's INTRQ already high, where MAME's waits for INTRQ to rise. TRSDOS's routine does not keep
+       A, so here TRSDOS then writes the controller `$01` (restore) where MAME's writes `$D0`; the check passes
+       either way. Check the Z80 PIO's documentation for which is right.
+     - **Writing.** TRSDOS on the Model II writing a file and its image saved back is untested.
+     - **The keyboard codes** need checking against the Model II keyboard's ROM.
+     - **The oracle past the prompt.** MAME's TRSDOS 1.2, in 0.264 and 0.289 alike, restores the drive and seeks again
+       17 times in its first 30 seconds, where ours seeks once, so it asks for the date about 15 seconds later and is as
+       slow to list its directory; the comparison stops at `TRSDOS READY` (see
+       [Comparing with MAME](../Trs80Model3And2.md#comparing-with-mame)).
    - **LS-DOS 6.3.1's screen stays blank.** At PR #32's head (`a5086f3`) it booted to its welcome screen. On main at
      `5c7ce12`, the screen is still blank after 60 seconds while its code runs from RAM, so something since then
-     broke it: bisect.
+     broke it: bisect. Seen by hand at `ca68b42`, not in a test: stepping `Trs80Model2Machine` with version 5 of
+     the boot ROM and the default configuration, as `Trs80Model2RomTests` does, and the image in drive 0, it shows
+     its welcome screen by 30 seconds and lists its directory, with or without the DMA's fix, so what stays blank is
+     elsewhere, such as a launch's options.
    - **Teledisk.** TRSDOS-II 4.2 is a Teledisk (`.td0`) image, which the media library does not read; see the
      [media backlog](Media.md).
 3. **An oracle.** Done: `Trs80Model3OracleTests` compares video RAM with MAME's `trs80m3`, `trs80m4` and `trs80m2`
    after the same keystrokes. It covers BASIC on the Model III and 4, the five DOSes, from seven images, booting and
-   listing their directories, and versions 1, 2, 3 and 5 of the Model II's boot ROM asking for a diskette (see
-   [Comparing with MAME](../Trs80Model3And2.md#comparing-with-mame)). Still open: the Model II with TRSDOS and LS-DOS,
-   once they boot (see stage 2).
+   listing their directories, versions 1, 2, 3 and 5 of the Model II's boot ROM asking for a diskette, and TRSDOS 1.2,
+   2.0a and 2.0b on the Model II booting and taking the date and time (see
+   [Comparing with MAME](../Trs80Model3And2.md#comparing-with-mame)). Still open: the Model II past TRSDOS's prompt,
+   and with LS-DOS (see stage 2).
 4. **ROM sources.** Done: `Model3.asm` (sharing Level II's BASIC through `Level2.asm`), `Model4PBoot.asm`,
    `Model2Boot.asm` and the character generators, with each build's `Keeps:` contracts checked by its own `MODEL`.
    The Model III's Level I ROM (`8040032`) is `Level1.asm` with `MODEL = 3`, and a Model III launches with it. Still

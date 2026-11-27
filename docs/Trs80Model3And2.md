@@ -9,7 +9,7 @@ Retrocore runs the TRS-80's other Z80 machines beside the [Model I](Trs80ModelI.
 
 The SDK has native sources for every ROM these machines run with a known good dump, byte-identical to the chips
 (see [ROMs](#roms)), so they run with nothing external, or from dumps. The real ROMs boot to their prompts, and the
-Model III, 4 and 4P boot their DOSes from disk images (see [DOSes](#doses)); the Model II has not run one yet. See
+Model III, 4 and 4P and the Model II boot their DOSes from disk images (see [DOSes](#doses)). See
 [What is not done yet](#what-is-not-done-yet). The Model II's keyboard has its own processor and ROM (MAME's
 `65-1991.z4`), which are not run here: the emulated keyboard queues its codes directly, as its documentation
 is remembered to give them rather than as its ROM sends them ([the Model II](#the-model-ii-12-and-16)).
@@ -86,7 +86,7 @@ The Model 4P has no cassette port.
 | CTC | `$F0`-`$F3` | Four counter/timer channels in timer and counter modes. |
 | SIO | `$F4`-`$F7` | Two serial channels with nothing connected. |
 | Hard disk board | `$C0`-`$CF` | Not fitted: the ports read zero, which the boot ROMs that boot from a hard disk take as no board. |
-| DMA | `$F8` | A Z80 DMA, ready on the disk controller's DRQ: memory and I/O ports, byte, continuous and burst modes, end-of-block interrupts and auto restart. |
+| DMA | `$F8` | A Z80 DMA, ready on the disk controller's DRQ: memory and I/O ports, byte, continuous and burst modes, end-of-block interrupts and auto restart. With status affecting the vector, an end-of-block interrupt's vector has bits 1-2 set to 10, as Zilog's DMA gives them. |
 
 The peripherals interrupt in mode 2 through the Z80 daisy chain, from the CTC through the SIO and DMA to the PIO: the
 requesting device puts its vector on the bus, and holds off the devices after it until its routine returns with
@@ -119,8 +119,8 @@ is at 250 kbps, or at 500 kbps, an 8-inch drive's, when a track holds more than 
 
 ## DOSes
 
-These boot from drive 0, take the date and list their directories, on the SDK's ROMs (`Trs80Model3RomTests`'s
-`BootsItsDos`). The images are not in the repository: the test reads them from `trs80-disks` in the external data
+These boot from drive 0, take the date and list their directories, on the SDK's ROMs (`BootsItsDos` in
+`Trs80Model3RomTests`, and for the Model II in `Trs80Model2RomTests`). The images are not in the repository: the test reads them from `trs80-disks` in the external data
 folder (`RETROCORE_CACHE`, or `Retrocore` in the user's profile) and is inconclusive without them. They are from the
 Internet Archive.
 
@@ -136,10 +136,19 @@ Internet Archive.
 
 The item names are the download pages' last path segment, `https://archive.org/details/<item>`.
 
-The Model II's DOSes are not among those items. They are in MAME's `trs80m2` software list, in the Internet Archive
-item `MAME_0.202_Software_List_ROMs_merged`, as `trs80m2.zip` (SHA-256 `813f8840…`). That holds a zip for each
-entry, named below with the file in it. The fixtures keep them under new names. None boots here yet (see the
-[backlog](backlog/Trs80Model3AndModel2.md#stages), stage 2).
+The Model II's DOSes are not among those items. They are in MAME's `trs80m2` software list, in the Internet Archive item
+`MAME_0.202_Software_List_ROMs_merged`, as `trs80m2.zip` (SHA-256 `813f8840…`). That holds a zip for each entry, named
+below with the file in it. The fixtures keep them under new names. TRSDOS 1.2, 2.0a and 2.0b boot, take the date and
+time and list their directories (`Trs80Model2RomTests.BootsItsDos`), and match MAME at their prompt in MAME 0.264 and
+0.289 (`Trs80Model3OracleTests.Model2DosMatchesMame`). LS-DOS 6.3.1 is not tested; its screen is reported to stay blank
+(see the [backlog](backlog/Trs80Model3AndModel2.md#stages), stage 2). TRSDOS-II 4.2 is a Teledisk image, which the media
+library does not read.
+
+TRSDOS's boot code checks the machine before it loads the DOS. One check copies 80 bytes to video RAM with the DMA,
+interrupting at the block's end with status affecting the vector, and waits for the routine at that vector; a vector
+naming another cause shows `BOOT ERROR DM 23`. In TRSDOS 1.2's boot code, as loaded at `$1400`, `DM` names the DMA
+test (the codes are at `$171B`: `LM`, `HM`, `DM`, `PI`) and `23` is the code it returns at `$15C5` when the routine's
+flag is not set.
 
 | Machine | DOS | File | In `trs80m2.zip` | SHA-256 |
 | --- | --- | --- | --- | --- |
@@ -259,8 +268,9 @@ has Level I's, as [above](#level-i).
 | `Trs80Model3Tests` | The Model III's map, clock interrupt and its mask, keyboard and NMI; the clock's 30 and 60 Hz; typed letters' keys, with shift for uppercase, and on Level I without shift; the Model 4's maps, paging, speed and 80x24; the 4P's boot ROM; the FD1793 with wait and NMI, INTRQ ending the wait; the cassette motor. |
 | `Trs80RomSourceTests` | Each source builds to its ROM's SHA-256, and with the dumps, byte for byte. |
 | `Trs80Model3RomTests` | The real ROMs, built from source: the Model III and Model 4 boot through `Cass?` and `Memory Size?` to BASIC and run a statement; the 4P, with no disk, says the drive is not ready; versions 1, 2, 3 and 5 of the Model II's boot ROM ask for a diskette; the Model 4 ROM's clock counting the interrupts at 2 and 4 MHz; the Model 4's function keys' codes, with and without shift; `CSAVE` and `CLOAD` at 1500 and 500 baud, a hand-written 1500 baud CAS image loading; Level I booting to `READY`, taking a statement typed in lowercase, and saving and loading at 250 baud; and, with the [DOS images](#doses), each DOS booting to its prompt and listing its directory, and the Model 4's DOSes showing typed text in the case it was typed. |
-| `Trs80Model2Tests` | Banked RAM; the CTC's mode 2 keyboard interrupt with `RETI`, and an NMI's ignored fetch reading as `RETI`; the clock NMI; the 6845; the DMA reading a sector; IMD and DMK images. |
-| `Trs80Model3OracleTests` | Against MAME 0.289, video RAM cell for cell after the same keystrokes on the same ROMs: Model III and Model 4 BASIC running a program; the Model 4's function keys and its clock's count at 2 MHz; with the [DOS images](#doses), TRSDOS 1.3 and 6.0 from their DMK and IMD images, LDOS 5.1.3, TRSDOS 6.2 and LS-DOS 6.3 booting, taking the date and listing their directories; and the Model II's boot ROMs, versions 1, 2, 3 and 5, asking for a diskette. See [Comparing with MAME](#comparing-with-mame). |
+| `Trs80Model2Tests` | Banked RAM; the CTC's mode 2 keyboard interrupt with `RETI`, and an NMI's ignored fetch reading as `RETI`; the clock NMI; the 6845; the DMA reading a sector, and its end-of-block vector with and without status affecting it; the PIO showing a two-sided disk; IMD and DMK images. |
+| `Trs80Model2RomTests` | The boot ROM, built from source, booting TRSDOS 1.2, 2.0a and 2.0b from the [DOS images](#doses), taking the date and time and listing their directories. |
+| `Trs80Model3OracleTests` | Against MAME 0.289, video RAM cell for cell after the same keystrokes on the same ROMs: Model III and Model 4 BASIC running a program; the Model 4's function keys and its clock's count at 2 MHz; with the [DOS images](#doses), TRSDOS 1.3 and 6.0 from their DMK and IMD images, LDOS 5.1.3, TRSDOS 6.2 and LS-DOS 6.3 booting, taking the date and listing their directories; the Model II's boot ROMs, versions 1, 2, 3 and 5, asking for a diskette; and TRSDOS 1.2, 2.0a and 2.0b on the Model II booting and taking the date and time. See [Comparing with MAME](#comparing-with-mame). |
 | [`tools/Test-Trs80Model3Dap.mjs`](../tools/Test-Trs80Model3Dap.mjs) | Each machine launching from stand-in dumps it writes, and the Model III and II from the SDK's sources, with source in the stack trace; the missing-dump error, threads, hardware rows, and the Model II's reset stop. |
 
 ## Comparing with MAME
@@ -310,14 +320,18 @@ What the comparison has to allow for:
   another BIOS, changes the run.
 - **The Model II's boot ROM** is chosen by MAME's BIOS name: `c8ff`, `2bff`, `2119` and `9733` for versions 1, 2, 3
   and 5.
+- **The Model II's TRSDOS in MAME**, 0.264 and 0.289 alike, asks for the date after about 30 seconds, where it asks here
+  after about 16. In its first 30 seconds MAME's TRSDOS 1.2 restores the drive in single density and seeks again 17
+  times, where here it does once; until then the two give the controller the same commands at nearly the same times. So
+  the keys wait for MAME, and as TRSDOS 1.2 in MAME is as slow to list its directory, whose heading shows the time, the
+  comparison stops at `TRSDOS READY`.
 
 ## What is not done yet
 
-- **The Model II's DOSes.** TRSDOS 1.2, 2.0a and 2.0b stop at `BOOT ERROR DM 23`, LS-DOS 6.3.1 leaves the screen
-  blank, and TRSDOS-II 4.2 is a Teledisk image, which the media library does not read (see the
-  [backlog](backlog/Trs80Model3AndModel2.md#stages), stage 2). Until they boot, the Model II's comparison with MAME
-  covers only the boot ROMs, and its DMA and keyboard codes are untested by real software; the keyboard codes also
-  need checking against its keyboard's ROM ([the Model II](#the-model-ii-12-and-16)).
+- **The Model II's DOSes.** LS-DOS 6.3.1's screen is reported to stay blank, and TRSDOS-II 4.2 is a Teledisk image,
+  which the media library does not read (see the [backlog](backlog/Trs80Model3AndModel2.md#stages), stage 2). The
+  comparison with MAME covers TRSDOS up to its prompt, not its directory; TRSDOS writing a file is untested; and the
+  keyboard codes need checking against its keyboard's ROM ([the Model II](#the-model-ii-12-and-16)).
 - **The Model II's boot ROM version 4**, MAME's `cpu_fc86` of 1982-11-18, which MAME lists with no good dump known,
   so `Model2Boot.asm` has no source for it.
 - **The RS-232 ports**, the Model 4's sound beyond the speaker bit, its hi-res graphics board and hard disks, and the

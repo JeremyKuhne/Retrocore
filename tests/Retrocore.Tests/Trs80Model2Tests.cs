@@ -172,6 +172,40 @@ public class Trs80Model2Tests
     }
 
     /// <summary>
+    ///  A block's end interrupts with the vector the program gave, and when status affects the vector, with bits 1-2
+    ///  set to 10, the end of a block, as Zilog's DMA gives them. TRSDOS's DMA test copies memory to video RAM and
+    ///  waits for the handler at that vector's entry; with 01, a match's, it stopped at <c>BOOT ERROR DM 23</c>.
+    /// </summary>
+    /// <param name="interruptControl">
+    ///  The interrupt control byte: the end of a block and a vector, with or without status affecting it.
+    /// </param>
+    /// <param name="expected">The vector the DMA gives.</param>
+    [TestMethod]
+    [DataRow((byte)0x32, (byte)0xAC)]
+    [DataRow((byte)0x12, (byte)0xA8)]
+    public void DmaEndOfBlockVector(byte interruptControl, byte expected)
+    {
+        Trs80Model2Bus bus = Create(new()).Bus;
+        for (int index = 0; index < 0x50; index++) { bus.Write((ushort)(0x2100 + index), (byte)(index + 1)); }
+
+        // As TRSDOS's test: A (memory at $2100, counting up) to B (memory at $3000, counting up), $4F, continuous,
+        // forced ready, interrupting at the block's end with vector $A8.
+        foreach (byte value in (byte[])[
+            0xC3, 0x7D, 0x00, 0x21, 0x4F, 0x00, 0x14, 0x10, 0xBD, 0x00, 0x30, interruptControl, 0xA8, 0x92, 0xCF, 0xB3,
+            0xAB, 0x87])
+        {
+            bus.Out(0xF8, value);
+        }
+
+        for (int cycle = 0; cycle < 10_000 && bus.Dma.Enabled; cycle++) { bus.Tick(); }
+
+        bus.Dma.Enabled.Should().BeFalse("the block ended");
+        bus.Read(0x3000).Should().Be(1);
+        bus.Read(0x304F).Should().Be(0x50, "a block moves one byte more than its length");
+        bus.Dma.PendingVector.Should().Be(expected);
+    }
+
+    /// <summary>
     ///  The PIO's port A shows, in bit 1, that the selected drive's disk has sectors on side 1, following the sectors
     ///  an image adds and formatting replaces.
     /// </summary>

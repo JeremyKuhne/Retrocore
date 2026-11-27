@@ -1071,7 +1071,7 @@ supply: `rom` names its file, or it is found in `romDirectory` (or `RETROCORE_TR
 - `time`: the clock's start, the host's time by default;
 - `files`: host files to put in RAM's directory, so the menu lists them: `.ba`, `.do` and `.co` files, BASIC text
   as `.bas` and text as `.txt`;
-- `cassette`: a `.wav` tape, which plays when the ROM runs the motor (`CLOAD`); Record in the Drives view writes one;
+- `cassette`: a `.wav` tape, which plays when the ROM runs the motor (`CLOAD`); Record in Retro Devices makes one;
 - `fastCassette`: run as fast as possible while the motor moves a tape, true by default;
 - `sound`: `speaker` (the buzzer) or `off`.
 

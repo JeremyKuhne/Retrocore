@@ -286,7 +286,8 @@ Covington's names kept as historical names. Covington's map is a second set of n
 - Boot and keystroke tests against MAME's `trsm100`: the menu's text, bytes free, a BASIC program's output, the
   clock's display. Inconclusive, not passing, without the ROM in the external fixture root.
 - The ROM's SDK source pinned by digest: CRC32 `730a3611`, SHA-1 `094dbc4a…bb25d` for the US Model 100.
-- The 8085's interrupt timing exercised by the real key scan; the cassette's bit timing against MAME's WAV output.
+- The 8085's interrupt timing exercised by the real key scan; the cassette against MAME's WAV output (checked by hand
+  in phase 3: each machine's `CLOAD` read the other's `CSAVE`).
 - The DAP script.
 
 Every download (the ROM, option ROMs, software, manuals, MAME's and VirtualT's sources, disassemblies) is approved
@@ -407,8 +408,8 @@ and from a `CSAVE` MAME 0.264 recorded to WAV. No new downloads.
   `i8155_pb_w` and `i8155_to_w`). `BEEP` sounds.
 - **The debugger.** The `cassette`, `fastCassette` and `sound` launch options; the cassette in Retro Devices (Insert,
   Record and Eject), saved through a file beside the recording when it comes out or the session ends; the Machine
-  view's Cassette and Sound rows; the display panel's sound. A recording goes to the file Record names, replacing it as the Apple-1's
-  does; one that holds nothing writes nothing.
+  view's Cassette and Sound rows; the display panel's sound. A recording goes to the file Record names, replacing it; one that holds
+  nothing writes nothing.
 - **Not yet.** A byte-level tape format (no common one for the Model 100 was found), and the cassette's tape in the
   recovery journal.
 

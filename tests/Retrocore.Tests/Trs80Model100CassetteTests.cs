@@ -33,6 +33,13 @@ public sealed class Trs80Model100CassetteTests
         }
 
         ((Action)(() => Trs80Model100Tape.FromWave("not a wave"u8))).Should().Throw<InvalidDataException>();
+
+        // The same samples as WAVE_FORMAT_EXTENSIBLE with the PCM subformat, and a file that starts silent.
+        Trs80Model100Tape extensible = Trs80Model100Tape.FromWave(Extensible(tape.ToWave()));
+        extensible.HalfCycles.Should().Equal(read.HalfCycles);
+        byte[] silent = new Trs80Model100Tape(startsHigh: true, [5000]).ToWave();
+        silent.AsSpan(44).Clear();
+        Trs80Model100Tape.FromWave(silent).StartsHigh.Should().BeFalse("silence starts low");
     }
 
     /// <summary>
@@ -62,8 +69,10 @@ public sealed class Trs80Model100CassetteTests
         Toggle(cassette, motor: true, [30, 5], ref level);
         Toggle(cassette, motor: false, [100], ref level);
         Toggle(cassette, motor: true, [7], ref level);
-        // SOD changed while the motor was stopped, so the tape takes that change as it moves again, then the next.
+        // SOD changed while the motor was stopped, so the tape takes that change as it moves again, a half of one
+        // cycle, then the next.
         recording.HalfCycles.Should().Equal(30, 5, 1, 6);
+        cassette.SerialInput.Should().Be(!level, "while recording, SID reads SOD back inverted");
         recording.StartsHigh.Should().BeFalse();
     }
 
@@ -103,6 +112,16 @@ public sealed class Trs80Model100CassetteTests
         changes.Should().BeGreaterThan(100, "the timer toggles the buzzer");
         sink.Peak.Should().BeGreaterThan(0.1f);
         machine.Devices.Should().ContainSingle().Which.Should().BeSameAs(bus.CassetteDrive);
+
+        // The motor stops with the power.
+        bus.CassetteDrive.Record(new Trs80Model100Tape(), "tape.wav");
+        bus.Out(0xE0, 0x08);
+        machine.StepCycle();
+        bus.CassetteDrive.Transport.Motor.Should().BeTrue();
+        bus.Out(0xB2, 0x10);
+        machine.StepCycle();
+        machine.IsPoweredOff.Should().BeTrue();
+        bus.CassetteDrive.Transport.Motor.Should().BeFalse("the power is off");
     }
 
     /// <summary>
@@ -158,6 +177,24 @@ public sealed class Trs80Model100CassetteTests
         machine.RunSeconds(1);
         machine.Bus.Audio.Flush();
         sink.Peak.Should().BeGreaterThan(0.1f);
+    }
+
+    // A 16-bit mono WAV file rewritten with a WAVE_FORMAT_EXTENSIBLE fmt chunk of 40 bytes, its subformat PCM.
+    private static byte[] Extensible(byte[] wave)
+    {
+        byte[] data = wave[36..];
+        byte[] file = new byte[12 + 8 + 40 + data.Length];
+        wave.AsSpan(0, 12).CopyTo(file);
+        System.Buffers.Binary.BinaryPrimitives.WriteInt32LittleEndian(file.AsSpan(4), file.Length - 8);
+        "fmt "u8.CopyTo(file.AsSpan(12));
+        System.Buffers.Binary.BinaryPrimitives.WriteInt32LittleEndian(file.AsSpan(16), 40);
+        wave.AsSpan(20, 16).CopyTo(file.AsSpan(20));
+        System.Buffers.Binary.BinaryPrimitives.WriteUInt16LittleEndian(file.AsSpan(20), 0xFFFE);
+        System.Buffers.Binary.BinaryPrimitives.WriteUInt16LittleEndian(file.AsSpan(36), 22);
+        System.Buffers.Binary.BinaryPrimitives.WriteUInt16LittleEndian(file.AsSpan(38), 16);
+        System.Buffers.Binary.BinaryPrimitives.WriteUInt16LittleEndian(file.AsSpan(44), 1);
+        data.CopyTo(file.AsSpan(60));
+        return file;
     }
 
     // Changes SOD after each count of cycles, keeping its level from one call to the next.

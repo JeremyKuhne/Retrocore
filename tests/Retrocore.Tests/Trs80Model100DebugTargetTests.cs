@@ -226,9 +226,9 @@ public sealed class Trs80Model100DebugTargetTests
     }
 
     /// <summary>
-    ///  A recording whose file cannot be written stays in the recorder when it is ejected, with nothing left beside
-    ///  it, and comes out once its path can be written; a tape that is not a WAV file is refused, leaving the
-    ///  recording in.
+    ///  A recording that holds nothing writes nothing when it comes out; one whose file cannot be written stays in the
+    ///  recorder when it is ejected, with nothing left beside it, and comes out once its path can be written; a tape
+    ///  that is not a WAV file is refused, leaving the recording in.
     /// </summary>
     [TestMethod]
     public void FailedRecordingsStayIn()
@@ -305,6 +305,13 @@ public sealed class Trs80Model100DebugTargetTests
             Exception thrown = save.Should().Throw<Exception>().Which;
             (thrown is IOException or UnauthorizedAccessException).Should().BeTrue(thrown.ToString());
             File.Exists(image).Should().BeTrue("the RAM image is saved all the same");
+
+            // When neither can be written, both are named.
+            File.Delete(image);
+            Directory.CreateDirectory(image);
+            Exception both = save.Should().Throw<IOException>().Which;
+            both.Message.Should().StartWith("Neither the recording nor the RAM image was saved");
+            Directory.Delete(image);
             Directory.Delete(wave);
         }
         finally

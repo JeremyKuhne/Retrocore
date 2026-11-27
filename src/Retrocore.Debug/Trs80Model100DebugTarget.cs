@@ -7,6 +7,7 @@ using Retrocore.Isa;
 using Retrocore.Machines.Devices;
 using Retrocore.Basic;
 using Retrocore.Machines.Trs80Model100;
+using System.Runtime.ExceptionServices;
 using System.Text.Json.Nodes;
 
 namespace Retrocore.Debug;
@@ -371,12 +372,12 @@ internal sealed partial class Trs80Model100DebugTarget : IDebugTarget, IRecordin
         {
             SaveRamImage();
         }
-        catch (Exception exception) when (failure is not null && exception is IOException or UnauthorizedAccessException)
+        catch (Exception exception) when (failure is not null && (exception is IOException or UnauthorizedAccessException))
         {
             throw new IOException($"Neither the recording nor the RAM image was saved: {failure.Message} {exception.Message}", exception);
         }
 
-        if (failure is not null) { System.Runtime.ExceptionServices.ExceptionDispatchInfo.Throw(failure); }
+        if (failure is not null) { ExceptionDispatchInfo.Throw(failure); }
     }
 
     private void SaveRamImage()

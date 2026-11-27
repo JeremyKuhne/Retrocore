@@ -17,6 +17,11 @@ namespace Retrocore.Machines.Trs80Model100;
 ///   inverted, as MAME's driver has it: low while the tape's level is high, high with no tape, and while recording
 ///   the inverse of SOD, which MAME's recorder gives back as its input.
 ///  </para>
+///  <para>
+///   A change of SOD while the motor is stopped goes on the tape as it moves again. One made in the cycle the motor
+///   stops leaves a half of one cycle, shorter than a WAV file's sample, which a saved file merges into the halves
+///   beside it; <c>CSAVE</c> runs the motor before it writes and stops it after, so its tapes have none.
+///  </para>
 /// </remarks>
 public sealed class Trs80Model100Cassette
 {
@@ -89,7 +94,9 @@ public sealed class Trs80Model100Cassette
         Mode = TapeMode.Recording;
         _sinceChange = 0;
         tape.Start(_output);
-        _recorded = _output;
+
+        // The level the tape ends at: it alternates from its start.
+        _recorded = tape.StartsHigh ^ ((tape.HalfCycles.Count & 1) != 0);
     }
 
     /// <summary>

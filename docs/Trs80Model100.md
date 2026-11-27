@@ -156,8 +156,8 @@ level inverted, as MAME's driver has it, and is high with no tape playing.
   It plays from its start once the ROM runs the motor, as `CLOAD` does.
 - **Recording:** **Record** in Retro Devices names the WAV file to write. The tape takes SOD's changes while the motor
   runs, as `CSAVE` runs it, and is written to the file, through a file beside it, when it comes out: on
-  **Eject**, on **Insert** of another tape, or when the session ends, replacing what is at that path, as the Apple-1's
-  recordings do. A recording that holds nothing writes nothing.
+  **Eject**, on **Insert** of another tape, or when the session ends, replacing what is at that path; a recording that
+  holds nothing writes nothing.
 
 Checked by hand against MAME 0.264 (2026-11-27): `CLOAD` read MAME's recording of a `CSAVE`, and MAME's `CLOAD`
 read Retrocore's. The tests check Retrocore's own `CSAVE` and `CLOAD` against each other, and the recording's blocks

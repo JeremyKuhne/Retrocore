@@ -304,10 +304,11 @@ internal sealed partial class Trs80DebugTarget : IDebugTarget
         string roms = SdkDirectory(directory);
         if (_machine.Configuration.Rom == Trs80Rom.Level1)
         {
+            // The source and the BASIC thread are the SDK build's, so a dump of another Level I gets neither.
             string level1 = Path.Join(roms, "Level1.asm");
-            if (File.Exists(level1))
+            if (File.Exists(level1)
+                && Trs80SdkModules.Matching(SystemRomImage, [() => Trs80SdkModules.AssembleLevel1(level1)]) is { } result)
             {
-                AssemblyResult result = Trs80SdkModules.AssembleLevel1(level1);
                 debug.Add(new SourceMapModule(result, Trs80MemoryArea.Rom));
                 _level1 = Trs80Level1Basic.From(result.Symbols, this, () => _machine.Processor.Registers, SetRegisters, _calls.Reset);
             }
@@ -328,6 +329,11 @@ internal sealed partial class Trs80DebugTarget : IDebugTarget
                 [("CONSTP", "CONSTP"), ("PRGEND", "PRGEND")]);
         }
     }
+
+    /// <summary>
+    ///  Gets the system ROM the machine was launched with: Level II's 12K or Level I's 4K.
+    /// </summary>
+    internal byte[] SystemRomImage { get; init; } = [];
 
     /// <inheritdoc/>
     public BasicDialect? Basic => _machine.Configuration.Rom == Trs80Rom.Level2 ? BasicDialect.Level2 : BasicDialect.Level1;

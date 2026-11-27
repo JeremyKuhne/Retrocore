@@ -228,8 +228,9 @@ Level II expressions. A `basic` launch takes a `.level2.bas` file (or one with `
 `REM retrocore level2`), with optional labels in place of line numbers. **Retrocore: Open BASIC Program** edits the
 program in memory, and imports and exports `.cas` tapes, listings and tokenized files.
 
-**Level I BASIC** has the BASIC thread too, from `Level1.asm`'s symbols: **BASIC program start** stops where RUN
-starts and CONT resumes, line breakpoints and steps go by statement (Level I's colons, and abbreviations such as `P.`
+**Level I BASIC** has the BASIC thread too, from `Level1.asm`'s symbols, when the ROM is the SDK's build or a dump
+of the same bytes; a `level1.rom` that differs gets neither the source nor the thread. **BASIC program start** stops
+where RUN starts and CONT resumes, line breakpoints and steps go by statement (Level I's colons, and abbreviations such as `P.`
 for PRINT, read as `EXEC` reads them), GOSUBs are in the call stack, and the Variables view shows A to Z, A$ and B$,
 the array A(n) counting down from the top of memory, and the FOR loops. Level I keeps no tokens: a line is its number
 and its text as typed, from `$4200` to `TXTUNF`, so a `.level1.bas` file (or one with `REM retrocore level1`) reads
@@ -266,7 +267,7 @@ with `stopOnEntry`. A Level II file is refused, as Level I cannot load it.
 | `Trs80TapeContentsTests` | Which BASIC a tape is for, from Level II's and Level I's own recordings, the cassette's warning for the other Level's tapes, and Level I's `PRINT MEM` in 4K and 16K. |
 | `Trs80OracleTests` (Conformance) | The same keystrokes on our machine and on MAME, through [`tools/Trs80Oracle.lua`](../tools/Trs80Oracle.lua). The screens must match, and so must the BASIC program bytes; each keystroke must fire within 0.025 s, a frame and a margin, after its time, fractional seconds included. |
 | `Trs80RomSourceTests` | The ROM sources, by digest and against the dumps. |
-| [`tools/Test-Trs80Dap.mjs`](../tools/Test-Trs80Dap.mjs) | The debugger end to end: boot, a ROM-source breakpoint with the call stack, a cassette round trip, stepping from a program into the ROM source, a NEWDOS/80 boot, the warning for a tape of the other Level, in a launch and from a saved machine, and Level I's BASIC thread: RUN's start, steps, a line breakpoint in a GOSUB, its variables, STOP and a Level I tape round trip. |
+| [`tools/Test-Trs80Dap.mjs`](../tools/Test-Trs80Dap.mjs) | The debugger end to end: boot, a ROM-source breakpoint with the call stack, a cassette round trip, stepping from a program into the ROM source, a NEWDOS/80 boot, the warning for a tape of the other Level, in a launch and from a saved machine, and Level I's BASIC thread: RUN's start, steps, a line breakpoint in a GOSUB, its variables, STOP, a Level I tape round trip, and no BASIC thread for a `level1.rom` that is not the SDK's build. |
 
 Tests that need dumps, MAME or a DOS image are inconclusive without them. The DAP script needs none, since its
 ROMs come from the SDK sources.

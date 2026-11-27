@@ -82,6 +82,7 @@ public sealed partial class BasicRenameGateTests
 
         // Assemble only byte images, Microsoft's base or resolver paths, and look no BASIC name up.
         ["Apple2SourceTests.cs"] = "looks no name up",
+        ["ContractAnalysisSdkTests.cs"] = "looks no name up",
         ["LanguageAnalysisTests.cs"] = "looks no name up",
         ["OverlayBaseResolverTests.cs"] = "looks no name up",
         ["SystemMasterBasicTests.cs"] = "looks no name up",

@@ -403,7 +403,7 @@ OSFILE_NOT_FOUND_RETURN:
 ;;
 ;; Reading the name and the catalogue uses FS_SCRATCH, so it then points FS_SCRATCH at the control block again.
 ;; In: FS_SCRATCH = the control block, FS_SCRATCH+10 = the address of the file name
-;; Out: carry = set when found, X, Y = the file's catalogue offset
+;; Out: X, Y = the file's catalogue offset, carry = set when found
 ;; Uses: A
 OSFILE_SEARCH:
     jsr READ_BLOCK_NAME                       ; read the file name

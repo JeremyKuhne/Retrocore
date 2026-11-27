@@ -39,9 +39,157 @@ flow return RTS RTI
 flow wait SYNC CWAI
 flow stop XHCF
 
-# How an instruction accesses a memory operand; the rest read it.
+# How an instruction accesses a memory operand; the rest read it. LEA works out its address only.
+access address LEAX LEAY LEAS LEAU
 access write STA STB STD STX STY STU STS CLR
 access read-write NEG COM LSR ROR ASR ASL ROL DEC INC XNC XDEC
+access write XSTS XSTU XSTX XSTY
+
+# Register and flag effects, for analysis, in the 6502 description's form (see OpcodeTables.txt). A postbyte's
+# registers come from M6809PostbyteCodec for each decoded postbyte: $1 is a stack list's registers or TFR's and
+# EXG's first register, $2 the second, and 'push $1' and 'pull $1' move the list's bytes. An indexed postbyte's
+# index register, accumulator offset and auto-increment add to every indexed instruction. PC is left to the flow
+# lines, but where a postbyte names it (PULS PC, TFR X,PC, a PCR offset); the state the registers line does not
+# list, NMI's arming and the flags an unprefixed store immediate takes from the instruction before it, is left
+# out, and those flags are flag=?; after a prefix they are constants, so XSTY and XSTS, which exist only with
+# one, set them, and the prefixed forms of the others leave them flag=? too.
+# A branch's 'taken' condition joins flag tests with & and then |, and compares flags with = and !=, as BGT's
+# zero=0&negative=overflow.
+parts D=A,B
+stack S
+effects :Direct                 reads DP
+effects ADDA                    reads A                 writes A half-carry negative zero overflow carry
+effects ADDB                    reads B                 writes B half-carry negative zero overflow carry
+effects ADCA                    reads A carry           writes A half-carry negative zero overflow carry
+effects ADCB                    reads B carry           writes B half-carry negative zero overflow carry
+effects SUBA                    reads A                 writes A negative zero overflow carry
+effects SUBB                    reads B                 writes B negative zero overflow carry
+effects CMPA                    reads A                 writes negative zero overflow carry
+effects CMPB                    reads B                 writes negative zero overflow carry
+effects SBCA                    reads A carry           writes A negative zero overflow carry
+effects SBCB                    reads B carry           writes B negative zero overflow carry
+effects ANDA EORA ORA           reads A                 writes A negative zero overflow=0
+effects ANDB EORB ORB           reads B                 writes B negative zero overflow=0
+effects BITA STA                reads A                 writes negative zero overflow=0
+effects BITB STB                reads B                 writes negative zero overflow=0
+effects LDA                                             writes A negative zero overflow=0
+effects LDB                                             writes B negative zero overflow=0
+effects ADDD                    reads D                 writes D negative zero overflow carry
+effects SUBD                    reads D                 writes D negative zero overflow carry
+effects CMPD                    reads D                 writes negative zero overflow carry
+effects CMPX                    reads X                 writes negative zero overflow carry
+effects CMPY                    reads Y                 writes negative zero overflow carry
+effects CMPU                    reads U                 writes negative zero overflow carry
+effects CMPS                    reads S                 writes negative zero overflow carry
+# XADDD and XADDU set the flags as ADDD does without writing the register.
+effects XADDD                   reads D                 writes negative zero overflow carry
+effects XADDU                   reads U                 writes negative zero overflow carry
+effects LDD                                             writes D negative zero overflow=0
+effects LDX                                             writes X negative zero overflow=0
+effects LDY                                             writes Y negative zero overflow=0
+effects LDU                                             writes U negative zero overflow=0
+effects LDS                                             writes S negative zero overflow=0
+effects STD                     reads D                 writes negative zero overflow=0
+effects STX                     reads X                 writes negative zero overflow=0
+effects STY                     reads Y                 writes negative zero overflow=0
+effects STU                     reads U                 writes negative zero overflow=0
+effects STS                     reads S                 writes negative zero overflow=0
+effects XSTA                                            writes negative=? zero=? overflow=?
+effects XSTB                                            writes negative=? zero=? overflow=?
+effects XSTX                    reads X                 writes negative=? zero=? overflow=?
+effects XSTY                    reads Y                 writes negative=1 zero=0 overflow=0
+effects XSTU                    reads U                 writes negative=? zero=? overflow=?
+effects XSTS                    reads S                 writes negative=1 zero=0 overflow=0
+effects NEG XDEC                                        writes negative zero overflow carry
+effects XNC                     reads carry             writes negative zero overflow carry
+effects COM                                             writes negative zero overflow=0 carry=1
+effects LSR                                             writes negative=0 zero carry
+effects ASR                                             writes negative zero carry
+effects ROR                     reads carry             writes negative zero carry
+effects ASL                                             writes negative zero overflow carry
+effects ROL                     reads carry             writes negative zero overflow carry
+effects DEC INC                                         writes negative zero overflow
+effects TST                                             writes negative zero overflow=0
+effects CLR                                             writes negative=0 zero=1 overflow=0 carry=0
+effects NEGA XDECA              reads A                 writes A negative zero overflow carry
+effects NEGB XDECB              reads B                 writes B negative zero overflow carry
+effects XNCA                    reads A carry           writes A negative zero overflow carry
+effects XNCB                    reads B carry           writes B negative zero overflow carry
+effects COMA                    reads A                 writes A negative zero overflow=0 carry=1
+effects COMB                    reads B                 writes B negative zero overflow=0 carry=1
+effects LSRA                    reads A                 writes A negative=0 zero carry
+effects LSRB                    reads B                 writes B negative=0 zero carry
+effects ASRA                    reads A                 writes A negative zero carry
+effects ASRB                    reads B                 writes B negative zero carry
+effects RORA                    reads A carry           writes A negative zero carry
+effects RORB                    reads B carry           writes B negative zero carry
+effects ASLA                    reads A                 writes A negative zero overflow carry
+effects ASLB                    reads B                 writes B negative zero overflow carry
+effects ROLA                    reads A carry           writes A negative zero overflow carry
+effects ROLB                    reads B carry           writes B negative zero overflow carry
+effects DECA INCA               reads A                 writes A negative zero overflow
+effects DECB INCB               reads B                 writes B negative zero overflow
+effects TSTA                    reads A                 writes negative zero overflow=0
+effects TSTB                    reads B                 writes negative zero overflow=0
+effects CLRA                                            writes A negative=0 zero=1 overflow=0 carry=0
+effects CLRB                                            writes B negative=0 zero=1 overflow=0 carry=0
+effects XCLRA                                           writes A negative=0 zero=1 overflow=0
+effects XCLRB                                           writes B negative=0 zero=1 overflow=0
+effects ABX                     reads B X               writes X
+effects MUL                     reads A B               writes D zero carry
+effects SEX                     reads B                 writes A negative zero
+effects DAA                     reads A half-carry carry        writes A negative zero overflow carry
+effects ANDCC ORCC XANDCC       reads CC                writes CC
+# X18 shifts each flag up from the one below, so the old E is lost.
+effects X18 reads fast-interrupt half-carry interrupt negative zero overflow carry writes CC carry=0
+effects LEAX                                            writes X zero
+effects LEAY                                            writes Y zero
+effects LEAS                                            writes S
+effects LEAU                                            writes U
+effects TFR                     reads $1                writes $2               copies $2=$1
+effects EXG                     reads $1 $2             writes $1 $2            copies $1=$2 $2=$1
+effects PSHS                    reads $1 S              writes S                        push $1
+effects PULS                    reads S                 writes $1 S                     pull $1
+effects PSHU                    reads $1 U              writes U                        push U $1
+effects PULU                    reads U                 writes $1 U                     pull U $1
+effects BCC                      reads carry             taken carry=0
+effects BCS                      reads carry             taken carry=1
+effects BEQ                      reads zero              taken zero=1
+effects BNE                      reads zero              taken zero=0
+effects BMI                      reads negative          taken negative=1
+effects BPL                      reads negative          taken negative=0
+effects BVC                      reads overflow          taken overflow=0
+effects BVS                      reads overflow          taken overflow=1
+effects BHI                      reads carry zero        taken carry=0&zero=0
+effects BLS                      reads carry zero        taken carry=1|zero=1
+effects BGE                      reads negative overflow taken negative=overflow
+effects BLT                      reads negative overflow taken negative!=overflow
+effects BGT                      reads negative overflow zero taken zero=0&negative=overflow
+effects BLE                      reads negative overflow zero taken zero=1|negative!=overflow
+effects LBCC                     reads carry             taken carry=0
+effects LBCS                     reads carry             taken carry=1
+effects LBEQ                     reads zero              taken zero=1
+effects LBNE                     reads zero              taken zero=0
+effects LBMI                     reads negative          taken negative=1
+effects LBPL                     reads negative          taken negative=0
+effects LBVC                     reads overflow          taken overflow=0
+effects LBVS                     reads overflow          taken overflow=1
+effects LBHI                     reads carry zero        taken carry=0&zero=0
+effects LBLS                     reads carry zero        taken carry=1|zero=1
+effects LBGE                     reads negative overflow taken negative=overflow
+effects LBLT                     reads negative overflow taken negative!=overflow
+effects LBGT                     reads negative overflow zero taken zero=0&negative=overflow
+effects LBLE                     reads negative overflow zero taken zero=1|negative!=overflow
+effects BRA BRN LBRA LBRN JMP NOP SYNC XHCF none
+effects BSR LBSR JSR            reads S                 writes S                        push 2
+effects RTS                     reads S                 writes S                        pull 2
+effects RTI                     reads S                 writes CC S     may-write A B DP X Y U  pull 3  may-pull 9
+# SWI, SWI2, SWI3 and CWAI set E before they stack CC, so the old E is never read; XRES, XSWI2 and XFIRQ
+# stack it as it was.
+effects SWI reads fast-interrupt half-carry interrupt negative zero overflow carry A B DP X Y U S writes S entire=1 fast-interrupt=1 interrupt=1 push 12
+effects SWI2 SWI3 reads fast-interrupt half-carry interrupt negative zero overflow carry A B DP X Y U S writes S entire=1 push 12
+effects CWAI reads fast-interrupt half-carry interrupt negative zero overflow carry A B DP X Y U S writes CC S entire=1 push 12
+effects XRES XSWI2 XFIRQ        reads CC A B DP X Y U S writes S                                push 12
 
 [forms]
 Implied                         ""

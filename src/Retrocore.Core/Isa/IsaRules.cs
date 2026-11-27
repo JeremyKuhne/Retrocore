@@ -31,6 +31,19 @@ internal sealed class IsaRules
     internal Dictionary<string, MemoryAccess> Access { get; } = [with(StringComparer.OrdinalIgnoreCase)];
 
     /// <summary>
+    ///  Gets the register and flag effects by scope, the empty name for the description's and a set's name for
+    ///  its own, then by <c>Mnemonic</c>, <c>Mnemonic:Form</c> or <c>:Form</c>.
+    /// </summary>
+    internal Dictionary<string, Dictionary<string, EffectsLine>> Effects { get; } =
+        [with(StringComparer.OrdinalIgnoreCase)];
+
+    /// <summary>
+    ///  Gets or sets the registers effects are kept on, made by the first <c>parts</c>, <c>stack</c> or
+    ///  <c>effects</c> line.
+    /// </summary>
+    internal EffectRegisterMap? EffectRegisters { get; set; }
+
+    /// <summary>
     ///  Gets whether an opcode line may name a form the <c>[forms]</c> section does not declare, which then
     ///  is a literal form whose pattern is its name, such as <c>A,[HL]</c>.
     /// </summary>

@@ -30,6 +30,27 @@ public sealed class IsaDescription
     public IReadOnlyList<IsaFlag> Flags { get; init; } = [];
 
     /// <summary>
+    ///  Gets the registers <see cref="InstructionEffects"/> keeps its register bits on, by bit: the registers
+    ///  line's, in its order, then the parts a <c>parts</c> line adds, such as the Z80's IXH. Empty when the
+    ///  description has no effects lines.
+    /// </summary>
+    public IReadOnlyList<string> EffectRegisters { get; init; } = [];
+
+    /// <summary>
+    ///  Gets the bits of <see cref="EffectRegisters"/> a register name stands for, to test an
+    ///  <see cref="InstructionEffects"/>'s registers with: one bit for a register, its parts' bits for a register
+    ///  with parts, such as HL's H and L.
+    /// </summary>
+    /// <param name="name">The register's name, as the registers or parts line writes it.</param>
+    /// <returns>The bits, or 0 when the name is no register, or the description has no effects lines.</returns>
+    public uint RegisterMask(string name) => EffectMasks is { } masks && masks.TryGetValue(name, out uint mask) ? mask : 0;
+
+    /// <summary>
+    ///  Gets the masks <see cref="RegisterMask"/> reads.
+    /// </summary>
+    internal IReadOnlyDictionary<string, uint>? EffectMasks { get; init; }
+
+    /// <summary>
     ///  Gets the operand forms, indexed by ID; their order is the order operands are matched in.
     /// </summary>
     public IReadOnlyList<OperandForm> Forms { get; init; } = [];

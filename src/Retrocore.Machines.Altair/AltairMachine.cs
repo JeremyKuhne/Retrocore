@@ -150,5 +150,12 @@ public sealed class AltairMachine : IMachine
 
     int IMachine.MemoryArea(ushort address) => (int)Bus.Area(address);
 
+    /// <inheritdoc/>
+    MemoryKind IMachine.AreaKind(int area) => (AltairMemoryArea)area switch
+        {
+            AltairMemoryArea.None => MemoryKind.None,
+            _ => MemoryKind.Ram
+        };
+
     void IMachine.QueueKey(byte code) => Bus.Terminal.Type(code);
 }

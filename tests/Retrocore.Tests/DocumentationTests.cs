@@ -90,6 +90,78 @@ public class DocumentationTests
     }
 
     /// <summary>
+    ///  Names that start a section and share a meaning, as "X, Y = the offset", are an entry each.
+    /// </summary>
+    [TestMethod]
+    public void SharedMeaningsParseAsEntries()
+    {
+        DocumentationComment comment = Parse("""
+            ;; Finds a file.
+            ;; In:    HL, DE = the names
+            ;; Out:   X, Y = its offset, carry = set when found, A = 0
+            FIND:
+                rts
+            """).Comments.Single();
+
+        Required(comment.Section("In")).Entries.Select(entry => (entry.Name, entry.Meaning)).Should().Equal(
+            ("HL", "the names"),
+            ("DE", "the names"));
+
+        Required(comment.Section("Out")).Entries.Select(entry => (entry.Name, entry.Meaning)).Should().Equal(
+            ("X", "its offset"),
+            ("Y", "its offset"),
+            ("carry", "set when found"),
+            ("A", "0"));
+    }
+
+    /// <summary>
+    ///  In the expanded form, names that share a meaning start a line; a wrapped meaning, indented deeper,
+    ///  continues each of them, even where it reads as names and a meaning; a dash shares a meaning too.
+    /// </summary>
+    [TestMethod]
+    public void SharedMeaningsWrapAndTakeDashes()
+    {
+        DocumentationComment expanded = Parse("""
+            ;; Moves bytes.
+            ;;
+            ;; In:
+            ;;   HL, DE = the names
+            ;;     past the bytes
+            ;;   A = the count of the
+            ;;     bytes, carry = set
+            MOVE:
+                rts
+            """).Comments.Single();
+
+        Required(expanded.Section("In")).Entries.Select(entry => (entry.Name, entry.Meaning)).Should().Equal(
+            ("HL", "the names past the bytes"),
+            ("DE", "the names past the bytes"),
+            ("A", "the count of the bytes, carry = set"));
+
+        DocumentationComment dashed = Parse("""
+            ;; Moves bytes.
+            ;; In:    HL, DE - the names
+            MOVE:
+                rts
+            """).Comments.Single();
+
+        Required(dashed.Section("In")).Entries.Select(entry => (entry.Name, entry.Meaning)).Should().Equal(
+            ("HL", "the names"),
+            ("DE", "the names"));
+
+        DocumentationComment both = Parse("""
+            ;; Moves bytes.
+            ;; In:    HL, DE - the names = their addresses
+            MOVE:
+                rts
+            """).Comments.Single();
+
+        Required(both.Section("In")).Entries.Select(entry => (entry.Name, entry.Meaning)).Should().Equal(
+            ("HL", "the names = their addresses"),
+            ("DE", "the names = their addresses"));
+    }
+
+    /// <summary>
     ///  The expanded form, remarks, wrapped lists and plain headings parse to the same model.
     /// </summary>
     [TestMethod]

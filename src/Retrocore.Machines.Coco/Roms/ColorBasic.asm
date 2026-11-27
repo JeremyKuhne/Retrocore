@@ -523,7 +523,7 @@ DEBDEL = $045E
 
 ;; Blinks the cursor: every eleventh call changes its color, then waits a moment.
 ;;
-;; Uses: A, X
+;; Uses: A, B, X
 BLINK:
     DEC BLKCNT
     BNE BLINK_WAIT

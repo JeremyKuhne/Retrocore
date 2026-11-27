@@ -300,6 +300,15 @@ public sealed class BbcMachine : IMachine
     int IMachine.MemoryArea(ushort address) => (int)Bus.Area(address);
 
     /// <inheritdoc/>
+    MemoryKind IMachine.AreaKind(int area) => (BbcMemoryArea)area switch
+        {
+            BbcMemoryArea.None => MemoryKind.None,
+            BbcMemoryArea.Ram => MemoryKind.Ram,
+            BbcMemoryArea.OneMegahertzBus or BbcMemoryArea.Sheila => MemoryKind.Io,
+            _ => MemoryKind.Rom
+        };
+
+    /// <inheritdoc/>
     void IMachine.QueueKey(byte code) => Keyboard.Type(code);
 
     // The MOS's font, at $C000: characters $20-$7F, 8 bytes each.

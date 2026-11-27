@@ -288,6 +288,15 @@ public sealed class AtariMachine : IMachine, IVideoSource
     int IMachine.MemoryArea(ushort address) => (int)Bus.Area(address);
 
     /// <inheritdoc/>
+    MemoryKind IMachine.AreaKind(int area) => (AtariMemoryArea)area switch
+        {
+            AtariMemoryArea.Ram => MemoryKind.Ram,
+            AtariMemoryArea.Io => MemoryKind.Io,
+            AtariMemoryArea.Empty => MemoryKind.None,
+            _ => MemoryKind.Rom
+        };
+
+    /// <inheritdoc/>
     void IMachine.QueueKey(byte code) => Keyboard.Type(code);
 
     // One machine cycle: returns whether the CPU ran.

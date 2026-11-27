@@ -17,78 +17,79 @@ internal static partial class InstructionDocs
 {
     private const int OpcodeCount = 256;
 
-    private static readonly Dictionary<string, (string Summary, string Flags)> s_docs = new(StringComparer.OrdinalIgnoreCase)
+    // What each 6502 family instruction does; the flags it changes come from the description's effects lines.
+    private static readonly Dictionary<string, string> s_docs = new(StringComparer.OrdinalIgnoreCase)
     {
-        ["ADC"] = ("Adds memory and the carry to A.", "N V Z C"),
-        ["AND"] = ("ANDs memory into A.", "N Z"),
-        ["ASL"] = ("Shifts A or memory left one bit; bit 7 goes to the carry.", "N Z C"),
-        ["BBR"] = ("Branches when a bit of a zero-page byte is clear (Rockwell 65C02).", "none"),
-        ["BBS"] = ("Branches when a bit of a zero-page byte is set (Rockwell 65C02).", "none"),
-        ["BCC"] = ("Branches when the carry is clear.", "none"),
-        ["BCS"] = ("Branches when the carry is set.", "none"),
-        ["BEQ"] = ("Branches when Z is set (the result was zero).", "none"),
-        ["BIT"] = ("Tests memory against A: Z from A AND memory; N and V from memory's bits 7 and 6 (not for immediate).", "N V Z"),
-        ["BMI"] = ("Branches when N is set (the result was negative).", "none"),
-        ["BNE"] = ("Branches when Z is clear (the result was not zero).", "none"),
-        ["BPL"] = ("Branches when N is clear.", "none"),
-        ["BRA"] = ("Branches always (65C02).", "none"),
-        ["BRK"] = ("Software interrupt: pushes PC+2 and P with B set, then jumps through $FFFE.", "B I (65C02 also clears D)"),
-        ["BVC"] = ("Branches when V is clear.", "none"),
-        ["BVS"] = ("Branches when V is set.", "none"),
-        ["CLC"] = ("Clears the carry.", "C"),
-        ["CLD"] = ("Clears decimal mode.", "D"),
-        ["CLI"] = ("Clears the interrupt disable flag, allowing IRQs.", "I"),
-        ["CLV"] = ("Clears the overflow flag.", "V"),
-        ["CMP"] = ("Compares A with memory (A - memory, result discarded).", "N Z C"),
-        ["CPX"] = ("Compares X with memory.", "N Z C"),
-        ["CPY"] = ("Compares Y with memory.", "N Z C"),
-        ["DEC"] = ("Decrements memory, or A on the 65C02.", "N Z"),
-        ["DEX"] = ("Decrements X.", "N Z"),
-        ["DEY"] = ("Decrements Y.", "N Z"),
-        ["EOR"] = ("Exclusive-ORs memory into A.", "N Z"),
-        ["INC"] = ("Increments memory, or A on the 65C02.", "N Z"),
-        ["INX"] = ("Increments X.", "N Z"),
-        ["INY"] = ("Increments Y.", "N Z"),
-        ["JMP"] = ("Jumps to an address.", "none"),
-        ["JSR"] = ("Pushes the return address minus one and jumps to a subroutine.", "none"),
-        ["LDA"] = ("Loads A from memory.", "N Z"),
-        ["LDX"] = ("Loads X from memory.", "N Z"),
-        ["LDY"] = ("Loads Y from memory.", "N Z"),
-        ["LSR"] = ("Shifts A or memory right one bit; bit 0 goes to the carry.", "N Z C"),
-        ["NOP"] = ("Does nothing.", "none"),
-        ["ORA"] = ("ORs memory into A.", "N Z"),
-        ["PHA"] = ("Pushes A.", "none"),
-        ["PHP"] = ("Pushes P, with B set.", "none"),
-        ["PHX"] = ("Pushes X (65C02).", "none"),
-        ["PHY"] = ("Pushes Y (65C02).", "none"),
-        ["PLA"] = ("Pulls A.", "N Z"),
-        ["PLP"] = ("Pulls P.", "all"),
-        ["PLX"] = ("Pulls X (65C02).", "N Z"),
-        ["PLY"] = ("Pulls Y (65C02).", "N Z"),
-        ["RMB"] = ("Clears a bit of a zero-page byte (Rockwell 65C02).", "none"),
-        ["ROL"] = ("Rotates A or memory left through the carry.", "N Z C"),
-        ["ROR"] = ("Rotates A or memory right through the carry.", "N Z C"),
-        ["RTI"] = ("Returns from an interrupt: pulls P, then PC.", "all"),
-        ["RTS"] = ("Returns from a subroutine: pulls the address and adds one.", "none"),
-        ["SBC"] = ("Subtracts memory and the borrow (the inverted carry) from A.", "N V Z C"),
-        ["SEC"] = ("Sets the carry.", "C"),
-        ["SED"] = ("Sets decimal mode for ADC and SBC.", "D"),
-        ["SEI"] = ("Sets the interrupt disable flag, masking IRQs.", "I"),
-        ["SMB"] = ("Sets a bit of a zero-page byte (Rockwell 65C02).", "none"),
-        ["STA"] = ("Stores A to memory.", "none"),
-        ["STP"] = ("Stops the processor until reset (WDC 65C02).", "none"),
-        ["STX"] = ("Stores X to memory.", "none"),
-        ["STY"] = ("Stores Y to memory.", "none"),
-        ["STZ"] = ("Stores zero to memory (65C02).", "none"),
-        ["TAX"] = ("Copies A to X.", "N Z"),
-        ["TAY"] = ("Copies A to Y.", "N Z"),
-        ["TRB"] = ("Clears the bits of memory that are set in A; Z from A AND memory (65C02).", "Z"),
-        ["TSB"] = ("Sets the bits of memory that are set in A; Z from A AND memory (65C02).", "Z"),
-        ["TSX"] = ("Copies S to X.", "N Z"),
-        ["TXA"] = ("Copies X to A.", "N Z"),
-        ["TXS"] = ("Copies X to S.", "none"),
-        ["TYA"] = ("Copies Y to A.", "N Z"),
-        ["WAI"] = ("Waits for an interrupt (WDC 65C02).", "none")
+        ["ADC"] = "Adds memory and the carry to A.",
+        ["AND"] = "ANDs memory into A.",
+        ["ASL"] = "Shifts A or memory left one bit; bit 7 goes to the carry.",
+        ["BBR"] = "Branches when a bit of a zero-page byte is clear (Rockwell 65C02).",
+        ["BBS"] = "Branches when a bit of a zero-page byte is set (Rockwell 65C02).",
+        ["BCC"] = "Branches when the carry is clear.",
+        ["BCS"] = "Branches when the carry is set.",
+        ["BEQ"] = "Branches when Z is set (the result was zero).",
+        ["BIT"] = "Tests memory against A: Z from A AND memory; N and V from memory's bits 7 and 6 (not for immediate).",
+        ["BMI"] = "Branches when N is set (the result was negative).",
+        ["BNE"] = "Branches when Z is clear (the result was not zero).",
+        ["BPL"] = "Branches when N is clear.",
+        ["BRA"] = "Branches always (65C02).",
+        ["BRK"] = "Software interrupt: pushes PC+2 and P with B set, then jumps through $FFFE.",
+        ["BVC"] = "Branches when V is clear.",
+        ["BVS"] = "Branches when V is set.",
+        ["CLC"] = "Clears the carry.",
+        ["CLD"] = "Clears decimal mode.",
+        ["CLI"] = "Clears the interrupt disable flag, allowing IRQs.",
+        ["CLV"] = "Clears the overflow flag.",
+        ["CMP"] = "Compares A with memory (A - memory, result discarded).",
+        ["CPX"] = "Compares X with memory.",
+        ["CPY"] = "Compares Y with memory.",
+        ["DEC"] = "Decrements memory, or A on the 65C02.",
+        ["DEX"] = "Decrements X.",
+        ["DEY"] = "Decrements Y.",
+        ["EOR"] = "Exclusive-ORs memory into A.",
+        ["INC"] = "Increments memory, or A on the 65C02.",
+        ["INX"] = "Increments X.",
+        ["INY"] = "Increments Y.",
+        ["JMP"] = "Jumps to an address.",
+        ["JSR"] = "Pushes the return address minus one and jumps to a subroutine.",
+        ["LDA"] = "Loads A from memory.",
+        ["LDX"] = "Loads X from memory.",
+        ["LDY"] = "Loads Y from memory.",
+        ["LSR"] = "Shifts A or memory right one bit; bit 0 goes to the carry.",
+        ["NOP"] = "Does nothing.",
+        ["ORA"] = "ORs memory into A.",
+        ["PHA"] = "Pushes A.",
+        ["PHP"] = "Pushes P, with B set.",
+        ["PHX"] = "Pushes X (65C02).",
+        ["PHY"] = "Pushes Y (65C02).",
+        ["PLA"] = "Pulls A.",
+        ["PLP"] = "Pulls P.",
+        ["PLX"] = "Pulls X (65C02).",
+        ["PLY"] = "Pulls Y (65C02).",
+        ["RMB"] = "Clears a bit of a zero-page byte (Rockwell 65C02).",
+        ["ROL"] = "Rotates A or memory left through the carry.",
+        ["ROR"] = "Rotates A or memory right through the carry.",
+        ["RTI"] = "Returns from an interrupt: pulls P, then PC.",
+        ["RTS"] = "Returns from a subroutine: pulls the address and adds one.",
+        ["SBC"] = "Subtracts memory and the borrow (the inverted carry) from A.",
+        ["SEC"] = "Sets the carry.",
+        ["SED"] = "Sets decimal mode for ADC and SBC.",
+        ["SEI"] = "Sets the interrupt disable flag, masking IRQs.",
+        ["SMB"] = "Sets a bit of a zero-page byte (Rockwell 65C02).",
+        ["STA"] = "Stores A to memory.",
+        ["STP"] = "Stops the processor until reset (WDC 65C02).",
+        ["STX"] = "Stores X to memory.",
+        ["STY"] = "Stores Y to memory.",
+        ["STZ"] = "Stores zero to memory (65C02).",
+        ["TAX"] = "Copies A to X.",
+        ["TAY"] = "Copies A to Y.",
+        ["TRB"] = "Clears the bits of memory that are set in A; Z from A AND memory (65C02).",
+        ["TSB"] = "Sets the bits of memory that are set in A; Z from A AND memory (65C02).",
+        ["TSX"] = "Copies S to X.",
+        ["TXA"] = "Copies X to A.",
+        ["TXS"] = "Copies X to S.",
+        ["TYA"] = "Copies Y to A.",
+        ["WAI"] = "Waits for an interrupt (WDC 65C02)."
     };
 
     private static readonly Dictionary<ProcessorVariant, Dictionary<string, List<(AddressMode Mode, byte Code)>>> s_encodings = [];
@@ -146,82 +147,127 @@ internal static partial class InstructionDocs
     internal static (string Summary, string Flags)? Brief(string mnemonic, InstructionSet set)
     {
         if (set.IsMacroOnly) { return null; }
-        Dictionary<string, (string Summary, string Flags)> docs = s_docs;
+        Dictionary<string, string> docs = s_docs;
         string key = mnemonic;
         if (ReferenceEquals(set.Description, Z80Isa.Description)) { docs = s_z80; }
         else if (ReferenceEquals(set.Description, M6809Isa.Description)) { docs = s_m6809; }
         else if (ReferenceEquals(set.Description, I8080Isa.Description)) { docs = s_i8080; }
         else if (mnemonic.Length == 4 && char.IsAsciiDigit(mnemonic[3])) { key = mnemonic[..3]; }
 
-        return docs.TryGetValue(key, out (string Summary, string Flags) doc) ? doc : null;
+        return docs.TryGetValue(key, out string? summary) ? (summary, MnemonicFlags(mnemonic, set)) : null;
     }
 
     /// <summary>
-    ///  Gets the flags one decoded instruction changes, where its mnemonic's depend on its operands, as ADD HL,BC
-    ///  changes only H, N and C, or BIT #$80 only Z.
+    ///  Gets the flags one decoded instruction changes, from the description's effects lines, so they follow its
+    ///  operands: ADD HL,BC changes only H, N and C, BIT #$80 only Z, and TFR A,CC every flag.
     /// </summary>
     /// <param name="instruction">The instruction.</param>
-    /// <returns>The flags, or null where its mnemonic has no documentation.</returns>
+    /// <returns>
+    ///  The flags: from the instruction's effects where the set has them, whether or not the mnemonic has
+    ///  documentation; else, for a documented mnemonic, what its encodings change in the description's sets, as its
+    ///  hover gives them; null for one without documentation.
+    /// </returns>
     internal static string? FlagsOf(in DisassembledInstruction instruction)
     {
-        InstructionSet set = instruction.InstructionSet;
-        if (Brief(instruction.Mnemonic, set) is not { } brief) { return null; }
-        string mnemonic = instruction.Mnemonic.ToUpperInvariant();
-        string text = instruction.ToString().ToUpperInvariant();
-        int space = text.IndexOf(' ', StringComparison.Ordinal);
-        string[] operands = space < 0 ? [] : [.. text[(space + 1)..].Split(',', StringSplitOptions.TrimEntries)];
-        string first = operands.Length > 0 ? operands[0] : "";
-        string second = operands.Length > 1 ? operands[1] : "";
-        bool pair = first is "BC" or "DE" or "HL" or "SP" or "IX" or "IY";
-        bool namesCc = operands.Contains("CC");
-        if (ReferenceEquals(set.Description, Z80Isa.Description))
+        // The effects lines say, with what a postbyte names, as the 6809's TFR A,CC.
+        InstructionEffects effects = instruction.Effects;
+        return effects.IsKnown
+            ? FlagText(Changed(effects), instruction.InstructionSet.Description)
+            : Brief(instruction.Mnemonic, instruction.InstructionSet)?.Flags;
+    }
+
+    // The flags a mnemonic's encodings change, from the effects lines: the set's, or where the set lacks the
+    // mnemonic, another set of its description that has it, so a hover still says what it would do. Where the
+    // encodings or their postbytes change different flags, as ADD A,B and ADD HL,BC do, each possibility, fewest
+    // first: "H N C or S Z H PV N C, by operands".
+    private static string MnemonicFlags(string mnemonic, InstructionSet set)
+    {
+        int id = set.GetMnemonic(mnemonic);
+        foreach (InstructionSet other in set.Description.InstructionSets.Values)
         {
-            return mnemonic switch
-            {
-                "ADD" => pair ? "H N C" : "S Z H PV N C",
-                "INC" or "DEC" => pair ? "none" : brief.Flags,
-                "EX" => first == "AF" ? "all (swapped with AF')" : "none",
-                "IN" => second.StartsWith('[') && second != "[C]" ? "none" : "S Z H PV N",
-                "LD" => first == "A" && second is "I" or "R" ? "S Z H PV N" : "none",
-                "POP" => first == "AF" ? "all" : "none",
-                _ => brief.Flags
-            };
+            if (id != InstructionSet.UnknownMnemonic) { break; }
+            set = other;
+            id = set.GetMnemonic(mnemonic);
         }
 
-        if (ReferenceEquals(set.Description, I8080Isa.Description))
+        SortedSet<(int Count, byte Flags)> distinct = [];
+        for (int encoding = 0; id != InstructionSet.UnknownMnemonic && encoding < set.Encodings.Count; encoding++)
         {
-            return mnemonic == "POP" ? first == "PSW" ? "all" : "none" : brief.Flags;
+            if (set.GetEncoding(encoding).Mnemonic == id) { distinct.UnionWith(Choices(set, encoding)); }
         }
 
-        if (ReferenceEquals(set.Description, M6809Isa.Description))
+        if (distinct.Count == 0) { return "none"; }
+        string text = string.Join(" or ", distinct.Select(choice => FlagText(choice.Flags, set.Description)));
+        return distinct.Count == 1 ? text : $"{text}, by operands";
+    }
+
+    // The flags one encoding changes, and where its postbyte decides, each it can: TFR's "none or all".
+    private static string EncodingFlags(InstructionSet set, int encoding) =>
+        string.Join(" or ", Choices(set, encoding).Select(choice => FlagText(choice.Flags, set.Description)));
+
+    // Each distinct set of documented flags an encoding can change, by its postbyte where it has one, fewest first.
+    private static SortedSet<(int Count, byte Flags)> Choices(InstructionSet set, int encoding)
+    {
+        byte documented = DocumentedFlags(set.Description);
+        ref readonly InstructionEffects effects = ref set.Effects(encoding);
+        SortedSet<(int Count, byte Flags)> distinct = [];
+        for (int postbyte = 0; postbyte < (effects.DependsOnPostbyte ? 256 : 1); postbyte++)
         {
-            return mnemonic switch
-            {
-                "EXG" or "PULS" or "PULU" => namesCc ? "all" : "none",
-                "TFR" => second == "CC" ? "all" : "none",
-                _ => brief.Flags
-            };
+            byte changed = (byte)(Changed(set.Effects(encoding, (byte)postbyte)) & documented);
+            distinct.Add((System.Numerics.BitOperations.PopCount(changed), changed));
         }
 
-        if (set.IsMacroOnly) { return brief.Flags; }
-        bool cmos = M6502Isa.VariantOf(set) != ProcessorVariant.Mos6502;
-        return mnemonic switch
+        return distinct;
+    }
+
+    private static byte Changed(in InstructionEffects effects) => (byte)(effects.FlagsWritten | effects.FlagsMayWrite);
+
+    // The flags documentation names by word; the hovers leave out the undocumented ones, the Z80's X and Y and
+    // the 8085's K and V.
+    private static byte DocumentedFlags(IsaDescription description)
+    {
+        byte documented = 0;
+        foreach (IsaFlag flag in description.Flags)
         {
-            // BIT #n has no memory operand for N and V to come from.
-            "BIT" when first.StartsWith('#') => "Z",
-            "BRK" => cmos ? "B I D" : "B I",
-            _ => brief.Flags
-        };
+            if (flag.Words.Count != 0) { documented |= (byte)(1 << flag.Bit); }
+        }
+
+        return documented;
+    }
+
+    // Documented flag letters in the flags line's order, P/V as PV, or "none" or "all"; B is no 6502 flag, only a
+    // bit of the byte BRK and PHP push.
+    private static string FlagText(byte flags, IsaDescription description)
+    {
+        byte documented = DocumentedFlags(description);
+        flags &= documented;
+        List<string> letters = [];
+        foreach (IsaFlag flag in description.Flags)
+        {
+            if ((flags & (1 << flag.Bit)) != 0) { letters.Add(flag.Name.Replace("/", "", StringComparison.Ordinal)); }
+        }
+
+        return flags == 0 ? "none" : flags == documented ? "all" : string.Join(' ', letters);
     }
 
     private static string? DescribeM6502(string mnemonic, ProcessorVariant variant)
     {
         string key = mnemonic.Length == 4 && char.IsAsciiDigit(mnemonic[3]) ? mnemonic[..3] : mnemonic;
-        if (!s_docs.TryGetValue(key, out (string Summary, string Flags) doc)) { return null; }
-        List<string> modes = [.. Encodings(variant, mnemonic).Select(encoding => $"| {Syntax(encoding.Mode)} | ${encoding.Code:X2} |")];
+        if (!s_docs.TryGetValue(key, out string? summary)) { return null; }
+        InstructionSet set = M6502Isa.Get(variant);
+        List<string> modes = [];
+        foreach ((AddressMode mode, byte code) in Encodings(variant, mnemonic))
+        {
+            string flags = set.TryDecode([code], out int encoding) ? EncodingFlags(set, encoding) : "";
+            modes.Add($"| {Syntax(mode)} | ${code:X2} | {flags} |");
+        }
+
         string rows = string.Join('\n', modes);
-        string table = modes.Count == 0 ? $"\n\nNot an instruction of the {variant}." : $"\n\n| Mode | Opcode |\n| --- | --- |\n{rows}";
-        return $"**{mnemonic.ToUpperInvariant()}**: {doc.Summary}\n\nFlags: {doc.Flags}{table}";
+        string table = modes.Count == 0
+            ? $"\n\nNot an instruction of the {variant}."
+            : $"\n\n| Mode | Opcode | Flags |\n| --- | --- | --- |\n{rows}";
+
+        return $"**{mnemonic.ToUpperInvariant()}**: {summary}\n\nFlags: {MnemonicFlags(mnemonic, set)}{table}";
     }
 
     /// <summary>

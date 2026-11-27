@@ -41,6 +41,94 @@ flow stop STP JAM
 # How an instruction accesses a memory operand; the rest read it.
 access write STA STX STY STZ SAX AHX SHX SHY TAS
 access read-write ASL LSR ROL ROR INC DEC TRB TSB RMB SMB SLO RLA SRE RRA DCP ISC
+# The accumulator forms of the shifts, INC and DEC touch no memory.
+access read ASL:Accumulator DEC:Accumulator INC:Accumulator LSR:Accumulator ROL:Accumulator ROR:Accumulator
+
+# Register and flag effects, for analysis. 'reads' lists the registers and flags an instruction reads,
+# 'writes' those it always assigns; the rest keep their values. Registers go by name and flags by word, and P
+# means every flag, as PHP pushes them. A written flag=0 or flag=1 takes that value, flag=bitN a copy of bit N
+# of the memory operand, and Name=? a value from state the effects leave out, as the Z80's after SCF.
+# 'push n' and 'pull n' move n bytes through the stack register, S, which they also read and write.
+# 'copies X=A' says the instruction sets X to A's value. 'taken zero=1' says when a branch is taken.
+# Instruction:Form replaces the instruction's own line, and a :Form line adds to each instruction in that form,
+# as the index register an address is formed from. 'effects in Set' lines win over these in that set and those
+# built on it. PC is left to the flow lines and the memory operand to the access lines.
+stack S
+effects ADC SBC                 reads A carry decimal   writes A negative overflow zero carry
+effects AND EOR ORA             reads A                 writes A negative zero
+effects ASL                                             writes negative zero carry
+effects LSR                                             writes negative=0 zero carry
+effects ROL ROR                 reads carry             writes negative zero carry
+effects INC DEC                                         writes negative zero
+effects BIT                     reads A                 writes negative=bit7 overflow=bit6 zero
+effects BIT:Immediate           reads A                 writes zero
+effects TRB TSB                 reads A                 writes zero
+effects CMP                     reads A                 writes negative zero carry
+effects CPX                     reads X                 writes negative zero carry
+effects CPY                     reads Y                 writes negative zero carry
+effects LDA                                             writes A negative zero
+effects LDX                                             writes X negative zero
+effects LDY                                             writes Y negative zero
+effects STA                     reads A
+effects STX                     reads X
+effects STY                     reads Y
+effects INX DEX                 reads X                 writes X negative zero
+effects INY DEY                 reads Y                 writes Y negative zero
+effects TAX                     reads A                 writes X negative zero copies X=A
+effects TAY                     reads A                 writes Y negative zero copies Y=A
+effects TXA                     reads X                 writes A negative zero copies A=X
+effects TYA                     reads Y                 writes A negative zero copies A=Y
+effects TSX                     reads S                 writes X negative zero copies X=S
+effects TXS                     reads X                 writes S copies S=X
+effects PHA                     reads A S               writes S                        push 1
+effects PHX                     reads X S               writes S                        push 1
+effects PHY                     reads Y S               writes S                        push 1
+effects PHP                     reads P S               writes S                        push 1
+effects PLA                     reads S                 writes A S negative zero        pull 1
+effects PLX                     reads S                 writes X S negative zero        pull 1
+effects PLY                     reads S                 writes Y S negative zero        pull 1
+effects PLP                     reads S                 writes P S                      pull 1
+effects JSR                     reads S                 writes S                        push 2
+effects RTS                     reads S                 writes S                        pull 2
+effects RTI                     reads S                 writes P S                      pull 3
+effects BRK                     reads P S               writes S interrupt=1            push 3
+effects in Wdc65C02 BRK         reads P S               writes S interrupt=1 decimal=0  push 3
+effects BCC                     reads carry             taken carry=0
+effects BCS                     reads carry             taken carry=1
+effects BEQ                     reads zero              taken zero=1
+effects BNE                     reads zero              taken zero=0
+effects BMI                     reads negative          taken negative=1
+effects BPL                     reads negative          taken negative=0
+effects BVC                     reads overflow          taken overflow=0
+effects BVS                     reads overflow          taken overflow=1
+effects CLC                                             writes carry=0
+effects SEC                                             writes carry=1
+effects CLD                                             writes decimal=0
+effects SED                                             writes decimal=1
+effects CLI                                             writes interrupt=0
+effects SEI                                             writes interrupt=1
+effects CLV                                             writes overflow=0
+effects BRA JMP NOP STZ BBR BBS RMB SMB WAI STP JAM none
+effects :Accumulator            reads A                 writes A
+effects :AbsoluteIndexedX :ZeroPageIndexedX :ZeroPageIndexedIndirect :AbsoluteIndexedIndirect reads X
+effects :AbsoluteIndexedY :ZeroPageIndexedY :ZeroPageIndirectIndexedY reads Y
+# The NMOS 6502's undocumented instructions.
+effects SLO SRE                 reads A                 writes A negative zero carry
+effects RLA                     reads A carry           writes A negative zero carry
+effects RRA ISC                 reads A carry decimal   writes A negative overflow zero carry
+effects DCP                     reads A                 writes negative zero carry
+effects ANC ALR                 reads A                 writes A negative zero carry
+effects ARR                     reads A carry decimal   writes A negative overflow zero carry
+effects AXS                     reads A X               writes X negative zero carry
+# XAA and LAX #n AND with A ORed with a constant that differs from chip to chip, so their results are A=?.
+effects XAA                     reads A X               writes A=? negative=? zero=?
+effects LAX                                             writes A X negative zero
+effects LAX:Immediate           reads A                 writes A=? X=? negative=? zero=?
+effects LAS                     reads S                 writes A X S negative zero
+effects SAX AHX                 reads A X
+effects SHX                     reads X
+effects SHY                     reads Y
+effects TAS                     reads A X               writes S
 
 [forms]
 # Operand forms, in the order operands are matched. A pattern is literal text with {} for an expression.

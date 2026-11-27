@@ -47,6 +47,140 @@ flow wait HLT
 
 # How an instruction accesses a memory operand; the rest read it.
 access write STA SHLD
+# Stores and read-modify-writes through HL, BC and DE (and the 8085's SHLX through DE), and XTHL's swap with the stack.
+access write MOV:M,A MOV:M,B MOV:M,C MOV:M,D MOV:M,E MOV:M,H MOV:M,L MVI:M,n STAX:B STAX:D SHLX
+access read-write DCR:M INR:M XTHL
+
+# Register and flag effects, for analysis, in the 6502 description's form (see OpcodeTables.txt): flags by
+# word, the 8085's K and V by name. $1 and $2 are the operands of the form's name; M is memory at HL, which the
+# :Form lines read, and a pair named by its first register (INX B) has a line of its own. These lines are the
+# 8080's, whose bits 5 and 3 read 0 and bit 1 reads 1; the 'effects in I8085' lines add the 8085's K and V.
+# PC is left to the flow lines, and the interrupt enable, masks and serial lines to the hardware; RIM reads
+# them, so its A is A=?.
+parts BC=B,C DE=D,E HL=H,L PSW=A,F
+stack SP
+effects MOV                     reads $2                writes $1               copies $1=$2
+effects MVI                                             writes $1
+effects :M :A,M :B,M :C,M :D,M :E,M :H,M :L,M           reads HL
+effects :M,A :M,B :M,C :M,D :M,E :M,H :M,L :M,n         reads HL
+effects LXI:B,nn                                        writes BC
+effects LXI:D,nn                                        writes DE
+effects LXI:H,nn LHLD                                   writes HL
+effects LXI:SP,nn                                       writes SP
+effects LDA                                             writes A
+effects STA OUT                 reads A
+effects IN                                              writes A
+effects SHLD                    reads HL
+effects LDAX:B                  reads BC                writes A
+effects LDAX:D                  reads DE                writes A
+effects STAX:B                  reads A BC
+effects STAX:D                  reads A DE
+effects XCHG                    reads DE HL             writes DE HL            copies D=H E=L H=D L=E
+effects XTHL                    reads SP HL             writes HL
+effects SPHL                    reads HL                writes SP
+effects PCHL                    reads HL
+effects ADD SUB                 reads A $1              writes A negative zero half-carry parity carry
+effects ADC SBB                 reads A $1 carry        writes A negative zero half-carry parity carry
+effects CMP                     reads A $1              writes negative zero half-carry parity carry
+# SUB A, XRA A, CMP A and SBB A do not depend on A, so they end its life; SBB A keeps the carry.
+effects SUB:A writes A negative=0 zero=1 half-carry=1 parity=1 carry=0
+effects XRA:A writes A negative=0 zero=1 half-carry=0 parity=1 carry=0
+effects CMP:A writes negative=0 zero=1 half-carry=1 parity=1 carry=0
+effects SBB:A                   reads carry             writes A negative zero half-carry parity
+effects ANA                     reads A $1              writes A negative zero half-carry parity carry=0
+effects XRA ORA                 reads A $1              writes A negative zero half-carry=0 parity carry=0
+effects ADI SUI                 reads A                 writes A negative zero half-carry parity carry
+effects CPI                     reads A                 writes negative zero half-carry parity carry
+effects ACI SBI                 reads A carry           writes A negative zero half-carry parity carry
+effects ANI                     reads A                 writes A negative zero half-carry parity carry=0
+effects XRI ORI                 reads A                 writes A negative zero half-carry=0 parity carry=0
+effects INR DCR                 reads $1                writes $1 negative zero half-carry parity
+effects INX:B DCX:B             reads BC                writes BC
+effects INX:D DCX:D             reads DE                writes DE
+effects INX:H DCX:H             reads HL                writes HL
+effects INX:SP DCX:SP           reads SP                writes SP
+effects DAD:B                   reads HL BC             writes HL carry
+effects DAD:D                   reads HL DE             writes HL carry
+effects DAD:H                   reads HL                writes HL carry
+effects DAD:SP                  reads HL SP             writes HL carry
+effects DAA                     reads A half-carry carry        writes A negative zero half-carry parity carry
+effects CMA                     reads A                 writes A
+effects STC                                             writes carry=1
+effects CMC                     reads carry             writes carry
+effects RLC RRC                 reads A                 writes A carry
+effects RAL RAR                 reads A carry           writes A carry
+effects JMP NOP DI EI HLT none
+effects JNZ                      reads zero              taken zero=0
+effects JZ                       reads zero              taken zero=1
+effects JNC                      reads carry             taken carry=0
+effects JC                       reads carry             taken carry=1
+effects JPO                      reads parity            taken parity=0
+effects JPE                      reads parity            taken parity=1
+effects JP                       reads negative          taken negative=0
+effects JM                       reads negative          taken negative=1
+effects CALL RST                reads SP                writes SP                       push 2
+effects CNZ                      reads zero SP           may-write SP may-push 2 taken zero=0
+effects CZ                       reads zero SP           may-write SP may-push 2 taken zero=1
+effects CNC                      reads carry SP          may-write SP may-push 2 taken carry=0
+effects CC                       reads carry SP          may-write SP may-push 2 taken carry=1
+effects CPO                      reads parity SP         may-write SP may-push 2 taken parity=0
+effects CPE                      reads parity SP         may-write SP may-push 2 taken parity=1
+effects CP                       reads negative SP       may-write SP may-push 2 taken negative=0
+effects CM                       reads negative SP       may-write SP may-push 2 taken negative=1
+effects RET                     reads SP                writes SP                       pull 2
+effects RNZ                      reads zero SP           may-write SP may-pull 2 taken zero=0
+effects RZ                       reads zero SP           may-write SP may-pull 2 taken zero=1
+effects RNC                      reads carry SP          may-write SP may-pull 2 taken carry=0
+effects RC                       reads carry SP          may-write SP may-pull 2 taken carry=1
+effects RPO                      reads parity SP         may-write SP may-pull 2 taken parity=0
+effects RPE                      reads parity SP         may-write SP may-pull 2 taken parity=1
+effects RP                       reads negative SP       may-write SP may-pull 2 taken negative=0
+effects RM                       reads negative SP       may-write SP may-pull 2 taken negative=1
+effects PUSH:B                  reads BC SP             writes SP                       push 2
+effects PUSH:D                  reads DE SP             writes SP                       push 2
+effects PUSH:H                  reads HL SP             writes SP                       push 2
+effects PUSH:PSW                reads A negative zero half-carry parity carry SP  writes SP          push 2
+effects POP:B                   reads SP                writes BC SP                    pull 2
+effects POP:D                   reads SP                writes DE SP                    pull 2
+effects POP:H                   reads SP                writes HL SP                    pull 2
+effects POP:PSW                 reads SP                writes A negative zero half-carry parity carry SP pull 2
+# The 8085: arithmetic also writes V, the overflow, and K, which is V exclusive-or the sign; INX and DCX write K, the
+# carry out of the incrementer; ANA sets the half-carry.
+# The 8085's PSW holds K and V as well.
+effects in I8085 PUSH:PSW       reads PSW SP            writes SP                       push 2
+effects in I8085 POP:PSW        reads SP                writes PSW SP                   pull 2
+effects in I8085 SUB:A writes A negative=0 zero=1 half-carry=1 parity=1 carry=0 K=0 V=0
+effects in I8085 XRA:A writes A negative=0 zero=1 half-carry=0 parity=1 carry=0 K=0 V=0
+effects in I8085 CMP:A writes negative=0 zero=1 half-carry=1 parity=1 carry=0 K=0 V=0
+effects in I8085 SBB:A          reads carry             writes A negative zero half-carry parity K V
+effects in I8085 ADD SUB        reads A $1              writes A negative zero half-carry parity carry K V
+effects in I8085 ADC SBB        reads A $1 carry        writes A negative zero half-carry parity carry K V
+effects in I8085 CMP            reads A $1              writes negative zero half-carry parity carry K V
+effects in I8085 ADI SUI        reads A                 writes A negative zero half-carry parity carry K V
+effects in I8085 ACI SBI        reads A carry           writes A negative zero half-carry parity carry K V
+effects in I8085 CPI            reads A                 writes negative zero half-carry parity carry K V
+effects in I8085 ANA            reads A $1              writes A negative zero half-carry=1 parity carry=0 K V=0
+effects in I8085 ANI            reads A                 writes A negative zero half-carry=1 parity carry=0 K V=0
+effects in I8085 XRA ORA        reads A $1              writes A negative zero half-carry=0 parity carry=0 K V=0
+effects in I8085 XRI ORI        reads A                 writes A negative zero half-carry=0 parity carry=0 K V=0
+effects in I8085 INR DCR        reads $1                writes $1 negative zero half-carry parity K V
+effects in I8085 DAA            reads A half-carry carry        writes A negative zero half-carry parity carry K V
+effects in I8085 INX:B DCX:B    reads BC                writes BC K
+effects in I8085 INX:D DCX:D    reads DE                writes DE K
+effects in I8085 INX:H DCX:H    reads HL                writes HL K
+effects in I8085 INX:SP DCX:SP  reads SP                writes SP K
+effects DSUB                    reads HL BC             writes HL negative zero half-carry parity carry K V
+effects ARHL                    reads HL                writes HL carry
+effects RDEL                    reads DE carry          writes DE carry V
+effects LDHI                    reads HL                writes DE
+effects LDSI                    reads SP                writes DE
+effects SHLX                    reads DE HL
+effects LHLX                    reads DE                writes HL
+effects RIM                                             writes A=?
+effects SIM                     reads A
+effects JNK                      reads K                 taken K=0
+effects JK                       reads K                 taken K=1
+effects RSTV                    reads V SP              may-write SP may-push 2 taken V=1
 
 [forms]
 # Operand forms with expressions, in the order operands are matched; literal forms such as A,B and M match

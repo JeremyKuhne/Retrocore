@@ -93,6 +93,10 @@ public class Vic20OracleTests
         Compare(mame, machine, arguments, $"{roms};{carts}");
     }
 
+    // MAME's frame at three seconds falls a hair before them on its clock (2.999999999999999880 on the 60 Hz
+    // VIC-20), so the script, which compares MAME's time exactly, is asked for that frame by a time just before it.
+    private const double MameEnd = 2.999;
+
     // Traces MAME and the machine for three emulated seconds and compares them instruction by instruction.
     private static void Compare(string mame, Vic20Machine machine, List<string> arguments, string roms)
     {
@@ -101,7 +105,7 @@ public class Vic20OracleTests
         environment["RETRO_CPU"] = "ue10";
         List<Row> expected = PetOracleTests.Collapse(Normalize(
             PetOracleTests.WithoutInterrupts(
-                PetOracleTests.RunMame(mame, arguments, roms, seconds: 3, "PetOracle.lua", environment),
+                PetOracleTests.RunMame(mame, arguments, roms, seconds: MameEnd, "PetOracle.lua", environment),
                 irq,
                 machine.Bus.Peek),
             machine.Bus.Peek));

@@ -333,11 +333,85 @@ plan (#239).
   it as MAME wires them.
 - `Cbm1541`: the 6502, the two VIAs (the bus and the head's stepper, motor, LED and write protect), the gate array's
   GCR read and write with its four speed zones and byte-ready on SO, and a half-track stepper on a `CommodoreDisk`.
-  The 1540 is the same board with its own ROM (325303-01), for the VIC's faster serial timing.
+  The 1540 works as the same board, with its own ROM (325303-01), for the VIC's faster serial timing.
 - `.d64` and `.g64` saved back when written, by the existing formats.
 - The drive as a device, numbers 8-11, with Add Card in the Machine view.
 - **Done when** `LOAD"$",8` lists a disk, LOAD, SAVE and the DOS commands (`N`, `S`, `R`, `V`, `I`) work, the
   `vic1001_flop` disks load, and drive traces match MAME's `c1541` and `c1540` through a directory load.
+
+**Built 2026-11-25** after "Start phase V3".
+
+- **`Retrocore.Machines.Commodore.Serial`** (in `Serial/`):
+  - `SerialBus`, `SerialPort` and `SerialLines`: ATN, CLK, DATA and SRQ, open collector, low while any device pulls
+    them.
+  - The VIC-20 pulls ATN from VIA 1's PA7, and CLK and DATA from VIA 2's CA2 and CB2. It reads CLK and DATA on VIA
+    1's PA0 and PA1, and SRQ on VIA 2's CB1. After each drive cycle only those serial inputs are updated.
+- **`Cbm1541`** (with `Cbm1541Bus`, `Cbm1541GateArray` and `Cbm1541Roms`):
+  - A 6502 at 1 MHz, 2K of RAM, VIA 1 (the bus) at `$1800`, VIA 2 (the disk) at `$1C00` and 16K of DOS at `$C000`,
+    all mirrored as MAME maps them. The 1540 works as the same board, with 325303-01. 901229's revisions 1 to 6 load, with 6
+    as the default, as in MAME.
+  - The XOR of ATN and ATNA pulls DATA, so every drive answers ATN in hardware.
+  - **The gate array** follows the 64H156:
+    - The 16 MHz clock recovery is the 4040's, with no GCR PROM: the DOS does the GCR coding itself.
+    - Ten ones are SYNC. Every eighth bit after it pulls BYTE READY low for half a bit, when SOE lets it, until the
+      quarters counter's bit 1 rises.
+    - BYTE READY's fall sets V through SO and latches port A through CA1. The latched byte is the one held when
+      BYTE READY fell, even within a microsecond.
+    - Writing, the eighth bit loads the write register from port A, and its top bit goes to the head as the counter's
+      bit 1 falls.
+  - **VIA 1's undriven pins** float high before the DOS sets their direction, as the TTL inverters they drive hold
+    them. So a 1540 holds CLK and DATA low at power-on, which is why 901229-05 added its `$FF10` patch.
+  - **VIA 2's undriven pins** read low, as in MAME. The DOS reads port B and writes it back when it sets the port's
+    direction, so pins read high would start the motor and push the stepper against its stop.
+  - **The write-protect sensor:** an empty drive reads not protected, since light passes. A disk going in or out
+    blocks the light for 0.1 second, which tells the DOS the disk changed, so it reads the new BAM.
+  - The mechanism is the 4040's `CommodoreFloppyDrive`, as a single drive (`disk8` to `disk11`). It saves as G64 or
+    D64.
+- **`Vic20Machine.AddDisk` and `RemoveDisk`** plug drives 8-11 into the bus. The drives run at 1 MHz against the
+  VIC-20's 14.318 MHz / 14 or 4.434 MHz / 4, counted without drift
+  against the machine's own clock constants. The machine's reset resets them too, as the bus's RESET
+  line does. `Devices` lists the Datasette, then each drive.
+- **Tests:**
+  - `Vic20DiskTests`:
+    - `LOAD"$",8` lists the Data 20 disk on both drives.
+    - On a blank disk on both drives: `N` formats, then SAVE, LOAD and VERIFY work. `R`, `S`, `V` and `I` answer on
+      the command channel, and the disk saves as a D64 that names the file.
+    - MAME's VIC File, VIC Writer and Simplicalc (G64s) and Speakeasy (a D64) load.
+    - Drives 8 and 9 list their own disks. A disk swapped in drive 8 lists its own BAM's count.
+    - A protected disk refuses a scratch with 26 WRITE PROTECT ON, and a format with 21 READ ERROR, as MAME's 1541
+      does too.
+    - The gate array reads every byte after each sync on track 18 as the image holds it.
+  - `Vic20DiskOracleTests` traces the drive's 6502 in MAME (`tools/Pet4040Oracle.lua` now takes `RETRO_CPU` and
+    makes it the debugger's visible CPU, so `tracelog` writes to its trace).
+    - Power-on matches on both the 1541 and the 1540. The 1541's directory load matches through 9 seconds: the main
+      program as far as the shorter trace goes, and all 508 of MAME's controller passes (46,889 rows), with 27 of
+      ours skipped where a job came sooner.
+    - The comparison differs from the 4040's, since DOS 2.6's interrupts return:
+      - Each trace splits into the main program, without the handlers, and the controller's passes (`$F2B0` to
+        `$FE7F`).
+      - Loops of up to 64 rows collapse.
+      - Passes may skip up to 100 on either side to agree again, as MAME types at its own pace and its jobs come at
+        other passes.
+      - Registers count until the first interrupt or the first read of a port's pins, and V never counts before the
+        first interrupt.
+    - **The 1540 directory load is not compared:** MAME's own 1540 on its `vic20` receives the LISTEN as `$2A` and
+      ends in `?DEVICE NOT PRESENT`. Ours lists the directory.
+- **Found and fixed while building:**
+  - BYTE READY was re-checked only at the quarters counter's steps, so a pulse could start and end within one
+    microsecond and be latched a bit late. That was data checksum errors.
+  - The drive read port B before its inputs were set, which stepped the head half a track at power-on.
+  - A VIA write replayed the last microsecond's BYTE READY edges.
+  - BYTE READY's rise was lost when the motor stopped, or SOE fell, while it was low, so CA1 and SO missed the next
+    byte's fall (found in review; `Cbm1541GateArrayTests`).
+- **Not done here:**
+  - Add Card and the drives in the Machine view come with the debug target in V6; the drives are `IMediumSlot`s
+    already.
+  - MAME's random flux on unformatted tracks (weak bits) is not modelled: a run of zeros past the counter's wrap
+    reads as ones there.
+  - SRQ is wired, but no device drives it until the 128's fast bus.
+- **Speed:** about 35× real time with no drive and 14.5× with a 1541, measured over 20 emulated seconds. Most of the
+  cost is the drive's 6502, VIAs and gate array.
+- **PGO:** no refresh. The new code runs only on the VIC-20, and the shared mechanism's code path is unchanged.
 
 #### V4. ROM sources
 
@@ -353,7 +427,7 @@ plan (#239).
 #### V5. The drives' DOS sources
 
 - `Serial/Dos1541.asm`: the 1541's DOS (325302-01 and 901229-xx, 16 KB), one source with a switch for each of the
-  901229 revisions (-01, -02, -03, -05, -06), and the 1540's 325303-01 as another switch.
+  901229 revisions (-01 to -06), and the 1540's 325303-01 as another switch.
 - Reviewed in parts, as the Atari BASIC source was: the job loop and GCR code, the command parser, the file and
   directory code, and the serial bus.
 - **Done when** every revision is byte-identical, the docs lint is clean, and the drive runs from the SDK's builds.

@@ -46,7 +46,8 @@ port A and VIA 2's PB7. The paddles are the VIC's.
 
 **Tape.** The Datasette at the machine's clock: VIA 2's CA1 reads the tape, its PB3 writes, and VIA 1 senses the keys
 and runs the motor. Tapes are TAP images (which save for the VIC-20, machine 1, at the video standard's clock), WAV
-recordings, or a `.prg` made into the tape SAVE writes.
+recordings, a `.prg`, or the programs in a `.t64` archive in directory order. PRG and T64 are made into the tape
+SAVE writes; they can be saved as TAP or WAV, not back to the original archive.
 
 **Cartridges.** MAME's chip files, named for their address (`.20`, `.40`, `.60`, `.70`, `.a0`, `.b0`), a `.prg` at its
 address, and VICE `.crt` images. Any other file is a `.prg` when its first two bytes are a block's start or middle and
@@ -101,7 +102,7 @@ The options are:
 - `ramExpansion`: `none` (the default), `3k`, `8k`, `16k`, `24k` (blocks 1 to 3) or `32k` (the 3K and blocks 1 to 3);
 - `cartridge`: a file, or a list of a cartridge's chip files;
 - `sound`: `speaker` (the default) or `off`;
-- `cassette`: a `.tap`, `.wav` or `.prg` tape, put in with PLAY down; and `fastCassette` (on by default), which runs as
+- `cassette`: a `.tap`, `.wav`, `.prg` or `.t64` tape, put in with PLAY down; and `fastCassette` (on by default), which runs as
   fast as it can while the tape moves;
 - `diskUnits`: the device numbers of drives on the serial bus, 8 to 11, such as `[8]`; `diskModel`: `1541` (the
   default) or `1540`; `disks`: `.d64` or `.g64` images for those drives in `diskUnits`' order (without `diskUnits`,

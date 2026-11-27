@@ -39,6 +39,10 @@ public static class CommodoreTapeBuilder
     public const int Long = 672;
 
     private const int HeaderLength = 192;
+    private const int HeaderLeader = 0x6A00;
+    private const int ProgramLeader = 0x1500;
+    private const int SyncLength = 9;
+    private const int GapLength = 80;
 
     /// <summary>
     ///  Builds a tape from a <c>.prg</c> file: its load address, low byte first, then the program.
@@ -79,23 +83,48 @@ public static class CommodoreTapeBuilder
             throw new ArgumentException("The program must fit below $FFFF.", nameof(program));
         }
 
-        byte[] header = new byte[HeaderLength];
-        header.AsSpan().Fill(0x20);
+        Span<byte> petscii = stackalloc byte[16];
+        petscii.Fill(0x20);
+        for (int i = 0; i < name.Length; i++)
+        {
+            char c = char.ToUpperInvariant(name[i]);
+            petscii[i] = c < 0x80 ? (byte)c : (byte)'?';
+        }
+
+        List<int> pulses = [];
+        AppendProgram(pulses, petscii, start, program);
+        return new(pulses);
+    }
+
+    /// <summary>
+    ///  Counts a program's pulses, including both copies of each block, leaders, sync, checksums and end markers.
+    /// </summary>
+    /// <param name="length">The number of program bytes.</param>
+    /// <returns>The number of pulses.</returns>
+    internal static int ProgramPulseCount(int length) =>
+        HeaderLeader + ProgramLeader + ((HeaderLength + length + (4 * (SyncLength + 1))) * 40) + (2 * ((2 * GapLength) + 1));
+
+    /// <summary>
+    ///  Appends the header and data blocks for a program with a name already in PETSCII.
+    /// </summary>
+    /// <param name="pulses">The tape's pulses.</param>
+    /// <param name="petscii">The 16-byte, space-padded name.</param>
+    /// <param name="start">The program's load address.</param>
+    /// <param name="program">The nonempty program bytes, ending at or below <c>$FFFF</c>.</param>
+    internal static void AppendProgram(List<int> pulses, ReadOnlySpan<byte> petscii, ushort start, ReadOnlySpan<byte> program)
+    {
+        int end = start + program.Length;
+        Span<byte> header = stackalloc byte[HeaderLength];
+        header.Fill(0x20);
         header[0] = 1;
         header[1] = (byte)start;
         header[2] = (byte)(start >> 8);
         header[3] = (byte)end;
         header[4] = (byte)(end >> 8);
-        for (int i = 0; i < name.Length; i++)
-        {
-            char c = char.ToUpperInvariant(name[i]);
-            header[5 + i] = c < 0x80 ? (byte)c : (byte)'?';
-        }
+        petscii.CopyTo(header[5..]);
 
-        List<int> pulses = [];
-        Block(pulses, 0x6A00, header);
-        Block(pulses, 0x1500, program);
-        return new(pulses);
+        Block(pulses, HeaderLeader, header);
+        Block(pulses, ProgramLeader, program);
     }
 
     private static void Block(List<int> pulses, int leader, ReadOnlySpan<byte> data)
@@ -104,14 +133,14 @@ public static class CommodoreTapeBuilder
         Copy(pulses, 0x80, data);
         pulses.Add(Long);
         pulses.Add(Short);
-        Shorts(pulses, 79);
+        Shorts(pulses, GapLength - 1);
         Copy(pulses, 0x00, data);
-        Shorts(pulses, 80);
+        Shorts(pulses, GapLength);
     }
 
     private static void Copy(List<int> pulses, byte sync, ReadOnlySpan<byte> data)
     {
-        for (int count = 9; count >= 1; count--) { Byte(pulses, (byte)(sync | count)); }
+        for (int count = SyncLength; count >= 1; count--) { Byte(pulses, (byte)(sync | count)); }
         byte checksum = 0;
         foreach (byte value in data)
         {

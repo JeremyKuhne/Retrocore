@@ -51,7 +51,7 @@ test("each machine offers what it can run: itself, sources and binaries, and its
     assert.match(pet4032.find(choice => choice.kind === "disk")?.detail ?? "", /4040/);
     const pet = runChoices(machine("pet2001-basic2"));
     assert.deepEqual(pet.find(choice => choice.kind === "program")?.extensions, ["prg", "bin"], "a .prg, or a plain binary");
-    assert.deepEqual(pet.find(choice => choice.kind === "tape")?.extensions, ["tap", "wav", "prg"]);
+    assert.deepEqual(pet.find(choice => choice.kind === "tape")?.extensions, ["tap", "wav", "prg", "t64"]);
     assert.match(pet.find(choice => choice.kind === "tape")?.detail ?? "", /Datasette/);
     assert.match(pet.find(choice => choice.kind === "basic")?.detail ?? "", /Commodore BASIC 2 \(PET\)/);
     assert.match(runChoices(machine("pet2001")).find(choice => choice.kind === "basic")?.detail ?? "", /Commodore BASIC 1 \(PET\)/);

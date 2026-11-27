@@ -6,7 +6,6 @@ using Retrocore.Machines.Chips;
 using Retrocore.Machines.Commodore;
 using Retrocore.Machines.Commodore.Vic20;
 using Retrocore.Machines.Devices;
-using Retrocore.Media;
 using Retrocore.Media.Commodore;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -30,7 +29,7 @@ internal sealed partial class Vic20DebugTarget
     ///   <c>cartridge</c> is a file or a list of files: MAME's chip files (named for their address, such as
     ///   <c>.a0</c>), a <c>.prg</c> placed at its address, or a VICE <c>.crt</c>; a cartridge that signs itself
     ///   starts at power-on. <c>sound</c> is <c>speaker</c> (the default), the VIC's voices, or <c>off</c>; <c>cassette</c> puts a tape
-    ///   (<c>.tap</c>, <c>.wav</c> or <c>.prg</c>) in the Datasette with PLAY down. <c>diskUnits</c>,
+    ///   (<c>.tap</c>, <c>.wav</c>, <c>.prg</c> or <c>.t64</c>) in the Datasette with PLAY down. <c>diskUnits</c>,
     ///   <c>diskModel</c> and <c>disks</c> connect 1541 or 1540 drives to the serial bus and put disks in them; see
     ///   <see cref="LaunchDisks"/>.
     ///  </para>
@@ -110,7 +109,7 @@ internal sealed partial class Vic20DebugTarget
         }
 
         target.LaunchDisks(args, sdkRoms ? Environment.GetEnvironmentVariable("RETROCORE_VIC20_ROMS") : directory);
-        if (args.String("cassette") is { } tape) { Insert(machine.Cassette, tape); }
+        if (args.String("cassette") is { } tape) { CommodoreTapeMedia.Insert(machine.Cassette, tape); }
 
         // Power-up's reset sequence takes seven cycles, after which the kernal's first instruction is next.
         machine.Run(7);
@@ -178,7 +177,7 @@ internal sealed partial class Vic20DebugTarget
         switch (action)
         {
             case "insert":
-                Insert(deck, args.String("path") ?? throw new ArgumentException("path is required."));
+                CommodoreTapeMedia.Insert(deck, args.String("path") ?? throw new ArgumentException("path is required."));
                 break;
             case "play":
                 deck.Play();
@@ -238,37 +237,6 @@ internal sealed partial class Vic20DebugTarget
         {
             throw new ArgumentException($"The cartridge cannot be loaded: {exception.Message}");
         }
-    }
-
-    // Puts a tape in with PLAY down: a TAP image or WAV recording, which saves back to its file, or a program file
-    // made into the tape SAVE would write, which saves only as another file. The tape is read before the one in the
-    // Datasette comes out, so a file that cannot be read leaves it in.
-    private static void Insert(CommodoreDatasette deck, string path)
-    {
-        string full = Path.GetFullPath(path);
-        byte[] bytes = File.ReadAllBytes(full);
-        CommodoreTape tape;
-        IImageCodec? codec;
-        string format;
-        if (Path.GetExtension(full).Equals(".prg", StringComparison.OrdinalIgnoreCase))
-        {
-            string name = Path.GetFileNameWithoutExtension(full);
-            tape = CommodoreTapeBuilder.FromPrg(name.Length > 16 ? name[..16] : name, bytes);
-            codec = null;
-            format = "PRG";
-        }
-        else
-        {
-            CommodoreTapeCodec loaded;
-            (tape, loaded) = CommodoreTapeCodec.Load(bytes);
-            codec = loaded;
-            format = loaded.Format;
-        }
-
-        deck.Eject();
-        deck.Insert(tape, full, format);
-        MediaActions.Register(tape, full, codec, bytes);
-        deck.Play();
     }
 
     // retro/media: the Datasette's keys and tape, by device cassette, and the drives' disks, by device disk8 to disk11.

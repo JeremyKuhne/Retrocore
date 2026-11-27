@@ -356,7 +356,8 @@ internal sealed class AnalysisRoutineEngine
             AnalysisRoutineSummary? seen = callee is { Incomplete: not null, Documented: false } ? null : callee;
             if (state.StackAddresses != 0 && seen is not { WritesThroughPointers: false })
             {
-                Stop($"it calls ${target:X4} with an address in its stack, which may be written through", pc, stack: true);
+                string named = target is { } called ? $"${called:X4}" : "a routine it cannot see";
+                Stop($"it calls {named} with an address in its stack, which may be written through", pc, stack: true);
                 return;
             }
 

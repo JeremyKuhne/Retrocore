@@ -363,7 +363,7 @@ public class AnalysisSoundnessTests
 
     /// <summary>
     ///  A pointer worked out from the stack pointer addresses the stack, as the Z80's <c>ADD HL,SP</c>, also where a
-    ///  callee works it out or steps one it is given.
+    ///  callee works it out or steps one it is given, or a callee, called or gone on into, writes through one.
     /// </summary>
     [TestMethod]
     public void PointersFromTheStackPointerWriteTheStack()
@@ -442,6 +442,23 @@ public class AnalysisSoundnessTests
                 sta $0100,x
                 rts
             """, "Mos6502", "A");
+
+        // A tail call into such a routine too: the write lands on the return address.
+        NotReturning("""
+            ;; Has a routine clear a byte of its return address through X.
+            ;; Keeps: Y
+            Caller:
+                tsx
+                inx
+                jmp Clobber
+
+            ;; Clears the byte at $0100 plus X.
+            ;; Keeps: Y
+            Clobber:
+                lda #0
+                sta $0100,x
+                rts
+            """, "Mos6502");
     }
 
     /// <summary>

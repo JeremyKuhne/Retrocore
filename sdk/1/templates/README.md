@@ -1,7 +1,7 @@
 # Project templates
 
 `retrocore new` and `retrocore init` start a project from one of these folders, which ship with the tool, beside the
-host in `Sdk/1/templates/`. The extension's *Retrocore: New Project* is meant to run `retrocore new`, so that both
+host in `Sdk/1/templates/`. The extension's *Retrocore: New Project* runs `retrocore new`, so that both
 make the same files.
 
 ```text

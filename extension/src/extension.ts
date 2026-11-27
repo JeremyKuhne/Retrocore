@@ -5,7 +5,7 @@
 import * as vscode from "vscode";
 import * as path from "node:path";
 import { randomBytes } from "node:crypto";
-import { shadowCopy, startLanguageClient, stopLanguageClient } from "./languageClient";
+import { restartLanguageClient, shadowCopy, stopLanguageClient } from "./languageClient";
 import { defaultHost, isBundled } from "./host";
 import { registerLaunchBreakpoints } from "./launchBreakpoints";
 import { registerDevices } from "./devices";
@@ -21,6 +21,8 @@ import { registerBasicLanguage } from "./basicLanguage";
 import { registerActiveTarget } from "./activeTarget";
 import { registerProjectLanguage } from "./projectLanguage";
 import { registerInactiveRanges } from "./inactiveRanges";
+import { newProject, type NewProjectAnswers } from "./newProject";
+import { registerToolStatus } from "./toolStatus";
 import { panelKeyCode, webviewHtml } from "./display";
 import { PictureCache } from "./pictures";
 import { groupCycleLines, type CycleLine } from "./cycles";
@@ -28,7 +30,13 @@ import { groupCycleLines, type CycleLine } from "./cycles";
 export function activate(context: vscode.ExtensionContext): void {
     const targets = registerActiveTarget(context);
     registerProjectLanguage(context, targets);
-    void startLanguageClient(context, targets);
+    // The first start, queued as a restart is, so a restart asked for during it waits for it.
+    restartLanguageClient(context, targets).catch(error => console.error(`retrocore: the language server did not start: ${String(error)}`));
+    registerToolStatus(context, () => restartLanguageClient(context, targets));
+    context.subscriptions.push(vscode.commands.registerCommand("retrocore.restartLanguageServer",
+        () => restartLanguageClient(context, targets)));
+    context.subscriptions.push(vscode.commands.registerCommand("retrocore.newProject",
+        (answers?: NewProjectAnswers) => newProject(context, answers)));
     registerInactiveRanges(context, targets);
     registerLaunchBreakpoints(context);
     const basic = registerBasic(context);
@@ -188,9 +196,9 @@ export function activate(context: vscode.ExtensionContext): void {
         if (drive !== undefined) await media({ device: "disk", action: "eject", drive });
     }));
     context.subscriptions.push(vscode.debug.registerDebugAdapterDescriptorFactory("retrocore", {
-        createDebugAdapterDescriptor(session) {
+        async createDebugAdapterDescriptor(session) {
             const host: unknown = session.configuration.debugHost;
-            const filename = typeof host === "string" ? host : defaultHost(context);
+            const filename = typeof host === "string" ? host : await defaultHost(context);
             if (filename === undefined) {
                 throw new Error("Retrocore: no debug host. Reinstall the extension, build the repository, or set debugHost.");
             }

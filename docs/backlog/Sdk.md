@@ -134,6 +134,10 @@ macOS. The sample is ready to move to its own repository: it pins the tool, reco
 output and has its own workflow, which builds every target and plays the transcripts once the tool is on a source it
 can restore from. Its README lists what else changes on the move.
 
+In VS Code, *Retrocore: New Project* asks for the machines, a name and a folder and runs the host's `retrocore new`.
+The extension runs a repository's pinned tool once it is restored; until then it runs its own host, with a warning
+and a Restore button ([open questions](#open-questions)).
+
 ## The project
 
 A repository has one `retrocore.json` at its root. It is either a single project, or it lists the folders of its
@@ -687,4 +691,9 @@ Checked against main once the PET and BBC Micro had landed:
 - **Saving the game.** A save to disk on the disk targets, and to tape or nothing on the Apple-1. Is this in the first
   sample, or after it?
 - **Where the extension and tool disagree.** Should the extension refuse to build when the repository pins a tool it
-  cannot run, or fall back to its own copy with a warning?
+  cannot run, or fall back to its own copy with a warning? Answered in phase 5: it falls back with a warning. A
+  restored pinned tool that runs as its version runs, as language server and debugger. One not restored, or that does
+  not run, gives way to the extension's own host, with a warning naming the pinned version, and the one that runs
+  when it can be read, and a Restore button; there is none when the versions are the same. The fallback refuses only
+  what it cannot build: a project on an SDK major it does not carry fails with the host's own message.
+  `retrocore.languageServer.host` and a launch's `debugHost` each choose their own process's host over the pin.

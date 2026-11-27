@@ -48,9 +48,11 @@ port A and VIA 2's PB7. The paddles are the VIC's.
 and runs the motor. Tapes are TAP images (which save for the VIC-20, machine 1, at the video standard's clock), WAV
 recordings, or a `.prg` made into the tape SAVE writes.
 
-**Cartridges.** MAME's chip files, named for their address (`.20`, `.40`, `.60`, `.70`, `.a0`, `.b0`), a `.prg` at
-its address, and VICE `.crt` images; any other file is a chip at `$A000`. A chip that fills a whole power-of-two part
-of its block repeats through the block, and a cartridge whose ROM at `$A004` reads `A0CBM` starts at power-on. Any RAM a cartridge brings is added.
+**Cartridges.** MAME's chip files, named for their address (`.20`, `.40`, `.60`, `.70`, `.a0`, `.b0`), a `.prg` at its
+address, and VICE `.crt` images. Any other file is a `.prg` when its first two bytes are a block's start or middle and
+the rest is whole 1K pages, and otherwise a chip at `$A000`. A chip that fills a whole power-of-two part of its block
+repeats through the block, and a cartridge whose ROM at `$A004` reads `A0CBM` starts at power-on. Any RAM a cartridge
+brings is added.
 
 **Drives.** 1541s and 1540s on the serial bus as devices 8 to 11, each with its own 6502, 2K of RAM, two VIAs and the
 gate array that reads and writes GCR, running its own DOS from MAME's `c1541` or `c1540` set. Disks are D64 and G64

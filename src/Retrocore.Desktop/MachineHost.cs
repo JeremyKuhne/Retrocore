@@ -392,7 +392,7 @@ internal sealed class MachineHost : DisposableBase
     /// </summary>
     /// <param name="code">
     ///  The ASCII code, 0-127, or a machine's own code above it, such as a Kaypro II arrow key's, $F1-$F4, PETSCII up
-    ///  to 255, or the VIC-20's RESTORE keys, 256-258.
+    ///  to 255, or the VIC-20's RESTORE, RUN/STOP with RESTORE, and SHIFT with the Commodore key, 256-258.
     /// </param>
     internal void Key(int code)
     {

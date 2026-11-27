@@ -19,15 +19,38 @@ namespace Retrocore.Tests;
 public sealed class T64Tests
 {
     /// <summary>
-    ///  The directory, not the physical order of the payloads, sets the order of the tape files.
+    ///  PRG types and legacy program markers play in directory order, not the physical order of the payloads.
     /// </summary>
+    /// <param name="fileType">The second program's CBM file-type byte.</param>
     [TestMethod]
-    public void ReadsProgramsInDirectoryOrder()
+    [DataRow(0x01)]
+    [DataRow(0x44)]
+    [DataRow(0x82)]
+    [DataRow(0xC2)]
+    public void ReadsProgramsInDirectoryOrder(int fileType)
     {
         byte[] image = TapeImage(0x04);
+        image[0x81] = (byte)fileType;
         CommodoreTape first = CommodoreTapeBuilder.FromProgram("FIRST", 0x0401, [0, 0]);
         CommodoreTape second = CommodoreTapeBuilder.FromProgram("SECOND", 0x0401, Program(0x04));
         T64Format.Read(image).Pulses.Should().Equal(first.Pulses.Concat(second.Pulses));
+    }
+
+    /// <summary>
+    ///  A non-program entry in an otherwise valid archive cannot become a loadable program.
+    /// </summary>
+    /// <param name="fileType">The unsupported second file's CBM file-type byte.</param>
+    [TestMethod]
+    [DataRow(0x00)]
+    [DataRow(0x81)]
+    [DataRow(0x83)]
+    [DataRow(0x84)]
+    public void RefusesNonProgramEntries(int fileType)
+    {
+        byte[] image = TapeImage(0x04);
+        image[0x81] = (byte)fileType;
+        FluentActions.Invoking(() => T64Format.Read(image)).Should().Throw<InvalidDataException>()
+            .WithMessage($"T64 entry 3 has unsupported CBM file type ${fileType:X2}; only programs can be played.");
     }
 
     /// <summary>

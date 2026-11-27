@@ -67,8 +67,9 @@ read and write them, so anything a PET could load loads. A Datasette takes:
 - `.wav` recordings, as MAME's PET software list holds them, which save with each pulse rounded to the sample;
 - `.prg` program files, made into the tape SAVE would write: each block twice after its leader, the header naming
   the program and its addresses;
-- `.t64` program archives, synthesized the same way, one program per active directory entry, in directory order.
-  T64 stores no original pulses, and C64S emulator snapshots cannot play as tape files.
+- `.t64` program archives, synthesized the same way, in directory order. T64 stores no original pulses.
+  PRG entries and the legacy `$01` and `$44` type markers are accepted; archives containing other active entries,
+  such as sequential files or C64S snapshots, are refused.
 
 The keys are the Datasette's: PLAY, RECORD (with PLAY), STOP, and rewinding. A recording is a changed tape: Save or
 Save As writes it as `.tap` or `.wav` (Save As only for imported PRG or T64), and ejecting it asks first, as a changed disk does

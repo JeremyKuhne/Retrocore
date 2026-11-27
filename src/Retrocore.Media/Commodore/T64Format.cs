@@ -12,7 +12,8 @@ namespace Retrocore.Media.Commodore;
 /// </summary>
 /// <remarks>
 ///  See <see href="https://ist.uwaterloo.ca/~schepers/formats/T64.TXT">Peter Schepers's T64 format notes</see>.
-///  T64 does not store pulses, and emulator snapshots cannot be played as tape files.
+///  T64 does not store pulses. Only PRG entries and the legacy program markers <c>$01</c> and <c>$44</c>
+///  can be played; archives containing other active entries are refused.
 /// </remarks>
 public static class T64Format
 {
@@ -64,6 +65,12 @@ public static class T64Format
             if (record[0] != 1)
             {
                 throw new InvalidDataException($"T64 entry {index + 1} is not a normal tape file.");
+            }
+
+            byte fileType = record[1];
+            if (fileType is not (0x01 or 0x44) && (CbmDosFileType)(fileType & 0x07) != CbmDosFileType.Program)
+            {
+                throw new InvalidDataException($"T64 entry {index + 1} has unsupported CBM file type ${fileType:X2}; only programs can be played.");
             }
 
             ushort start = BinaryPrimitives.ReadUInt16LittleEndian(record[2..]);

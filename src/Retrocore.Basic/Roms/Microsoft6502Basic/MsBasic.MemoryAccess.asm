@@ -23,7 +23,7 @@
     ;; when that entry is configured not to preserve <PokeAddress>.
     ;; Out: X = byte value, TextPointer = terminating character
     ;; See: <EvaluateNumber>, <ConvertToAddress>, <ReadCommaAndByte>
-    ;; Also: GETNUM (M6502, ASTIL, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;; Also: GETNUM (M6502, ASTIL, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     .proc ReadAddressAndByte
     jsr EvaluateNumber
     jsr ConvertToAddress
@@ -33,7 +33,7 @@
     ;;
     ;; Out: X = byte value, TextPointer = terminating character
     ;; See: <CheckComma>, <EvaluateByte>
-    ;; Also: COMBYT (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;; Also: COMBYT (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     .proc ReadCommaAndByte
     jsr CheckComma
     jmp EvaluateByte
@@ -46,7 +46,7 @@
     ;; address.
     ;; Out: PokeAddress = address, A = high byte, Y = low byte
     ;; Errors: ILLEGAL QUANTITY for an exponent or sign rejected by this configuration
-    ;; Also: GETADR (M6502, ASTIL, CBM4S79, K4S79, HV1, HV1R, HV2, HV4, HV4R, HVK4)
+    ;; Also: GETADR (M6502, ASTIL, CBM4S79, K4S79, HV1, HV1R, HV2, HV4, HV4R, HVK4, BV20)
     .proc ConvertToAddress
     .if rejectNegative
         lda FacSign
@@ -81,7 +81,7 @@
     ;; guard, addresses whose high byte is at least the high byte of <ROMLOC> and less than that of <LASTWR> return
     ;; zero without reading memory; the page containing <LASTWR> itself remains readable.
     ;; Errors: ILLEGAL QUANTITY if <ConvertToAddress> rejects the address
-    ;; Also: PEEK (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;; Also: PEEK (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     .proc Peek
     .if preserveAddress
         lda PokeAddress+highFirst
@@ -104,13 +104,13 @@
     .endif
 
 ;; Reads the byte at <PokeAddress> into A and Y.
-;; Also: GETCON (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: GETCON (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 Fetch:
     lda (PokeAddress),y
     tay
 
 ;; Restores <PokeAddress> where selected, then jumps to <ReturnByte>; the ROM guard branches here with Y = 0.
-;; Also: DOSGFL (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: DOSGFL (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 ToReturnByte:
     .if preserveAddress
         pla
@@ -134,7 +134,7 @@ ToReturnByte:
     ;; The byte expression may call <Functions::Peek>; its address-preservation configuration determines whether that
     ;; nested call leaves the original destination in <PokeAddress>.
     ;; See: <ReadAddressAndByte>
-    ;; Also: POKE (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;; Also: POKE (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     .proc Poke
     jsr ReadAddressAndByte
     txa
@@ -161,7 +161,7 @@ ToReturnByte:
     ;;     `WAIT_EASTER_EGG` is 1) continues here
     ;;   Done = returns; <Float::AlignAndAdd> branches here as its own return
     ;; See: <ReadAddressAndByte>, <ReadCommaAndByte>, <Statements::Wait::StoreMask>
-    ;; Also: FNWAIT (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;; Also: FNWAIT (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     .proc Wait
     jsr ReadAddressAndByte
     stx WaitAndMask
@@ -172,13 +172,13 @@ ToReturnByte:
 
 ;; Stores X as <WaitXorMask>; the hidden-message extension (BASIC 2's, and BASIC 1's when `WAIT_EASTER_EGG` is 1)
 ;; continues here.
-;; Also: STORDO (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: STORDO (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 StoreMask:
     stx WaitXorMask
     ldy #$00
 
 ;; The polling loop.
-;; Also: WAITER (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: WAITER (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 Poll:
     lda (PokeAddress),y
     eor WaitXorMask
@@ -186,7 +186,7 @@ Poll:
     beq Poll
 
 ;; Returns; <Float::AlignAndAdd> branches here as its own return.
-;; Also: ZERRTS (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: ZERRTS (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 Done:
     rts
     .endproc

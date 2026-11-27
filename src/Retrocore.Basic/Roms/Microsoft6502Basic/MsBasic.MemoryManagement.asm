@@ -32,7 +32,7 @@
     ;;   <TOKEN_GOSUB>); on a match, the variable's low byte; on a search ending at $00, 0
     ;; Keeps: Y
     ;; See: <Statements::For>, <Statements::Next>
-    ;; Also: FNDFOR (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;; Also: FNDFOR (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     .proc FindForFrame
     tsx
     inx
@@ -40,7 +40,7 @@
     inx
     inx
 ;; Stops at a frame not marked <TOKEN_FOR>; a zero <AssignedVariable> high byte adopts this frame's variable.
-;; Also: FFLOOP (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: FFLOOP (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 NextFrame:
     lda Stack + 1 + ForFrame::TOKEN,x
     cmp #TOKEN_FOR
@@ -52,7 +52,7 @@ NextFrame:
     lda Stack + 1 + ForFrame::VARIABLE+1,x
     sta AssignedVariable+1
 ;; Compares the frame's variable pointer with <AssignedVariable>.
-;; Also: CMPFOR (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: CMPFOR (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 Compare:
     cmp Stack + 1 + ForFrame::VARIABLE+1,x
     bne SkipFrame
@@ -60,7 +60,7 @@ Compare:
     cmp Stack + 1 + ForFrame::VARIABLE,x
     beq Done
 ;; Adds <FOR_FRAME_SIZE> to X, modulo 256, and loops unless X is then exactly 0.
-;; Also: ADDFRS (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: ADDFRS (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 SkipFrame:
     txa
     clc
@@ -68,7 +68,7 @@ SkipFrame:
     tax
     bne NextFrame
 ;; Returns.
-;; Also: FFRTS (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: FFRTS (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 Done:
     rts
     .endproc
@@ -86,13 +86,13 @@ Done:
     ;; Entry:
     ;;   Unchecked = copies without the space check or updating <ArraysEnd>
     ;; See: <CheckFreeMemory>, <Strings::CollectGarbage>
-    ;; Also: BLTU (M6502, ASTIL, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;; Also: BLTU (M6502, ASTIL, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     .proc MoveRangeUp
     jsr CheckFreeMemory
     sta ArraysEnd
     sty ArraysEnd+1
 ;; Copies without the space check or updating <ArraysEnd>.
-;; Also: BLTUC (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: BLTUC (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 Unchecked:
     sec
     lda SourceEnd
@@ -113,7 +113,7 @@ Unchecked:
     dec SourceEnd+1
     sec
 ;; Lowers <DestinationEnd> by the partial-page length.
-;; Also: BLT1 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: BLT1 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 SetDestination:
     lda DestinationEnd
     sbc Pointer1
@@ -122,19 +122,19 @@ SetDestination:
     dec DestinationEnd+1
     bcc NextByte
 ;; (<SourceEnd>),y to (<DestinationEnd>),y.
-;; Also: BLTLP (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: BLTLP (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 CopyByte:
     lda (SourceEnd),y
     sta (DestinationEnd),y
 ;; Dey; loop; then copies offset 0.
-;; Also: MOREN1 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: MOREN1 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 NextByte:
     dey
     bne CopyByte
     lda (SourceEnd),y
     sta (DestinationEnd),y
 ;; Steps both high bytes down a page; X pages.
-;; Also: DECBLT (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: DECBLT (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 NextPage:
     dec SourceEnd+1
     dec DestinationEnd+1
@@ -152,7 +152,7 @@ NextPage:
     ;; In: A = number of two-byte entries, 0 through $7F
     ;; Errors: OUT OF MEMORY if the reserve addition overflows or the resulting threshold exceeds the stack pointer
     ;; See: <EvaluateExpression>, <Statements::For>, <Statements::GoSub>
-    ;; Also: GETSTK (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;; Also: GETSTK (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     .proc CheckStack
     asl a
     adc #stackReserve
@@ -174,7 +174,7 @@ NextPage:
     ;; In: A = address low byte, Y = address high byte
     ;; Out: A = address low byte, Y = address high byte
     ;; Errors: OUT OF MEMORY if the address is still at or above <StringsBottom>
-    ;; Also: REASON (M6502, ASTIL, AS82, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;; Also: REASON (M6502, ASTIL, AS82, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     .proc CheckFreeMemory
     cpy StringsBottom+1
     bcc Done
@@ -182,13 +182,13 @@ NextPage:
     cmp StringsBottom
     bcc Done
 ;; Pushes A, Y and nine scratch bytes, calls <Strings::CollectGarbage>.
-;; Also: TRYMOR (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: TRYMOR (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 Collect:
     pha
     ldx #$09
     tya
 ;; Pushes <FloatTemporary1>+x for x = 9 down to 1.
-;; Also: REASAV (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: REASAV (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 SaveScratch:
     pha
     lda FloatTemporary1,x
@@ -197,7 +197,7 @@ SaveScratch:
     jsr Strings::CollectGarbage
     ldx #$F7
 ;; Pulls the nine bytes back after collection.
-;; Also: REASTO (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: REASTO (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 RestoreScratch:
     pla
     sta Fac,x
@@ -212,7 +212,7 @@ RestoreScratch:
     cmp StringsBottom
     bcs ReportOutOfMemory
 ;; Returns.
-;; Also: REARTS (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: REARTS (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 Done:
     rts
     .endproc

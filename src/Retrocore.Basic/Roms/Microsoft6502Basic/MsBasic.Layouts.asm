@@ -43,7 +43,7 @@ Stack = $0100
 .endstruct
 
 ;; The size of a <StringDescriptor>.
-;; Also: STRSIZ (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: STRSIZ (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 DESCRIPTOR_SIZE = .sizeof(StringDescriptor)
 
 ;; The frame `FOR` pushes on the stack, from low addresses to high, which `NEXT` finds and steps.
@@ -61,7 +61,7 @@ DESCRIPTOR_SIZE = .sizeof(StringDescriptor)
 .endstruct
 
 ;; The size of a <ForFrame>.
-;; Also: FORSIZ (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: FORSIZ (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 FOR_FRAME_SIZE = .sizeof(ForFrame)
 
 ;; The frame `GOSUB` pushes on the stack, from low addresses to high, which `RETURN` pops.

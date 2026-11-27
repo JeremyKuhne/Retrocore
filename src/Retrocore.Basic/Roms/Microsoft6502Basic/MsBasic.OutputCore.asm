@@ -5,8 +5,11 @@
 
 ;; Emits the line-number and decimal-output routines.
 ;; Parameters: omitPositiveSpace = 1 to omit the leading space for positive values, otherwise 0
-;;   includeTime = 1 to use the time-conversion table, otherwise 0
-.macro DecimalOutput omitPositiveSpace, includeTime
+;;   includeTime = 1 to use the time-conversion table, otherwise 0;
+;;   keepY = optional, 1 (when given) for <Float::PrintFac> to call <Float::FormatFacAtOffset>, past the `LDY #1` of
+;;   <Float::FormatFac>, with the Y of 0 that <Float::PrintDecimalAX>'s conversion leaves, so that a line number prints
+;;   without the space for its sign (the VIC-20's)
+.macro DecimalOutput omitPositiveSpace, includeTime, keepY
 
     .assert omitPositiveSpace = 0 || omitPositiveSpace = 1, "omitPositiveSpace is 0 or 1."
     .assert includeTime = 0 || includeTime = 1, "includeTime is 0 or 1."
@@ -17,7 +20,7 @@
 
     ;; Prints the line-number prefix and the current line number.
     ;; See: <Float::PrintDecimalAX>, <LineNumberPrefix>
-    ;; Also: INPRT (M6502, ASTIL, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;; Also: INPRT (M6502, ASTIL, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     .proc PrintInLineNumber
     lda #<LineNumberPrefix
     ldy #>LineNumberPrefix
@@ -29,8 +32,8 @@
 
     ;; Prints the unsigned line number in A:X.
     ;; In: A = high byte of line number, X = low byte of line number
-    ;; See: <Float::FormatFac>, <PrintText>
-    ;; Also: LINPRT (M6502, ASTIL, CBM4S79, K4S79, HV1, HV1R, HV2, HV4, HV4R, HVK4)
+    ;; See: <Float::FormatFac>, <Float::FormatFacAtOffset>, <PrintText>
+    ;; Also: LINPRT (M6502, ASTIL, CBM4S79, K4S79, HV1, HV1R, HV2, HV4, HV4R, HVK4, BV20)
     .proc PrintDecimalAX
     sta FacMantissa1
     stx FacMantissa2
@@ -40,14 +43,20 @@
     ; Falls into PrintFac.
     .endproc
 
-    ;; Prints <Fac> as a decimal number through <Float::FormatFac> and <PrintText>.
+    ;; Prints <Fac> as a decimal number through <Float::FormatFac> and <PrintText>; where the build passes `keepY` (the
+    ;; VIC-20), through <Float::FormatFacAtOffset> with the caller's Y instead of <Float::FormatFac>.
     ;; Entry:
     ;;   ToPrintString = Jumps on to <PrintText>, printing the string at Y:A
     .proc PrintFac
-    jsr FormatFac
+    .ifnblank keepY
+        .assert keepY = 1, "keepY is 1 when given."
+        jsr FormatFacAtOffset
+    .else
+        jsr FormatFac
+    .endif
 
 ;; Prints the string addressed by Y:A through <PrintText>.
-;; Also: STROU2 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: STROU2 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 ToPrintString:
     jmp PrintText
     .endproc
@@ -60,7 +69,7 @@ ToPrintString:
     ;; <Float::FormatFacAtOffset> also serves `STR$`: with Y = 0 its string begins one byte earlier at
     ;; <NumberBufferPrefix>.
     ;; Out: A = low byte of <NumberBuffer>, Y = high byte of <NumberBuffer>
-    ;; Also: FOUT (M6502, ASTIL, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;; Also: FOUT (M6502, ASTIL, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     .proc FormatFac
     ldy #$01
     .endproc
@@ -69,7 +78,7 @@ ToPrintString:
     ;; Entry:
     ;;   ExtractDigits = With Y at a power of ten: sets X's bit 7 for the first pass and extracts digits; the PET's TI$
     ;;     conversion enters here with Y at a time divisor
-    ;; Also: FOUTC (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;; Also: FOUTC (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     .proc FormatFacAtOffset
     .if omitPositiveSpace
         lda #'-'
@@ -79,7 +88,7 @@ ToPrintString:
         iny
 
 ;; Stores the minus sign; a positive number skips this store, since this build omits the leading space.
-;; Also: FOUT1 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: FOUT1 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 StoreSign:
         sta NumberBuffer-1,y
 
@@ -92,7 +101,7 @@ SignDone:
         lda #'-'
 
 ;; Stores the sign character, a space or a minus.
-;; Also: FOUT1 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: FOUT1 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 StoreSign:
         sta NumberBuffer-1,y
     .endif
@@ -109,7 +118,7 @@ StoreSign:
     bcs SetScale
 
 ;; <Fac> below 1: multiplies by <Float::Billion> and starts the decimal scale at -9.
-;; Also: FOUT37 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: FOUT37 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 ScaleUpSmall:
     lda #<Billion
     ldy #>Billion
@@ -117,13 +126,13 @@ ScaleUpSmall:
     lda #$F7
 
 ;; Stores the starting decimal scale in <DigitCount>.
-;; Also: FOUT7 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: FOUT7 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 SetScale:
     sta DigitCount
 
 ;; Compares with <Float::UpperOutputLimit>: equal goes straight to <Float::FormatFacAtOffset::ConvertInteger>, larger
 ;; divides.
-;; Also: FOUT4 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: FOUT4 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 CheckUpper:
     ; Scale the magnitude into the nine-digit range, keeping the decimal scale in <DigitCount>.
     lda #<UpperOutputLimit
@@ -133,7 +142,7 @@ CheckUpper:
     bpl DivideDown
 
 ;; Compares with <Float::LowerOutputLimit>: larger rounds.
-;; Also: FOUT3 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: FOUT3 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 CheckLower:
     lda #<LowerOutputLimit
     ldy #>LowerOutputLimit
@@ -142,26 +151,26 @@ CheckLower:
     bpl RoundHalf
 
 ;; <Float::MultiplyByTen> and lowers the scale.
-;; Also: FOUT38 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: FOUT38 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 MultiplyUp:
     jsr MultiplyByTen
     dec DigitCount
     bne CheckLower
 
 ;; <Float::DivideByTen> and raises the scale.
-;; Also: FOUT9 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: FOUT9 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 DivideDown:
     jsr DivideByTen
     inc DigitCount
     bne CheckUpper
 
 ;; Adds 1/2 (<Float::AddHalf>) to round.
-;; Also: FOUT5 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: FOUT5 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 RoundHalf:
     jsr AddHalf
 
 ;; <Float::ToLongInteger>, then decides between fixed point and an E exponent from the scale.
-;; Also: BIGGES (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: BIGGES (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 ConvertInteger:
     jsr ToLongInteger
     ldx #$01
@@ -178,12 +187,12 @@ ConvertInteger:
 ;; Sets carry for the subtraction that follows: branched to when the decimal scale is below -10 (the value, rounded
 ;; to nine digits, is below .01), or fallen into with A = 2, which makes the printed exponent zero (fixed point). A
 ;; large value goes on to <Float::FormatFacAtOffset::SetExponent> with carry already set.
-;; Also: FOUTPI (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: FOUTPI (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 UseExponent:
     sec
 
 ;; Stores the printed exponent in <DecimalExponent> (0 means fixed point) and the digits before the point.
-;; Also: FOUT6 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: FOUT6 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 SetExponent:
     sbc #$02
     sta DecimalExponent                      ; zero selects fixed-point output
@@ -193,7 +202,7 @@ SetExponent:
     bpl FirstPower
 
 ;; No digits before the point: writes '.' and, if needed, '0'.
-;; Also: FOUT39 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: FOUT39 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 LeadingPoint:
     ldy NumberBufferPointer
     lda #'.'
@@ -206,23 +215,23 @@ LeadingPoint:
     sta NumberBuffer-1,y
 
 ;; Saves the buffer position.
-;; Also: FOUT16 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: FOUT16 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 SavePosition:
     sty NumberBufferPointer
 
 ;; Starts at the first power of ten.
-;; Also: FOUT8 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: FOUT8 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 FirstPower:
     ldy #$00
 
 ;; With Y at a power of ten: sets X's bit 7 for the first pass and extracts digits. The PET's TI$ conversion enters
 ;; here with Y at a time divisor.
-;; Also: FOUTIM (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: FOUTIM (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 ExtractDigits:
     ldx #$80
 
 ;; Extracts one decimal digit by repeated addition of an alternating signed power of ten.
-;; Also: FOUT2 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: FOUT2 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 AddPower:
     lda FacMantissa4
     clc
@@ -243,12 +252,12 @@ AddPower:
     bmi DigitFound
 
 ;; A carry with a negative power: keep adding.
-;; Also: FOUT41 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: FOUT41 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 Carried:
     bmi AddPower
 
 ;; Turns the count into the digit (complemented for a positive power).
-;; Also: FOUT40 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: FOUT40 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 DigitFound:
     txa
     bcc StoreDigit
@@ -256,7 +265,7 @@ DigitFound:
     adc #$0A
 
 ;; Makes the count a digit character, stores it and writes '.' when the digits before the point are done.
-;; Also: FOUTYP (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: FOUTYP (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 StoreDigit:
     adc #('0'-1)
     iny
@@ -276,7 +285,7 @@ StoreDigit:
     sta NumberBuffer-1,y
 
 ;; Saves the buffer position and reloads the table offset.
-;; Also: STXBUF (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: STXBUF (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 SavePointer:
     sty NumberBufferPointer
     ldy PowerTablePointer
@@ -296,12 +305,12 @@ NextPower:
     bne AddPower
 
 ;; Reloads the buffer position.
-;; Also: FOULDY (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: FOULDY (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 DigitsDone:
     ldy NumberBufferPointer
 
 ;; Removes trailing fractional zeroes and an unnecessary decimal point before emitting any exponent.
-;; Also: FOUT11 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: FOUT11 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 TrimZeros:
     lda NumberBuffer-1,y
     dey
@@ -312,7 +321,7 @@ TrimZeros:
     iny
 
 ;; Writes no exponent for fixed point; otherwise picks its sign.
-;; Also: FOUT12 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: FOUT12 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 Exponent:
     lda #'+'
     ldx DecimalExponent
@@ -325,7 +334,7 @@ Exponent:
     lda #'-'
 
 ;; Writes 'E' and the exponent's sign.
-;; Also: FOUT14 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: FOUT14 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 StoreExponentSign:
     sta NumberBuffer+1,y
     lda #'E'
@@ -335,7 +344,7 @@ StoreExponentSign:
     sec
 
 ;; Counts the exponent's tens, then writes its two digits and the terminator.
-;; Also: FOUT15 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: FOUT15 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 ExponentTens:
     inx
     sbc #$0A
@@ -349,18 +358,18 @@ ExponentTens:
     beq ReturnBuffer
 
 ;; <Fac> is zero: writes '0'.
-;; Also: FOUT19 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: FOUT19 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 StoreZero:
     sta NumberBuffer-1,y
 
 ;; Writes the zero terminator.
-;; Also: FOUT17 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: FOUT17 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 Terminate:
     lda #$00
     sta NumberBuffer,y
 
 ;; Returns Y:A = <NumberBuffer>.
-;; Also: FOUT20 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: FOUT20 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 ReturnBuffer:
     lda #<NumberBuffer
     ldy #>NumberBuffer

@@ -8,7 +8,7 @@
 ;; Prints text up to a quotation mark or zero.
 ;; In: A = low string address, Y = high string address
 ;; See: <Strings::FromText>, <PrintString>
-;; Also: STROUT (M6502, ASTIL, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: STROUT (M6502, ASTIL, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 .proc PrintText
     jsr Strings::FromText
 ; Falls into PrintString.
@@ -20,14 +20,14 @@
 ;; <PrintNewline::Return>, Print's return.
 ;; In: FacMantissa3 = string descriptor address (low byte), FacMantissa4 = its high byte
 ;; See: <Strings::ReleaseFac>, <PrintCharacter>
-;; Also: STRPRT (M6502, ASTIL, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: STRPRT (M6502, ASTIL, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 .proc PrintString
     jsr Strings::ReleaseFac
     tax
     ldy #$00
     inx
 ;; Prints the next character until the count runs out.
-;; Also: STRPR2 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: STRPR2 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 NextCharacter:
     dex
     beq PrintNewline::Return

@@ -10,7 +10,7 @@
 
     ;; Takes the square root of <Fac> by raising it to one half.
     ;; Errors: <Functions::Log> reports an illegal quantity for a negative argument
-    ;; Also: SQR (M6502, ASTIL, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;; Also: SQR (M6502, ASTIL, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     .proc Sqr
     jsr Float::CopyFacToArg
     lda #<Float::Half
@@ -29,7 +29,7 @@
     ;; log(base)).
     ;; In: zero = set when the exponent is zero
     ;; Errors: illegal quantity for a negative base with a noninteger exponent
-    ;; Also: FPWRT (M6502, ASTIL, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;; Also: FPWRT (M6502, ASTIL, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     .proc RaiseArg
     beq Functions::Exp
     lda ArgExponent
@@ -37,7 +37,7 @@
     jmp SetExponentAndSign
 
 ;; Saves the power in <FloatTemporary3>; for a negative base checks the power is whole and takes its parity.
-;; Also: FPWRT1 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: FPWRT1 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 NonzeroBase:
     ldx #FloatTemporary3
     ldy #0
@@ -55,7 +55,7 @@ NonzeroBase:
 ;; <Fac> = Arg with its sign from A: positive for a negative base's whole power, so the parity negates the result,
 ;; and negative for a fractional power, which <Functions::Log> rejects. Then EXP(power * LOG(base)), negated for an
 ;; odd power.
-;; Also: FPWR1 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: FPWR1 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 TakeLog:
     jsr CopyArgToFacWithSign
     tya
@@ -73,7 +73,7 @@ TakeLog:
     ;; Negates <Fac> unless its exponent is zero.
     ;; Entry:
     ;;   Done = The shared rts
-    ;; Also: NEGOP (M6502, ASTIL, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;; Also: NEGOP (M6502, ASTIL, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     .proc Negate
     lda FacExponent
     beq Done
@@ -82,7 +82,7 @@ TakeLog:
     sta FacSign
 
 ;; Returns without changing the result.
-;; Also: NEGRTS (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: NEGRTS (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 Done:
     rts
     .endproc
@@ -100,7 +100,7 @@ Done:
     ;; It multiplies by log2(e), keeps the integer part for scaling and evaluates <Float::ExponentialPolynomial> on the
     ;; reduced argument. A sufficiently negative argument underflows to zero.
     ;; Errors: floating-point overflow when the result is too large
-    ;; Also: EXP (M6502, ASTIL, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;; Also: EXP (M6502, ASTIL, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     .proc Exp
 
     ;; Where <Functions::Exp> keeps the product's rounding byte while it splits off the integer part. The byte is
@@ -116,7 +116,7 @@ Done:
     jsr Float::Round::Increment
 
 ;; Saves the rounding byte, copies <Fac> to Arg; exponent $88 or more is out of range.
-;; Also: STOLD (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: STOLD (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 CheckRange:
     sta RoundingByte
     jsr Float::CopyFacToArgUnrounded
@@ -125,12 +125,12 @@ CheckRange:
     bcc Reduce
 
 ;; <Float::ExponentOutOfRange>: the <ERROR_OVERFLOW> error for a large positive argument, zero for a large negative one.
-;; Also: GOMLDV (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: GOMLDV (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 OutOfRange:
     jsr Float::ExponentOutOfRange
 
 ;; Takes the integer part (<Functions::Int>) for the power of two and keeps the fraction.
-;; Also: EXP1 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: EXP1 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 Reduce:
     jsr Int
     lda SmallInteger
@@ -143,7 +143,7 @@ Reduce:
     ldx #5
 
 ;; Exchanges <Fac> and Arg byte by byte.
-;; Also: SWAPLP (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: SWAPLP (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 SwapLoop:
     lda ArgExponent,x
     ldy FacExponent,x
@@ -177,7 +177,7 @@ SwapLoop:
     ;; In: A = low byte of coefficient table, Y = high byte of coefficient table
     ;; Out: Fac = polynomial result
     ;; See: <Float::EvaluatePolynomial>
-    ;; Also: POLYX (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;; Also: POLYX (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     .proc EvaluateOddPolynomial
     sta PolynomialPointer
     sty PolynomialPointer+1
@@ -196,7 +196,7 @@ SwapLoop:
     ;; from highest power to constant.
     ;; In: A = low byte of table, Y = high byte of table
     ;; Out: Fac = polynomial result
-    ;; Also: POLY (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;; Also: POLY (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     .proc EvaluatePolynomial
     sta PolynomialPointer
     sty PolynomialPointer+1
@@ -205,7 +205,7 @@ SwapLoop:
     ;; Uses the table already saved in <PolynomialPointer>.
     ;; Entry:
     ;;   Done = The shared rts
-    ;; Also: POLY1 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;; Also: POLY1 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     .proc EvaluateStoredPolynomial
     jsr StoreFacInTemporary2
     lda (PolynomialPointer),y
@@ -217,14 +217,14 @@ SwapLoop:
     inc PolynomialPointer+1
 
 ;; Stores the first coefficient's address.
-;; Also: POLY3 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: POLY3 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 SetPointer:
     sta PolynomialPointer
     ldy PolynomialPointer+1
 
 ;; Multiplies by the coefficient at Y:A on the first pass, and by x (<FloatTemporary2>) on later ones, and steps to
 ;; the next coefficient.
-;; Also: POLY2 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: POLY2 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 NextTerm:
     jsr MultiplyPacked
     lda PolynomialPointer
@@ -235,7 +235,7 @@ NextTerm:
     iny
 
 ;; Adds the coefficient; loops <PolynomialDegree> times.
-;; Also: POLY4 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: POLY4 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 AddTerm:
     sta PolynomialPointer
     sty PolynomialPointer+1
@@ -260,7 +260,7 @@ Done:
     .scope Functions continued
 
     ;; Computes cosine of <Fac> in radians by adding pi/2 and falling into <Functions::Sin>.
-    ;; Also: COS (M6502, ASTIL, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;; Also: COS (M6502, ASTIL, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     .proc Cos
     lda #<Float::HalfPi
     ldy #>Float::HalfPi
@@ -273,7 +273,7 @@ Done:
     ;; <Float::SinePolynomial>. <TangentSign> records a quadrant change for <Functions::Tan>.
     ;; Entry:
     ;;   Reflect = Negates <Fac> (<Float::Negate>)
-    ;; Also: SIN (M6502, ASTIL, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;; Also: SIN (M6502, ASTIL, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     .proc Sin
     jsr Float::CopyFacToArg
     lda #<Float::TwoPi
@@ -299,12 +299,12 @@ Done:
     sta TangentSign
 
 ;; Negates <Fac> (<Float::Negate>).
-;; Also: SIN1 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: SIN1 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 Reflect:
     jsr Float::Negate
 
 ;; Adds Quarter; restores a negative quadrant's sign.
-;; Also: SIN2 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: SIN2 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 AddQuarter:
     lda #<Float::Quarter
     ldy #>Float::Quarter
@@ -314,7 +314,7 @@ AddQuarter:
     jsr Float::Negate
 
 ;; Points Y:A at <Float::SinePolynomial>.
-;; Also: SIN3 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: SIN3 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 Approximate:
     lda #<Float::SinePolynomial
     ldy #>Float::SinePolynomial
@@ -329,7 +329,7 @@ ToEvaluateOddPolynomial:
     ;;
     ;; The sine is saved; the cosine is computed from the magnitude of the reduced argument <Functions::Sin> leaves in
     ;; <FloatTemporary1>, which replaces the input stored there first, and the quadrant sign.
-    ;; Also: TAN (M6502, ASTIL, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;; Also: TAN (M6502, ASTIL, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     .proc Tan
     jsr Float::StoreFacInTemporary1
     lda #0
@@ -353,7 +353,7 @@ ToDividePacked:
     jmp Float::DividePacked
 
 ;; Continues the cosine calculation using the quadrant sign in A from <Functions::Tan>.
-;; Also: COSC (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: COSC (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 Cosine:
     pha
     jmp Sin::Reflect
@@ -371,7 +371,7 @@ Cosine:
     ;;
     ;; It reduces the magnitude to at most one using atan(x) = pi/2 - atan(1/x), evaluates
     ;; <Float::ArctangentPolynomial>, then restores the original sign.
-    ;; Also: ATN (M6502, ASTIL, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;; Also: ATN (M6502, ASTIL, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     .proc Atn
     lda FacSign
     pha
@@ -379,7 +379,7 @@ Cosine:
     jsr Float::Negate
 
 ;; Pushes the exponent; a magnitude of 1 or more takes the reciprocal (One / <Fac>).
-;; Also: ATN1 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: ATN1 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 Positive:
     lda FacExponent
     pha
@@ -390,7 +390,7 @@ Positive:
     jsr Float::DividePacked
 
 ;; Evaluates <Float::ArctangentPolynomial> and subtracts from <Float::HalfPi> if the reciprocal was taken.
-;; Also: ATN2 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: ATN2 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 Approximate:
     lda #<Float::ArctangentPolynomial
     ldy #>Float::ArctangentPolynomial
@@ -403,14 +403,14 @@ Approximate:
     jsr Float::SubtractFromPacked
 
 ;; Negates for a negative argument.
-;; Also: ATN3 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: ATN3 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 RestoreSign:
     pla
     bpl Done
     jmp Float::Negate
 
 ;; The rts.
-;; Also: ATN4 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: ATN4 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 Done:
     rts
     .endproc

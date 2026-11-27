@@ -24,7 +24,7 @@
     ;; Discards the program and falls into the variable and stack reset; with text after the statement, returns.
     ;; In: zero = set at the end of the statement, carry = as <EraseProgram> takes it
     ;; See: <ClearVariables>, <EraseProgram>
-    ;; Also: SCRATH (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;; Also: SCRATH (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     .proc New
     bne FindLine::Done
     .endproc
@@ -38,7 +38,7 @@
     ;; leaves it at the end of a statement, so AppleSoft's and, by default, BASIC 1's `NEW` leave <VariablesStart> at
     ;; <ProgramStart> + 3. The startup code calls it too, with the carry its own code leaves.
     ;; In: carry = added to the address where `clearCarry` is 0
-    ;; Also: SCRTCH (M6502, ASTIL, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;; Also: SCRTCH (M6502, ASTIL, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     .proc EraseProgram
     lda #$00
     .if resetLock
@@ -71,7 +71,7 @@
     ;; <Statements::Clear>, which returns unless zero is set, so those builds pass `runSetsZero` = 1 to load zero
     ;; first.
     ;; See: <RewindTextPointer>, <ClearVariables>
-    ;; Also: RUNC (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;; Also: RUNC (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     .proc ResetProgramState
     jsr RewindTextPointer
     .if runSetsZero
@@ -88,7 +88,7 @@
     ;; Discards variables and execution state, retaining the program text; with text after the statement, returns.
     ;; In: zero = set at the end of the statement
     ;; See: <ClearVariables>
-    ;; Also: CLEAR (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;; Also: CLEAR (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     .proc Clear
     bne returnEntry
     .endproc
@@ -130,16 +130,26 @@ ToIllegalQuantity:
 .endmacro
 
 ;; Emits the common variable, DATA and string reset.
-;; Parameters: closeFiles = 1 to close the operating system's open files;
+;; Parameters: closeFiles = 1 to close the operating system's open files after resetting the strings, 2 to close them
+;;   first, with an entry after the call;
 ;;   clearDiskStatus = 1 to clear the disk-status descriptor
 .macro ClearStorage closeFiles, clearDiskStatus
-    .assert closeFiles = 0 || closeFiles = 1, "closeFiles is 0 or 1."
+    .assert closeFiles >= 0 && closeFiles <= 2, "closeFiles is 0, 1 or 2."
     .assert clearDiskStatus = 0 || clearDiskStatus = 1, "clearDiskStatus is 0 or 1."
 
     ;; Resets string, variable and array storage, then falls into the DATA and stack reset.
+    ;;
+    ;; Where `closeFiles` is 2 (the VIC-20), it closes the files first, and `AfterClose` resets the storage without
+    ;; closing them.
     ;; See: <ResetStack>, <Statements::Restore>
-    ;; Also: CLEARC (M6502, ASTIL, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;; Also: CLEARC (M6502, ASTIL, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     .proc ClearVariables
+    .if closeFiles = 2
+        jsr CQCALL
+
+;; Resets the storage without closing the files, as BASIC does when RS-232 has moved the top of memory.
+AfterClose:
+    .endif
     lda MemoryTop
     ldy MemoryTop+1
     sta StringsBottom
@@ -148,7 +158,7 @@ ToIllegalQuantity:
         lda #$00
         sta DSDESC
     .endif
-    .if closeFiles
+    .if closeFiles = 1
         jsr CQCALL
     .endif
     lda VariablesStart
@@ -158,7 +168,7 @@ ToIllegalQuantity:
     sta ArraysEnd
     sty ArraysEnd+1
 ;; Calls <Statements::Restore>, then falls into <ResetStack>.
-;; Also: FLOAD (M6502, CBM4S79, K4S79, HV1, HV1R, HV2, HV4, HV4R, HVK4)
+;; Also: FLOAD (M6502, CBM4S79, K4S79, HV1, HV1R, HV2, HV4, HV4R, HVK4, BV20)
 RestoreData:
     jsr Statements::Restore
     .endproc
@@ -180,7 +190,7 @@ RestoreData:
     ;; Entry:
     ;;   Done = returns; LIST, and CLEAR except in BASIC 1, return through it for a syntax error
     ;; See: <FindForFrame>, <Statements::Cont>
-    ;; Also: STKINI (M6502, ASTIL, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;; Also: STKINI (M6502, ASTIL, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     .proc ResetStack
     ldx #TemporaryDescriptors
     stx NextTemporary
@@ -208,13 +218,13 @@ RestoreData:
         .byte $51
     .endif
 ;; Returns; LIST, and CLEAR except in BASIC 1, return through it for a syntax error.
-;; Also: STKRTS (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: STKRTS (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 Done:
     rts
     .endproc
 
     ;; Sets <TextPointer> to one byte before <ProgramStart>.
-    ;; Also: STXTPT (M6502, ASTIL, CBM4S79, K4S79, HV1, HV1R, HV2, HV4, HV4R, HVK4)
+    ;; Also: STXTPT (M6502, ASTIL, CBM4S79, K4S79, HV1, HV1R, HV2, HV4, HV4R, HVK4, BV20)
     .proc RewindTextPointer
     clc
     lda ProgramStart

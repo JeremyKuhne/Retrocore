@@ -2,11 +2,13 @@
 ;; COMMODORE BASIC: COMMODORE'S NAMES OF SHARED DEFINITIONS
 ;;
 ;; Commodore's names, and the names Microsoft's source gives only in its Commodore builds, for definitions of the
-;; shared Microsoft modules. They resolve only in the PET builds that include this file. Each entry is an alias in
-;; <Commodore> that inherits its target's documentation and gives the names in its `Also:` section, citing the
+;; shared Microsoft modules. They resolve only in the PET and VIC-20 builds that include this file. Each entry is an
+;; alias in <Commodore> that inherits its target's documentation and gives the names in its `Also:` section, citing the
 ;; documents by their keys in docs/Bibliography.md: Microsoft's source (M6502), Commodore's BASIC 4 listing of July
 ;; 23, 1979 (CBM4S79), and Martin Hoffmann-Vetter's reconstructions of each PET BASIC (HV1, HV1R, HV2, HV4, HV4R),
-;; each for its own build and, under the lineage rule, for the same definition in the other PET builds. In CBM4S79,
+;; each for its own build and, under the lineage rule, for the same definition in the other PET builds, and
+;; Commodore's listing of the VIC-20's BASIC (BV20), which the lineage rule reaches in the same way: on each entry
+;; whose name it gives at the same address, in every build that has the entry. In CBM4S79,
 ;; SQR05 and SQR20 are in code18, TENC in code19, N0999, N9999 and NMIL in code22, and RMULC and RADDC in code25;
 ;; COPYC is in code6, STRD in code14, and CHRD, LEFTD, RIGHTD and MIDD in code16. The room check and the classic
 ;; collector's steps also have Microsoft's names here (M6502), since BASIC 4 gives those names to other steps, and so
@@ -17,35 +19,35 @@
 .scope Commodore
 
 ;; Inherit: <Float::SquareRootOfHalf>
-;; Also: SQR05 (CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: SQR05 (CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 SquareRootOfHalf = Float::SquareRootOfHalf
 
 ;; Inherit: <Float::SquareRootOfTwo>
-;; Also: SQR20 (CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: SQR20 (CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 SquareRootOfTwo = Float::SquareRootOfTwo
 
 ;; Inherit: <Float::Ten>
-;; Also: TENC (CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: TENC (CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 Ten = Float::Ten
 
 ;; Inherit: <Float::LowerOutputLimit>
-;; Also: N0999 (CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: N0999 (CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 LowerOutputLimit = Float::LowerOutputLimit
 
 ;; Inherit: <Float::UpperOutputLimit>
-;; Also: N9999 (CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: N9999 (CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 UpperOutputLimit = Float::UpperOutputLimit
 
 ;; Inherit: <Float::Billion>
-;; Also: NMIL (CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: NMIL (CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 Billion = Float::Billion
 
 ;; Inherit: <Float::RandomMultiplier>
-;; Also: RMULC (CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: RMULC (CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 RandomMultiplier = Float::RandomMultiplier
 
 ;; Inherit: <Float::RandomAddend>
-;; Also: RADDC (CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: RADDC (CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 RandomAddend = Float::RandomAddend
 
 ;; Inherit: <Functions::Log::MultiplyByLogOfTwo>
@@ -57,11 +59,11 @@ MultiplyByLogOfTwo = Functions::Log::MultiplyByLogOfTwo
 ToDividePacked = Functions::Tan::ToDividePacked
 
 ;; Inherit: <CharacterReaderTemplate::GetCurrent>
-;; Also: CHDGOT (CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: CHDGOT (CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 CharacterReaderGetCurrent = CharacterReaderTemplate::GetCurrent
 
 ;; Inherit: <CharacterReaderTemplate::Done>
-;; Also: CHDRTS (CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: CHDRTS (CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 CharacterReaderDone = CharacterReaderTemplate::Done
 
 ; BASIC 4's lister, which reads its keyword table through a pointer.
@@ -83,43 +85,43 @@ ListFirstWord = Statements::List::ListFirstWord
 ; copy (in Commodore.StringAssignment.asm) and the functions by their targets.
 .ifdef Strings::CollectGarbage::NextPass
 ;; Inherit: <::StoreDescriptor>
-;; Also: COPYC (CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: COPYC (CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 StoreDescriptor = ::StoreDescriptor
 .endif
 
 .ifdef ::StoreLinkedDescriptor
 ;; Inherit: <::StoreLinkedDescriptor>
-;; Also: COPYC (CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: COPYC (CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 LinkedDescriptor = ::StoreLinkedDescriptor
 .endif
 
 .ifdef Functions::Str
 ;; Inherit: <Functions::Str>
-;; Also: STRD (CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: STRD (CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 Str = Functions::Str
 .endif
 
 .ifdef Functions::Chr
 ;; Inherit: <Functions::Chr>
-;; Also: CHRD (CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: CHRD (CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 Chr = Functions::Chr
 .endif
 
 .ifdef Functions::Left
 ;; Inherit: <Functions::Left>
-;; Also: LEFTD (CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: LEFTD (CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 Left = Functions::Left
 .endif
 
 .ifdef Functions::Right
 ;; Inherit: <Functions::Right>
-;; Also: RIGHTD (CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: RIGHTD (CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 Right = Functions::Right
 .endif
 
 .ifdef Functions::Mid
 ;; Inherit: <Functions::Mid>
-;; Also: MIDD (CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: MIDD (CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 Mid = Functions::Mid
 .endif
 
@@ -127,7 +129,7 @@ Mid = Functions::Mid
 ; The PET's AND, which Microsoft's source names ANDOP; AppleSoft's overlay gives ANDOP to its OR.
 .ifdef Operators::And
 ;; Inherit: <Operators::And>
-;; Also: ANDOP (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: ANDOP (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 AndOperator = Operators::And
 .endif
 
@@ -143,7 +145,7 @@ ReserveReturn = Strings::ReserveSpace::Done
 ; documents give Microsoft's name for the room check.
 .ifdef Strings::ReserveSpace::CheckRoom
 ;; Inherit: <Strings::ReserveSpace::CheckRoom>
-;; Also: TRYAG3 (M6502, HV1, HV1R, HV2)
+;; Also: TRYAG3 (M6502, HV1, HV1R, HV2, BV20)
 UnlinkedCheckRoom = Strings::ReserveSpace::CheckRoom
 .endif
 
@@ -163,37 +165,37 @@ ReserveCheckRoom = Strings::ReserveSpace::CheckLinkedRoom
 ; The classic collector's steps in BASIC 1 and 2, whose Microsoft names BASIC 4 gives to its array back-link steps.
 .ifdef Strings::CollectGarbage::NextArray
 ;; Inherit: <Strings::CollectGarbage::NextArray>
-;; Also: ARYVA2 (M6502, HV1, HV1R, HV2)
+;; Also: ARYVA2 (M6502, HV1, HV1R, HV2, BV20)
 CollectorNextArray = Strings::CollectGarbage::NextArray
 .endif
 
 .ifdef Strings::CollectGarbage::CheckArraysEnd
 ;; Inherit: <Strings::CollectGarbage::CheckArraysEnd>
-;; Also: ARYVA3 (M6502, HV1, HV1R, HV2)
+;; Also: ARYVA3 (M6502, HV1, HV1R, HV2, BV20)
 CollectorCheckArraysEnd = Strings::CollectGarbage::CheckArraysEnd
 .endif
 
 .ifdef Strings::CollectGarbage::ReadArray
 ;; Inherit: <Strings::CollectGarbage::ReadArray>
-;; Also: ARYVGO (M6502, HV1, HV1R, HV2)
+;; Also: ARYVGO (M6502, HV1, HV1R, HV2, BV20)
 CollectorReadArray = Strings::CollectGarbage::ReadArray
 .endif
 
 .ifdef Strings::CollectGarbage::ElementsReady
 ;; Inherit: <Strings::CollectGarbage::ElementsReady>
-;; Also: ARYGET (M6502, HV1, HV1R, HV2)
+;; Also: ARYGET (M6502, HV1, HV1R, HV2, BV20)
 CollectorElementsReady = Strings::CollectGarbage::ElementsReady
 .endif
 
 .ifdef Strings::CollectGarbage::CheckElement
 ;; Inherit: <Strings::CollectGarbage::CheckElement>
-;; Also: GOGO (M6502, HV1, HV1R, HV2)
+;; Also: GOGO (M6502, HV1, HV1R, HV2, BV20)
 CollectorCheckElement = Strings::CollectGarbage::CheckElement
 .endif
 
 .ifdef Strings::CollectGarbage::Advance
 ;; Inherit: <Strings::CollectGarbage::Advance>
-;; Also: DVARTS (M6502, HV1, HV1R, HV2)
+;; Also: DVARTS (M6502, HV1, HV1R, HV2, BV20)
 CollectorAdvance = Strings::CollectGarbage::Advance
 .endif
 
@@ -275,6 +277,28 @@ ReleaseSkipLink = Strings::ReleaseDescriptor::SkipLink
 ;; Inherit: <Strings::ReleaseDescriptor::ReadDescriptor>
 ;; Also: FRE02 (CBM4S79, HV4, HV4R)
 ReleaseReadDescriptor = Strings::ReleaseDescriptor::ReadDescriptor
+.endif
+
+; The VIC-20's BASIC (BV20): the shared entries only its build has.
+.ifdef ClearVariables::AfterClose
+;; Inherit: <ClearVariables::AfterClose>
+;; Also: CLEART (BV20)
+ClearVariablesAfterClose = ClearVariables::AfterClose
+.endif
+.ifdef Statements::List::CheckTokenDefault
+;; Inherit: <Statements::List::CheckTokenDefault>
+;; Also: NQPLOP (BV20)
+CheckTokenDefault = Statements::List::CheckTokenDefault
+.endif
+.ifdef EvaluateOperand::Default
+;; Inherit: <EvaluateOperand::Default>
+;; Also: NEVAL (BV20)
+EvaluateOperandDefault = EvaluateOperand::Default
+.endif
+.ifdef ::FacToSignedWord
+;; Inherit: <::FacToSignedWord>
+;; Also: FLPINT (BV20)
+FloatToInteger = ::FacToSignedWord
 .endif
 
 

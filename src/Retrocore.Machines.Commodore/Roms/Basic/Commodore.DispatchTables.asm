@@ -6,8 +6,13 @@
 ; the function table contains actual entry addresses.
 
 .include "../../Microsoft6502Basic/MsBasic.OperatorTable.asm"
+.include "Commodore.NumberedErrors.asm"
+.include "Commodore.Switches.asm"
 
-;; Emits the Commodore statement, function and operator tables, reserved words and messages.
+;; Emits the Commodore statement, function and operator tables, reserved words and messages. With <STANDARD_KERNAL>
+;; (the VIC-20), `LOAD`, `SAVE`, `VERIFY`, `SYS`, `OPEN` and `CLOSE` are BASIC's own statements; with
+;; <NUMBERED_ERRORS>, the messages are `CommodoreNumberedErrors`' numbered ones, which have `FILE DATA` and `CR/LF`,
+;; so `badData` and `singleReturn` must then be 0.
 ;; Parameters: goToken = 1 to include the `GO` spelling; diskCommands = 1 to add the disk statements;
 ;;   badData = 1 for the early `BAD DATA` error, 0 for `FILE DATA`;
 ;;   singleReturn = 1 for a carriage return alone in `READY` and `BREAK`, 0 for `CR/LF`
@@ -17,10 +22,11 @@
     .assert badData = 0 || badData = 1, "badData is 0 or 1."
     .assert singleReturn = 0 || singleReturn = 1, "singleReturn is 0 or 1."
     .assert diskCommands = 0 || goToken = 1, "Disk commands follow GO."
+    .assert NUMBERED_ERRORS = 0 || badData + singleReturn = 0, "The numbered messages have FILE DATA and CR/LF."
 
 ;; Statement handler addresses minus one, indexed by token starting with `END`.
 ;; Disk commands, when present, follow `GO` in this table even though their tokens follow the functions.
-;; Also: STMDSP (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: STMDSP (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 StatementTable:
     .word Statements::End - 1
     .word Statements::For - 1
@@ -41,9 +47,15 @@ StatementTable:
     .word Statements::Stop - 1
     .word Statements::On - 1
     .word Statements::Wait - 1
-    .word KernalLoad - 1
-    .word KernalSave - 1
-    .word KernalVerify - 1
+    .if STANDARD_KERNAL
+        .word Statements::Load - 1
+        .word Statements::Save - 1
+        .word Statements::Verify - 1
+    .else
+        .word KernalLoad - 1
+        .word KernalSave - 1
+        .word KernalVerify - 1
+    .endif
     .word Statements::Def - 1
     .word Statements::Poke - 1
     .word Statements::PrintNumber - 1
@@ -52,9 +64,15 @@ StatementTable:
     .word Statements::List - 1
     .word Statements::Clear - 1
     .word Statements::Cmd - 1
-    .word KernalSys - 1
-    .word KernalOpen - 1
-    .word KernalClose - 1
+    .if STANDARD_KERNAL
+        .word Statements::Sys - 1
+        .word Statements::Open - 1
+        .word Statements::Close - 1
+    .else
+        .word KernalSys - 1
+        .word KernalOpen - 1
+        .word KernalClose - 1
+    .endif
     .word Statements::Get - 1
     .word Statements::New - 1
     .if diskCommands
@@ -77,14 +95,14 @@ StatementTable:
     .endif
 
     ;; Function entry addresses, in token order from `SGN` through `MID$`.
-    ;; Also: FUNDSP (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;; Also: FUNDSP (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     .proc FunctionTable
     .word Functions::Sgn
     .word Functions::Int
     .word Functions::Abs
 
 ;; `USR`'s entry: the writable jump at <UserVector>.
-;; Also: USRLOC (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: USRLOC (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 Usr:
     .word UserVector
     .word Functions::Fre
@@ -128,20 +146,20 @@ Atn:
 
 ;; Reserved words in token order; bit 7 marks the last character of each spelling.
 ;; <Tokenize> searches this list and <Statements::List> expands tokens from it. A zero byte ends the list.
-;; Also: RESLST (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: RESLST (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 ReservedWords:
     .byte "EN", 'D' | $80
     ;; The token of `END`, the first statement token.
-    ;; Also: ENDTK (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;; Also: ENDTK (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     TOKEN_END = $80
     .byte "FO", 'R' | $80
     ;; The token of `FOR`.
-    ;; Also: FORTK (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;; Also: FORTK (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     TOKEN_FOR = $81
     .byte "NEX", 'T' | $80
     .byte "DAT", 'A' | $80
     ;; The token of `DATA`.
-    ;; Also: DATATK (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;; Also: DATATK (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     TOKEN_DATA = $83
     .byte "INPUT", '#' | $80
     .byte "INPU", 'T' | $80
@@ -150,19 +168,19 @@ ReservedWords:
     .byte "LE", 'T' | $80
     .byte "GOT", 'O' | $80
     ;; The token of `GOTO`.
-    ;; Also: GOTOTK (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;; Also: GOTOTK (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     TOKEN_GOTO = $89
     .byte "RU", 'N' | $80
     .byte 'I', 'F' | $80
     .byte "RESTOR", 'E' | $80
     .byte "GOSU", 'B' | $80
     ;; The token of `GOSUB`.
-    ;; Also: GOSUTK (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;; Also: GOSUTK (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     TOKEN_GOSUB = $8D
     .byte "RETUR", 'N' | $80
     .byte "RE", 'M' | $80
     ;; The token of `REM`.
-    ;; Also: REMTK (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;; Also: REMTK (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     TOKEN_REM = $8F
     .byte "STO", 'P' | $80
     .byte 'O', 'N' | $80
@@ -178,7 +196,7 @@ ReservedWords:
     .byte "PRINT", '#' | $80
     .byte "PRIN", 'T' | $80
     ;; The token of `PRINT` (the tokenizer stores it for ?).
-    ;; Also: PRINTK (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;; Also: PRINTK (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     TOKEN_PRINT = $99
     .byte "CON", 'T' | $80
     .byte "LIS", 'T' | $80
@@ -190,60 +208,60 @@ ReservedWords:
     .byte "GE", 'T' | $80
     .byte "NE", 'W' | $80
     ;; The token of `NEW`, the last ordinary statement.
-    ;; Also: SCRATK (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;; Also: SCRATK (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     TOKEN_NEW = $A2
     .byte "TAB", '(' | $80
     ;; The token of `TAB(`.
-    ;; Also: TABTK (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;; Also: TABTK (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     TOKEN_TAB = $A3
     .byte 'T', 'O' | $80
     ;; The token of `TO`.
-    ;; Also: TOTK (M6502, CBM4S79, K4S79, HV1, HV1R, HV2, HV4, HV4R, HVK4)
+    ;; Also: TOTK (M6502, CBM4S79, K4S79, HV1, HV1R, HV2, HV4, HV4R, HVK4, BV20)
     TOKEN_TO = $A4
     .byte 'F', 'N' | $80
     ;; The token of `FN`.
-    ;; Also: FNTK (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;; Also: FNTK (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     TOKEN_FN = $A5
     .byte "SPC", '(' | $80
     ;; The token of `SPC(`.
-    ;; Also: SPCTK (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;; Also: SPCTK (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     TOKEN_SPC = $A6
     .byte "THE", 'N' | $80
     ;; The token of `THEN`.
-    ;; Also: THENTK (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;; Also: THENTK (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     TOKEN_THEN = $A7
     .byte "NO", 'T' | $80
     ;; The token of `NOT`.
-    ;; Also: NOTTK (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;; Also: NOTTK (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     TOKEN_NOT = $A8
     .byte "STE", 'P' | $80
     ;; The token of `STEP`.
-    ;; Also: STEPTK (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;; Also: STEPTK (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     TOKEN_STEP = $A9
     ;; The token of `+`.
-    ;; Also: PLUSTK (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;; Also: PLUSTK (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     TOKEN_PLUS = $AA
     ;; The token of `-`.
-    ;; Also: MINUTK (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;; Also: MINUTK (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     TOKEN_MINUS = TOKEN_PLUS + 1
     .byte '+' | $80, '-' | $80, '*' | $80, '/' | $80, '^' | $80
     .byte "AN", 'D' | $80
     .byte 'O', 'R' | $80
     .byte '>' | $80
     ;; The token of `>`, the first relational token.
-    ;; Also: GREATK (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;; Also: GREATK (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     TOKEN_GREATER = $B1
     .byte '=' | $80
     ;; The token of `=`.
-    ;; Also: EQULTK (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;; Also: EQULTK (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     TOKEN_EQUAL = $B2
     .byte '<' | $80
     ;; The token of `<`.
-    ;; Also: LESSTK (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;; Also: LESSTK (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     TOKEN_LESS = $B3
     .byte "SG", 'N' | $80
     ;; The token of `SGN`, the first function.
-    ;; Also: ONEFUN (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;; Also: ONEFUN (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     TOKEN_FIRST_FUNCTION = $B4
     .byte "IN", 'T' | $80
     .byte "AB", 'S' | $80
@@ -265,7 +283,7 @@ ReservedWords:
     .byte "AS", 'C' | $80
     .byte "CHR", '$' | $80
     ;; The token of `CHR$`, the last one-argument function.
-    ;; Also: LASNUM (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;; Also: LASNUM (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     TOKEN_LAST_SIMPLE_FUNCTION = $C7
     .byte "LEFT", '$' | $80
     .byte "RIGHT", '$' | $80
@@ -273,7 +291,7 @@ ReservedWords:
     .if goToken
         .byte 'G', 'O' | $80
         ;; The token of `GO`.
-        ;; Also: GOTK (M6502, CBM4S79, HV2, HV4, HV4R)
+        ;; Also: GOTK (M6502, CBM4S79, HV2, HV4, HV4R, BV20)
         TOKEN_GO = $CB
     .endif
     .if diskCommands
@@ -294,52 +312,56 @@ ReservedWords:
         .byte "DIRECTOR", 'Y' | $80
     .endif
     .byte $00
+    .if NUMBERED_ERRORS
+        CommodoreNumberedErrors
+        .exitmacro
+    .endif
 
 ;; Error messages addressed by the ERROR_* constants' byte offsets.
 ;; Bit 7 on the last character ends each message; <ReportError> appends <ErrorSuffix>.
 ;; Also: ERRTAB (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 ErrorMessages:
     ;; Offset of "NEXT WITHOUT FOR" in <ErrorMessages>.
-    ;; Also: ERRNF (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;; Also: ERRNF (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     ERROR_NEXT_WITHOUT_FOR = * - ErrorMessages
     .byte "NEXT WITHOUT FO", 'R' | $80
     ;; Offset of "SYNTAX" in <ErrorMessages>.
-    ;; Also: ERRSN (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;; Also: ERRSN (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     ERROR_SYNTAX = * - ErrorMessages
     .byte "SYNTA", 'X' | $80
     ;; Offset of "RETURN WITHOUT GOSUB" in <ErrorMessages>.
-    ;; Also: ERRRG (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;; Also: ERRRG (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     ERROR_RETURN_WITHOUT_GOSUB = * - ErrorMessages
     .byte "RETURN WITHOUT GOSU", 'B' | $80
     ;; Offset of "OUT OF DATA" in <ErrorMessages>.
-    ;; Also: ERROD (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;; Also: ERROD (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     ERROR_OUT_OF_DATA = * - ErrorMessages
     .byte "OUT OF DAT", 'A' | $80
     ;; Offset of "ILLEGAL QUANTITY" in <ErrorMessages>.
-    ;; Also: ERRFC (M6502, CBM4S79, K4S79, HV1, HV1R, HV2, HV4, HV4R, HVK4)
+    ;; Also: ERRFC (M6502, CBM4S79, K4S79, HV1, HV1R, HV2, HV4, HV4R, HVK4, BV20)
     ERROR_ILLEGAL_QUANTITY = * - ErrorMessages
     .byte "ILLEGAL QUANTIT", 'Y' | $80
     .if ERROR_PADDING5
         .res 5, $00
     .endif
     ;; Offset of "OVERFLOW" in <ErrorMessages>.
-    ;; Also: ERROV (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;; Also: ERROV (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     ERROR_OVERFLOW = * - ErrorMessages
     .byte "OVERFLO", 'W' | $80
     ;; Offset of "OUT OF MEMORY" in <ErrorMessages>.
-    ;; Also: ERROM (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;; Also: ERROM (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     ERROR_OUT_OF_MEMORY = * - ErrorMessages
     .byte "OUT OF MEMOR", 'Y' | $80
     ;; Offset of "UNDEF'D STATEMENT" in <ErrorMessages>.
-    ;; Also: ERRUS (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;; Also: ERRUS (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     ERROR_UNDEFINED_STATEMENT = * - ErrorMessages
     .byte "UNDEF'D STATEMEN", 'T' | $80
     ;; Offset of "BAD SUBSCRIPT" in <ErrorMessages>.
-    ;; Also: ERRBS (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;; Also: ERRBS (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     ERROR_BAD_SUBSCRIPT = * - ErrorMessages
     .byte "BAD SUBSCRIP", 'T' | $80
     ;; Offset of "REDIM'D ARRAY" in <ErrorMessages>.
-    ;; Also: ERRDD (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;; Also: ERRDD (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     ERROR_REDIMENSIONED_ARRAY = * - ErrorMessages
     .byte "REDIM'D ARRA", 'Y' | $80
     ;; Offset of "DIVISION BY ZERO" in <ErrorMessages>.
@@ -347,19 +369,19 @@ ErrorMessages:
     ERROR_DIVISION_BY_ZERO = * - ErrorMessages
     .byte "DIVISION BY ZER", 'O' | $80
     ;; Offset of "ILLEGAL DIRECT" in <ErrorMessages>.
-    ;; Also: ERRID (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;; Also: ERRID (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     ERROR_ILLEGAL_DIRECT = * - ErrorMessages
     .byte "ILLEGAL DIREC", 'T' | $80
     ;; Offset of "TYPE MISMATCH" in <ErrorMessages>.
-    ;; Also: ERRTM (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;; Also: ERRTM (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     ERROR_TYPE_MISMATCH = * - ErrorMessages
     .byte "TYPE MISMATC", 'H' | $80
     ;; Offset of "STRING TOO LONG" in <ErrorMessages>.
-    ;; Also: ERRLS (M6502, CBM4S79, K4S79, HV1, HV1R, HV2, HV4, HV4R, HVK4)
+    ;; Also: ERRLS (M6502, CBM4S79, K4S79, HV1, HV1R, HV2, HV4, HV4R, HVK4, BV20)
     ERROR_STRING_TOO_LONG = * - ErrorMessages
     .byte "STRING TOO LON", 'G' | $80
     ;; Offset of the file-data message: "BAD DATA" in BASIC 1, "FILE DATA" later.
-    ;; Also: ERRBD (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;; Also: ERRBD (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     ERROR_FILE_DATA = * - ErrorMessages
     .if badData
         .byte "BAD DAT", 'A' | $80
@@ -367,29 +389,29 @@ ErrorMessages:
         .byte "FILE DAT", 'A' | $80
     .endif
     ;; Offset of "FORMULA TOO COMPLEX" in <ErrorMessages>.
-    ;; Also: ERRST (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;; Also: ERRST (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     ERROR_FORMULA_TOO_COMPLEX = * - ErrorMessages
     .byte "FORMULA TOO COMPLE", 'X' | $80
     ;; Offset of "CAN'T CONTINUE" in <ErrorMessages>.
-    ;; Also: ERRCN (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;; Also: ERRCN (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     ERROR_CANT_CONTINUE = * - ErrorMessages
     .byte "CAN'T CONTINU", 'E' | $80
     ;; Offset of "UNDEF'D FUNCTION" in <ErrorMessages>.
-    ;; Also: ERRUF (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;; Also: ERRUF (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     ERROR_UNDEFINED_FUNCTION = * - ErrorMessages
     .byte "UNDEF'D FUNCTIO", 'N' | $80
     .assert * - ErrorMessages <= 256, "The error message offsets must fit in one byte."
 
 ;; Suffix appended to an error message.
-;; Also: ERR (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: ERR (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 ErrorSuffix:
     .asciiz " ERROR"
 ;; Introduction before the line number in an error or break message.
-;; Also: INTXT (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: INTXT (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 LineNumberPrefix:
     .asciiz " IN "
 ;; Message shown when the interpreter is ready for another command.
-;; Also: REDDY (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: REDDY (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 ReadyMessage:
     .byte CARRIAGE_RETURN
     .if .not singleReturn
@@ -401,7 +423,7 @@ ReadyMessage:
     .endif
     .byte $00
 ;; Message shown when execution is stopped.
-;; Also: BRKTXT (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: BRKTXT (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 BreakMessage:
     .byte CARRIAGE_RETURN
     .if .not singleReturn

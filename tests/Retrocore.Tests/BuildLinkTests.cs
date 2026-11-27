@@ -7,6 +7,7 @@ using Retrocore.Debug;
 using Retrocore.Debug.Language;
 using Retrocore.Documentation;
 using Retrocore.Machines.Apple2;
+using Retrocore.Machines.Chips;
 using Retrocore.Machines.Commodore;
 
 namespace Retrocore.Tests;
@@ -15,8 +16,8 @@ namespace Retrocore.Tests;
 ///  In each build of a source that builds several variants with <c>.if</c>, every link in a comment the build
 ///  assembles reaches a definition the build assembles. The resolver resolves a link only to what its set's build
 ///  assembles and the lint reports the rest, so each build's lint finds the links only another build can follow;
-///  this lints AppleSoft's and PET BASIC's builds, and <see cref="RomBuildLinkTests"/> the Apple II's ROM and DOS
-///  builds.
+///  this lints AppleSoft's, PET BASIC's and the VIC-20's BASIC builds, and <see cref="RomBuildLinkTests"/> the
+///  Apple II's ROM and DOS builds.
 /// </summary>
 /// <remarks>
 ///  <para>
@@ -61,6 +62,17 @@ public sealed class BuildLinkTests
         string inputs = BasicNames.Inputs;
         AssemblyResult result = PetSdkModules.AssembleBasic(Path.Join(inputs, "Pet"), model, original, BasicSourceKind.Native);
         AssertLinksAssembled(result, "PetBasic", sdkBuild: false, others: false);
+    }
+
+    /// <summary>
+    ///  The VIC-20's BASIC's links, in the shared modules it assembles too, reach what its build assembles.
+    /// </summary>
+    [TestMethod]
+    public void Vic20BasicLinksOnlyWhatItsBuildAssembles()
+    {
+        string inputs = BasicNames.Inputs;
+        AssemblyResult result = Vic20SdkModules.AssembleBasic(Path.Join(inputs, "Pet", "Vic20"), VicVideoStandard.Ntsc);
+        AssertLinksAssembled(result, "Vic20Basic", sdkBuild: false, others: false);
     }
 
     /// <summary>

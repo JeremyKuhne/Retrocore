@@ -21,7 +21,7 @@
     ;; Entry:
     ;;   ToError = jumps to <ReportError> with the error in X; where `earlyCheck` is 1 (BASIC 1 by default), `FN`
     ;;     enters here
-    ;; Also: ERRDIR (M6502, ASTIL, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;; Also: ERRDIR (M6502, ASTIL, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     .proc RejectDirectMode
     ldx CurrentLine+1
     inx
@@ -31,7 +31,7 @@
         .byte $2C                   ; BIT absolute skips the next two bytes
 
 ;; Reports a call to a function with no definition.
-;; Also: ERRGUF (M6502, CBM4S79, HV2, HV4, HV4R)
+;; Also: ERRGUF (M6502, CBM4S79, HV2, HV4, HV4R, BV20)
 UndefinedFunction:
         ldx #<ERROR_UNDEFINED_FUNCTION
     .endif
@@ -49,7 +49,7 @@ ToError:
     ;; The function entry records the expression's text pointer and the argument variable's value pointer.
     ;; The formula is evaluated when called, not when defined.
     ;; Errors: ILLEGAL DIRECT in direct mode, TYPE MISMATCH for a string name or argument
-    ;; Also: DEF (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;; Also: DEF (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     .proc Def
     jsr ReadFunctionName
     jsr RejectDirectMode
@@ -77,7 +77,7 @@ ToError:
 
     ;; Parses FN and its name, finding or creating the function's scalar entry.
     ;; Out: FunctionPointer = function entry value address
-    ;; Also: GETFNM (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;; Also: GETFNM (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     .proc ReadFunctionName
     lda #<TOKEN_FN
     jsr CheckCharacter
@@ -98,7 +98,7 @@ ToError:
     ;; The early check tests the low byte of the argument variable's address for none, so it also takes a function
     ;; whose argument variable's address ends in $00 as undefined.
     ;; Out: Fac = function result
-    ;; Also: FNDOER (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;; Also: FNDOER (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     .proc Fn
     jsr ReadFunctionName
     lda FunctionPointer+1
@@ -132,7 +132,7 @@ ToError:
     iny
 
 ;; Pushes the argument variable's five bytes.
-;; Also: DEFSTF (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: DEFSTF (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 SaveArgument:
     lda (VariablePointer),y
     pha
@@ -174,7 +174,7 @@ RestoreText:
     ;; Copies five stacked bytes into the destination at <FunctionPointer>.
     ;;
     ;; DEF uses this to install its text and argument pointers; <Functions::Fn> uses it to restore the argument value.
-    ;; Also: DEFFIN (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;; Also: DEFFIN (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     .proc PopToFunctionPointer
     ldy #$00
     pla

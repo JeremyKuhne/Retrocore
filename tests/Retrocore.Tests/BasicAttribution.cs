@@ -25,7 +25,7 @@ internal static partial class BasicAttribution
     /// <summary>
     ///  Gets the documents that give each Commodore name for shared code, which are the same for every one.
     /// </summary>
-    internal static string[] CommodoreKeys { get; } = ["CBM4S79", "HV1", "HV1R", "HV2", "HV4", "HV4R"];
+    internal static string[] CommodoreKeys { get; } = ["CBM4S79", "HV1", "HV1R", "HV2", "HV4", "HV4R", "BV20"];
 
     /// <summary>
     ///  Gets the SDK's bibliography, <c>docs/Bibliography.md</c>.

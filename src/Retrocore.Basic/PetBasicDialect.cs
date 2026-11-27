@@ -7,8 +7,8 @@ using System.Text;
 namespace Retrocore.Basic;
 
 /// <summary>
-///  Commodore BASIC for the PET: BASIC 1, the 2001's first ROMs; BASIC 2, the 2001-N's and the upgrade ROMs; and
-///  BASIC 4, the 4000 series', with its disk commands. All derive from Microsoft's 6502 BASIC and use the shared
+///  Commodore BASIC for the PET and the VIC-20: BASIC 1, the 2001's first ROMs; BASIC 2, the 2001-N's and the upgrade
+///  ROMs, and the VIC-20's; and BASIC 4, the 4000 series', with its disk commands. All derive from Microsoft's 6502 BASIC and use the shared
 ///  native interpreter or the corresponding <c>m6502.asm</c> MACRO-10 overlay.
 /// </summary>
 /// <remarks>
@@ -27,8 +27,10 @@ namespace Retrocore.Basic;
 ///   escapes, such as <c>{$93}</c> for clear screen.
 ///  </para>
 ///  <para>
-///   Programs start at <c>$0401</c>. Variables are laid out as AppleSoft's are: two name characters whose high bits
-///   give the type, and five-byte floats, two-byte integers high byte first, and three-byte string descriptors.
+///   Programs start at <c>$0401</c> on the PET; on the VIC-20 where its RAM puts them, <c>$1001</c> unexpanded, and
+///   its page-zero pointers are three bytes above BASIC 2's. Variables are laid out as AppleSoft's are: two name
+///   characters whose high bits give the type, and five-byte floats, two-byte integers high byte first, and three-byte
+///   string descriptors.
 ///  </para>
 /// </remarks>
 internal sealed class PetBasicDialect : BasicDialect

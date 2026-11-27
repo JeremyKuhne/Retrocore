@@ -79,10 +79,15 @@ internal sealed partial class Vic20DebugTarget
             {
                 roms = Vic20Roms.LoadFromDirectory(folder, standard);
             }
-            catch (FileNotFoundException exception)
+            catch (Exception exception) when (exception is FileNotFoundException or DirectoryNotFoundException)
             {
+                string chip = exception is FileNotFoundException missing ? Path.GetFileName(missing.FileName) ?? "A chip" : folder;
                 throw new ArgumentException(
-                    $"{Path.GetFileName(exception.FileName)} is missing; romDirectory needs MAME's {(standard == VicVideoStandard.Ntsc ? "vic20" : "vic20p")} ROM set.");
+                    $"{chip} is missing; romDirectory needs MAME's {(standard == VicVideoStandard.Ntsc ? "vic20" : "vic20p")} ROM set.");
+            }
+            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+            {
+                throw new ArgumentException($"romDirectory's chips cannot be read: {exception.Message}");
             }
         }
 
@@ -97,7 +102,8 @@ internal sealed partial class Vic20DebugTarget
 
         target.SetSound(args.String("sound") ?? "speaker");
 
-        // BASIC's page-zero addresses, which loading a program needs before the session adds the SDK's modules.
+        // BASIC's addresses, so a basic launch knows where BASIC's prompt and statements are before the session adds
+        // the SDK's modules.
         if (File.Exists(Path.Join(sdk, "Basic.asm")))
         {
             target.SetBasicSymbols(Vic20SdkModules.AssembleBasic(sdk, standard).SymbolsWithHistoricalNames);
@@ -135,6 +141,13 @@ internal sealed partial class Vic20DebugTarget
         if (prg.Length < 3) { throw new ArgumentException("A .prg file is its load address and at least a byte."); }
         int address = prg[0] | (prg[1] << 8);
         bool basic = address is 0x0401 or 0x1001 or 0x1201;
+
+        // A BASIC program goes where TXTTAB says, which the kernal sets as it starts: before then it is zero.
+        if (basic && (_machine.Bus.Peek(0x2B) | (_machine.Bus.Peek(0x2C) << 8)) < 0x0400)
+        {
+            throw new ArgumentException("A BASIC .prg loads where BASIC's program starts, which the kernal has not set yet; give bootSeconds time to start.");
+        }
+
         (ushort start, _) = _machine.LoadProgram(prg);
         if (!basic)
         {
@@ -234,7 +247,7 @@ internal sealed partial class Vic20DebugTarget
         {
             return (Vic20Cartridge.Load(full), string.Join(", ", full.Select(Path.GetFileName)));
         }
-        catch (Exception exception) when (exception is FileNotFoundException or DirectoryNotFoundException or InvalidDataException)
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or InvalidDataException)
         {
             throw new ArgumentException($"The cartridge cannot be loaded: {exception.Message}");
         }

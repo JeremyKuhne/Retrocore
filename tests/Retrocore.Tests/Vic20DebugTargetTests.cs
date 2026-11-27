@@ -15,6 +15,7 @@ namespace Retrocore.Tests;
 /// </summary>
 /// <remarks>
 ///  <para>
+///   With <c>RETROCORE_VIC20_ROMS</c> set, the launches run the dumps instead, which are the same bytes.
 ///   <c>tools/Test-Vic20Dap.mjs</c> and <c>tools/Test-Vic20BasicDap.mjs</c> run the target through the debug adapter.
 ///  </para>
 /// </remarks>
@@ -37,7 +38,7 @@ public sealed class Vic20DebugTargetTests
 
         static void Refuses(JsonObject args, string message)
         {
-            Action launch = () => Vic20DebugTarget.Launch(args);
+            Action launch = () => Launch(args);
             launch.Should().Throw<ArgumentException>().WithMessage(message);
         }
     }
@@ -49,7 +50,7 @@ public sealed class Vic20DebugTargetTests
     [TestMethod]
     public void KeysThatTypeNothingAreHeldBriefly()
     {
-        Vic20DebugTarget target = Vic20DebugTarget.Launch([]);
+        Vic20DebugTarget target = Launch([]);
         target.MaximumKey.Should().Be(Vic20DebugTarget.CommodoreShiftKey);
         target.Key(Vic20DebugTarget.CommodoreShiftKey + 1).Should().BeFalse();
         target.Key(Vic20DebugTarget.CommodoreShiftKey).Should().BeTrue();
@@ -60,10 +61,18 @@ public sealed class Vic20DebugTargetTests
         // Another such key lets go of the first.
         target.Key(Vic20DebugTarget.StopRestoreKey).Should().BeTrue();
         keyboard.IsPressed(Vic20Key.Commodore).Should().BeFalse();
+        keyboard.IsPressed(Vic20Key.LeftShift).Should().BeFalse();
         keyboard.IsPressed(Vic20Key.Stop).Should().BeTrue();
         keyboard.Restore.Should().BeTrue();
         target.RunCycles((target.ClockHertz / 10) + 1);
         keyboard.IsPressed(Vic20Key.Stop).Should().BeFalse();
+        keyboard.Restore.Should().BeFalse();
+
+        // RESTORE alone.
+        target.Key(Vic20DebugTarget.RestoreKey).Should().BeTrue();
+        keyboard.Restore.Should().BeTrue();
+        keyboard.IsPressed(Vic20Key.Stop).Should().BeFalse();
+        target.RunCycles((target.ClockHertz / 10) + 1);
         keyboard.Restore.Should().BeFalse();
     }
 
@@ -81,7 +90,7 @@ public sealed class Vic20DebugTargetTests
         vic20.DefaultLoadAddress.Should().Be(0x1001);
         vic20.InputLimit.Should().Be(88);
         vic20.DisplayName.Should().Be("Commodore BASIC 2 (VIC-20)");
-        Vic20DebugTarget.Launch([]).Basic.Should().BeSameAs(vic20);
+        Launch([]).Basic.Should().BeSameAs(vic20);
     }
 
     /// <summary>
@@ -91,7 +100,7 @@ public sealed class Vic20DebugTargetTests
     [TestMethod]
     public void BootedScreenAndErrorsRead()
     {
-        Vic20DebugTarget target = Vic20DebugTarget.Launch([]);
+        Vic20DebugTarget target = Launch([]);
         target.Boot(3);
         target.ShowsReady.Should().BeTrue();
         target.DisplayState(running: false)["columns"]?.GetValue<int>().Should().Be(22);
@@ -118,7 +127,7 @@ public sealed class Vic20DebugTargetTests
     {
         Dictionary<string, string> rows = Rows(new() { ["video"] = "pal", ["ramExpansion"] = "16k" });
         rows["video"].Should().Be("PAL, the 6561");
-        rows["rom"].Should().Be("BASIC 2 and kernal 901486-07, from the SDK's sources");
+        rows["rom"].Should().StartWith("BASIC 2 and kernal 901486-07", "from the SDK's sources, or the dumps in RETROCORE_VIC20_ROMS");
         rows["memory"].Should().Be("21 KB: 5 KB and block 1, block 2");
         rows["cartridge"].Should().Be("empty");
         rows["serial8"].Should().Be("empty");
@@ -126,6 +135,36 @@ public sealed class Vic20DebugTargetTests
         Rows(new() { ["ramExpansion"] = "3k" })["memory"].Should().Be("8 KB: 5 KB and 3K at $0400");
 
         static Dictionary<string, string> Rows(JsonObject args) =>
-            Vic20DebugTarget.Launch(args).Hardware().ToDictionary(row => row.Id, row => row.Value);
+            Launch(args).Hardware().ToDictionary(row => row.Id, row => row.Value);
     }
+
+    /// <summary>
+    ///  A BASIC <c>.prg</c> loaded before the kernal has set where BASIC's program starts is refused, not written over
+    ///  page zero.
+    /// </summary>
+    [TestMethod]
+    public void BasicProgramWaitsForTheKernal()
+    {
+        Vic20DebugTarget target = Launch([]);
+        Action early = () => target.LoadPrg([0x01, 0x10, 0x00, 0x00, 0x00], run: false, entry: null);
+        early.Should().Throw<ArgumentException>().WithMessage("*bootSeconds*");
+    }
+
+    /// <summary>
+    ///  The expansion's RAM is in the program's area, as the built-in 5K is, so a program in block 1 maps to its source.
+    /// </summary>
+    [TestMethod]
+    public void ExpansionRamIsProgramRam()
+    {
+        Vic20DebugTarget target = Launch(new() { ["ramExpansion"] = "32k" });
+        foreach (ushort address in (ushort[])[0x0000, 0x0400, 0x1400, 0x2000, 0x7FFF])
+        {
+            target.ReadArea(address).Should().Be(target.ProgramArea, $"${address:X4} is RAM");
+        }
+
+        target.ReadArea(0xC000).Should().Be(Vic20MemoryArea.Basic);
+        target.ReadArea(0xA000).Should().Be(Vic20MemoryArea.None, "block 5 is empty without a cartridge or its RAM");
+    }
+
+    private static Vic20DebugTarget Launch(JsonObject args) => Vic20DebugTarget.Launch(args);
 }

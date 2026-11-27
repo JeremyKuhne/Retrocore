@@ -107,9 +107,17 @@ internal sealed partial class Vic20DebugTarget
         ushort message = (ushort)Word(entry);
         Span<char> text = stackalloc char[40];
         int length = 0;
-        while (length < text.Length)
+        int skipped = 0;
+        while (length < text.Length && skipped < 4)
         {
-            byte character = Peek((ushort)(message + length));
+            // BREAK's message ends in a NUL and a shifted space, which the screen shows as nothing and a space.
+            byte character = Peek((ushort)(message + length + skipped));
+            if ((character & 0x7F) == 0)
+            {
+                skipped++;
+                continue;
+            }
+
             text[length++] = (char)(character & 0x7F);
             if ((character & 0x80) != 0) { break; }
         }

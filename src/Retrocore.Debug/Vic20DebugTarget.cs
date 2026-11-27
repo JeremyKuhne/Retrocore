@@ -179,6 +179,11 @@ internal sealed partial class Vic20DebugTarget : IDebugTarget
     public int DefaultLoadAddress => 0x1400;
 
     /// <inheritdoc/>
+    /// <remarks>
+    ///  <para>
+    ///   All RAM, the built-in 5K and the expansion's, as <see cref="ReadArea"/> reports it.
+    ///  </para>
+    /// </remarks>
     public Enum ProgramArea => Vic20MemoryArea.Ram;
 
     /// <inheritdoc/>
@@ -200,7 +205,17 @@ internal sealed partial class Vic20DebugTarget : IDebugTarget
     public byte Peek(ushort address) => _machine.Bus.Peek(address);
 
     /// <inheritdoc/>
-    public Enum ReadArea(ushort address) => _machine.Bus.Area(address);
+    /// <remarks>
+    ///  <para>
+    ///   The expansion's RAM reads as RAM, as the built-in 5K does, so a program loaded anywhere in RAM is in its
+    ///   <see cref="ProgramArea"/>: on an expanded VIC-20 machine code usually lives in block 1, from <c>$2000</c>.
+    ///  </para>
+    /// </remarks>
+    public Enum ReadArea(ushort address) => _machine.Bus.Area(address) switch
+    {
+        Vic20MemoryArea.ExpansionRam => Vic20MemoryArea.Ram,
+        Vic20MemoryArea area => area
+    };
 
     /// <inheritdoc/>
     /// <remarks>
@@ -444,7 +459,7 @@ internal sealed partial class Vic20DebugTarget : IDebugTarget
                 "cpu",
                 "Processor",
                 ntsc ? "6502 at 1.02 MHz" : "6502 at 1.11 MHz",
-                "The board's processor, at the VIC's dot clock divided by four (NTSC's 14.318 MHz by 14, PAL's 4.434 MHz by 4)."),
+                "The board's processor, clocked from the VIC's crystal: NTSC's 14.318 MHz divided by 14, PAL's 4.434 MHz divided by 4."),
             new("rom", "ROM", RomText(), "The dumps in romDirectory or RETROCORE_VIC20_ROMS, under MAME's names; without them, built from the SDK's sources."),
             new("memory", "Memory", MemoryText(machine.Bus.Expansion), "The launch's ramExpansion option: none, 3k, 8k, 16k, 24k or 32k."),
             new("sound", "Sound", _soundMode == "off" ? "off" : "the VIC's four voices", "The launch's sound option: speaker plays the VIC's three tones and noise, as the TV does; off is silent."),

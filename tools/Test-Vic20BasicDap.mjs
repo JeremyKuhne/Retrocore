@@ -93,12 +93,12 @@ async function session(video, ramExpansion) {
         assert.equal((await frames())[0].name, "10: GOTO 999");
 
         // Step Into on SYS stops in the machine code it calls, at its first instruction: LDA #1, STA $03F0, RTS at
-        // $033A, in the bytes the kernal leaves unused below the cassette buffer.
+        // $0334, in the eight bytes the kernal leaves unused below the cassette buffer.
         await request("setExceptionBreakpoints", { filters: [] });
         const routine = Buffer.from([0xA9, 0x01, 0x8D, 0xF0, 0x03, 0x60]).toString("base64");
-        await request("writeMemory", { memoryReference: "0x33A", data: routine });
+        await request("writeMemory", { memoryReference: "0x334", data: routine });
         const document = (await request("retro/basic/document", { base: "retrocore-basic://vic20/" })).uri;
-        const looping = "10 SYS 826\n20 FOR I=1 TO 2000\n30 A=A+1\n40 NEXT I\n50 PRINT \"DONE\"\n";
+        const looping = "10 SYS 820\n20 FOR I=1 TO 2000\n30 A=A+1\n40 NEXT I\n50 PRINT \"DONE\"\n";
         assert.equal((await request("retro/basic/write", { text: looping })).success, true);
         await request("setBreakpoints", { source: { path: document }, breakpoints: [{ line: 1 }] });
         await request("continue", { threadId: 1 });
@@ -107,7 +107,7 @@ async function session(video, ramExpansion) {
         await request("stepIn", { threadId: 2 });
         const into = await event("stopped");
         assert.equal(into.reason, "step");
-        assert.match(into.description ?? "", /^Machine code at \$033A/);
+        assert.match(into.description ?? "", /^Machine code at \$0334/);
 
         // The jiffy clock interrupts sixty times a second; returning from one taken at GONE starts no statement again,
         // so each pass of the loop is one hit.

@@ -116,7 +116,8 @@ try {
         "video", "cpu", "rom", "memory", "sound", "cassette", "cartridge", "serial8", "serial9", "serial10", "serial11"
     ]);
     assert.equal(hardware.video.value, "NTSC, the 6560");
-    assert.equal(hardware.rom.value, "BASIC 2 and kernal 901486-06, from the SDK's sources");
+    // The SDK's builds, or with RETROCORE_VIC20_ROMS set, the dumps.
+    assert.ok(hardware.rom.value.startsWith("BASIC 2 and kernal 901486-06"), hardware.rom.value);
     assert.equal(hardware.memory.value, "5 KB, unexpanded");
     assert.equal(hardware.cartridge.value, "empty");
     assert.equal(hardware.serial8.value, "empty");
@@ -220,7 +221,9 @@ try {
     // A .prg program at BASIC's start loads with BASIC's pointers set and runs.
     const memory = await request("readMemory", { memoryReference: "0x1001", count: 32 });
     const bytes = Buffer.from(memory.data, "base64");
-    const end = bytes.indexOf(Buffer.from([0, 0, 0])) + 3;
+    const found = bytes.indexOf(Buffer.from([0, 0, 0]));
+    assert.ok(found >= 0, "the program's end link is in its first 32 bytes");
+    const end = found + 3;
     writeFileSync(prg, Buffer.concat([Buffer.from([0x01, 0x10]), bytes.subarray(0, end)]));
     await launch({ program: prg });
     await screen(screen => screen.includes("VIC 42"), "the .prg program's output");
@@ -269,7 +272,7 @@ try {
     assert.equal((await request("threads")).threads[0].name, "VIC-20 (PAL) 6502");
     const pal = await rows();
     assert.equal(pal.video.value, "PAL, the 6561");
-    assert.equal(pal.rom.value, "BASIC 2 and kernal 901486-07, from the SDK's sources");
+    assert.ok(pal.rom.value.startsWith("BASIC 2 and kernal 901486-07"), pal.rom.value);
     await request("setExceptionBreakpoints", { filters: ["machineReset"] });
     await request("retro/reset");
     assert.equal((await event("stopped")).reason, "breakpoint");
@@ -278,7 +281,7 @@ try {
     await request("continue", { threadId: 1 });
 
     // A 1541 on device 8: a blank disk formatted, a program saved on it, the disk saved as a D64 image and listed.
-    if (existsSync(join(driveRoms, "901229-06 aa.uab5"))) {
+    if (["325302-01.uab4", "901229-06 aa.uab5"].every(chip => existsSync(join(driveRoms, chip)))) {
         writeFileSync(disk, Buffer.alloc(174848));
         await launch({ driveRomDirectory: driveRoms, disks: [disk] });
         await screen(ready, "READY. with a 1541");

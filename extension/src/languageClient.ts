@@ -25,10 +25,37 @@ export const onDidStopLanguageClient = stopped.event;
  */
 export const onDidStartLanguageClient = startedEvent.event;
 
-/** The Retrocore.Debug host: the setting, or the packaged host or the workspace's build (see host.ts). */
-export function hostPath(context: vscode.ExtensionContext): string | undefined {
+/** The Retrocore.Debug host: the setting, or the repository's pinned tool, the packaged host or the workspace's build (see host.ts). */
+export async function hostPath(context: vscode.ExtensionContext): Promise<string | undefined> {
     const configured = vscode.workspace.getConfiguration("retrocore").get<string>("languageServer.host");
-    return configured ? configured : defaultHost(context);
+    return configured ? configured : await defaultHost(context);
+}
+
+// Stops the running server and starts it again on the host given, or the one chosen now, with the registrations its
+// first start made; true when a server runs after it.
+let restartOn: ((host?: string) => Promise<boolean>) | undefined;
+
+// Every restart, the rebuild watcher's included, waits for the one before it, so no two start servers at once.
+let restarts: Promise<unknown> = Promise.resolve();
+
+function queued<T>(work: () => Promise<T>): Promise<T> {
+    const next = restarts.then(work, work);
+    restarts = next.catch(() => undefined);
+    return next;
+}
+
+/**
+ * Restarts the language server on the host chosen now, as after the pinned tool is restored: the first start's
+ * watchers, listeners and commands are kept, and only the server is replaced; it starts it if the extension never
+ * found a host to start it on. Restarts run one after another, after the first start.
+ * @returns Whether a language server runs after it: false when there is no host, or the server did not start.
+ */
+export function restartLanguageClient(context: vscode.ExtensionContext, targets?: ActiveTargets): Promise<boolean> {
+    return queued(async () => {
+        if (restartOn !== undefined) return await restartOn();
+        await startLanguageClient(context, targets);
+        return client?.isRunning() ?? false;
+    });
 }
 
 /**
@@ -76,10 +103,11 @@ export async function startLanguageClient(context: vscode.ExtensionContext, targ
     const settings = vscode.workspace.getConfiguration("retrocore");
     if (!settings.get<boolean>("languageServer.enabled", true)) return;
     context.subscriptions.push(stopped, startedEvent);
-    const host = hostPath(context);
+    const host = await hostPath(context);
+    if (restartOn !== undefined) return;
     if (host === undefined || !fs.existsSync(host)) {
         void vscode.window.showWarningMessage(
-            "Retrocore: language features need Retrocore.Debug.dll. Reinstall the extension, build the repository, or set retrocore.languageServer.host.");
+            "Retrocore: language features need Retrocore.Debug.dll. Reinstall the extension, build the repository, restore the pinned tool, or set retrocore.languageServer.host.");
         return;
     }
 
@@ -132,31 +160,62 @@ export async function startLanguageClient(context: vscode.ExtensionContext, targ
         vscode.workspace.onDidChangeWorkspaceFolders(updateWords),
         vscode.commands.registerCommand("retrocore.lint.addUnlinkedNameWord", addUnlinkedNameWord));
 
-    const start = async (): Promise<void> => {
-        await startFrom(context, host, [configurations, projects, pascal]);
+    let current = host;
+    const start = async (from: string = current): Promise<void> => {
+        current = from;
+        await startFrom(context, from, [configurations, projects, pascal]);
         updateWords();
         updateTarget();
         for (const document of vscode.workspace.textDocuments) opened(document);
         // After the target, so what is asked now is answered for it.
         startedEvent.fire();
     };
-    await start();
+    // Set before the first start, so a restart after one that failed replaces the server rather than registering again.
+    // A server that does not start is reported, and the restart says so; the host it was to run is kept, so a rebuild
+    // of the first start's host revives it only if that was the one.
+    const notStarted = (on: string, error: unknown): void => {
+        void vscode.window.showWarningMessage(`Retrocore: the language server did not start on ${on}: ${String(error)}`);
+    };
+    restartOn = async (given?: string) => {
+        await stopLanguageClient();
+        if (!vscode.workspace.getConfiguration("retrocore").get<boolean>("languageServer.enabled", true)) return false;
+        let next: string | undefined = given;
+        try {
+            next ??= await hostPath(context);
+            if (next === undefined || !fs.existsSync(next)) {
+                void vscode.window.showWarningMessage(
+                    "Retrocore: language features need Retrocore.Debug.dll. Reinstall the extension, build the repository, restore the pinned tool, or set retrocore.languageServer.host.");
+                return false;
+            }
+            await start(next);
+        } catch (error) {
+            notStarted(next ?? "the host chosen", error);
+            return false;
+        }
+        return client?.isRunning() ?? false;
+    };
 
-    // Restart on the rebuilt host once a build has settled.
+    // Restart on the rebuilt host once a build has settled, while it is the host the server runs: a server moved to
+    // another host, such as the restored pinned tool, stays there. The watcher is made before the first start, so a
+    // rebuild recovers from a first start that failed.
     let pending: NodeJS.Timeout | undefined;
     const watcher = vscode.workspace.createFileSystemWatcher(new vscode.RelativePattern(vscode.Uri.file(path.dirname(host)), path.basename(host)));
     const changed = (): void => {
         if (pending !== undefined) clearTimeout(pending);
         pending = setTimeout(() => {
             pending = undefined;
-            void (async () => {
-                await stopLanguageClient();
-                if (fs.existsSync(host)) await start();
-            })();
+            if (current !== host || !fs.existsSync(host)) return;
+            queued(async () => await restartOn?.(host))
+                .catch(error => console.error(`retrocore: the language server did not restart: ${String(error)}`));
         }, 2000);
     };
     context.subscriptions.push(watcher, watcher.onDidChange(changed), watcher.onDidCreate(changed),
         { dispose: () => { if (pending !== undefined) clearTimeout(pending); } });
+    try {
+        await start();
+    } catch (error) {
+        notStarted(host, error);
+    }
 }
 
 /** Adds a word to the user's or the workspace's unlinked-name dictionary: the server's quick fix for the lint. */
@@ -222,10 +281,15 @@ export async function languageRequest<T>(method: string, params: unknown): Promi
     return await running.sendRequest<T>(method, params);
 }
 
-/** Stops the language server. */
+/** Stops the language server; one that never started, or is still starting, is let go as it is. */
 export async function stopLanguageClient(): Promise<void> {
     const running = client;
     client = undefined;
     if (running !== undefined) stopped.fire();
-    await running?.stop();
+    try {
+        await running?.stop();
+    } catch (error) {
+        // vscode-languageclient keeps no hold on a server whose start failed, so its process may still run.
+        console.warn(`retrocore: the language server could not be stopped, and its process may still run: ${String(error)}`);
+    }
 }

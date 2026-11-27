@@ -189,6 +189,28 @@ in the overview ruler; both move when you pick another target. The colors are
 `retrocore.inactiveCodeBackground` and `retrocore.inactiveCodeOverviewRuler`, and
 `retrocore.inactiveCode.shade` turns the shading off.
 
+**Retrocore: New Project...** starts a repository: pick the template when there is more
+than one, the machines to build for (each becomes a target in its usual environment), a
+name and a folder, and it runs `retrocore new` from the same templates as the command
+line, then offers to open the folder. The project pins the `retrocore` tool at the
+version of the host that made it.
+
+**The repository's pinned tool.** When `.config/dotnet-tools.json` pins `retrocore` (for
+the first workspace folder whose repository pins it), the extension runs that tool, as
+language server and debugger, once `dotnet tool restore` has restored it into the NuGet
+packages folder (`NUGET_PACKAGES`, or `~/.nuget/packages`) and it runs as the version
+pinned, so the editor builds what CI builds. Until then it runs its own host and, when
+that host's version differs, says so with a **Restore** button. **Retrocore: Restore
+Pinned Tool**, the button's command, runs `dotnet tool restore` and restarts the language
+server on the pinned tool; a debug launch picks its host at each launch. After a restore
+from a terminal, run it, or **Retrocore: Restart Language Server**, so the language
+server follows. Its own host builds a project whose SDK major it carries; one it does not
+carry fails with the host's own message. `retrocore.languageServer.host` sets the
+language server's host and a launch's `debugHost` that launch's, each over the pin; with
+the setting, the warning concerns only the debugger. In
+the Extension Development Host a Release build of this repository comes first, with no
+warning.
+
 ## What is highlighted
 
 - All three current CPU maps: MOS 6502, WDC 65C02 and Rockwell 65C02, including
@@ -226,7 +248,8 @@ is not marked as a compiler error; that is the language server's job, below.
 ## Language features
 
 The extension starts `Retrocore.Debug --language-server` for `retrocore-asm` documents. It
-uses `retrocore.languageServer.host`, or by default the host packaged with the installed
+uses `retrocore.languageServer.host`, or by default the repository's pinned tool once it is
+restored (see [Projects](#projects)), and otherwise the host packaged with the installed
 extension; a self-hosted extension uses the workspace's Release build,
 `artifacts/AnyCPU/Release/Retrocore.Debug/net11.0/Retrocore.Debug.dll`, first.
 `retrocore.languageServer.enabled` turns it off.

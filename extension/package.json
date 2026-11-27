@@ -25,7 +25,7 @@
     "generate:grammar": "node scripts/generate-grammar.mjs && node scripts/generate-basic-grammar.mjs",
     "compile": "npm run generate:grammar && node scripts/copy-schema.mjs && tsc -p .",
     "check:grammar": "node scripts/generate-grammar.mjs --check && node scripts/generate-basic-grammar.mjs --check",
-    "test:grammar": "npm run check:grammar && node --test out/test/grammar.test.js out/test/basicGrammar.test.js out/test/pascalGrammar.test.js out/test/display.test.js out/test/pictures.test.js out/test/hardware.test.js out/test/machines.test.js out/test/startFlow.test.js out/test/favorite.test.js out/test/memory.test.js out/test/drives.test.js out/test/cycles.test.js out/test/project.test.js",
+    "test:grammar": "npm run check:grammar && node --test out/test/grammar.test.js out/test/basicGrammar.test.js out/test/pascalGrammar.test.js out/test/display.test.js out/test/pictures.test.js out/test/hardware.test.js out/test/machines.test.js out/test/startFlow.test.js out/test/favorite.test.js out/test/memory.test.js out/test/drives.test.js out/test/cycles.test.js out/test/project.test.js out/test/pinnedTool.test.js",
     "test:language": "node out/test/runTest.js --language-only",
     "test:memory-integration": "node out/test/runTest.js --memory-only",
     "test:editor": "node out/test/runTest.js",
@@ -407,7 +407,7 @@
         "retrocore.languageServer.host": {
           "type": "string",
           "default": "",
-          "description": "Path to Retrocore.Debug.dll. Empty uses the workspace build under artifacts/AnyCPU/Release/Retrocore.Debug/net11.0."
+          "description": "Path to Retrocore.Debug.dll for the language server. Empty uses, in development, the workspace build under artifacts/AnyCPU/Release/Retrocore.Debug/net11.0 first; then the repository's pinned retrocore tool once it is restored; and otherwise the host packaged with the extension."
         },
         "retrocore.inactiveCode.shade": {
           "type": "boolean",
@@ -1227,6 +1227,18 @@
       ]
     },
     "commands": [
+      {
+        "command": "retrocore.newProject",
+        "title": "Retrocore: New Project..."
+      },
+      {
+        "command": "retrocore.restoreTool",
+        "title": "Retrocore: Restore Pinned Tool"
+      },
+      {
+        "command": "retrocore.restartLanguageServer",
+        "title": "Retrocore: Restart Language Server"
+      },
       {
         "command": "retrocore.pickTarget",
         "title": "Retrocore: Pick Target...",

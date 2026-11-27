@@ -150,7 +150,7 @@ Hardware details, system sources, media formats, and launch options are covered 
   [Conversion logs](docs/conversions/README.md) · [Bibliography](docs/Bibliography.md)
 - **Contributing and roadmap:** [Development, testing, and repository layout](docs/Development.md) (build and test
   commands, Native AOT and PGO, `RETROCORE_*` external fixtures, solution projects, and the SDK ROM source index) ·
-  [`docs/backlog`](docs/backlog) for active design notes
+  [`docs/backlog`](docs/backlog) for active design notes, including [tape and disk speed](docs/backlog/MediaSpeed.md)
 
 ## License
 

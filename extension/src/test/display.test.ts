@@ -95,7 +95,7 @@ function loadPanel(state?: unknown, audioContext?: unknown): {
     document: PanelDocument; frames: (() => void)[];
 } {
     const posted: unknown[] = [];
-    const ids = ["screen", "display", "text", "status", "disk", "details", "overlay", "ctrl", "reset", "trs80-reset", "model3-reset", "model2-reset", "model100-reset", "kaypro-reset", "apple1-reset", "apple1-clear", "coco-reset", "pet-reset", "altair-reset", "altair-clear", "bbc-reset", "hint", "sound", "volume", "bezel", "scale", "speed", "fastDisk", "off", "offName", "restart", "startMachine", "close", "basic", "screenType", "screenChoice", "mouseState"];
+    const ids = ["screen", "display", "text", "status", "disk", "details", "overlay", "ctrl", "reset", "trs80-reset", "model3-reset", "model2-reset", "model100-reset", "kaypro-reset", "apple1-reset", "apple1-clear", "coco-reset", "pet-reset", "vic20-reset", "altair-reset", "altair-clear", "bbc-reset", "hint", "sound", "volume", "bezel", "scale", "speed", "fastDisk", "off", "offName", "restart", "startMachine", "close", "basic", "screenType", "screenChoice", "mouseState"];
     const byId = new Map(ids.map(id => [id, new Element()]));
     byId.get("ctrl")?.setAttribute("aria-pressed", "false");
     const buttons = [new Element({ button: "0" }), new Element({ button: "1" })];
@@ -351,7 +351,21 @@ test("the PET's key bar has Stop and Clr, the shifted HOME", () => {
     assert.match(bar, /data-code="3"[^>]*>Stop</);
     assert.match(bar, /data-code="147"[^>]*>Clr</);
     assert.match(bar, /id="pet-reset"[^>]*>Reset</);
-    assert.match(html, /data-machine="apple2 apple3 coco pet bbc atari800"/, "the PET, and the BBC Micro, have the Sound button");
+    assert.match(html, /data-machine="apple2 apple3 coco pet vic20 bbc atari800"/, "the PET, the VIC-20 and the BBC Micro have the Sound button");
+});
+
+test("the VIC-20's key bar has RUN/STOP, RESTORE alone and with RUN/STOP, CLR, HOME, the Commodore key and f1-f8", () => {
+    const html = webviewHtml("NONCE");
+    const bar = /<span class="keys" data-machine="vic20">([\s\S]*?)<\/span>/.exec(html)?.[1] ?? "";
+    assert.match(bar, /data-code="3"[^>]*>Run\/Stop</);
+    assert.match(bar, /data-code="256"[^>]*>Restore</);
+    assert.match(bar, /data-code="257"[^>]*>Stop\+Restore</);
+    assert.match(bar, /data-code="147"[^>]*>Clr</);
+    assert.match(bar, /data-code="19"[^>]*>Home</);
+    assert.match(bar, /data-code="258"[^>]*>C= Shift</);
+    const keys = [...bar.matchAll(/data-code="(\d+)"[^>]*>f(\d)</g)].map(match => [Number(match[2]), Number(match[1])]);
+    assert.deepEqual(keys.sort((a, b) => a[0] - b[0]).map(key => key[1]), [133, 137, 134, 138, 135, 139, 136, 140], "f1-f8 in PETSCII");
+    assert.match(bar, /id="vic20-reset"[^>]*>Reset</);
 });
 
 test("the Model I's Reset button, Ctrl+Break and Ctrl+F12 press its reset", () => {
@@ -482,6 +496,7 @@ test("sharp scales are whole physical pixels per dot, in the screen's shape, as 
         "at 150% display scaling, 3x is 1680x1152 physical pixels");
     assert.deepEqual(size("trs80-model1", 1000, 900, 1), { width: 768, height: 576, scale: 1 }, "Model I dots are 2 by 3");
     assert.deepEqual(size("pet", 1300, 900, 1), { width: 1280, height: 800, scale: 2 }, "the PET's 320x200 square dots, doubled at 1x");
+    assert.deepEqual(size("vic20", 1300, 1000, 1), { width: 1200, height: 992, scale: 2 }, "the VIC-20's dots three wide by two tall");
     assert.equal(size("trs80-model1", 700, 900, 1), null, "too small for 1x");
 });
 
@@ -789,7 +804,7 @@ test("the Atari's keys are ATASCII, its BREAK and console keys are above 127, an
     for (const [code, name] of [[240, "Start"], [241, "Select"], [242, "Option"], [243, "Break"], [244, "System Reset"]] as const) {
         assert.match(bar.slice(0, bar.indexOf("</span>")), new RegExp(`data-code="${code}"[^>]*>${name}<`), name);
     }
-    assert.match(html, /data-machine="apple2 apple3 coco pet bbc atari800"/, "the Atari has the Sound button");
+    assert.match(html, /data-machine="apple2 apple3 coco pet vic20 bbc atari800"/, "the Atari has the Sound button");
 });
 
 test("the panel's keys reach the machine up to code 255, for the BBC Micro's COPY, cursor and function keys and the Atari's console keys", () => {

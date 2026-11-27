@@ -57,7 +57,7 @@ test("the machines are the ones agreed, each with its own id and name, in order"
         "TRS-80 Model I (Level I)", "TRS-80 Model III", "TRS-80 Model III (Level I)", "TRS-80 Model 4", "TRS-80 Model 4P",
         "TRS-80 Model II", "TRS-80 Model 12", "TRS-80 Model 16 (Z80 side)", "TRS-80 Model 100", "Tandy 102", "Apple-1", "TRS-80 Color Computer",
         "TRS-80 Color Computer 2", "TRS-80 Color Computer 3", "Commodore PET 2001 (BASIC 2)", "Commodore PET 2001",
-        "Commodore PET 4032", "Commodore PET 4032 (business keyboard)", "BBC Micro Model B", "BBC Micro Model A",
+        "Commodore PET 4032", "Commodore PET 4032 (business keyboard)", "Commodore VIC-20", "BBC Micro Model B", "BBC Micro Model A",
         "Atari 800", "Atari 400", "MITS Altair 8800", "Kaypro II"
     ]);
     assert.deepEqual(machineById("altair")?.configuration, { machine: "altair" });
@@ -138,6 +138,16 @@ test("what each machine runs: Apple disks and DOS, the Model I's disks and tapes
         assert.deepEqual(pet?.choices.map(choice => choice.option), ["ramKilobytes", "sound"], "the 4032's board has no snow");
         assert.equal(pet?.choices[0].default, 32);
     }
+    const vic20 = machineById("vic20");
+    assert.deepEqual(vic20?.configuration, { machine: "vic20" }, "the video option picks NTSC or PAL");
+    assert.deepEqual(vic20?.diskFormats, ["d64", "g64"], "a disk brings a 1541 as device 8");
+    assert.deepEqual(vic20?.tapeFormats, ["tap", "wav", "prg"]);
+    assert.equal(vic20?.tapeOption, undefined, "its one Datasette is cassette");
+    assert.deepEqual(vic20?.programFormats, ["prg", "bin"]);
+    assert.deepEqual(vic20?.basicDialects, ["petbasic"]);
+    assert.deepEqual(vic20?.cartridgeFormats, ["a0", "20", "40", "60", "70", "prg", "crt", "bin"]);
+    assert.deepEqual(vic20?.choices.map(choice => choice.option), ["video", "ramExpansion", "sound"]);
+    assert.deepEqual(vic20?.choices.map(choice => choice.default), ["ntsc", "none", "speaker"], "as the launch defaults them");
     assert.deepEqual(machineById("bbcb")?.configuration, { machine: "bbc", model: "bbcb" });
     assert.deepEqual(machineById("bbcb")?.diskFormats, ["ssd", "dsd"]);
     assert.deepEqual(machineById("bbcb")?.basicDialects, ["bbcbasic"]);
@@ -183,6 +193,7 @@ test("a launch configuration finds its catalog machine as the host reads its mod
     assert.equal(catalogMachine({ machine: "pet", model: "pet2001" })?.id, "pet2001");
     assert.equal(catalogMachine({ machine: "pet", model: "pet4032-business" })?.id, "pet4032-business");
     assert.equal(catalogMachine({ machine: "kaypro2" })?.id, "kaypro2");
+    assert.equal(catalogMachine({ machine: "vic20", video: "pal" })?.id, "vic20", "PAL is an option, not a model");
     assert.equal(catalogMachine({ machine: "pdp10" }), undefined);
 });
 

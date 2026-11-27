@@ -75,23 +75,24 @@ export function runChoices(machine: Machine): RunChoice[] {
     }
 
     if (machine.cartridgeFormats !== undefined && machine.cartridgeFormats.length !== 0) {
-        choices.push({
-            kind: "cartridge",
-            label: "A cartridge",
-            detail: "Plugs it into the left slot in place of BASIC",
-            extensions: machine.cartridgeFormats
-        });
+        // The VIC-20's cartridge goes in the expansion port, beside BASIC; the Atari's left slot is BASIC's.
+        const detail = machine.configuration.machine === "vic20"
+            ? "Plugs it into the expansion port; one that starts itself runs at power-on"
+            : "Plugs it into the left slot in place of BASIC";
+        choices.push({ kind: "cartridge", label: "A cartridge", detail, extensions: machine.cartridgeFormats });
     }
 
     if (machine.diskFormats.length !== 0) {
         // The BBC Micro boots a disk with SHIFT held as it starts, as SHIFT-BREAK does.
         const detail = machine.configuration.machine === "pet" ? "Puts it in drive 0 of the 4040 at device 8"
+            : machine.configuration.machine === "vic20" ? "Puts it in a 1541 on the serial bus as device 8"
             : machine.configuration.machine === "bbc" ? "Boots it from drive 0, as SHIFT-BREAK does" : "Boots it from the first drive";
         choices.push({ kind: "disk", label: "A disk image", detail, extensions: machine.diskFormats });
     }
 
     if (machine.tapeFormats.length !== 0) {
-        const player = machine.configuration.machine === "pet" ? "the Datasette, with PLAY down" : "the cassette player";
+        const commodore = machine.configuration.machine === "pet" || machine.configuration.machine === "vic20";
+        const player = commodore ? "the Datasette, with PLAY down" : "the cassette player";
         choices.push({ kind: "tape", label: "A tape", detail: `Puts it in ${player}`, extensions: machine.tapeFormats });
     }
 
@@ -118,8 +119,10 @@ function dialectName(dialect: string, machine: Machine): string {
         case "colorbasic": return "Color BASIC";
         case "mbasic": return "MBASIC";
         case "model100": return "Model 100 BASIC";
-        // The PET's one dialect is the version its ROMs have: BASIC 1 on the 2001, BASIC 4 on the 4032, else BASIC 2.
+        // The PET's one dialect is the version its ROMs have: BASIC 1 on the 2001, BASIC 4 on the 4032, else BASIC 2;
+        // the VIC-20's is BASIC 2.
         case "petbasic": {
+            if (machine.configuration.machine === "vic20") return "Commodore BASIC 2 (VIC-20)";
             const model = String(machine.configuration.model ?? "");
             const version = model === "pet2001" ? 1 : model.startsWith("pet4032") ? 4 : 2;
             return `Commodore BASIC ${version} (PET)`;
@@ -199,8 +202,9 @@ export function setupConfiguration(setup: Setup): Record<string, unknown> {
             Object.assign(configuration, { executable: path });
             break;
         case "cartridge":
-            // The cartridge takes the left slot, so BASIC comes out whatever revision the options chose.
-            Object.assign(configuration, { cartridge: path, basicCartridge: "none" });
+            // An Atari's cartridge takes the left slot, so BASIC comes out whatever revision the options chose; the
+            // VIC-20's goes in the expansion port beside BASIC.
+            Object.assign(configuration, machine.configuration.machine === "vic20" ? { cartridge: path } : { cartridge: path, basicCartridge: "none" });
             break;
         case "dosSource":
             Object.assign(configuration, { source: path, dos: setup.dos ?? "3.3", stopOnEntry: false });

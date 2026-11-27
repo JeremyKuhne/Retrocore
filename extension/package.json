@@ -499,6 +499,7 @@
                   "pet2001",
                   "pet4032",
                   "pet4032-business",
+                  "vic20",
                   "bbcb",
                   "bbca",
                   "atari800",
@@ -1621,6 +1622,7 @@
                   "apple1",
                   "coco",
                   "pet",
+                  "vic20",
                   "altair",
                   "kaypro2",
                   "bbc",
@@ -1638,6 +1640,7 @@
                   "The Apple-1, with the Woz Monitor and the Apple Cassette Interface.",
                   "The TRS-80 Color Computer 1, 2 or 3; model says which.",
                   "The Commodore PET: the 2001 with BASIC 1 or the BASIC 2 upgrade ROMs, or the 4032 with BASIC 4; model says which (pet2001-basic2 by default).",
+                  "The Commodore VIC-20: a 6502, BASIC 2, the VIC's colour screen and sound, and 5 KB; video picks NTSC or PAL, and ramExpansion the RAM in the expansion port.",
                   "The MITS Altair 8800: an 8080 with RAM and a terminal on the 88-2SIO; it has no ROM.",
                   "The Kaypro II: a 2.5 MHz Z80, 64 KB, 80x24 and two drives, running CP/M 2.2.",
                   "The BBC Micro, Model B or A; model says which (bbcb by default).",
@@ -1645,11 +1648,11 @@
                   "The older name for apple2, from when only the IIe was emulated."
                 ],
                 "default": "apple2",
-                "description": "The machine to emulate: apple2 is the Apple II family (model picks the IIe or enhanced IIe), apple3 an Apple III, trs80-model1 a TRS-80 Model I, trs80-model3 a Model III, 4 or 4P, trs80-model2 a Model II, 12 or 16, trs80-model100 a Model 100 or Tandy 102, apple1 an Apple-1, coco a TRS-80 Color Computer (model picks 1, 2 or 3), pet a Commodore PET (model picks the 2001 with BASIC 1 or 2, or the 4032), altair a MITS Altair 8800, kaypro2 a Kaypro II, bbc a BBC Micro (model picks the Model B or A), and atari800 an Atari 800 or 400 (model picks which)."
+                "description": "The machine to emulate: apple2 is the Apple II family (model picks the IIe or enhanced IIe), apple3 an Apple III, trs80-model1 a TRS-80 Model I, trs80-model3 a Model III, 4 or 4P, trs80-model2 a Model II, 12 or 16, trs80-model100 a Model 100 or Tandy 102, apple1 an Apple-1, coco a TRS-80 Color Computer (model picks 1, 2 or 3), pet a Commodore PET (model picks the 2001 with BASIC 1 or 2, or the 4032), vic20 a Commodore VIC-20 (video picks NTSC or PAL), altair a MITS Altair 8800, kaypro2 a Kaypro II, bbc a BBC Micro (model picks the Model B or A), and atari800 an Atari 800 or 400 (model picks which)."
               },
               "romDirectory": {
                 "type": "string",
-                "description": "Directory of externally supplied ROM dumps; defaults to RETROCORE_IIE_ROMS for the IIe, RETROCORE_IIPLUS_ROMS for the II Plus, RETROCORE_II_ROMS for the II, RETROCORE_APPLE3_ROMS for the Apple III (MAME's apple3 set), RETROCORE_TRS80_ROMS for the Model I, III, 4, 4P, II, 12 and 16 (the Model III, 4 and II families' dumps are under MAME's names, in the directory or its trs80m3, trs80m4, trs80m4p, trs80m2 or trs80m16 folder), RETROCORE_APPLE1_ROMS for the Apple-1 (wozmon.bin and aci.bin), RETROCORE_COCO_ROMS for the Color Computer, RETROCORE_PET_ROMS for the PET (MAME's pet2001, pet2001n, pet4016 and pet4032b chips, in the directory or its folder for the set) and RETROCORE_KAYPRO_ROMS for the Kaypro II (81-149c.u47 or 81-149c.rom, and 81-146.u43 or 81-146a.bin, in the directory or its kayproii folder), RETROCORE_BBC_ROMS for the BBC Micro and RETROCORE_ATARI_ROMS for the Atari 400 and 800. Without dumps the ROMs are assembled from the SDK's sources, which are byte-identical to them; the Color Computer's dumps are under MAME's names (such as bas12.rom, extbas11.rom, coco3.rom and disk11.rom), in the directory or its coco, coco2b, coco3 and coco_fdc folders, and the BBC Micro's too (os12.rom, basic2.rom, dnfs120.rom and saa5050), in the directory or its bbcb, bbc_acorn8271 and saa5050 folders, and the Atari's too (MAME's a800 and a800pal chips, such as co12399b.rom, co12499b.rom and co14599b.rom), with the 810's firmware in an atari810 folder beside them and Atari BASIC as basic-revc.rom (or -reva or -revb) in the directory or its basic folder. The Model 100 and Tandy 102 default to RETROCORE_TRS80M100_ROMS, and need m100rom.m12 or m102rom.m12 (or m100.bin, m100rom.bin, t102.bin, t102_rom.bin or m102rom.bin) there or in its trs80m100, tandy102 or trs80m100-roms folder."
+                "description": "Directory of externally supplied ROM dumps; defaults to RETROCORE_IIE_ROMS for the IIe, RETROCORE_IIPLUS_ROMS for the II Plus, RETROCORE_II_ROMS for the II, RETROCORE_APPLE3_ROMS for the Apple III (MAME's apple3 set), RETROCORE_TRS80_ROMS for the Model I, III, 4, 4P, II, 12 and 16 (the Model III, 4 and II families' dumps are under MAME's names, in the directory or its trs80m3, trs80m4, trs80m4p, trs80m2 or trs80m16 folder), RETROCORE_APPLE1_ROMS for the Apple-1 (wozmon.bin and aci.bin), RETROCORE_COCO_ROMS for the Color Computer, RETROCORE_PET_ROMS for the PET (MAME's pet2001, pet2001n, pet4016 and pet4032b chips, in the directory or its folder for the set), RETROCORE_VIC20_ROMS for the VIC-20 (MAME's vic20 or vic20p chips, 901486-01, 901486-06 or -07 and 901460-03, in the directory or its vic20 or vic20p folder) and RETROCORE_KAYPRO_ROMS for the Kaypro II (81-149c.u47 or 81-149c.rom, and 81-146.u43 or 81-146a.bin, in the directory or its kayproii folder), RETROCORE_BBC_ROMS for the BBC Micro and RETROCORE_ATARI_ROMS for the Atari 400 and 800. Without dumps the ROMs are assembled from the SDK's sources, which are byte-identical to them; the Color Computer's dumps are under MAME's names (such as bas12.rom, extbas11.rom, coco3.rom and disk11.rom), in the directory or its coco, coco2b, coco3 and coco_fdc folders, and the BBC Micro's too (os12.rom, basic2.rom, dnfs120.rom and saa5050), in the directory or its bbcb, bbc_acorn8271 and saa5050 folders, and the Atari's too (MAME's a800 and a800pal chips, such as co12399b.rom, co12499b.rom and co14599b.rom), with the 810's firmware in an atari810 folder beside them and Atari BASIC as basic-revc.rom (or -reva or -revb) in the directory or its basic folder. The Model 100 and Tandy 102 default to RETROCORE_TRS80M100_ROMS, and need m100rom.m12 or m102rom.m12 (or m100.bin, m100rom.bin, t102.bin, t102_rom.bin or m102rom.bin) there or in its trs80m100, tandy102 or trs80m100-roms folder."
               },
               "highRam": {
                 "type": "boolean",
@@ -1731,7 +1734,27 @@
               },
               "ramKilobytes": {
                 "type": "number",
-                "description": "Model I: RAM in kilobytes, 4-48; defaults to 48 with the Expansion Interface, else 16 (4 for Level I). Apple II and II Plus: 16, 32 or 48 (the default) on the board. Apple III: 128, 256 (the default) or 512. Apple-1: 4 (the default), 8, 16 or 32 from $0000. Color Computer 1 and 2: 4, 16, 32 or 64 (16 on a CoCo 1, 64 on a CoCo 2); CoCo 3: 128 (the default) or 512. Model III: 16, 32 or 48 (the default). Model 4 and 4P: 64 or 128 (the default). Model II, 12 and 16: 32 to 512 in 32K banks, 64 by default. Altair 8800: 1 to 64 from $0000, 64 by default. PET: 4, 8, 16 or 32; 8 by default, or 32 on a 4032 (16 is the 4016). Atari 800 and 400: 8 to 48 in steps of 8; 48 on the 800 and 16 on the 400 by default. Model 100 and Tandy 102: 8, 16, 24 or 32 (the default), filled down from $FFFF."
+                "description": "Model I: RAM in kilobytes, 4-48; defaults to 48 with the Expansion Interface, else 16 (4 for Level I). Apple II and II Plus: 16, 32 or 48 (the default) on the board. Apple III: 128, 256 (the default) or 512. Apple-1: 4 (the default), 8, 16 or 32 from $0000. Color Computer 1 and 2: 4, 16, 32 or 64 (16 on a CoCo 1, 64 on a CoCo 2); CoCo 3: 128 (the default) or 512. Model III: 16, 32 or 48 (the default). Model 4 and 4P: 64 or 128 (the default). Model II, 12 and 16: 32 to 512 in 32K banks, 64 by default. Altair 8800: 1 to 64 from $0000, 64 by default. PET: 4, 8, 16 or 32; 8 by default, or 32 on a 4032 (16 is the 4016). Atari 800 and 400: 8 to 48 in steps of 8; 48 on the 800 and 16 on the 400 by default. Model 100 and Tandy 102: 8, 16, 24 or 32 (the default), filled down from $FFFF. The VIC-20's is ramExpansion."
+              },
+              "ramExpansion": {
+                "enum": [
+                  "none",
+                  "3k",
+                  "8k",
+                  "16k",
+                  "24k",
+                  "32k"
+                ],
+                "enumDescriptions": [
+                  "The unexpanded VIC-20: 5 KB, 3583 bytes free for BASIC from $1001.",
+                  "3K at $0400, as the VIC-1210 adds: BASIC starts at $0401.",
+                  "8K in block 1, as the VIC-1110 adds: BASIC starts at $1201 and the screen moves to $1000.",
+                  "16K in blocks 1 and 2, as the VIC-1111 adds.",
+                  "24K in blocks 1 to 3, the most BASIC can use.",
+                  "The 3K and 24K together."
+                ],
+                "default": "none",
+                "description": "VIC-20: the RAM in the expansion port, which moves BASIC's start and the screen."
               },
               "switches": {
                 "type": "number",
@@ -1825,7 +1848,7 @@
               },
               "cassette": {
                 "type": "string",
-                "description": "Model I, Model III and 4, and Color Computer: a .cas tape to play (500 baud on a Model III or 4). Apple-1: a .wav tape, which plays from the start of the session. Altair 8800: a .tap tape of bytes for the 88-ACR, which plays at 300 baud from the start of the session. BBC Micro: a .uef tape, or any file with a .inf file beside it, which goes on a tape as the MOS saves files. Atari 800 and 400: a .cas tape for the 410, or an .xex, which goes on a boot tape. Model 100 and Tandy 102: a .wav tape, which plays when the ROM runs the motor (CLOAD). The PET's are cassette1 and cassette2."
+                "description": "Model I, Model III and 4, and Color Computer: a .cas tape to play (500 baud on a Model III or 4). Apple-1: a .wav tape, which plays from the start of the session. Altair 8800: a .tap tape of bytes for the 88-ACR, which plays at 300 baud from the start of the session. BBC Micro: a .uef tape, or any file with a .inf file beside it, which goes on a tape as the MOS saves files. Atari 800 and 400: a .cas tape for the 410, or an .xex, which goes on a boot tape. Model 100 and Tandy 102: a .wav tape, which plays when the ROM runs the motor (CLOAD). VIC-20: a .tap, .wav or .prg tape in the Datasette, with PLAY down; a .prg goes in as the tape SAVE writes. The PET's are cassette1 and cassette2."
               },
               "cassette1": {
                 "type": "string",
@@ -1843,7 +1866,7 @@
               "fastCassette": {
                 "type": "boolean",
                 "default": true,
-                "description": "Model I, Color Computer, PET, BBC Micro and Atari 800 and 400: run as fast as possible while the cassette motor runs, so tapes load and save quickly. Apple-1 and Altair 8800: the same while a tape plays or records; Model 100: while the motor moves a tape that plays or records. The machine's own timing is unchanged."
+                "description": "Model I, Color Computer, PET, VIC-20, BBC Micro and Atari 800 and 400: run as fast as possible while the cassette motor runs, so tapes load and save quickly. Apple-1 and Altair 8800: the same while a tape plays or records; Model 100: while the motor moves a tape that plays or records. The machine's own timing is unchanged."
               },
               "disks": {
                 "type": "array",
@@ -1851,7 +1874,7 @@
                   "type": "string"
                 },
                 "maxItems": 16,
-                "description": "Model I, III, 4 and 4P: JV1, JV3, DMK or IMD images for drives 0-3, chosen by extension or, for .dsk, by contents. Model II, 12 and 16: IMD, DMK or JV3 images of 8-inch disks. Apple III: DOS- or ProDOS-order (.po) or WOZ images for .D1, the built-in drive, then .D2-.D4. Color Computer: JVC (.dsk) images for drives 0-3, which put the disk controller in the slot. PET: .d64, .d67 or .g64 images for the first disk unit's drive 0, its drive 1, then the next unit's; without diskUnits, as many units as they need, from device 8. Kaypro II: IMG, DSK, IMD or DMK images of single-sided double-density 5.25-inch disks for drive A, then B. BBC Micro: SSD or DSD images for drives 0 and 1; a DSD's second side is drive 2 or 3. Atari 800 and 400: ATR or XFD images for D1:-D4:; an .xex boots from a disk built for it. Altair 8800: SIMH .dsk images of 8-inch disks (77 tracks of 32 137-byte sectors) for the 88-DCDD's drives 0-3, which fit the controller and the DBL PROM and boot drive 0."
+                "description": "Model I, III, 4 and 4P: JV1, JV3, DMK or IMD images for drives 0-3, chosen by extension or, for .dsk, by contents. Model II, 12 and 16: IMD, DMK or JV3 images of 8-inch disks. Apple III: DOS- or ProDOS-order (.po) or WOZ images for .D1, the built-in drive, then .D2-.D4. Color Computer: JVC (.dsk) images for drives 0-3, which put the disk controller in the slot. PET: .d64, .d67 or .g64 images for the first disk unit's drive 0, its drive 1, then the next unit's; without diskUnits, as many units as they need, from device 8. VIC-20: .d64 or .g64 images for the drive at device 8, then the next; without diskUnits, as many 1541s as they need, from device 8. Kaypro II: IMG, DSK, IMD or DMK images of single-sided double-density 5.25-inch disks for drive A, then B. BBC Micro: SSD or DSD images for drives 0 and 1; a DSD's second side is drive 2 or 3. Atari 800 and 400: ATR or XFD images for D1:-D4:; an .xex boots from a disk built for it. Altair 8800: SIMH .dsk images of 8-inch disks (77 tracks of 32 137-byte sectors) for the 88-DCDD's drives 0-3, which fit the controller and the DBL PROM and boot drive 0."
               },
               "diskUnits": {
                 "type": "array",
@@ -1861,21 +1884,22 @@
                   "maximum": 15
                 },
                 "uniqueItems": true,
-                "description": "PET: the device numbers of the dual disk drives on the IEEE-488 bus, such as [8, 9], each the diskModel. Each needs its ROMs, MAME's c4040 or c2040 set, in driveRomDirectory or romDirectory. A 4032 has one as 8 when the ROMs are found; [] leaves it out."
+                "description": "PET: the device numbers of the dual disk drives on the IEEE-488 bus, such as [8, 9], each the diskModel. Each needs its ROMs, MAME's c4040 or c2040 set, in driveRomDirectory or romDirectory. A 4032 has one as 8 when the ROMs are found; [] leaves it out. VIC-20: the device numbers, 8 to 11, of the drives on the serial bus, each the diskModel, with MAME's c1541 or c1540 set."
               },
               "diskModel": {
                 "type": "string",
-                "enum": ["4040", "2040"],
-                "default": "4040",
+                "enum": ["4040", "2040", "1541", "1540"],
                 "enumDescriptions": [
-                  "The 4040, with DOS 2.0: D64 disks.",
-                  "The 2040, with DOS 1.2: D67 disks, each initialized with the I command before it is read."
+                  "PET: the 4040, with DOS 2.0: D64 disks.",
+                  "PET: the 2040, with DOS 1.2: D67 disks, each initialized with the I command before it is read.",
+                  "VIC-20: the 1541, with DOS 2.6 (901229-06): D64 and G64 disks.",
+                  "VIC-20: the 1540, the 1541's forerunner, timed for the VIC-20's serial bus alone."
                 ],
-                "description": "PET: what the diskUnits are, a 4040 (DOS 2.0) or a 2040 (DOS 1.2)."
+                "description": "PET: what the diskUnits are, a 4040 (DOS 2.0, the default) or a 2040 (DOS 1.2). VIC-20: a 1541 (the default) or a 1540."
               },
               "driveRomDirectory": {
                 "type": "string",
-                "description": "PET: a folder with the drives' ROMs under MAME's names: the 4040's c4040 set (901468-14 to -16, 901466-04 and 901467) or the 2040's c2040 set (901468-06 and -07, 901466-01 and 901467), or a folder holding c4040 and c2040 folders, or one beside them. Defaults to romDirectory, then RETROCORE_PET_ROMS."
+                "description": "PET: a folder with the drives' ROMs under MAME's names: the 4040's c4040 set (901468-14 to -16, 901466-04 and 901467) or the 2040's c2040 set (901468-06 and -07, 901466-01 and 901467), or a folder holding c4040 and c2040 folders, or one beside them. Defaults to romDirectory, then RETROCORE_PET_ROMS. VIC-20: the 1541's c1541 set (325302-01 and 901229-06) or the 1540's c1540 set (325302-01 and 325303-01), or a folder holding c1541 and c1540 folders, or one beside them; defaults to romDirectory, then RETROCORE_VIC20_ROMS."
               },
               "bootSeconds": {
                 "type": "number",
@@ -1926,11 +1950,11 @@
                 ],
                 "enumDescriptions": [
                   "No sound, and no cost.",
-                  "The IIe's speaker, in mono. Costs about 2% of emulation speed. On a Color Computer, its sound through the TV: the DAC, cassette and single-bit sound. On a PET, the VIA's CB2, as a speaker on the user port plays it. On a BBC Micro, the SN76489, in stereo. On an Atari, POKEY through the TV, in mono. On a Model 100, its piezo buzzer.",
+                  "The IIe's speaker, in mono. Costs about 2% of emulation speed. On a Color Computer, its sound through the TV: the DAC, cassette and single-bit sound. On a PET, the VIA's CB2, as a speaker on the user port plays it. On a VIC-20, the VIC's three tones and noise, as the TV plays them. On a BBC Micro, the SN76489, in stereo. On an Atari, POKEY through the TV, in mono. On a Model 100, its piezo buzzer.",
                   "The speaker and the Mockingboard's two sound chips, in stereo, and the Mockingboard in slot 4 unless mockingboard is false. Slows emulation by about a quarter, because the chips' output is worked out every cycle."
                 ],
                 "default": "speaker",
-                "description": "IIe, Color Computer, PET, BBC Micro, Atari and Model 100: what the display panel plays while the machine runs. Sound plays in time only at the machine's real speed (speed 1); the panel's Sound button changes it while debugging."
+                "description": "IIe, Color Computer, PET, VIC-20, BBC Micro, Atari and Model 100: what the display panel plays while the machine runs. Sound plays in time only at the machine's real speed (speed 1); the panel's Sound button changes it while debugging."
               },
               "mockingboard": {
                 "type": "boolean",
@@ -2207,8 +2231,18 @@
                 "description": "Color Computer 1 and 2: the artifact colors a composite monitor shows in two-color graphics."
               },
               "cartridge": {
-                "type": "string",
-                "description": "Color Computer: a ROM pack image (.ccc or .rom, up to 16 KB) in the cartridge slot. Atari 800 and 400: a left cartridge (.rom or .car), in BASIC's place: basicCartridge is none by default with one."
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                ],
+                "description": "Color Computer: a ROM pack image (.ccc or .rom, up to 16 KB) in the cartridge slot. Atari 800 and 400: a left cartridge (.rom or .car), in BASIC's place: basicCartridge is none by default with one. VIC-20: a cartridge in the expansion port, or a list of its chips: MAME's chip files, named for where they go (such as game.a0 and game.20), a .prg at its address, or a VICE .crt; one that signs itself at $A000 starts at power-on."
               },
               "rightCartridge": {
                 "type": "string",
@@ -2236,11 +2270,11 @@
                   "pal"
                 ],
                 "enumDescriptions": [
-                  "NTSC: 60 Hz and a 1.79 MHz 6502.",
-                  "PAL: 50 Hz and a 1.77 MHz 6502, with the PAL OS."
+                  "NTSC: 60 Hz; on an Atari a 1.79 MHz 6502, on a VIC-20 the 6560 and a 1.02 MHz 6502.",
+                  "PAL: 50 Hz; on an Atari a 1.77 MHz 6502 and the PAL OS, on a VIC-20 the 6561, a 1.11 MHz 6502 and the PAL kernal."
                 ],
                 "default": "ntsc",
-                "description": "Atari 800 and 400: the video standard, which picks the OS: os on NTSC, the PAL OS on PAL."
+                "description": "Atari 800 and 400: the video standard, which picks the OS: os on NTSC, the PAL OS on PAL. VIC-20: the video standard, which picks the VIC and the kernal, 901486-06 on NTSC and -07 on PAL."
               },
               "os": {
                 "enum": [
@@ -2494,6 +2528,23 @@
             "machine": "pet",
             "model": "pet2001-basic2",
             "name": "Debug PET 6502 source",
+            "debugHost": "${workspaceFolder}/artifacts/AnyCPU/Release/Retrocore.Debug/net11.0/Retrocore.Debug.dll",
+            "source": "${file}",
+            "stopOnEntry": true
+          },
+          {
+            "type": "retrocore",
+            "request": "launch",
+            "machine": "vic20",
+            "name": "Boot VIC-20",
+            "debugHost": "${workspaceFolder}/artifacts/AnyCPU/Release/Retrocore.Debug/net11.0/Retrocore.Debug.dll",
+            "stopOnEntry": false
+          },
+          {
+            "type": "retrocore",
+            "request": "launch",
+            "machine": "vic20",
+            "name": "Debug VIC-20 6502 source",
             "debugHost": "${workspaceFolder}/artifacts/AnyCPU/Release/Retrocore.Debug/net11.0/Retrocore.Debug.dll",
             "source": "${file}",
             "stopOnEntry": true

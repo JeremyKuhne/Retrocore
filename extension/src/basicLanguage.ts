@@ -51,8 +51,9 @@ function sessionDialect(): string | undefined {
     if (session.configuration.machine === "coco" && session.configuration.model !== "coco3") return "colorbasic";
     if (session.configuration.machine === "kaypro2") return "mbasic";
     if (session.configuration.machine === "trs80-model100") return "model100";
-    // One dialect for both PETs: the machine picks BASIC 1 (the 2001) or BASIC 2 (the upgrade ROMs, the default).
-    if (session.configuration.machine === "pet") return "petbasic";
+    // One dialect for the PETs and the VIC-20: the machine picks BASIC 1 (the 2001), BASIC 2 (the upgrade ROMs, the
+    // default, and the VIC-20's) or BASIC 4.
+    if (session.configuration.machine === "pet" || session.configuration.machine === "vic20") return "petbasic";
     if (session.configuration.machine === "bbc") return "bbcbasic";
     if (session.configuration.machine === "atari800") return "atari";
     return undefined;

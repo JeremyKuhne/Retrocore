@@ -55,6 +55,12 @@ test("each machine offers what it can run: itself, sources and binaries, and its
     assert.match(pet.find(choice => choice.kind === "tape")?.detail ?? "", /Datasette/);
     assert.match(pet.find(choice => choice.kind === "basic")?.detail ?? "", /Commodore BASIC 2 \(PET\)/);
     assert.match(runChoices(machine("pet2001")).find(choice => choice.kind === "basic")?.detail ?? "", /Commodore BASIC 1 \(PET\)/);
+    assert.deepEqual(kinds("vic20"), ["machine", "source", "program", "basic", "cartridge", "disk", "tape"]);
+    const vic20 = runChoices(machine("vic20"));
+    assert.match(vic20.find(choice => choice.kind === "basic")?.detail ?? "", /Commodore BASIC 2 \(VIC-20\)/);
+    assert.match(vic20.find(choice => choice.kind === "cartridge")?.detail ?? "", /expansion port/);
+    assert.match(vic20.find(choice => choice.kind === "disk")?.detail ?? "", /1541/);
+    assert.match(vic20.find(choice => choice.kind === "tape")?.detail ?? "", /Datasette/);
     assert.deepEqual(runChoices(machine("coco2")).find(choice => choice.kind === "program")?.extensions, ["bin"], "other machines load binaries");
     assert.deepEqual(kinds("kaypro2"), ["machine", "source", "program", "basic", "disk"], "the Kaypro II boots CP/M disks and runs MBASIC");
     for (const id of ["atari800", "atari400"]) {
@@ -86,6 +92,10 @@ test("each kind of setup becomes the launch options that run it, which package.j
             { machine: "pet", model: "pet2001", program: "hello.prg", ramKilobytes: 32, snow: false }],
         [{ machineId: "pet2001", kind: "basic", path: "a.petbasic.bas", options: { sound: "off" } }, { basic: "a.petbasic.bas", sound: "off" }],
         [{ machineId: "pet4032", kind: "disk", path: "demo.d64", options: { ramKilobytes: 16 } }, { machine: "pet", model: "pet4032", disks: ["demo.d64"], ramKilobytes: 16 }],
+        [{ machineId: "vic20", kind: "tape", path: "game.tap", options: { video: "pal" } }, { machine: "vic20", cassette: "game.tap", video: "pal" }],
+        [{ machineId: "vic20", kind: "cartridge", path: "game.a0", options: { ramExpansion: "8k" } },
+            { machine: "vic20", cartridge: "game.a0", basicCartridge: undefined, ramExpansion: "8k" }],
+        [{ machineId: "vic20", kind: "disk", path: "demo.d64", options: {} }, { machine: "vic20", disks: ["demo.d64"] }],
         [{ machineId: "kaypro2", kind: "disk", path: "cpm.img", options: {} }, { machine: "kaypro2", disks: ["cpm.img"] }],
         [{ machineId: "kaypro2", kind: "basic", path: "a.mbasic.bas", basicDisk: "cpm.img", options: {} }, { machine: "kaypro2", basic: "a.mbasic.bas", disks: ["cpm.img"] }],
         [{ machineId: "apple2-iie-enhanced", kind: "dosSource", path: "hi.s", options: {} }, { source: "hi.s", dos: "3.3", stopOnEntry: false }],
@@ -133,7 +143,7 @@ test("a kept setup is used only while it still names a machine and something it 
     assert.ok(!isUsable({ machineId: "apple4", kind: "machine", options: {} }), "an unknown machine");
     assert.ok(!isUsable({ machineId: "trs80-model1-level1", kind: "disk", path: "x.dsk", options: {} }), "Level I has no disks");
     assert.ok(!isUsable({ machineId: "apple2-iie", kind: "source", options: {} }), "a source needs its file");
-    assert.equal(machines.length, 30);
+    assert.equal(machines.length, 31);
 });
 
 test("a BBC Micro's disk boots from drive 0 with SHIFT held as it starts, as SHIFT-BREAK does", () => {

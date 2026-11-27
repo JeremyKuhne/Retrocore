@@ -86,6 +86,7 @@ const screens: Record<string, string> = {
     apple2: "apple2", apple3: "apple2", apple1: "apple1", coco: "coco", "trs80-model1": "trs80-model1",
     "trs80-model3": "trs80-model1", "trs80-model4": "trs80-model1", altair: "trs80-model1", "trs80-model2": "apple2",
     pet: "trs80-model1",
+    vic20: "coco",
     kaypro2: "apple2",
     bbc: "coco",
     atari800: "coco"
@@ -97,10 +98,11 @@ export function mediumOf(device: Device): "tape" | "disk" {
 }
 
 /**
- * The files a device's Insert offers: its formats, and on a PET a .prg too, which goes in as the tape SAVE writes.
+ * The files a device's Insert offers: its formats, and on a PET or VIC-20 a .prg too, which goes in as the tape SAVE
+ * writes.
  */
 export function insertFormats(device: Device, machine: unknown): string[] {
-    return machine === "pet" && device.kind === "tapeDrive" && !device.formats.includes("prg") ? [...device.formats, "prg"] : device.formats;
+    return (machine === "pet" || machine === "vic20") && device.kind === "tapeDrive" && !device.formats.includes("prg") ? [...device.formats, "prg"] : device.formats;
 }
 
 /** The icons of the Machine view's rows, by hardware id, when the row is not a slot. */

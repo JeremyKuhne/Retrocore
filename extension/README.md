@@ -1,7 +1,7 @@
 # Retrocore Assembly and Debugger
 
 Native Retrocore assembly highlighting, language features and source debugging on
-the Apple II family, the Apple-1, the TRS-80 Model I, III, 4, II, 12 and 16, the TRS-80 Color Computer, the Commodore PET 2001 and 4032, the BBC Micro, the Atari 400 and 800, the TRS-80 Model 100 and Tandy 102, and the MITS Altair 8800 in one extension. Highlighting is declarative and needs no C# process,
+the Apple II family, the Apple-1, the TRS-80 Model I, III, 4, II, 12 and 16, the TRS-80 Color Computer, the Commodore PET 2001 and 4032, the Commodore VIC-20, the BBC Micro, the Atari 400 and 800, the TRS-80 Model 100 and Tandy 102, and the MITS Altair 8800 in one extension. Highlighting is declarative and needs no C# process,
 ROMs or debug session. Language features (errors as you type, go to definition,
 hover, completion and symbols) come from a language server in the .NET debug host,
 which starts when a `retrocore-asm` document opens; see
@@ -112,7 +112,7 @@ The quickest way is the **Run and Debug** dropdown. Under Retrocore it lists eac
 machine: Apple IIe (enhanced), Apple IIe, Apple II Plus, Apple II, Apple III, TRS-80
 Model I (Level II), TRS-80 Model I (Level I), TRS-80 Model III, Model III (Level I), Model 4, Model 4P,
 Model II, Model 12 and Model 16 (Z80 side), the TRS-80 Model 100 and Tandy 102 (from your ROM), Apple-1, the TRS-80 Color Computer,
-Color Computer 2 and Color Computer 3, the Commodore PET 2001 (BASIC 2), PET 2001, PET 4032 and PET 4032 (business keyboard), the BBC Micro Model B and Model A, the Atari 800 and Atari 400, the MITS Altair 8800, and the Kaypro II. Pick one and press F5, and it boots as it is. **Debug: Select and Start Debugging** lists them too.
+Color Computer 2 and Color Computer 3, the Commodore PET 2001 (BASIC 2), PET 2001, PET 4032 and PET 4032 (business keyboard), the Commodore VIC-20, the BBC Micro Model B and Model A, the Atari 800 and Atari 400, the MITS Altair 8800, and the Kaypro II. Pick one and press F5, and it boots as it is. **Debug: Select and Start Debugging** lists them too.
 
 To start a machine with something in it, run **Retrocore: Start Machine…**. It is in
 the Command Palette and on the **Machine** view's **...** menu. It asks three things:
@@ -121,14 +121,16 @@ the Command Palette and on the **Machine** view's **...** menu. It asks three th
 2. **What it runs.** The choices depend on the machine:
    - just the machine;
    - a source file, which is assembled and loaded, then stops at its start;
-   - a binary program, loaded at the machine's usual address (on the PET, a `.prg`
-     too, which loads where its first two bytes say);
+   - a binary program, loaded at the machine's usual address (on the PET and the
+     VIC-20, a `.prg` too, which loads where its first two bytes say);
    - a BASIC file, for the machine's own BASIC;
-   - a disk image, booted from the first drive (on the BBC Micro with SHIFT-BREAK; on the PET, inserted in it);
-   - a tape, on the Model I, the Apple-1, the Color Computer, the BBC Micro, the Atari and
-     the PET (in its built-in Datasette, with PLAY down);
+   - a disk image, booted from the first drive (on the BBC Micro with SHIFT-BREAK; on the PET, inserted in it; on
+     the VIC-20, in a 1541 as device 8);
+   - a tape, on the Model I, the Apple-1, the Color Computer, the BBC Micro, the Atari,
+     the PET (in its built-in Datasette, with PLAY down) and the VIC-20 (in its Datasette);
    - on the Atari, an executable (`.xex`), booted from the first drive on a disk built
-     for it, or a cartridge (`.rom` or `.car`), in the left slot in place of BASIC;
+     for it, or a cartridge (`.rom` or `.car`), in the left slot in place of BASIC; on
+     the VIC-20, a cartridge in the expansion port;
    - on the Apple II family, a source file on a fresh DOS 3.3 disk, which boots and
      runs it.
 
@@ -138,7 +140,7 @@ the Command Palette and on the **Machine** view's **...** menu. It asks three th
      last ran with come back, as [Machine and Drives](#machine-and-drives) describes.
    - **Options…** lists that machine's own choices, such as the II's Monitor, the II
      and II Plus's memory and slot 0 card, the Mockingboard, the Model I's ROM, memory,
-     Expansion Interface and lowercase, the Model III's ROM and memory, the Apple-1's memory and cassette interface, the PET's memory, sound and snow, and the Atari's BASIC revision, video standard, disk drives and sound. Each shows its current value; Esc goes back.
+     Expansion Interface and lowercase, the Model III's ROM and memory, the Apple-1's memory and cassette interface, the PET's memory, sound and snow, the VIC-20's video standard, memory expansion and sound, and the Atari's BASIC revision, video standard, disk drives and sound. Each shows its current value; Esc goes back.
      The ROM picks Level I or Level II BASIC (and on the Model I, Level II 1.3 or 1.2), so
      the Level I and Level II entries are the same machine with a different ROM. Level I
      cannot start from a disk, so it is refused for one, and a BASIC file that names its
@@ -1271,6 +1273,67 @@ take disks: `OPEN 15,8,15,"N0:NAME,ID"` formats one, and `SAVE "0:NAME",8` and
 `DSAVE`, `DLOAD` and `DIRECTORY` do the same. A 2040 reads a disk once `OPEN 15,8,15,"I0"`
 initializes it. A disk the drive wrote is a changed disk, which saves back to its D64,
 D67 or G64 image. See the [PET guide](../docs/Pet.md) for what is emulated.
+
+## Debugging on the Commodore VIC-20
+
+`"machine": "vic20"` debugs a VIC-20, with the same source debugging, 6502 call stack,
+cycle counts and `Keeps:` checks. The machine is configured by:
+
+- `video`: `ntsc` (the default: the 6560, a 1.02 MHz 6502 and kernal 901486-06) or
+  `pal` (the 6561, a 1.11 MHz 6502 and kernal 901486-07);
+- `ramExpansion`: `none` (the default, 5 KB), `3k` (at `$0400`, as the VIC-1210 adds),
+  `8k`, `16k` or `24k` (blocks 1 to 3, as the VIC-1110 and VIC-1111 add), or `32k`
+  (the 3K and 24K together). With 8K or more, BASIC starts at `$1201` and the screen
+  moves down to `$1000`;
+- `sound`: `speaker` (the default; the VIC's three tones and noise, as the TV plays
+  them) or `off`;
+- `screen`: `color` (the default), `white`, `green` or `amber`;
+- `cartridge`: a cartridge in the expansion port, a file or a list of its chips: MAME's
+  chip files, named for where they go (such as `game.a0` and `game.20`), a `.prg` at
+  its address, or a VICE `.crt`. One that signs itself at `$A000` starts at power-on;
+- `cassette`: a `.tap`, `.wav` or `.prg` tape in the Datasette, with PLAY down. A
+  `.prg` goes in as the tape SAVE writes. `fastCassette` (on by default) runs flat out
+  while the cassette motor runs;
+- `diskUnits`: the device numbers of drives on the serial bus, 8 to 11, such as `[8]`,
+  and `diskModel`, `1541` (the default) or `1540`; `disks`: `.d64` or `.g64` images for
+  the drive at device 8, then the next (without `diskUnits`, as many drives as they
+  need, from device 8). Each drive runs its own DOS on its own 6502, from MAME's
+  `c1541` set (901229-06) or `c1540` set, in `driveRomDirectory`, else `romDirectory`
+  or `RETROCORE_VIC20_ROMS`.
+
+BASIC, the kernal and the character ROM are the SDK sources `Vic20/Basic.asm`,
+`Vic20/Kernal.asm` and `Vic20/CharacterGenerator.asm`, which assemble byte-identically
+to the chips, so the VIC-20 needs no external files, and debugging steps into the
+sources as ROM modules: BASIC in the shared Commodore and Microsoft modules, through its
+end in the kernal's chip, and the kernal in its own files. Dumps from `romDirectory` or
+`RETROCORE_VIC20_ROMS`, MAME's `vic20` or `vic20p` chips, in the folder or its folder
+for the set, replace the sources' ROMs when given.
+
+A `program` that is a `.prg` loads as the kernal's LOAD does. A BASIC program, one at
+BASIC's start on some VIC-20 (`$0401`, `$1001` or `$1201`), moves to this machine's
+start and is linked again there, so a program saved on an unexpanded VIC-20 runs on an
+expanded one; BASIC's pointers are set and `RUN` is typed (`"run": false` leaves it at
+the prompt). Any other starts at its load address, or `entryAddress`. A plain binary, or
+a `source`, loads at `$1400` by default. A `BRK` goes to the kernal's warm start;
+ticking the Breakpoints view's BRK filter stops there first.
+
+A `basic` launch runs a Commodore BASIC file, `.petbasic.bas` or a `.bas` whose first
+line is `REM retrocore petbasic`, in the VIC-20's BASIC 2, wherever the expansion puts
+its program.
+
+The panel shows the VIC's picture in colour. **Escape** is RUN/STOP, **Home** HOME,
+the arrows the cursor keys, **Backspace** DEL and **Insert** INST; lowercase letters type
+their keys unshifted. The key bar has **Run/Stop**, **Restore**, **Stop+Restore** (the
+kernal's warm start, back to `READY.` with the program kept), **Clr**, **Home**, **C=
+Shift** (which switches between the upper-case and graphics characters and the
+lower-case ones), **f1** to **f8**, and **Reset**: the VIC-20 has no RESET key, so
+Reset, **Ctrl+F12** and **Ctrl+Break** pull the expansion port's reset line, resetting
+the 6502, the VIAs and the drives and keeping memory. The Datasette's row in the
+[Drives](#machine-and-drives) view has its keys, as the PET's do. In the
+[Machine](#machine-and-drives) view, **Add Card...** on a free **Device 8** to **Device
+11** row connects a 1541 or a 1540 there: `OPEN 15,8,15,"N:NAME,ID"` formats a disk,
+and `SAVE "NAME",8` and `LOAD "$",8` work as on a VIC-20. A disk the drive wrote is a
+changed disk, which saves back to its D64 or G64 image.
 
 ## Debugging on the Atari 400 and 800
 

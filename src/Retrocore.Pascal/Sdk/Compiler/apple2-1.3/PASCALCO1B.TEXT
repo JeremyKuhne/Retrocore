@@ -1,0 +1,87 @@
+(** PASCALCO1B.TEXT: part 2 of 2 of PASCALCO1: PASCALCO, segment 1: the headings
+    of its EXTERNAL and FORWARD procedures.
+
+    Included by COMPILER.TEXT after PASCALCO1A.TEXT and before COMPINIT1.TEXT.
+
+    Procedures here, nested ones indented:
+        ScanIdentifier
+        SearchTree
+        Error
+        ReadSourcePage
+        WriteListingLine
+        EnterIdentifier
+        NextToken
+        FindInTree
+        FindIdentifier
+        GetBounds
+        IncrementChecked
+        TakeSegmentSlot
+        EndLine
+        SegmentInformation
+        SkipTokens
+        IsPackedChars
+        IsString
+        DecimalSize
+        ReadConstant
+        CompatibleTypes
+        EmitByte
+        EmitWord
+        WriteCode
+        FinishSegment
+        CompileBlock *)
+
+  (** Assembled: scans the identifier at SourceBuffer^[SourceCursor] into
+      TokenName in capitals, and looks it up in the reserved words, setting
+      Token and Operator (II.0: IDSEARCH, here in 6502 code). *)
+  PROCEDURE ScanIdentifier(VAR Cursor: INTEGER; Buffer: SourceReference);
+    EXTERNAL;
+
+  (** Assembled: searches a scope's tree for a name; 0 found, 1 to go right,
+      -1 left, with the last node looked at (II.0: TREESEARCH, here in 6502
+      code). *)
+  FUNCTION SearchTree(Root: Identifier; VAR Found: Identifier; VAR SoughtName:
+      Spelling): INTEGER;
+    EXTERNAL;
+
+  PROCEDURE Error(ErrorCode: INTEGER); FORWARD;
+  (** Also: GETNEXTPAGE (UCSD20) *)
+  PROCEDURE ReadSourcePage; FORWARD;
+  (** Also: PRINTLINE (UCSD20) *)
+  PROCEDURE WriteListingLine; FORWARD;
+  (** Also: ENTERID (UCSD20) *)
+  PROCEDURE EnterIdentifier(Declared: Identifier); FORWARD;
+  (** Also: INSYMBOL (UCSD20) *)
+  PROCEDURE NextToken; FORWARD;
+  (** Also: SEARCHSECTION (UCSD20) *)
+  PROCEDURE FindInTree(Root: Identifier; VAR Found: SymbolLink); FORWARD;
+  (** Also: SEARCHID (UCSD20) *)
+  PROCEDURE FindIdentifier(Classes: ClassSet; VAR Found: SymbolLink); FORWARD;
+  PROCEDURE GetBounds(Scalar: Structure; VAR Lowest: INTEGER; VAR Highest:
+      INTEGER); FORWARD;
+  PROCEDURE IncrementChecked(VAR Counter: INTEGER; Limit: INTEGER; LimitError:
+      INTEGER); FORWARD;
+  PROCEDURE TakeSegmentSlot(NewNumber: BOOLEAN); FORWARD;
+  PROCEDURE EndLine; FORWARD;
+  FUNCTION SegmentInformation(Slot: INTEGER): INTEGER; FORWARD;
+  (** Also: SKIP (UCSD20) *)
+  PROCEDURE SkipTokens(Followers: TokenSet); FORWARD;
+  (** Also: PAOFCHAR (UCSD20) *)
+  FUNCTION IsPackedChars(Tested: Structure): BOOLEAN; FORWARD;
+  (** Also: STRGTYPE (UCSD20) *)
+  FUNCTION IsString(Tested: Structure): BOOLEAN; FORWARD;
+  (** Also: DECSIZE (UCSD20) *)
+  FUNCTION DecimalSize(Digits: INTEGER): INTEGER; FORWARD;
+  (** UCSD Pascal II.0 calls it CONSTANT (UCSD20). *)
+  PROCEDURE ReadConstant(Followers: TokenSet; VAR ValueType: Structure; VAR
+      Value: WordValue); FORWARD;
+  (** Also: COMPTYPES (UCSD20) *)
+  FUNCTION CompatibleTypes(First: Structure; Second: Structure): BOOLEAN;
+      FORWARD;
+  (** Also: GENBYTE (UCSD20) *)
+  PROCEDURE EmitByte(Byte: INTEGER); FORWARD;
+  (** Also: GENWORD (UCSD20) *)
+  PROCEDURE EmitWord(Word: INTEGER); FORWARD;
+  PROCEDURE WriteCode(Flush: BOOLEAN); FORWARD;
+  PROCEDURE FinishSegment; FORWARD;
+  (** Also: BLOCK (UCSD20) *)
+  PROCEDURE CompileBlock(Followers: TokenSet); FORWARD;

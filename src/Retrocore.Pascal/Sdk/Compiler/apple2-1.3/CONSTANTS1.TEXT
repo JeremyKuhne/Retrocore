@@ -1,0 +1,281 @@
+(** CONSTANTS1.TEXT: part 1 of 2 of CONSTANTS: tokens, operators, classes,
+    forms, the kinds of operands, scopes, big constants and segments, where an
+    interface is read from, and the special standard routines' keys.
+
+    Included by COMPILER.TEXT first and before CONSTANTS2.TEXT. *)
+
+CONST
+  (* The tokens the scanner finds. *)
+  (** Also: IDENT (UCSD20) *)
+  NameToken = 0;
+  (** Also: COMMA (UCSD20) *)
+  CommaToken = 1;
+  (** Also: COLON (UCSD20) *)
+  ColonToken = 2;
+  (** Also: SEMICOLON (UCSD20) *)
+  SemicolonToken = 3;
+  (** Also: LPARENT (UCSD20) *)
+  LeftParenthesisToken = 4;
+  (** Also: RPARENT (UCSD20) *)
+  RightParenthesisToken = 5;
+  (** Also: DOSY (UCSD20) *)
+  DoToken = 6;
+  (** Also: TOSY (UCSD20) *)
+  ToToken = 7;
+  (** Also: DOWNTOSY (UCSD20) *)
+  DowntoToken = 8;
+  (** Also: ENDSY (UCSD20) *)
+  EndToken = 9;
+  (** Also: UNTILSY (UCSD20) *)
+  UntilToken = 10;
+  (** Also: OFSY (UCSD20) *)
+  OfToken = 11;
+  (** Also: THENSY (UCSD20) *)
+  ThenToken = 12;
+  (** Also: ELSESY (UCSD20) *)
+  ElseToken = 13;
+  (** Also: BECOMES (UCSD20) *)
+  BecomesToken = 14;
+  (** Also: LBRACK (UCSD20) *)
+  LeftBracketToken = 15;
+  (** Also: RBRACK (UCSD20) *)
+  RightBracketToken = 16;
+  (** Also: ARROW (UCSD20) *)
+  ArrowToken = 17;
+  (** Also: PERIOD (UCSD20) *)
+  PeriodToken = 18;
+  (** Also: BEGINSY (UCSD20) *)
+  BeginToken = 19;
+  (** Also: IFSY (UCSD20) *)
+  IfToken = 20;
+  (** Also: CASESY (UCSD20) *)
+  CaseToken = 21;
+  (** Also: REPEATSY (UCSD20) *)
+  RepeatToken = 22;
+  (** Also: WHILESY (UCSD20) *)
+  WhileToken = 23;
+  (** Also: FORSY (UCSD20) *)
+  ForToken = 24;
+  (** Also: WITHSY (UCSD20) *)
+  WithToken = 25;
+  (** Also: GOTOSY (UCSD20) *)
+  GotoToken = 26;
+  (** Also: LABELSY (UCSD20) *)
+  LabelToken = 27;
+  (** Also: CONSTSY (UCSD20) *)
+  ConstToken = 28;
+  (** Also: TYPESY (UCSD20) *)
+  TypeToken = 29;
+  (** Also: VARSY (UCSD20) *)
+  VarToken = 30;
+  (** Also: PROCSY (UCSD20) *)
+  KeywordProcedureToken = 31;
+  (** Also: FUNCSY (UCSD20) *)
+  KeywordFunctionToken = 32;
+  (** Also: PROGSY (UCSD20) *)
+  ProgramToken = 33;
+  (** Also: FORWARDSY (UCSD20) *)
+  ForwardToken = 34;
+  (** Also: INTCONST (UCSD20) *)
+  IntegerToken = 35;
+  (** Also: REALCONST (UCSD20) *)
+  RealToken = 36;
+  (** UCSD Pascal II.0 calls it STRINGCONST (UCSD20). *)
+  StringToken = 37;
+  (** Also: NOTSY (UCSD20) *)
+  NotToken = 38;
+  (** Also: MULOP (UCSD20) *)
+  MultiplicativeToken = 39;
+  (** Also: ADDOP (UCSD20) *)
+  AdditiveToken = 40;
+  (** Also: RELOP (UCSD20) *)
+  RelationalToken = 41;
+  (** Also: SETSY (UCSD20) *)
+  SetToken = 42;
+  (** Also: PACKEDSY (UCSD20) *)
+  PackedToken = 43;
+  (** Also: ARRAYSY (UCSD20) *)
+  ArrayToken = 44;
+  (** Also: RECORDSY (UCSD20) *)
+  RecordToken = 45;
+  (** Also: FILESY (UCSD20) *)
+  FileToken = 46;
+  (** Also: OTHERSY (UCSD20) *)
+  OtherToken = 47;
+  (** Also: LONGCONST (UCSD20) *)
+  LongNumberToken = 48;
+  (** Also: USESSY (UCSD20) *)
+  UsesToken = 49;
+  (** Also: UNITSY (UCSD20) *)
+  UnitToken = 50;
+  (** Also: INTERSY (UCSD20) *)
+  UnitInterfaceToken = 51;
+  (** Also: IMPLESY (UCSD20) *)
+  UnitImplementationToken = 52;
+  (** Also: EXTERNLSY (UCSD20) *)
+  KeywordExternalToken = 53;
+  CaseElseToken = 54;
+
+  (* The operators a multiplicative, additive or relational token is. *)
+  (** Also: MUL (UCSD20) *)
+  MultiplyOperator = 0;
+  (** Also: RDIV (UCSD20) *)
+  DivideOperator = 1;
+  (** Also: ANDOP (UCSD20) *)
+  AndOperator = 2;
+  (** Also: IDIV (UCSD20) *)
+  IntegerDivideOperator = 3;
+  ModuloOperator = 4;
+  (** Also: PLUS (UCSD20) *)
+  PlusOperator = 5;
+  (** Also: MINUS (UCSD20) *)
+  MinusOperator = 6;
+  (** Also: OROP (UCSD20) *)
+  OrOperator = 7;
+  (** Also: LTOP (UCSD20) *)
+  LessOperator = 8;
+  (** Also: LEOP (UCSD20) *)
+  AtMostOperator = 9;
+  (** Also: GEOP (UCSD20) *)
+  AtLeastOperator = 10;
+  (** Also: GTOP (UCSD20) *)
+  GreaterOperator = 11;
+  (** Also: NEOP (UCSD20) *)
+  UnequalOperator = 12;
+  (** Also: EQOP (UCSD20) *)
+  EqualOperator = 13;
+  (** Also: INOP (UCSD20) *)
+  InOperator = 14;
+  (** Also: NOOP (UCSD20) *)
+  NoneOperator = 15;
+
+  (* What an identifier is: its class. *)
+  (** Also: TYPES (UCSD20) *)
+  TypeClass = 0;
+  (** Also: KONST (UCSD20) *)
+  ConstantClass = 1;
+  (** Also: FORMALVARS (UCSD20) *)
+  FormalClass = 2;
+  (** Also: ACTUALVARS (UCSD20) *)
+  ActualClass = 3;
+  (** UCSD Pascal II.0 calls it FIELD (UCSD20). *)
+  FieldClass = 4;
+  (** Also: PROC (UCSD20) *)
+  ProperProcedureClass = 5;
+  (** Also: FUNC (UCSD20) *)
+  ValueFunctionClass = 6;
+  (** Also: MODULE (UCSD20) *)
+  ModuleClass = 7;
+
+  (* What a type is: its form. *)
+  (** UCSD Pascal II.0 calls it SCALAR (UCSD20). *)
+  ScalarForm = 0;
+  (** Also: SUBRANGE (UCSD20) *)
+  SubrangeForm = 1;
+  (** Also: POINTER (UCSD20) *)
+  PointerForm = 2;
+  (** Also: LONGINT (UCSD20) *)
+  LongIntegerForm = 3;
+  (** Also: POWER (UCSD20) *)
+  SetForm = 4;
+  (** Also: ARRAYS (UCSD20) *)
+  ArrayForm = 5;
+  (** Also: RECORDS (UCSD20) *)
+  RecordForm = 6;
+  (** UCSD Pascal II.0 calls it FILES (UCSD20). *)
+  FileForm = 7;
+  (** Also: TAGFLD (UCSD20) *)
+  TagFieldForm = 8;
+  (** UCSD Pascal II.0 calls it VARIANT (UCSD20). *)
+  VariantForm = 9;
+
+  (* What an operand is. *)
+  (** Also: CST (UCSD20) *)
+  KnownValueOperand = 0;
+  (** Also: VARBL (UCSD20) *)
+  MemoryOperand = 1;
+  (** Also: EXPR (UCSD20) *)
+  StackOperand = 2;
+
+  (* What an open scope is. *)
+  (** Also: BLCK (UCSD20) *)
+  BlockScope = 0;
+  (** Also: CREC (UCSD20) *)
+  WithDirectScope = 1;
+  (** Also: VREC (UCSD20) *)
+  WithIndirectScope = 2;
+  (** Also: REC (UCSD20) *)
+  RecordScope = 3;
+
+  (* What a big constant is. *)
+  (** Also: REEL (UCSD20) *)
+  RealKind = 0;
+  (** Also: PSET (UCSD20) *)
+  SetKind = 1;
+  (** Also: STRG (UCSD20) *)
+  StringKind = 2;
+  (** Also: TRIX (UCSD20) *)
+  WordsKind = 3;
+  (** Also: LONG (UCSD20) *)
+  LongKind = 4;
+
+  (* What a segment is, in the segment dictionary. *)
+  LinkedSegment = 0;
+  HostSegment = 1;
+  SegmentRoutineSegment = 2;
+  UnitSegment = 3;
+  AssembledSegment = 4;
+  UnlinkedIntrinsicSegment = 5;
+  LinkedIntrinsicSegment = 6;
+  UnitDataSegment = 7;
+
+  (* Where a unit's interface is read from. *)
+  WorkUnitFile = 0;
+  SystemUnitFile = 1;
+  UserUnitFile = 2;
+
+  (* The special standard routines' keys, which ROUTINE compiles. *)
+  ReadKey = 1;
+  ReadlnKey = 2;
+  WriteKey = 3;
+  WritelnKey = 4;
+  FileEndKey = 5;
+  LineEndKey = 6;
+  PredecessorKey = 7;
+  SuccessorKey = 8;
+  OrdinalKey = 9;
+  SquareKey = 10;
+  AbsoluteKey = 11;
+  NewKey = 12;
+  ReadUnitKey = 13;
+  WriteUnitKey = 14;
+  ConcatenateKey = 15;
+  LengthKey = 16;
+  InsertKey = 17;
+  DeleteKey = 18;
+  CopyKey = 19;
+  StringPositionKey = 20;
+  LeftMoveKey = 21;
+  RightMoveKey = 22;
+  ExitKey = 23;
+  NameSearchKey = 24;
+  TreeLookupKey = 25;
+  TimeKey = 26;
+  FillBytesKey = 27;
+  OpenNewKey = 28;
+  OpenOldKey = 29;
+  RewriteKey = 30;
+  CloseKey = 31;
+  SeekKey = 32;
+  ResetKey = 33;
+  GetKey = 34;
+  PutKey = 35;
+  ScanKey = 36;
+  ReadBlocksKey = 37;
+  WriteBlocksKey = 38;
+  TruncateKey = 39;
+  PageKey = 40;
+  SizeOfKey = 41;
+  StrKey = 42;
+  GotoXYKey = 43;
+  StatusOfUnitKey = 44;

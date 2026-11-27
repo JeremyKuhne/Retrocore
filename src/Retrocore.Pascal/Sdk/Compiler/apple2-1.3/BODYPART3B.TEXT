@@ -1,0 +1,575 @@
+(** BODYPART3B.TEXT: part 2 of 3 of BODYPART3: BODYPART's code generator.
+
+    Included by COMPILER.TEXT after BODYPART3A.TEXT and before BODYPART3C.TEXT.
+
+    Procedures here, nested ones indented:
+          PackStringConstant
+          ApplySelectors
+          CompileVariable
+          NumberExternalRoutine
+          PushVariableAddress
+          CompileCall
+            CompileInput
+            CompileOutput *)
+
+    (** Makes the string constant at StringOffset in the code a packed array
+        of characters, without its length.
+        Also: STRGTOPA (UCSD20) *)
+    PROCEDURE PackStringConstant;
+    BEGIN
+      IF ODD(StringOffset) THEN
+      BEGIN
+        MOVERIGHT(CodeBuffer^[StringOffset + 1], CodeBuffer^[StringOffset + 2],
+            ORD(CodeBuffer^[StringOffset + 1]) + 1);
+        CodeBuffer^[StringOffset] := CHR(215);
+        CodeBuffer^[StringOffset + 1] := CHR(208)
+      END
+      ELSE
+      BEGIN
+        MOVELEFT(CodeBuffer^[StringOffset + 2], CodeBuffer^[StringOffset + 1],
+            ORD(CodeBuffer^[StringOffset + 2]) + 1);
+        CodeBuffer^[StringOffset] := CHR(208);
+        CodeBuffer^[StringOffset + ORD(CodeBuffer^[StringOffset + 1]) + 2] :=
+            CHR(215)
+      END
+    END;
+
+    (** Compiles a variable's selectors, [ ], . and ^.
+        Also: SELECTOR (UCSD20) *)
+    PROCEDURE ApplySelectors;
+      VAR
+        (** UCSD Pascal II.0 calls it LATTR (UCSD20). *)
+        Indexed: OperandEntry;
+        (** UCSD Pascal II.0 calls it LCP (UCSD20). *)
+        Field: SymbolLink;
+        (** UCSD Pascal II.0 calls it LMAX (UCSD20). *)
+        Highest: INTEGER;
+        (** UCSD Pascal II.0 calls it LMIN (UCSD20). *)
+        Lowest: INTEGER;
+    BEGIN
+      WITH Named^ DO
+      BEGIN
+        Operand.DataType := DataType;
+        Operand.Kind := MemoryOperand;
+        CASE Class OF
+          ActualClass:
+          BEGIN
+            Operand.StaticLevel := StaticLevel;
+            Operand.Offset := Offset;
+            Operand.Literal.Ordinal := DirectAccess;
+            IF InUnit THEN
+              IF Operand.DataType <> NIL THEN
+                IF (StaticLevel = 1) AND (Operand.DataType^.Form = RecordForm)
+                    THEN
+                  PushAddress
+          END;
+          FormalClass:
+          BEGIN
+            EmitTwoOperands(LoadOuterCode, StaticLevel, Offset);
+            Operand.Literal.Ordinal := IndirectAccess;
+            Operand.StaticLevel := 0
+          END;
+          FieldClass:
+          BEGIN
+            WITH Display[FoundLevel] DO
+              IF Kind = WithDirectScope THEN
+              BEGIN
+                Operand.Literal.Ordinal := DirectAccess;
+                Operand.StaticLevel := Files.Word;
+                Operand.Offset := Labels.Word + StaticLevel
+              END
+              ELSE
+              BEGIN
+                EmitTwoOperands(LoadOuterCode, Level, Files.Word);
+                Operand.Literal.Ordinal := IndirectAccess;
+                Operand.StaticLevel := StaticLevel
+              END;
+            IF ODD(Offset) THEN
+            BEGIN
+              PushAddress;
+              Operand.Literal.Ordinal := PackedAccess;
+              EmitConstant(RoutineNumber);
+              EmitConstant(CodeSegment)
+            END
+          END;
+          ValueFunctionClass:
+            IF StaticLevel <> 1 THEN
+              Error(150)
+            ELSE
+              IF NOT IsOpen THEN
+                Error(103)
+              ELSE
+              BEGIN
+                Operand.Literal.Ordinal := DirectAccess;
+                Operand.StaticLevel := Offset + 1;
+                Operand.Offset := 1
+              END
+        END
+      END;
+      IF Operand.DataType <> NIL THEN
+        IF (Operand.DataType^.Form <= SetForm) AND (Operand.DataType^.Size > 1)
+            THEN
+        BEGIN
+          PushAddress;
+          Operand.Literal.Ordinal := MultipleAccess
+        END;
+      IF NOT (Token IN SelectionStarters + Followers) THEN
+      BEGIN
+        Error(59);
+        SkipTokens(SelectionStarters + Followers)
+      END;
+      WHILE Token IN SelectionStarters DO
+      BEGIN
+        IF Token = LeftBracketToken THEN
+        BEGIN
+          REPEAT
+            Indexed := Operand;
+            IF Indexed.DataType <> NIL THEN
+              IF Indexed.DataType^.Form <> ArrayForm THEN
+              BEGIN
+                Error(138);
+                Indexed.DataType := NIL
+              END;
+            PushAddress;
+            NextToken;
+            CompileExpression(Followers + [CommaToken, RightBracketToken]);
+            PushOperand;
+            MaskBoolean;
+            IF Operand.DataType <> NIL THEN
+              IF Operand.DataType^.Form <> ScalarForm THEN
+                Error(113);
+            IF Indexed.DataType <> NIL THEN
+              WITH Indexed.DataType^ DO
+              BEGIN
+                IF CompatibleTypes(BaseType, Operand.DataType) THEN
+                BEGIN
+                  IF (BaseType <> NIL) AND NOT IsString(Indexed.DataType) THEN
+                  BEGIN
+                    GetBounds(BaseType, Lowest, Highest);
+                    IF CheckRanges THEN
+                    BEGIN
+                      EmitConstant(Lowest);
+                      EmitConstant(Highest);
+                      EmitOpcode(RangeCheckCode)
+                    END;
+                    IF Lowest <> 0 THEN
+                    BEGIN
+                      EmitConstant(ABS(Lowest));
+                      IF Lowest > 0 THEN
+                        EmitOpcode(SubtractIntegersCode)
+                      ELSE
+                        EmitOpcode(AddIntegersCode)
+                    END
+                  END
+                END
+                ELSE
+                  Error(139);
+                Operand.DataType := ElementType;
+                Operand.Kind := MemoryOperand;
+                Operand.Literal.Ordinal := IndirectAccess;
+                Operand.StaticLevel := 0;
+                IF Operand.DataType <> NIL THEN
+                  IF ArrayIsPacked THEN
+                    IF ElementBits = 8 THEN
+                    BEGIN
+                      Operand.Literal.Ordinal := ByteAccess;
+                      IF IsString(Indexed.DataType) AND CheckRanges THEN
+                        EmitOpcode(IndexStringCode)
+                      ELSE
+                      BEGIN
+                      END
+                    END
+                    ELSE
+                    BEGIN
+                      Operand.Literal.Ordinal := PackedAccess;
+                      EmitTwoOperands(IndexPackedCode, ElementsPerWord,
+                          ElementBits)
+                    END
+                  ELSE
+                  BEGIN
+                    EmitOneOperand(IndexArrayCode, Operand.DataType^.Size);
+                    IF (Operand.DataType^.Form <= SetForm) AND
+                        (Operand.DataType^.Size > 1) THEN
+                      Operand.Literal.Ordinal := MultipleAccess
+                  END
+              END
+          UNTIL Token <> CommaToken;
+          IF Token = RightBracketToken THEN
+            NextToken
+          ELSE
+            Error(12)
+        END
+        ELSE
+          IF Token = PeriodToken THEN
+          BEGIN
+            IF Operand.DataType <> NIL THEN
+              IF Operand.DataType^.Form <> RecordForm THEN
+              BEGIN
+                Error(140);
+                Operand.DataType := NIL
+              END;
+            NextToken;
+            IF Token = NameToken THEN
+            BEGIN
+              IF Operand.DataType <> NIL THEN
+              BEGIN
+                FindInTree(Operand.DataType^.FirstField.Entry, Field);
+                IF Field.Entry = NIL THEN
+                BEGIN
+                  Error(152);
+                  Operand.DataType := NIL
+                END
+                ELSE
+                BEGIN
+                  WITH Field.Entry^ DO
+                  BEGIN
+                    Operand.DataType := DataType;
+                    CASE Operand.Literal.Ordinal OF
+                      DirectAccess:
+                        Operand.Offset := Operand.Offset + StaticLevel;
+                      IndirectAccess:
+                        Operand.StaticLevel := Operand.StaticLevel +
+                            StaticLevel;
+                      PackedAccess, MultipleAccess, ByteAccess:
+                        Error(409)
+                    END;
+                    IF ODD(Offset) THEN
+                    BEGIN
+                      PushAddress;
+                      Operand.Literal.Ordinal := PackedAccess;
+                      EmitConstant(RoutineNumber);
+                      EmitConstant(CodeSegment)
+                    END
+                  END;
+                  IF Operand.DataType <> NIL THEN
+                    IF (Operand.DataType^.Form <= SetForm) AND
+                        (Operand.DataType^.Size > 1) THEN
+                    BEGIN
+                      PushAddress;
+                      Operand.Literal.Ordinal := MultipleAccess
+                    END
+                END
+              END;
+              NextToken
+            END
+            ELSE
+              Error(2)
+          END
+          ELSE
+          BEGIN
+            IF Operand.DataType <> NIL THEN
+              WITH Operand.DataType^ DO
+                IF (Form = PointerForm) OR (Form = FileForm) THEN
+                BEGIN
+                  PushOperand;
+                  Operand.Kind := MemoryOperand;
+                  Operand.Literal.Ordinal := IndirectAccess;
+                  Operand.StaticLevel := 0;
+                  IF Form = PointerForm THEN
+                    Operand.DataType := BaseType
+                  ELSE
+                  BEGIN
+                    Operand.DataType := BaseType;
+                    IF Operand.DataType = NIL THEN
+                      Error(399)
+                    ELSE
+                      IF Operand.DataType = CharStructure THEN
+                      BEGIN
+                        EmitConstant(0);
+                        Operand.Literal.Ordinal := ByteAccess
+                      END
+                  END;
+                  IF Operand.DataType <> NIL THEN
+                    IF (Operand.DataType^.Form <= SetForm) AND
+                        (Operand.DataType^.Size > 1) THEN
+                      Operand.Literal.Ordinal := MultipleAccess
+                END
+                ELSE
+                  Error(141);
+            NextToken
+          END;
+        IF NOT (Token IN Followers + SelectionStarters) THEN
+        BEGIN
+          Error(6);
+          SkipTokens(Followers + SelectionStarters)
+        END
+      END
+    END;
+
+    (** Compiles a variable.
+
+        UCSD Pascal II.0 calls it VARIABLE (UCSD20). *)
+    PROCEDURE CompileVariable;
+      VAR
+        (** UCSD Pascal II.0 calls it LCP (UCSD20). *)
+        Found: SymbolLink;
+    BEGIN
+      IF Token = NameToken THEN
+      BEGIN
+        FindIdentifier(ClassesOfVariable + [FieldClass], Found);
+        NextToken
+      END
+      ELSE
+      BEGIN
+        Error(2);
+        Found.Entry := DummyVariable.Entry
+      END;
+      ApplySelectors(Followers, Found.Entry)
+    END;
+
+    (** Gives an external procedure the next procedure number. *)
+    PROCEDURE NumberExternalRoutine;
+    BEGIN
+      WITH Unnumbered^ DO
+      BEGIN
+        RoutineNumber := NextRoutine;
+        IF NextRoutine > 254 THEN
+          Error(251)
+        ELSE
+          NextRoutine := NextRoutine + 1;
+        RoutineDictionary[RoutineNumber] := 0;
+        NeedsLinker := TRUE;
+        IsExternal := TRUE
+      END
+    END;
+
+    (** Loads a variable's address: LDA for one of its own, LOD for a VAR
+        parameter's.
+        Also: LOADIDADDR (UCSD20) *)
+    PROCEDURE PushVariableAddress;
+    BEGIN
+      WITH Variable^ DO
+        IF Class = ActualClass THEN
+          EmitTwoOperands(OuterAddressCode, StaticLevel, Offset)
+        ELSE
+          EmitTwoOperands(LoadOuterCode, StaticLevel, Offset)
+    END;
+
+    (** Compiles a call: of a special procedure, READ or WRITE, or of a
+        declared one.
+        Also: CALL (UCSD20) *)
+    PROCEDURE CompileCall;
+      VAR
+        (** A special procedure's number.
+            Also: LKEY (UCSD20) *)
+        Key: INTEGER;
+        (** The call has a parenthesized list. *)
+        HasParentheses: BOOLEAN;
+
+      (** Compiles READ and READLN. *)
+      PROCEDURE CompileInput;
+        VAR
+          (** The variable. *)
+          Found: SymbolLink;
+          (** The file read. *)
+          InputFile: SymbolLink;
+      BEGIN
+        InputFile.Entry := InputIdentifier.Entry;
+        IF (Token = NameToken) AND HasParentheses THEN
+        BEGIN
+          FindIdentifier(ClassesOfVariable + [FieldClass], Found);
+          IF Found.Entry^.DataType <> NIL THEN
+            IF Found.Entry^.DataType^.Form = FileForm THEN
+              IF Found.Entry^.DataType^.BaseType = CharStructure THEN
+              BEGIN
+                NextToken;
+                InputFile.Entry := Found.Entry;
+                IF NOT (Token IN [CommaToken, RightParenthesisToken]) THEN
+                  Error(20);
+                IF Token = CommaToken THEN
+                  NextToken
+              END
+        END
+        ELSE
+          IF HasParentheses THEN
+            Error(2);
+        IF HasParentheses AND (Token <> RightParenthesisToken) THEN
+          REPEAT
+            PushVariableAddress(InputFile.Entry);
+            CompileVariable(Followers + [CommaToken, RightParenthesisToken]);
+            IF Operand.Literal.Ordinal = ByteAccess THEN
+              Error(103);
+            PushAddress;
+            IF Operand.DataType <> NIL THEN
+              IF CompatibleTypes(IntegerStructure, Operand.DataType) THEN
+                EmitTwoOperands(CallExternalCode, 0, 12)
+              ELSE
+                IF CompatibleTypes(RealStructure, Operand.DataType) THEN
+                  EmitExternalCall(31, 3)
+                ELSE
+                  IF CompatibleTypes(LongStructure, Operand.DataType) THEN
+                  BEGIN
+                    EmitConstant(Operand.DataType^.Size);
+                    EmitExternalCall(30, 2)
+                  END
+                  ELSE
+                    IF CompatibleTypes(CharStructure, Operand.DataType) THEN
+                      EmitTwoOperands(CallExternalCode, 0, 16)
+                    ELSE
+                      IF IsString(Operand.DataType) THEN
+                      BEGIN
+                        EmitConstant(Operand.DataType^.Capacity);
+                        EmitTwoOperands(CallExternalCode, 0, 18)
+                      END
+                      ELSE
+                        Error(125);
+            IF CheckInputOutput THEN
+              EmitOneOperand(CallStandardCode, 0);
+            LoopDone := Token <> CommaToken;
+            IF NOT LoopDone THEN
+              NextToken
+          UNTIL LoopDone;
+        IF Key = ReadlnKey THEN
+        BEGIN
+          PushVariableAddress(InputFile.Entry);
+          EmitTwoOperands(CallExternalCode, 0, 21);
+          IF CheckInputOutput THEN
+            EmitOneOperand(CallStandardCode, 0)
+        END
+      END;
+
+      (** Compiles WRITE and WRITELN. *)
+      PROCEDURE CompileOutput;
+        VAR
+          (** The value's type. *)
+          ValueType: Structure;
+          (** Its field width is the default. *)
+          DefaultWidth: BOOLEAN;
+          (** The first argument. *)
+          Found: SymbolLink;
+          (** The file written. *)
+          OutputFile: SymbolLink;
+          (** A packed array of characters' length. *)
+          ArrayLength: INTEGER;
+          (** A packed array's lowest index. *)
+          Lowest: INTEGER;
+          (** A word CompileOutput never uses. *)
+          UnusedWord: INTEGER;
+      BEGIN
+        OutputFile.Entry := OutputIdentifier.Entry;
+        IF (Token = NameToken) AND HasParentheses THEN
+        BEGIN
+          FindIdentifier(ClassesOfVariable + [ConstantClass, FieldClass,
+              ValueFunctionClass], Found);
+          IF Found.Entry^.DataType <> NIL THEN
+            IF Found.Entry^.DataType^.Form = FileForm THEN
+              IF Found.Entry^.DataType^.BaseType = CharStructure THEN
+              BEGIN
+                NextToken;
+                OutputFile.Entry := Found.Entry;
+                IF NOT (Token IN [CommaToken, RightParenthesisToken]) THEN
+                  Error(20);
+                IF Token = CommaToken THEN
+                  NextToken
+              END
+        END;
+        IF HasParentheses AND (Token <> RightParenthesisToken) THEN
+          REPEAT
+            PushVariableAddress(OutputFile.Entry);
+            CompileExpression(Followers + [CommaToken, ColonToken,
+                RightParenthesisToken]);
+            ValueType := Operand.DataType;
+            IF ValueType <> NIL THEN
+              WITH ValueType^ DO
+                IF Form > LongIntegerForm THEN
+                  PushAddress
+                ELSE
+                BEGIN
+                  PushOperand;
+                  IF Form = LongIntegerForm THEN
+                  BEGIN
+                    EmitConstant(DecimalSize(36));
+                    EmitConstant(0);
+                    EmitExternalCall(30, 4)
+                  END
+                END;
+            IF Token = ColonToken THEN
+            BEGIN
+              NextToken;
+              CompileExpression(Followers + [CommaToken, ColonToken,
+                  RightParenthesisToken]);
+              IF Operand.DataType <> NIL THEN
+                IF Operand.DataType <> IntegerStructure THEN
+                  Error(20);
+              PushOperand;
+              DefaultWidth := FALSE
+            END
+            ELSE
+              DefaultWidth := TRUE;
+            IF ValueType = IntegerStructure THEN
+            BEGIN
+              IF DefaultWidth THEN
+                EmitConstant(0);
+              EmitTwoOperands(CallExternalCode, 0, 13)
+            END
+            ELSE
+              IF ValueType = RealStructure THEN
+              BEGIN
+                IF DefaultWidth THEN
+                  EmitConstant(0);
+                IF Token = ColonToken THEN
+                BEGIN
+                  NextToken;
+                  CompileExpression(Followers + [CommaToken,
+                      RightParenthesisToken]);
+                  PushOperand;
+                  IF Operand.DataType <> NIL THEN
+                    IF Operand.DataType <> IntegerStructure THEN
+                      Error(125)
+                END
+                ELSE
+                  EmitConstant(0);
+                EmitExternalCall(31, 4)
+              END
+              ELSE
+                IF CompatibleTypes(ValueType, LongStructure) THEN
+                BEGIN
+                  IF DefaultWidth THEN
+                    EmitConstant(0);
+                  EmitExternalCall(30, 3)
+                END
+                ELSE
+                  IF ValueType = CharStructure THEN
+                  BEGIN
+                    IF DefaultWidth THEN
+                      EmitConstant(0);
+                    EmitTwoOperands(CallExternalCode, 0, 17)
+                  END
+                  ELSE
+                    IF IsString(ValueType) THEN
+                    BEGIN
+                      IF DefaultWidth THEN
+                        EmitConstant(0);
+                      EmitTwoOperands(CallExternalCode, 0, 19)
+                    END
+                    ELSE
+                      IF IsPackedChars(ValueType) AND (ValueType <>
+                          ByteStreamStructure) THEN
+                      BEGIN
+                        ArrayLength := 0;
+                        IF ValueType^.BaseType <> NIL THEN
+                        BEGIN
+                          GetBounds(ValueType^.BaseType, Lowest, ArrayLength);
+                          ArrayLength := ArrayLength - Lowest + 1
+                        END;
+                        IF DefaultWidth THEN
+                          EmitConstant(ArrayLength);
+                        EmitConstant(ArrayLength);
+                        EmitTwoOperands(CallExternalCode, 0, 20)
+                      END
+                      ELSE
+                        Error(125);
+            IF CheckInputOutput THEN
+              EmitOneOperand(CallStandardCode, 0);
+            LoopDone := Token <> CommaToken;
+            IF NOT LoopDone THEN
+              NextToken
+          UNTIL LoopDone;
+        IF Key = WritelnKey THEN
+        BEGIN
+          PushVariableAddress(OutputFile.Entry);
+          EmitTwoOperands(CallExternalCode, 0, 22);
+          IF CheckInputOutput THEN
+            EmitOneOperand(CallStandardCode, 0)
+        END
+      END;

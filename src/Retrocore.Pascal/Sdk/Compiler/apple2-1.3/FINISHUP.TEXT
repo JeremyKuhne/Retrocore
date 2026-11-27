@@ -1,0 +1,98 @@
+(** FINISHUP.TEXT: FINISHUP, segment 20: the end.
+
+    Included by COMPILER.TEXT after NUMSTRIN.TEXT and before PASCALCO2A.TEXT.
+
+    Procedures here, nested ones indented:
+        FINISHUP (segment) *)
+
+  (** Ends the compile: the last checks, the listing's end, the time and
+      lines, and the segment dictionary in the code file's block 0 (II.0:
+      PASCALCOMPILER's end). *)
+  SEGMENT PROCEDURE FINISHUP;
+  BEGIN
+    IF Token <> PeriodToken THEN
+      Error(21);
+    IF Listing THEN
+    BEGIN
+      LinesRead := LinesRead + 1;
+      SourceBuffer^[SourceCursor] := CHR(13);
+      SourceCursor := SourceCursor + 1;
+      WriteListingLine
+    END;
+    ErrorBlock := 0;
+    TIME(TokenLength, LinesAtStart);
+    StartTime := LinesAtStart - StartTime;
+    IF NeedsLinker THEN
+    BEGIN
+      SegmentDictionary[SlotOfSegment[CurrentSegment]].Kind := HostSegment;
+      WRITELIN
+    END;
+    RELEASE(HeapMark);
+    CLOSE(LibraryFile);
+    CLOSE(ListingFile, LOCK);
+    IF Noisy THEN
+      WRITELN(OUTPUT);
+    WRITE(LinesRead, ' lines');
+    IF StartTime > 0 THEN
+    BEGIN
+      WRITE(', ', (StartTime + 30) DIV 60, ' secs, ', ROUND(3600 / StartTime *
+          LinesRead), ' lines/min')
+    END;
+    IF Noisy THEN
+    BEGIN
+      WRITELN(OUTPUT);
+      WRITE('Smallest available space = ', LeastMemory, ' words')
+    END;
+    CodeCounter := 0;
+    NEW(CodeBuffer);
+    FOR CurrentSegment := 0 TO 15 DO
+      WITH SegmentDictionary[CurrentSegment] DO
+      BEGIN
+        EmitWord(FirstBlock);
+        EmitWord(CodeLength)
+      END;
+    FOR CurrentSegment := 0 TO 15 DO
+    BEGIN
+      MOVELEFT(SegmentDictionary[CurrentSegment].NameOfSegment,
+          CodeBuffer^[CodeCounter], 8);
+      CodeCounter := CodeCounter + 8
+    END;
+    FOR CurrentSegment := 0 TO 15 DO
+      EmitWord(SegmentDictionary[CurrentSegment].Kind);
+    FOR CurrentSegment := 0 TO 15 DO
+      EmitWord(SegmentDictionary[CurrentSegment].TextBlock);
+    FOR CurrentSegment := 0 TO 15 DO
+      EmitWord(SegmentInformation(CurrentSegment));
+    IF IsProgram THEN
+    BEGIN
+      MOVELEFT(LibrarySegments, RoutineDictionary, 8);
+      EmitWord(RoutineDictionary[0]);
+      EmitWord(RoutineDictionary[1]);
+      EmitWord(RoutineDictionary[2]);
+      EmitWord(RoutineDictionary[3])
+    END
+    ELSE
+    BEGIN
+      EmitWord(0);
+      EmitWord(0);
+      EmitWord(0);
+      EmitWord(0)
+    END;
+    LoopDone := TRUE;
+    IF CodeCounter >= 432 THEN
+      Error(407);
+    WHILE CodeCounter < 432 DO
+      EmitByte(0);
+    IF Comment = NIL THEN
+    BEGIN
+      NEW(Comment);
+      Comment^[0] := CHR(0)
+    END;
+    MOVELEFT(Comment^[1], CodeBuffer^[CodeCounter], LENGTH(Comment^));
+    FILLCHAR(CodeBuffer^[CodeCounter + LENGTH(Comment^)], 80 -
+        LENGTH(Comment^), CHR(0));
+    CodeCounter := CodeCounter + 80;
+    CodeFileBlock := 0;
+    BlockByte := 0;
+    WriteCode(TRUE)
+  END;

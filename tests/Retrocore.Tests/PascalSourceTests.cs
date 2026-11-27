@@ -225,6 +225,22 @@ public sealed class PascalSourceTests
     }
 
     /// <summary>
+    ///  A use of Pascal's own name never leads to a declaration that gives it as a historical name.
+    /// </summary>
+    /// <param name="name">A standard identifier or a later reserved word.</param>
+    [TestMethod]
+    [DataRow("EXIT")]
+    [DataRow("OTHERWISE")]
+    public void PascalsOwnNamesAreNotHistorical(string name)
+    {
+        string source = $"PROGRAM P;\n(** Q.\n    Also: {name} (UCSD20) *)\nPROCEDURE Q;\nBEGIN\n  {name}(Q)\nEND;\nBEGIN END.";
+        PascalProgram program = Analyze(source);
+
+        Lines(source, $"  {name}(Q)", name, out int line, out int column);
+        program.DeclarationAt(Path.Join("SRC", "P.TEXT"), line, column).Should().BeNull();
+    }
+
+    /// <summary>
     ///  A program written to the style passes the lint.
     /// </summary>
     [TestMethod]
@@ -247,6 +263,7 @@ public sealed class PascalSourceTests
     [DataRow("name", "PROGRAM P;\nVAR Total_Count: INTEGER;\nBEGIN END.")]
     [DataRow("name", "PROGRAM P;\nVAR TOTAL: INTEGER;\nBEGIN END.")]
     [DataRow("name", "PROGRAM P;\nVAR total: INTEGER;\nBEGIN END.")]
+    [DataRow("name", "PROGRAM P;\nVAR Otherwise: INTEGER;\nBEGIN END.")]
     [DataRow("name-8", "PROGRAM P;\nVAR CountAllItems, CountAllOthers: INTEGER;\nBEGIN END.")]
     [DataRow("name-8", "PROGRAM P;\nVAR CountAllItems: INTEGER;\nPROCEDURE Q;\nVAR CountAllOthers: INTEGER;\nBEGIN END;\nBEGIN END.")]
     [DataRow("include", "PROGRAM P;\n(*$I GONE*)\nBEGIN END.")]
@@ -256,6 +273,9 @@ public sealed class PascalSourceTests
     [DataRow("also", "PROGRAM P;\n(** Q.\n    Also: OLDQ (UCSD20 *)\nPROCEDURE Q;\nBEGIN END;\nBEGIN END.")]
     [DataRow("also", "PROGRAM P;\n(** Q.\n    Also: R (UCSD20) *)\nPROCEDURE Q;\nBEGIN END;\nPROCEDURE R;\nBEGIN END;\nBEGIN END.")]
     [DataRow("also", "PROGRAM P;\n(** Q.\n    Also: X (UCSD20) *)\nPROCEDURE Q;\nBEGIN END;\n(** R.\n    Also: X (UCSD20) *)\nPROCEDURE R;\nBEGIN END;\nBEGIN END.")]
+    [DataRow("also", "PROGRAM P;\n(** Q.\n    Also: EXIT (UCSD20) *)\nPROCEDURE Q;\nBEGIN END;\nBEGIN END.")]
+    [DataRow("also", "PROGRAM P;\n(** Q.\n    Also: OTHERWISE (UCSD20) *)\nPROCEDURE Q;\nBEGIN END;\nBEGIN END.")]
+    [DataRow("also", "PROGRAM P;\n(** Q.\n    Also: REPEAT (UCSD20) *)\nPROCEDURE Q;\nBEGIN END;\nBEGIN END.")]
     [DataRow("link", "PROGRAM P;\n(** Q, not <Missing>. *)\nPROCEDURE Q;\nBEGIN END;\nBEGIN END.")]
     [DataRow("link", "PROGRAM P;\nPROCEDURE Report;\n(** R, not <port.Inner>. *)\nPROCEDURE Inner;\nBEGIN END;\nBEGIN END;\nBEGIN END.")]
     [DataRow("also", "PROGRAM P;\n(** Q.\n    Also: OLDQ (UCSD20), OLDQ (A2POSRM) *)\nPROCEDURE Q;\nBEGIN END;\nBEGIN END.")]
@@ -315,7 +335,8 @@ public sealed class PascalSourceTests
     }
 
     /// <summary>
-    ///  Every Pascal source in the SDK passes the lint, each program from its main file: the one no other includes.
+    ///  Every Pascal source in the SDK passes the lint, each program read from its main file, and every Assembler
+    ///  source the text checks; every source is one or the other.
     /// </summary>
     [TestMethod]
     public void SdkSourcesPassTheLint()
@@ -340,26 +361,118 @@ public sealed class PascalSourceTests
             Assert.Inconclusive("src/Retrocore.Pascal/Sdk has no Pascal source yet.");
         }
 
+        // Programs from their main files; a source of Apple's Assembler, whose first line after its comments is a
+        // directive, as text.
+        static string Read(string path) => File.ReadAllText(path);
+        List<string> mains = [.. sources.Where(file => PascalProgram.IsMainFile(Read(file)))];
+        static bool IsAssembly(string text)
+        {
+            string? first = PascalLexer.Lines(text)
+                .Select(line => line.Trim())
+                .FirstOrDefault(line => line.Length > 0 && !line.StartsWith(';'));
+
+            return first is not null && first.StartsWith('.');
+        }
+
+        List<string> assembled = [.. sources.Where(file => IsAssembly(Read(file)))];
         List<PascalProgram> programs =
         [
-            .. sources.Select(file => PascalProgram.Analyze(file, path => File.Exists(path) ? File.ReadAllText(path) : null))
+            .. mains.Select(file => PascalProgram.Analyze(
+                file,
+                path => File.Exists(path) ? File.ReadAllText(path) : null,
+                PascalIncludeFolders.For(file)))
         ];
 
-        HashSet<string> included =
-        [
-            .. programs.SelectMany(program => program.Files.Skip(1)).Select(file => file.Path)
-        ];
-
+        HashSet<string> read = [.. programs.SelectMany(program => program.Files).Select(file => Path.GetFullPath(file.Path))];
         List<string> problems =
         [
             .. programs
-                .Where(program => !included.Contains(program.Root))
                 .SelectMany(program => PascalLint.Check(program, BasicAttribution.Bibliography))
+                .Concat(assembled.SelectMany(file => PascalLint.CheckText(file, Read(file))))
+                .Distinct()
                 .Select(problem => $"{Path.GetRelativePath(sdk, problem.File)}({problem.Line + 1},{problem.Column + 1}): "
-                    + $"{problem.Rule}: {problem.Message}")
+                    + $"{problem.Rule}: {problem.Message}"),
+            .. sources
+                .Where(file => !read.Contains(Path.GetFullPath(file)) && !assembled.Contains(file))
+                .Select(file => $"{Path.GetRelativePath(sdk, file)}: no program reads it, and it isn't an Assembler source")
         ];
 
         problems.Should().BeEmpty($"the lint found:{Environment.NewLine}{string.Join(Environment.NewLine, problems)}");
+    }
+
+    /// <summary>
+    ///  A Compiler's source includes the system's globals from the System folder of its machine and version.
+    /// </summary>
+    [TestMethod]
+    public void CompilersIncludeTheSystemsGlobals()
+    {
+        string root = Directory.CreateTempSubdirectory("pascal").FullName;
+        try
+        {
+            string compiler = Path.Join(root, "Compiler", "apple2-1.3");
+            string system = Path.Join(root, "System", "apple2-1.3");
+            Directory.CreateDirectory(compiler);
+            Directory.CreateDirectory(system);
+            string main = Path.Join(compiler, "COMPILER.TEXT");
+            File.WriteAllText(main, "PROGRAM P;\n(*$I SYSGLOBALS*)\nBEGIN Count := 1 END.\n");
+            File.WriteAllText(Path.Join(system, "SYSGLOBALS.TEXT"), "VAR Count: INTEGER;\n");
+
+            PascalIncludeFolders.For(main).Should().Equal(system);
+            PascalProgram program = PascalProgram.Analyze(
+                main,
+                path => File.Exists(path) ? File.ReadAllText(path) : null,
+                PascalIncludeFolders.For(main));
+
+            program.Includes.Should().ContainSingle().Which.Path.Should().Be(Path.Join(system, "SYSGLOBALS.TEXT"));
+            PascalLint.Check(program, bibliography: null).Should().BeEmpty();
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    /// <summary>
+    ///  An include is the file beside the including one if there is one, else the first include folder's.
+    /// </summary>
+    [TestMethod]
+    public void IncludesFindTheFirstFile()
+    {
+        string root = Directory.CreateTempSubdirectory("pascal").FullName;
+        try
+        {
+            string[] folders = [Path.Join(root, "Main"), Path.Join(root, "First"), Path.Join(root, "Second")];
+            foreach (string folder in folders)
+            {
+                Directory.CreateDirectory(folder);
+                File.WriteAllText(Path.Join(folder, "PART.TEXT"), "VAR Count: INTEGER;\n");
+            }
+
+            string main = Path.Join(folders[0], "MAIN.TEXT");
+            File.WriteAllText(main, "PROGRAM P;\n(*$I PART*)\nBEGIN Count := 1 END.\n");
+            string? Found() => PascalProgram.Analyze(main, path => File.Exists(path) ? File.ReadAllText(path) : null, folders[1..])
+                .Includes.Single().Path;
+
+            Found().Should().Be(Path.Join(folders[0], "PART.TEXT"));
+            File.Delete(Path.Join(folders[0], "PART.TEXT"));
+            Found().Should().Be(Path.Join(folders[1], "PART.TEXT"));
+            File.Delete(Path.Join(folders[1], "PART.TEXT"));
+            Found().Should().Be(Path.Join(folders[2], "PART.TEXT"));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    /// <summary>
+    ///  An Assembler source has only the checks of its text: its lines, name and size.
+    /// </summary>
+    [TestMethod]
+    public void AssemblerSourcesHaveTheTextChecks()
+    {
+        PascalLint.CheckText(Path.Join("SRC", "ASSEMBLED.TEXT"), "         .PROC   SCANIDEN,2\n         RTS\n").Should().BeEmpty();
+        PascalLint.CheckText(Path.Join("SRC", "ASSEMBLED.TEXT"), "\t.PROC X\n").Should().ContainSingle().Which.Rule.Should().Be("tab");
     }
 
     /// <summary>
@@ -636,6 +749,53 @@ public sealed class PascalSourceTests
     }
 
     /// <summary>
+    ///  A program's code shape stays the same when its names change and comments come and go, and changes with its
+    ///  code.
+    /// </summary>
+    [TestMethod]
+    public void CodeShapeIgnoresNamesAndComments()
+    {
+        string renamed = Sample
+            .Replace("Increment", "AddOne", StringComparison.Ordinal)
+            .Replace("MaxItems", "Limit", StringComparison.Ordinal)
+            .Replace("(** Its value. *)", "(* A comment instead. *)", StringComparison.Ordinal);
+
+        string changed = Sample.Replace("Number + 1", "Number + 2", StringComparison.Ordinal);
+        string option = "(*$R-*)\n" + Sample;
+        string braceOption = "{$R-}\n" + Sample;
+        string shape = PascalCodeShape.Digest(Analyze());
+
+        PascalCodeShape.Digest(Analyze(renamed, Part)).Should().Be(shape);
+        PascalCodeShape.Digest(Analyze(changed, Part)).Should().NotBe(shape);
+        PascalCodeShape.Digest(Analyze(option, Part)).Should().NotBe(shape, "an option changes the code");
+        PascalCodeShape.Digest(Analyze(braceOption, Part)).Should().NotBe(shape, "an option in braces does too");
+    }
+
+    /// <summary>
+    ///  A file that includes itself, in another case, is read once: the shape doesn't expand it without end.
+    /// </summary>
+    [TestMethod]
+    public void CodeShapeReadsASelfIncludeOnce()
+    {
+        const string Source = """
+            PROGRAM Loop;
+            (*$I p.text*)
+            BEGIN
+            END.
+            """;
+
+        Dictionary<string, string> files = new(StringComparer.OrdinalIgnoreCase)
+        {
+            [Path.Join("SRC", "P.TEXT")] = Source,
+        };
+
+        PascalProgram program = PascalProgram.Analyze(Path.Join("SRC", "P.TEXT"), files.GetValueOrDefault);
+
+        string alone = Source.Replace("(*$I p.text*)", "", StringComparison.Ordinal);
+        PascalCodeShape.Digest(program).Should().Be(PascalCodeShape.Digest(Analyze(alone)));
+    }
+
+    /// <summary>
     ///  A file's size is its text as the disk stores it: leading blanks compressed, and no page's padding.
     /// </summary>
     [TestMethod]
@@ -655,6 +815,17 @@ public sealed class PascalSourceTests
         {
             [Path.Join("SRC", "SAMPLE.TEXT")] = Sample,
             [Path.Join("SRC", "PART.TEXT")] = Part,
+        };
+
+        return PascalProgram.Analyze(Path.Join("SRC", "SAMPLE.TEXT"), files.GetValueOrDefault);
+    }
+
+    private static PascalProgram Analyze(string sample, string part)
+    {
+        Dictionary<string, string> files = new()
+        {
+            [Path.Join("SRC", "SAMPLE.TEXT")] = sample,
+            [Path.Join("SRC", "PART.TEXT")] = part,
         };
 
         return PascalProgram.Analyze(Path.Join("SRC", "SAMPLE.TEXT"), files.GetValueOrDefault);

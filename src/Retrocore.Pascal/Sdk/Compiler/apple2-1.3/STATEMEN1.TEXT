@@ -1,0 +1,23 @@
+(** STATEMEN1.TEXT: STATEMEN, segment 11: its heading.
+
+    Included by COMPILER.TEXT after ROUTINE2.TEXT and before CASESTAT.TEXT.
+
+    Procedures here, nested ones indented:
+          STATEMEN (segment) *)
+
+    (** Compiles a statement, with its label.
+        Also: STATEMENT (UCSD20) *)
+    SEGMENT PROCEDURE STATEMEN(Followers: TokenSet);
+      LABEL 1;
+      VAR
+        (** UCSD Pascal II.0 calls it LCP (UCSD20). *)
+        NameFound: SymbolLink;
+        (** The innermost block's scope, past the WITHs', whose labels a
+            label is looked for in. *)
+        LabelScope: INTEGER;
+        (** UCSD Pascal II.0 calls it LLP (UCSD20). *)
+        ThisLabel: LabelLink;
+        (** The heap mark released after it. *)
+        SavedMark: MarkOfStatement;
+        (** DataCounter before it, for its temporaries. *)
+        TemporariesStart: INTEGER;

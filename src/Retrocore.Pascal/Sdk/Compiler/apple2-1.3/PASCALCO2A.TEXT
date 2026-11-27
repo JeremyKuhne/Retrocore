@@ -1,0 +1,574 @@
+(** PASCALCO2A.TEXT: part 1 of 3 of PASCALCO2: PASCALCO's procedures and body.
+
+    Included by COMPILER.TEXT after FINISHUP.TEXT and before PASCALCO2B.TEXT.
+
+    Procedures here, nested ones indented:
+        Error
+        ReadSourcePage
+        WriteListingLine
+        EnterIdentifier
+        EndLine
+        CompileProgram
+        NextToken
+          SkipComment
+        FindInTree
+        FindIdentifier
+        GetBounds
+        IncrementChecked
+        TakeSegmentSlot *)
+
+  (** Reports error ErrorCode at the current line: shows the line and asks
+      whether to continue, stop or edit; a fatal error (above 400) or ESC
+      stops the Compiler, and E goes to the Editor at the error. *)
+  PROCEDURE Error;
+    VAR
+      (** The key pressed.
+          Also: CH (UCSD20) *)
+      Key: CHAR;
+      (** Where the line shown starts. *)
+      ShownStart: INTEGER;
+      (** The line. *)
+      Line: ErrorLine;
+  BEGIN
+    IF (ErrorOffset <> SourceCursor) OR (ErrorBlock <> SourceBlock) THEN
+    BEGIN
+      ErrorBlock := SourceBlock;
+      ErrorOffset := SourceCursor;
+      ErrorNumber := ErrorCode;
+      IF EditOnError THEN
+        Key := 'E'
+      ELSE
+      BEGIN
+        IF Noisy THEN
+          WRITELN(OUTPUT)
+        ELSE
+          IF Listing AND NOT ListingToConsole AND (ErrorCode <= 400) THEN
+            EXIT(Error);
+        IF LineStart = 0 THEN
+        BEGIN
+          WRITE(SourceBuffer^:SourceCursor)
+        END
+        ELSE
+        BEGIN
+          ShownStart := SCAN(-(LineStart - 1), = CHR(13),
+              SourceBuffer^[LineStart - 2]) + LineStart - 1;
+          MOVELEFT(SourceBuffer^[ShownStart], Line, SourceCursor - ShownStart);
+          WRITE(Line:SourceCursor - ShownStart)
+        END;
+        WRITELN(' <<<<');
+        WRITE('Line ', LinesRead, ', error ', ErrorCode, ':',
+            ' <sp>(continue), <esc>(terminate), E(dit', CHR(7));
+        REPEAT
+          READ(KEYBOARD, Key)
+        UNTIL (Key = ' ') OR (Key = 'E') OR (Key = 'e') OR (Key = CHR(27))
+      END;
+      IF (Key = 'E') OR (Key = 'e') THEN
+      BEGIN
+        ErrorBlock := SourceBlock - 2;
+        EXIT(PASCALCO)
+      END;
+      IF (ErrorCode > 400) OR (Key = CHR(27)) THEN
+      BEGIN
+        ErrorBlock := 0;
+        CLOSE(ListingFile, LOCK);
+        EXIT(PASCALCO)
+      END;
+      WRITELN(OUTPUT);
+      IF Noisy THEN
+      BEGIN
+        WRITE('<', LinesRead:4, '>')
+      END
+    END
+  END;
+
+  (** Reads the source's next page, two blocks, into SourceBuffer: from a
+      unit's interface, an include file or the source; in a unit's interface,
+      first writes the page's interface text to the code file.
+      Also: GETNEXTPAGE (UCSD20) *)
+  PROCEDURE ReadSourcePage;
+    VAR
+      (** Not used. *)
+      Unused: INTEGER;
+  BEGIN
+    SourceCursor := 0;
+    LineStart := 0;
+    IF InUnit THEN
+      IF InInterface AND NOT ReadingInterface THEN
+      BEGIN
+        MOVELEFT(SourceBuffer^[StartOfInterface], CodeBuffer^, 1024);
+        WriteCode(TRUE);
+        StartOfInterface := 0
+      END;
+    IF ReadingInterface THEN
+    BEGIN
+      IF UnitFile = WorkUnitFile THEN
+      BEGIN
+        IF BLOCKREAD(WorkCodeFile^, SourceBuffer^, 2, SourceBlock) <> 2 THEN
+          ReadingInterface := FALSE
+      END
+      ELSE
+        IF BLOCKREAD(LibraryFile, SourceBuffer^, 2, SourceBlock) <> 2 THEN
+          ReadingInterface := FALSE;
+      IF ReadingInterface THEN
+      BEGIN
+      END
+      ELSE
+      BEGIN
+        SourceBlock := UsesBlock;
+        SourceCursor := UsesCursor;
+        LineStart := UsesLineStart
+      END
+    END;
+    IF NOT ReadingInterface THEN
+      IF Including THEN
+        IF BLOCKREAD(IncludeFile, SourceBuffer^, 2, SourceBlock) <> 2 THEN
+        BEGIN
+          IF IORESULT <> 0 THEN
+            Error(403);
+          CLOSE(IncludeFile);
+          Including := FALSE;
+          SourceBlock := IncludeBlock;
+          SourceCursor := IncludeCursor;
+          LineStart := IncludeLineStart
+        END;
+    IF NOT (Including OR ReadingInterface) THEN
+      IF BLOCKREAD(WorkTextFile^, SourceBuffer^, 2, SourceBlock) <> 2 THEN
+        Error(401);
+    IF SourceCursor = 0 THEN
+      IF SourceBuffer^[0] = CHR(16) THEN
+        SourceCursor := 2;
+    SourceBlock := SourceBlock + 2
+  END;
+
+  (** Writes the line to the listing, with its line number, segment,
+      procedure, level, and DataCounter or CodeCounter.
+      Also: PRINTLINE (UCSD20) *)
+  PROCEDURE WriteListingLine;
+    VAR
+      (** * on a line with a breakpoint, else :
+          Also: STARORC (UCSD20) *)
+      Marker: CHAR;
+      (** D in declarations, else the statement level.
+          Also: DORLEV (UCSD20) *)
+      LevelMark: INTEGER;
+      (** Also: LENG (UCSD20) *)
+      LineLength: INTEGER;
+      (** The line.
+          Also: A (UCSD20) *)
+      Line: ListingLine;
+  BEGIN
+    Marker := ':';
+    IF InDeclarations THEN
+      LevelMark := 68
+    ELSE
+      LevelMark := LineNestingDepth MOD 10 + 48;
+    IF BreakpointOnLine THEN
+      Marker := '*';
+    (*$I+*)  (* I/O checks on again: an I/O error stops the program. *)
+    WRITE(ListingFile, LinesRead:6, CurrentSegment:4, CurrentRoutine:5, Marker,
+        CHR(LevelMark), ListedCounter:6, ' ');
+    LineLength := SourceCursor - LineStart;
+    IF LineLength > 100 THEN
+      LineLength := 100;
+    MOVELEFT(SourceBuffer^[LineStart], Line, LineLength);
+    IF Line[0] = CHR(16) THEN
+    BEGIN
+      IF Line[1] > ' ' THEN
+      BEGIN
+        WRITE(ListingFile, ' ':ORD(Line[1]) - 32)
+      END;
+      LineLength := LineLength - 2;
+      MOVELEFT(Line[2], Line, LineLength)
+    END;
+    Line[LineLength - 1] := CHR(13);
+    WRITE(ListingFile, Line:LineLength);
+    IF (ErrorBlock = SourceBlock) AND (ErrorOffset > LineStart) THEN
+    BEGIN
+      WRITELN(ListingFile, '>>>>>> Error # ', ErrorNumber)
+    END
+  END;
+
+  (** Enters an identifier in the innermost scope's tree; error 101 for one
+      already there.
+      Also: ENTERID (UCSD20) *)
+  PROCEDURE EnterIdentifier;
+    VAR
+      (** UCSD Pascal II.0 calls it LCP1 (UCSD20). *)
+      Node: SymbolLink;
+      (** UCSD Pascal II.0 calls it LCP (UCSD20). *)
+      Root: SymbolLink;
+      (** SearchTree's answer.
+          Also: I (UCSD20) *)
+      Direction: INTEGER;
+  BEGIN
+    Root.Entry := Display[DisplayTop].Tree.Entry;
+    IF Root.Entry = NIL THEN
+      Display[DisplayTop].Tree.Entry := Declared
+    ELSE
+    BEGIN
+      Direction := SearchTree(Root.Entry, Node.Entry, Declared^.Name);
+      WHILE Direction = 0 DO
+      BEGIN
+        Error(101);
+        IF Node.Entry^.Right.Entry = NIL THEN
+          Direction := 1
+        ELSE
+          Direction := SearchTree(Node.Entry^.Right.Entry, Node.Entry,
+              Declared^.Name)
+      END;
+      IF Direction = 1 THEN
+        Node.Entry^.Right.Entry := Declared
+      ELSE
+        Node.Entry^.Left.Entry := Declared
+    END;
+    Declared^.Left.Entry := NIL;
+    Declared^.Right.Entry := NIL
+  END;
+
+  (** Ends a line: counts it, shows a dot, lists it, and reads the next page
+      at the page's end (II.0: INSYMBOL's CHECKEND). *)
+  PROCEDURE EndLine;
+  BEGIN
+    LinesRead := LinesRead + 1;
+    SourceCursor := SourceCursor + 1;
+    IF Noisy THEN
+    BEGIN
+      (*$I-*)  (* I/O checks off: errors are left for IORESULT. *)
+      WRITE('.');
+      IF (LinesRead - LinesAtStart) MOD 50 = 0 THEN
+      BEGIN
+        WRITELN(OUTPUT);
+        WRITE('<', LinesRead:4, '>')
+      END
+    END;
+    IF Listing THEN
+      WriteListingLine;
+    BreakpointOnLine := FALSE;
+    IF SourceBuffer^[SourceCursor] = CHR(0) THEN
+    BEGIN
+      IF NOT ReadingInterface THEN
+      BEGIN
+        SourceCursor := SCAN(1024 - SourceCursor, <> CHR(0),
+            SourceBuffer^[SourceCursor]) + SourceCursor;
+        IF SourceCursor <> 1024 THEN
+          Error(400)
+      END;
+      ReadSourcePage
+    END
+    ELSE
+      LineStart := SourceCursor;
+    IF SourceBuffer^[SourceCursor] = CHR(12) THEN
+      SourceCursor := SourceCursor + 1;
+    IF SourceBuffer^[SourceCursor] = CHR(16) THEN
+      SourceCursor := SourceCursor + 2
+    ELSE
+    BEGIN
+      SourceCursor := SourceCursor + SCAN(80, <> CHR(9),
+          SourceBuffer^[SourceCursor]);
+      SourceCursor := SourceCursor + SCAN(80, <> ' ',
+          SourceBuffer^[SourceCursor])
+    END;
+    IF InDeclarations THEN
+      ListedCounter := DataCounter
+    ELSE
+      ListedCounter := CodeCounter
+  END;
+
+  PROCEDURE CompileProgram; FORWARD;
+
+  (** The scanner: reads the next symbol into Token, and Operator, TokenName,
+      TokenValue or TokenLength, skipping blanks and comments, and reading
+      the options in a comment with COMPOPTI.
+      Also: INSYMBOL (UCSD20) *)
+  PROCEDURE NextToken;
+    LABEL 1;
+    VAR
+      (** UCSD Pascal II.0 calls it LVP (UCSD20). *)
+      Kept: ScannedValue;
+      (** Not used. *)
+      Unused: INTEGER;
+      (** A short integer's value. *)
+      ShortValue: INTEGER;
+      (** Its digits. *)
+      Digits: INTEGER;
+      (** The next character. *)
+      Character: INTEGER;
+
+    (** Skips a comment to its end, } or * ), after reading the options it
+        starts with (II.0: INSYMBOL's comments). *)
+    PROCEDURE SkipComment(Closer: INTEGER);
+      VAR
+        (** Not used. *)
+        Unused: INTEGER;
+    BEGIN
+      SourceCursor := SourceCursor + 1;
+      IF SourceBuffer^[SourceCursor] = '$' THEN
+        IF NOT COMPOPTI(Closer) THEN
+          EXIT(SkipComment);
+      SourceCursor := SourceCursor - 1;
+      REPEAT
+        REPEAT
+          SourceCursor := SourceCursor + 1;
+          WHILE SourceBuffer^[SourceCursor] = CHR(13) DO
+            EndLine
+        UNTIL ORD(SourceBuffer^[SourceCursor]) = Closer
+      UNTIL (SourceBuffer^[SourceCursor + 1] = ')') OR (Closer = 125);
+      SourceCursor := SourceCursor + 1
+    END;
+
+  BEGIN
+    IF TakeNestingDepth THEN
+    BEGIN
+      LineNestingDepth := NestingDepth;
+      TakeNestingDepth := FALSE
+    END;
+    Operator := NoneOperator;
+    1:
+    Token := OtherToken;
+    CASE ORD(SourceBuffer^[SourceCursor]) OF
+      39:
+        NUMSTRIN(FALSE, Kept);
+      48, 49, 50, 51, 52, 53, 54, 55, 56, 57:
+      BEGIN
+        Character := ORD(SourceBuffer^[SourceCursor]);
+        Digits := 0;
+        ShortValue := 0;
+        WHILE (Character IN [48..57]) AND (Digits < 4) DO
+        BEGIN
+          ShortValue := ShortValue * 10 + (Character - 48);
+          Digits := Digits + 1;
+          Character := ORD(SourceBuffer^[SourceCursor + Digits])
+        END;
+        IF Character IN [46, 48..57, 69] THEN
+          NUMSTRIN(TRUE, Kept)
+        ELSE
+        BEGIN
+          SourceCursor := SourceCursor + Digits - 1;
+          Token := IntegerToken;
+          Operator := NoneOperator;
+          TokenValue.Ordinal := ShortValue
+        END
+      END;
+      65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81, 82,
+          83, 84, 85, 86, 87, 88, 89, 90, 97, 98,
+          99, 100, 101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111, 112,
+              113, 114, 115, 116, 117, 118, 119, 120,
+          121, 122:
+        ScanIdentifier(SourceCursor, SourceBuffer);
+      123:
+      BEGIN
+        SkipComment(125);
+        GOTO 1
+      END;
+      40:
+        IF SourceBuffer^[SourceCursor + 1] = '*' THEN
+        BEGIN
+          SourceCursor := SourceCursor + 1;
+          SkipComment(42);
+          SourceCursor := SourceCursor + 1;
+          GOTO 1
+        END
+        ELSE
+          Token := LeftParenthesisToken;
+      41:
+        Token := RightParenthesisToken;
+      44:
+        Token := CommaToken;
+      9, 32:
+      BEGIN
+        SourceCursor := SourceCursor + 1;
+        GOTO 1
+      END;
+      46:
+        IF SourceBuffer^[SourceCursor + 1] = '.' THEN
+        BEGIN
+          SourceCursor := SourceCursor + 1;
+          Token := ColonToken
+        END
+        ELSE
+          Token := PeriodToken;
+      58:
+        IF SourceBuffer^[SourceCursor + 1] = '=' THEN
+        BEGIN
+          SourceCursor := SourceCursor + 1;
+          Token := BecomesToken
+        END
+        ELSE
+          Token := ColonToken;
+      59:
+        Token := SemicolonToken;
+      94:
+        Token := ArrowToken;
+      91:
+        Token := LeftBracketToken;
+      93:
+        Token := RightBracketToken;
+      42:
+      BEGIN
+        Token := MultiplicativeToken;
+        Operator := MultiplyOperator
+      END;
+      43:
+      BEGIN
+        Token := AdditiveToken;
+        Operator := PlusOperator
+      END;
+      45:
+      BEGIN
+        Token := AdditiveToken;
+        Operator := MinusOperator
+      END;
+      47:
+      BEGIN
+        Token := MultiplicativeToken;
+        Operator := DivideOperator
+      END;
+      60:
+      BEGIN
+        Token := RelationalToken;
+        Operator := LessOperator;
+        CASE SourceBuffer^[SourceCursor + 1] OF
+          '>':
+          BEGIN
+            Operator := UnequalOperator;
+            SourceCursor := SourceCursor + 1
+          END;
+          '=':
+          BEGIN
+            Operator := AtMostOperator;
+            SourceCursor := SourceCursor + 1
+          END
+        END
+      END;
+      61:
+      BEGIN
+        Token := RelationalToken;
+        Operator := EqualOperator
+      END;
+      62:
+      BEGIN
+        Token := RelationalToken;
+        IF SourceBuffer^[SourceCursor + 1] = '=' THEN
+        BEGIN
+          Operator := AtLeastOperator;
+          SourceCursor := SourceCursor + 1
+        END
+        ELSE
+          Operator := GreaterOperator
+      END
+    END;
+    IF Token = OtherToken THEN
+      IF SourceBuffer^[SourceCursor] = CHR(13) THEN
+      BEGIN
+        EndLine;
+        TakeNestingDepth := TRUE;
+        GOTO 1
+      END
+      ELSE
+        Error(400);
+    SourceCursor := SourceCursor + 1
+  END;
+
+  (** Finds TokenName in the tree Root, setting Found to it or NIL.
+      Also: SEARCHSECTION (UCSD20) *)
+  PROCEDURE FindInTree;
+  BEGIN
+    IF Root <> NIL THEN
+      IF SearchTree(Root, Found.Entry, TokenName) = 0 THEN
+      BEGIN
+      END
+      ELSE
+        Found.Entry := NIL
+    ELSE
+      Found.Entry := NIL
+  END;
+
+  (** Finds TokenName in the scopes, innermost first, of a class in Classes;
+      one not found is reported (104) and stands for its class's dummy entry
+      (DummyType, DummyVariable and the others).
+      Also: SEARCHID (UCSD20) *)
+  PROCEDURE FindIdentifier;
+    LABEL 1;
+    VAR
+      (** UCSD Pascal II.0 calls it LCP (UCSD20). *)
+      Candidate: SymbolLink;
+  BEGIN
+    FOR FoundLevel := DisplayTop DOWNTO 0 DO
+    BEGIN
+      Candidate.Entry := Display[FoundLevel].Tree.Entry;
+      IF Candidate.Entry <> NIL THEN
+        IF SearchTree(Candidate.Entry, Candidate.Entry, TokenName) = 0 THEN
+          IF Candidate.Entry^.Class IN Classes THEN
+            GOTO 1
+          ELSE
+            IF ReportUndeclared THEN
+              Error(103)
+            ELSE
+              Candidate.Entry := NIL
+        ELSE
+          Candidate.Entry := NIL
+    END;
+    IF ReportUndeclared THEN
+    BEGIN
+      Error(104);
+      IF TypeClass IN Classes THEN
+        Candidate.Entry := DummyType.Entry
+      ELSE
+        IF ActualClass IN Classes THEN
+          Candidate.Entry := DummyVariable.Entry
+        ELSE
+          IF FieldClass IN Classes THEN
+            Candidate.Entry := DummyField.Entry
+          ELSE
+            IF ConstantClass IN Classes THEN
+              Candidate.Entry := DummyConstant.Entry
+            ELSE
+              IF ProperProcedureClass IN Classes THEN
+                Candidate.Entry := DummyProcedure.Entry
+              ELSE
+                Candidate.Entry := DummyFunction.Entry
+    END;
+    1:
+    Found.Entry := Candidate.Entry
+  END;
+
+  (** A scalar's lowest and highest values. *)
+  PROCEDURE GetBounds;
+  BEGIN
+    WITH Scalar^ DO
+      IF Form = SubrangeForm THEN
+      BEGIN
+        Lowest := ORD(ArrayIsPacked);
+        Highest := MaximumValue
+      END
+      ELSE
+      BEGIN
+        Lowest := 0;
+        IF Scalar = CharStructure THEN
+          Highest := 255
+        ELSE
+          IF Scalar^.ElementType <> NIL THEN
+            Highest := Scalar^.ElementType^.LastValue
+          ELSE
+            Highest := 0
+      END
+  END;
+
+  (** Adds 1 to a counter below its limit, or reports an error. *)
+  PROCEDURE IncrementChecked;
+  BEGIN
+    IF Counter < Limit THEN
+      Counter := Counter + 1
+    ELSE
+      Error(LimitError)
+  END;
+
+  (** Takes the next slot of the segment dictionary for CurrentSegment, with
+      NewNumber a new segment number too. *)
+  PROCEDURE TakeSegmentSlot;
+  BEGIN
+    IF NewNumber THEN
+      IncrementChecked(NextSegment, 63, 354);
+    IncrementChecked(LastSegmentSlot, 15, 354);
+    SlotOfSegment[CurrentSegment] := LastSegmentSlot
+  END;

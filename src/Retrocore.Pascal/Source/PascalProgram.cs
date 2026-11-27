@@ -10,6 +10,7 @@ namespace Retrocore.Pascal.Source;
 public sealed partial class PascalProgram
 {
     private readonly List<PascalToken> _tokens = [];
+    private IReadOnlyList<string> _includeFolders = [];
     private readonly Dictionary<string, List<PascalDeclaration>> _oldNames = [with(StringComparer.Ordinal)];
 
     private PascalProgram(string root) => Root = root;
@@ -62,10 +63,26 @@ public sealed partial class PascalProgram
     ///  Reads a file's text by path, or gives null when there is none: an open editor's text, or else the file's.
     /// </param>
     /// <returns>The program.</returns>
-    public static PascalProgram Analyze(string root, Func<string, string?> read)
+    public static PascalProgram Analyze(string root, Func<string, string?> read) => Analyze(root, read, []);
+
+    /// <summary>
+    ///  Analyzes a program from its main file, reading the files it includes from the same folder, or else from other
+    ///  folders, in order.
+    /// </summary>
+    /// <param name="root">The main file's path.</param>
+    /// <param name="read">
+    ///  Reads a file's text by path, or gives null when there is none: an open editor's text, or else the file's.
+    /// </param>
+    /// <param name="includeFolders">
+    ///  The folders to look in for an included file that isn't beside the file that includes it, such as the
+    ///  system's globals beside SYSTEM.PASCAL's source.
+    /// </param>
+    /// <returns>The program.</returns>
+    public static PascalProgram Analyze(string root, Func<string, string?> read, IReadOnlyList<string> includeFolders)
     {
         ArgumentNullException.ThrowIfNull(read);
-        PascalProgram program = new(root);
+        ArgumentNullException.ThrowIfNull(includeFolders);
+        PascalProgram program = new(root) { _includeFolders = includeFolders };
         program.Scopes.Add(program.Outer);
         program.Read(root, read(root) ?? "", read, []);
         List<PascalToken> scanned =
@@ -77,6 +94,16 @@ public sealed partial class PascalProgram
         program.IndexOldNames();
         return program;
     }
+
+    /// <summary>
+    ///  Gets whether a source is a program's main file: its first word, after comments, is <c>PROGRAM</c>,
+    ///  <c>UNIT</c> or <c>SEPARATE</c>.
+    /// </summary>
+    /// <param name="text">The source's text.</param>
+    /// <returns>Whether it is.</returns>
+    public static bool IsMainFile(string text) =>
+        PascalLexer.Tokenize(text, "").FirstOrDefault(token => !token.IsComment) is { } first
+            && (first.Is("PROGRAM") || first.Is("UNIT") || first.Is("SEPARATE"));
 
     /// <summary>
     ///  Gets a file of the program by path.
@@ -142,6 +169,15 @@ public sealed partial class PascalProgram
         }
 
         if (found is not null) { return (found, false); }
+
+        // Pascal's own names are never historical ones, whatever a comment says.
+        if (PascalNames.IsStandard(reference.Token.Text)
+            || PascalNames.IsKeyword(reference.Token.Text)
+            || PascalNames.IsLaterKeyword(reference.Token.Text))
+        {
+            return null;
+        }
+
         return OldName(reference.Token.Text) is { } old ? (old, true) : null;
     }
 
@@ -214,7 +250,11 @@ public sealed partial class PascalProgram
             bool option = token.Kind is PascalTokenKind.Option or PascalTokenKind.BraceComment;
             if (option && IncludeName(token.Text) is { } name)
             {
-                string? found = Locate(path, name, read);
+                string? found = _includeFolders
+                    .Prepend(System.IO.Path.GetDirectoryName(path) ?? "")
+                    .Select(folder => Locate(folder, name, read))
+                    .FirstOrDefault(located => located is not null);
+
                 Includes.Add(new(token, name, found));
                 if (found is not null && !reading.Contains(found.ToUpperInvariant()) && read(found) is { } included)
                 {
@@ -260,10 +300,9 @@ public sealed partial class PascalProgram
         return name.Length > 0 ? name : null;
     }
 
-    // Finds an included file beside the including one, its case left out, with .TEXT added when the name has no dot.
-    private static string? Locate(string including, string name, Func<string, string?> read)
+    // Finds an included file in a folder, its case left out, with .TEXT added when the name has no dot.
+    private static string? Locate(string folder, string name, Func<string, string?> read)
     {
-        string folder = System.IO.Path.GetDirectoryName(including) ?? "";
         string wanted = name.Contains('.', StringComparison.Ordinal) ? name : name + ".TEXT";
         string direct = System.IO.Path.Join(folder, wanted);
         if (read(direct) is not null) { return direct; }

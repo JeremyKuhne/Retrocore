@@ -276,8 +276,13 @@ public class PascalCompilerRoundTripTests
         return marked;
     }
 
-    // APPLE1 with APPLE3's 128K system as its own, and without the Editor, which a compile does not need.
-    private static byte[] Boot128K(string apple1, string apple3)
+    /// <summary>
+    ///  Gets APPLE1 with APPLE3's 128K system as its own, and without the Editor, which a compile does not need.
+    /// </summary>
+    /// <param name="apple1">APPLE1's image.</param>
+    /// <param name="apple3">APPLE3's image.</param>
+    /// <returns>The boot disk's sectors.</returns>
+    internal static byte[] Boot128K(string apple1, string apple3)
     {
         byte[] boot = Sectors(apple1);
         PascalVolume extras = PascalVolume.Read(Sectors(apple3), proDosOrder: false);
@@ -292,8 +297,12 @@ public class PascalCompilerRoundTripTests
         return boot;
     }
 
-    // An image's sectors, a WOZ image's read back from its tracks.
-    private static byte[] Sectors(string path) => path.EndsWith(".woz", StringComparison.OrdinalIgnoreCase)
+    /// <summary>
+    ///  Gets an image's sectors, a WOZ image's read back from its tracks.
+    /// </summary>
+    /// <param name="path">The image.</param>
+    /// <returns>The sectors.</returns>
+    internal static byte[] Sectors(string path) => path.EndsWith(".woz", StringComparison.OrdinalIgnoreCase)
         ? SectorDiskReader.Read(WozDisk.Load(File.ReadAllBytes(path)), proDosOrder: false)
         : File.ReadAllBytes(path);
 }

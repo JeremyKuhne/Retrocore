@@ -1,0 +1,589 @@
+(** BODYPART3A.TEXT: part 1 of 3 of BODYPART3: BODYPART's code generator.
+
+    Included by COMPILER.TEXT after BODY3.TEXT and before BODYPART3B.TEXT.
+
+    Procedures here, nested ones indented:
+            CompileStatements
+              StartUnits
+            KeepStatementsResident
+          AddLinkerReference
+          EmitOpcode
+          EmitConstant
+          EmitBigOperand
+          EmitOneOperand
+          EmitTwoOperands
+          EmitExternalCall
+          MaskBoolean
+          EmitJump
+          EmitFalseJump
+          NewJump
+          PlaceJump
+          PushOperand
+          StoreOperand
+          PushAddress
+          PushByteAddress *)
+
+      (** Compiles the statements, after the code that starts the block's
+          files and units (II.0: BODY's). *)
+      PROCEDURE CompileStatements;
+
+        (** Calls each used unit's initialization, in order. *)
+        PROCEDURE StartUnits(VAR Units: Identifier);
+        BEGIN
+          IF Units <> NIL THEN
+          BEGIN
+            StartUnits(Units^.Next.Entry);
+            IF ODD(Units^.Offset) THEN
+              EmitTwoOperands(CallExternalCode, Units^.StaticLevel, 1)
+          END
+        END;
+
+      BEGIN
+        IF Noisy THEN
+        BEGIN
+          WRITELN(OUTPUT);
+          FreeMemory[0] := MEMAVAIL;
+          IF FreeMemory[0] < LeastMemory THEN
+            LeastMemory := FreeMemory[0];
+          IF BodyRoutine <> NIL THEN
+          BEGIN
+            WRITELN(BodyRoutine^.Name, ' [', FreeMemory[0]:5, ' words]')
+          END;
+          WRITE('<', LinesRead:4, '>')
+        END;
+        IF NOT InUnit OR AllowUnitFiles THEN
+        BEGIN
+          Current.Entry := Display[DisplayTop].Files.Entry;
+          WHILE Current.Entry <> NIL DO
+            WITH Current.Entry^ DO
+            BEGIN
+              WITH DataType^ DO
+              BEGIN
+                EmitTwoOperands(OuterAddressCode, StaticLevel, Offset);
+                EmitTwoOperands(OuterAddressCode, StaticLevel, Offset + 300);
+                IF BaseType = NIL THEN
+                  EmitConstant(-1)
+                ELSE
+                  IF DataType = TextInteractiveStructure THEN
+                    EmitConstant(0)
+                  ELSE
+                    IF BaseType = CharStructure THEN
+                      EmitConstant(-2)
+                    ELSE
+                      EmitConstant(ComponentType^.Size)
+              END;
+              EmitTwoOperands(CallExternalCode, 0, 3);
+              Current.Entry := Next.Entry
+            END
+        END;
+        IF IsMainBody THEN
+          StartUnits(UsedUnits.Entry);
+        REPEAT
+          REPEAT
+            STATEMEN(Followers + [SemicolonToken, EndToken])
+          UNTIL NOT (Token IN StartersOfStatement);
+          LoopDone := Token <> SemicolonToken;
+          IF NOT LoopDone THEN
+            NextToken
+        UNTIL LoopDone
+      END;
+
+      (** CompileStatements with STATEMEN resident. *)
+      PROCEDURE KeepStatementsResident;
+      BEGIN (*$R STATEMEN*)
+        CompileStatements
+      END;
+
+    BEGIN
+      BODY1;
+      IF Swapping THEN
+        KeepStatementsResident
+      ELSE
+        CompileStatements;
+      BODY3
+    END;
+
+    (** Records a reference for the linker: a unit's global, or a procedure
+        in another segment.
+        Also: LINKERREF (UCSD20) *)
+    PROCEDURE AddLinkerReference;
+    BEGIN
+      IF PendingCount > 128 THEN
+      BEGIN
+        IF BLOCKWRITE(ReferenceFile, PendingReferences^, 1, NextReferenceBlock)
+            <> 1 THEN
+          Error(402);
+        NextReferenceBlock := NextReferenceBlock + 1;
+        PendingCount := 1
+      END;
+      WITH PendingReferences^[PendingCount] DO
+      BEGIN
+        IF TargetClass IN ClassesOfVariable THEN
+          Target := TargetNumber + 63 + 1
+        ELSE
+          Target := TargetNumber;
+        Offset := SegmentOffset + CodeOffset
+      END;
+      PendingCount := PendingCount + 1
+    END;
+
+    (** Generates an instruction of no operands; for LSA, 38, the string
+        constant after it.
+        Also: GEN0 (UCSD20) *)
+    PROCEDURE EmitOpcode;
+      VAR
+        (** A character. *)
+        Index: INTEGER;
+        (** Where the LSA starts. *)
+        StringOffset: INTEGER;
+    BEGIN
+      IF Opcode <> StringAddressCode THEN
+        EmitByte(Opcode + 128)
+      ELSE
+      BEGIN
+        StringOffset := CodeCounter;
+        LastStringOffset := CodeCounter;
+        IF NOT ODD(StringOffset) THEN
+          EmitByte(215);
+        EmitByte(166);
+        WITH Operand.Literal.Entry^ DO
+        BEGIN
+          EmitByte(StringLength);
+          FOR Index := 1 TO StringLength DO
+            EmitByte(ORD(Contents[Index - 1]))
+        END;
+        IF ODD(StringOffset) THEN
+          EmitByte(215)
+      END
+    END;
+
+    (** Generates a constant's load: SLDC, or LDCI.
+        Also: GENLDC (UCSD20) *)
+    PROCEDURE EmitConstant;
+    BEGIN
+      IF (Value >= 0) AND (Value <= 127) THEN
+        EmitByte(Value)
+      ELSE
+      BEGIN
+        EmitByte(51 + 148);
+        EmitByte(ABS(Value) MOD 256);
+        EmitByte(ABS(Value) DIV 256);
+        IF Value < 0 THEN
+          EmitOpcode(NegateIntegerCode)
+      END
+    END;
+
+    (** Generates a big operand: one byte to 127, else two, the high one with
+        bit 7 set.
+        Also: GENBIG (UCSD20) *)
+    PROCEDURE EmitBigOperand(Value: INTEGER);
+    BEGIN
+      IF Value <= 127 THEN
+        EmitByte(Value)
+      ELSE
+      BEGIN
+        EmitByte(128 + Value DIV 256);
+        EmitByte(Value MOD 256)
+      END
+    END;
+
+    (** Generates an instruction of one operand, in its short forms where
+        there are.
+        Also: GEN1 (UCSD20) *)
+    PROCEDURE EmitOneOperand;
+      LABEL 1;
+      VAR
+        (** A constant's word. *)
+        WordIndex: INTEGER;
+        (** Its words. *)
+        WordTotal: INTEGER;
+    BEGIN
+      EmitByte(Opcode + 128);
+      IF Opcode = LoadConstantCode THEN
+      BEGIN
+        IF Argument = 2 THEN
+          WordTotal := 2
+        ELSE
+        BEGIN
+          WordTotal := 8;
+          WHILE WordTotal > 0 DO
+            IF Operand.Literal.Entry^.Words[WordTotal] <> 0 THEN
+              GOTO 1
+            ELSE
+              WordTotal := WordTotal - 1
+        END;
+        1:
+        Operand.DataType^.Size := WordTotal;
+        IF WordTotal > 1 THEN
+        BEGIN
+          EmitByte(WordTotal);
+          FOR WordIndex := WordTotal DOWNTO 1 DO
+            EmitWord(Operand.Literal.Entry^.Words[WordIndex])
+        END
+        ELSE
+        BEGIN
+          CodeCounter := CodeCounter - 1;
+          IF WordTotal = 1 THEN
+            EmitConstant(Operand.Literal.Entry^.Words[1])
+        END
+      END
+      ELSE
+        IF Opcode IN [CallStandardCode, AdjustSetCode, AssignStringCode,
+            ReturnCode, CallOuterCode, LoadWordsCode, StoreWordsCode,
+            ReturnBaseCode, CallBaseCode, CallLocalCode, CallGlobalCode] THEN
+          EmitByte(Argument)
+        ELSE
+          IF InUnit AND (Opcode IN [GlobalAddressCode, LoadGlobalCode,
+              StoreGlobalCode]) THEN
+          BEGIN
+            AddLinkerReference(3, Argument, CodeCounter);
+            EmitByte(128);
+            EmitByte(0)
+          END
+          ELSE
+            IF ((Opcode = LoadLocalCode) OR (Opcode = LoadGlobalCode)) AND
+                (Argument <= 16) THEN
+            BEGIN
+              CodeCounter := CodeCounter - 1;
+              IF Opcode = LoadGlobalCode THEN
+                EmitByte(231 + Argument)
+              ELSE
+                EmitByte(215 + Argument)
+            END
+            ELSE
+              IF (Opcode = LoadIndirectCode) AND (Argument <= 7) THEN
+              BEGIN
+                CodeCounter := CodeCounter - 1;
+                EmitByte(248 + Argument)
+              END
+              ELSE
+                EmitBigOperand(Argument)
+    END;
+
+    (** Generates an instruction of two operands, a level and a word, in its
+        short forms.
+        Also: GEN2 (UCSD20) *)
+    PROCEDURE EmitTwoOperands;
+    BEGIN
+      IF (Opcode = IndexPackedCode) OR (Opcode = CallExternalCode) THEN
+      BEGIN
+        EmitByte(Opcode + 128);
+        EmitByte(FirstArgument);
+        EmitByte(SecondArgument)
+      END
+      ELSE
+        IF Opcode IN [EqualCode..GreaterCode, AtMostCode, LessCode,
+            UnequalCode] THEN
+          IF FirstArgument = 0 THEN
+            EmitOpcode(Opcode + 20)
+          ELSE
+          BEGIN
+            EmitOneOperand(Opcode, FirstArgument + FirstArgument);
+            IF FirstArgument > 4 THEN
+              EmitBigOperand(SecondArgument)
+          END
+        ELSE
+          IF FirstArgument = 1 THEN
+            EmitOneOperand(Opcode - 13, SecondArgument)
+          ELSE
+            IF FirstArgument = Level THEN
+              EmitOneOperand(Opcode + 20, SecondArgument)
+            ELSE
+              IF FirstArgument < 0 THEN
+              BEGIN
+                IF Opcode = LoadOuterCode THEN
+                  EmitByte(157)
+                ELSE
+                  IF Opcode = StoreOuterCode THEN
+                    EmitByte(209)
+                  ELSE
+                    EmitByte(167);
+                EmitByte(-FirstArgument);
+                EmitBigOperand(SecondArgument)
+              END
+              ELSE
+              BEGIN
+                EmitByte(Opcode + 128);
+                EmitByte(Level - FirstArgument);
+                EmitBigOperand(SecondArgument)
+              END
+    END;
+
+    (** Calls routine CalledRoutine of segment CalledSegment (CXP), noting
+        the segment in LibrarySegments (II.0: GENNR's). *)
+    PROCEDURE EmitExternalCall;
+    BEGIN
+      LibrarySegments := LibrarySegments + [CalledSegment];
+      EmitTwoOperands(CallExternalCode, CalledSegment, CalledRoutine)
+    END;
+
+    (** After a BOOLEAN's load, keeps its low bit: SLDC 1, LAND. *)
+    PROCEDURE MaskBoolean;
+    BEGIN
+      IF Operand.DataType = BooleanStructure THEN
+      BEGIN
+        EmitByte(1);
+        EmitByte(132)
+      END
+    END;
+
+    (** Generates a jump to a label: to a placed label 0 to 127 bytes on, by
+        its distance, else through the jump table; to one not yet placed,
+        linking it to the label's other jumps to fix later.
+        Also: GENJMP (UCSD20) *)
+    PROCEDURE EmitJump;
+      VAR
+        (** The jump's distance. *)
+        Distance: INTEGER;
+    BEGIN
+      WITH Destination^ DO
+        IF IsDefined THEN
+        BEGIN
+          EmitByte(Opcode + 128);
+          Distance := Offset - CodeCounter - 1;
+          IF (Distance >= 0) AND (Distance <= 127) THEN
+            EmitByte(Distance)
+          ELSE
+          BEGIN
+            IF TableIndex = 0 THEN
+            BEGIN
+              TableIndex := NextJumpSlot;
+              IF NextJumpSlot = 36 THEN
+                Error(254)
+              ELSE
+                NextJumpSlot := NextJumpSlot + 1;
+              JumpTable[TableIndex] := Offset
+            END;
+            Distance := -TableIndex;
+            EmitByte(248 - TableIndex - TableIndex)
+          END
+        END
+        ELSE
+        BEGIN
+          MOVELEFT(Offset, CodeBuffer^[CodeCounter], 2);
+          IF Opcode = JumpCode THEN
+            Distance := CodeCounter + 4096
+          ELSE
+            Distance := CodeCounter;
+          Offset := Distance;
+          CodeCounter := CodeCounter + 2
+        END
+    END;
+
+    (** Loads a BOOLEAN and jumps on false.
+        Also: GENFJP (UCSD20) *)
+    PROCEDURE EmitFalseJump;
+    BEGIN
+      PushOperand;
+      IF (Operand.DataType <> BooleanStructure) AND (Operand.DataType <> NIL)
+          THEN
+        Error(135);
+      EmitJump(JumpFalseCode, Destination)
+    END;
+
+    (** A new label, not yet placed.
+        Also: GENLABEL (UCSD20) *)
+    PROCEDURE NewJump;
+    BEGIN
+      NEW(Created);
+      WITH Created^ DO
+      BEGIN
+        IsDefined := FALSE;
+        Offset := 28000
+      END
+    END;
+
+    (** Places a label here, fixing the jumps to it.
+        Also: PUTLABEL (UCSD20) *)
+    PROCEDURE PlaceJump;
+      VAR
+        (** A jump to fix. *)
+        Pending: INTEGER;
+        (** Its opcode. *)
+        Opcode: INTEGER;
+    BEGIN
+      WITH Placed^ DO
+      BEGIN
+        Pending := Offset;
+        IsDefined := TRUE;
+        Offset := CodeCounter;
+        TableIndex := 0;
+        WHILE Pending < 28000 DO
+        BEGIN
+          IF Pending >= 4096 THEN
+          BEGIN
+            Pending := Pending - 4096;
+            Opcode := 57
+          END
+          ELSE
+            Opcode := 33;
+          CodeCounter := Pending;
+          MOVELEFT(CodeBuffer^[CodeCounter], Pending, 2);
+          EmitJump(Opcode, Placed)
+        END;
+        CodeCounter := Offset
+      END
+    END;
+
+    (** Loads Operand onto the stack.
+        Also: LOAD (UCSD20) *)
+    PROCEDURE PushOperand;
+      VAR
+        (** A long integer constant's power of ten. *)
+        PowerOfTen: INTEGER;
+        (** Its word. *)
+        WordIndex: INTEGER;
+    BEGIN
+      IF Operand.DataType <> NIL THEN
+      BEGIN
+        CASE Operand.Kind OF
+          KnownValueOperand:
+            IF Operand.DataType^.Form = LongIntegerForm THEN
+              WITH Operand.Literal.Entry^ DO
+              BEGIN
+                PowerOfTen := 10000;
+                EmitConstant(DigitGroups[1]);
+                EmitConstant(18);
+                EmitExternalCall(30, 4);
+                FOR WordIndex := 2 TO WordCount DO
+                BEGIN
+                  IF WordIndex = WordCount THEN
+                    PowerOfTen := TRUNC(PWROFTEN(StringLength));
+                  EmitConstant(PowerOfTen);
+                  EmitConstant(18);
+                  EmitExternalCall(30, 4);
+                  EmitConstant(8);
+                  EmitExternalCall(30, 4);
+                  EmitConstant(DigitGroups[WordIndex]);
+                  EmitConstant(18);
+                  EmitExternalCall(30, 4);
+                  EmitConstant(2);
+                  EmitExternalCall(30, 4)
+                END
+              END
+            ELSE
+              IF (Operand.DataType^.Form = ScalarForm) AND (Operand.DataType <>
+                  RealStructure) THEN
+                EmitConstant(Operand.Literal.Ordinal)
+              ELSE
+                IF Operand.DataType = NilStructure THEN
+                  EmitOpcode(LoadNilCode)
+                ELSE
+                  IF Operand.DataType = RealStructure THEN
+                    EmitOneOperand(LoadConstantCode, 2)
+                  ELSE
+                    EmitOneOperand(LoadConstantCode, 5);
+          MemoryOperand:
+            CASE Operand.Literal.Ordinal OF
+              DirectAccess:
+                EmitTwoOperands(LoadOuterCode, Operand.StaticLevel,
+                    Operand.Offset);
+              IndirectAccess:
+                EmitOneOperand(LoadIndirectCode, Operand.StaticLevel);
+              PackedAccess:
+                EmitOpcode(LoadPackedCode);
+              MultipleAccess:
+                EmitOneOperand(LoadWordsCode, Operand.DataType^.Size);
+              ByteAccess:
+                EmitOpcode(LoadByteCode)
+            END;
+          StackOperand:
+          BEGIN
+          END
+        END;
+        WITH Operand.DataType^ DO
+          IF ((Form = SetForm) OR (Form = LongIntegerForm) AND (Operand.Kind <>
+              KnownValueOperand)) AND (Operand.Kind <> StackOperand) THEN
+            EmitConstant(Operand.DataType^.Size);
+        Operand.Kind := StackOperand
+      END
+    END;
+
+    (** Stores the stack into a variable.
+        Also: STORE (UCSD20) *)
+    PROCEDURE StoreOperand;
+    BEGIN
+      WITH Destination DO
+        IF DataType <> NIL THEN
+          CASE Access OF
+            DirectAccess:
+              EmitTwoOperands(StoreOuterCode, StaticLevel, Offset);
+            IndirectAccess:
+              IF StaticLevel <> 0 THEN
+                Error(409)
+              ELSE
+                EmitOpcode(StoreIndirectCode);
+            PackedAccess:
+              EmitOpcode(StorePackedCode);
+            MultipleAccess:
+              EmitOneOperand(StoreWordsCode, DataType^.Size);
+            ByteAccess:
+              EmitOpcode(StoreByteCode)
+          END
+    END;
+
+    (** Loads Operand's address.
+        Also: LOADADDRESS (UCSD20) *)
+    PROCEDURE PushAddress;
+    BEGIN
+      IF Operand.DataType <> NIL THEN
+      BEGIN
+        CASE Operand.Kind OF
+          KnownValueOperand:
+            IF IsString(Operand.DataType) THEN
+              EmitOpcode(StringAddressCode)
+            ELSE
+              Error(409);
+          MemoryOperand:
+            CASE Operand.Literal.Ordinal OF
+              DirectAccess:
+                EmitTwoOperands(OuterAddressCode, Operand.StaticLevel,
+                    Operand.Offset);
+              IndirectAccess:
+                IF Operand.StaticLevel <> 0 THEN
+                  EmitOneOperand(AddOffsetCode, Operand.StaticLevel);
+              PackedAccess:
+                Error(103)
+            END
+        END;
+        Operand.Kind := MemoryOperand;
+        Operand.Literal.Ordinal := IndirectAccess;
+        Operand.StaticLevel := 0
+      END
+    END;
+
+    (** Loads a byte's address: a word's, and the byte's offset.
+        Also: BYTEADDRESS (UCSD20) *)
+    PROCEDURE PushByteAddress;
+    BEGIN
+      IF Operand.DataType <> NIL THEN
+      BEGIN
+        CASE Operand.Kind OF
+          KnownValueOperand:
+            IF IsString(Operand.DataType) THEN
+              EmitOpcode(StringAddressCode)
+            ELSE
+              Error(409);
+          MemoryOperand:
+            CASE Operand.Literal.Ordinal OF
+              DirectAccess:
+                EmitTwoOperands(OuterAddressCode, Operand.StaticLevel,
+                    Operand.Offset);
+              IndirectAccess:
+                IF Operand.StaticLevel <> 0 THEN
+                  EmitOneOperand(AddOffsetCode, Operand.StaticLevel);
+              PackedAccess:
+                Error(103)
+            END
+        END;
+        IF Operand.Kind <> MemoryOperand THEN
+        BEGIN
+          Operand.Kind := MemoryOperand;
+          EmitConstant(0)
+        END
+        ELSE
+          IF Operand.Literal.Ordinal <> ByteAccess THEN
+            EmitConstant(0);
+        Operand.Literal.Ordinal := ByteAccess
+      END
+    END;

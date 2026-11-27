@@ -1,0 +1,435 @@
+(** TYPES2.TEXT: part 2 of 3 of TYPES: types, operands, the lexical stack,
+    scopes, jumps and labels, the code file's segment dictionary and blocks, the
+    Linker's references, the listing, and a library's tables.
+
+    Included by COMPILER.TEXT after TYPES1.TEXT and before TYPES3.TEXT. *)
+
+  (** A type. Its variant part, by Form (0 ScalarForm, 1 SubrangeForm, 2
+      PointerForm, 3 LongIntegerForm, 4 SetForm, 5 ArrayForm, 6 RecordForm, 7
+      FileForm, 8 TagFieldForm, 9 VariantForm), reuses the same words: word
+      2: ScalarKind, BaseType, IndexRange, ComponentType, FirstField or
+      NestedVariant; word 3: LastConstant, Maximum, ElementType or
+      VariantPart; word 4: Minimum or ArrayIsPacked; words
+      5-8, an array's: ElementBits, ElementsPerWord, ArrayIsString, Capacity.
+
+      UCSD Pascal II.0 calls it STRUCTURE (UCSD20). *)
+  TypeEntry = RECORD
+      CASE INTEGER OF
+        (** Its words. *)
+        TypeFields: (Size: INTEGER;
+           (** Its kind: 0 ScalarForm, 1 SubrangeForm, 2 PointerForm, 3
+               LongIntegerForm, 4 SetForm (a set), 5 ArrayForm, 6 RecordForm,
+               7 FileForm, 8 TagFieldForm, 9 VariantForm. *)
+           Form: INTEGER;
+           (** A scalar's kind, 0 STANDARD or 1 DECLARED; or word 2 as a
+               number.
+               Also: SCALKIND (UCSD20) *)
+           ScalarKind: INTEGER;
+           (** A subrange's Maximum as an integer. *)
+           MaximumValue: INTEGER;
+           (** Whether an array is packed; a subrange's Minimum as a word.
+               Also: AISPACKD (UCSD20) *)
+           ArrayIsPacked: BOOLEAN;
+           (** A packed array's bits per element.
+               Also: ELWIDTH (UCSD20) *)
+           ElementBits: INTEGER;
+           (** A packed array's elements per word.
+               Also: ELSPERWD (UCSD20) *)
+           ElementsPerWord: INTEGER;
+           (** Whether a packed array of characters is a STRING.
+               Also: AISSTRNG (UCSD20) *)
+           ArrayIsString: BOOLEAN;
+           (** A string's longest length.
+               Also: MAXLENG (UCSD20) *)
+           Capacity: INTEGER;
+           (** Word 9: an enumeration's last constant's value, where
+               LastConstant is taken for a structure. *)
+           LastValue: INTEGER);
+        (** Size and Form, in the variant whose words 2 and 3 are structures. *)
+        TypeStructuresView: (HeadOfViews: ARRAY[1..2] OF INTEGER;
+           (** The type it is made of: a subrange's, a set's elements', an
+               array's index, a file's components (II.0's RANGETYPE, ELSET,
+               INXTYPE, FILTYPE).
+               Also: ELTYPE (UCSD20) *)
+           BaseType: Structure;
+           (** An array's element type; the same word as II.0's RECVAR, FSTVAR
+               and NXTVAR.
+               Also: AELTYPE (UCSD20) *)
+           ElementType: Structure;
+           (** A subrange's lowest value; a variant's value (II.0's VARVAL).
+               Also: MIN (UCSD20) *)
+           Minimum: WordValue;
+           (** ElementBits, in the variant of structures. *)
+           WidthWord: INTEGER;
+           (** DataType of a field reached through FirstField taken as a
+               structure. *)
+           FieldDataType: Structure;
+           (** Next of a field reached so. *)
+           FieldNext: Structure;
+           (** Capacity as a value. *)
+           LengthValue: WordValue);
+        (** Size and Form, in the variant whose words 2 and 3 are a file's
+            component type and an enumeration's last constant. *)
+        TypeFileView: (HeadOfFile: ARRAY[1..2] OF INTEGER;
+           (** A file's component type, as a pointer to its structure. *)
+           ComponentType: ShortStructure;
+           (** An enumeration's last constant, the head of their list.
+               Also: FCONST (UCSD20) *)
+           LastConstant: SymbolLink);
+        (** Size and Form, in the variant whose words 2 and 3 are an index
+            subrange and a Maximum. *)
+        TypeRangeView: (HeadOfRange: ARRAY[1..2] OF INTEGER;
+           (** An array's index type, as a pointer to a subrange. *)
+           IndexRange: RangeStructure;
+           (** A subrange's highest value.
+               Also: MAX (UCSD20) *)
+           Maximum: WordValue);
+        (** Size and Form, in the variant whose words 2 and 3 are a record's
+            FirstField and VariantPart. *)
+        TypeRecordView: (HeadOfRecord: ARRAY[1..2] OF INTEGER;
+           (** A record's first field; a tag field's identifier.
+               Also: FSTFLD (UCSD20) *)
+           FirstField: SymbolLink;
+           (** A record's variant part, as a pointer to its tag field's
+               structure.
+               Also: RECVAR (UCSD20) *)
+           VariantPart: TagStructure);
+        (** Size and Form, in the variant whose word 2 is a variant's
+            NestedVariant. *)
+        TypeVariantView: (HeadOfVariant: ARRAY[1..2] OF INTEGER;
+           (** A variant's own variant part.
+               Also: SUBVAR (UCSD20) *)
+           NestedVariant: TagStructure);
+        (** A long integer's words. *)
+        LongTypeSize: (PadLong: ARRAY[1..2] OF INTEGER);
+        (** A pointer's, a set's, a file's, and the standard scalars'. *)
+        PointerTypeSize: (PadPointer: ARRAY[1..3] OF INTEGER);
+        (** An enumeration's, a record's, a tag field's. *)
+        EnumerationTypeSize: (PadEnumeration: ARRAY[1..4] OF INTEGER);
+        (** A subrange's, an array's, a variant's. *)
+        RangeTypeSize: (PadRange: ARRAY[1..5] OF INTEGER);
+        (** A packed array's. *)
+        PackedTypeSize: (PadPacked: ARRAY[1..8] OF INTEGER);
+        (** A string's. *)
+        StringTypeSize: (PadString: ARRAY[1..9] OF INTEGER);
+        (** The first 9 words as one array: Size to Capacity. *)
+        TypeCopyView: (AllWords: ARRAY[1..9] OF INTEGER)
+    END;
+
+  (** The identifier: DataType, Next, Class. *)
+  LinkedEntry = RECORD
+      (** The identifier's first six words: Name, Right, Left. *)
+      Head: ARRAY[1..6] OF INTEGER;
+      (** DataType. *)
+      DataType: Structure;
+      (** Next. *)
+      Next: LinkedSymbol;
+      (** Class. *)
+      Class: INTEGER
+    END;
+
+  (** A pointer to a ValueEntry.
+
+      UCSD Pascal II.0 calls it CSP (UCSD20). *)
+  OptionValue = ^ValueEntry;
+
+  (** The system's first seven globals. *)
+  SystemHead = ARRAY[1..7] OF INTEGER;
+
+  (** An untyped file.
+      Also: PHYLE (UCSD20) *)
+  UntypedFile = FILE;
+
+  (** A pointer to a file (II.0: ^PHYLE). *)
+  FileReference = ^UntypedFile;
+
+  (** What an expression is, which the code generator loads or stores: Kind 0
+      KnownValueOperand (Literal), 1 MemoryOperand (Access 0 DirectAccess, 1
+      IndirectAccess, 2 PackedAccess, 3 MultipleAccess, 4 ByteAccess), 2
+      StackOperand (on the stack).
+      Also: ATTR (UCSD20) *)
+  OperandEntry = RECORD
+      (** Its type.
+          Also: TYPTR (UCSD20) *)
+      DataType: Structure;
+      (** 0 KnownValueOperand, 1 MemoryOperand, 2 StackOperand. *)
+      Kind: INTEGER;
+      CASE INTEGER OF
+        (** A constant's value; a variable's Access as Literal.Ordinal.
+            Also: CVAL (UCSD20) *)
+        0: (Literal: WordValue;
+           (** A direct variable's level; an indirect one's IDPLMT.
+               Also: VLEVEL (UCSD20) *)
+           StaticLevel: INTEGER;
+           (** A direct variable's word.
+               Also: DPLMT (UCSD20) *)
+           Offset: INTEGER);
+        (** How a variable is reached: 0 DirectAccess, 1 IndirectAccess, 2
+            PackedAccess, 3 MultipleAccess, 4 ByteAccess. *)
+        1: (Access: INTEGER)
+    END;
+
+  (** A pointer to a pair of types CompatibleTypes is comparing.
+      Also: TESTP (UCSD20) *)
+  TypePair = ^PairEntry;
+
+  (** Two pointer types being compared, which stops CompatibleTypes going
+      round recursive types.
+      Also: TESTPOINTER (UCSD20) *)
+  PairEntry = RECORD
+      (** The second type's element.
+          Also: ELT2 (UCSD20) *)
+      SecondElement: INTEGER;
+      (** The first's.
+          Also: ELT1 (UCSD20) *)
+      FirstElement: INTEGER;
+      (** The pair before. *)
+      Outer: TypePair
+    END;
+
+  (** A heap mark (II.0: ^INTEGER). *)
+  BlockMark = ^INTEGER;
+
+  (** A pointer to a lexical level's saved state (II.0: ^LEXSTKREC). *)
+  LexicalLevel = ^LexicalEntry;
+
+  (** What a procedure's declaration saves of the enclosing one's state, and
+      restores at its end.
+
+      UCSD Pascal II.0 calls it LEXSTKREC (UCSD20). *)
+  LexicalEntry = RECORD
+      (** The display's top.
+          Also: DOLDTOP (UCSD20) *)
+      SavedTop: INTEGER;
+      (** The level.
+          Also: DOLDLEV (UCSD20) *)
+      SavedLevel: INTEGER;
+      (** The next procedure's number.
+          Also: SOLDPROC (UCSD20) *)
+      SavedNextRoutine: INTEGER;
+      (** The current procedure's number.
+          Also: POLDPROC (UCSD20) *)
+      SavedRoutine: INTEGER;
+      (** The segment.
+          Also: DOLDSEG (UCSD20) *)
+      SavedSegment: INTEGER;
+      (** The location counter.
+          Also: DLLC (UCSD20) *)
+      SavedDataCounter: INTEGER;
+      (** The symbol that ends the block: ; or .
+          Also: BFSY (UCSD20) *)
+      EndingToken: INTEGER;
+      (** The procedure.
+          Also: DFPROCP (UCSD20) *)
+      RoutineEntry: SymbolLink;
+      (** The heap mark to release to.
+          Also: DMARKP (UCSD20) *)
+      ReleaseMark: BlockMark;
+      (** Whether it is a segment procedure. *)
+      IsSegment: BOOLEAN;
+      (** The level outside.
+          Also: PREVLEXSTACKP (UCSD20) *)
+      OuterLevel: LexicalLevel
+    END;
+
+  (** A pointer to a ValueEntry.
+
+      UCSD Pascal II.0 calls it CSP (UCSD20). *)
+  BigValue = ^ValueEntry;
+
+  (** A set of symbols.
+      Also: SETOFSYS (UCSD20) *)
+  TokenSet = SET OF 0..63;
+
+  (** A set of identifier classes.
+      Also: SETOFIDS (UCSD20) *)
+  ClassSet = SET OF 0..15;
+
+  (** A pointer to a label, also used as a word.
+      Also: LABELP (UCSD20) *)
+  LabelLink = RECORD CASE BOOLEAN OF TRUE: (Word: INTEGER); FALSE: (Entry:
+      ^LabelEntry) END;
+
+  (** A scope (II.0: DISPLAY's record). *)
+  ScopeEntry = RECORD
+      (** The root of its names' tree.
+          Also: FNAME (UCSD20) *)
+      Tree: SymbolLink;
+      (** What it is: 0 BlockScope, a block; 1 WithDirectScope, 2
+          WithIndirectScope, a WITH's record; 3 RecordScope, a record's
+          fields.
+          Also: OCCUR (UCSD20) *)
+      Kind: INTEGER;
+      (** A block's file variables, to close at its end.
+          Also: FFILE (UCSD20) *)
+      Files: SymbolLink;
+      (** A block's labels.
+          Also: FLABEL (UCSD20) *)
+      Labels: LabelLink
+    END;
+
+  (** The display: a scope for each level of nesting, and for each WITH. *)
+  DisplayStack = ARRAY[0..12] OF ScopeEntry;
+
+  (** A place in the code a jump goes to.
+      Also: CODELABEL (UCSD20) *)
+  JumpEntry = RECORD
+      (** Whether it is placed: then Offset holds its offset, else the
+          last jump to fix (II.0's REFLIST).
+          Also: DEFINED (UCSD20) *)
+      IsDefined: BOOLEAN;
+      (** Its offset; while undefined, the last jump to it, which links the
+          others (II.0's REFLIST, in the same word).
+          Also: OCCURIC (UCSD20) *)
+      Offset: INTEGER;
+      (** Its entry in the jump table, for a jump too far back.
+          Also: JTABINX (UCSD20) *)
+      TableIndex: INTEGER
+    END;
+
+  (** A pointer to a place in the code.
+      Also: LBP (UCSD20) *)
+  Jump = ^JumpEntry;
+
+  (** A declared label.
+
+      UCSD Pascal II.0 calls it USERLABEL (UCSD20). *)
+  LabelEntry = RECORD
+      (** Its number.
+          Also: LABVAL (UCSD20) *)
+      Number: WordValue;
+      (** The next.
+          Also: NEXTLAB (UCSD20) *)
+      Next: LabelLink;
+      (** Its place in the code.
+          Also: CODELBP (UCSD20) *)
+      Target: Jump
+    END;
+
+  (** A set of segment numbers. *)
+  SegmentNumbers = SET OF 0..63;
+
+  (** Each procedure's entry offset in the segment. *)
+  RoutineOffsets = ARRAY[0..254] OF INTEGER;
+
+  (** A segment's entry.
+      Also: SEGREC (UCSD20) *)
+  SegmentEntry = RECORD
+      (** Its code's bytes.
+          Also: CODELENG (UCSD20) *)
+      CodeLength: INTEGER;
+      (** Its first block.
+          Also: DISKADDR (UCSD20) *)
+      FirstBlock: INTEGER;
+      (** Its name.
+          Also: SEGNAME (UCSD20) *)
+      NameOfSegment: Spelling;
+      (** Its number, which 1.3 keeps apart from its slot. *)
+      Number: INTEGER;
+      (** Its interface text's first block.
+          Also: TEXTADDR (UCSD20) *)
+      TextBlock: INTEGER;
+      (** What the segment is: 0 LinkedSegment, 1 HostSegment, 2
+          SegmentRoutineSegment, 3 UnitSegment, 4 AssembledSegment, 5
+          UnlinkedIntrinsicSegment, 6 LinkedIntrinsicSegment, 7
+          UnitDataSegment. *)
+      Kind: INTEGER
+    END;
+
+  (** The code file's segment dictionary, by slot. *)
+  SegmentTable = ARRAY[0..15] OF SegmentEntry;
+
+  (** The slot in the segment dictionary of each segment number. *)
+  SlotTable = PACKED ARRAY[0..63] OF 0..15;
+
+  (** A pointer to a string (II.0: ^STRING). *)
+  StringReference = ^STRING;
+
+  (** The jump table. *)
+  JumpOffsets = ARRAY[0..36] OF INTEGER;
+
+  (** A reference. *)
+  LinkEntry = RECORD
+      (** Where in the code. *)
+      Offset: INTEGER;
+      (** To what.
+
+          UCSD Pascal II.0 calls it KEY (UCSD20). *)
+      Target: INTEGER
+    END;
+
+  (** A block of references.
+      Also: REFARRAY (UCSD20) *)
+  LinkerBlock = ARRAY[1..128] OF LinkEntry;
+
+  (** A pointer to a block of references for the linker (II.0: ^REFARRAY). *)
+  LinkerBuffer = ^LinkerBlock;
+
+  (** A block of the code file. *)
+  DiskBlock = PACKED ARRAY[0..511] OF CHAR;
+
+  (** The code buffer.
+      Also: CODEARRAY (UCSD20) *)
+  CodeBytes = PACKED ARRAY[0..1999] OF CHAR;
+
+  (** A pointer to the code buffer (II.0: ^CODEARRAY). *)
+  CodeReference = ^CodeBytes;
+
+  (** The source buffer, a page of the text file. *)
+  SourcePage = PACKED ARRAY[0..1023] OF CHAR;
+
+  (** A pointer to the source buffer. *)
+  SourceReference = ^SourcePage;
+
+  (** The line an error is in, as Error shows it. *)
+  ErrorLine = PACKED ARRAY[0..179] OF CHAR;
+
+  (** A line of the listing (II.0: PRINTLINE's A). *)
+  ListingLine = PACKED ARRAY[0..99] OF CHAR;
+
+  (** A pointer to a ValueEntry.
+
+      UCSD Pascal II.0 calls it CSP (UCSD20). *)
+  ScannedValue = ^ValueEntry;
+
+  (** The word, and its bytes. *)
+  WordBytes = RECORD CASE BOOLEAN OF TRUE: (Word: INTEGER); FALSE: (Bytes:
+      PACKED ARRAY[0..1] OF CHAR) END;
+
+  (** A segment's information word: number, machine type and version. *)
+  SegmentAttributes = PACKED RECORD CASE INTEGER OF 0: (Word: WordBytes); 1:
+      (Number: 0..255; MachineType: 0..15;
+      Unused: 0..1; Version: 0..7) END;
+
+  (** A pointer to a ValueEntry.
+
+      UCSD Pascal II.0 calls it CSP (UCSD20). *)
+  CopiedValue = ^ValueEntry;
+
+  (** COMPINIT's list of standard names. *)
+  NamesText = PACKED ARRAY[0..511] OF CHAR;
+
+  (** Memory as bytes, for a MemoryCell. *)
+  MemoryBytes = PACKED ARRAY[0..0] OF CHAR;
+
+  (** Memory as bits, for a MemoryCell. *)
+  MemoryBits = PACKED ARRAY[0..0] OF BOOLEAN;
+
+  (** A word of memory, by its address. *)
+  MemoryCell = RECORD CASE INTEGER OF 0: (Address: INTEGER); 1: (Bytes:
+      ^MemoryBytes); 2: (Bits: ^MemoryBits) END;
+
+  (** A library's segment dictionary: blocks and lengths. *)
+  BlockExtents = ARRAY[1..32] OF INTEGER;
+
+  (** A library's segments' names, by slot. *)
+  NameTable = ARRAY[0..15] OF Spelling;
+
+  (** A library's segments' kinds, by slot. *)
+  KindTable = ARRAY[0..15] OF INTEGER;
+
+  (** A library's segments' interface texts' blocks, by slot. *)
+  TextTable = ARRAY[0..15] OF INTEGER;
+
+  (** An information word. *)
+  PackedAttributes = PACKED RECORD Number: 0..255; Rest: 0..255 END;

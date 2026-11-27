@@ -1,0 +1,599 @@
+(** DECLARAT2.TEXT: part 2 of 4 of DECLARAT, segment 8: declarations.
+
+    Included by COMPILER.TEXT after DECLARAT1.TEXT and before DECLARAT3.TEXT.
+
+    Procedures here, nested ones indented:
+              CompileVariants
+            MakePointerType
+          DeclareUses
+            UseUnit
+              FindInterface
+                IsInLibrary *)
+
+        (** Compiles a variant part: CASE, the tag field and the variants
+            (II.0: FIELDLIST's). *)
+        PROCEDURE CompileVariants;
+          VAR
+            (** The tag field has a name. *)
+            TagNamed: BOOLEAN;
+        BEGIN
+          NEW(FieldType, EnumerationTypeSize);
+          WITH FieldType^ DO
+          BEGIN
+            BaseType := NIL;
+            ElementType := NIL;
+            Form := TagFieldForm
+          END;
+          Variants := FieldType;
+          NextToken;
+          IF Token = NameToken THEN
+          BEGIN
+            IF Packing THEN
+              NEW(Declared.Entry, PackedFieldSize)
+            ELSE
+              NEW(Declared.Entry, SimpleVariableSize);
+            WITH Declared.Entry^ DO
+            BEGIN
+              DataType := NIL;
+              Class := FieldClass;
+              Next.Entry := NIL;
+              Offset := 0
+            END;
+            TagNamed := FALSE;
+            ReportUndeclared := FALSE;
+            FindIdentifier([TypeClass], FoundType);
+            ReportUndeclared := TRUE;
+            IF FoundType.Entry = NIL THEN
+            BEGIN
+              TagNamed := TRUE;
+              Declared.Entry^.Name := TokenName;
+              EnterIdentifier(Declared.Entry);
+              NextToken;
+              IF Token = ColonToken THEN
+                NextToken
+              ELSE
+                Error(5)
+            END;
+            IF Token = NameToken THEN
+            BEGIN
+              FindIdentifier([TypeClass], FoundType);
+              VariantChain := FoundType.Entry^.DataType;
+              IF VariantChain <> NIL THEN
+                IF VariantChain^.Form <= SubrangeForm THEN
+                BEGIN
+                  IF CompatibleTypes(RealStructure, VariantChain) THEN
+                    Error(109);
+                  Declared.Entry^.DataType := VariantChain;
+                  FieldType^.FirstField.Entry := Declared.Entry;
+                  IF TagNamed THEN
+                    PlaceField(Declared.Entry)
+                END
+                ELSE
+                  Error(110);
+              NextToken
+            END
+            ELSE
+            BEGIN
+              Error(2);
+              SkipTokens(Followers + [LeftParenthesisToken, OfToken])
+            END
+          END
+          ELSE
+          BEGIN
+            Error(2);
+            SkipTokens(Followers + [LeftParenthesisToken, OfToken])
+          END;
+          FieldType^.Size := NextWord + ORD(NextBit > 0);
+          IF Token = OfToken THEN
+            NextToken
+          ELSE
+            Error(8);
+          VariantChain := NIL;
+          FirstWord := NextWord;
+          LastWord := NextWord;
+          FirstBit := NextBit;
+          LastBit := NextBit;
+          REPEAT
+            Nested := NIL;
+            REPEAT
+              ReadConstant(Followers + [CommaToken, ColonToken,
+                  LeftParenthesisToken], Variant, Value);
+              IF FieldType^.BaseType <> NIL THEN
+                IF NOT CompatibleTypes(FieldType^.BaseType^.FieldDataType,
+                    Variant) THEN
+                  Error(111);
+              NEW(Variant, RangeTypeSize);
+              WITH Variant^ DO
+              BEGIN
+                ElementType := VariantChain;
+                BaseType := Nested;
+                Minimum := Value;
+                Form := VariantForm
+              END;
+              VariantChain := Variant;
+              Nested := Variant;
+              LoopDone := Token <> CommaToken;
+              IF NOT LoopDone THEN
+                NextToken
+            UNTIL LoopDone;
+            IF Token = ColonToken THEN
+              NextToken
+            ELSE
+              Error(5);
+            IF Token = LeftParenthesisToken THEN
+              NextToken
+            ELSE
+              Error(9);
+            IF Token = RightParenthesisToken THEN
+              Nested := NIL
+            ELSE
+              CompileFields(Followers + [SemicolonToken,
+                  RightParenthesisToken], Nested);
+            IF NextWord > LastWord THEN
+            BEGIN
+              LastWord := NextWord;
+              LastBit := NextBit
+            END
+            ELSE
+              IF (NextWord = LastWord) AND (NextBit > LastBit) THEN
+                LastBit := NextBit;
+            WHILE Variant <> NIL DO
+            BEGIN
+              NextVariant := Variant^.BaseType;
+              Variant^.BaseType := Nested;
+              Variant^.Size := NextWord + ORD(NextBit > 0);
+              Variant := NextVariant
+            END;
+            IF Token = RightParenthesisToken THEN
+            BEGIN
+              NextToken;
+              CheckFollowers(FieldFollowers)
+            END
+            ELSE
+              Error(4);
+            LoopDone := Token <> SemicolonToken;
+            IF NOT LoopDone THEN
+            BEGIN
+              NextToken;
+              NextWord := FirstWord;
+              NextBit := FirstBit
+            END
+          UNTIL LoopDone OR (Token = EndToken);
+          NextWord := LastWord;
+          NextBit := LastBit;
+          FieldType^.ElementType := VariantChain
+        END;
+
+      BEGIN
+        PriorField.Entry := NIL;
+        FieldType := NIL;
+        LastField.Entry := NIL;
+        FieldFollowers := Followers + [SemicolonToken];
+        IF NOT (Token IN [NameToken, CaseToken]) THEN
+        BEGIN
+          Error(19);
+          SkipTokens(Followers + [NameToken, CaseToken])
+        END;
+        WHILE Token = NameToken DO
+        BEGIN
+          Field.Entry := PriorField.Entry;
+          REPEAT
+            IF Token = NameToken THEN
+            BEGIN
+              IF Packing THEN
+                NEW(Declared.Entry, PackedFieldSize)
+              ELSE
+                NEW(Declared.Entry, SimpleVariableSize);
+              WITH Declared.Entry^ DO
+              BEGIN
+                Name := TokenName;
+                DataType := NIL;
+                Next.Entry := Field.Entry;
+                Class := FieldClass;
+                Offset := 0
+              END;
+              Field.Entry := Declared.Entry;
+              EnterIdentifier(Declared.Entry);
+              NextToken
+            END
+            ELSE
+              Error(2);
+            IF NOT (Token IN [CommaToken, ColonToken]) THEN
+            BEGIN
+              Error(6);
+              SkipTokens(Followers + [CommaToken..SemicolonToken, CaseToken])
+            END;
+            LoopDone := Token <> CommaToken;
+            IF NOT LoopDone THEN
+              NextToken
+          UNTIL LoopDone;
+          IF Token = ColonToken THEN
+            NextToken
+          ELSE
+            Error(5);
+          CompileType(Followers + [SemicolonToken, CaseToken], FieldType,
+              FieldSize);
+          IF FieldType <> NIL THEN
+            IF FieldType^.Form = FileForm THEN
+              Error(108);
+          WHILE Field.Entry <> PriorField.Entry DO
+            WITH Field.Entry^ DO
+            BEGIN
+              DataType := FieldType;
+              PlaceField(Field.Entry);
+              LastField.Entry := Field.Entry;
+              Field.Entry := Next.Entry
+            END;
+          PriorField.Entry := Declared.Entry;
+          IF Token = SemicolonToken THEN
+          BEGIN
+            NextToken;
+            IF NOT (Token IN [NameToken, EndToken, CaseToken]) THEN
+            BEGIN
+              Error(19);
+              SkipTokens(Followers + [NameToken, CaseToken])
+            END
+          END
+        END;
+        Field.Entry := NIL;
+        WHILE PriorField.Entry <> NIL DO
+        BEGIN
+          WITH PriorField.Entry^ DO
+          BEGIN
+            Declared.Entry := Next.Entry;
+            Next.Entry := Field.Entry
+          END;
+          Field.Entry := PriorField.Entry;
+          PriorField.Entry := Declared.Entry
+        END;
+        IF Token = CaseToken THEN
+          CompileVariants
+        ELSE
+          Variants := NIL
+      END;
+
+      (** Compiles a pointer type, entering a target not yet declared in
+          ForwardPointers.
+
+          UCSD Pascal II.0 calls it POINTERTYPE (UCSD20). *)
+      PROCEDURE MakePointerType;
+      BEGIN
+        NEW(Built, PointerTypeSize);
+        TypeMade := Built;
+        WITH Built^ DO
+        BEGIN
+          BaseType := NIL;
+          Size := 1;
+          Form := PointerForm
+        END;
+        NextToken;
+        IF Token = NameToken THEN
+        BEGIN
+          ReportUndeclared := FALSE;
+          FindIdentifier([TypeClass], TargetName);
+          ReportUndeclared := TRUE;
+          IF TargetName.Entry = NIL THEN
+          BEGIN
+            NEW(TargetName.Entry, TypeIdentifierSize);
+            WITH TargetName.Entry^ DO
+            BEGIN
+              Name := TokenName;
+              DataType := Built;
+              Next.Entry := ForwardPointers.Entry;
+              Class := TypeClass
+            END;
+            ForwardPointers.Entry := TargetName.Entry
+          END
+          ELSE
+            IF TargetName.Entry^.DataType <> NIL THEN
+              IF (TargetName.Entry^.DataType^.Form <> FileForm) OR
+                  CompilingSystem THEN
+                Built^.ScalarKind := ORD(TargetName.Entry^.DataType)
+              ELSE
+                Error(108);
+          NextToken
+        END
+        ELSE
+          Error(2)
+      END;
+
+    BEGIN
+      Packing := FALSE;
+      IF NOT (Token IN TypeStarters) THEN
+      BEGIN
+        Error(10);
+        SkipTokens(Followers + TypeStarters)
+      END;
+      IF Token IN TypeStarters THEN
+      BEGIN
+        IF Token IN SimpleStarters THEN
+          CompileSimpleType(Followers, TypeMade, TypeSize)
+        ELSE
+          IF Token = ArrowToken THEN
+            MakePointerType
+          ELSE
+          BEGIN
+            IF Token = PackedToken THEN
+            BEGIN
+              NextToken;
+              Packing := TRUE;
+              IF NOT (Token IN CompositeStarters) THEN
+              BEGIN
+                Error(10);
+                SkipTokens(Followers + CompositeStarters)
+              END
+            END;
+            IF Token = ArrayToken THEN
+            BEGIN
+              NextToken;
+              IF Token = LeftBracketToken THEN
+                NextToken
+              ELSE
+                Error(11);
+              Part := NIL;
+              REPEAT
+                IF Packing THEN
+                  NEW(Built, PackedTypeSize)
+                ELSE
+                  NEW(Built, RangeTypeSize);
+                WITH Built^ DO
+                BEGIN
+                  ElementType := Part;
+                  BaseType := NIL;
+                  IF Packing THEN
+                    ArrayIsString := FALSE;
+                  ArrayIsPacked := FALSE;
+                  Form := ArrayForm
+                END;
+                Part := Built;
+                CompileSimpleType(Followers + [CommaToken, OfToken,
+                    RightBracketToken], IndexType, PartSize);
+                Part^.Size := PartSize;
+                IF IndexType <> NIL THEN
+                  IF IndexType^.Form <= SubrangeForm THEN
+                  BEGIN
+                    IF IndexType = RealStructure THEN
+                    BEGIN
+                      Error(109);
+                      IndexType := NIL
+                    END
+                    ELSE
+                      IF IndexType = IntegerStructure THEN
+                      BEGIN
+                        Error(149);
+                        IndexType := NIL
+                      END;
+                    Built^.BaseType := IndexType
+                  END
+                  ELSE
+                  BEGIN
+                    Error(113);
+                    IndexType := NIL
+                  END;
+                LoopDone := Token <> CommaToken;
+                IF NOT LoopDone THEN
+                  NextToken
+              UNTIL LoopDone;
+              IF Token = RightBracketToken THEN
+                NextToken
+              ELSE
+                Error(12);
+              IF Token = OfToken THEN
+                NextToken
+              ELSE
+                Error(8);
+              CompileType(Followers, Built, PartSize);
+              IF Built <> NIL THEN
+                IF Built^.Form = FileForm THEN
+                  Error(108);
+              IF IsPackable(Built) THEN
+                IF PackedBits + PackedBits <= 16 THEN
+                  WITH Part^ DO
+                  BEGIN
+                    ArrayIsPacked := TRUE;
+                    ElementsPerWord := 16 DIV PackedBits;
+                    ElementBits := PackedBits
+                  END;
+              REPEAT
+                WITH Part^ DO
+                BEGIN
+                  IndexType := ElementType;
+                  ElementType := Built;
+                  IF BaseType <> NIL THEN
+                  BEGIN
+                    GetBounds(BaseType, Lowest, Highest);
+                    IF ArrayIsPacked THEN
+                      PartSize := (Highest - Lowest + ElementsPerWord) DIV
+                          ElementsPerWord
+                    ELSE
+                      PartSize := PartSize * (Highest - Lowest + 1);
+                    IF PartSize <= 0 THEN
+                    BEGIN
+                      Error(399);
+                      PartSize := 1
+                    END;
+                    Size := PartSize
+                  END
+                END;
+                Built := Part;
+                Part := IndexType
+              UNTIL Part = NIL
+            END
+            ELSE
+              IF Token = RecordToken THEN
+              BEGIN
+                NextToken;
+                OldDisplayTop := DisplayTop;
+                IF DisplayTop < 12 THEN
+                BEGIN
+                  DisplayTop := DisplayTop + 1;
+                  WITH Display[DisplayTop] DO
+                  BEGIN
+                    Tree.Entry := NIL;
+                    Kind := RecordScope
+                  END
+                END
+                ELSE
+                  Error(250);
+                NextWord := 0;
+                NextBit := 0;
+                CompileFields(Followers - [SemicolonToken] + [EndToken], Part);
+                NextWord := NextWord + ORD(NextBit > 0);
+                NEW(Built, EnumerationTypeSize);
+                WITH Built^ DO
+                BEGIN
+                  FirstField.Entry := Display[DisplayTop].Tree.Entry;
+                  ElementType := Part;
+                  Size := NextWord;
+                  Form := RecordForm
+                END;
+                DisplayTop := OldDisplayTop;
+                IF Token = EndToken THEN
+                  NextToken
+                ELSE
+                  Error(13)
+              END
+              ELSE
+                IF Token = SetToken THEN
+                BEGIN
+                  NextToken;
+                  IF Token = OfToken THEN
+                    NextToken
+                  ELSE
+                    Error(8);
+                  CompileSimpleType(Followers, Part, PartSize);
+                  IF Part <> NIL THEN
+                    IF (Part^.Form > SubrangeForm) OR (Part = IntegerStructure)
+                        OR (Part = RealStructure) THEN
+                    BEGIN
+                      Error(115);
+                      Part := NIL
+                    END
+                    ELSE
+                      IF Part = RealStructure THEN
+                      BEGIN
+                        Error(114);
+                        Part := NIL
+                      END;
+                  NEW(Built, PointerTypeSize);
+                  WITH Built^ DO
+                  BEGIN
+                    BaseType := Part;
+                    Form := SetForm;
+                    IF Part <> NIL THEN
+                    BEGIN
+                      GetBounds(Part, Lowest, Highest);
+                      Size := (Highest + 16) DIV 16;
+                      IF Size > 255 THEN
+                      BEGIN
+                        Error(169);
+                        Size := 1
+                      END
+                    END
+                    ELSE
+                      Size := 0
+                  END
+                END
+                ELSE
+                  IF Token = FileToken THEN
+                  BEGIN
+                    IF InUnit THEN
+                      IF NOT (InInterface OR AllowUnitFiles) THEN
+                        Error(191);
+                    NextToken;
+                    NEW(Built, PointerTypeSize);
+                    WITH Built^ DO
+                    BEGIN
+                      Form := FileForm;
+                      BaseType := NIL
+                    END;
+                    IF Token = OfToken THEN
+                    BEGIN
+                      NextToken;
+                      CompileType(Followers, Part, PartSize)
+                    END
+                    ELSE
+                      Part := NIL;
+                    Built^.BaseType := Part;
+                    IF Part <> NIL THEN
+                      Built^.Size := 300 + Part^.Size
+                    ELSE
+                      Built^.Size := 40
+                  END;
+            TypeMade := Built
+          END;
+        CheckFollowers(Followers)
+      END
+      ELSE
+        TypeMade := NIL;
+      IF TypeMade = NIL THEN
+        TypeSize := 1
+      ELSE
+        TypeSize := TypeMade^.Size
+    END;
+
+    (** Compiles USES: reads each unit's interface, from the code file or a
+        library.
+        Also: USESDECLARATION (UCSD20) *)
+    PROCEDURE DeclareUses;
+      LABEL 1;
+      VAR
+        (** UCSD Pascal II.0 calls it LCP (UCSD20). *)
+        Listed: SymbolLink;
+        (** The library's segment dictionary: blocks and lengths. *)
+        LibraryExtents: BlockExtents;
+        (** Its segments' names. *)
+        SlotNames: NameTable;
+        (** Their kinds. *)
+        SlotKinds: KindTable;
+        (** Their interface texts' blocks. *)
+        SlotTexts: TextTable;
+        (** Their information words. *)
+        SlotAttributes: AttributeTable;
+
+      (** Uses a unit: finds its interface, enters its identifier and
+          compiles its interface as declarations. *)
+      PROCEDURE UseUnit(UnitName: Spelling);
+        VAR
+          (** DataSegment before. *)
+          OldDataSegment: INTEGER;
+          (** Its segment's kind. *)
+          UnitKind: INTEGER;
+          (** Its interface text's block. *)
+          StartBlock: INTEGER;
+          (** An intrinsic unit without a data segment. *)
+          WithoutData: BOOLEAN;
+          (** Its interface was found. *)
+          Found: BOOLEAN;
+          (** Its identifier. *)
+          NewUnit: SymbolLink;
+          (** Two words UseUnit never uses. *)
+          SpareWords: TwoSpareWords;
+          (** NextRoutine before. *)
+          OldNextRoutine: INTEGER;
+          (** Not used. *)
+          Unused: INTEGER;
+          (** CurrentSegment before. *)
+          OldSegment: INTEGER;
+          (** DataCounter before. *)
+          OldDataCounter: INTEGER;
+          (** Five words UseUnit never uses. *)
+          MoreSpareWords: FiveSpareWords;
+
+        (** Finds a unit's interface text: in CompiledUnits, compiled in this
+            source, or in the library.
+            Also: GETTEXT (UCSD20) *)
+        PROCEDURE FindInterface(VAR Found: BOOLEAN);
+          VAR
+            (** UCSD Pascal II.0 calls it LCP (UCSD20). *)
+            Listed: SymbolLink;
+            (** Its slot in the library. *)
+            UnitSlot: INTEGER;
+
+          (** Whether the unit is in the library, and whether it is
+              intrinsic. *)
+          FUNCTION IsInLibrary: BOOLEAN;
+            VAR
+              (** Its data segment's slot. *)
+              DataSlot: INTEGER;
+              Present: BOOLEAN;

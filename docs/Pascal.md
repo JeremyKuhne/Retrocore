@@ -143,7 +143,8 @@ Conditions, hit counts and log messages work as on any breakpoint, with the CPU'
   `(*$L APPLE1:NAME.TEXT*)`; a Pascal file's name is at most 15 letters, so `HIL.LST.TEXT`, not `HILBERT.LST.TEXT`.
   Each `--unit` code file goes beside the source, for its `USES (*$U NAME.CODE*) NAME` to find. With
   `--includes folder`, the source is a main file that includes the folder's files by name, `(*$I NAME.TEXT*)`, each
-  put on SOURCE:, the boot disk or CODE:, whichever has room, and its directive given that volume (below);
+  put on SOURCE:, the boot disk or CODE:, whichever has room, and its directive given that volume (below); give
+  `--includes` again for each more folder, the first that has a name giving its file;
 - `--pascal assembly code output.text` writes each segment's assembled procedures as source for Apple's Assembler, as
   `output.SEGMENT.text`, a library's units naming their procedures from their interface text;
 - `--pascal assemble-native source.text APPLE1.dsk APPLE2.dsk output.code` assembles a 6502 source with Apple's own
@@ -488,6 +489,12 @@ each compiles with its own Compiler back to the same segments, every file opens 
 say what things are, and `(** *)` comments document declarations, with the names Apple's and UCSD's documents gave
 them kept in `Also:`. In VS Code, a Pascal file gets the style's lint as you type, hover for its doc comments, and go
 to definition and the outline, by current or historical name, across the files its program includes.
+
+The SDK has Apple Pascal 1.3's Compiler, `SYSTEM.COMPILER`, as such a source:
+[`Sdk/Compiler/apple2-1.3`](../src/Retrocore.Pascal/Sdk/Compiler/apple2-1.3), with the system's globals it uses in
+[`Sdk/System/apple2-1.3`](../src/Retrocore.Pascal/Sdk/System/apple2-1.3), shipped as `Pascal/Compiler/apple2-1.3/`
+and `Pascal/System/apple2-1.3/`. It compiles, assembles and links back to the same segments as APPLE2's file; its
+folder's README has the commands, and [PascalCompiler13.md](conversions/PascalCompiler13.md) its conversion.
 
 ## Testing
 

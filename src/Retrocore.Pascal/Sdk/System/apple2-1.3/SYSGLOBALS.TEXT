@@ -1,0 +1,210 @@
+(** SYSGLOBALS.TEXT: the system's globals and the headings of its procedures, as
+    the Compiler uses them, compiled with the U- option as part of the system.
+    SYSTEM.PASCAL's source completes it; the types it uses (SystemHead,
+    FileReference) are for now the including program's.
+
+    Included by COMPILER.TEXT after TYPES3.TEXT and before PASCALCO1A.TEXT.
+
+    Procedures here, nested ones indented:
+      ExecutionError
+      InitializeFile
+      ResetFile
+      OpenFile
+      CloseFile
+      GetComponent
+      PutComponent
+      SeekRecord
+      IsEndOfFile
+      IsEndOfLine
+      ReadInteger
+      WriteInteger
+      ReadReal
+      WriteReal
+      ReadCharacter
+      WriteCharacter
+      ReadString
+      WriteString
+      WriteBytes
+      ReadNewLine
+      WriteNewLine
+      AppendString
+      InsertString
+      CopyString
+      DeleteString
+      FindSubstring
+      TransferBlocks
+      MoveCursor
+      FindVolume
+      WriteDirectory
+      FindDirectoryEntry
+      ParseTitle
+      DeleteEntry
+      InsertEntry
+      HomeCursor
+      ClearScreen
+      ClearLine
+      Prompt
+      WaitForSpace
+      GetCharacter
+      ReadDirectory
+      PrepareTitle *)
+
+VAR
+  (** The system's globals before WorkCodeFile: the start of its USERINFO
+      record.
+
+      UCSD Pascal II.0 calls the whole record INFOREC (UCSD20). *)
+  SystemGlobals: SystemHead;
+
+  (** The work code file the Compiler writes, and reads a unit's interface
+      from.
+      Also: WORKCODE (UCSD20) *)
+  WorkCodeFile: FileReference;
+  (** The source file being compiled.
+      Also: WORKSYM (UCSD20) *)
+  WorkTextFile: FileReference;
+  (** The number of the error the Compiler stopped at, for the Editor.
+      Also: ERRNUM (UCSD20) *)
+  ErrorNumber: INTEGER;
+  (** The block of the source the error is in.
+      Also: ERRBLK (UCSD20) *)
+  ErrorBlock: INTEGER;
+  (** The offset in that block of the error.
+      Also: ERRSYM (UCSD20) *)
+  ErrorOffset: INTEGER;
+  (** Go straight to the Editor on an error, without asking.
+      Also: STUPID (UCSD20) *)
+  EditOnError: BOOLEAN;
+  (** A slow terminal: the Compiler does not show its progress.
+      Also: SLOWTERM (UCSD20) *)
+  SlowTerminal: BOOLEAN;
+
+(* The system's procedures, in the order that numbers them; only
+   PrepareTitle, which the Compiler calls, has its parameters. *)
+
+(** Reports a run-time error. *)
+PROCEDURE ExecutionError; FORWARD;
+(** Starts a file variable (CompileStatements calls it, CXP 0, 3).
+    Also: FINIT (UCSD20) *)
+PROCEDURE InitializeFile; FORWARD;
+(** RESET of a file (CXP 0, 4).
+    Also: FRESET (UCSD20) *)
+PROCEDURE ResetFile; FORWARD;
+(** Opens a file by name, RESET, REWRITE (CXP 0, 5).
+    Also: FOPEN (UCSD20) *)
+PROCEDURE OpenFile; FORWARD;
+(** Closes a file (CXP 0, 6).
+    Also: FCLOSE (UCSD20) *)
+PROCEDURE CloseFile; FORWARD;
+(** GET (CXP 0, 7).
+    Also: FGET (UCSD20) *)
+PROCEDURE GetComponent; FORWARD;
+(** PUT (CXP 0, 8).
+    Also: FPUT (UCSD20) *)
+PROCEDURE PutComponent; FORWARD;
+(** SEEK, which 1.3 does in its reals' unit instead (CXP 31, 2).
+    Also: XSEEK (UCSD20) *)
+PROCEDURE SeekRecord; FORWARD;
+(** EOF (CXP 0, 10).
+    Also: FEOF (UCSD20) *)
+PROCEDURE IsEndOfFile; FORWARD;
+(** EOLN (CXP 0, 11).
+    Also: FEOLN (UCSD20) *)
+PROCEDURE IsEndOfLine; FORWARD;
+(** READ of an integer (CXP 0, 12).
+    Also: FREADINT (UCSD20) *)
+PROCEDURE ReadInteger; FORWARD;
+(** WRITE of an integer (CXP 0, 13).
+    Also: FWRITEINT (UCSD20) *)
+PROCEDURE WriteInteger; FORWARD;
+(** READ of a real, 1.3's in its reals' unit (CXP 31, 3).
+    Also: XREADREAL (UCSD20) *)
+PROCEDURE ReadReal; FORWARD;
+(** WRITE of a real, 1.3's in its reals' unit (CXP 31, 4).
+    Also: XWRITEREAL (UCSD20) *)
+PROCEDURE WriteReal; FORWARD;
+(** READ of a character (CXP 0, 16).
+    Also: FREADCHAR (UCSD20) *)
+PROCEDURE ReadCharacter; FORWARD;
+(** WRITE of a character (CXP 0, 17).
+    Also: FWRITECHAR (UCSD20) *)
+PROCEDURE WriteCharacter; FORWARD;
+(** READ of a string (CXP 0, 18).
+    Also: FREADSTRING (UCSD20) *)
+PROCEDURE ReadString; FORWARD;
+(** WRITE of a string (CXP 0, 19).
+    Also: FWRITESTRING (UCSD20) *)
+PROCEDURE WriteString; FORWARD;
+(** WRITE of a packed array of characters (CXP 0, 20).
+    Also: FWRITEBYTES (UCSD20) *)
+PROCEDURE WriteBytes; FORWARD;
+(** READLN (CXP 0, 21).
+    Also: FREADLN (UCSD20) *)
+PROCEDURE ReadNewLine; FORWARD;
+(** WRITELN (CXP 0, 22).
+    Also: FWRITELN (UCSD20) *)
+PROCEDURE WriteNewLine; FORWARD;
+(** CONCAT's appending (CXP 0, 23).
+    Also: SCONCAT (UCSD20) *)
+PROCEDURE AppendString; FORWARD;
+(** INSERT (CXP 0, 24).
+    Also: SINSERT (UCSD20) *)
+PROCEDURE InsertString; FORWARD;
+(** COPY (CXP 0, 25).
+    Also: SCOPY (UCSD20) *)
+PROCEDURE CopyString; FORWARD;
+(** DELETE (CXP 0, 26).
+    Also: SDELETE (UCSD20) *)
+PROCEDURE DeleteString; FORWARD;
+(** POS (CXP 0, 27).
+    Also: SPOS (UCSD20) *)
+PROCEDURE FindSubstring; FORWARD;
+(** BLOCKREAD and BLOCKWRITE (CXP 0, 28).
+    Also: FBLOCKIO (UCSD20) *)
+PROCEDURE TransferBlocks; FORWARD;
+(** GOTOXY (CXP 0, 29).
+    Also: FGOTOXY (UCSD20) *)
+PROCEDURE MoveCursor; FORWARD;
+(** Finds a volume.
+    Also: VOLSEARCH (UCSD20) *)
+PROCEDURE FindVolume; FORWARD;
+(** Writes a directory.
+    Also: WRITEDIR (UCSD20) *)
+PROCEDURE WriteDirectory; FORWARD;
+(** Finds a file in a directory.
+    Also: DIRSEARCH (UCSD20) *)
+PROCEDURE FindDirectoryEntry; FORWARD;
+(** Parses a file title.
+    Also: SCANTITLE (UCSD20) *)
+PROCEDURE ParseTitle; FORWARD;
+(** Deletes a directory entry.
+    Also: DELENTRY (UCSD20) *)
+PROCEDURE DeleteEntry; FORWARD;
+(** Inserts a directory entry.
+    Also: INSENTRY (UCSD20) *)
+PROCEDURE InsertEntry; FORWARD;
+(** Moves the cursor to the top left. *)
+PROCEDURE HomeCursor; FORWARD;
+(** Clears the screen. *)
+PROCEDURE ClearScreen; FORWARD;
+(** Clears the line the cursor is on. *)
+PROCEDURE ClearLine; FORWARD;
+(** Shows a command line's prompt. *)
+PROCEDURE Prompt; FORWARD;
+(** Waits for a space.
+    Also: SPACEWAIT (UCSD20) *)
+PROCEDURE WaitForSpace; FORWARD;
+(** Reads a character from the keyboard; II.0's makes a lower-case letter a
+    capital.
+    Also: GETCHAR (UCSD20) *)
+PROCEDURE GetCharacter; FORWARD;
+(** Reads a directory.
+    Also: FETCHDIR (UCSD20) *)
+PROCEDURE ReadDirectory; FORWARD;
+
+(** 1.3's, not II.0's COMMAND: called with a file title, 1 and the title's
+    longest length (40 or 80) before the title is opened (COMPINIT's listing
+    file, $I, $L). What it does to the title is the system's; the name is a
+    guess from those uses. *)
+PROCEDURE PrepareTitle(VAR Title: STRING; Start: INTEGER; MaximumLength:
+    INTEGER); FORWARD;

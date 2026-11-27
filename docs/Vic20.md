@@ -157,8 +157,9 @@ The ROM-source builds, the debug target's tests and the DAP scripts need nothing
 
 - MAME 0.264's `vic20`, `vic20p`, `c1540` and `c1541` sets, from the
   [MAME ROM sets on archive.org](https://archive.org/download/mame-0.264-roms-non-merged/): unzipped, each in its
-  folder, in `RETROCORE_VIC20_ROMS` or `<root>\vic20-roms\extract`, and zipped in the `mame` folder beside it. The DAP
-  script reads the `c1541` set from `RETROCORE_VIC20_ROMS` or `%USERPROFILE%\Retrocore\vic20-roms\extract`.
+  folder, in `RETROCORE_VIC20_ROMS` or `<root>\vic20-roms\extract`, and zipped in a `mame` folder beside that folder,
+  in its parent. The DAP script reads the `c1541` set from `RETROCORE_VIC20_ROMS` or
+  `%USERPROFILE%\Retrocore\vic20-roms\extract`, whatever `RETROCORE_CACHE` says.
 - MAME 0.202's `vic1001_cart`, `vic1001_cass` and `vic1001_flop` software lists, each list's zips in
   `<root>\vic20-media\extract\<list>\<list>`, and MAME's `vic1001_cart.xml` in `<root>\mame\hash`.
 - For the comparisons, a MAME in `RETROCORE_MAME` (or `<root>\mame\mame.exe`); the cartridge comparison reads the

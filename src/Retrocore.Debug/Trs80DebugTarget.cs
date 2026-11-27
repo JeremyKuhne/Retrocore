@@ -532,7 +532,15 @@ internal sealed partial class Trs80DebugTarget : IDebugTarget
     {
         Trs80Configuration configuration = _machine.Configuration;
         bool level1 = configuration.Rom == Trs80Rom.Level1;
-        string rom = level1 ? "Level I BASIC" : _revision is 12 ? "Level II BASIC 1.2" : "Level II BASIC 1.3";
+        // A Level II ROM with neither revision's power-up message is named without a revision.
+        string rom = _revision switch
+        {
+            _ when level1 => "Level I BASIC",
+            12 => "Level II BASIC 1.2",
+            13 => "Level II BASIC 1.3",
+            _ => "Level II BASIC"
+        };
+
         string doubler = configuration.Doubler switch
         {
             Trs80Doubler.Percom => ", with a Percom doubler",
@@ -544,7 +552,11 @@ internal sealed partial class Trs80DebugTarget : IDebugTarget
         return
         [
             new("model", "TRS-80 Model I", "Z80 at 1.774 MHz", "The keyboard unit's processor."),
-            new("rom", "ROM", rom, "The launch's rom (level2, the default, or level1) and Level II revision (1.3 or 1.2)."),
+            new(
+                "rom",
+                "ROM",
+                rom,
+                "The launch's rom (level2, the default, or level1), and the Level II revision its power-up message names (1.3 or 1.2)."),
             new(
                 "memory",
                 "Memory",

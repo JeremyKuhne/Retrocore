@@ -488,10 +488,17 @@ try {
     writeFileSync(join(otherRoms, "rom-c_alt.z3"), Buffer.alloc(0x0800));
     await launch({ romDirectory: otherRoms }, ["basicStart"]);
     assert.deepEqual((await request("threads")).threads.map(thread => thread.name), ["Model I Z80"]);
+    const romRow = async () => (await request("retro/devices")).hardware.find(row => row.id === "rom").value;
+    assert.equal(await romRow(), "Level II BASIC 1.3", "the message names the revision");
+
+    // A Level II dump with neither revision's message is named without one.
+    writeFileSync(join(otherRoms, "rom-a_alt.z1"), levelTwo.fill(0, 0x0105, 0x0111).subarray(0, 0x2000));
+    await launch({ romDirectory: otherRoms }, ["basicStart"]);
+    assert.equal(await romRow(), "Level II BASIC");
 
     await request("disconnect");
     console.log("Model I DAP passed: boot to READY, a Level II source breakpoint with the Z80 call stack, a cassette round trip, RUN and CONT stops, the reset button, power-on and entry stops, 1x and 2x speed, stepping from a Z80 source into Level2.asm"
-        + (existsSync(dos) ? ", a NEWDOS/80 boot" : "") + ", a fast cassette load at real speed, tapes for the other Level warned of, and Level I's BASIC thread: RUN's start, steps, a line breakpoint in a GOSUB, its variables, STOP, a Level I tape round trip, an error in a DATA item, a Level I file's basic launch, and no BASIC thread for another Level I or Level II ROM.");
+        + (existsSync(dos) ? ", a NEWDOS/80 boot" : "") + ", a fast cassette load at real speed, tapes for the other Level warned of, and Level I's BASIC thread: RUN's start, steps, a line breakpoint in a GOSUB, its variables, STOP, a Level I tape round trip, an error in a DATA item, a Level I file's basic launch, no BASIC thread for another Level I or Level II ROM, and a Level II ROM named without a revision when it has neither message.");
 } finally {
     clearTimeout(timeout);
     close();

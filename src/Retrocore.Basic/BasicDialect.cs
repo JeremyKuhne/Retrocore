@@ -133,6 +133,11 @@ public abstract partial class BasicDialect
     public static BasicDialect PetBasic4 => PetBasicDialect.Basic4;
 
     /// <summary>
+    ///  Gets the VIC-20's BASIC 2: the PET's BASIC 2 with its page zero three bytes higher.
+    /// </summary>
+    public static BasicDialect Vic20Basic => PetBasicDialect.Vic20;
+
+    /// <summary>
     ///  Gets the PET's BASIC by its version.
     /// </summary>
     /// <param name="version">1 for the PET 2001's first ROMs, 4 for the 4000 series', else BASIC 2.</param>

@@ -80,8 +80,8 @@ internal sealed partial class Vic20DebugTarget
     ///  <para>
     ///   <c>diskUnits</c> lists the drives' device numbers, 8-11, and <c>diskModel</c> says what they are, 1541 (the
     ///   default) or 1540; <c>disks</c> lists images (<c>.d64</c> or <c>.g64</c>) for those drives in the order
-    ///   <c>diskUnits</c> lists them, a null leaving a drive empty. Disks without units connect as many drives, from 8, as they need. With
-    ///   neither, no drive is connected, as a VIC-20 came without one. The ROMs are MAME's <c>c1541</c> (901229-06) or
+    ///   <c>diskUnits</c> lists them, a null leaving a drive empty. Disks without units connect as many drives, from 8,
+    ///   as they need. With neither, no drive is connected, as a VIC-20 came without one. The ROMs are MAME's <c>c1541</c> (901229-06) or
     ///   <c>c1540</c> set, in <c>driveRomDirectory</c>, else <c>romDirectory</c> or <c>RETROCORE_VIC20_ROMS</c>.
     ///  </para>
     /// </remarks>

@@ -66,8 +66,9 @@ dotnet tool restore
 dotnet retrocore build --all
 ```
 
-`retrocore` is published nowhere yet, so `dotnet tool restore` needs a source that holds its package, made by
-`dotnet pack src/Retrocore.Debug -c Release -o <folder>` in Retrocore. `--add-source <folder>` gives one; a
+`retrocore` is on no feed yet, so `dotnet tool restore` needs a folder that holds `retrocore.0.1.0-dev.nupkg`, the
+version the sample pins: what `dotnet pack src/Retrocore.Debug -c Release -o <folder>` makes in Retrocore (a preview
+build's artifact is another version, which the pin would have to name). `--add-source <folder>` gives one; a
 `nuget.config` above the clone whose `packageSourceMapping` takes `retrocore` from that folder alone is safer, so
 that no package of that name on nuget.org stands in for it. Here, inside Retrocore, the Release build serves as well,
 from this folder:

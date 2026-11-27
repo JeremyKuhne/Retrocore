@@ -57,7 +57,8 @@ and every ROM they run is an SDK source, except the PET's 4040 and 2040 disk dri
 What is missing:
 
 - a project that names its targets, and a build of it that runs outside the editor;
-- a published `retrocore` .NET tool: the debug host packs as one, but no preview build ships it;
+- a published `retrocore` .NET tool: the debug host packs as one, and preview builds of it and the extension are
+  workflow artifacts ([below](#setting-up-a-repository)), but no feed or release publishes them;
 - per-target SDK roots: every host searches the one `Sdk/` folder;
 - headers that describe each target to the program, and `RC_` defines;
 - user-set symbols outside `--assemble`: the debug launch and the language server pass none;
@@ -114,8 +115,8 @@ The workflow a developer follows, and the one this plan's sample is built with:
 **Delivery.** `retrocore` is a .NET tool carrying the SDK majors it supports. A repository pins its version in
 `.config/dotnet-tools.json`, so everyone, CI included, builds with the same tool and headers. The VS Code extension
 uses the repository's pinned tool when there is one and its own bundled copy otherwise, and it says so when the two
-differ. Retrocore is not published yet, so the tool and the extension need preview builds first. Until then the
-workflow runs from a local build of this repository.
+differ. Retrocore is not published to a feed yet; its preview builds are workflow artifacts (below), and a project's
+workflow restores the tool only once it is given a source for them.
 
 **As built so far (phase 5).** `retrocore new <template> <name> [--machines list] [--output folder]` and
 `retrocore init <template> [--name name] [--machines list] [--output folder]`, from the templates in
@@ -136,7 +137,13 @@ can restore from. Its README lists what else changes on the move.
 
 In VS Code, *Retrocore: New Project* asks for the machines, a name and a folder and runs the host's `retrocore new`.
 The extension runs a repository's pinned tool once it is restored; until then it runs its own host, with a warning
-and a Restore button ([open questions](#open-questions)).
+and a Restore button when its version differs ([open questions](#open-questions)).
+
+Preview builds: [`.github/workflows/preview.yml`](../../.github/workflows/preview.yml), on each push to main or by
+hand, packs the tool as `0.1.0-preview.<run>` (checking that it installs from its package alone, says its version and
+makes a project that pins it) and the extension's VSIX with a host of that same version, and keeps both as the run's
+artifacts. They are published nowhere: a NuGet feed for the tool, a release, or the Marketplace each wait for a
+decision of their own.
 
 ## The project
 

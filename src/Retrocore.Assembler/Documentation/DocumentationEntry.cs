@@ -35,12 +35,14 @@ public sealed record DocumentationEntry(string Name, string Meaning, int Line)
             int depth = 0, start = 0;
             for (int index = 0; index <= items.Length; index++)
             {
-                char current = index < items.Length ? items[index] : ',';
+                // The end closes the last item, even one whose note is left open; a stray ")" closes nothing.
+                bool end = index == items.Length;
+                char current = end ? ',' : items[index];
                 if (current == '(') { depth++; }
-                else if (current == ')') { depth--; }
+                else if (current == ')') { depth = Math.Max(0, depth - 1); }
 
                 int separator = 0;
-                if (depth == 0 && current == ',') { separator = 1; }
+                if (end || (depth == 0 && current == ',')) { separator = 1; }
                 else if (depth == 0 && string.Compare(items, index, " and ", 0, 5, StringComparison.OrdinalIgnoreCase) == 0)
                 {
                     separator = 5;

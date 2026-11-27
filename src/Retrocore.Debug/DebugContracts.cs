@@ -170,6 +170,9 @@ internal sealed class DebugContracts
     {
         Dictionary<ushort, DebugContract> contracts = [];
         DocumentationSet set = resolver.Current;
+
+        // Each routine's contract at its start first, then its entries' where no routine starts, in source order.
+        List<(ushort At, DebugContract Contract)> entered = [];
         foreach (DocumentationTopic documented in set.Topics)
         {
             if (documented.Kind != DocumentationKind.Routine || documented.Value is not { } value) { continue; }
@@ -207,8 +210,13 @@ internal sealed class DebugContracts
                 }
             }
 
-            // Another entry takes the routine's contract where the label has no comment of its own. The first
-            // contract at an address wins.
+            foreach ((ushort at, IReadOnlyList<string> keeps) in clauses)
+            {
+                (List<string> entryKept, List<(string, ushort, int)> entryMemory) = Kept(keeps);
+                entered.Add((at, new(topic.Name, entryKept, entryMemory, Changes: null)));
+            }
+
+            // Another entry takes the routine's contract where the label has no comment of its own.
             DebugContract? routine = null;
             if (kept.Count != 0 || memory.Count != 0 || changes is not null)
             {
@@ -224,17 +232,18 @@ internal sealed class DebugContracts
                     && !clauses.ContainsKey((ushort)entry)
                     && set.Find(label) is null)
                 {
-                    contracts.TryAdd((ushort)entry, routine);
+                    entered.Add(((ushort)entry, routine));
                 }
             }
+        }
 
-            foreach ((ushort at, IReadOnlyList<string> keeps) in clauses)
+        // A clause that keeps nothing holds its address, so no other contract is checked there, but checks nothing.
+        foreach ((ushort at, DebugContract contract) in entered) { contracts.TryAdd(at, contract); }
+        foreach ((ushort at, DebugContract contract) in contracts.ToArray())
+        {
+            if (contract.Registers.Count == 0 && contract.Memory.Count == 0 && contract.Changes is null)
             {
-                (List<string> entryKept, List<(string, ushort, int)> entryMemory) = Kept(keeps);
-                if ((entryKept.Count != 0 || entryMemory.Count != 0) && !contracts.ContainsKey(at))
-                {
-                    contracts.Add(at, new(topic.Name, entryKept, entryMemory, Changes: null));
-                }
+                contracts.Remove(at);
             }
         }
 

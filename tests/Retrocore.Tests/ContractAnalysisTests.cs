@@ -3,6 +3,7 @@
 // See LICENSE file in the project root for full license information
 
 using Retrocore.Assembler;
+using Retrocore.Debug;
 using Retrocore.Documentation;
 
 namespace Retrocore.Tests;
@@ -209,6 +210,40 @@ public class ContractAnalysisTests
 
         (findings, _, _) = Check(Shared, "Mos6502");
         findings.Should().BeEmpty();
+        Dictionary<ushort, DebugContract> contracts = DebugContracts(Shared);
+        contracts.Should().NotContainKey(0x1001, "the debugger checks nothing at the shared address either");
+        contracts[0x1000].Registers.Should().Equal("X");
+    }
+
+    /// <summary>
+    ///  A routine's own contract at its start wins over another routine's entry there, in the check and the
+    ///  debugger alike, whichever comes first: Target keeps A as it says, though Saver lists the label at its
+    ///  address as an entry, plain or with a clause.
+    /// </summary>
+    [TestMethod]
+    public void RoutinesWinOverOtherRoutinesEntries()
+    {
+        foreach (string entry in (string[])["Alias = clears A", "Alias = clears A; keeps nothing"])
+        {
+            string source = $"""
+                ;; Returns, or from Alias clears A.
+                ;; Keeps: X
+                ;; Entry: {entry}
+                Saver:
+                    rts
+
+                ;; Clears A.
+                ;; Keeps: A
+                Target:
+                Alias:
+                    lda #0
+                    rts
+                """;
+
+            (List<string> findings, _, _) = Check(source, "Mos6502");
+            findings.Should().Equal("Target ($1001) documents Keeps: A, but A is changed by the instruction at $1001.");
+            DebugContracts(source)[0x1001].Registers.Should().Equal("A");
+        }
     }
 
     /// <summary>
@@ -285,6 +320,20 @@ public class ContractAnalysisTests
 
         Check(M6809, "M6809").Findings.Should().Equal(
             "Saver ($1000) documents Keeps: B, but B is changed by the instruction at $1004.");
+    }
+
+    // The debugger's contracts for a 6502 source, by address.
+    private static Dictionary<ushort, DebugContract> DebugContracts(string source)
+    {
+        string path = Path.Join(AppContext.BaseDirectory, "ContractAnalysis.Debugger.asm");
+        AssemblyResult result = new Retrocore.Assembler.Assembler().Assemble(
+            new AssemblySource(source, path),
+            new AssemblyOptions("Mos6502", 0x1000, 0x100));
+
+        result.Diagnostics.Should().BeEmpty();
+        DocumentationSet documentation = DocumentationSet.Create([DocumentationParser.Parse(source, path)], result);
+        return Retrocore.Debug.DebugContracts.Build(
+            new DocumentationResolver(documentation), model: "", new DebugRegisters(M6502Isa.Description));
     }
 
     private static (List<string> Findings, int Checked, IReadOnlyList<string> Skipped) Check(string source, string cpu)

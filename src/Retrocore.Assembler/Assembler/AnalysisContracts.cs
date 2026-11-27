@@ -102,6 +102,9 @@ internal sealed partial class AnalysisContracts
 
         DocumentationResolver resolver = new(documentation, others);
         long? Symbol(string name) => result.Symbols.TryGetValue(name, out long value) ? value : null;
+
+        // Each routine's contract at its start first, then its entries' where no routine starts, in source order.
+        List<(ushort At, AnalysisContract Contract)> entered = [];
         foreach (DocumentationTopic documented in documentation.Topics)
         {
             if (documented.Kind != DocumentationKind.Routine || documented.Value is not { } value)
@@ -139,8 +142,13 @@ internal sealed partial class AnalysisContracts
                 }
             }
 
+            foreach ((ushort at, IReadOnlyList<string> keeps) in clauses)
+            {
+                if (Read(topic, model, Symbol, own, address, keeps) is { } clause) { entered.Add((at, clause)); }
+            }
+
             // A call to another entry takes the routine's contract where the label has no comment of its own, as the
-            // debugger takes it; one with a comment is a routine of its own. The first contract at an address wins.
+            // debugger takes it; one with a comment is a routine of its own.
             _routines.TryAdd(address, topic);
             if (Read(topic, model, Symbol, own, address, keeps: null) is { } contract)
             {
@@ -152,19 +160,13 @@ internal sealed partial class AnalysisContracts
                         && !clauses.ContainsKey((ushort)entry)
                         && documentation.Find(label) is null)
                     {
-                        _contracts.TryAdd((ushort)entry, contract);
+                        entered.Add(((ushort)entry, contract));
                     }
                 }
             }
-
-            foreach ((ushort at, IReadOnlyList<string> keeps) in clauses)
-            {
-                if (!_contracts.ContainsKey(at) && Read(topic, model, Symbol, own, address, keeps) is { } entered)
-                {
-                    _contracts[at] = entered;
-                }
-            }
         }
+
+        foreach ((ushort at, AnalysisContract contract) in entered) { _contracts.TryAdd(at, contract); }
     }
 
     /// <summary>

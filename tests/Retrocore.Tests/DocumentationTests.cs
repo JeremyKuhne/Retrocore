@@ -696,6 +696,10 @@ public class DocumentationTests
         new DocumentationEntry("Noted", "skips; keeps X (the index, or the count) and Y (and so on)", 0).Keeps
             .Should().Equal("X", "Y");
 
+        // A note left open keeps the rest as one item, which the check reports; a stray ")" closes nothing.
+        new DocumentationEntry("Open", "skips; keeps X (the index", 0).Keeps.Should().Equal("X (the index");
+        new DocumentationEntry("Stray", "skips; keeps X), Y", 0).Keeps.Should().Equal("X)", "Y");
+
         List<string> messages = [.. new DocumentationResolver(set).Check().Select(diagnostic => diagnostic.Message)];
         messages.Should().Equal("Entry: 'Wrong' keeps 'the carry', which is not a register, flag or symbol.");
     }

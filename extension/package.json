@@ -1831,7 +1831,7 @@
               "fastCassette": {
                 "type": "boolean",
                 "default": true,
-                "description": "Model I, Color Computer, PET, BBC Micro, Atari 800 and 400, and Model 100: run as fast as possible while the cassette motor runs, so tapes load and save quickly. Apple-1 and Altair 8800: the same while a tape plays or records. The machine's own timing is unchanged."
+                "description": "Model I, Color Computer, PET, BBC Micro and Atari 800 and 400: run as fast as possible while the cassette motor runs, so tapes load and save quickly. Apple-1 and Altair 8800: the same while a tape plays or records; Model 100: while the motor moves a tape that plays or records. The machine's own timing is unchanged."
               },
               "disks": {
                 "type": "array",

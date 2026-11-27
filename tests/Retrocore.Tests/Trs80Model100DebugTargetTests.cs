@@ -269,6 +269,16 @@ public sealed class Trs80Model100DebugTargetTests
             target.DeviceAction(drive, "eject", []);
             drive.Media.Should().BeNull();
             Trs80Model100Tape.FromWave(File.ReadAllBytes(wave)).HalfCycles.Should().NotBeEmpty();
+
+            // A recording to a new file, put in again from its own path, is saved first and plays.
+            string fresh = Path.Join(folder, "fresh.wav");
+            JsonObject freshRecording = new() { ["path"] = fresh };
+            target.DeviceAction(drive, "record", freshRecording);
+            Record(target, changes: 4);
+            target.DeviceAction(drive, "insert", freshRecording);
+            File.Exists(fresh).Should().BeTrue("the recording was saved before it was read");
+            drive.Media.Should().NotBeNull();
+            drive.Media?.WriteProtected.Should().BeTrue("the tape now plays");
         }
         finally
         {

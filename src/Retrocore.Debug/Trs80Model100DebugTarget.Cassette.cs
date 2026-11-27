@@ -94,8 +94,8 @@ internal sealed partial class Trs80Model100DebugTarget
     internal void Insert(string path)
     {
         string full = Path.GetFullPath(path);
-        if (!File.Exists(full)) { throw new ArgumentException($"The tape {full} does not exist."); }
         SaveCassetteRecording();
+        if (!File.Exists(full)) { throw new ArgumentException($"The tape {full} does not exist."); }
         Trs80Model100Tape tape = Trs80Model100Tape.FromWave(File.ReadAllBytes(full));
         EjectCassette();
         _machine.Bus.CassetteDrive.Play(tape, full);

@@ -51,7 +51,8 @@ access write XSTS XSTU XSTX XSTY
 # index register, accumulator offset and auto-increment add to every indexed instruction. PC is left to the flow
 # lines, but where a postbyte names it (PULS PC, TFR X,PC, a PCR offset); the state the registers line does not
 # list, NMI's arming and the flags an unprefixed store immediate takes from the instruction before it, is left
-# out, and those flags are flag=?; after a prefix they are constants, so XSTY and XSTS, which have one, set them.
+# out, and those flags are flag=?; after a prefix they are constants, so XSTY and XSTS, which exist only with
+# one, set them, and the prefixed forms of the others leave them flag=? too.
 # A branch's 'taken' condition joins flag tests with & and then |, and compares flags with = and !=, as BGT's
 # zero=0&negative=overflow.
 parts D=A,B

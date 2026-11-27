@@ -58,9 +58,12 @@ public class M6809EffectsTests
         }
 
         stores.Should().Be(4, "XSTA, XSTB, XSTX and XSTU; XSTY and XSTS are prefixed, which sets N and clears Z and V");
-        set.TryDecode([0x10, 0x8F, 0x12, 0x34], out int prefixedStore).Should().BeTrue();
-        InstructionEffects prefixed = set.Effects(prefixedStore);
-        (prefixed.FlagsHidden, prefixed.FlagsSet, prefixed.FlagsCleared).Should().Be(((byte)0, (byte)0x08, (byte)0x06));
+        foreach (byte opcode in (byte[])[0x8F, 0xCF])
+        {
+            set.TryDecode([0x10, opcode, 0x12, 0x34], out int prefixedStore).Should().BeTrue();
+            InstructionEffects prefixed = set.Effects(prefixedStore);
+            (prefixed.FlagsHidden, prefixed.FlagsSet, prefixed.FlagsCleared).Should().Be(((byte)0, (byte)0x08, (byte)0x06), $"$10 ${opcode:X2}");
+        }
 
         // PULS A,X,PC: pulls five bytes into A, X and PC through S.
         InstructionEffects puls = Effects(set, [0x35, 0x92]);

@@ -83,8 +83,9 @@ public sealed class DebugRelaunchTests
         client.Request("initialize", []);
         client.Request("setExceptionBreakpoints", new JsonObject { ["filters"] = new JsonArray("machineReset") });
         client.Request("configurationDone", []);
-        client.Request("launch", IIPlus());
-        client.Event("stopped").String("description").Should().Be(PowerOn);
+        client.Request("launch", IIPlus(), out int? responseSequence);
+        client.Event("stopped", out int? stopSequence).String("description").Should().Be(PowerOn);
+        Assert.IsTrue(stopSequence > responseSequence, "the launch response precedes the startup stop");
 
         client.Request("launch", IIPlus());
         client.NoStop(TimeSpan.FromMilliseconds(500), "the second launch waits for its own configurationDone");

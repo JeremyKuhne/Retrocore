@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 // See LICENSE file in the project root for full license information
 
+using Retrocore.Debug;
 using Retrocore.Machines.Apple2;
 using Retrocore.Media;
 
@@ -198,6 +199,166 @@ public class Apple2MachineTests
         bus.TextByte(row: 0, column: 0).Should().Be(0);
         bus.Write(0xC001, value: 0);
         bus.TextByte(row: 0, column: 0).Should().Be(0xC1);
+    }
+
+    /// <summary>
+    ///  The debugger's current text surface honors display mapping, not CPU read and write bank selection.
+    /// </summary>
+    [TestMethod]
+    public void TextSurfaceDistinguishesMixedModeAndDisplayBanks()
+    {
+        Apple2Roms roms = Roms();
+        byte[] characters = roms.Characters.ToArray();
+        characters[0x40 * 8] ^= 0x01;
+        Apple2Machine machine = new(Apple2Model.IIeEnhanced, new Apple2Roms(roms.System, characters));
+        using Apple2DebugTarget target = new(machine, Apple2Model.IIeEnhanced);
+        Apple2Bus bus = machine.Bus;
+        // Row 20 starts at $0650; each video page has distinct aux/main contents.
+        bus.SetRam(auxiliary: true, address: 0x0650, value: 0xC1);
+        bus.SetRam(auxiliary: false, address: 0x0650, value: 0xC2);
+        bus.SetRam(auxiliary: true, address: 0x0A50, value: 0xC3);
+        bus.SetRam(auxiliary: false, address: 0x0A50, value: 0xC4);
+        bus.SetRam(auxiliary: true, address: 0x0651, value: 0x40);
+        bus.Write(0xC00D, value: 0);
+        bus.Write(0xC050, value: 0);
+        bus.Write(0xC053, value: 0);
+        bus.Write(0xC003, value: 0);
+        bus.Write(0xC004, value: 0);
+        DebugTextSurface mixed = TextSurface(target);
+        mixed.Mode.Should().Be("mixed");
+        mixed.Columns.Should().Be(80);
+        mixed.FirstRow.Should().Be(20);
+        mixed.Rows.Should().HaveCount(4);
+        mixed.Rows[0].Should().StartWith("AB");
+        bus.Write(0xC00F, value: 0);
+        TextSurface(target).Rows[0].Should().StartWith("AB\uFFFD");
+        bus.Write(0xC055, value: 0);
+        TextSurface(target).Rows[0].Should().StartWith("CD");
+        bus.Write(0xC001, value: 0);
+        TextSurface(target).Rows[0].Should().StartWith("AB");
+        bus.Write(0xC052, value: 0);
+        TextSurface(target).Rows.Should().BeEmpty();
+        TextSurface(target, "textMemory").Rows[20].Should().StartWith("AB");
+    }
+
+    /// <summary>
+    ///  Both IIe ROMs accept real keyboard reads before and after the ROM itself switches to the slot-3 console.
+    /// </summary>
+    /// <param name="model">The launch's model name.</param>
+    /// <param name="profile">The matching firmware profile prefix.</param>
+    [TestMethod]
+    [DataRow("iie", "apple2eOriginal")]
+    [DataRow("iie-enhanced", "apple2eEnhanced")]
+    public void GuestDemandFollowsTheActualIIeInputHook(string model, string profile)
+    {
+        using Apple2DebugTarget target = Apple2DebugTarget.Launch(new System.Text.Json.Nodes.JsonObject
+        {
+            ["model"] = model, ["sound"] = "off", ["controllers"] = false
+        });
+
+        target.AddSdkModules(new(), directory: null);
+        foreach (char key in "PR#3\r")
+        {
+            GuestInputPath path = WaitForDemand(target);
+            path.Profile.Should().Be(profile + "40");
+            Deliver(target, path, key);
+        }
+
+        GuestInputPath eighty = WaitForDemand(target);
+        eighty.Profile.Should().Be(profile + "80");
+        TextSurface(target).Columns.Should().Be(80);
+        Deliver(target, eighty, 'X');
+        WaitForDemand(target).Profile.Should().Be(profile + "80");
+        target.Poke(0x0038, 0x00);
+        target.WaitingForInput().Should().BeNull("a different input hook cannot prove the normal 80-column route");
+    }
+
+    /// <summary>
+    ///  Runs the SDK-built Pascal 1.1 console on the language card and observes both strobe clear and ring admission.
+    /// </summary>
+    [TestMethod]
+    public void PascalConsoleAdmitsThroughItsRingRatherThanAtTheStrobe()
+    {
+        Apple2Machine machine = new(Apple2Model.IIPlus, Roms());
+        using Apple2DebugTarget target = new(machine, Apple2Model.IIPlus);
+        Apple2Bus bus = machine.Bus;
+        Retrocore.Assembler.AssemblyResult assembly = PascalInterpreterSourceTests.Assemble();
+        ReadOnlySpan<byte> image = SourceBuild.OutputBytes(assembly).Span;
+        machine.Run(7);
+        bus.InstallLanguageCard();
+        bus.Read(0xC083);
+        bus.Read(0xC083);
+        for (int offset = 0; offset < 0x3000; offset++) { bus.Write((ushort)(0xD000 + offset), image[offset]); }
+
+        ushort read = (ushort)assembly.Symbols["ConsoleRead"];
+        ushort slot = (ushort)(assembly.Symbols["SlotTypes"] + assembly.Symbols["CONSOLE_SLOT"] - 1);
+        // The guest calls the real routine. Slot 3 initially redirects it to a serial card.
+        target.Load(0x300, [0x20, (byte)read, (byte)(read >> 8), 0x85, 0x90, 0x4C, 0x05, 0x03]);
+        target.ProgramCounter = 0x300;
+        bus.Write(slot, value: 3);
+        ushort wait = (ushort)assembly.Symbols["ConsoleRead::FromTypeAhead"];
+        StepTo(target, wait);
+        target.WaitingForInput().Should().BeNull("a serial console is not keyboard demand");
+        bus.Write(slot, value: 0);
+        GuestInputPath path = target.WaitingForInput() ?? throw new AssertFailedException("No verified Pascal console demand.");
+        path.Profile.Should().Be("applePascal11Console");
+        Deliver(target, path, 'A', requireIntermediateAck: true);
+        StepTo(target, 0x0305);
+        char.IsAsciiLetter((char)bus.Peek(0x90)).Should().BeTrue("the firmware actually returned a letter to its caller");
+    }
+
+    private static GuestInputPath WaitForDemand(Apple2DebugTarget target)
+    {
+        ulong deadline = target.CycleCount + 4_000_000;
+        while (target.CycleCount < deadline)
+        {
+            if (target.IsInstructionBoundary && target.WaitingForInput() is { } path) { return path; }
+            target.StepCycle();
+        }
+
+        throw new AssertFailedException(
+            $"No guest demand at ${target.ProgramCounter:X4}, keyboard hook ${InputFirmware.Word(target, 0x0038):X4}.");
+    }
+
+    private static void Deliver(Apple2DebugTarget target, GuestInputPath path, char key, bool requireIntermediateAck = false)
+    {
+        path.Send(key).Should().Be(InputReceipt.Pending);
+        Func<int, InputReceipt> observe = path.Observe ?? throw new AssertFailedException("No keyboard receipt observer.");
+        bool ack = false;
+        ulong deadline = target.CycleCount + 100_000;
+        while (target.CycleCount < deadline)
+        {
+            target.StepCycle();
+            if (!target.IsInstructionBoundary) { continue; }
+            switch (observe(key))
+            {
+                case InputReceipt.Acknowledged:
+                    ack = true;
+                    break;
+                case InputReceipt.Accepted:
+                    if (requireIntermediateAck) { ack.Should().BeTrue("the card acknowledges before the ring store"); }
+                    return;
+                case InputReceipt.Unconfirmed:
+                    throw new AssertFailedException($"The key was not admitted at ${target.ProgramCounter:X4}.");
+            }
+        }
+
+        throw new AssertFailedException("The guest did not admit its pending key.");
+    }
+
+    private static DebugTextSurface TextSurface(Apple2DebugTarget target, string surface = "visibleText") =>
+        target.ReadTextSurface(surface) ?? throw new AssertFailedException($"No {surface} surface.");
+
+    private static void StepTo(Apple2DebugTarget target, ushort address)
+    {
+        ulong deadline = target.CycleCount + 100_000;
+        while (target.CycleCount < deadline)
+        {
+            if (target.IsInstructionBoundary && target.ProgramCounter == address) { return; }
+            target.StepCycle();
+        }
+
+        throw new AssertFailedException($"Expected ${address:X4}, running at ${target.ProgramCounter:X4}.");
     }
 
     /// <summary>

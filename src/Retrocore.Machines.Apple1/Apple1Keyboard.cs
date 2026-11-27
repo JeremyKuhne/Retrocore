@@ -28,6 +28,11 @@ public sealed class Apple1Keyboard
     private int _strobe;
 
     /// <summary>
+    ///  Gets or sets whether typed keys skip the human-paced gap while retaining the PIA read/strobe handshake.
+    /// </summary>
+    public bool FastTyping { get; set; }
+
+    /// <summary>
     ///  Creates the keyboard on the PIA's port A.
     /// </summary>
     /// <param name="pia">The PIA.</param>
@@ -85,7 +90,7 @@ public sealed class Apple1Keyboard
             return;
         }
 
-        if (++_gap < GapCycles) { return; }
+        if (!FastTyping && ++_gap < GapCycles) { return; }
         _gap = 0;
         _pia.InputA = (byte)(_keys.Dequeue() | 0x80);
         _pia.SetCA1(level: true);

@@ -22,6 +22,7 @@ const startup = join(sdkRoms, "Vic20", "Kernal.Startup.asm");
 const channels = join(sdkRoms, "Vic20", "Kernal.Channels.asm");
 const nativeInit = join(sdkRoms, "Basic", "Commodore.KernalStartup.asm");
 const nativeOutput = join(root, "src", "Retrocore.Basic", "Roms", "Microsoft6502Basic", "MsBasic.OutputCore.asm");
+const transfers = join(root, "src", "Retrocore.Basic", "Roms", "Microsoft6502Basic", "MsBasic.ProgramTransfers.asm");
 const vic20Roms = process.env.RETROCORE_VIC20_ROMS || join(homedir(), "Retrocore", "vic20-roms", "extract");
 const driveRoms = join(vic20Roms, "c1541");
 
@@ -190,7 +191,14 @@ try {
     // RUN/STOP and RESTORE stop a running program and warm start to READY., keeping it.
     await type("10 GOTO 10\rRUN\r");
     await screen(screen => joined(screen).includes("RUN") && !ready(screen), "the loop running");
-    await request("retro/key", { code: 257 });
+    await settle(); // Let the typed RETURN go before pressing the key chord.
+    // RESTORE reads STOP through the column left selected by the keyboard scan. Press it from BASIC, not mid-scan.
+    const goTo = await request("setBreakpoints", { source: { path: transfers }, breakpoints: [{ line: lineOf(transfers, "GoTo") }] });
+    assert.equal(goTo.breakpoints[0].verified, true, JSON.stringify(goTo.breakpoints[0]));
+    assert.equal((await event("stopped")).reason, "breakpoint");
+    await request("setBreakpoints", { source: { path: transfers }, breakpoints: [] });
+    assert.equal((await request("retro/key", { code: 257 })).delivered, 1);
+    await request("continue", { threadId: 1 });
     await screen(screen => ready(screen) && !joined(screen).includes("RUN"), "RUN/STOP and RESTORE's warm start");
     await type("NEW\r");
 

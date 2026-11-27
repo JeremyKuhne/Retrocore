@@ -144,7 +144,7 @@ Hardware details, system sources, media formats, and launch options are covered 
   [SDK headers, memory maps, and environments](sdk/1/README.md) · [Native assembly](docs/NativeAssembly.md) ·
   [Doc comments (`;;`)](docs/DocComments.md) · [Breakpoints](docs/Breakpoints.md) · [Memory views](docs/Memory.md) ·
   [Devices and media](docs/Devices.md) · [Apple DOS](docs/Dos.md) · [Disk II](docs/DiskII.md) ·
-  [Apple Pascal](docs/Pascal.md)
+  [Apple Pascal](docs/Pascal.md) · [Debug Adapter automation](docs/DebugAdapter.md)
 - **Source conversion and style:** [Converting sources](docs/ConvertingSources.md) ·
   [Assembly style guide](docs/AssemblyStyle.md) · [Pascal style guide](docs/PascalStyle.md) ·
   [Conversion logs](docs/conversions/README.md) · [Bibliography](docs/Bibliography.md)

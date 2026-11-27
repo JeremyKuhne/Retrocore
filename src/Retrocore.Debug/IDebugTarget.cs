@@ -524,6 +524,19 @@ internal interface IDebugTarget : IDebugMemory
     JsonObject DisplayState(bool running);
 
     /// <summary>
+    ///  Reads a named text surface without making a frame.
+    /// </summary>
+    /// <param name="surface">The requested text surface.</param>
+    /// <returns>Its state, or null if the target does not expose it.</returns>
+    DebugTextSurface? ReadTextSurface(string surface) => null;
+
+    /// <summary>
+    ///  Gets the standalone video metadata without rendering its pixels.
+    /// </summary>
+    /// <returns>The owned video object, or null if no pixel display is available.</returns>
+    JsonObject? VideoState() => DisplayState(running: false).Object("video")?.DeepClone().AsObject();
+
+    /// <summary>
     ///  Gets the monitors the video can be shown on, from <see cref="DebugScreens"/>, the default first.
     /// </summary>
     IReadOnlyList<string> Screens { get; }
@@ -570,6 +583,38 @@ internal interface IDebugTarget : IDebugMemory
     /// </param>
     /// <returns>Whether the keyboard has a key for it; a character it has none for is left out.</returns>
     bool Key(int code);
+
+    /// <summary>
+    ///  Gets whether this target has a guest-demand profile, independent of the currently executing code.
+    /// </summary>
+    bool SupportsGuestInput => false;
+
+    /// <summary>
+    ///  Gets the verified, currently blocking keyboard operation, or null when it is unknown. The caller must
+    ///  already be at a boundary of the machine CPU.
+    /// </summary>
+    /// <returns>The current input path, if verified.</returns>
+    GuestInputPath? WaitingForInput() => null;
+
+    /// <summary>
+    ///  Gets the count of queued or latched physical keys, when the device can report it.
+    /// </summary>
+    int? PendingKeys => null;
+
+    /// <summary>
+    ///  Observes bytes accepted by the named native console sink.
+    /// </summary>
+    /// <param name="name">The sink to observe.</param>
+    /// <param name="sink">Receives bytes, or null to stop observing.</param>
+    /// <returns>Whether the named sink is available.</returns>
+    bool SetConsoleSink(string name, Action<byte>? sink) => false;
+
+    /// <summary>
+    ///  Enables accelerated, non-human-paced text I/O when this target supports it.
+    /// </summary>
+    /// <param name="enabled">Whether to use fast I/O.</param>
+    /// <returns>Whether the requested mode is supported.</returns>
+    bool SetFastIo(bool enabled) => !enabled;
 
     /// <summary>
     ///  Gets how far apart pasted keys go, in the machine's cycles: between keys, and after a RETURN; null to queue

@@ -150,7 +150,7 @@ internal static class SdkModules
         bool autostart = false,
         BasicSourceKind basicSource = BasicSourceKind.Native)
     {
-        return AddTo(debug, model, directory, out _, autostart, basicSource);
+        return AddTo(debug, model, directory, out _, out _, out _, autostart, basicSource);
     }
 
     /// <summary>
@@ -160,6 +160,8 @@ internal static class SdkModules
     /// <param name="model">The emulated model, which selects each ROM's faithful variant.</param>
     /// <param name="directory">The ROM source directory; by default the copy beside the debug host.</param>
     /// <param name="integer">Integer BASIC's assembly, for its addresses; null when its source is missing.</param>
+    /// <param name="monitorImage">The assembly of the II/Plus Monitor, when available.</param>
+    /// <param name="firmwareImage">The assembly of the IIe firmware, when available.</param>
     /// <param name="autostart">For the II, whether its Monitor is the Autostart ROM.</param>
     /// <param name="basicSource">The AppleSoft listing used for debugger source maps.</param>
     /// <returns>The AppleSoft assembly, for BASIC's addresses; null when its source is missing.</returns>
@@ -168,11 +170,14 @@ internal static class SdkModules
         Apple2Model model,
         string? directory,
         out AssemblyResult? integer,
+        out AssemblyResult? monitorImage,
+        out AssemblyResult? firmwareImage,
         bool autostart = false,
         BasicSourceKind basicSource = BasicSourceKind.Native)
     {
         AssemblyResult? basic = null;
         integer = null;
+        monitorImage = firmwareImage = null;
         string roms = directory ?? RomDirectory;
         string slot7 = Path.Join(roms, "Slot7.rom.asm");
         if (File.Exists(slot7)) { debug.Add(new SourceMapModule(AssembleRom(slot7), Apple2MemoryArea.Slot7Rom)); }
@@ -233,8 +238,8 @@ internal static class SdkModules
         string monitor = Path.Join(roms, "System", "Monitor.asm");
         if (File.Exists(monitor))
         {
-            AssemblyResult monitorBuild = AssembleSystem(monitor, MonitorOrigin, MonitorSize, model, autostart);
-            debug.Add(new SourceMapModule(monitorBuild, Apple2MemoryArea.SystemRom));
+            monitorImage = AssembleSystem(monitor, MonitorOrigin, MonitorSize, model, autostart);
+            debug.Add(new SourceMapModule(monitorImage, Apple2MemoryArea.SystemRom));
         }
 
         // Integer BASIC is the II's ROM and a II Plus's firmware card's, and DOS 3.3's INT loads it into a language
@@ -266,7 +271,8 @@ internal static class SdkModules
         string firmware = FirmwarePath(model, roms);
         if (File.Exists(firmware))
         {
-            debug.Add(new SourceMapModule(AssembleSystem(firmware, FirmwareOrigin, FirmwareSize, model), Apple2MemoryArea.SystemRom));
+            firmwareImage = AssembleSystem(firmware, FirmwareOrigin, FirmwareSize, model);
+            debug.Add(new SourceMapModule(firmwareImage, Apple2MemoryArea.SystemRom));
         }
 
         return basic;

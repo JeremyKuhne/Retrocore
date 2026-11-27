@@ -114,8 +114,7 @@ internal sealed partial class DebugSession
     private string? _powerOn;
     private readonly Dictionary<string, JsonObject> _requested = [with(StringComparer.OrdinalIgnoreCase)];
 
-    // Pasted keys still to type, on a machine with a typing pace, and the cycle the next may go at.
-    private readonly Queue<int> _typing = new();
+    // The cycle the next paced physical key may go at.
     private ulong _typingDue;
     private readonly DebugLineCycles _lineCycles = new();
     private (string Path, int Line)? _cycleSource;
@@ -179,7 +178,13 @@ internal sealed partial class DebugSession
         // An image changed on disk shows in its drive, even while the machine is stopped.
         MediaActions.SourcesChanged += SourcesChanged;
         transport.On("initialize", _ => Capabilities());
-        transport.On("launch", args => Reply(() => Launch(args)));
+        transport.OnWithFollowUp("launch", args =>
+        {
+            bool configured = false;
+            JsonObject body = Reply(() => Launch(args, out configured));
+            return (body, configured ? StartConfiguredLaunch : null);
+        });
+
         transport.On("setBreakpoints", args => Reply(() => Breakpoints(args)));
         transport.On("setFunctionBreakpoints", args => Reply(() => FunctionBreakpoints(args)));
         transport.On("setInstructionBreakpoints", args => Reply(() => InstructionBreakpoints(args)));
@@ -330,6 +335,7 @@ internal sealed partial class DebugSession
 
         transport.On("continue", args => Reply(() =>
         {
+            RequireManualExecution();
             _basicGoal = null;
             _pascalGoal = null;
             Continue();
@@ -342,25 +348,25 @@ internal sealed partial class DebugSession
 
         transport.On("pause", args => Reply(() =>
         {
-            if (OnBasic(args))
+            if (_interaction is null && OnBasic(args))
             {
                 PauseBasic();
                 return [];
             }
 
-            if (OnPascal(args))
+            if (_interaction is null && OnPascal(args))
             {
                 StepPascal(PascalStep.Pause);
                 return [];
             }
 
-            _run?.Cancel();
             Stopped("pause");
             return [];
         }));
 
         transport.On("next", args => Reply(() =>
         {
+            RequireManualExecution();
             if (OnPascal(args)) { StepPascal(PascalStep.Over, Instruction(args)); }
             else if (OnBasic(args)) { StepBasic(BasicStep.Over); }
             else { Step(over: true, outOf: false, Instruction(args), args.Int("threadId") ?? 1); }
@@ -369,6 +375,7 @@ internal sealed partial class DebugSession
 
         transport.On("stepIn", args => Reply(() =>
         {
+            RequireManualExecution();
             if (OnPascal(args)) { StepPascal(PascalStep.Into, Instruction(args)); }
             else if (OnBasic(args)) { StepBasic(BasicStep.Into); }
             else { Step(over: false, outOf: false, Instruction(args), args.Int("threadId") ?? 1); }
@@ -377,6 +384,7 @@ internal sealed partial class DebugSession
 
         transport.On("stepOut", args => Reply(() =>
         {
+            RequireManualExecution();
             if (OnPascal(args)) { StepPascal(PascalStep.Out); }
             else if (OnBasic(args)) { StepBasic(BasicStep.Out); }
             else { Step(over: false, outOf: true, Instruction(args), args.Int("threadId") ?? 1); }
@@ -417,6 +425,7 @@ internal sealed partial class DebugSession
         }));
 
         transport.On("retro/display", args => Reply(DisplayNow));
+        RegisterInteraction(transport);
         transport.On("retro/devices", args => Reply(DevicesBody));
         transport.On("retro/device", args => Reply(() =>
         {
@@ -499,20 +508,7 @@ internal sealed partial class DebugSession
                 throw new ArgumentOutOfRangeException(nameof(args));
             }
 
-            // A key pressed while a paste is still typing waits its turn behind it, but CONTROL-C, which interrupts,
-            // goes now and drops the rest of the paste.
-            if (code == 3)
-            {
-                _typing.Clear();
-            }
-            else if (_typing.Count != 0)
-            {
-                _typing.Enqueue(code);
-                return [];
-            }
-
-            Target.Key(code);
-            return [];
+            return PhysicalKey(code);
         }));
 
         // retro/type: types text, as pasted into the display panel, through the keyboard's queue: line endings are
@@ -520,22 +516,7 @@ internal sealed partial class DebugSession
         transport.On("retro/type", args => Reply(() =>
         {
             string text = args.String("text") ?? throw new ArgumentException("text is required.");
-            List<int> codes = TypedText.Codes(text, out int skipped, Target is BbcDebugTarget ? BbcPound : null);
-
-            // A machine with a typing pace takes the keys as the run reaches each one's time.
-            if (Target.TypingPace is not null)
-            {
-                foreach (int code in codes) { _typing.Enqueue(code); }
-                return new JsonObject { ["typed"] = codes.Count, ["skipped"] = skipped };
-            }
-
-            int typed = 0;
-            foreach (int code in codes)
-            {
-                if (Target.Key(code)) { typed++; } else { skipped++; }
-            }
-
-            return new JsonObject { ["typed"] = typed, ["skipped"] = skipped };
+            return TypeText(text);
         }));
 
         // retro/screen: shows the video on another of the machine's monitors, such as a green-phosphor one. A new
@@ -550,6 +531,10 @@ internal sealed partial class DebugSession
         // retro/reset: presses the machine's reset. While stopped, the views show where it now is.
         transport.On("retro/reset", args => Reply(() =>
         {
+            bool scripted = _interaction is { Policy: "scripted" };
+            if (scripted) { RetireWorker(); }
+            CompleteInteraction("reset");
+            CancelPhysicalInput();
             // A reset abandons every call in progress, even where it keeps the stack pointer and RAM, as the 8080's does.
             // The BBC Micro's shifted BREAK boots its disk or tape.
             if (args.Bool("shift") == true && Target is BbcDebugTarget bbc) { bbc.ShiftReset(); }
@@ -558,12 +543,20 @@ internal sealed partial class DebugSession
             Pascal?.Reset();
             _pascalFrames = null;
             Invalidate();
-            if (_run is not { IsCancellationRequested: false })
+            if (!IsRunning)
             {
                 // A reset switches banks back, as the language card's ROM does.
-                NotifyMemory();
+                if (!scripted) { NotifyMemory(); }
                 Notify("invalidated", new JsonObject { ["areas"] = new JsonArray("all") });
-                NotifyFrame(running: false);
+                if (scripted)
+                {
+                    Stopped("pause", description: "The machine reset during an automation run.");
+                    _unchecked = Cpu.IsInstructionBoundary;
+                }
+                else
+                {
+                    NotifyFrame(running: false);
+                }
             }
 
             return [];
@@ -628,7 +621,9 @@ internal sealed partial class DebugSession
         lock (_gate)
         {
             if (_ended) { return; }
-            _run?.Cancel();
+            RetireWorker();
+            CompleteInteraction("disconnected");
+            CancelPhysicalInput();
             CloseJournal();
             ReleaseTarget();
             _ended = true;
@@ -995,18 +990,30 @@ internal sealed partial class DebugSession
     // The cards a launch's media options put in, which a saved machine and a target's cards leave to the launch.
     private static bool LaunchOwned(string card) => card.StartsWith("diskII", StringComparison.Ordinal) || card == "blockStorage";
 
-    private JsonObject Launch(JsonObject args)
+    private JsonObject Launch(JsonObject args, out bool configured)
     {
         // The launch takes a configurationDone that came before it, even if it fails.
-        bool configured = _configured;
+        configured = _configured;
+        RetireWorker();
+        CompleteInteraction("replaced");
+        CancelPhysicalInput();
+        _lastInput = null;
+        _textOnly = false;
         _configured = false;
         _launchAttempted = true;
         _launchReady = false;
-        _run?.Cancel();
         // A project launch builds its target, as retrocore build does, and launches the target's machine with the
         // target's options, which the saved media then goes over as over any launch's.
         TargetBuild? built = null;
         if (args.ContainsKey("project")) { (args, built) = ProjectLaunch.Prepare(args); }
+        bool textOnly = args.Bool("textOnly") ?? false;
+        bool fastIo = args.String("ioMode") switch
+        {
+            null or "realistic" => false,
+            "fast" => true,
+            _ => throw new ArgumentException("ioMode must be 'realistic' or 'fast'.", nameof(args))
+        };
+
         args = LaunchMedia.WithSaved(args, args["machineState"]);
         string machine = DebugMachines.Require(args.String("machine"));
         string? sourceFile = args.String("source");
@@ -1047,6 +1054,15 @@ internal sealed partial class DebugSession
             _ => Apple2DebugTarget.Launch(args)
         };
 
+        if (!Target.SetFastIo(fastIo))
+        {
+            throw new ArgumentException($"Fast I/O is not supported for machine '{machine}'.", nameof(args));
+        }
+
+        _textOnly = textOnly;
+        _launchId++;
+        ConfigureInteraction(args);
+
         // A bare program calls the ROM's routines, such as COUT, which the Apple II's Monitor sets up as it resets, so
         // the ROM runs first, as the other machines' ROMs do before a program loads. It runs before the target's cards
         // and a saved machine's cards and disks go in; a disk the target's own options insert is in the drive from the
@@ -1079,8 +1095,6 @@ internal sealed partial class DebugSession
         _basicGoal = null;
         _basicStarting = null;
         _basicView = null;
-        _typing.Clear();
-        _typingDue = 0;
         ForgetPascal();
         _basicEnded = false;
         _lineCycles.Clear();
@@ -1274,23 +1288,8 @@ internal sealed partial class DebugSession
 
         _launchReady = true;
 
-        // A configurationDone that came before the launch starts the machine once the launch has returned. A launch
-        // after this one waits for a configurationDone of its own, and a launch that comes before the start runs,
-        // even one that fails, or the session ending, cancels that start.
-        if (configured)
-        {
-            IDebugTarget launched = Target;
-            _ = Task.Run(() =>
-            {
-                lock (_gate)
-                {
-                    if (_launchReady && !_ended && ReferenceEquals(_target, launched)) { Start(); }
-                }
-            });
-        }
-
         // A project launch says which machine it started, which only the target said, for the editor to follow.
-        return built is null ? [] : new JsonObject
+        return built is null ? WithIdentity([]) : WithIdentity(new JsonObject
         {
             ["project"] = new JsonObject
             {
@@ -1303,7 +1302,7 @@ internal sealed partial class DebugSession
                 ["binary"] = built.Binary,
                 ["entry"] = built.Entry
             }
-        };
+        });
     }
 
     // The Monitor sets up the PIA as it starts, so a loaded program's output through ECHO, and BASIC's own, reaches
@@ -1401,6 +1400,19 @@ internal sealed partial class DebugSession
         Vic20DebugTarget target = Vic20DebugTarget.Launch(args);
         target.Boot(args.Double("bootSeconds") ?? (loads ? 4 : 0));
         return target;
+    }
+
+    // Send startup stops after the launch response when configurationDone arrived early.
+    private void StartConfiguredLaunch()
+    {
+        try
+        {
+            lock (_gate) { Start(); }
+        }
+        catch (Exception exception) when (IsRunFailure(exception))
+        {
+            ExecutionFailed(exception, CancellationToken.None);
+        }
     }
 
     /// <summary>
@@ -1793,8 +1805,7 @@ internal sealed partial class DebugSession
         for (int count = 0; count < 1_000_000; count++)
         {
             IDebugTarget ran = Cpu;
-            if (!Execute()) { return; }
-
+            if (!Execute() || StopOnCaptureOverflow()) { return; }
 
             // The other CPU's instruction: only its breakpoints can stop the step. While the stepping CPU is idle off
             // a boundary no instruction of its has finished, so the step neither ends nor meets a breakpoint of its own.
@@ -1880,7 +1891,7 @@ internal sealed partial class DebugSession
         Invalidate();
 
         // Pasted keys go in as the machine runs, whether continuing or stepping.
-        if (_typing.Count != 0) { TypeNext(); }
+        if (_typing.Count != 0 || _interaction?.Input is { GuestDemand: false, Pending: > 0 }) { TypeNext(); }
 
         // The instruction is that of the CPU with the bus as it starts. One that hands the bus over finishes on the
         // CPU's own view; the SoftCard's Z80 runs its last T-states beside the 6502.
@@ -2057,72 +2068,63 @@ internal sealed partial class DebugSession
         return true;
     }
 
-    // Types the next pasted key once its time has come, and sets the time of the one after: longer after a RETURN.
-    private void TypeNext()
-    {
-        if (Target.TypingPace is not { } pace)
-        {
-            while (_typing.TryDequeue(out int code)) { Target.Key(code); }
-            return;
-        }
-
-        if (Target.CycleCount < _typingDue) { return; }
-        int next = _typing.Dequeue();
-        Target.Key(next);
-        _typingDue = Target.CycleCount + (next == '\r' ? pace.Line : pace.Key);
-    }
-
     private void Continue()
     {
-        _run?.Cancel();
-        _run?.Dispose();
-        _run = new();
-        CancellationToken token = _run.Token;
         bool check = Resume(Cpu.IsInstructionBoundary);
+        bool trapReported = _exception is ("brk", _);
+        RetireWorker();
+        CancellationTokenSource source = new();
+        _run = source;
+        CancellationToken token = source.Token;
         _ = Task.Run(async () =>
         {
             bool first = !check;
-
-            // Only a stop at the BRK itself has reported it; resuming from any other stop there checks it.
-            bool trapReported = _exception is ("brk", _);
             long frameTime = Stopwatch.GetTimestamp();
-
-            // A launch or stop can cancel this worker before it starts and replace or clear the target, so the worker
-            // reads the target only under the lock, and only while it has not been cancelled.
             long paceTime = frameTime;
-            ulong paceCycles;
-            lock (_gate)
-            {
-                if (token.IsCancellationRequested) { return; }
-
-                // Sound made while stopped would play as a burst; the panel hears only what runs from here.
-                Target.TakeAudio();
-                paceCycles = Target.CycleCount;
-                StartMeasuring();
-                _running = token;
-            }
-
-            bool ahead = false;
             try
             {
+                ulong paceCycles;
+                lock (_gate)
+                {
+                    if (token.IsCancellationRequested) { return; }
+
+                    // Sound made while stopped would play as a burst; the panel hears only what runs from here.
+                    Target.TakeAudio();
+                    paceCycles = Target.CycleCount;
+                    StartMeasuring();
+                    _running = token;
+                }
+
                 while (!token.IsCancellationRequested)
                 {
+                    bool ahead;
                     lock (_gate)
                     {
                         if (token.IsCancellationRequested) { return; }
+                        if (_transport is { OutputFailed: true })
+                        {
+                            RetireWorker();
+                            CompleteInteraction("disconnected");
+                            CancelPhysicalInput();
+                            return;
+                        }
 
                         // Each slice runs until it has kept up with the machine's clock, or for a few milliseconds.
                         long slice = Stopwatch.GetTimestamp();
 
                         // Frozen bytes go back to their values before each slice runs.
                         if (_frozen.Count != 0) { ApplyFreezes(); }
-                        ulong due = Due(ref paceTime, ref paceCycles);
-                        ahead = false;
-                        for (int count = 0; !token.IsCancellationRequested && Target.CycleCount < due; count++)
+                        ulong due = _interaction?.Policy == "scripted" ? ulong.MaxValue : Due(ref paceTime, ref paceCycles);
+
+                        for (int count = 0; !token.IsCancellationRequested; count++)
                         {
-                            if ((count & 63) == 0
+                            bool canAdvance = Target.CycleCount < due;
+                            InteractionRun? interaction = _interaction;
+                            if (!canAdvance && interaction is null) { break; }
+
+                            if (_transport is { Backpressured: true } or { OutputFailed: true } || ((count & 63) == 0
                                 && (Volatile.Read(ref _requestsWaiting) != 0
-                                    || Stopwatch.GetElapsedTime(slice).TotalMilliseconds >= SliceMilliseconds))
+                                    || Stopwatch.GetElapsedTime(slice).TotalMilliseconds >= SliceMilliseconds)))
                             {
                                 break;
                             }
@@ -2132,6 +2134,7 @@ internal sealed partial class DebugSession
                             IDebugTarget cpu = Cpu;
                             ushort pc = cpu.ProgramCounter;
                             bool boundary = cpu.IsInstructionBoundary;
+                            interaction?.Input?.Observe();
                             long here = boundary ? BoundaryToken(cpu, pc) : 0;
                             if (boundary && first) { PassBoundary(cpu, pc); }
                             if (boundary && Hit(pc) is { } hit)
@@ -2164,25 +2167,41 @@ internal sealed partial class DebugSession
                                 }
                             }
 
-                            first = false;
+                            if ((_consoleCapture is not null && StopOnCaptureOverflow())
+                                || (interaction is not null && ObserveInteraction(interaction, cpu, boundary, canAdvance)))
+                            {
+                                return;
+                            }
 
+                            if (!canAdvance) { break; }
+                            first = false;
                             if (!Execute()) { return; }
                         }
 
                         if (token.IsCancellationRequested) { return; }
-                        ahead = Target.CycleCount >= due;
+                        bool backpressured = _transport is { Backpressured: true };
+                        ahead = backpressured || Target.CycleCount >= due;
 
                         // A disk the machine ejected is kept in the journal as it goes, not at the next checkpoint.
                         if (HasEjected()) { CheckpointSoon(); }
-                        if (Stopwatch.GetElapsedTime(frameTime).TotalMilliseconds >= 33)
+                        if (!backpressured && Stopwatch.GetElapsedTime(frameTime).TotalMilliseconds >= 33)
                         {
                             AddLoadedModules();
                             Measure();
-                            NotifyFrame(running: true);
-                            if (Target.TakeAudio() is { } audio) { Notify("retro/audio", audio); }
-                            NotifySourceCycles();
+                            if (!_textOnly)
+                            {
+                                NotifyFrame(running: true);
+                                if (Target.TakeAudio() is { } audio) { Notify("retro/audio", audio); }
+                                NotifySourceCycles();
+                            }
+                            else
+                            {
+                                Target.TakeAudio();
+                            }
+
                             NotifyStatus();
                             NotifyRunningMemory();
+                            NotifyTextChanges();
                             frameTime = Stopwatch.GetTimestamp();
                         }
                     }
@@ -2232,9 +2251,18 @@ internal sealed partial class DebugSession
                 lock (_gate)
                 {
                     if (_running == token) { _running = default; }
+                    if (ReferenceEquals(_run, source)) { _run = null; }
+                    source.Dispose();
                 }
             }
-        }, token);
+        });
+    }
+
+    private void RetireWorker()
+    {
+        CancellationTokenSource? previous = _run;
+        _run = null;
+        previous?.Cancel();
     }
 
     // The exceptions a run's worker catches: its cancellation, and the failures it reports.
@@ -2390,6 +2418,8 @@ internal sealed partial class DebugSession
         string? exception = null,
         int? threadId = null)
     {
+        RetireWorker();
+        CompleteInteraction(reason == "exception" ? "exception" : "stopped");
         Invalidate();
         if (HasEjected()) { CheckpointSoon(); }
         int thread = threadId ?? (_target is null ? 1 : ThreadOf(Cpu));
@@ -2423,6 +2453,8 @@ internal sealed partial class DebugSession
         NotifySourceCycles(force: true);
         NotifyStatus();
         NotifyMemory();
+        if (_textPolicy == "onStop") { Notify("retro/text/update", Snapshot(_textSurface)); }
+        else { NotifyTextChanges(); }
     }
 
     // Whether resuming from the last stop checks the breakpoints at the PC before running, and forgets it.
@@ -2510,6 +2542,7 @@ internal sealed partial class DebugSession
     private void NotifySourceCycles(bool force = false)
     {
         FlushLineCycles();
+        if (_textOnly) { return; }
         if (_cycleChangesOnly && !force && !_sourceCyclesDirty && !_lineCycles.Changed) { return; }
 
         Notify("retro/cycles", SourceCyclesJson());
@@ -2542,6 +2575,8 @@ internal sealed partial class DebugSession
     // keeps; a stopped one always has them, so the picture is whole wherever the machine stops.
     private void NotifyFrame(bool running)
     {
+        if (_textOnly) { return; }
+
         JsonObject state = Target.DisplayState(running);
         state["speed"] = SpeedJson(running);
         ReadOnlySpan<byte> pixels = Target.RenderVideo();
@@ -2552,9 +2587,8 @@ internal sealed partial class DebugSession
             pixels.CopyTo(_sentPixels);
         }
 
-        ReadOnlyMemory<byte> sent = changed ? _sentPixels : ReadOnlyMemory<byte>.Empty;
-        (_transport ?? throw new InvalidOperationException("The session is not registered with a transport."))
-            .SendEvent("retro/frame", writer => DisplayFrameWriter.Write(writer, state, sent.Span));
+        DapTransport transport = _transport ?? throw new InvalidOperationException("The session is not registered with a transport.");
+        transport.SendFrame(state, changed ? _sentPixels : ReadOnlyMemory<byte>.Empty);
     }
 
     private void Notify(string method, JsonObject body) =>

@@ -53,6 +53,20 @@ writeFileSync(join(held, "8041364.u104"), image(0x2000, [0xF3, 0x3E, 0xC1, 0xD3,
 writeFileSync(join(held, "8040332.u105"), image(0x1000, []));
 writeFileSync(join(held, "8040316c.u106"), image(0x800, []));
 
+// Starts an FD1793 step, then asserts WAIT. The controller finishes the step without needing media.
+const finiteWait = join(roms, "finite-wait");
+mkdirSync(finiteWait);
+writeFileSync(join(finiteWait, "8041364.u104"), image(0x2000, [
+    0xF3,                         // DI
+    0x3E, 0x81, 0xD3, 0xF4,      // Select drive 0 without WAIT.
+    0x3E, 0x50, 0xD3, 0xF0,      // Submit Step In with track update.
+    0x3E, 0xC1, 0xD3, 0xF4,      // Assert WAIT while the controller is busy.
+    0x3E, 0x2A,                   // Held by WAIT; next instruction is at $000F.
+    0x18, 0xFE                    // JR to itself.
+]));
+writeFileSync(join(finiteWait, "8040332.u105"), image(0x1000, []));
+writeFileSync(join(finiteWait, "8040316c.u106"), image(0x800, []));
+
 function drop(name) {
     for (let index = events.length - 1; index >= 0; index--) {
         if (events[index].event === name) events.splice(index, 1);
@@ -128,6 +142,17 @@ try {
     assert.equal(paused.reason, "pause", `the held machine pauses (${paused.description ?? paused.reason})`);
     assert.equal((await request("stackTrace", { threadId: 1 })).stackFrames[0].instructionPointerReference, "0x0005",
         "it pauses at the instruction it is held in, after OUT");
+
+    await launch({ machine: "trs80-model3", diskController: true, stopOnEntry: true, textOnly: true }, [], finiteWait);
+    assert.equal((await event("stopped")).reason, "entry");
+    const maxCycles = 100;
+    const run = await request("retro/runUntil", { stopOn: { kind: "instruction", address: 0xFFFF }, maxCycles });
+    const exhausted = await event("retro/run/result", body => body.launchId === run.launchId && body.runId === run.runId);
+    assert.equal(exhausted.outcome, "cycleBudgetExceeded");
+    assert.ok(exhausted.cycles > run.startCycle + maxCycles, "the disk wait outlasts the deadline");
+    assert.equal((await event("stopped")).reason, "pause");
+    assert.equal((await request("stackTrace", { threadId: 1 })).stackFrames[0].instructionPointerReference, "0x000F",
+        "budget expiry parks at the first instruction boundary after the disk wait");
 
     if (process.env.RETROCORE_DAP_VERBOSE === "1") console.log("SDK ROMs");
     await launch({ machine: "trs80-model3" }, [], null);

@@ -123,7 +123,7 @@ public sealed class Trs80Model100DebugTargetTests
 
     /// <summary>
     ///  The launch's files go into RAM's directory, the menu is drawn again with them, the Hardware view lists them,
-    ///  and BASIC's program is readable through the target; a file that is not a Model 100's is refused before any is
+    ///  BASIC runs one, and the target's BASIC is the Model 100's; a file that is not a Model 100's is refused before any is
     ///  written.
     /// </summary>
     [TestMethod]

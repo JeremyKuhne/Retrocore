@@ -143,8 +143,7 @@ public sealed class Model100Files
     ///  <para>
     ///   A new file takes the first free directory entry and goes at the end of its kind's region; one that replaces
     ///   another takes its place and entry, so BASIC keeps a program it has open. RAM is changed only once the file
-    ///   is known to fit; but a <c>.BA</c> file already in RAM whose lines do not end is found only as the files are
-    ///   linked again, after they have moved, which leaves RAM changed.
+    ///   is known to fit and every program in RAM to end.
     ///  </para>
     /// </remarks>
     /// <param name="name">
@@ -288,6 +287,9 @@ public sealed class Model100Files
     private void Move(int at, int removed, ReadOnlySpan<byte> inserted, int keep)
     {
         int delta = inserted.Length - removed;
+        // Every program is checked to end first, so linking them again after the move cannot fail partway.
+        CheckPrograms();
+
         // String space lies above the stack top, up to the memory top, and the stack grows down from the stack top, so
         // keeping the files and variables a stack's room below the stack top keeps them out of the strings too.
         int end = Word(FreeStart);
@@ -366,6 +368,18 @@ public sealed class Model100Files
 
         if (delta != 0) { Relink(); }
         if (clears) { Model100Dialect.Instance.Clear(_memory); }
+    }
+
+    // Checks that each .BA file and BASIC's unsaved program ends, before a move changes RAM.
+    private void CheckPrograms()
+    {
+        for (int entry = Directory; entry < Directory + (Entries * EntrySize); entry += EntrySize)
+        {
+            byte type = _memory.Read(entry);
+            if ((type & InUse) == 0 || (type & 0x60) != 0 || type == RomType) { continue; }
+            int address = Word(entry + 1);
+            if (address >= FileArea) { BasicEnd(_memory, address); }
+        }
     }
 
     // Links each .BA file and BASIC's unsaved program for where it now is.

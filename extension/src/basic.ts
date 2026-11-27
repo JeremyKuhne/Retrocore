@@ -370,7 +370,7 @@ export function registerBasic(context: vscode.ExtensionContext): BasicPrograms {
         const path = typeof target === "string" ? target : (await vscode.window.showOpenDialog({
             title: "Import a BASIC program into the machine",
             canSelectMany: false,
-            filters: { "BASIC programs": ["bas", "txt", "cas", "bin"], "All files": ["*"] }
+            filters: { "BASIC programs": ["bas", "txt", "cas", "ba", "bin"], "All files": ["*"] }
         }))?.[0]?.fsPath;
         if (path === undefined) return undefined;
         try {
@@ -399,7 +399,7 @@ export function registerBasic(context: vscode.ExtensionContext): BasicPrograms {
                     {
                         label: "Tokenized program", detail: "The bytes as BASIC stores them",
                         format: "tokenized",
-                        name: program.dialect === "applesoft" ? "PROGRAM#fc0801" : program.dialect === "integer" ? "PROGRAM#fa0000" : "program.bas"
+                        name: program.dialect === "applesoft" ? "PROGRAM#fc0801" : program.dialect === "integer" ? "PROGRAM#fa0000" : program.dialect === "model100" ? "PROGRAM.BA" : "program.bas"
                     },
                     ...program.dialect === "level2" || program.dialect === "level1"
                         ? [{ label: "TRS-80 tape", detail: "A .cas file, as CSAVE writes it", format: "tape", name: "program.cas" }]

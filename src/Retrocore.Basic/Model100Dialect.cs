@@ -154,13 +154,14 @@ internal sealed class Model100Dialect : BasicDialect
     /// <inheritdoc/>
     /// <remarks>
     ///  <para>
-    ///   The program ends at its zero link, as other files follow it; a program pointer with no program there gives no
-    ///   bounds.
+    ///   The program ends at its zero link, as other files follow it; a program pointer at no .BA file or unsaved
+    ///   program, or at one whose lines do not end, gives no bounds.
     ///  </para>
     /// </remarks>
     internal override (int Start, int End) ProgramBounds(IBasicMemory memory)
     {
         int start = BasicProgram.Word(memory, Pointers.ProgramStart);
+        if (!new Model100Files(memory).HoldsProgram(start)) { return (0, 0); }
         try
         {
             return (start, Model100Files.BasicEnd(memory, start));

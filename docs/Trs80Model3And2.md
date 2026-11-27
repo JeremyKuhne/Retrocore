@@ -140,9 +140,9 @@ The Model II's DOSes are not among those items. They are in MAME's `trs80m2` sof
 `MAME_0.202_Software_List_ROMs_merged`, as `trs80m2.zip` (SHA-256 `813f8840…`). That holds a zip for each entry, named
 below with the file in it. The fixtures keep them under new names. TRSDOS 1.2, 2.0a and 2.0b boot, take the date and
 time and list their directories (`Trs80Model2RomTests.BootsItsDos`), and match MAME at their prompt in MAME 0.264 and
-0.289 (`Trs80Model3OracleTests.Model2DosMatchesMame`). LS-DOS 6.3.1 is not tested; its screen is reported to stay blank
-(see the [backlog](backlog/Trs80Model3AndModel2.md#stages), stage 2). TRSDOS-II 4.2 is a Teledisk image, which the media
-library does not read.
+0.289 (`Trs80Model3OracleTests.Model2DosMatchesMame`). LS-DOS 6.3.1 boots, takes the date and lists its directory
+(`Trs80Model2Tests.BootsLsDos`), but is not yet compared with MAME. TRSDOS-II 4.2 is a Teledisk image, which the media
+library does not read (see the [backlog](backlog/Trs80Model3AndModel2.md#stages), stage 2).
 
 TRSDOS's boot code checks the machine before it loads the DOS. One check copies 80 bytes to video RAM with the DMA,
 interrupting at the block's end with status affecting the vector, and waits for the routine at that vector; a vector
@@ -328,7 +328,7 @@ What the comparison has to allow for:
 
 ## What is not done yet
 
-- **The Model II's DOSes.** LS-DOS 6.3.1's screen is reported to stay blank, and TRSDOS-II 4.2 is a Teledisk image,
+- **The Model II's DOSes.** LS-DOS 6.3.1 is not yet compared with MAME, and TRSDOS-II 4.2 is a Teledisk image,
   which the media library does not read (see the [backlog](backlog/Trs80Model3AndModel2.md#stages), stage 2). The
   comparison with MAME covers TRSDOS up to its prompt, not its directory; TRSDOS writing a file is untested; and the
   keyboard codes need checking against its keyboard's ROM ([the Model II](#the-model-ii-12-and-16)).

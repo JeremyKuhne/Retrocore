@@ -28,9 +28,10 @@ public sealed class FloppyDisk : IMedium
     private readonly Dictionary<(int Cylinder, int Side), List<FloppySector>> _tracks = [];
     private bool _writeProtected;
 
-    // The tracks on side 1 that have sectors, kept so that Sides is cheap: a Model II polls it on every T-state while
-    // its PIO watches the controller.
-    private int _sideOneTracks;
+    // The geometry, kept as tracks gain or lose sectors: a machine can ask for it at every clock, as the Model II's PIO
+    // does watching its port A.
+    private int _cylinders;
+    private int _sides = 1;
 
     /// <summary>
     ///  Gets or sets whether the disk is write-protected; a change counts in <see cref="Version"/>.
@@ -57,12 +58,12 @@ public sealed class FloppyDisk : IMedium
     /// <summary>
     ///  Gets the highest cylinder with sectors, plus one.
     /// </summary>
-    public int Cylinders => Tracks().Select(track => track.Cylinder + 1).DefaultIfEmpty(0).Max();
+    public int Cylinders => _cylinders;
 
     /// <summary>
     ///  Gets the number of sides with sectors.
     /// </summary>
-    public int Sides => _sideOneTracks != 0 ? 2 : 1;
+    public int Sides => _sides;
 
     /// <summary>
     ///  Gets the sectors of a physical track in rotational order, or an empty list for an unformatted track.
@@ -101,8 +102,9 @@ public sealed class FloppyDisk : IMedium
             throw new InvalidDataException($"Cylinder {cylinder} side {side} holds more sectors than a track can.");
         }
 
-        if (side == 1 && sectors.Count == 0) { _sideOneTracks++; }
         sectors.Add(sector);
+        _cylinders = Math.Max(_cylinders, cylinder + 1);
+        if (side == 1) { _sides = 2; }
     }
 
     /// <summary>
@@ -153,13 +155,8 @@ public sealed class FloppyDisk : IMedium
             track.Add(sector);
         }
 
-        if (side == 1)
-        {
-            bool had = _tracks.TryGetValue((cylinder, side), out List<FloppySector>? old) && old.Count != 0;
-            _sideOneTracks += (track.Count != 0 ? 1 : 0) - (had ? 1 : 0);
-        }
-
         _tracks[(cylinder, side)] = track;
+        Measure();
         Changed();
     }
 
@@ -190,6 +187,19 @@ public sealed class FloppyDisk : IMedium
     ///  Records that the disk differs from its image, as after a save that could not hold all of it.
     /// </summary>
     public void MarkChanged() => IsDirty = true;
+
+    // The geometry again, after formatting, which can leave a track with no sectors.
+    private void Measure()
+    {
+        _cylinders = 0;
+        _sides = 1;
+        foreach (((int cylinder, int side), List<FloppySector> sectors) in _tracks)
+        {
+            if (sectors.Count == 0) { continue; }
+            _cylinders = Math.Max(_cylinders, cylinder + 1);
+            if (side == 1) { _sides = 2; }
+        }
+    }
 
     private void Changed()
     {

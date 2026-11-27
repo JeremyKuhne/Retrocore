@@ -305,7 +305,7 @@ public sealed class DapTransportTests
         List<JsonObject> messages = Exchange(transport =>
         {
             transport.On("cancel", args => new JsonObject { ["requestId"] = args.Int("requestId") });
-            transport.On("next", _ => []);
+            transport.On("next", _ => new JsonObject());
         },
         Encode(new JsonObject { ["type"] = "request", ["seq"] = 1, ["command"] = 99 }),
         Encode(new JsonObject { ["type"] = "request", ["seq"] = "bad", ["command"] = "launch" }),

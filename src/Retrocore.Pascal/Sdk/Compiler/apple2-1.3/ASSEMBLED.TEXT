@@ -73,7 +73,7 @@ PUTCH    INX
          BCS     NEXTCH
          STA     88,X
          BCC     NEXTCH
-; The identifier's end: CURSOR moved on to its last character
+; The identifier's end: Cursor moved on to its last character
 IDEND    DEY
          TYA
          LDY     #0
@@ -204,7 +204,7 @@ BWORDS   .BYTE   1,42,45,47,49,4E,20,20
 CWORDS   .BYTE   2,43,41,53,45,20,20,20
          .BYTE   20,15,0,43,4F,4E,53,54
          .BYTE   20,20,20,1C,0
-; DO, DOWNTO, DIV
+; DO, DIV, DOWNTO
 DWORDS   .BYTE   3,44,4F,20,20,20,20,20
          .BYTE   20,6,0,44,49,56,20,20
          .BYTE   20,20,20,27,3,44,4F,57
@@ -299,7 +299,7 @@ WWORDS   .BYTE   2,57,48,49,4C,45,20,20
          STA     80
          PLA
          STA     81
-; Compares Name with the node's
+; Compares SoughtName with the node's
 VISIT    LDX     #8
          LDY     #0FF
 ; The next letter
@@ -323,7 +323,7 @@ CMPNAME  DEX
 GORIGHT  STX     80
          STA     81
          JMP     VISIT
-; Name sorts before the node's: its Left
+; SoughtName sorts before the node's: its Left
 TRYLEFT  LDY     #0A
          LDA     (80),Y
          TAX
@@ -352,7 +352,7 @@ RIGHTEND LDA     #0
          PHA
          LDA     #1
          PHA
-; FOUND := the node, and return
+; Found, the VAR parameter, := the node, and return
 SETLAST  LDY     #0
          LDA     80
          STA     (7E),Y

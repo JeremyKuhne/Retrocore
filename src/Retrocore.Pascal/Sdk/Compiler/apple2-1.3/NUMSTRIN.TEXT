@@ -3,12 +3,12 @@
     Included by COMPILER.TEXT after COMPOPTI.TEXT and before FINISHUP.TEXT.
 
     Procedures here, nested ones indented:
-      NUMSTRIN (segment)
-        ScanString
-        ScanNumber *)
+        NUMSTRIN (segment)
+          ScanString
+          ScanNumber *)
 
   (** Scans a string or number constant: IsNumber says which; a number may be
-      a REAL or a long integer [II.0 NextToken's]. *)
+      a REAL or a long integer (II.0: INSYMBOL's). *)
   SEGMENT PROCEDURE NUMSTRIN(IsNumber: BOOLEAN; VAR BigConstant: ScannedValue);
 
     (** Scans a string constant into TokenConstant, or a character into

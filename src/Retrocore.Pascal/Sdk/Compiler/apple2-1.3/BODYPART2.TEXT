@@ -3,7 +3,7 @@
     Included by COMPILER.TEXT after STATEMEN2.TEXT and before BODY1.TEXT.
 
     Procedures here, nested ones indented:
-      CompileRoutineBody *)
+          CompileRoutineBody *)
 
     (** Compiles the body: BODY1 starts it, CompileStatements compiles the
         statements, BODY3 ends it.

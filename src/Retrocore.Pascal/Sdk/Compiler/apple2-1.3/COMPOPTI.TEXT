@@ -3,11 +3,11 @@
     Included by COMPILER.TEXT after UNITPART.TEXT and before NUMSTRIN.TEXT.
 
     Procedures here, nested ones indented:
-      COMPOPTI (segment)
-        EndOptions
-        ScanOptionName
-        MakeResident
-          AddResident *)
+        COMPOPTI (segment)
+          EndOptions
+          ScanOptionName
+          MakeResident
+            AddResident *)
 
   (** Reads the options at the start of a comment, ($ and letters with + or -
       or a name), and says whether the comment goes on; EndCharacter is } or

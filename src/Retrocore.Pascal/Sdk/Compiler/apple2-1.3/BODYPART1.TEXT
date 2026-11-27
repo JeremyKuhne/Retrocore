@@ -3,58 +3,77 @@
     Included by COMPILER.TEXT after DECLARAT4.TEXT and before ROUTINE1.TEXT.
 
     Procedures here, nested ones indented:
-      BODYPART (segment)
-        AddLinkerReference
-        EmitOpcode
-        EmitConstant
-        EmitOneOperand
-        EmitTwoOperands
-        EmitExternalCall
-        PushOperand
-        PushAddress
-        PushByteAddress
-        CompileExpression
-        CompileVariable
-        NumberExternalRoutine
-        PushVariableAddress
-        MaskBoolean
-        EmitJump
-        EmitFalseJump
-        NewJump
-        PlaceJump
-        StoreOperand
-        PackStringConstant
-        ApplySelectors
-        CompileCall *)
+        BODYPART (segment)
+          AddLinkerReference
+          EmitOpcode
+          EmitConstant
+          EmitOneOperand
+          EmitTwoOperands
+          EmitExternalCall
+          PushOperand
+          PushAddress
+          PushByteAddress
+          CompileExpression
+          CompileVariable
+          NumberExternalRoutine
+          PushVariableAddress
+          MaskBoolean
+          EmitJump
+          EmitFalseJump
+          NewJump
+          PlaceJump
+          StoreOperand
+          PackStringConstant
+          ApplySelectors
+          CompileCall *)
 
-  (** Compiles a procedure's body, from BEGIN to END, into p-code The GEN
+  (** Compiles a procedure's body, from BEGIN to END, into p-code. The GEN
       procedures take p-code opcodes less 128, II.0's numbering, written as
-      the PCODE constants: 30 BigValue, 33 FJP, 35 IND, 50 LDA, 51 LDC, 54
-      LOD, 56 STR, 57 UJP, 77 CXP [II.0, PS]. *)
+      the PCODE constants: 30 CSP, 33 FJP, 35 IND, 50 LDA, 51 LDC, 54 LOD, 56
+      STR, 57 UJP, 77 CXP [II.0, PS]. *)
   SEGMENT PROCEDURE BODYPART(Followers: TokenSet; BodyRoutine: Identifier);
 
+    (** Also: LINKERREF (UCSD20) *)
     PROCEDURE AddLinkerReference(TargetClass: INTEGER; TargetNumber: INTEGER;
         CodeOffset: INTEGER); FORWARD;
+    (** Also: GEN0 (UCSD20) *)
     PROCEDURE EmitOpcode(Opcode: INTEGER); FORWARD;
+    (** Also: GENLDC (UCSD20) *)
     PROCEDURE EmitConstant(Value: INTEGER); FORWARD;
+    (** Also: GEN1 (UCSD20) *)
     PROCEDURE EmitOneOperand(Opcode: INTEGER; Argument: INTEGER); FORWARD;
+    (** Also: GEN2 (UCSD20) *)
     PROCEDURE EmitTwoOperands(Opcode: INTEGER; FirstArgument: INTEGER;
         SecondArgument: INTEGER); FORWARD;
     PROCEDURE EmitExternalCall(CalledSegment: INTEGER; CalledRoutine: INTEGER);
         FORWARD;
+    (** Also: LOAD (UCSD20) *)
     PROCEDURE PushOperand; FORWARD;
+    (** Also: LOADADDRESS (UCSD20) *)
     PROCEDURE PushAddress; FORWARD;
+    (** Also: BYTEADDRESS (UCSD20) *)
     PROCEDURE PushByteAddress; FORWARD;
+    (** Also: EXPRESSION (UCSD20) *)
     PROCEDURE CompileExpression(Followers: TokenSet); FORWARD;
+    (** UCSD Pascal II.0 calls it VARIABLE (UCSD20). *)
     PROCEDURE CompileVariable(Followers: TokenSet); FORWARD;
     PROCEDURE NumberExternalRoutine(VAR Unnumbered: Identifier); FORWARD;
+    (** Also: LOADIDADDR (UCSD20) *)
     PROCEDURE PushVariableAddress(Variable: Identifier); FORWARD;
     PROCEDURE MaskBoolean; FORWARD;
+    (** Also: GENJMP (UCSD20) *)
     PROCEDURE EmitJump(Opcode: INTEGER; Destination: Jump); FORWARD;
+    (** Also: GENFJP (UCSD20) *)
     PROCEDURE EmitFalseJump(Destination: Jump); FORWARD;
+    (** Also: GENLABEL (UCSD20) *)
     PROCEDURE NewJump(VAR Created: Jump); FORWARD;
+    (** Also: PUTLABEL (UCSD20) *)
     PROCEDURE PlaceJump(Placed: Jump); FORWARD;
+    (** Also: STORE (UCSD20) *)
     PROCEDURE StoreOperand(VAR Destination: OperandEntry); FORWARD;
+    (** Also: STRGTOPA (UCSD20) *)
     PROCEDURE PackStringConstant(StringOffset: INTEGER); FORWARD;
+    (** Also: SELECTOR (UCSD20) *)
     PROCEDURE ApplySelectors(Followers: TokenSet; Named: Identifier); FORWARD;
+    (** Also: CALL (UCSD20) *)
     PROCEDURE CompileCall(Followers: TokenSet; Called: Identifier); FORWARD;

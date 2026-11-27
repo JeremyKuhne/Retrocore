@@ -1,10 +1,10 @@
-(** ROUTINE2.TEXT: ROUTINE, segment 10: the special standard procedures,
-    continued.
+(** ROUTINE2.TEXT: part 2 of 2 of ROUTINE: ROUTINE, segment 10: the special
+    standard procedures.
 
     Included by COMPILER.TEXT after ROUTINE1.TEXT and before STATEMEN1.TEXT.
 
     Procedures here, nested ones indented:
-      OtherCall *)
+            OtherCall *)
 
       (** The other special procedures and functions: EOF, EOLN, PRED, SUCC,
           ORD, SQR, ABS, LENGTH, INSERT, POS, TIME, RESET, REWRITE, TRUNC,

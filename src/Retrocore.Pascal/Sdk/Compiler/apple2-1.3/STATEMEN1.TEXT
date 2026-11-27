@@ -3,7 +3,7 @@
     Included by COMPILER.TEXT after ROUTINE2.TEXT and before CASESTAT.TEXT.
 
     Procedures here, nested ones indented:
-      STATEMEN (segment) *)
+          STATEMEN (segment) *)
 
     (** Compiles a statement, with its label.
         Also: STATEMENT (UCSD20) *)

@@ -178,7 +178,7 @@ public static class PascalLint
     {
         foreach (PascalInclude include in program.Includes.Where(include => include.Path is null))
         {
-            string message = $"There is no file '{include.Name}' beside this one to include.";
+            string message = $"There is no file '{include.Name}' to include, beside this one or in its include folders.";
             problems.Add(Diagnostic(include.Token, "include", message) with { IsError = true });
         }
     }
@@ -229,7 +229,11 @@ public static class PascalLint
     {
         foreach (PascalDeclaration declaration in program.Declarations)
         {
-            if (declaration.Name.Contains('_', StringComparison.Ordinal))
+            if (PascalNames.IsLaterKeyword(declaration.Name))
+            {
+                Add(declaration, "name", $"'{declaration.Name}' is a reserved word of Apple Pascal 1.3: choose another.");
+            }
+            else if (declaration.Name.Contains('_', StringComparison.Ordinal))
             {
                 Add(declaration, "name", $"'{declaration.Name}' has an underscore, which the Compiler leaves out.");
             }
@@ -381,7 +385,7 @@ public static class PascalLint
             }
 
             // A use of a reserved word or standard identifier would otherwise find the declaration that gives it.
-            if (PascalNames.IsKeyword(also.Name) || PascalNames.IsStandard(also.Name))
+            if (PascalNames.IsKeyword(also.Name) || PascalNames.IsLaterKeyword(also.Name) || PascalNames.IsStandard(also.Name))
             {
                 Add($"The historical name {also.Name} is Pascal's own: give it in prose.");
             }

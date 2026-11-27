@@ -1,14 +1,14 @@
-(** DECLARAT3.TEXT: DECLARAT, segment 8: declarations, continued.
+(** DECLARAT3.TEXT: part 3 of 4 of DECLARAT: DECLARAT, segment 8: declarations.
 
     Included by COMPILER.TEXT after DECLARAT2.TEXT and before DECLARAT4.TEXT.
 
     Procedures here, nested ones indented:
-              SearchLibrary
-      DeclareLabels
-      DeclareConstants
-      DeclareTypes
-      DeclareVariables
-      DeclareRoutine *)
+                  SearchLibrary
+          DeclareLabels
+          DeclareConstants
+          DeclareTypes
+          DeclareVariables
+          DeclareRoutine *)
 
             (** The kind of the library's segment named UnitName with a kind
                 in Kinds, and its slot; -1 for none. *)

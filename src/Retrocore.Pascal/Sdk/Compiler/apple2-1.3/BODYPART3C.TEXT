@@ -1,349 +1,274 @@
-(** BODYPART3C.TEXT: BODYPART's code generator, continued.
+(** BODYPART3C.TEXT: part 3 of 3 of BODYPART3: BODYPART's code generator.
 
-    Included by COMPILER.TEXT after BODYPART3B.TEXT and before BODYPART3D.TEXT.
+    Included by COMPILER.TEXT after BODYPART3B.TEXT and before BODYPART4A.TEXT.
 
     Procedures here, nested ones indented:
-      CompileVariable
-      NumberExternalRoutine
-      PushVariableAddress
-      CompileCall
-        CompileInput
-        CompileOutput *)
+            CompileUserCall *)
 
-                    END;
-                    IF ODD(Offset) THEN
-                    BEGIN
-                      PushAddress;
-                      Operand.Literal.Ordinal := PackedAccess;
-                      EmitConstant(RoutineNumber);
-                      EmitConstant(CodeSegment)
-                    END
-                  END;
-                  IF Operand.DataType <> NIL THEN
-                    IF (Operand.DataType^.Form <= SetForm) AND
-                        (Operand.DataType^.Size > 1) THEN
-                    BEGIN
-                      PushAddress;
-                      Operand.Literal.Ordinal := MultipleAccess
-                    END
-                END
-              END;
-              NextToken
-            END
+      (** Compiles a call of a declared procedure: its arguments, by value or
+          VAR, and the call.
+          Also: CALLNONSPECIAL (UCSD20) *)
+      PROCEDURE CompileUserCall;
+        LABEL 1;
+        VAR
+          (** The arguments. *)
+          ArgumentCount: INTEGER;
+          (** The next parameter. *)
+          Parameter: LinkedSymbol;
+          (** Its type. *)
+          ExpectedType: Structure;
+          (** The argument is a character constant. *)
+          LiteralArgument: BOOLEAN;
+          (** It is not a variable of the parameter's size. *)
+          SizeDiffers: BOOLEAN;
+          (** The parameter's highest index. *)
+          Highest: INTEGER;
+          (** Its lowest. *)
+          Lowest: INTEGER;
+          (** The argument's constant value. *)
+          LiteralValue: WordValue;
+      BEGIN
+        WITH Called^ DO
+        BEGIN
+          Parameter := NextEntry;
+          IF StaticLevel = 1 THEN
+            IF RoutineKind <> 0 THEN
+              Error(399)
+        END;
+        IF Token = LeftParenthesisToken THEN
+        BEGIN
+          REPEAT
+            IF Parameter = NIL THEN
+              Error(126);
+            NextToken;
+            CompileExpression(Followers + [CommaToken, RightParenthesisToken]);
+            LiteralValue.Entry := Operand.Literal.Entry;
+            IF (Operand.DataType <> NIL) AND (Parameter <> NIL) THEN
+            BEGIN
+              ExpectedType := Parameter^.DataType;
+              IF (Parameter^.Class = FormalClass) OR (ExpectedType <> NIL) THEN
+              BEGIN
+                IF Parameter^.Class = ActualClass THEN
+                  IF Operand.DataType^.Form <= SetForm THEN
+                  BEGIN
+                    LiteralArgument := (Operand.DataType = CharStructure) AND
+                        (Operand.Kind = KnownValueOperand);
+                    SizeDiffers := (ExpectedType^.Size <>
+                        Operand.DataType^.Size) OR (Operand.Kind <>
+                        MemoryOperand);
+                    PushOperand;
+                    IF ExpectedType^.Form = SetForm THEN
+                      IF SizeDiffers THEN
+                        EmitOneOperand(AdjustSetCode, ExpectedType^.Size)
+                      ELSE
+                      BEGIN
+                        CodeCounter := CodeCounter - 1;
+                        IF ExpectedType^.Size > 127 THEN
+                          CodeCounter := CodeCounter - 2
+                      END
+                    ELSE
+                      IF ExpectedType^.Form = LongIntegerForm THEN
+                      BEGIN
+                        IF Operand.DataType = IntegerStructure THEN
+                        BEGIN
+                          EmitConstant(18);
+                          EmitExternalCall(30, 4);
+                          Operand.DataType := LongStructure
+                        END;
+                        IF SizeDiffers THEN
+                        BEGIN
+                          EmitConstant(ExpectedType^.Size);
+                          EmitConstant(0);
+                          EmitExternalCall(30, 4)
+                        END
+                        ELSE
+                          CodeCounter := CodeCounter - 1
+                      END
+                      ELSE
+                        IF (ExpectedType^.Form = SubrangeForm) AND CheckRanges
+                            THEN
+                        BEGIN
+                          EmitConstant(ORD(ExpectedType^.ArrayIsPacked));
+                          EmitConstant(ExpectedType^.MaximumValue);
+                          EmitOpcode(RangeCheckCode)
+                        END
+                        ELSE
+                          IF (Operand.DataType = IntegerStructure) AND
+                              CompatibleTypes(ExpectedType, RealStructure) THEN
+                          BEGIN
+                            EmitOpcode(FloatTopCode);
+                            Operand.DataType := RealStructure
+                          END
+                          ELSE
+                            IF LiteralArgument AND IsString(ExpectedType) THEN
+                              Operand.DataType := StringStructure
+                  END
+                  ELSE
+                  BEGIN
+                    LiteralArgument := IsString(Operand.DataType) AND
+                        (Operand.Kind = KnownValueOperand);
+                    PushAddress;
+                    IF LiteralArgument AND IsPackedChars(ExpectedType) THEN
+                      IF NOT ExpectedType^.ArrayIsString THEN
+                      BEGIN
+                        PackStringConstant(LastStringOffset);
+                        IF ExpectedType^.BaseType <> NIL THEN
+                        BEGIN
+                          GetBounds(ExpectedType^.BaseType, Lowest, Highest);
+                          IF Highest - Lowest + 1 <> Operand.DataType^.Capacity
+                              THEN
+                            Error(142)
+                        END;
+                        Operand.DataType := ExpectedType
+                      END
+                  END
+                ELSE
+                  IF Operand.Kind = MemoryOperand THEN
+                  BEGIN
+                    IF Operand.Literal.Ordinal = ByteAccess THEN
+                      IF ExpectedType = ByteStreamStructure THEN
+                      BEGIN
+                        EmitOpcode(AddIntegersCode);
+                        Operand.Literal.Ordinal := IndirectAccess;
+                        Operand.StaticLevel := 0
+                      END
+                      ELSE
+                        Error(103);
+                    PushAddress;
+                    IF ExpectedType <> NIL THEN
+                      WITH ExpectedType^ DO
+                        CASE Form OF
+                          LongIntegerForm, SetForm:
+                            IF Operand.DataType^.Size <> ExpectedType^.Size THEN
+                              Error(142);
+                          ArrayForm:
+                            IF ArrayIsPacked THEN
+                              IF ArrayIsString THEN
+                                IF (Capacity > Operand.DataType^.Capacity) AND
+                                    CheckVarStrings THEN
+                                  Error(175)
+                        END
+                  END
+                  ELSE
+                    Error(154);
+                IF NOT CompatibleTypes(ExpectedType, Operand.DataType) THEN
+                  IF (ExpectedType <> ByteStreamStructure) AND (ExpectedType <>
+                      WordStreamStructure) THEN
+                    Error(142)
+                  ELSE
+                    WITH Operand.DataType^ DO
+                      IF ExpectedType = ByteStreamStructure THEN
+                        IF (Form = ArrayForm) AND ArrayIsPacked AND
+                            (ElementsPerWord = 2) AND (ElementBits = 8) THEN
+                        BEGIN
+                        END
+                        ELSE
+                          IF (Operand.DataType = CharStructure) AND
+                              (LiteralValue.Ordinal = 4) THEN
+                          BEGIN
+                          END
+                          ELSE
+                            IF (Form = SubrangeForm) AND (MaximumValue = 255)
+                                THEN
+                            BEGIN
+                            END
+                            ELSE
+                              Error(142)
+                      ELSE
+                        IF (Form = ArrayForm) AND NOT ArrayIsPacked THEN
+                        BEGIN
+                        END
+                        ELSE
+                          IF Size = 1 THEN
+                          BEGIN
+                          END
+                          ELSE
+                            Error(142)
+              END
+            END;
+            IF Parameter <> NIL THEN
+              Parameter := Parameter^.Next
+          UNTIL Token <> CommaToken;
+          IF Token = RightParenthesisToken THEN
+            NextToken
+          ELSE
+            Error(4)
+        END;
+        IF Parameter <> NIL THEN
+          Error(126);
+        WITH Called^ DO
+          IF StaticLevel = 1 THEN
+          BEGIN
+            IF Class = ValueFunctionClass THEN
+            BEGIN
+              EmitConstant(0);
+              EmitConstant(0)
+            END;
+            IF RoutineNumber = 0 THEN
+              NumberExternalRoutine(Called);
+            IF InUnit THEN
+              IF IsImported THEN
+              BEGIN
+                EmitTwoOperands(CallExternalCode, CodeSegment, RoutineNumber);
+                AddLinkerReference(5, CodeSegment, CodeCounter - 2)
+              END
+              ELSE
+                GOTO 1
             ELSE
-              Error(2)
+            BEGIN
+              1:
+              IF CodeSegment <> CurrentSegment THEN
+                EmitTwoOperands(CallExternalCode, CodeSegment, RoutineNumber)
+              ELSE
+                IF Offset = 0 THEN
+                  EmitOneOperand(CallBaseCode, RoutineNumber)
+                ELSE
+                  IF Offset = Level THEN
+                    EmitOneOperand(CallLocalCode, RoutineNumber)
+                  ELSE
+                    IF Offset = 1 THEN
+                      EmitOneOperand(CallGlobalCode, RoutineNumber)
+                    ELSE
+                      EmitOneOperand(CallOuterCode, RoutineNumber)
+            END
           END
           ELSE
-          BEGIN
-            IF Operand.DataType <> NIL THEN
-              WITH Operand.DataType^ DO
-                IF (Form = PointerForm) OR (Form = FileForm) THEN
-                BEGIN
-                  PushOperand;
-                  Operand.Kind := MemoryOperand;
-                  Operand.Literal.Ordinal := IndirectAccess;
-                  Operand.StaticLevel := 0;
-                  IF Form = PointerForm THEN
-                    Operand.DataType := BaseType
-                  ELSE
-                  BEGIN
-                    Operand.DataType := BaseType;
-                    IF Operand.DataType = NIL THEN
-                      Error(399)
-                    ELSE
-                      IF Operand.DataType = CharStructure THEN
-                      BEGIN
-                        EmitConstant(0);
-                        Operand.Literal.Ordinal := ByteAccess
-                      END
-                  END;
-                  IF Operand.DataType <> NIL THEN
-                    IF (Operand.DataType^.Form <= SetForm) AND
-                        (Operand.DataType^.Size > 1) THEN
-                      Operand.Literal.Ordinal := MultipleAccess
-                END
-                ELSE
-                  Error(141);
-            NextToken
-          END;
-        IF NOT (Token IN Followers + SelectionStarters) THEN
-        BEGIN
-          Error(6);
-          SkipTokens(Followers + SelectionStarters)
-        END
-      END
-    END;
+            IF (Offset <> 21) AND (Offset <> 22) THEN
+              EmitOneOperand(CallStandardCode, Offset);
+        Operand.DataType := Called^.DataType
+      END;
 
-    (* Compiles a variable *)
-    PROCEDURE CompileVariable;
-      VAR
-        (** UCSD Pascal II.0 calls it LCP (UCSD20). *)
-        Found: SymbolLink;
     BEGIN
-      IF Token = NameToken THEN
+      IF Called^.StaticLevel = 2 THEN
       BEGIN
-        FindIdentifier(ClassesOfVariable + [FieldClass], Found);
-        NextToken
+        HasParentheses := TRUE;
+        Key := Called^.Offset;
+        IF Token = LeftParenthesisToken THEN
+          NextToken
+        ELSE
+          IF Key IN [ReadlnKey, WritelnKey..LineEndKey] THEN
+            HasParentheses := FALSE
+          ELSE
+            Error(9);
+        IF Key IN [PredecessorKey..AbsoluteKey, ReadUnitKey, WriteUnitKey,
+            TreeLookupKey, ScanKey, TruncateKey, StrKey] THEN
+        BEGIN
+          CompileExpression(Followers + [CommaToken, RightParenthesisToken]);
+          PushOperand
+        END;
+        IF Key IN [ReadKey, ReadlnKey] THEN
+          CompileInput
+        ELSE
+          IF Key IN [WriteKey, WritelnKey] THEN
+            CompileOutput
+          ELSE
+            ROUTINE(Followers, HasParentheses, Key);
+        IF HasParentheses THEN
+          IF Token = RightParenthesisToken THEN
+            NextToken
+          ELSE
+            Error(4)
       END
       ELSE
-      BEGIN
-        Error(2);
-        Found.Entry := DummyVariable.Entry
-      END;
-      ApplySelectors(Followers, Found.Entry)
+        CompileUserCall
     END;
-
-    (* Gives an external procedure the next procedure number *)
-    PROCEDURE NumberExternalRoutine;
-    BEGIN
-      WITH Unnumbered^ DO
-      BEGIN
-        RoutineNumber := NextRoutine;
-        IF NextRoutine > 254 THEN
-          Error(251)
-        ELSE
-          NextRoutine := NextRoutine + 1;
-        RoutineDictionary[RoutineNumber] := 0;
-        NeedsLinker := TRUE;
-        IsExternal := TRUE
-      END
-    END;
-
-    (* Loads a variable's address: LDA for one of its own, LOD for a VAR
-       parameter's *)
-    PROCEDURE PushVariableAddress;
-    BEGIN
-      WITH Variable^ DO
-        IF Class = ActualClass THEN
-          EmitTwoOperands(OuterAddressCode, StaticLevel, Offset)
-        ELSE
-          EmitTwoOperands(LoadOuterCode, StaticLevel, Offset)
-    END;
-
-    (* Compiles a call: of a special procedure, READ or WRITE, or of a
-       declared one *)
-    PROCEDURE CompileCall;
-      VAR
-        (** A special procedure's number.
-            Also: LKEY (UCSD20) *)
-        Key: INTEGER;
-        (** The call has a parenthesized list. *)
-        HasParentheses: BOOLEAN;
-
-      (** Compiles READ and READLN. *)
-      PROCEDURE CompileInput;
-        VAR
-          (** The variable. *)
-          Found: SymbolLink;
-          (** The file read. *)
-          InputFile: SymbolLink;
-      BEGIN
-        InputFile.Entry := InputIdentifier.Entry;
-        IF (Token = NameToken) AND HasParentheses THEN
-        BEGIN
-          FindIdentifier(ClassesOfVariable + [FieldClass], Found);
-          IF Found.Entry^.DataType <> NIL THEN
-            IF Found.Entry^.DataType^.Form = FileForm THEN
-              IF Found.Entry^.DataType^.BaseType = CharStructure THEN
-              BEGIN
-                NextToken;
-                InputFile.Entry := Found.Entry;
-                IF NOT (Token IN [CommaToken, RightParenthesisToken]) THEN
-                  Error(20);
-                IF Token = CommaToken THEN
-                  NextToken
-              END
-        END
-        ELSE
-          IF HasParentheses THEN
-            Error(2);
-        IF HasParentheses AND (Token <> RightParenthesisToken) THEN
-          REPEAT
-            PushVariableAddress(InputFile.Entry);
-            CompileVariable(Followers + [CommaToken, RightParenthesisToken]);
-            IF Operand.Literal.Ordinal = ByteAccess THEN
-              Error(103);
-            PushAddress;
-            IF Operand.DataType <> NIL THEN
-              IF CompatibleTypes(IntegerStructure, Operand.DataType) THEN
-                EmitTwoOperands(CallExternalCode, 0, 12)
-              ELSE
-                IF CompatibleTypes(RealStructure, Operand.DataType) THEN
-                  EmitExternalCall(31, 3)
-                ELSE
-                  IF CompatibleTypes(LongStructure, Operand.DataType) THEN
-                  BEGIN
-                    EmitConstant(Operand.DataType^.Size);
-                    EmitExternalCall(30, 2)
-                  END
-                  ELSE
-                    IF CompatibleTypes(CharStructure, Operand.DataType) THEN
-                      EmitTwoOperands(CallExternalCode, 0, 16)
-                    ELSE
-                      IF IsString(Operand.DataType) THEN
-                      BEGIN
-                        EmitConstant(Operand.DataType^.Capacity);
-                        EmitTwoOperands(CallExternalCode, 0, 18)
-                      END
-                      ELSE
-                        Error(125);
-            IF CheckInputOutput THEN
-              EmitOneOperand(CallStandardCode, 0);
-            LoopDone := Token <> CommaToken;
-            IF NOT LoopDone THEN
-              NextToken
-          UNTIL LoopDone;
-        IF Key = ReadlnKey THEN
-        BEGIN
-          PushVariableAddress(InputFile.Entry);
-          EmitTwoOperands(CallExternalCode, 0, 21);
-          IF CheckInputOutput THEN
-            EmitOneOperand(CallStandardCode, 0)
-        END
-      END;
-
-      (** Compiles WRITE and WRITELN. *)
-      PROCEDURE CompileOutput;
-        VAR
-          (** The value's type. *)
-          ValueType: Structure;
-          (** Its field width is the default. *)
-          DefaultWidth: BOOLEAN;
-          (** The first argument. *)
-          Found: SymbolLink;
-          (** The file written. *)
-          OutputFile: SymbolLink;
-          (** A string's length. *)
-          ArrayLength: INTEGER;
-          (** A packed array's lowest index. *)
-          Lowest: INTEGER;
-          (** A word CompileOutput never uses. *)
-          UnusedWord: INTEGER;
-      BEGIN
-        OutputFile.Entry := OutputIdentifier.Entry;
-        IF (Token = NameToken) AND HasParentheses THEN
-        BEGIN
-          FindIdentifier(ClassesOfVariable + [ConstantClass, FieldClass,
-              ValueFunctionClass], Found);
-          IF Found.Entry^.DataType <> NIL THEN
-            IF Found.Entry^.DataType^.Form = FileForm THEN
-              IF Found.Entry^.DataType^.BaseType = CharStructure THEN
-              BEGIN
-                NextToken;
-                OutputFile.Entry := Found.Entry;
-                IF NOT (Token IN [CommaToken, RightParenthesisToken]) THEN
-                  Error(20);
-                IF Token = CommaToken THEN
-                  NextToken
-              END
-        END;
-        IF HasParentheses AND (Token <> RightParenthesisToken) THEN
-          REPEAT
-            PushVariableAddress(OutputFile.Entry);
-            CompileExpression(Followers + [CommaToken, ColonToken,
-                RightParenthesisToken]);
-            ValueType := Operand.DataType;
-            IF ValueType <> NIL THEN
-              WITH ValueType^ DO
-                IF Form > LongIntegerForm THEN
-                  PushAddress
-                ELSE
-                BEGIN
-                  PushOperand;
-                  IF Form = LongIntegerForm THEN
-                  BEGIN
-                    EmitConstant(DecimalSize(36));
-                    EmitConstant(0);
-                    EmitExternalCall(30, 4)
-                  END
-                END;
-            IF Token = ColonToken THEN
-            BEGIN
-              NextToken;
-              CompileExpression(Followers + [CommaToken, ColonToken,
-                  RightParenthesisToken]);
-              IF Operand.DataType <> NIL THEN
-                IF Operand.DataType <> IntegerStructure THEN
-                  Error(20);
-              PushOperand;
-              DefaultWidth := FALSE
-            END
-            ELSE
-              DefaultWidth := TRUE;
-            IF ValueType = IntegerStructure THEN
-            BEGIN
-              IF DefaultWidth THEN
-                EmitConstant(0);
-              EmitTwoOperands(CallExternalCode, 0, 13)
-            END
-            ELSE
-              IF ValueType = RealStructure THEN
-              BEGIN
-                IF DefaultWidth THEN
-                  EmitConstant(0);
-                IF Token = ColonToken THEN
-                BEGIN
-                  NextToken;
-                  CompileExpression(Followers + [CommaToken,
-                      RightParenthesisToken]);
-                  PushOperand;
-                  IF Operand.DataType <> NIL THEN
-                    IF Operand.DataType <> IntegerStructure THEN
-                      Error(125)
-                END
-                ELSE
-                  EmitConstant(0);
-                EmitExternalCall(31, 4)
-              END
-              ELSE
-                IF CompatibleTypes(ValueType, LongStructure) THEN
-                BEGIN
-                  IF DefaultWidth THEN
-                    EmitConstant(0);
-                  EmitExternalCall(30, 3)
-                END
-                ELSE
-                  IF ValueType = CharStructure THEN
-                  BEGIN
-                    IF DefaultWidth THEN
-                      EmitConstant(0);
-                    EmitTwoOperands(CallExternalCode, 0, 17)
-                  END
-                  ELSE
-                    IF IsString(ValueType) THEN
-                    BEGIN
-                      IF DefaultWidth THEN
-                        EmitConstant(0);
-                      EmitTwoOperands(CallExternalCode, 0, 19)
-                    END
-                    ELSE
-                      IF IsPackedChars(ValueType) AND (ValueType <>
-                          ByteStreamStructure) THEN
-                      BEGIN
-                        ArrayLength := 0;
-                        IF ValueType^.BaseType <> NIL THEN
-                        BEGIN
-                          GetBounds(ValueType^.BaseType, Lowest, ArrayLength);
-                          ArrayLength := ArrayLength - Lowest + 1
-                        END;
-                        IF DefaultWidth THEN
-                          EmitConstant(ArrayLength);
-                        EmitConstant(ArrayLength);
-                        EmitTwoOperands(CallExternalCode, 0, 20)
-                      END
-                      ELSE
-                        Error(125);
-            IF CheckInputOutput THEN
-              EmitOneOperand(CallStandardCode, 0);
-            LoopDone := Token <> CommaToken;
-            IF NOT LoopDone THEN
-              NextToken
-          UNTIL LoopDone;
-        IF Key = WritelnKey THEN
-        BEGIN
-          PushVariableAddress(OutputFile.Entry);
-          EmitTwoOperands(CallExternalCode, 0, 22);
-          IF CheckInputOutput THEN
-            EmitOneOperand(CallStandardCode, 0)
-        END
-      END;

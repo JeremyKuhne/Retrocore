@@ -3,7 +3,7 @@
     Included by COMPILER.TEXT after BODYPART2.TEXT and before BODY3.TEXT.
 
     Procedures here, nested ones indented:
-      BODY1 (segment) *)
+            BODY1 (segment) *)
 
       (** CompileRoutineBody's start: copies value parameters, makes the
           labels, and starts a program's units.

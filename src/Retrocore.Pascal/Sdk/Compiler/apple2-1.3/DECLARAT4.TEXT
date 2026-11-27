@@ -1,9 +1,9 @@
-(** DECLARAT4.TEXT: DECLARAT, segment 8: declarations, continued.
+(** DECLARAT4.TEXT: part 4 of 4 of DECLARAT: DECLARAT, segment 8: declarations.
 
     Included by COMPILER.TEXT after DECLARAT3.TEXT and before BODYPART1.TEXT.
 
     Procedures here, nested ones indented:
-      DeclareParameters *)
+            DeclareParameters *)
 
       (** Compiles the parameters, giving each its words.
 

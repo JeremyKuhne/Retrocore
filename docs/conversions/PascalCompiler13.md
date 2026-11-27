@@ -2,7 +2,7 @@
 
 `src/Retrocore.Pascal/Sdk/Compiler/apple2-1.3/`, shipped as `Sdk/Pascal/Compiler/apple2-1.3/`: `SYSTEM.COMPILER`,
 Apple Pascal 1.3's Compiler, in the SDK's [Pascal style](../PascalStyle.md). A main file, `COMPILER.TEXT`, includes
-38 others in order, one of them, `SYSGLOBALS.TEXT`, from `src/Retrocore.Pascal/Sdk/System/apple2-1.3/`; the two
+37 others in order, one of them, `SYSGLOBALS.TEXT`, from `src/Retrocore.Pascal/Sdk/System/apple2-1.3/`; the two
 procedures in 6502 code are `ASSEMBLED.TEXT`, for Apple's Assembler. One build:
 
 | Build | How | Tests |
@@ -30,14 +30,14 @@ procedures in 6502 code are `ASSEMBLED.TEXT`, for Apple's Assembler. One build:
   standard identifier's key, every use still finding its declaration, and inside a WITH no field sharing a
   variable's key. One word for each concept ([below](#words)). [PascalCompiler13Renames.md](PascalCompiler13Renames.md)
   lists each.
-- **PC4. Historical names.** A doc's `Also:` gives the name a document has for the thing, checked by script: 397
+- **PC4. Historical names.** A doc's `Also:` gives the name a document has for the thing, checked by script: 453
   from UCSD Pascal II.0's listing (UCSD20), where the private source's comment cited II.0 for the name and the
   listing's OCR text has the word, or where a constant's value and its type are both in it; 83 p-code mnemonics from
   Apple's manual (A2POSRM), the ones the SDK's interpreter cites. A name given to more than one declaration, or with
-  another declaration's key, goes in a remark instead (177: "UCSD Pascal II.0 calls it LCP (UCSD20)"); one that is a
+  another declaration's key, goes in a remark instead (136: "UCSD Pascal II.0 calls it LCP (UCSD20)"); one that is a
   reserved word or standard identifier (`EXIT`, `SCAN`) is never an `Also:`, as a use of it would find the
   declaration, which the lint now reports. Citations the listing doesn't confirm are left out.
-- **PC5. The docs.** A declaration's comment, above it or after it on its line, is its `(** *)` doc: 1,148 docs. A
+- **PC5. The docs.** A declaration's comment, above it or after it on its line, is its `(** *)` doc: 1,186 docs. A
   doc after a declaration that declares one name moves above it; a group's comment over constants stays a comment
   (`(* The tokens the scanner finds. *)`). Old names in the prose are the new ones.
 - **PC6. Constants.** One to a line, each with its doc, where the decompiler put several on a line. They stay

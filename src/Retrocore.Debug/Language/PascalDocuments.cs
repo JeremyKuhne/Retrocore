@@ -225,7 +225,8 @@ internal sealed class PascalDocuments
 
     private PascalAnalysis Analyze(string root)
     {
-        PascalProgram program = PascalProgram.Analyze(root, Read, PascalIncludeFolders.For(root));
+        IReadOnlyList<string> includeFolders = PascalIncludeFolders.For(root);
+        PascalProgram program = PascalProgram.Analyze(root, Read, includeFolders);
 
         // The files read from disk; the folders an include was looked for in, whose times change as a file in them
         // is added or removed; and the Pascal files beside them, any of which may become a main file that reads one.
@@ -233,7 +234,10 @@ internal sealed class PascalDocuments
         foreach (PascalSourceFile file in program.Files)
         {
             if (!_open.ContainsKey(file.Path)) { stamps[file.Path] = PascalAnalysis.Stamp(file.Path); }
-            string folder = Path.GetDirectoryName(file.Path) ?? "";
+        }
+
+        foreach (string folder in program.Files.Select(file => Path.GetDirectoryName(file.Path) ?? "").Concat(includeFolders))
+        {
             if (stamps.TryAdd(folder, PascalAnalysis.Stamp(folder)))
             {
                 foreach (string beside in Beside(folder).Where(beside => !_open.ContainsKey(beside)))

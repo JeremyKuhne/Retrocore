@@ -14,20 +14,22 @@ public static class PascalNames
     /// </summary>
     public const int Significant = 8;
 
-    // The reserved words of Apple Pascal: 1.1's, as its interpreter's IdSearch table has them (each read to 8
-    // letters), and OTHERWISE, which 1.3's Compiler adds (its IDSCAN's table, where SEPARATE is not one). Every
-    // version's sources share names, so a name is none of any version's.
+    // Apple Pascal 1.1's reserved words, as its interpreter's IdSearch table has them (each read to 8 letters).
     private static readonly HashSet<string> s_keywords =
     [
         .. new[]
         {
             "AND", "ARRAY", "BEGIN", "CASE", "CONST", "DIV", "DO", "DOWNTO", "ELSE", "END", "EXTERNAL", "FILE", "FOR",
             "FORWARD", "FUNCTION", "GOTO", "IF", "IMPLEMENTATION", "IN", "INTERFACE", "LABEL", "MOD", "NOT", "OF", "OR",
-            "OTHERWISE",
             "PACKED", "PROCEDURE", "PROGRAM", "RECORD", "REPEAT", "SEGMENT", "SEPARATE", "SET", "THEN", "TO", "TYPE",
             "UNIT", "UNTIL", "USES", "VAR", "WHILE", "WITH"
         }.Select(Key)
     ];
+
+    // The words a later version reserves: OTHERWISE, which 1.3's Compiler adds (its IDSCAN's table, where SEPARATE is
+    // not one). A 1.1 program may use one as a name, so it reads as a name; the SDK's sources, which every version's
+    // Compiler compiles, use none.
+    private static readonly HashSet<string> s_laterKeywords = [.. new[] { "OTHERWISE" }.Select(Key)];
 
     // The standard identifiers of Apple Pascal and Apple III Pascal: the predeclared types, constants, files,
     // procedures and functions, and the words that are reserved only where they appear (INTRINSIC, CODE, DATA).
@@ -63,6 +65,13 @@ public static class PascalNames
     /// <param name="word">The word, in any case.</param>
     /// <returns>Whether it is.</returns>
     public static bool IsKeyword(string word) => s_keywords.Contains(Key(word));
+
+    /// <summary>
+    ///  Gets whether a word is reserved by some version of Apple Pascal, if not by 1.1: <c>OTHERWISE</c>, 1.3's.
+    /// </summary>
+    /// <param name="word">The word.</param>
+    /// <returns>Whether it is.</returns>
+    public static bool IsLaterKeyword(string word) => s_laterKeywords.Contains(Key(word));
 
     /// <summary>
     ///  Gets whether a name is one of Pascal's standard identifiers.

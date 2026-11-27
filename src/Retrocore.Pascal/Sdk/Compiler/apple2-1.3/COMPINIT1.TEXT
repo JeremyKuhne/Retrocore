@@ -1,16 +1,17 @@
-(** COMPINIT1.TEXT: COMPINIT, segment 7: starting a compile.
+(** COMPINIT1.TEXT: part 1 of 2 of COMPINIT: COMPINIT, segment 7: starting a
+    compile.
 
     Included by COMPILER.TEXT after PASCALCO1B.TEXT and before COMPINIT2.TEXT.
 
     Procedures here, nested ones indented:
-      COMPINIT (segment)
-        MakeStandardTypes
-        EnterStandardNames
-        MakeDummies
-        AddNames
-        NextName
-        EnterSpecialRoutines
-        EnterSystemRoutines *)
+        COMPINIT (segment)
+          MakeStandardTypes
+          EnterStandardNames
+          MakeDummies
+          AddNames
+          NextName
+          EnterSpecialRoutines
+          EnterSystemRoutines *)
 
   (*$NS 7*)  (* The next segment is numbered 7. *)
   (** Starts the Compiler: checks the system's version, sets the options and
@@ -44,14 +45,14 @@
         (** The index type of the streams, 1..32767. *)
         StreamRange: RangeStructure;
     BEGIN
-      NEW(IntegerStructure, SetTypeSize);
+      NEW(IntegerStructure, PointerTypeSize);
       WITH IntegerStructure^ DO
       BEGIN
         Size := 1;
         Form := ScalarForm;
         ScalarKind := 0
       END;
-      NEW(RealStructure, SetTypeSize);
+      NEW(RealStructure, PointerTypeSize);
       WITH RealStructure^ DO
       BEGIN
         Size := 2;
@@ -64,7 +65,7 @@
         Size := DecimalSize((16 - 1) * 100 DIV 332 + 1);
         Form := LongIntegerForm
       END;
-      NEW(CharStructure, SetTypeSize);
+      NEW(CharStructure, PointerTypeSize);
       WITH CharStructure^ DO
       BEGIN
         Size := 1;
@@ -78,7 +79,7 @@
         Form := ScalarForm;
         ScalarKind := 1
       END;
-      NEW(NilStructure, SetTypeSize);
+      NEW(NilStructure, PointerTypeSize);
       WITH NilStructure^ DO
       BEGIN
         Size := 1;
@@ -92,7 +93,7 @@
         Form := FileForm;
         BaseType := CharStructure
       END;
-      NEW(TextInteractiveStructure, SetTypeSize);
+      NEW(TextInteractiveStructure, PointerTypeSize);
       WITH TextInteractiveStructure^ DO
       BEGIN
         Size := 300 + 1;
@@ -133,7 +134,7 @@
         ElementsPerWord := 2;
         ElementType := CharStructure
       END;
-      NEW(WordStreamStructure, ArrayTypeSize);
+      NEW(WordStreamStructure, RangeTypeSize);
       WITH WordStreamStructure^ DO
       BEGIN
         Form := ArrayForm;
@@ -401,7 +402,7 @@
     END;
 
     (** Enters the special procedures, which the Compiler compiles itself
-        (ROUTINE), each with its Target.
+        (ROUTINE), each with its key.
         Also: ENTSPCPROCS (UCSD20) *)
     PROCEDURE EnterSpecialRoutines;
       LABEL 1;
@@ -453,7 +454,7 @@
     END;
 
     (** Enters the standard procedures and functions that are calls of the
-        system's (BigValue), with their parameters.
+        system's (CSP), with their parameters.
         Also: ENTSTDPROCS (UCSD20) *)
     PROCEDURE EnterSystemRoutines;
       LABEL 1;

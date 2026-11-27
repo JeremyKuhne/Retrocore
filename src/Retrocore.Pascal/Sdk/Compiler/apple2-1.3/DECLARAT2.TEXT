@@ -1,14 +1,14 @@
-(** DECLARAT2.TEXT: DECLARAT, segment 8: declarations, continued.
+(** DECLARAT2.TEXT: part 2 of 4 of DECLARAT: DECLARAT, segment 8: declarations.
 
     Included by COMPILER.TEXT after DECLARAT1.TEXT and before DECLARAT3.TEXT.
 
     Procedures here, nested ones indented:
-          CompileVariants
-        MakePointerType
-      DeclareUses
-        UseUnit
-          FindInterface
-            IsInLibrary *)
+              CompileVariants
+            MakePointerType
+          DeclareUses
+            UseUnit
+              FindInterface
+                IsInLibrary *)
 
         (** Compiles a variant part: CASE, the tag field and the variants
             (II.0: FIELDLIST's). *)
@@ -102,7 +102,7 @@
                 IF NOT CompatibleTypes(FieldType^.BaseType^.FieldDataType,
                     Variant) THEN
                   Error(111);
-              NEW(Variant, ArrayTypeSize);
+              NEW(Variant, RangeTypeSize);
               WITH Variant^ DO
               BEGIN
                 ElementType := VariantChain;
@@ -254,10 +254,11 @@
 
       (** Compiles a pointer type, entering a target not yet declared in
           ForwardPointers.
-          Also: POINTERTYPE (UCSD20) *)
+
+          UCSD Pascal II.0 calls it POINTERTYPE (UCSD20). *)
       PROCEDURE MakePointerType;
       BEGIN
-        NEW(Built, SetTypeSize);
+        NEW(Built, PointerTypeSize);
         TypeMade := Built;
         WITH Built^ DO
         BEGIN
@@ -334,7 +335,7 @@
                 IF Packing THEN
                   NEW(Built, PackedTypeSize)
                 ELSE
-                  NEW(Built, ArrayTypeSize);
+                  NEW(Built, RangeTypeSize);
                 WITH Built^ DO
                 BEGIN
                   ElementType := Part;
@@ -474,7 +475,7 @@
                         Error(114);
                         Part := NIL
                       END;
-                  NEW(Built, SetTypeSize);
+                  NEW(Built, PointerTypeSize);
                   WITH Built^ DO
                   BEGIN
                     BaseType := Part;
@@ -500,7 +501,7 @@
                       IF NOT (InInterface OR AllowUnitFiles) THEN
                         Error(191);
                     NextToken;
-                    NEW(Built, SetTypeSize);
+                    NEW(Built, PointerTypeSize);
                     WITH Built^ DO
                     BEGIN
                       Form := FileForm;
@@ -572,7 +573,7 @@
           OldNextRoutine: INTEGER;
           (** Not used. *)
           Unused: INTEGER;
-          (** CurrentSegment before. *)
+          (** SEG before. *)
           OldSegment: INTEGER;
           (** DataCounter before. *)
           OldDataCounter: INTEGER;

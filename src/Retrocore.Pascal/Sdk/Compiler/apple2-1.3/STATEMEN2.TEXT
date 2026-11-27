@@ -3,13 +3,13 @@
     Included by COMPILER.TEXT after FORSTATE.TEXT and before BODYPART2.TEXT.
 
     Procedures here, nested ones indented:
-      Assignment
-      GotoStatement
-      CompoundStatement
-      IfStatement
-      RepeatStatement
-      WhileStatement
-      WithStatement *)
+            Assignment
+            GotoStatement
+            CompoundStatement
+            IfStatement
+            RepeatStatement
+            WhileStatement
+            WithStatement *)
 
       (** Compiles an assignment. *)
       PROCEDURE Assignment(Assigned: Identifier);

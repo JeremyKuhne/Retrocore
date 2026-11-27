@@ -1,10 +1,10 @@
-(** BODYPART4B.TEXT: BODYPART's expressions and body, continued.
+(** BODYPART4B.TEXT: part 2 of 2 of BODYPART4: BODYPART's expressions and body.
 
     Included by COMPILER.TEXT after BODYPART4A.TEXT and before WRITELIN.TEXT.
 
     Procedures here, nested ones indented:
-        MakePackedArray
-      KeepRoutineResident *)
+            MakePackedArray
+          KeepRoutineResident *)
 
       (** Makes a string or a character a packed array of characters, for one
           compared or assigned to it.
@@ -16,7 +16,7 @@
           Highest: INTEGER;
           (** UCSD Pascal II.0 calls it LMIN (UCSD20). *)
           Lowest: INTEGER;
-          (** The packed array's type. *)
+          (** The new index subrange type of the packed array. *)
           IndexSubrange: ShortStructure;
       BEGIN
         IF ArrayStructure <> ByteStreamStructure THEN

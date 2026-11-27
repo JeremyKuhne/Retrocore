@@ -3,7 +3,7 @@
     Included by COMPILER.TEXT after STATEMEN1.TEXT and before FORSTATE.TEXT.
 
     Procedures here, nested ones indented:
-      CASESTAT (segment) *)
+            CASESTAT (segment) *)
 
       (** Compiles CASE: the selector, each case's code, and the jump table.
           Also: CASESTATEMENT (UCSD20) *)

@@ -1,27 +1,28 @@
-(** ROUTINE1.TEXT: ROUTINE, segment 10: the special standard procedures.
+(** ROUTINE1.TEXT: part 1 of 2 of ROUTINE: ROUTINE, segment 10: the special
+    standard procedures.
 
     Included by COMPILER.TEXT after BODYPART1.TEXT and before ROUTINE2.TEXT.
 
     Procedures here, nested ones indented:
-      ROUTINE (segment)
-        SkipComma
-        CheckInteger
-        StringArgument
-        NewCall
-        MoveCall
-        ExitCall
-        UnitTransferCall
-        ConcatCall
-        StringRoutineCall
-        StrCall
-        CloseCall
-        FileRoutineCall
-        ScanCall
-        BlockTransferCall
-        SizeOfCall *)
+          ROUTINE (segment)
+            SkipComma
+            CheckInteger
+            StringArgument
+            NewCall
+            MoveCall
+            ExitCall
+            UnitTransferCall
+            ConcatCall
+            StringRoutineCall
+            StrCall
+            CloseCall
+            FileRoutineCall
+            ScanCall
+            BlockTransferCall
+            SizeOfCall *)
 
     (** Compiles a call of a special procedure, which the Compiler compiles
-        itself, by its Target. *)
+        itself, by its Key. *)
     SEGMENT PROCEDURE ROUTINE(Followers: TokenSet; HasParentheses: BOOLEAN;
         Key: INTEGER);
       VAR
@@ -315,7 +316,7 @@
         Operand.DataType^.Capacity := TotalLength
       END;
 
-      (** DELETE, COPY and GOTOXY, whose first arguments are strings. *)
+      (** DELETE and COPY, whose first arguments are strings, and GOTOXY. *)
       PROCEDURE StringRoutineCall;
         VAR
           (** A temporary. *)

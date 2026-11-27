@@ -1,11 +1,12 @@
-(** COMPINIT2.TEXT: COMPINIT, segment 7: starting a compile, continued.
+(** COMPINIT2.TEXT: part 2 of 2 of COMPINIT: COMPINIT, segment 7: starting a
+    compile.
 
     Included by COMPILER.TEXT after COMPINIT1.TEXT and before DECLARAT1.TEXT.
 
     Procedures here, nested ones indented:
-      SetGlobals
-      MakeTokenSets
-      CheckSystemVersion *)
+          SetGlobals
+          MakeTokenSets
+          CheckSystemVersion *)
 
     (** Sets the Compiler's globals and options as they start.
         Also: INITSCALARS (UCSD20) *)

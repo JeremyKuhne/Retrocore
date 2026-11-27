@@ -3,10 +3,10 @@
     Included by COMPILER.TEXT after BODYPART4B.TEXT and before UNITPART.TEXT.
 
     Procedures here, nested ones indented:
-      WRITELIN (segment)
-        EmitReferences
-          ReadNextBlock
-        EmitEntries *)
+        WRITELIN (segment)
+          EmitReferences
+            ReadNextBlock
+          EmitEntries *)
 
   (** Writes the linker information after the segment's code: each global and
       external identifier with the places that refer to it, from
@@ -27,7 +27,7 @@
       (** A variable of another unit's. *)
       InOtherUnit: BOOLEAN;
 
-    (** Writes the places that refer to identifier TokenName, and their
+    (** Writes the places that refer to identifier TargetSought, and their
         count.
         Also: GETREFS (UCSD20) *)
     PROCEDURE EmitReferences(TargetSought: INTEGER);

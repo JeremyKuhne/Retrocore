@@ -1,18 +1,18 @@
-(** DECLARAT1.TEXT: DECLARAT, segment 8: declarations.
+(** DECLARAT1.TEXT: part 1 of 4 of DECLARAT: DECLARAT, segment 8: declarations.
 
     Included by COMPILER.TEXT after COMPINIT2.TEXT and before DECLARAT2.TEXT.
 
     Procedures here, nested ones indented:
-      DECLARAT (segment)
-        CheckFollowers
-        CompileType
-          CompileSimpleType
-          IsPackable
-          CompileFields
-            PlaceField *)
+        DECLARAT (segment)
+          CheckFollowers
+          CompileType
+            CompileSimpleType
+            IsPackable
+            CompileFields
+              PlaceField *)
 
   (** Compiles a block's declarations: USES, LABEL, CONST, TYPE, VAR, and
-      procedures and functions [II.0 DECLARATIONPART].
+      procedures and functions.
       Also: DECLARATIONPART (UCSD20) *)
   SEGMENT PROCEDURE DECLARAT(Followers: TokenSet);
     VAR
@@ -152,7 +152,7 @@
               FindIdentifier([TypeClass, ConstantClass], Named);
               IF Named.Entry^.Class = ConstantClass THEN
               BEGIN
-                NEW(Built, ArrayTypeSize);
+                NEW(Built, RangeTypeSize);
                 WITH Built^ DO
                 BEGIN
                   WITH Named.Entry^ DO
@@ -257,7 +257,7 @@
             END
             ELSE
             BEGIN
-              NEW(Built, ArrayTypeSize);
+              NEW(Built, RangeTypeSize);
               Built^.Form := SubrangeForm;
               ReadConstant(Followers + [ColonToken], BoundType, Value);
               IF IsString(BoundType) THEN

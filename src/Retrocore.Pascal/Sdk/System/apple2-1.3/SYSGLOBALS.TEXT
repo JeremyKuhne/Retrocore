@@ -52,7 +52,8 @@
 VAR
   (** The system's globals before WorkCodeFile: the start of its USERINFO
       record.
-      Also: INFOREC (UCSD20) *)
+
+      UCSD Pascal II.0 calls the whole record INFOREC (UCSD20). *)
   SystemGlobals: SystemHead;
 
   (** The work code file the Compiler writes, and reads a unit's interface
@@ -181,13 +182,13 @@ PROCEDURE DeleteEntry; FORWARD;
 (** Inserts a directory entry.
     Also: INSENTRY (UCSD20) *)
 PROCEDURE InsertEntry; FORWARD;
-(** II.0's. *)
+(** Moves the cursor to the top left. *)
 PROCEDURE HomeCursor; FORWARD;
-(** II.0's. *)
+(** Clears the screen. *)
 PROCEDURE ClearScreen; FORWARD;
-(** II.0's. *)
+(** Clears the line the cursor is on. *)
 PROCEDURE ClearLine; FORWARD;
-(** II.0's. *)
+(** Shows a command line's prompt. *)
 PROCEDURE Prompt; FORWARD;
 (** II.0's.
     Also: SPACEWAIT (UCSD20) *)

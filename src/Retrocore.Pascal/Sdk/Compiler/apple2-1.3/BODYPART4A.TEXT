@@ -1,16 +1,17 @@
-(** BODYPART4A.TEXT: BODYPART's expressions and body.
+(** BODYPART4A.TEXT: part 1 of 2 of BODYPART4: BODYPART's expressions and body.
 
-    Included by COMPILER.TEXT after BODYPART3D.TEXT and before BODYPART4B.TEXT.
+    Included by COMPILER.TEXT after BODYPART3C.TEXT and before BODYPART4B.TEXT.
 
     Procedures here, nested ones indented:
-      CompileExpression
-        FloatOperands
-        WidenOperands
-        CompileSimpleExpression
-          CompileTerm
-            CompileFactor *)
+          CompileExpression
+            FloatOperands
+            WidenOperands
+            CompileSimpleExpression
+              CompileTerm
+                CompileFactor *)
 
-    (* Compiles an expression: a simple expression, or two compared *)
+    (** Compiles an expression: a simple expression, or two compared.
+        Also: EXPRESSION (UCSD20) *)
     PROCEDURE CompileExpression;
       LABEL 1;
       VAR
@@ -18,8 +19,9 @@
         LeftOperand: OperandEntry;
         (** UCSD Pascal II.0 calls it LOP (UCSD20). *)
         Comparison: INTEGER;
-        (** What a comparison compares: 0 words, 1 reals, 3 strings and
-            others. *)
+        (** What a comparison compares, for its p-code: 0 words (scalars and
+            pointers), 1 reals, 2 strings, 3 booleans, 4 sets, 5 packed
+            characters, 6 other arrays, 7 long integers. *)
         CompareKind: INTEGER;
         (** Their words, or bytes. *)
         CompareSize: INTEGER;
@@ -85,7 +87,7 @@
           LeftOperand: OperandEntry;
           (** UCSD Pascal II.0 calls it LOP (UCSD20). *)
           SumOperator: INTEGER;
-          (** It starts with a sign.
+          (** It starts with a minus sign.
               Also: SIGNED (UCSD20) *)
           Negated: BOOLEAN;
 
@@ -110,9 +112,9 @@
               (** A word CompileFactor never uses (II.0's FACTOR has its LVP
                   here). *)
               UnusedWord: INTEGER;
-              (** The set has elements that are not constants. *)
+              (** The current element is a constant. *)
               ElementIsConstant: BOOLEAN;
-              (** The first element. *)
+              (** A set value is on the stack, which the next element joins. *)
               SetOnStack: BOOLEAN;
               (** A string constant's type. *)
               NewType: Structure;
@@ -234,7 +236,7 @@
                   NextToken;
                   KnownMembers := [];
                   SetOnStack := FALSE;
-                  NEW(NewType, SetTypeSize);
+                  NEW(NewType, PointerTypeSize);
                   WITH NewType^ DO
                   BEGIN
                     BaseType := NIL;

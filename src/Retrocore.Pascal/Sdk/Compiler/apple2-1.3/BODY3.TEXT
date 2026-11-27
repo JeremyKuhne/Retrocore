@@ -3,8 +3,8 @@
     Included by COMPILER.TEXT after BODY1.TEXT and before BODYPART3A.TEXT.
 
     Procedures here, nested ones indented:
-      BODY3 (segment)
-        EmitUnitCode *)
+            BODY3 (segment)
+              EmitUnitCode *)
 
       (** CompileRoutineBody's end: closes the block's files, ends the units,
           writes the jump table and the procedure's attributes, and the code.

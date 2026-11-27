@@ -1,5 +1,5 @@
-(** TYPES1.TEXT: the types: the symbol table's entries, types and constants,
-    operands, scopes, labels and the code file's records.
+(** TYPES1.TEXT: part 1 of 3 of TYPES: the types: the symbol table's entries,
+    types and constants, operands, scopes, labels and the code file's records.
 
     Included by COMPILER.TEXT after CONSTANTS2.TEXT and before TYPES2.TEXT. *)
 
@@ -8,8 +8,8 @@ TYPE
       Also: ALPHA (UCSD20) *)
   Spelling = PACKED ARRAY[0..7] OF CHAR;
 
-  (** A Identifier that is also used as a word (I) [the decompiler's variant
-      record for it]. *)
+  (** An Identifier that is also used as a word (Word): the decompiler's variant
+      record for it. *)
   SymbolLink = RECORD CASE BOOLEAN OF TRUE: (Word: INTEGER); FALSE: (Entry:
       ^SymbolEntry) END;
 
@@ -39,8 +39,7 @@ TYPE
 
   (** Its structure: Size, Form, BaseType. *)
   PointerEntry = RECORD
-      (** Size.
-          Also: PSIZE (UCSD20) *)
+      (** Size. *)
       Size: INTEGER;
       (** Form, 2 PointerForm. *)
       Form: INTEGER;
@@ -63,8 +62,7 @@ TYPE
         0: (DataType: Structure;
            (** The next parameter. *)
            Next: NextFormal;
-           (** Its class: 2 FormalClass, 3 ActualClass.
-               Also: KLASS (UCSD20) *)
+           (** Its class: 2 FormalClass, 3 ActualClass. *)
            Class: INTEGER;
            (** Words 9 and 10, which a parameter's description has no use
                for. *)
@@ -96,7 +94,7 @@ TYPE
       Also: CONSTREC (UCSD20) *)
   ValueEntry = RECORD
       (** Its kind.
-          Also: CSTCLASS (UCSD20) *)
+          Also: CCLASS (UCSD20) *)
       Kind: INTEGER;
       CASE INTEGER OF
         (** A string's length; a long integer's LLAST, its last word's
@@ -140,7 +138,7 @@ TYPE
       field here is named for its most common use: word 9: StaticLevel
       (vars), FLDADDR (fields), PFDECKIND (procedures: 0 standard, 1
       declared, 2 special), SEGID (units); word 10: Offset (vars), FISPACKD
-      (fields), PFLEV or Target/CSPNUM (procedures); words 11-18: FLDWIDTH
+      (fields), PFLEV or KEY/CSPNUM (procedures); words 11-18: FLDWIDTH
       and FLDRBIT (fields), RoutineNumber, CodeSegment, RoutineKind,
       LocalsStart, IsForward, IsExternal, IsOpen, IsImported (procedures).
 
@@ -164,8 +162,8 @@ TYPE
            Next: SymbolLink;
            (** What it is: 0 TypeClass, 1 ConstantClass, 2 FormalClass, 3
                ActualClass, 4 FieldClass, 5 ProperProcedureClass, 6
-               ValueFunctionClass, 7 ModuleClass [II.0 IDCLASS].
-               Also: IDCLASS (UCSD20) *)
+               ValueFunctionClass, 7 ModuleClass.
+               Also: KLASS (UCSD20) *)
            Class: INTEGER;
            (** StaticLevel, a variable's level; FLDADDR, a field's word;
                PFDECKIND, a procedure's kind (0 standard, 1 declared, 2
@@ -173,7 +171,7 @@ TYPE
                Also: VLEV (UCSD20) *)
            StaticLevel: INTEGER;
            (** Offset, a variable's word; FISPACKD, whether a field is
-               packed; PFLEV, a procedure's level, or Target, a standard
+               packed; PFLEV, a procedure's level, or the key, a standard
                one's number.
                Also: VADDR (UCSD20) *)
            Offset: INTEGER;

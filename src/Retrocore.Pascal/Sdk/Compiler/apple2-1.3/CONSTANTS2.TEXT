@@ -1,5 +1,6 @@
-(** CONSTANTS2.TEXT: the constants: tokens, operators, classes and forms, kinds,
-    the special standard routines' keys and the p-code's opcodes.
+(** CONSTANTS2.TEXT: part 2 of 2 of CONSTANTS: the constants: tokens, operators,
+    classes and forms, kinds, the special standard routines' keys and the
+    p-code's opcodes.
 
     Included by COMPILER.TEXT after CONSTANTS1.TEXT and before TYPES1.TEXT. *)
 
@@ -273,7 +274,7 @@
   (** UCSD Pascal II.0 calls it BYTE (UCSD20). *)
   ByteAccess = 4;
 
-  (** ValueEntry's variants. *)
+  (* ValueEntry's variants. *)
   ValueFields = 0;
   ValueSetView = 1;
   ValueRealView = 2;
@@ -281,7 +282,7 @@
   RealRecordSize = 103;
   LongRecordSize = 112;
 
-  (** SymbolEntry's variants. *)
+  (* SymbolEntry's variants. *)
   SymbolFields = 0;
   SymbolValuesView = 1;
   SymbolNextView = 2;
@@ -293,7 +294,7 @@
   UnitIdentifierSize = 114;
   RoutineIdentifierSize = 118;
 
-  (** TypeEntry's variants. *)
+  (* TypeEntry's variants. *)
   TypeFields = 0;
   TypeStructuresView = 1;
   TypeFileView = 2;
@@ -301,9 +302,9 @@
   TypeRecordView = 4;
   TypeVariantView = 5;
   LongTypeSize = 102;
-  SetTypeSize = 103;
+  PointerTypeSize = 103;
   EnumerationTypeSize = 104;
-  ArrayTypeSize = 105;
+  RangeTypeSize = 105;
   PackedTypeSize = 108;
   StringTypeSize = 109;
   TypeCopyView = 209;

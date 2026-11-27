@@ -1,309 +1,32 @@
-(** PASCALCO2B.TEXT: PASCALCO's procedures and body, continued.
+(** PASCALCO2B.TEXT: part 2 of 3 of PASCALCO2: PASCALCO's procedures and body.
 
     Included by COMPILER.TEXT after PASCALCO2A.TEXT and before PASCALCO2C.TEXT.
 
     Procedures here, nested ones indented:
-        SkipComment
-      FindInTree
-      FindIdentifier
-      GetBounds
-      IncrementChecked
-      TakeSegmentSlot
-      SkipTokens
-      IsPackedChars
-      IsString
-      DecimalSize
-      ReadConstant
-      CompatibleTypes
-      SegmentInformation
-      EmitByte
-      EmitWord *)
+        SkipTokens
+        IsPackedChars
+        IsString
+        DecimalSize
+        ReadConstant
+        CompatibleTypes
+        SegmentInformation
+        EmitByte
+        EmitWord
+        WriteCode
+        FinishSegment
+        CompileBlock
+          ForwardUndefined *)
 
-    (** Skips a comment to its end, } or * ), after reading the options it
-        starts with (II.0: INSYMBOL's comments). *)
-    PROCEDURE SkipComment(Closer: INTEGER);
-      VAR
-        (** Not used. *)
-        Unused: INTEGER;
-    BEGIN
-      SourceCursor := SourceCursor + 1;
-      IF SourceBuffer^[SourceCursor] = '$' THEN
-        IF NOT COMPOPTI(Closer) THEN
-          EXIT(SkipComment);
-      SourceCursor := SourceCursor - 1;
-      REPEAT
-        REPEAT
-          SourceCursor := SourceCursor + 1;
-          WHILE SourceBuffer^[SourceCursor] = CHR(13) DO
-            EndLine
-        UNTIL ORD(SourceBuffer^[SourceCursor]) = Closer
-      UNTIL (SourceBuffer^[SourceCursor + 1] = ')') OR (Closer = 125);
-      SourceCursor := SourceCursor + 1
-    END;
-
-  BEGIN
-    IF TakeNestingDepth THEN
-    BEGIN
-      LineNestingDepth := NestingDepth;
-      TakeNestingDepth := FALSE
-    END;
-    Operator := NoneOperator;
-    1:
-    Token := OtherToken;
-    CASE ORD(SourceBuffer^[SourceCursor]) OF
-      39:
-        NUMSTRIN(FALSE, Kept);
-      48, 49, 50, 51, 52, 53, 54, 55, 56, 57:
-      BEGIN
-        Character := ORD(SourceBuffer^[SourceCursor]);
-        Digits := 0;
-        ShortValue := 0;
-        WHILE (Character IN [48..57]) AND (Digits < 4) DO
-        BEGIN
-          ShortValue := ShortValue * 10 + (Character - 48);
-          Digits := Digits + 1;
-          Character := ORD(SourceBuffer^[SourceCursor + Digits])
-        END;
-        IF Character IN [46, 48..57, 69] THEN
-          NUMSTRIN(TRUE, Kept)
-        ELSE
-        BEGIN
-          SourceCursor := SourceCursor + Digits - 1;
-          Token := IntegerToken;
-          Operator := NoneOperator;
-          TokenValue.Ordinal := ShortValue
-        END
-      END;
-      65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81, 82,
-          83, 84, 85, 86, 87, 88, 89, 90, 97, 98,
-          99, 100, 101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111, 112,
-              113, 114, 115, 116, 117, 118, 119, 120,
-          121, 122:
-        ScanIdentifier(SourceCursor, SourceBuffer);
-      123:
-      BEGIN
-        SkipComment(125);
-        GOTO 1
-      END;
-      40:
-        IF SourceBuffer^[SourceCursor + 1] = '*' THEN
-        BEGIN
-          SourceCursor := SourceCursor + 1;
-          SkipComment(42);
-          SourceCursor := SourceCursor + 1;
-          GOTO 1
-        END
-        ELSE
-          Token := LeftParenthesisToken;
-      41:
-        Token := RightParenthesisToken;
-      44:
-        Token := CommaToken;
-      9, 32:
-      BEGIN
-        SourceCursor := SourceCursor + 1;
-        GOTO 1
-      END;
-      46:
-        IF SourceBuffer^[SourceCursor + 1] = '.' THEN
-        BEGIN
-          SourceCursor := SourceCursor + 1;
-          Token := ColonToken
-        END
-        ELSE
-          Token := PeriodToken;
-      58:
-        IF SourceBuffer^[SourceCursor + 1] = '=' THEN
-        BEGIN
-          SourceCursor := SourceCursor + 1;
-          Token := BecomesToken
-        END
-        ELSE
-          Token := ColonToken;
-      59:
-        Token := SemicolonToken;
-      94:
-        Token := ArrowToken;
-      91:
-        Token := LeftBracketToken;
-      93:
-        Token := RightBracketToken;
-      42:
-      BEGIN
-        Token := MultiplicativeToken;
-        Operator := MultiplyOperator
-      END;
-      43:
-      BEGIN
-        Token := AdditiveToken;
-        Operator := PlusOperator
-      END;
-      45:
-      BEGIN
-        Token := AdditiveToken;
-        Operator := MinusOperator
-      END;
-      47:
-      BEGIN
-        Token := MultiplicativeToken;
-        Operator := DivideOperator
-      END;
-      60:
-      BEGIN
-        Token := RelationalToken;
-        Operator := LessOperator;
-        CASE SourceBuffer^[SourceCursor + 1] OF
-          '>':
-          BEGIN
-            Operator := UnequalOperator;
-            SourceCursor := SourceCursor + 1
-          END;
-          '=':
-          BEGIN
-            Operator := AtMostOperator;
-            SourceCursor := SourceCursor + 1
-          END
-        END
-      END;
-      61:
-      BEGIN
-        Token := RelationalToken;
-        Operator := EqualOperator
-      END;
-      62:
-      BEGIN
-        Token := RelationalToken;
-        IF SourceBuffer^[SourceCursor + 1] = '=' THEN
-        BEGIN
-          Operator := AtLeastOperator;
-          SourceCursor := SourceCursor + 1
-        END
-        ELSE
-          Operator := GreaterOperator
-      END
-    END;
-    IF Token = OtherToken THEN
-      IF SourceBuffer^[SourceCursor] = CHR(13) THEN
-      BEGIN
-        EndLine;
-        TakeNestingDepth := TRUE;
-        GOTO 1
-      END
-      ELSE
-        Error(400);
-    SourceCursor := SourceCursor + 1
-  END;
-
-  (* Finds TokenName in the tree Root, setting Found to it or NIL *)
-  PROCEDURE FindInTree;
-  BEGIN
-    IF Root <> NIL THEN
-      IF SearchTree(Root, Found.Entry, TokenName) = 0 THEN
-      BEGIN
-      END
-      ELSE
-        Found.Entry := NIL
-    ELSE
-      Found.Entry := NIL
-  END;
-
-  (* Finds TokenName in the scopes, innermost first, of a class in Classes;
-     one not found is reported (104) and stands
-     for the U...Entry of its class *)
-  PROCEDURE FindIdentifier;
-    LABEL 1;
-    VAR
-      (** UCSD Pascal II.0 calls it LCP (UCSD20). *)
-      Candidate: SymbolLink;
-  BEGIN
-    FOR FoundLevel := DisplayTop DOWNTO 0 DO
-    BEGIN
-      Candidate.Entry := Display[FoundLevel].Tree.Entry;
-      IF Candidate.Entry <> NIL THEN
-        IF SearchTree(Candidate.Entry, Candidate.Entry, TokenName) = 0 THEN
-          IF Candidate.Entry^.Class IN Classes THEN
-            GOTO 1
-          ELSE
-            IF ReportUndeclared THEN
-              Error(103)
-            ELSE
-              Candidate.Entry := NIL
-        ELSE
-          Candidate.Entry := NIL
-    END;
-    IF ReportUndeclared THEN
-    BEGIN
-      Error(104);
-      IF TypeClass IN Classes THEN
-        Candidate.Entry := DummyType.Entry
-      ELSE
-        IF ActualClass IN Classes THEN
-          Candidate.Entry := DummyVariable.Entry
-        ELSE
-          IF FieldClass IN Classes THEN
-            Candidate.Entry := DummyField.Entry
-          ELSE
-            IF ConstantClass IN Classes THEN
-              Candidate.Entry := DummyConstant.Entry
-            ELSE
-              IF ProperProcedureClass IN Classes THEN
-                Candidate.Entry := DummyProcedure.Entry
-              ELSE
-                Candidate.Entry := DummyFunction.Entry
-    END;
-    1:
-    Found.Entry := Candidate.Entry
-  END;
-
-  (* A scalar's lowest and highest values *)
-  PROCEDURE GetBounds;
-  BEGIN
-    WITH Scalar^ DO
-      IF Form = SubrangeForm THEN
-      BEGIN
-        Lowest := ORD(ArrayIsPacked);
-        Highest := MaximumValue
-      END
-      ELSE
-      BEGIN
-        Lowest := 0;
-        IF Scalar = CharStructure THEN
-          Highest := 255
-        ELSE
-          IF Scalar^.ElementType <> NIL THEN
-            Highest := Scalar^.ElementType^.LastValue
-          ELSE
-            Highest := 0
-      END
-  END;
-
-  (* Adds 1 to a counter below its limit, or reports an error *)
-  PROCEDURE IncrementChecked;
-  BEGIN
-    IF Counter < Limit THEN
-      Counter := Counter + 1
-    ELSE
-      Error(LimitError)
-  END;
-
-  (* Takes the next slot of the segment dictionary for CurrentSegment, with
-     NewNumber a new segment number too *)
-  PROCEDURE TakeSegmentSlot;
-  BEGIN
-    IF NewNumber THEN
-      IncrementChecked(NextSegment, 63, 354);
-    IncrementChecked(LastSegmentSlot, 15, 354);
-    SlotOfSegment[CurrentSegment] := LastSegmentSlot
-  END;
-
-  (* Skips symbols to one in Followers, after an error *)
+  (** Skips symbols to one in Followers, after an error.
+      Also: SKIP (UCSD20) *)
   PROCEDURE SkipTokens;
   BEGIN
     WHILE NOT (Token IN Followers) DO
       NextToken
   END;
 
-  (* Whether a type is a packed array of characters *)
+  (** Whether a type is a packed array of characters.
+      Also: PAOFCHAR (UCSD20) *)
   FUNCTION IsPackedChars;
   BEGIN
     IsPackedChars := FALSE;
@@ -313,7 +36,8 @@
             CharStructure)
   END;
 
-  (* Whether a type is a STRING *)
+  (** Whether a type is a STRING.
+      Also: STRGTYPE (UCSD20) *)
   FUNCTION IsString;
   BEGIN
     IsString := FALSE;
@@ -321,13 +45,16 @@
       IsString := Tested^.ArrayIsString
   END;
 
-  (* The words a long integer of I digits takes *)
+  (** The words a long integer of Digits digits takes.
+      Also: DECSIZE (UCSD20) *)
   FUNCTION DecimalSize;
   BEGIN
     DecimalSize := (Digits + 3) DIV 4 + 1
   END;
 
-  (* Reads a constant: its type and value *)
+  (** Reads a constant: its type and value.
+
+      UCSD Pascal II.0 calls it CONSTANT (UCSD20). *)
   PROCEDURE ReadConstant;
     VAR
       (** UCSD Pascal II.0 calls it LSP (UCSD20). *)
@@ -337,7 +64,7 @@
       (** 0 none, 1 +, 2 -. *)
       Sign: INTEGER;
       (** UCSD Pascal II.0 calls it LVP (UCSD20). *)
-      Negated: CopiedValue;
+      ValueCopy: CopiedValue;
       (** A long integer's word. *)
       WordIndex: INTEGER;
   BEGIN
@@ -360,9 +87,9 @@
           FoundType^.AllWords := StringStructure^.AllWords;
           FoundType^.Capacity := TokenLength;
           FoundType^.BaseType := NIL;
-          NEW(Negated);
-          Negated^ := TokenValue.Entry^;
-          TokenValue.Entry := Negated
+          NEW(ValueCopy);
+          ValueCopy^ := TokenValue.Entry^;
+          TokenValue.Entry := ValueCopy
         END;
         Value := TokenValue;
         NextToken
@@ -398,10 +125,10 @@
               BEGIN
                 IF Sign = 2 THEN
                 BEGIN
-                  NEW(Negated, RealRecordSize);
-                  Negated^.Kind := RealKind;
-                  Negated^.RealNumber := -Value.Entry^.RealNumber;
-                  Value.Entry := Negated
+                  NEW(ValueCopy, RealRecordSize);
+                  ValueCopy^.Kind := RealKind;
+                  ValueCopy^.RealNumber := -Value.Entry^.RealNumber;
+                  Value.Entry := ValueCopy
                 END
               END
               ELSE
@@ -409,12 +136,12 @@
                 BEGIN
                   IF Sign = 2 THEN
                   BEGIN
-                    NEW(Negated, LongRecordSize);
-                    Negated^ := Value.Entry^;
-                    FOR WordIndex := 1 TO Negated^.WordCount DO
-                      Negated^.DigitGroups[WordIndex] :=
-                          -Negated^.DigitGroups[WordIndex];
-                    Value.Entry := Negated
+                    NEW(ValueCopy, LongRecordSize);
+                    ValueCopy^ := Value.Entry^;
+                    FOR WordIndex := 1 TO ValueCopy^.WordCount DO
+                      ValueCopy^.DigitGroups[WordIndex] :=
+                          -ValueCopy^.DigitGroups[WordIndex];
+                    Value.Entry := ValueCopy
                   END
                 END
                 ELSE
@@ -467,7 +194,8 @@
     ValueType := FoundType
   END;
 
-  (* Whether two types are compatible *)
+  (** Whether two types are compatible.
+      Also: COMPTYPES (UCSD20) *)
   FUNCTION CompatibleTypes;
     VAR
       (** UCSD Pascal II.0 calls it LSP2 (UCSD20). *)
@@ -576,8 +304,8 @@
               CompatibleTypes := FALSE
   END;
 
-  (* The information word of slot Slot: its segment's number, the machine
-     type and the version, 6 *)
+  (** The information word of slot Slot: its segment's number, the machine
+      type and the version, 6. *)
   FUNCTION SegmentInformation;
     VAR
       (** Whether words are high byte first. *)
@@ -598,14 +326,16 @@
     SegmentInformation := Information.Word.Word
   END;
 
-  (* Puts a byte in the code *)
+  (** Puts a byte in the code.
+      Also: GENBYTE (UCSD20) *)
   PROCEDURE EmitByte;
   BEGIN
     CodeBuffer^[CodeCounter] := CHR(Byte);
     CodeCounter := CodeCounter + 1
   END;
 
-  (* Puts a word in the code, on a word boundary, its bytes swapped by $F+ *)
+  (** Puts a word in the code, on a word boundary, its bytes swapped by $F+.
+      Also: GENWORD (UCSD20) *)
   PROCEDURE EmitWord;
     VAR
       Swapped: INTEGER;
@@ -620,4 +350,207 @@
       CodeBuffer^[CodeCounter + 1] := CHR(Swapped)
     END;
     CodeCounter := CodeCounter + 2
+  END;
+
+  (** Copies the code buffer to the code file through BlockBuffer; Flush
+      writes the last block too. *)
+  PROCEDURE WriteCode;
+    VAR
+      (** Bytes to copy. *)
+      Chunk: INTEGER;
+      (** Bytes left. *)
+      Remaining: INTEGER;
+      (** Where in the code buffer. *)
+      Position: INTEGER;
+  BEGIN
+    Position := 0;
+    Remaining := CodeCounter;
+    REPEAT
+      Chunk := 512 - BlockByte;
+      IF Chunk > Remaining THEN
+        Chunk := Remaining;
+      MOVELEFT(CodeBuffer^[Position], BlockBuffer[BlockByte], Chunk);
+      Position := Position + Chunk;
+      BlockByte := BlockByte + Chunk;
+      IF (BlockByte = 512) OR Flush THEN
+      BEGIN
+        IF ErrorNumber = 0 THEN
+          IF BLOCKWRITE(WorkCodeFile^, BlockBuffer, 1, CodeFileBlock) <> 1 THEN
+            Error(402);
+        CodeFileBlock := CodeFileBlock + 1;
+        BlockByte := 0
+      END;
+      Remaining := Remaining - Chunk
+    UNTIL Remaining = 0
+  END;
+
+  (** Ends a segment: writes its procedure dictionary, its number and
+      procedures' count, and its length to SEGTABLE (II.0: BLOCK's end). *)
+  PROCEDURE FinishSegment;
+    VAR
+      (** A procedure. *)
+      ThisRoutine: INTEGER;
+  BEGIN
+    CodeCounter := 0;
+    FOR ThisRoutine := NextRoutine - 1 DOWNTO 1 DO
+      IF RoutineDictionary[ThisRoutine] = 0 THEN
+        EmitWord(0)
+      ELSE
+        EmitWord(SegmentOffset + CodeCounter - RoutineDictionary[ThisRoutine]);
+    EmitByte(CurrentSegment);
+    EmitByte(NextRoutine - 1);
+    SegmentDictionary[SlotOfSegment[CurrentSegment]].CodeLength :=
+        SegmentOffset + CodeCounter;
+    WriteCode(TRUE);
+    SegmentOffset := 0;
+    SegmentHasCode := FALSE
+  END;
+
+  (** Compiles a block and those in it: declarations with DECLARAT, each body
+      with BODYPART, units with UNITPART, pushing the lexical stack as a
+      procedure opens and popping it as it closes.
+      Also: BLOCK (UCSD20) *)
+  PROCEDURE CompileBlock;
+    LABEL 1;
+    VAR
+      (** The block ended with its symbol. *)
+      BlockDone: BOOLEAN;
+
+    (** Whether a scope's tree has a procedure declared FORWARD and never
+        defined, writing its name (II.0: BLOCK's check). *)
+    FUNCTION ForwardUndefined(Root: Identifier): BOOLEAN;
+    BEGIN
+      ForwardUndefined := FALSE;
+      IF Root <> NIL THEN
+        WITH Root^ DO
+        BEGIN
+          IF Class IN [ProperProcedureClass, ValueFunctionClass] THEN
+            IF StaticLevel = 1 THEN
+              IF RoutineKind = 0 THEN
+                IF IsForward THEN
+                BEGIN
+                  ForwardUndefined := TRUE;
+                  WRITELN(OUTPUT);
+                  WRITE(Name, ' undefined')
+                END;
+          IF ForwardUndefined(Right.Entry) OR ForwardUndefined(Left.Entry) THEN
+            ForwardUndefined := TRUE
+        END
+    END;
+
+  BEGIN
+    IF (Token = UnitToken) AND NOT InUnit THEN
+      IF Swapping OR UnitsWithoutSwapping THEN
+      BEGIN
+        UNITPART(Followers + [EndToken, UnitToken..UnitImplementationToken]);
+        IF Token = PeriodToken THEN
+          EXIT(CompileBlock)
+      END
+      ELSE
+        Error(408);
+    IsProgram := NOT InUnit;
+    NewBlock := TRUE;
+    REPEAT
+      IF NOT NewBlock THEN
+      BEGIN
+        InDeclarations := FALSE;
+        NestingDepth := 0;
+        CodeCounter := 0;
+        ListedCounter := 0;
+        IF NOT CompilingSystem OR (Level > 1) THEN
+          IF ForwardUndefined(Display[DisplayTop].Tree.Entry) THEN
+            Error(117);
+        IF InUnit THEN
+          IF LexicalStack^.OuterLevel^.RoutineEntry.Entry =
+              ProgramIdentifier.Entry THEN
+            IF Token IN [EndToken, BeginToken] THEN
+              EXIT(CompileBlock);
+        SegmentsMadeResident.Entry := NIL;
+        IF Token = BeginToken THEN
+          NextToken
+        ELSE
+          Error(17);
+        REPEAT
+          BODYPART(Followers + [CaseToken], LexicalStack^.RoutineEntry.Entry);
+          BlockDone := (Token = LexicalStack^.EndingToken) OR InUnit AND (Token
+              = EndToken);
+          IF NOT BlockDone THEN
+          BEGIN
+            IF LexicalStack^.EndingToken = SemicolonToken THEN
+              Error(14)
+            ELSE
+              Error(6);
+            SkipTokens(Followers + [LexicalStack^.EndingToken]);
+            BlockDone := (Token = LexicalStack^.EndingToken) OR InUnit AND
+                (Token = EndToken)
+          END
+        UNTIL BlockDone OR (Token IN BlockStarters);
+        IF NOT BlockDone THEN
+        BEGIN
+          IF LexicalStack^.EndingToken = SemicolonToken THEN
+            Error(14)
+          ELSE
+            Error(6);
+          DECLARAT(Followers)
+        END
+        ELSE
+        BEGIN
+          IF Token = SemicolonToken THEN
+            NextToken;
+          IF NOT (Token IN [BeginToken, KeywordProcedureToken..ProgramToken])
+              AND (LexicalStack^.EndingToken = SemicolonToken) THEN
+            IF NOT (InUnit AND (Token = EndToken)) THEN
+            BEGIN
+              Error(6);
+              SkipTokens(Followers);
+              DECLARAT(Followers)
+            END
+            ELSE
+              GOTO 1
+          ELSE
+          BEGIN
+            1:
+            WITH LexicalStack^ DO
+            BEGIN
+              IF RoutineEntry.Entry <> NIL THEN
+                RoutineEntry.Entry^.IsOpen := FALSE;
+              IF IsSegment THEN
+              BEGIN
+                IF SegmentHasCode THEN
+                  FinishSegment;
+                IF NeedsLinker AND (Level = 1) THEN
+                BEGIN
+                  SegmentDictionary[SlotOfSegment[CurrentSegment]].Kind :=
+                      HostSegment;
+                  WRITELIN
+                END;
+                NextRoutine := SavedNextRoutine;
+                CurrentSegment := SavedSegment
+              END;
+              Level := SavedLevel;
+              DisplayTop := SavedTop;
+              DataCounter := SavedDataCounter;
+              CurrentRoutine := SavedRoutine
+            END;
+            IF LexicalStack^.RoutineEntry.Entry <> ProgramIdentifier.Entry THEN
+              RELEASE(LexicalStack^.ReleaseMark);
+            LexicalStack := LexicalStack^.OuterLevel;
+            NewBlock := Token IN [KeywordProcedureToken..ProgramToken]
+          END
+        END
+      END
+      ELSE
+      BEGIN
+        DECLARAT(Followers);
+        IF Level = 0 THEN
+          IF Token = UnitToken THEN
+          BEGIN
+            UNITPART(Followers + [EndToken,
+                UnitToken..UnitImplementationToken]);
+            IF Token IN [KeywordProcedureToken..ProgramToken] THEN
+              DECLARAT(Followers)
+          END
+      END
+    UNTIL LexicalStack = NIL;
+    FinishSegment
   END;

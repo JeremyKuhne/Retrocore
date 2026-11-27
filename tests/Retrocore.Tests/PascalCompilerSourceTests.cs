@@ -27,7 +27,8 @@ namespace Retrocore.Tests;
 [TestClass]
 public sealed class PascalCompilerSourceTests
 {
-    // The shape of SYSTEM.COMPILER's decompiled source, which this one keeps.
+    // The code's shape: the private named source this one was converted from had the same, which the conversion's
+    // scripts checked at each step (docs/conversions/PascalCompiler13.md, PC1).
     private const string Shape = "8DA3303C3A1F2AFC2155010AEB1834C090318E729ED9A205E5FC26D2EDE0482A";
 
     // The SHA-256 of SYSTEM.COMPILER on Apple Pascal 1.3's APPLE2.
@@ -71,7 +72,8 @@ public sealed class PascalCompilerSourceTests
         foreach (string file in Directory.EnumerateFiles(compiler, "*.TEXT").Concat(Directory.EnumerateFiles(system, "*.TEXT")))
         {
             string name = Path.GetFileName(file);
-            if (name is not ("COMPILER.TEXT" or "ASSEMBLED.TEXT")) { included[name] = File.ReadAllText(file); }
+            // The Compiler's folder first, as --includes and the editor look.
+            if (name is not ("COMPILER.TEXT" or "ASSEMBLED.TEXT")) { included.TryAdd(name, File.ReadAllText(file)); }
         }
 
         string boot = Path.Join(Path.GetTempPath(), $"Retrocore-{Guid.NewGuid():N}-APPLE1-128K.dsk");

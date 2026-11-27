@@ -319,9 +319,9 @@ before are kept only here. The 16 names the code file keeps (the program's and t
 | `STRECVIEW` | `TypeRecordView` | constant |
 | `STVARVIEW` | `TypeVariantView` | constant |
 | `STLONGSIZE` | `LongTypeSize` | constant |
-| `STPTRSIZE` | `SetTypeSize` | constant |
+| `STPTRSIZE` | `PointerTypeSize` | constant |
 | `STENUMSIZE` | `EnumerationTypeSize` | constant |
-| `STRANGESIZE` | `ArrayTypeSize` | constant |
+| `STRANGESIZE` | `RangeTypeSize` | constant |
 | `STPACKSIZE` | `PackedTypeSize` | constant |
 | `STSTRSIZE` | `StringTypeSize` | constant |
 | `STCOPY9` | `TypeCopyView` | constant |
@@ -1355,7 +1355,7 @@ before are kept only here. The 16 names the code file keeps (the program's and t
 | `PASCALCO.CONSTANT.LSP` | `PASCALCO.ReadConstant.FoundType` | variable |
 | `PASCALCO.CONSTANT.LCP` | `PASCALCO.ReadConstant.NamedConstant` | variable |
 | `PASCALCO.CONSTANT.SIGN` | `PASCALCO.ReadConstant.Sign` | variable |
-| `PASCALCO.CONSTANT.LVP` | `PASCALCO.ReadConstant.Negated` | variable |
+| `PASCALCO.CONSTANT.LVP` | `PASCALCO.ReadConstant.ValueCopy` | variable |
 | `PASCALCO.CONSTANT.WORDNO` | `PASCALCO.ReadConstant.WordIndex` | variable |
 | `PASCALCO.COMPTYPES.LSP2` | `PASCALCO.CompatibleTypes.SecondField` | variable |
 | `PASCALCO.COMPTYPES.LSP1` | `PASCALCO.CompatibleTypes.LeftField` | variable |

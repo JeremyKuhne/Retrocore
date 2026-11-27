@@ -3,7 +3,7 @@
     Included by COMPILER.TEXT after NUMSTRIN.TEXT and before PASCALCO2A.TEXT.
 
     Procedures here, nested ones indented:
-      FINISHUP (segment) *)
+        FINISHUP (segment) *)
 
   (** Ends the compile: the last checks, the listing's end, the time and
       lines, and the segment dictionary in the code file's block 0 (II.0:

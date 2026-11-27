@@ -3,10 +3,10 @@
     Included by COMPILER.TEXT after WRITELIN.TEXT and before COMPOPTI.TEXT.
 
     Procedures here, nested ones indented:
-      UNITPART (segment)
-        OpenReferenceFile
-        UnitHeading
-        CompileImplementation *)
+        UNITPART (segment)
+          OpenReferenceFile
+          UnitHeading
+          CompileImplementation *)
 
   (** Compiles the units in a source: each one's interface, which goes into
       the code file as text, and its implementation, which is a segment of
@@ -26,7 +26,7 @@
       (** And its last byte in it. *)
       TextEndOffset: INTEGER;
 
-    (** Opens SYSTEM.Information for the linker's references.
+    (** Opens SYSTEM.INFO for the linker's references.
         Also: OPENREFFILE (UCSD20) *)
     PROCEDURE OpenReferenceFile;
     BEGIN

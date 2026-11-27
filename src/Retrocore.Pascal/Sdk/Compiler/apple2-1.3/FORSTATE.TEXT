@@ -3,7 +3,7 @@
     Included by COMPILER.TEXT after CASESTAT.TEXT and before STATEMEN2.TEXT.
 
     Procedures here, nested ones indented:
-      FORSTATE (segment) *)
+            FORSTATE (segment) *)
 
       (** Compiles FOR: the control variable, its limit kept in a temporary,
           and the loop.

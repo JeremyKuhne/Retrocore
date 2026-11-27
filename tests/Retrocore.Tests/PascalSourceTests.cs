@@ -247,6 +247,7 @@ public sealed class PascalSourceTests
     [DataRow("name", "PROGRAM P;\nVAR Total_Count: INTEGER;\nBEGIN END.")]
     [DataRow("name", "PROGRAM P;\nVAR TOTAL: INTEGER;\nBEGIN END.")]
     [DataRow("name", "PROGRAM P;\nVAR total: INTEGER;\nBEGIN END.")]
+    [DataRow("name", "PROGRAM P;\nVAR Otherwise: INTEGER;\nBEGIN END.")]
     [DataRow("name-8", "PROGRAM P;\nVAR CountAllItems, CountAllOthers: INTEGER;\nBEGIN END.")]
     [DataRow("name-8", "PROGRAM P;\nVAR CountAllItems: INTEGER;\nPROCEDURE Q;\nVAR CountAllOthers: INTEGER;\nBEGIN END;\nBEGIN END.")]
     [DataRow("include", "PROGRAM P;\n(*$I GONE*)\nBEGIN END.")]
@@ -354,7 +355,6 @@ public sealed class PascalSourceTests
 
             return first is not null && first.StartsWith('.');
         }
-
 
         List<string> assembled = [.. sources.Where(file => IsAssembly(Read(file)))];
         List<PascalProgram> programs =
@@ -698,6 +698,25 @@ public sealed class PascalSourceTests
     }
 
     /// <summary>
+    ///  A program's code shape stays the same when its names change and comments come and go, and changes with its
+    ///  code.
+    /// </summary>
+    [TestMethod]
+    public void CodeShapeIgnoresNamesAndComments()
+    {
+        string renamed = Sample
+            .Replace("Increment", "AddOne", StringComparison.Ordinal)
+            .Replace("MaxItems", "Limit", StringComparison.Ordinal)
+            .Replace("(** Its value. *)", "(* A comment instead. *)", StringComparison.Ordinal);
+
+        string changed = Sample.Replace("Number + 1", "Number + 2", StringComparison.Ordinal);
+        string shape = PascalCodeShape.Digest(Analyze());
+
+        PascalCodeShape.Digest(Analyze(renamed, Part)).Should().Be(shape);
+        PascalCodeShape.Digest(Analyze(changed, Part)).Should().NotBe(shape);
+    }
+
+    /// <summary>
     ///  A file's size is its text as the disk stores it: leading blanks compressed, and no page's padding.
     /// </summary>
     [TestMethod]
@@ -717,6 +736,17 @@ public sealed class PascalSourceTests
         {
             [Path.Join("SRC", "SAMPLE.TEXT")] = Sample,
             [Path.Join("SRC", "PART.TEXT")] = Part,
+        };
+
+        return PascalProgram.Analyze(Path.Join("SRC", "SAMPLE.TEXT"), files.GetValueOrDefault);
+    }
+
+    private static PascalProgram Analyze(string sample, string part)
+    {
+        Dictionary<string, string> files = new()
+        {
+            [Path.Join("SRC", "SAMPLE.TEXT")] = sample,
+            [Path.Join("SRC", "PART.TEXT")] = part,
         };
 
         return PascalProgram.Analyze(Path.Join("SRC", "SAMPLE.TEXT"), files.GetValueOrDefault);

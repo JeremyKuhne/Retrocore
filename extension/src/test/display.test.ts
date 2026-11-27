@@ -345,6 +345,32 @@ test("the PET types PETSCII: STOP, HOME, the cursor keys, DEL and INST, and its 
     assert.deepEqual(posted.splice(0), [{ command: "reset" }], "the reset switch");
 });
 
+test("the VIC-20 types PETSCII, shows its Datasette stopped and its drive by device, and its key bar's codes reach the machine", () => {
+    const { posted, screen, byId, window } = loadPanel();
+    window.dispatch("message", { data: {
+        machine: "vic20", standard: "pal", rows: [""], cycles: 1, running: true,
+        speed: { setting: 1, accelerated: false, actual: 1, hertz: 1108404 },
+        media: {
+            cassette: { path: "game.tap", mode: "stopped", recording: false, motor: false },
+            disks: [{ device: "disk8", path: "demo.d64", mounted: true, writeProtected: false, track: 18, motor: true }]
+        },
+        video: { width: 1, height: 1, pixelFormat: "rgba", pixels: Buffer.from([0, 0, 0, 255]).toString("base64") }
+    } });
+    assert.deepEqual(posted.filter(message => "error" in (message as object)), [], "the frame draws without an error");
+    assert.equal(byId.get("status")?.textContent, "Running · 1.00× · 1.11 MHz · Tape stopped");
+    assert.equal(byId.get("disk")?.textContent, "Device 8 track 18 · motor on", "a 1541 by its device and track");
+    assert.equal(byId.get("display")?.style.aspectRatio, "4/3");
+    assert.match(byId.get("hint")?.textContent ?? "", /^Esc: RUN\/STOP · Home: HOME/);
+    posted.splice(0);
+    for (const key of ["Escape", "Home", "ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Backspace", "Insert", "Enter", "a"]) {
+        screen.dispatch("keydown", { key, code: "", ctrlKey: false, altKey: false, shiftKey: false });
+    }
+    assert.deepEqual(posted.splice(0).map(message => (message as { code: number }).code), [3, 19, 157, 29, 145, 17, 20, 148, 13, 97]);
+    for (const code of [256, 257, 258]) assert.equal(panelKeyCode({ code }), code, "the key bar's RESTORE keys pass to the host");
+    byId.get("vic20-reset")?.dispatch("click");
+    assert.deepEqual(posted.splice(0), [{ command: "reset" }], "the reset switch");
+});
+
 test("the PET's key bar has Stop and Clr, the shifted HOME", () => {
     const html = webviewHtml("NONCE");
     const bar = /<span class="keys" data-machine="pet">([\s\S]*?)<\/span>/.exec(html)?.[1] ?? "";
@@ -497,6 +523,7 @@ test("sharp scales are whole physical pixels per dot, in the screen's shape, as 
     assert.deepEqual(size("trs80-model1", 1000, 900, 1), { width: 768, height: 576, scale: 1 }, "Model I dots are 2 by 3");
     assert.deepEqual(size("pet", 1300, 900, 1), { width: 1280, height: 800, scale: 2 }, "the PET's 320x200 square dots, doubled at 1x");
     assert.deepEqual(size("vic20", 1300, 1000, 1), { width: 1200, height: 992, scale: 2 }, "the VIC-20's dots three wide by two tall");
+    assert.deepEqual(size("vic20pal", 1400, 1200, 1), { width: 1344, height: 1184, scale: 2 }, "PAL's 224x296 frame");
     assert.equal(size("trs80-model1", 700, 900, 1), null, "too small for 1x");
 });
 
@@ -807,12 +834,12 @@ test("the Atari's keys are ATASCII, its BREAK and console keys are above 127, an
     assert.match(html, /data-machine="apple2 apple3 coco pet vic20 bbc atari800"/, "the Atari has the Sound button");
 });
 
-test("the panel's keys reach the machine up to code 255, for the BBC Micro's COPY, cursor and function keys and the Atari's console keys", () => {
-    for (const code of [0, 13, 127, 0x8B, 0x8F, 0x80, 0x89, 240, 244, 255]) {
+test("the panel's keys reach the machine up to code 258, for the BBC Micro's and Atari's keys and the VIC-20's RESTORE", () => {
+    for (const code of [0, 13, 127, 0x8B, 0x8F, 0x80, 0x89, 240, 244, 255, 256, 257, 258]) {
         assert.equal(panelKeyCode({ code }), code);
     }
 
-    for (const input of [{ code: 256 }, { code: -1 }, { code: 1.5 }, { code: "A" }, { button: 0 }, null, 13]) {
+    for (const input of [{ code: 259 }, { code: -1 }, { code: 1.5 }, { code: "A" }, { button: 0 }, null, 13]) {
         assert.equal(panelKeyCode(input), undefined);
     }
 });

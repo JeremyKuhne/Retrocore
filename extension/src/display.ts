@@ -6,13 +6,14 @@
 // written doubled, or it becomes the character itself; display.test.ts checks that the script parses.
 
 /**
- * The key code in a message from the display panel, or undefined for another message: a whole number from 0 to 255,
+ * The key code in a message from the display panel, or undefined for another message: a whole number from 0 to 258,
  * since the BBC Micro's COPY, cursor and function keys and the Atari's START, SELECT, OPTION, BREAK and SYSTEM RESET
- * have codes above 127.
+ * have codes above 127, and the VIC-20's RESTORE, RUN/STOP with RESTORE, and SHIFT with the Commodore key are 256-258.
+ * The debug host refuses a code above its machine's own largest.
  */
 export function panelKeyCode(input: unknown): number | undefined {
     return typeof input === "object" && input !== null && "code" in input && typeof input.code === "number"
-        && Number.isInteger(input.code) && input.code >= 0 && input.code < 256 ? input.code : undefined;
+        && Number.isInteger(input.code) && input.code >= 0 && input.code <= 258 ? input.code : undefined;
 }
 
 /** The display panel's page, with its script allowed by the nonce. */
@@ -185,7 +186,7 @@ speedSelect.addEventListener('change',()=>{
 function speedText(frame){
     const speed=frame.speed;
     if(!speed||typeof speed.actual!=='number')return [];
-    // Accelerated is the Model I's, Apple-1's, Color Computer's, PET's or Atari's fast cassette or the IIe's
+    // Accelerated is the Model I's, Apple-1's, Color Computer's, PET's, VIC-20's or Atari's fast cassette or the IIe's
     // fast disk, running flat out while the media moves.
     const tapes=['trs80-model1','trs80-model3','apple1','coco','pet','vic20','bbc','atari800'];
     const fast=speed.accelerated===true?[tapes.includes(frame.machine)?'Fast tape':'Fast disk']:[];
@@ -231,8 +232,10 @@ function draw(frame){
     }
     if(!iie){
         const media=frame.media;
-        // The Apple-1 has a cassette and no disks.
-        const tape=media?.cassette?.path?['Tape '+(media.cassette.recording?'recording':'playing')+(media.cassette.motor?' · motor on':'')]:[];
+        // The Apple-1 has a cassette and no disks; the VIC-20's one Datasette has keys, as the PET's have.
+        const cassette=media?.cassette;
+        const state=cassette?.recording?'recording':cassette?.mode===undefined||cassette.mode==='playing'?'playing':'stopped';
+        const tape=cassette?.path?['Tape '+state+(cassette.motor?' · motor on':'')]:[];
         // The PET's two Datasettes, each with its keys: stopped, playing or recording.
         for(const port of [1,2]){
             const deck=media?.['cassette'+port];
@@ -241,9 +244,10 @@ function draw(frame){
         }
         // The Atari's drives are D1: to D4:, numbered from 0 like the others'.
         const drive=disk=>frame.machine==='atari800'?'D'+(disk.drive+1)+':':'D'+disk.drive;
-        // The TRS-80s name a drive and its cylinder; the PET's 4040 and 2040 name a unit's drive, as disk8-0, and a track.
+        // The TRS-80s name a drive and its cylinder; the PET's 4040 and 2040 name a unit's drive, as disk8-0, and a track,
+        // and the VIC-20's 1541 and 1540 their device, as disk8.
         const diskLabel=disk=>typeof disk.device==='string'
-            ?disk.device.replace(/^disk(\\d+)-(\\d)$/,'Unit $1 drive $2')+' track '+(Number.isInteger(disk.track)?disk.track:disk.track.toFixed(1))+(disk.motor?' · motor on':'')
+            ?disk.device.replace(/^disk(\\d+)-(\\d)$/,'Unit $1 drive $2').replace(/^disk(\\d+)$/,'Device $1')+' track '+(Number.isInteger(disk.track)?disk.track:disk.track.toFixed(1))+(disk.motor?' · motor on':'')
             :drive(disk)+' cylinder '+disk.cylinder+(disk.selected?' · selected':'');
         const disks=media?.disks?media.disks.filter(disk=>disk.mounted).map(diskLabel):[];
         document.getElementById('status').textContent=[running?'Running':frame.cycles+' cycles'].concat(running?speedText(frame):[],tape).join(' · ');

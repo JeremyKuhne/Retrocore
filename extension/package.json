@@ -1874,7 +1874,7 @@
                   "type": "string"
                 },
                 "maxItems": 16,
-                "description": "Model I, III, 4 and 4P: JV1, JV3, DMK or IMD images for drives 0-3, chosen by extension or, for .dsk, by contents. Model II, 12 and 16: IMD, DMK or JV3 images of 8-inch disks. Apple III: DOS- or ProDOS-order (.po) or WOZ images for .D1, the built-in drive, then .D2-.D4. Color Computer: JVC (.dsk) images for drives 0-3, which put the disk controller in the slot. PET: .d64, .d67 or .g64 images for the first disk unit's drive 0, its drive 1, then the next unit's; without diskUnits, as many units as they need, from device 8. VIC-20: .d64 or .g64 images for the drive at device 8, then the next; without diskUnits, as many 1541s as they need, from device 8. Kaypro II: IMG, DSK, IMD or DMK images of single-sided double-density 5.25-inch disks for drive A, then B. BBC Micro: SSD or DSD images for drives 0 and 1; a DSD's second side is drive 2 or 3. Atari 800 and 400: ATR or XFD images for D1:-D4:; an .xex boots from a disk built for it. Altair 8800: SIMH .dsk images of 8-inch disks (77 tracks of 32 137-byte sectors) for the 88-DCDD's drives 0-3, which fit the controller and the DBL PROM and boot drive 0."
+                "description": "Model I, III, 4 and 4P: JV1, JV3, DMK or IMD images for drives 0-3, chosen by extension or, for .dsk, by contents. Model II, 12 and 16: IMD, DMK or JV3 images of 8-inch disks. Apple III: DOS- or ProDOS-order (.po) or WOZ images for .D1, the built-in drive, then .D2-.D4. Color Computer: JVC (.dsk) images for drives 0-3, which put the disk controller in the slot. PET: .d64, .d67 or .g64 images for the first disk unit's drive 0, its drive 1, then the next unit's; without diskUnits, as many units as they need, from device 8. VIC-20: .d64 or .g64 images for the drives in diskUnits' order; without diskUnits, as many 1541s as they need, from device 8. Kaypro II: IMG, DSK, IMD or DMK images of single-sided double-density 5.25-inch disks for drive A, then B. BBC Micro: SSD or DSD images for drives 0 and 1; a DSD's second side is drive 2 or 3. Atari 800 and 400: ATR or XFD images for D1:-D4:; an .xex boots from a disk built for it. Altair 8800: SIMH .dsk images of 8-inch disks (77 tracks of 32 137-byte sectors) for the 88-DCDD's drives 0-3, which fit the controller and the DBL PROM and boot drive 0."
               },
               "diskUnits": {
                 "type": "array",
@@ -1982,13 +1982,13 @@
                   "amber"
                 ],
                 "enumDescriptions": [
-                  "A color monitor or television (the default on the Apple II family, the Apple III, the Color Computer and the Atari).",
+                  "A color monitor or television (the default on the Apple II family, the Apple III, the Color Computer, the VIC-20 and the Atari).",
                   "Apple IIe: an RGB card and color monitor, without the composite signal's fringing: white runs stay white to their edges, colored areas are solid, and text is white.",
                   "A black and white monochrome monitor: on an Apple II, every dot sharp, as double hi-res desktops need.",
                   "A green-phosphor monochrome monitor.",
                   "An amber-phosphor monochrome monitor."
                 ],
-                "description": "The monitor the video is shown on: color on the Apple II family, the Apple III, the Color Computer and the Atari, or a white, green or amber monochrome one on any machine (green is the default on the Apple-1, the Model I and the Kaypro II, which have no color; the PET 2001 is white, and with BASIC 2 green). The display panel's Screen menu changes it, and its choice is kept for later launches on machines that have it."
+                "description": "The monitor the video is shown on: color on the Apple II family, the Apple III, the Color Computer, the VIC-20 and the Atari, or a white, green or amber monochrome one on any machine (green is the default on the Apple-1, the Model I and the Kaypro II, which have no color; the PET 2001 is white, and with BASIC 2 green). The display panel's Screen menu changes it, and its choice is kept for later launches on machines that have it."
               },
               "mouse": {
                 "type": "integer",

@@ -1296,8 +1296,8 @@ cycle counts and `Keeps:` checks. The machine is configured by:
   while the cassette motor runs;
 - `diskUnits`: the device numbers of drives on the serial bus, 8 to 11, such as `[8]`,
   and `diskModel`, `1541` (the default) or `1540`; `disks`: `.d64` or `.g64` images for
-  the drive at device 8, then the next (without `diskUnits`, as many drives as they
-  need, from device 8). Each drive runs its own DOS on its own 6502, from MAME's
+  those drives in the order `diskUnits` lists them (without `diskUnits`, as many drives
+  as they need, from device 8). Each drive runs its own DOS on its own 6502, from MAME's
   `c1541` set (901229-06) or `c1540` set, in `driveRomDirectory`, else `romDirectory`
   or `RETROCORE_VIC20_ROMS`.
 

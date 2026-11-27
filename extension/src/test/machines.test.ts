@@ -139,7 +139,7 @@ test("what each machine runs: Apple disks and DOS, the Model I's disks and tapes
         assert.equal(pet?.choices[0].default, 32);
     }
     const vic20 = machineById("vic20");
-    assert.deepEqual(vic20?.configuration, { machine: "vic20" }, "the video option picks NTSC or PAL");
+    assert.deepEqual(vic20?.configuration, { machine: "vic20" }, "no model: NTSC or PAL is the video choice");
     assert.deepEqual(vic20?.diskFormats, ["d64", "g64"], "a disk brings a 1541 as device 8");
     assert.deepEqual(vic20?.tapeFormats, ["tap", "wav", "prg"]);
     assert.equal(vic20?.tapeOption, undefined, "its one Datasette is cassette");

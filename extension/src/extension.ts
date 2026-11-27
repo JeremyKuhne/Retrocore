@@ -396,7 +396,7 @@ function soundRequest(session: vscode.DebugSession): string {
 /**
  * The display panel's tab icon: a CRT monitor framed in the theme's tab text color, whose screen glows in the
  * machine's phosphor while it runs (green for the IIe, white for the Model I, the PET and the Apple-1, the Color Computer's
- * green text screen) and is dark (off) when it stops.
+ * green text screen, which the colour machines such as the VIC-20 share) and is dark (off) when it stops.
  */
 function machineIcon(extension: vscode.Uri, screen: "apple2" | "trs80-model1" | "apple1" | "coco" | "off"): { light: vscode.Uri; dark: vscode.Uri } {
     const name = screen === "off" ? "crt-off" : screen;

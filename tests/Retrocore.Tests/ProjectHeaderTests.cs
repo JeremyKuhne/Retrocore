@@ -151,6 +151,28 @@ public sealed partial class ProjectHeaderTests
     }
 
     /// <summary>
+    ///  The VIC-20's RAM is its 5K and its <c>ramExpansion</c>'s: 3K at <c>$0400</c> and 8K for each block.
+    /// </summary>
+    /// <param name="options">The target's options.</param>
+    /// <param name="ram">Its RAM, in kilobytes.</param>
+    [TestMethod]
+    [DataRow("{}", 5)]
+    [DataRow("{ \"ramExpansion\": \"none\" }", 5)]
+    [DataRow("{ \"ramExpansion\": \"3k\" }", 8)]
+    [DataRow("{ \"ramExpansion\": \"8k\" }", 13)]
+    [DataRow("{ \"ramExpansion\": \"16k\" }", 21)]
+    [DataRow("{ \"ramExpansion\": \"24k\" }", 29)]
+    [DataRow("{ \"ramExpansion\": \"32k\" }", 32)]
+    public void Vic20RamFollowsItsExpansion(string options, int ram)
+    {
+        Write("retrocore.json", $$"""
+            { "sdk": "1", "cpu": "{{CatalogMachine.Find("vic20")?.Cpu.Name}}", "targets": { "t": { "machine": "vic20", "environment": "bare", "options": {{options}} } } }
+            """);
+
+        RetrocoreProject.Load(_folder).Target("t").Symbols()["RC_RAM_KB"].Should().Be(ram);
+    }
+
+    /// <summary>
     ///  A target's <c>ramKilobytes</c> is read as the launch reads it: a whole number written as a number with a
     ///  fraction or as text counts, and one that is not a whole number leaves the machine's default.
     /// </summary>

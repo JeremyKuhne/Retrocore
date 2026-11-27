@@ -363,7 +363,7 @@ public class AnalysisSoundnessTests
 
     /// <summary>
     ///  A pointer worked out from the stack pointer addresses the stack, as the Z80's <c>ADD HL,SP</c>, also where a
-    ///  callee works it out.
+    ///  callee works it out or steps one it is given.
     /// </summary>
     [TestMethod]
     public void PointersFromTheStackPointerWriteTheStack()
@@ -408,6 +408,23 @@ public class AnalysisSoundnessTests
                 add hl,sp
                 ret
             """, "Z80", "BC");
+
+        // And one that adjusts an address the caller passes, as INX on the X that TSX gave.
+        NotKept("""
+            ;; Saves A, then clears it on the stack through the X a helper steps.
+            ;; Keeps: A
+            Caller:
+                pha
+                tsx
+                jsr Bump
+                lda #0
+                sta $0100,x
+                pla
+                rts
+            Bump:
+                inx
+                rts
+            """, "Mos6502", "A");
     }
 
     /// <summary>

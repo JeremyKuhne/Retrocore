@@ -311,6 +311,13 @@ public class InstructionEffectsTests
             Effects(description.InstructionSets[name], 0x00).FlagsCleared.Should().Be((byte)(1 << decimalBit), name);
         }
 
+        // The NMOS XAA and LAX #n take a constant that differs from chip to chip, which the core cannot know.
+        InstructionSet nmos = M6502Isa.Get(ProcessorVariant.Mos6502);
+        uint a = description.RegisterMask("A");
+        Effects(nmos, 0x8B).RegistersHidden.Should().Be(a);
+        Effects(nmos, 0xAB).RegistersHidden.Should().Be(a | description.RegisterMask("X"));
+        Effects(nmos, 0xA9).RegistersHidden.Should().Be(0, "LDA #n is no such instruction");
+
         InstructionEffects immediate = Effects(M6502Isa.Get(ProcessorVariant.Wdc65C02), 0x89);
         immediate.FlagsWritten.Should().Be((byte)(1 << Flag(description, "zero")));
         immediate.FlagsFromOperand.Should().Be(0);

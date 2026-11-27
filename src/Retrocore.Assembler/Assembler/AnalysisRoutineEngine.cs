@@ -1026,8 +1026,11 @@ internal sealed class AnalysisRoutineEngine
             state.Slots[FlagSlot + bit] = AnalysisValue.Of((summary.UnknownFlags & mask) != 0 ? Unknown(at) : Changed(at));
         }
 
-        // A register the callee leaves holding an address in its stack holds one in the caller's.
-        state.StackAddresses = (state.StackAddresses & summary.KeptRegisters) | summary.StackAddresses;
+        // A register the callee leaves holding an address in its stack holds one in the caller's; with a stack address
+        // in hand, any register the callee changes may hold one worked out from it, as INX on the X a TSX gave.
+        uint changed = _leaves & ~summary.KeptRegisters;
+        uint passed = state.StackAddresses != 0 ? changed : 0;
+        state.StackAddresses = (state.StackAddresses & summary.KeptRegisters) | passed | summary.StackAddresses;
         Forget(state, at);
     }
 

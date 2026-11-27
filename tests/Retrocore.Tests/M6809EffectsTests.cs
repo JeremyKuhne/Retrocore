@@ -46,6 +46,9 @@ public class M6809EffectsTests
         uint s = description.RegisterMask("S"), u = description.RegisterMask("U"), pc = description.RegisterMask("PC");
         description.RegisterMask("D").Should().Be(a | b);
 
+        // An unprefixed store immediate takes its flags from the instruction before it, which the core cannot know.
+        Effects(set, [0x87, 0x00]).FlagsHidden.Should().Be(0x0E, "XSTA #n's N, Z and V");
+
         // PULS A,X,PC: pulls five bytes into A, X and PC through S.
         InstructionEffects puls = Effects(set, [0x35, 0x92]);
         puls.DependsOnPostbyte.Should().BeTrue();

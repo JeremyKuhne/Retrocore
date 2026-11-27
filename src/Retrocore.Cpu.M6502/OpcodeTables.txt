@@ -120,9 +120,10 @@ effects DCP                     reads A                 writes negative zero car
 effects ANC ALR                 reads A                 writes A negative zero carry
 effects ARR                     reads A carry decimal   writes A negative overflow zero carry
 effects AXS                     reads A X               writes X negative zero carry
-effects XAA                     reads A X               writes A negative zero
+# XAA and LAX #n AND with A ORed with a constant that differs from chip to chip, so their results are A=?.
+effects XAA                     reads A X               writes A=? negative=? zero=?
 effects LAX                                             writes A X negative zero
-effects LAX:Immediate           reads A                 writes A X negative zero
+effects LAX:Immediate           reads A                 writes A=? X=? negative=? zero=?
 effects LAS                     reads S                 writes A X S negative zero
 effects SAX AHX                 reads A X
 effects SHX                     reads X

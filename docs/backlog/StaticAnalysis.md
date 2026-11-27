@@ -277,7 +277,9 @@ to its arithmetic, K to `INX` and `DCX`, and the whole of F to PSW.
 - In `writes`, `flag=0` and `flag=1` are constants, and `flag=bitN` is a copy of bit N of the memory operand.
   `Name=?` is a register or flag written from state the effects leave out, which running the instruction cannot
   tell: the Z80's X and Y after `SCF`, `CCF` and `BIT b,[HL]` (from Q and WZ), the parity after `LD A,I` (IFF2), A
-  and its flags after `LD A,R` (the refresh count), and the 8085's A after `RIM`.
+  and its flags after `LD A,R` (the refresh count), the 8085's A after `RIM`, the 6809's flags after an unprefixed
+  store immediate (from the instruction before), and the NMOS 6502's results of `XAA` and `LAX #n` (a constant that
+  differs from chip to chip).
 - `taken Condition` says when a conditional branch, call or return is taken: `taken zero=1` for `BEQ`,
   `taken carry=0` for `RET NC`. Tests on flags (`flag=0`, `flag=1`, `flag=flag`, `flag!=flag`) join with `&`,
   then `|`, as the 6809's `BHI` (`carry=0&zero=0`), `BLS` (`carry=1|zero=1`) and `BGT`
@@ -483,7 +485,8 @@ and the documentation:
 - `Keeps:` of memory is not checked, only of registers and flags.
 - **Stack addresses through memory or the stack,** as a stack pointer stored with `LD [nn],SP` and loaded back, or
   pushed and pulled, are not known to be stack addresses again, so a write through them is not seen as one; nor
-  are those a callee the analysis cannot see leaves. A callee it follows passes them on.
+  are those a callee the analysis cannot see leaves. A callee it follows passes on those it works out, and while
+  the caller holds one, every register a callee changes may be one, as INX on the X a TSX gave.
 - **Stores to a fixed address in the stack,** as the 6502's `STY $0104`, are not seen as writes into it, since
   where the stack pointer is at entry is not known.
 - Where the check runs, as for the other analyses, is the first open question below.
@@ -614,7 +617,7 @@ SET_EOF. Routines followed now for the first time found three documentation erro
 - DEL's `Out: VARTAB = HL = ...` named only VARTAB; it is now `HL, VARTAB = ...`.
 - CHKRES's `Out:` had HL inside the zero flag's meaning; HL now has its own entry.
 
-The closing review's fixes made the check stricter: 890 routines checked, 32 findings, 118 `Keeps:` items not
+The closing review's fixes made the check stricter: 889 routines checked, 32 findings, 118 `Keeps:` items not
 verified. Most of the drop is routines now listed as followed in part, 120 of them, which were counted as checked
 before; the rest write into the stack through an address worked out from a stack pointer. The 7 new findings are
 all from `Entry:` labels, now checked too: SET_ENTRY_EXEC_ADDRESS_MERGE skips SAVE_REGISTERS, so A, which the

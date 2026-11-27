@@ -192,7 +192,7 @@ public sealed class Trs80Model100CassetteTests
         System.Buffers.Binary.BinaryPrimitives.WriteUInt16LittleEndian(file.AsSpan(20), 0xFFFE);
         System.Buffers.Binary.BinaryPrimitives.WriteUInt16LittleEndian(file.AsSpan(36), 22);
         System.Buffers.Binary.BinaryPrimitives.WriteUInt16LittleEndian(file.AsSpan(38), 16);
-        System.Buffers.Binary.BinaryPrimitives.WriteUInt16LittleEndian(file.AsSpan(44), 1);
+        Convert.FromHexString("0100000000001000800000AA00389B71").CopyTo(file.AsSpan(44));
         data.CopyTo(file.AsSpan(60));
         return file;
     }

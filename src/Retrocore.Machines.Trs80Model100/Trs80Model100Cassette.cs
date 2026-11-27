@@ -18,9 +18,11 @@ namespace Retrocore.Machines.Trs80Model100;
 ///   the inverse of SOD, which MAME's recorder gives back as its input.
 ///  </para>
 ///  <para>
-///   A change of SOD while the motor is stopped goes on the tape as it moves again. One made in the cycle the motor
-///   stops leaves a half of one cycle, shorter than a WAV file's sample, which a saved file merges into the halves
-///   beside it; <c>CSAVE</c> runs the motor before it writes and stops it after, so its tapes have none.
+///   A change of SOD made while the motor is stopped is written when the motor next runs, as a half counting the
+///   motor's running time since the last change, plus one cycle. It is one cycle long when that change came in the
+///   motor's last cycle before it stopped, and a saved WAV file merges any half shorter than its sample (about 56
+///   cycles at 44.1 kHz) into the halves beside it. A recording appended to a tape that ends at another level than
+///   SOD's starts with such a change.
 ///  </para>
 /// </remarks>
 public sealed class Trs80Model100Cassette

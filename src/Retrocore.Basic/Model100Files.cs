@@ -226,16 +226,15 @@ public sealed class Model100Files
             throw new InvalidOperationException($"BASIC has {file.Name} open, and the ROM's KILL refuses it too; open another program first.");
         }
 
-        // Measured first, and every program checked, so a file with no end is refused before RAM changes.
-        int length = Length(file.Type, file.Address);
-        CheckPrograms();
+        // The move checks every program before RAM changes; the entry goes once the move is done. Until then a removed
+        // .BA file's entry has the next program's address, as a .BA file is always followed by another or by BASIC's
+        // unsaved program, so linking the programs again links that one twice.
         int entry = EntryOf(file.Address);
+        Move(file.Address, Length(file.Type, file.Address), [], keep: -1);
         for (int index = 0; index < EntrySize; index++)
         {
             _memory.Write(entry + index, 0);
         }
-
-        Move(file.Address, length, [], keep: -1);
     }
 
     /// <summary>
@@ -296,7 +295,7 @@ public sealed class Model100Files
         // String space lies above the stack top, up to the memory top, and the stack grows down from the stack top, so
         // keeping the files and variables a stack's room below the stack top keeps them out of the strings too.
         int end = Word(FreeStart);
-        if (end + delta > Word(StackTop) - StackRoom)
+        if (delta > 0 && end + delta > Word(StackTop) - StackRoom)
         {
             throw new InvalidOperationException(
                 $"RAM has {Word(StackTop) - StackRoom - end} bytes free; {delta} more are needed.");

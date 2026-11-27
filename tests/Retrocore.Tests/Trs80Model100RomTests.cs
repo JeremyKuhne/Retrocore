@@ -167,8 +167,13 @@ public sealed class Trs80Model100RomTests
         return rom;
     }
 
-    // Builds a machine and runs it to the menu, the clock set so the date is not the host's.
-    private static Trs80Model100Machine Boot(string name, int kilobytes = 32)
+    /// <summary>
+    ///  Builds a machine and runs it to the menu, the clock set so the date is not the host's.
+    /// </summary>
+    /// <param name="name">The ROM's file.</param>
+    /// <param name="kilobytes">The RAM.</param>
+    /// <returns>The machine, at the menu.</returns>
+    internal static Trs80Model100Machine Boot(string name, int kilobytes = 32)
     {
         Trs80Model100Machine machine = new(
             new Trs80Model100Configuration
@@ -182,8 +187,12 @@ public sealed class Trs80Model100RomTests
         return machine;
     }
 
-    // Types keys and runs until they are all pressed.
-    private static void Type(Trs80Model100Machine machine, string text)
+    /// <summary>
+    ///  Types keys and runs until they are all pressed.
+    /// </summary>
+    /// <param name="machine">The machine.</param>
+    /// <param name="text">The keys' codes.</param>
+    internal static void Type(Trs80Model100Machine machine, string text)
     {
         foreach (char character in text) { machine.Keyboard.Type((byte)character).Should().BeTrue(); }
         while (machine.Keyboard.IsTyping) { machine.Run(10_000); }

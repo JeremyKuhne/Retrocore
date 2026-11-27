@@ -65,7 +65,7 @@ ToPushTemporary:
     ;; Entry:
     ;;   CountInX = takes the count from X; <Mid> branches here
     ;;   CountInA = pushes the count in A, allocates it and releases the source descriptor; <Mid> branches here
-    ;; Also: RLEFT (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;; Also: RLEFT (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     .proc Slice
     bcc PushStart
     lda (DescriptorPointer),y
@@ -73,17 +73,17 @@ ToPushTemporary:
     tya
 
 ;; Pushes the start offset.
-;; Also: RLEFT1 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: RLEFT1 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 PushStart:
     pha
 
 ;; Takes the count from X; <Mid> branches here.
-;; Also: RLEFT2 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: RLEFT2 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 CountInX:
     txa
 
 ;; Pushes the count in A, allocates it and releases the source descriptor; <Mid> branches here.
-;; Also: RLEFT3 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: RLEFT3 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 CountInA:
     pha
     jsr Strings::Allocate
@@ -100,7 +100,7 @@ CountInA:
     inc Pointer1+1
 
 ;; Copies the characters and pushes the result.
-;; Also: PULMOR (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: PULMOR (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 Copy:
     tya
     jsr Strings::CopyBytes
@@ -135,7 +135,7 @@ Copy:
     jsr EvaluateByte
 
 ;; Gets the descriptor and start with <Functions::SliceArguments>.
-;; Also: MID2 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: MID2 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 HaveLength:
     jsr SliceArguments
     ; `rejectZeroSlices` is 1 in AppleSoft and, by default, BASIC 1, and 0 in BASIC 2 and 4.
@@ -168,7 +168,7 @@ HaveLength:
     ;; The stack return sets zero from the argument; the indirect return sets it from the incremented return byte.
     ;; Out: A = byte argument, X = byte argument, Y = 0, DescriptorPointer = descriptor address
     ;; Errors: ILLEGAL QUANTITY for a zero byte argument where `rejectZeroSlices` is 1
-    ;; Also: PREAM (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;; Also: PREAM (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     .proc SliceArguments
     jsr CheckCloseParenthesis
     pla
@@ -212,7 +212,7 @@ HaveLength:
     ;;
     ;; Where `sharedLenJump` is 1 (BASIC 1), <Asc> jumps to this routine's `ToFloat`, the jump to <ReturnByte>.
     ;; Errors: TYPE MISMATCH if <Fac> is not a string
-    ;; Also: LEN (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;; Also: LEN (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     .proc Len
     jsr ReleaseArgument
     .if sharedLenJump
@@ -226,7 +226,7 @@ ToFloat:
     ;; Out: A = length, Y = length, zero = set for an empty string, X = 0, Pointer1 = character address,
     ;;   ValueType = numeric
     ;; Errors: TYPE MISMATCH if <Fac> is not a string
-    ;; Also: LEN1 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;; Also: LEN1 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     .proc ReleaseArgument
     jsr Strings::ReleaseFacString
     ldx #$00
@@ -237,7 +237,7 @@ ToFloat:
 
     ;; Returns the first character's byte value in <Fac>.
     ;; Errors: TYPE MISMATCH if <Fac> is not a string, ILLEGAL QUANTITY for an empty string
-    ;; Also: ASC (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;; Also: ASC (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     .proc Asc
     jsr ReleaseArgument
     beq ToIllegalQuantityError
@@ -252,14 +252,14 @@ ToFloat:
     .endproc
 
     ;; Jumps to <IllegalQuantityError>, shared by the string functions, <ConvertToByte> and the memory statements.
-    ;; Also: GOFUC (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;; Also: GOFUC (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     .proc ToIllegalQuantityError
     jmp IllegalQuantityError
     .endproc
     .endscope
 
     ;; Advances past the current character and reads a byte-valued numeric expression.
-    ;; Also: GTBYTC (M6502, ASTIL, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;; Also: GTBYTC (M6502, ASTIL, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     .proc SkipAndEvaluateByte
     jsr GetNextCharacter
     ; Falls into EvaluateByte.
@@ -269,7 +269,7 @@ ToFloat:
     ;; Out: X = value, A = the current character, as <GetCurrentCharacter> returns it, TextPointer = terminating
     ;;   character
     ;; Errors: TYPE MISMATCH for a string, ILLEGAL QUANTITY if the value is outside the byte range
-    ;; Also: GETBYT (M6502, ASTIL, CBM4S79, K4S79, HV1, HV1R, HV2, HV4, HV4R, HVK4)
+    ;; Also: GETBYT (M6502, ASTIL, CBM4S79, K4S79, HV1, HV1R, HV2, HV4, HV4R, HVK4, BV20)
     .proc EvaluateByte
     jsr EvaluateNumber
     ; Falls into ConvertToByte.
@@ -278,7 +278,7 @@ ToFloat:
     ;; Converts <Fac> to a nonnegative byte and refreshes the current text character.
     ;; Out: X = value, A = the current character, as <GetCurrentCharacter> returns it
     ;; Errors: ILLEGAL QUANTITY if the value is outside the byte range
-    ;; Also: CONINT (M6502, ASTIL, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;; Also: CONINT (M6502, ASTIL, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     .proc ConvertToByte
     jsr FacToNonnegativeInteger
     ldx FacMantissa3
@@ -299,7 +299,7 @@ ToGetCurrentCharacter:
     ;; <Float::ReadNumber>; on success, that byte and the caller's <TextPointer> are restored. An error from
     ;; <Float::ReadNumber> bypasses restoration.
     ;; Errors: TYPE MISMATCH if <Fac> is not a string
-    ;; Also: VAL (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;; Also: VAL (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     .proc Val
     jsr ReleaseArgument
     bne NotEmpty
@@ -322,7 +322,7 @@ NotEmpty:
     inx
 
 ;; Saves the byte after the string, writes a terminator and parses the number.
-;; Also: VAL2 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: VAL2 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 SetEnd:
     stx Pointer2+1
     ldy #$00
@@ -348,7 +348,7 @@ SetEnd:
     ;;
     ;; After <Strings::FromTextUntil> that moves past the scanned text; after <Functions::Val> it restores the caller's
     ;; position.
-    ;; Also: ST2TXT (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;; Also: ST2TXT (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     .proc SetTextPointer
     ldx SecondStringPointer
     ldy SecondStringPointer+1
@@ -356,7 +356,7 @@ SetEnd:
     sty TextPointer+1
 
 ;; Returns.
-;; Also: VALRTS (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: VALRTS (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 Done:
     rts
     .endproc

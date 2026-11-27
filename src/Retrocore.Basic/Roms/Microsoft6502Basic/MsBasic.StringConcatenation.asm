@@ -27,7 +27,7 @@
     ;;   sign, decimal = clear
     ;; Errors: STRING TOO LONG for a combined length above 255, TYPE MISMATCH for a non-string second operand,
     ;;   or an error from evaluation or allocation
-    ;; Also: CAT (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;; Also: CAT (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     .proc Concatenate
     lda FacMantissa4
     pha
@@ -48,7 +48,7 @@
     jmp ReportError
 
 ;; Allocates the combined string and copies the two strings into it.
-;; Also: SIZEOK (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: SIZEOK (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 LengthOk:
     jsr AllocateForFac
     jsr CopyString
@@ -67,7 +67,7 @@ LengthOk:
     ;; In: StringPointer = descriptor address, NewString = destination, decimal = clear
     ;; Out: NewString = destination after the copy, Pointer1 = source address, X = source low byte, Y = 0
     ;; See: <Strings::CopyFrom>, <Strings::CopyBytes>
-    ;; Also: MOVINS (M6502, ASTIL, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;; Also: MOVINS (M6502, ASTIL, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     .proc CopyString
     ldy #$00
     lda (StringPointer),y
@@ -87,7 +87,7 @@ LengthOk:
     ;; Out: NewString = destination after the copy, Pointer1 = source address, Y = 0
     ;; Keeps: X
     ;; See: <Strings::CopyBytes>
-    ;; Also: MOVSTR (M6502, ASTIL, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;; Also: MOVSTR (M6502, ASTIL, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     .proc CopyFrom
     stx Pointer1
     sty Pointer1+1
@@ -101,14 +101,14 @@ LengthOk:
     ;; In: A = length, Pointer1 = source address, NewString = destination, decimal = clear
     ;; Out: A = destination low byte after the copy, Y = 0, NewString = destination after the copy
     ;; Keeps: X
-    ;; Also: MOVDO (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;; Also: MOVDO (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     .proc CopyBytes
     tay
     beq Advance
     pha
 
 ;; Copies one byte downward.
-;; Also: MOVLP (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: MOVLP (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 Loop:
     dey
     lda (Pointer1),y
@@ -122,7 +122,7 @@ CheckMore:
     pla
 
 ;; Adds the length to <NewString>.
-;; Also: MVDONE (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: MVDONE (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 Advance:
     clc
     adc NewString
@@ -131,7 +131,7 @@ Advance:
     inc NewString+1
 
 ;; Returns.
-;; Also: MVSTRT (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: MVSTRT (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 Done:
     rts
     .endproc
@@ -139,7 +139,7 @@ Done:
     ;; Checks the <Fac> type, then releases its descriptor if it is the latest temporary.
     ;; Errors: TYPE MISMATCH if <Fac> is not a string
     ;; See: <Strings::ReleaseFac>, <Strings::ReleaseDescriptor>
-    ;; Also: FRESTR (M6502, ASTIL, CBM4S79, K4S79, HV1, HV1R, HV2, HV4, HV4R, HVK4)
+    ;; Also: FRESTR (M6502, ASTIL, CBM4S79, K4S79, HV1, HV1R, HV2, HV4, HV4R, HVK4, BV20)
     .proc ReleaseFacString
     jsr RequireString
     ; Falls into ReleaseFac.
@@ -149,7 +149,7 @@ Done:
     ;; In: FacMantissa3 = descriptor address (low byte), FacMantissa4 = its high byte, decimal = clear
     ;; Out: A = length, X = character address low byte, Y = character address high byte, Pointer1 = character address
     ;; See: <Strings::ReleaseDescriptor>
-    ;; Also: FREFAC (M6502, ASTIL, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;; Also: FREFAC (M6502, ASTIL, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     .proc ReleaseFac
     lda FacMantissa3
     ldy FacMantissa4
@@ -165,7 +165,7 @@ Done:
     ;; In: A = descriptor low byte, Y = descriptor high byte, decimal = clear
     ;; Out: A = length, X = character address low byte, Y = character address high byte, Pointer1 = character address
     ;; See: <Strings::ReleaseTemporary>
-    ;; Also: FRETMP (M6502, ASTIL, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;; Also: FRETMP (M6502, ASTIL, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     .proc ReleaseDescriptor
     sta Pointer1
     sty Pointer1+1
@@ -212,7 +212,7 @@ SkipLink:
         inc StringsBottom+1
 
 ;; Pulls the length back into A.
-;; Also: FREPLA (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: FREPLA (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 RestoreLength:
         pla
         rts
@@ -258,12 +258,12 @@ ReadDescriptor:
         inc StringsBottom+1
 
 ;; Pulls the length back into A.
-;; Also: FREPLA (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: FREPLA (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 RestoreLength:
         pla
 
 ;; Stores the address in <Pointer1> and returns.
-;; Also: FRETRT (M6502, HV1, HV1R, HV2)
+;; Also: FRETRT (M6502, HV1, HV1R, HV2, BV20)
 StoreAddress:
         stx Pointer1
         sty Pointer1+1
@@ -280,7 +280,7 @@ StoreAddress:
     ;; Keeps: X
     ;; Entry:
     ;;   Done = returns; where `linkedRelease` is 1 (BASIC 4), <Strings::ReleaseDescriptor> branches here
-    ;; Also: FRETMS (M6502, ASTIL, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;; Also: FRETMS (M6502, ASTIL, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     .proc ReleaseTemporary
     cpy LastTemporary+1
     bne Done
@@ -292,7 +292,7 @@ StoreAddress:
     ldy #$00
 
 ;; Returns; where `linkedRelease` is 1 (BASIC 4), <Strings::ReleaseDescriptor> branches here.
-;; Also: FRERTS (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: FRERTS (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 Done:
     rts
     .endproc

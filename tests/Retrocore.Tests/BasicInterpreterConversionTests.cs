@@ -36,7 +36,7 @@ public sealed class BasicInterpreterConversionTests
     // name BASIC's entries the kernal reaches (ERROR, READY, INIT and others), as the workspace's do.
     private static readonly string[] s_appleKeys = ["M6502", "UNKN", "ASTIL", "AS82", "ASRM78"];
     private static readonly string[] s_commodoreKeys =
-        ["M6502", "UNKN", "CBM4S79", "K4S79", "HV1", "HV1R", "HV2", "HV4", "HV4R", "HVK4"];
+        ["M6502", "UNKN", "CBM4S79", "K4S79", "HV1", "HV1R", "HV2", "HV4", "HV4R", "HVK4", "BV20"];
 
     // The definitions that give no overlay name of their own, by vendor: the new constants, the labels that were
     // *+5 branches, and, each only where it needs it, AppleSoft's PrintTabOrSpace, whose old names are on its

@@ -86,19 +86,21 @@ public sealed class BasicSharedFloatAliasesTests
         ["GFDIV"] = ["M6502"]
     };
 
-    // Commodore's spellings of the character reader's labels, in its BASIC 4 source and the reconstructions.
+    // Commodore's spellings of the character reader's labels, in its BASIC 4 and VIC-20 sources and the reconstructions.
     private static readonly Dictionary<string, string[]> s_hoffmannVetterNames = new(StringComparer.Ordinal)
     {
-        ["CHDGOT"] = ["CBM4S79", "HV1", "HV1R", "HV2", "HV4", "HV4R"],
-        ["CHDRTS"] = ["CBM4S79", "HV1", "HV1R", "HV2", "HV4", "HV4R"]
+        ["CHDGOT"] = ["CBM4S79", "HV1", "HV1R", "HV2", "HV4", "HV4R", "BV20"],
+        ["CHDRTS"] = ["CBM4S79", "HV1", "HV1R", "HV2", "HV4", "HV4R", "BV20"]
     };
 
     // The names whose aliases Commodore's file guards, so that only some builds define them: BASIC 4's lister names,
-    // and the names of the expression, variable and string modules' definitions, which the math region's build leaves
-    // out and BasicExpressionsConversionTests checks in the whole builds.
+    // the VIC-20's names for the entries only its build has, and the names of the expression, variable and string
+    // modules' definitions, which the math region's build leaves out and BasicExpressionsConversionTests checks in the
+    // whole builds.
     private static readonly HashSet<string> s_guardedNames =
     [
-        "RESCR2", "PRIT3B", .. BasicExpressionsConversionTests.CommodoreOldNames.Keys
+        "RESCR2", "PRIT3B", "CLEART", "NQPLOP", "NEVAL", "FLPINT",
+        .. BasicExpressionsConversionTests.CommodoreOldNames.Keys
     ];
 
     // Addresses in the independently assembled PET1, PET2 and PET4 listings:

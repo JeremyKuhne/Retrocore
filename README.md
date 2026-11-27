@@ -17,12 +17,12 @@ The Model 100 runs the ROM you supply until its source is written.
 | Apple III | Synertek 6502A | Boot ROM (diagnostics, monitor and SOS boot) | 128, 256 or 512 KB banked RAM with extended addressing, all native video modes with character RAM, built-in and three external drives (WOZ, DSK, DO, PO), speaker and 6-bit DAC, ProFile hard disk cards with pseudo-DMA (PO, HDV), SOS 1.3 |
 | TRS-80 Model I, Level II and Level I | Z80 | Level II 1.2 and 1.3, Level I, MCM6670P character generator; plus the Radio Shack lowercase kit's font (from source; no chip dump is known) | CAS tapes (play and record), Expansion Interface (up to 48 KB RAM, 40 Hz clock, FD1771 with Percom/Radio Shack double-density doubler), JV1 and JV3 disks, lowercase modification |
 | TRS-80 Model III, 4 and 4P | Z80 | The Model III's ROM (ROM C revisions B and C) and its Level I ROM, the Model 4's, the 4P's boot ROM, and their character generators | 16-128 KB with the Model 4's memory maps and banking, 64x16 and 80x24 video, FD1793 with wait states and NMIs, JV1, JV3, DMK and IMD disks, CAS tapes at 500 and 1500 baud; boots TRSDOS, LDOS and LS-DOS |
-| TRS-80 Model II, 12 and 16 (Z80 side) | Z80 | Versions 1, 2, 3 and 5 of the boot ROM (five ROMs, as version 3 has two; version 4 has no known good dump) and the character generator | 32-512 KB banked RAM, MC6845 80x24 video, Z80 CTC, PIO, SIO and DMA with mode 2 interrupts, FD1791 with 8-inch IMD, DMK and JV3 disks |
+| TRS-80 Model II, 12 and 16 (Z80 side) | Z80 | Versions 1, 2, 3 and 5 of the boot ROM (five ROMs, as version 3 has two; version 4 has no known good dump) and the character generator | 32-512 KB banked RAM, MC6845 80x24 video, Z80 CTC, PIO, SIO and DMA with mode 2 interrupts, FD1791 with 8-inch IMD, DMK and JV3 disks; boots TRSDOS 1.2 and 2.0 |
 | TRS-80 Color Computer 1, 2 and 3 | Motorola 6809E | Color BASIC 1.0-1.3, Extended Color BASIC 1.0 and 1.1, Disk Extended Color BASIC 1.0 and 1.1, and the CoCo 3's Extended Color BASIC 2.0 with Super Extended BASIC | SAM and MC6847/MC6847T1 VDG with artifact colors, the CoCo 3's GIME (MMU, 128 or 512 KB, palette, timer, 40/80 columns), CAS tapes, sound, joysticks, ROM packs, the disk controller cartridge with JVC disks |
 | BBC Micro Model B and Model A | MOS 6502 at 2 MHz | MOS 1.20, BBC BASIC II, DNFS 1.20 and the SAA5050's characters | 6845 and video ULA in modes 0-6, SAA5050 teletext in mode 7, SN76489 sound, UEF tapes (play and record) and `.inf` files, the Intel 8271 with SSD and DSD disks, the analogue port |
 | Commodore PET 2001 and 4032 | MOS 6502 | BASIC 1 and 4 (original and revised) and BASIC 2, their screen editors (BASIC 4's for the graphics and business keyboards) and kernals, with the machine-language monitor, and the 901447-08 and -10 character ROMs | 4-32 KB RAM, two 6520 PIAs and a 6522 VIA, 40x25 video with the 2001's timing and snow, the chiclet, graphics and business keyboards, CB2 sound, two Datasettes (TAP, WAV and PRG tapes, play and record), the IEEE-488 bus with 4040 and 2040 dual drives as devices 8-15 (D64, D67 and G64 disks, which save) |
 | Atari 400 and 800 | MOS 6502 | OS rev. A and B and the PAL OS, the floating point package, Atari BASIC rev. A, B and C, and the 810's firmware | ANTIC and GTIA (or CTIA) with every display mode, players and missiles, POKEY's sound, keyboard and timers, joysticks, 8-48 KB, both cartridge slots with bank-switched cartridges, the 410 recorder (CAS), 810 disk drives at the hardware level (ATR, XFD), and `.xex` files |
-| TRS-80 Model 100 and Tandy 102 | OKI 80C85 | None of their own; your ROM runs | 8-32 KB RAM kept between sessions in a RAM image, the 240x64 LCD's ten HD44102 drivers, the keyboard matrix, the uPD1990AC clock on RST 7.5, the 81C55, the option ROM socket and the power-off bit; boots the menu and runs BASIC from your ROM |
+| TRS-80 Model 100 and Tandy 102 | OKI 80C85 | None of their own; your ROM runs | 8-32 KB RAM kept between sessions in a RAM image, the 240x64 LCD's ten HD44102 drivers, the keyboard matrix, the uPD1990AC clock on RST 7.5, the 81C55, the option ROM socket and the power-off bit; boots the menu and runs BASIC from your ROM, with `.BA`, `.DO` and `.CO` files put in and taken out of RAM |
 | MITS Altair 8800 | Intel 8080 | None of its own; DBL and MBL PROMs from SDK sources | 1-64 KB RAM, the 88-2SIO's MC6850 ACIAs or the 88-SIO with an 80x24 ADM-3A-style terminal, the 88-ACR cassette, sense switches, the front panel's EXAMINE and DEPOSIT, the 88-DCDD with 8-inch drives and the DBL and MBL boot PROMs; runs Altair BASIC and CP/M 2.2 from your images |
 | Kaypro II | Z80 | Monitor ROM 81-149C and its character generator; MBASIC 5.21 too, which loads from disk | 64 KB RAM under the banked ROM and 4 KB of video RAM, 80x24 text, serial keyboard, FD1793 with two drives (raw IMG, IMD and DMK disks), Z80 SIO and PIOs; runs CP/M 2.2 and MBASIC from your disks |
 
@@ -114,7 +114,9 @@ summaries into generated C# XML documentation ([DocComments.md](docs/DocComments
 section keeps the names manuals and listings gave it, so code written with them still assembles and the editor
 offers the current name. Sources maintained by hand follow [the assembly style guide](docs/AssemblyStyle.md),
 which the SDK's ROM sources are being converted to, for developers new to the old machines, with the old names
-kept as a bridge to the original documents. [ConvertingSources.md](docs/ConvertingSources.md) is why and how, and
+kept as a bridge to the original documents; the SDK's Pascal sources follow
+[the Pascal style guide](docs/PascalStyle.md) in the same spirit. [ConvertingSources.md](docs/ConvertingSources.md)
+is why and how, and
 [the conversion logs](docs/conversions/README.md) record what was decided for each source converted.
 
 In VS Code, assembly files get syntax highlighting, live diagnostics as you type, go to definition, find all
@@ -125,14 +127,15 @@ completions, document outlines, and workspace symbol search across your code and
 ## BASIC
 
 Retrocore supports **AppleSoft BASIC**, **Integer BASIC**, and **TRS-80 Level II and Level I BASIC**. **MBASIC**
-(Microsoft BASIC-80 5.21, the Kaypro II's CP/M BASIC) has `.mbasic.bas` source files with the same editing support:
+(Microsoft BASIC-80 5.21, the Kaypro II's CP/M BASIC) and **Model 100 BASIC** have `.mbasic.bas` and `.model100.bas`
+source files with the same editing support (Model 100 BASIC's keyword hovers are still to come):
 
-- **Source files with optional labels.** `.applesoft.bas`, `.integer.bas`, `.level2.bas`, `.level1.bas`, `.mbasic.bas`, and `.bas` files can
-  omit line numbers, indent freely, and jump to `label:` or `@label` targets. They get dialect-accurate
-  highlighting (finding reserved words inside identifiers where the ROMs do), diagnostics, keyword and variable
-  hovers, go to definition, find all references, completions, outlines, and line renumbering.
-- **Tokenized files and tapes.** **Retrocore: Open as BASIC Listing** opens tokenized programs (including
-  CiderPress2 `#fc` and `#fa` files) and Model I `.cas` tapes as text and writes them back on save.
+- **Source files with optional labels.** `.applesoft.bas`, `.integer.bas`, `.level2.bas`, `.level1.bas`, `.mbasic.bas`,
+  `.model100.bas`, and `.bas` files can omit line numbers, indent freely, and jump to `label:` or `@label` targets. They
+  get dialect-accurate highlighting (finding reserved words inside identifiers where the ROMs do), diagnostics, keyword
+  and variable hovers, go to definition, find all references, completions, outlines, and line renumbering.
+- **Tokenized files and tapes.** **Retrocore: Open as BASIC Listing** opens tokenized programs (including CiderPress2
+  `#fc` and `#fa` files), Model 100 `.ba` files and Model I `.cas` tapes as text and writes them back on save.
 - **Live machine editing.** While a machine is running, **Retrocore: Open BASIC Program** edits the program
   currently in RAM as text, tracks `LOAD`, `CLOAD`, or lines typed on the emulated screen, and tokenizes changes
   back into memory on save ([BASIC programs](extension/README.md#basic-programs)).
@@ -407,6 +410,7 @@ Design notes for upcoming work live in [`docs/backlog`](docs/backlog):
 - [Business BASIC's other versions, modules and DEF FN view](docs/backlog/BusinessBasic.md);
 - [the Z80 SoftCards](docs/backlog/SoftCard.md): interrupts, the Premium SoftCard IIe and CP/M 3, CP/M sources, if wanted;
 - [the Commodore PET](docs/backlog/Pet.md): the 8032's 80 columns and CRTC, if wanted;
+- [the Commodore VIC-20, 64 and 128](docs/backlog/Commodore.md), with the 1540, 1541 and 1571 drives;
 - [the Kaypro II](docs/backlog/Kaypro.md): CP/M's sources and its disks as a file system;
 - [the BBC Micro's later models and expansions](docs/backlog/BbcMicro.md);
 - [the Atari 400 and 800](docs/backlog/Atari800.md);

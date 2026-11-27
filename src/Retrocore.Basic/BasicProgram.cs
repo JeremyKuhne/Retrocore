@@ -206,6 +206,12 @@ public sealed partial class BasicProgram
             return;
         }
 
+        if (Dialect is Model100Dialect model100)
+        {
+            model100.Write(this, memory);
+            return;
+        }
+
         BasicPointers pointers = Dialect.Pointers;
         int start = Word(memory, pointers.ProgramStart);
         byte[] image = ToImage(start);
@@ -233,7 +239,7 @@ public sealed partial class BasicProgram
         using ValueStringBuilder builder = new(stackalloc char[256]);
         if (pragma)
         {
-            builder.Append(Dialect == BasicDialect.Level2 || Dialect == BasicDialect.Mbasic ? "' retrocore " : "REM retrocore ");
+            builder.Append(Dialect == BasicDialect.Level2 || Dialect == BasicDialect.Mbasic || Dialect == BasicDialect.Model100 ? "' retrocore " : "REM retrocore ");
             builder.Append(Dialect.Name);
             builder.Append('\n');
         }

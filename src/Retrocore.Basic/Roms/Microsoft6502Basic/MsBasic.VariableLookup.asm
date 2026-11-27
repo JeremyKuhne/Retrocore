@@ -45,18 +45,18 @@
     ;;   WithDimensionFlag = starts with A = first character and X = dimension flag
     ;;   KeepDimensionFlag = starts with A = first character, retaining the current dimension flag
     ;; See: <IsLetter>, <Variables::NotFound>, <Variables::ValueAddress>, <Variables::FindArray>
-    ;; Also: PTRGET (M6502, ASTIL, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;; Also: PTRGET (M6502, ASTIL, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     .proc FindVariable
     ldx #$00
     jsr GetCurrentCharacter
 
 ;; Starts with A = first character and X = dimension flag.
-;; Also: PTRGT1 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: PTRGT1 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 WithDimensionFlag:
     stx Dimensioning
 
 ;; Starts with A = first character, retaining the current dimension flag.
-;; Also: PTRGT2 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: PTRGT2 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 KeepDimensionFlag:
     sta VariableName
     jsr GetCurrentCharacter
@@ -64,12 +64,12 @@ KeepDimensionFlag:
     bcs ValidFirst
 
 ;; Jumps to <SyntaxError> for a bad first character or a forbidden `%`.
-;; Also: INTERR (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: INTERR (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 ToSyntaxError:
     jmp SyntaxError
 
 ;; Clears <ValueType> and <IntegerType> and reads the second character.
-;; Also: PTRGT3 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: PTRGT3 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 ValidFirst:
     ldx #$00
     stx ValueType
@@ -90,12 +90,12 @@ AfterVectors:
     bcc CheckSuffix
 
 ;; Keeps a letter or digit as the second name character.
-;; Also: ISSEC (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: ISSEC (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 SecondCharacter:
     tax
 
 ;; Consumes further letters and digits.
-;; Also: EATEM (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: EATEM (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 SkipRest:
     jsr GetNextCharacter
     bcc SkipRest
@@ -103,7 +103,7 @@ SkipRest:
     bcs SkipRest
 
 ;; `$` makes a string: sets <ValueType> and the second byte's bit 7.
-;; Also: NOSEC (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: NOSEC (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 CheckSuffix:
     cmp #'$'
     bne CheckInteger
@@ -112,7 +112,7 @@ CheckSuffix:
     bne MarkSecond
 
 ;; `%` makes an integer (a syntax error where subscripts are not allowed) and sets both bytes' bit 7.
-;; Also: NOTSTR (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: NOTSTR (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 CheckInteger:
     cmp #'%'
     bne CheckSubscript
@@ -128,7 +128,7 @@ CheckInteger:
     sta VariableName
 
 ;; Sets bit 7 of the second name byte and consumes the suffix.
-;; Also: TURNON (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: TURNON (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 MarkSecond:
     txa
     ora #$80
@@ -136,7 +136,7 @@ MarkSecond:
     jsr GetNextCharacter
 
 ;; Stores the second byte and compares the next character, ORed with <SubscriptMode>, with `(`.
-;; Also: STRNAM (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: STRNAM (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 CheckSubscript:
     stx VariableName+1
     sec
@@ -178,12 +178,12 @@ SearchScalars:
     .endif
 
 ;; Stores the entry pointer's high byte (start, and on a page crossing).
-;; Also: STXFND (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: STXFND (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 SetEntryHigh:
     stx SourceStart+1
 
 ;; Stores the low byte; at <ArraysStart> the name is not found.
-;; Also: LOPFND (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: LOPFND (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 CheckEnd:
     sta SourceStart
     cpx ArraysStart+1
@@ -192,7 +192,7 @@ CheckEnd:
     beq Variables::NotFound
 
 ;; Compares both name bytes with <VariableName>.
-;; Also: LOPFN (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: LOPFN (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 CompareName:
     lda VariableName
     cmp (SourceStart),y
@@ -216,7 +216,7 @@ SecondMismatch:
 ;; Steps past an entry and loops.
 ;;
 ;; Only a table that wrapped past $FFFF would fall out of the routine, into the code after it.
-;; Also: NOTIT (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: NOTIT (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 Advance:
     clc
     lda SourceStart
@@ -255,7 +255,7 @@ Advance:
     ;; BASIC 4 additionally rejects DS and DS$. Other names proceed to insertion.
     ;; In: VariableName = encoded name, Y = 0, decimal = clear
     ;; See: <Variables::ReturnZero>, <Variables::Create>
-    ;; Also: NOTFNS (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;; Also: NOTFNS (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     .proc NotFound
     pla
     pha
@@ -274,7 +274,7 @@ Advance:
     ;;
     ;; BASIC 1 and AppleSoft place two zero bytes here. BASIC 2 and 4 use bytes within <Float::Half> instead.
     ;; Out: A = low address, Y = high address
-    ;; Also: LDZR (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;; Also: LDZR (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     .proc ReturnZero
     .if ownZero
         lda #<ZeroVariable
@@ -295,7 +295,7 @@ ZeroVariable:
 ;; Two zero bytes that an absent scalar reads.
 ;;
 ;; BASIC 2 and 4 have no such bytes here: their <ZeroValue> lies inside <Float::Half>.
-;; Also: ZERO (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: ZERO (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 ZeroValue:
         .endif
         .byte $00, $00
@@ -309,7 +309,7 @@ ZeroValue:
     ;; `statusName` is 1 (the PET), `ST`; where `diskNames` is 1 (BASIC 4), `DS` and `DS$`. In AppleSoft it is empty.
     ;; In: VariableName = encoded name, Y = 0
     ;; Errors: SYNTAX for a reserved name
-    ;; Also: NOTEVL (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;; Also: NOTEVL (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     .proc CheckReservedName
     .if clockNames || statusName || diskNames
         lda VariableName
@@ -327,13 +327,13 @@ ZeroValue:
     .endif
     .if clockNames || statusName || diskNames
 ;; Jumps to <SyntaxError> for a reserved name.
-;; Also: GOBADV (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: GOBADV (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 ToSyntaxError:
         jmp SyntaxError
     .endif
 
 ;; Checks for `ST`.
-;; Also: QSTAVR (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: QSTAVR (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 CheckStatus:
     .if statusName
         cmp #'S'
@@ -365,7 +365,7 @@ CheckDiskStatus:
     ;; Out: VariablePointer = address of the new value, A = its low byte, Y = its high byte
     ;; Errors: OUT OF MEMORY if the enlarged tables cannot fit
     ;; See: <MoveRangeUp>, <Variables::ValueAddress>
-    ;; Also: VAROK (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;; Also: VAROK (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     .proc Create
     lda ArraysStart
     ldy ArraysStart+1
@@ -381,7 +381,7 @@ CheckDiskStatus:
     iny
 
 ;; Stores the arrays' new end and moves them.
-;; Also: NOTEVE (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: NOTEVE (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 SetNewEnd:
     sta DestinationEnd
     sty DestinationEnd+1
@@ -520,7 +520,7 @@ WriteEntry:
     ;; Returns the value address two bytes after the scalar entry at <SourceStart>.
     ;; In: SourceStart = scalar entry address, decimal = clear
     ;; Out: A = low value address, Y = high value address, VariablePointer = value address
-    ;; Also: FINPTR (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;; Also: FINPTR (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     .proc ValueAddress
     lda SourceStart
     clc
@@ -530,7 +530,7 @@ WriteEntry:
     iny
 
 ;; Stores <VariablePointer> and returns.
-;; Also: FINNOW (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: FINNOW (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 Store:
     sta VariablePointer
     sty VariablePointer+1
@@ -542,7 +542,7 @@ Store:
     ;; Where `countEntry` is 1 (AppleSoft), `FromCount` takes the count in A instead; `STORE` and `RECALL` call it.
     ;; In: SourceStart = array descriptor, Counter = number of dimensions, decimal = clear
     ;; Out: ArrayPointer = first value address, A = its low byte, Y = its high byte
-    ;; Also: FMAPTR (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;; Also: FMAPTR (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     .proc ElementsStart
     lda Counter
     .if countEntry
@@ -558,7 +558,7 @@ FromCount:
     iny
 
 ;; Stores <ArrayPointer> and returns.
-;; Also: JSRGM (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: JSRGM (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 Store:
     sta ArrayPointer
     sty ArrayPointer+1

@@ -64,6 +64,7 @@ test("the machines are the ones agreed, each with its own id and name, in order"
     assert.deepEqual(machineById("trs80-model100")?.configuration, { machine: "trs80-model100", model: "100" });
     assert.deepEqual(machineById("tandy102")?.configuration, { machine: "trs80-model100", model: "102" });
     assert.deepEqual(machineById("tandy102")?.diskFormats, [], "the Model 100 has no disk drive of its own");
+    assert.deepEqual(machineById("trs80-model100")?.basicDialects, [], "a BASIC launch steps through the ROM, which is not an SDK source yet");
     assert.deepEqual(machineById("altair")?.diskFormats, ["dsk"], "the 88-DCDD's SIMH images");
     assert.deepEqual(machineById("altair")?.tapeFormats, [], "an Altair tape needs a bootstrap, so it cannot start the machine");
     assert.deepEqual(machineById("apple3")?.configuration, { machine: "apple3" });

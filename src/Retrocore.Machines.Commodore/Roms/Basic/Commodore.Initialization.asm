@@ -24,7 +24,7 @@
     ;;
     ;; Where `markDirect` is 1 (BASIC 1), it marks the line number as direct. The memory probe that
     ;; <CommodoreMemoryProbe> emits next establishes BASIC's limit, and <CommodoreStartProgram> ends the routine.
-    ;; Also: INIT (M6502, CBM4S79, K4S79, HV1, HV1R, HV2, HV4, HV4R, HVK4)
+    ;; Also: INIT (M6502, CBM4S79, K4S79, HV1, HV1R, HV2, HV4, HV4R, HVK4, BV20)
     .proc ColdStart
     ldx #<(STACK_END-$100)
     .if markDirect
@@ -47,7 +47,7 @@
     ldx #<(RandomValue+4-GetNextCharacter)
 
 ;; Copies the character reader and the random seed to page zero.
-;; Also: MOVCHG (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: MOVCHG (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 CopyCharacterReader:
     lda CharacterReaderTemplate-1,x
     sta GetNextCharacter-1,x
@@ -163,7 +163,7 @@ FoundMemoryTop:
     ldy LineNumber+1
 
 ;; Sets <MemoryTop> and <StringsBottom> from A and Y.
-;; Also: USEDEF (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: USEDEF (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 SetMemoryTop:
     sta MemoryTop
     sty MemoryTop+1
@@ -247,7 +247,7 @@ CURSOR_DOWN = $11
 
 ;; The free-memory count's suffix, `BYTES FREE`. BASIC 2 and 4 end it with a carriage return; BASIC 1 goes on, in
 ;; the same string, with the cursor home, its sign-on and three cursor-downs.
-;; Also: WORDS (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: WORDS (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 BytesFreeMessage:
     .byte " BYTES FREE"
     .if earlyBanner
@@ -261,7 +261,7 @@ SignOnMessage:
 
 ;; The later sign-on, printed before the free-memory count: BASIC 2's, and BASIC 1's where its banner switch is 0.
 ;; BASIC 4 keeps the string but prints its own banner.
-;; Also: FREMES (M6502, CBM4S79, HV2, HV4, HV4R)
+;; Also: FREMES (M6502, CBM4S79, HV2, HV4, HV4R, BV20)
 SignOnMessage:
         .byte "### COMMODORE BASIC ###", CARRIAGE_RETURN, CARRIAGE_RETURN, $00
     .endif

@@ -17,7 +17,9 @@
 ; ZERO_IN_HALF_CONSTANT: 1 to define `ZeroValue` within <Float::Half> for BASIC 2 and 4; BASIC 1 has its own.
 ; WAIT_EASTER_EGG: 1 to include BASIC 2's hidden WAIT routine and its encoded bytes.
 ; BASIC4_OUTPUT_PADDING: 1 to include BASIC 4's checksum and patch space before <Float::PrintInLineNumber>.
+; SQR_PATCH_SPACE and UNSPACED_LINE_NUMBERS, which default to 0, are described where they are defined.
 
+.include "Commodore.Switches.asm"
 .include "../../Microsoft6502Basic/MsBasic.AdditionCore.asm"
 .include "../../Microsoft6502Basic/MsBasic.FloatConstants.asm"
 .include "../../Microsoft6502Basic/MsBasic.Logarithm.asm"
@@ -35,6 +37,20 @@
 .assert ZERO_IN_HALF_CONSTANT = 0 || ZERO_IN_HALF_CONSTANT = 1, "ZERO_IN_HALF_CONSTANT is 0 or 1."
 .assert WAIT_EASTER_EGG = 0 || WAIT_EASTER_EGG = 1, "WAIT_EASTER_EGG is 0 or 1."
 .assert BASIC4_OUTPUT_PADDING = 0 || BASIC4_OUTPUT_PADDING = 1, "BASIC4_OUTPUT_PADDING is 0 or 1."
+
+.ifndef SQR_PATCH_SPACE
+;; 1 includes the BASIC chip's checksum byte, `BASIC_ROM_CHECKSUM`, and patch space before `SQR`, which then starts
+;; $1F71 bytes into the chip (the VIC-20's).
+SQR_PATCH_SPACE = 0
+.endif
+.assert SQR_PATCH_SPACE = 0 || SQR_PATCH_SPACE = 1, "SQR_PATCH_SPACE is 0 or 1."
+
+.ifndef UNSPACED_LINE_NUMBERS
+;; 1 prints line numbers without the space before them (the VIC-20's): <Float::PrintDecimalAX> enters
+;; <Float::FormatFacAtOffset> with the Y of 0 that the conversion leaves, so the sign's place falls before the string.
+UNSPACED_LINE_NUMBERS = 0
+.endif
+.assert UNSPACED_LINE_NUMBERS = 0 || UNSPACED_LINE_NUMBERS = 1, "UNSPACED_LINE_NUMBERS is 0 or 1."
 
     AddEntries
 
@@ -115,13 +131,35 @@ RomChecksumAdjustment:
     .assert * = $CF78, "BASIC 4's PrintInLineNumber must begin at $CF78."
 .endif
 
+.if UNSPACED_LINE_NUMBERS
+    DecimalOutput 0, 1, 1
+.else
     DecimalOutput 0, 1
+.endif
     OutputTables ZERO_IN_HALF_CONSTANT, 1
+
+.if SQR_PATCH_SPACE
+;; The byte that makes the BASIC chip's checksum come out to its page: the root defines <BASIC_ROM_CHECKSUM>.
+;; Also: CKSMC0 (BV20)
+BasicRomChecksumAdjustment:
+    .byte BASIC_ROM_CHECKSUM
+
+;; Unused patch space, filled with $AA, up to `SQR`.
+;; Also: PATCHS (BV20)
+PatchSpace:
+    .res ROM_ORIGIN + $1F71 - *, $AA
+.endif
+
     PowerRoutines
     ExponentialConstants
     ExponentialRoutine
     PolynomialRoutines
+.if STANDARD_KERNAL
+    RandomRoutine 2
+    CommodoreKernalStatements
+.else
     RandomRoutine 1
+.endif
     TrigonometricRoutines
     SineConstants
 

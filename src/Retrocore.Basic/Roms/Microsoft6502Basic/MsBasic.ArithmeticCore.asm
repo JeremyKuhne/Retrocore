@@ -19,7 +19,7 @@
     ;; Each multiplier byte is shifted through the result, adding the argument accumulator when a multiplier bit is set.
     ;; In: A = low byte of packed operand address, Y = high byte of packed operand address
     ;; See: <Float::CombineExponents>, <Float::NormalizeResult>
-    ;; Also: FMULT (M6502, ASTIL, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;; Also: FMULT (M6502, ASTIL, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     .proc MultiplyPacked
     jsr LoadArg
     ; Falls into MultiplyArg.
@@ -27,7 +27,7 @@
 
     ;; Multiplies the unpacked argument accumulator by <Fac>, with zero set from <FacExponent> and <ResultSign> already
     ;; set.
-    ;; Also: FMULTT (M6502, ASTIL, HV1, HV1R, HV2, HV4, HV4R, CBM4S79)
+    ;; Also: FMULTT (M6502, ASTIL, HV1, HV1R, HV2, HV4, HV4R, CBM4S79, BV20)
     .proc MultiplyArg
     .if shortZeroBranch
         beq MultiplyByte::Done
@@ -59,19 +59,19 @@
     ;; Entry:
     ;;   NonZero = skips the zero test, for a byte that is never zero
     ;;   Done = The shared rts
-    ;; Also: MLTPLY (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;; Also: MLTPLY (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     .proc MultiplyByte
     bne *+5                         ; a zero byte takes the whole-byte shift
     jmp ShiftProductByte
 
 ;; Shifts the first multiplier bit into carry and sets bit 7 as a marker, which ends the loop when it shifts out.
-;; Also: MLTPL1 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: MLTPL1 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 NonZero:
     lsr a
     ora #$80
 
 ;; Carry set: adds Arg's mantissa to <Result1> through <Result4>.
-;; Also: MLTPL2 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: MLTPL2 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 NextBit:
     tay
     bcc Shift                      ; add ARG only for a set multiplier bit
@@ -90,7 +90,7 @@ NextBit:
     sta Result1
 
 ;; Rotates <Result1> through <Result4> and <FacExtension> right; loops until only the marker bit has gone.
-;; Also: MLTPL3 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: MLTPL3 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 Shift:
     ror Result1
     ror Result2
@@ -102,7 +102,7 @@ Shift:
     bne NextBit
 
 ;; The shared rts.
-;; Also: MULTRT (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: MULTRT (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 Done:
     rts
     .endproc
@@ -111,7 +111,7 @@ Done:
     ;; In: A = low byte of packed operand address, Y = high byte of packed operand address
     ;; Out: A = exponent of <Fac>, zero = set when <Fac> is zero
     ;; See: <Float::LoadFac>
-    ;; Also: CONUPK (M6502, ASTIL, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;; Also: CONUPK (M6502, ASTIL, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     .proc LoadArg
     sta Pointer1
     sty Pointer1+1
@@ -144,14 +144,14 @@ Done:
     ;; A zero operand or a combined exponent below the range discards the caller's return address and returns zero
     ;; from the arithmetic operation. A sum that rebiases to exactly zero stores a zero exponent, clears the sign and
     ;; returns to the caller. Overflow goes to <Float::OverflowError>.
-    ;; Also: MULDIV (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;; Also: MULDIV (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     .proc CombineExponents
     lda ArgExponent
     ; Falls into AddExponent.
     .endproc
 
     ;; Uses the exponent already in A.
-    ;; Also: MLDEXP (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;; Also: MLDEXP (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     .proc AddExponent
     beq Underflow
     clc
@@ -163,7 +163,7 @@ Done:
 
 ;; No carry from the add: a sum under $80 underflows; otherwise rebiases and stores the exponent, clearing the sign
 ;; when it is zero.
-;; Also: TRYOFF (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: TRYOFF (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 NoCarry:
     bpl Underflow
     adc #$80
@@ -176,7 +176,7 @@ NoCarry:
     .endproc
 
     ;; Handles an exceptional exponent in <Functions::Exp>, choosing overflow or zero from the sign of <Fac>.
-    ;; Also: MLDVEX (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;; Also: MLDVEX (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     .proc ExponentOutOfRange
     lda FacSign
     eor #$FF
@@ -184,7 +184,7 @@ NoCarry:
     .endproc
 
     ;; Drops the caller's return address and sets <Fac> to zero, so the caller's caller gets zero.
-    ;; Also: ZEREMV (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;; Also: ZEREMV (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     .proc Underflow
     pla
     pla
@@ -192,14 +192,14 @@ NoCarry:
     .endproc
 
     ;; Jumps on to <Float::OverflowError>.
-    ;; Also: GOOVER (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;; Also: GOOVER (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     .proc ToOverflowError
     jmp OverflowError
     .endproc
 
     ;; Multiplies <Fac> by ten, using an addition and exponent adjustments.
     ;; Errors: overflow = jumps to <Float::OverflowError> if the exponent wraps
-    ;; Also: MUL10 (M6502, ASTIL, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;; Also: MUL10 (M6502, ASTIL, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     .proc MultiplyByTen
     jsr CopyFacToArg
     tax
@@ -216,7 +216,7 @@ NoCarry:
     ;; In: A = the exponent to give the argument accumulator's mantissa
     ;; Entry:
     ;;   Done = The shared rts
-    ;; Also: FINML6 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;; Also: FINML6 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     .proc AddScaledArgAndDouble
     ldx #$00
     stx ResultSign
@@ -225,7 +225,7 @@ NoCarry:
     beq ToOverflowError
 
 ;; The shared rts.
-;; Also: MUL10R (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: MUL10R (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 Done:
     rts
     .endproc
@@ -239,7 +239,7 @@ Ten:
 
     ;; Divides <Fac> by ten.
     ;; See: <Float::DivideArgByPacked>, <Float::Ten>
-    ;; Also: DIV10 (M6502, ASTIL, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;; Also: DIV10 (M6502, ASTIL, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     .proc DivideByTen
     jsr CopyFacToArg
     lda #<Ten
@@ -250,7 +250,7 @@ Ten:
 
     ;; Divides the unpacked argument accumulator by the packed number at Y:A.
     ;; In: A = low byte of divisor address, Y = high byte of divisor address, X = relative sign
-    ;; Also: FDIVF (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;; Also: FDIVF (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     .proc DivideArgByPacked
     stx ResultSign
     jsr LoadFac
@@ -262,7 +262,7 @@ Ten:
     ;; The divisor is rounded, then repeated comparisons and subtractions build the quotient a bit at a time.
     ;; In: A = low byte of packed dividend address, Y = high byte of packed dividend address
     ;; Errors: divide by zero = jumps to <ReportError>, overflow = jumps to <Float::OverflowError>
-    ;; Also: FDIV (M6502, ASTIL, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;; Also: FDIV (M6502, ASTIL, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     .proc DividePacked
     jsr LoadArg
     ; Falls into DivideArg.
@@ -270,7 +270,7 @@ Ten:
 
     ;; Divides the unpacked argument accumulator by <Fac>, with zero set from <FacExponent> and <ResultSign> already
     ;; set.
-    ;; Also: FDIVT (M6502, ASTIL, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;; Also: FDIVT (M6502, ASTIL, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     .proc DivideArg
     beq DivisionByZero
     jsr Round
@@ -285,7 +285,7 @@ Ten:
     lda #$01
 
 ;; Builds quotient bits by comparing and subtracting the divisor from the argument accumulator.
-;; Also: DIVIDE (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: DIVIDE (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 Compare:
     ; Compare the remaining dividend with the divisor, most significant byte first.
     ldy ArgMantissa1
@@ -302,7 +302,7 @@ Compare:
 
 ;; Rotates the comparison's carry into the quotient byte; each full byte is stored in <Result1> through <Result4>.
 ;; After the fourth it goes on to <Float::DivideArg::LastBits>, and the partial fifth to <Float::DivideArg::Finish>.
-;; Also: SAVQUO (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: SAVQUO (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 SaveBit:
     php
     rol a
@@ -314,14 +314,14 @@ SaveBit:
     lda #$01
 
 ;; Restores the comparison's flags: Arg >= <Fac> subtracts.
-;; Also: QSHFT (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: QSHFT (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 TestSubtract:
     plp
     bcs Subtract
 
 ;; Shifts Arg left one bit. A carry out gives quotient bit 1 and a clear top bit gives 0, both without comparing;
 ;; otherwise it compares again.
-;; Also: SHFARG (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: SHFARG (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 ShiftDividend:
     asl ArgMantissa4
     rol ArgMantissa3
@@ -332,7 +332,7 @@ ShiftDividend:
     bpl SaveBit
 
 ;; Subtracts <Fac>'s mantissa from Arg's, then shifts.
-;; Also: DIVSUB (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: DIVSUB (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 Subtract:
     ; A quotient bit was set: subtract the divisor, then shift the remainder.
     tay
@@ -352,13 +352,13 @@ Subtract:
     jmp ShiftDividend
 
 ;; After four quotient bytes, sets A to $40 to collect two more bits.
-;; Also: LD100 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: LD100 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 LastBits:
     lda #$40
     bne TestSubtract
 
 ;; Moves the two extra bits to the top of <FacExtension> and normalizes the quotient (<Float::NormalizeResult>).
-;; Also: DIVNRM (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: DIVNRM (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 Finish:
     asl a
     asl a
@@ -371,7 +371,7 @@ Finish:
     jmp NormalizeResult
 
 ;; Reports division by zero through <ReportError>.
-;; Also: DV0ERR (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: DV0ERR (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 DivisionByZero:
     ldx #ERROR_DIVISION_BY_ZERO
     jmp ReportError

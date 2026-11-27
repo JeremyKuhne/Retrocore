@@ -208,7 +208,7 @@ internal sealed class BasicLineScanner
                 name = null;
                 if (length == 1 && _dialect.IsRemark(value)) { break; }
                 bool range = jump == BasicJump.Range && afterNumber && word == "-";
-                jump = range ? BasicJump.Range : JumpAfter(word);
+                jump = range ? BasicJump.Range : JumpAfter(word, _dialect);
                 via = range ? via : word;
                 afterNumber = false;
                 afterFunction = word == "FN" || (Bbc && word == "PROC");
@@ -392,10 +392,12 @@ internal sealed class BasicLineScanner
         return Column(at);
     }
 
-    private static BasicJump JumpAfter(string word) => word switch
+    // The Model 100's RESTORE takes a line too, as Level II's and AppleSoft's do not.
+    private static BasicJump JumpAfter(string word, BasicDialect dialect) => word switch
     {
         "GOTO" or "GOSUB" => BasicJump.List,
         "THEN" or "ELSE" or "RUN" or "RESUME" or "EDIT" or "TRAP" => BasicJump.Single,
+        "RESTORE" when dialect == BasicDialect.Model100 => BasicJump.Single,
         "LIST" or "LLIST" or "DEL" or "DELETE" => BasicJump.Range,
         _ => BasicJump.None
     };
@@ -763,10 +765,10 @@ internal sealed class BasicLineScanner
         return _text[start..End(last)];
     }
 
-    // A type suffix: $ and %, on Level II ! and # for single and double precision, and in Business BASIC & for a
-    // long integer.
+    // A type suffix: $ and %, on Level II, MBASIC and the Model 100 ! and # for single and double precision, and in
+    // Business BASIC & for a long integer.
     private bool IsSuffix(byte value) => value is (byte)'$' or (byte)'%'
-        || ((_dialect == BasicDialect.Level2 || _dialect == BasicDialect.Mbasic) && value is (byte)'!' or (byte)'#')
+        || ((_dialect == BasicDialect.Level2 || _dialect == BasicDialect.Mbasic || _dialect == BasicDialect.Model100) && value is (byte)'!' or (byte)'#')
         || (Business && value == '&');
 
     private bool Business => _dialect == BasicDialect.BusinessBasic;

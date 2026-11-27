@@ -26,7 +26,7 @@
 .assert .not .defined(ZERO_AT_FHALF), "Predefine ZERO_IN_HALF_CONSTANT, not ZERO_AT_FHALF."
 
 ;; Start of the BASIC 2 ROM.
-;; Also: ROMLOC (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: ROMLOC (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 ROM_ORIGIN = $C000
 
 ;; Use the later multiply-by-zero branch.

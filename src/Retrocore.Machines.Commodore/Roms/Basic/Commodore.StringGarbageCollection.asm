@@ -43,7 +43,7 @@ LINK_SIZE = 2
     ;; In: MemoryTop = the top of string space (exclusive), StringsBottom = the lowest string, decimal = clear
     ;; Out: StringsBottom = the new lowest string, NewString = the same
     ;; See: <Strings::CollectGarbage::LoadDescriptorAddress>
-    ;; Also: GARBA2 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;; Also: GARBA2 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     .proc CollectGarbage
 
     ;; The byte whose bit 7 is set while a gap is open: once garbage has been skipped, live strings must move.

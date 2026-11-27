@@ -16,12 +16,12 @@
     .scope Float continued
 
 ;; Packed floating-point constant 1.
-;; Also: FONE (M6502, HV1, HV1R, HV2, HV4, HV4R, CBM4S79)
+;; Also: FONE (M6502, HV1, HV1R, HV2, HV4, HV4R, CBM4S79, BV20)
 One:
     FloatOne
 
 ;; Logarithm polynomial: degree 3, followed by four packed coefficients.
-;; Also: LOGCN2 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: LOGCN2 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 LogPolynomial:
     .byte $03
     .byte $7F, $5E, $56, $CB, $79
@@ -40,12 +40,12 @@ SquareRootOfTwo:
     .byte $81, $35, $04, $F3, $34
 
 ;; Packed floating-point constant minus one half.
-;; Also: NEGHLF (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: NEGHLF (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 MinusHalf:
     .byte $80, $80, $00, $00, $00
 
 ;; Packed approximation to the natural logarithm of two.
-;; Also: LOG2 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: LOG2 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 LogOfTwo:
     .byte $80, $31, $72, $17, $F8
     .endscope
@@ -94,14 +94,14 @@ Billion:
     .scope Float continued
 
 ;; Packed floating-point constant one half.
-;; Also: FHALF (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: FHALF (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 Half:
     .byte $80, $00
     .endscope
 
     .if defineZero
 ;; Three zero bytes shared by <Float::Half> and other constants.
-;; Also: ZERO (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: ZERO (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 ZeroValue:
     .endif
     .byte $00, $00, $00
@@ -111,7 +111,7 @@ ZeroValue:
 ;; Nine signed, big-endian powers of ten, alternating from -100,000,000 to -1.
 ;;
 ;; Repeated addition of these values extracts the nine output digits.
-;; Also: FOUTBL (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: FOUTBL (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 PowersOfTen:
     .byte $FA, $0A, $1F, $00       ; -100,000,000
     .byte $00, $98, $96, $80       ;   10,000,000
@@ -124,7 +124,7 @@ PowersOfTen:
     .byte $FF, $FF, $FF, $FF       ;           -1
 
 ;; End of the decimal powers in <Float::PowersOfTen>.
-;; Also: FDCEND (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: FDCEND (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 PowersOfTenEnd:
     .assert PowersOfTenEnd - PowersOfTen = 36, "FOUTBL has nine four-byte entries."
 
@@ -138,7 +138,7 @@ PowersOfTenEnd:
         .byte $00, $00, $00, $3C       ;         60
 
 ;; End of the time-conversion divisors following <Float::PowersOfTenEnd>.
-;; Also: TIMEND (M6502, HV1, HV1R, HV2, HV4, HV4R, CBM4S79)
+;; Also: TIMEND (M6502, HV1, HV1R, HV2, HV4, HV4R, CBM4S79, BV20)
 TimeDivisorsEnd:
     .endif
     .endscope
@@ -151,12 +151,12 @@ TimeDivisorsEnd:
     .scope Float continued
 
 ;; The five-byte floating-point constant log base 2 of e.
-;; Also: LOGEB2 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: LOGEB2 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 LogBase2OfE:
     .byte $81, $38, $AA, $3B, $29
 
 ;; <Functions::Exp>'s polynomial: degree 7, followed by eight five-byte coefficients in evaluation order.
-;; Also: EXPCON (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: EXPCON (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 ExponentialPolynomial:
     .byte $07                       ; polynomial degree
     .byte $71, $34, $58, $3E, $56   ; approximately 0.00002149876370
@@ -177,22 +177,22 @@ ExponentialPolynomial:
     .scope Float continued
 
 ;; Five-byte floating-point pi/2.
-;; Also: PI2 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: PI2 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 HalfPi:
     .byte $81, $49, $0F, $DA, $A2
 
 ;; Five-byte floating-point 2*pi.
-;; Also: TWOPI (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: TWOPI (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 TwoPi:
     .byte $83, $49, $0F, $DA, $A2
 
 ;; Five-byte floating-point one quarter.
-;; Also: FR4 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: FR4 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 Quarter:
     .byte $7F, $00, $00, $00, $00
 
 ;; <Functions::Sin>'s odd-polynomial table: degree 5 for P and six five-byte coefficients for X * P(X squared).
-;; Also: SINCON (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: SINCON (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 SinePolynomial:
     .byte $05                       ; polynomial degree
     .byte $84, $E6, $1A, $2D, $1B   ; approximately -14.38139067
@@ -211,7 +211,7 @@ SinePolynomial:
     .scope Float continued
 
 ;; <Functions::Atn>'s odd-polynomial table: degree 11 for P and twelve five-byte coefficients for X * P(X squared).
-;; Also: ATNCON (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: ATNCON (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 ArctangentPolynomial:
     .byte $0B                       ; polynomial degree
     .byte $76, $B3, $83, $BD, $D3   ; approximately -0.0006847939119

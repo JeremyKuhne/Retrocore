@@ -40,7 +40,7 @@ public sealed class BasicMathConversionTests
 
     // The documents a vendor's file may cite: its vendor's, Microsoft's source, and UNKN.
     private static readonly string[] s_appleKeys = ["M6502", "UNKN", "ASTIL", "AS82", "ASRM78"];
-    private static readonly string[] s_commodoreKeys = ["M6502", "UNKN", "CBM4S79", "HV1", "HV1R", "HV2", "HV4", "HV4R"];
+    private static readonly string[] s_commodoreKeys = ["M6502", "UNKN", "CBM4S79", "HV1", "HV1R", "HV2", "HV4", "HV4R", "BV20"];
 
     // The definitions in the converted files that give no overlay name of their own: the families' guard, the guard
     // bytes that share OLDOV's byte under their own names, the constants and text of BASIC 2's hidden message and
@@ -52,7 +52,8 @@ public sealed class BasicMathConversionTests
     [
         "FAMILIES_DECLARED", "Float::UnshiftedExtension", "Functions::Exp::RoundingByte",
         "HIDDEN_MESSAGE_LENGTH", "SCREEN_CODE_MASK", "Float::PrintFac", "HiddenMessageText", "RomChecksumAdjustment",
-        "Functions::Log::MultiplyByLogOfTwo", "Functions::Tan::ToDividePacked", "Float::FormatFacAtOffset::SignDone"
+        "Functions::Log::MultiplyByLogOfTwo", "Functions::Tan::ToDividePacked", "Float::FormatFacAtOffset::SignDone",
+        "SQR_PATCH_SPACE", "UNSPACED_LINE_NUMBERS"
     ];
 
     private static readonly Apple2Model[] s_appleModels =

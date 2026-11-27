@@ -300,7 +300,13 @@ internal static partial class MediaActions
         AcornTapeCodec => new() { ["kind"] = "acornTape" },
         AcornDiskCodec acorn => new() { ["kind"] = "acornDisk", ["format"] = acorn.Format },
         CommodoreDiskCodec disk => new() { ["kind"] = "commodoreDisk", ["format"] = disk.Format },
-        CommodoreTapeCodec tape => new() { ["kind"] = "commodoreTape", ["format"] = tape.Format },
+        CommodoreTapeCodec tape => new()
+        {
+            ["kind"] = "commodoreTape",
+            ["format"] = tape.Format,
+            ["machine"] = tape.Machine,
+            ["video"] = tape.Video,
+        },
         AltairDiskCodec => new() { ["kind"] = "altairDisk" },
         AtariDiskCodec atari => new() { ["kind"] = "atariDisk", ["format"] = atari.Format },
         AtariTapeCodec => new() { ["kind"] = "atariTape" },
@@ -321,7 +327,7 @@ internal static partial class MediaActions
             "acornTape" => new AcornTapeCodec(),
             "acornDisk" => new AcornDiskCodec(format),
             "commodoreDisk" => new CommodoreDiskCodec(format),
-            "commodoreTape" => new CommodoreTapeCodec(format),
+            "commodoreTape" => new CommodoreTapeCodec(format, (byte)(codec.Int("machine") ?? TapFormat.PetMachine), (byte)(codec.Int("video") ?? TapFormat.Pal)),
             "altairDisk" => new AltairDiskCodec(),
             "atariDisk" => AtariDiskCodec.For(format),
             "atariTape" => new AtariTapeCodec(),

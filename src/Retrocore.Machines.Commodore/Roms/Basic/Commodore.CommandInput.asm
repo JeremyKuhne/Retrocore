@@ -6,9 +6,13 @@
 ; BASIC 1      1                    0, 0, 0, 0            1, 0                    0, 1
 ; BASIC 2      1                    1, 1, 1, 0            0, 0                    0, 0
 ; BASIC 4      0                    1, 1, 1, 1            0, 1                    1, 0
-; Both revisions of BASIC 1 and BASIC 4 use their version's same settings. The next entry is FindLine.
+; VIC-20       0                    1, 1, 1, 0            0, 1                    0, 0
+; Both revisions of BASIC 1 and BASIC 4 use their version's same settings. The next entry is FindLine. The workspace's
+; <BASIC_RAM_VECTORS>, <NUMBERED_ERRORS> and <STANDARD_KERNAL> select the VIC-20's code: the jumps through the RAM
+; vectors, the numbered messages and the kernal's calls.
 
 .include "../../Microsoft6502Basic/MsBasic.CommandCore.asm"
+.include "Commodore.Switches.asm"
 
 ;; Emits error reporting and the READY prompt: <ReportOutOfMemory>, <ReportError> and <ReadyForCommand>, which falls
 ;; into the <CommandLoop> that <CommodoreCommandLoop> emits next.
@@ -16,8 +20,9 @@
 .macro CommodoreErrorReady clearSuppression
     .assert clearSuppression = 0 || clearSuppression = 1, "clearSuppression is 0 or 1."
 
-    ;; Reports an OUT OF MEMORY error: loads its offset and falls into <ReportError>.
-    ;; Also: OMERR (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;; Reports an OUT OF MEMORY error: loads its offset, or with <NUMBERED_ERRORS> its number, and falls into
+    ;; <ReportError>.
+    ;; Also: OMERR (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     .proc ReportOutOfMemory
     ldx #<ERROR_OUT_OF_MEMORY
     ; Falls into ReportError.
@@ -25,34 +30,65 @@
 
     ;; Restores the default channels when one is selected and prints the error, then returns to the command prompt.
     ;;
-    ;; Where `clearSuppression` is 1 (BASIC 1 and 2), it first clears the output-suppression flag.
-    ;; In: X = the message's offset in <ErrorMessages>
+    ;; Where `clearSuppression` is 1 (BASIC 1 and 2), it first clears the output-suppression flag. With
+    ;; <BASIC_RAM_VECTORS> (the VIC-20), it jumps through `ErrorVector`, to its `Default` entry unless a program has
+    ;; changed the vector; with <NUMBERED_ERRORS>, X is the error's number, its message is found through
+    ;; `ErrorMessageAddresses`, and the channels are reset whether or not one is selected.
+    ;; In: X = the message's offset in `ErrorMessages`, or with <NUMBERED_ERRORS> the error's number
     ;; See: <KernalResetChannels>, <PrintCharacter>, <ReportMessage>
-    ;; Also: ERROR (M6502, K4S79, HV1, HV1R, HV2, HV4, HV4R, HVK4, CBM4S79)
+    ;; Also: ERROR (M6502, K4S79, HV1, HV1R, HV2, HV4, HV4R, HVK4, CBM4S79, BV20)
     .proc ReportError
+    .if BASIC_RAM_VECTORS
+        jmp (ErrorVector)
+
+;; The ROM's error handler, where <ErrorVector> points unless a program changes it.
+;; Also: NERROR (BV20)
+Default:
+    .endif
     .if clearSuppression
         lsr OutputSuppressed
     .endif
-    lda CurrentChannel
-    beq PrintMessage
+    .if NUMBERED_ERRORS
+        txa
+        asl a
+        tax
+        lda ErrorMessageAddresses-2,x
+        sta Pointer1
+        lda ErrorMessageAddresses-1,x
+        sta Pointer1+1
+    .else
+        lda CurrentChannel
+        beq PrintMessage
+    .endif
     jsr KernalResetChannels
     lda #$00
     sta CurrentChannel
 
 ;; Starts a new line and prints the question mark.
-;; Also: ERRCRD (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: ERRCRD (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 PrintMessage:
     jsr PrintNewline
     jsr PrintQuestionMark
+    .if NUMBERED_ERRORS
+        ldy #$00
+    .endif
 
 ;; Prints the message's characters until the one with bit 7 set, then falls into <ReportError::AddErrorSuffix>.
-;; Also: GETERR (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: GETERR (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 NextCharacter:
-    lda ErrorMessages,x
+    .if NUMBERED_ERRORS
+        lda (Pointer1),y
+    .else
+        lda ErrorMessages,x
+    .endif
     pha
     and #$7F
     jsr PrintCharacter
-    inx
+    .if NUMBERED_ERRORS
+        iny
+    .else
+        inx
+    .endif
     pla
     bpl NextCharacter
     ErrorFinish
@@ -62,9 +98,10 @@ NextCharacter:
 
     ;; Prints the READY message and falls into <CommandLoop>.
     ;;
-    ;; Where `clearSuppression` is 1 (BASIC 1 and 2), it first clears the output-suppression flag.
+    ;; Where `clearSuppression` is 1 (BASIC 1 and 2), it first clears the output-suppression flag. With
+    ;; <STANDARD_KERNAL> (the VIC-20), it then turns the kernal's control messages on, for direct mode.
     ;; See: <CommandLoop>
-    ;; Also: READY (M6502, K4S79, HV1, HV1R, HV2, HV4, HV4R, HVK4, CBM4S79)
+    ;; Also: READY (M6502, K4S79, HV1, HV1R, HV2, HV4, HV4R, HVK4, CBM4S79, BV20)
     .proc ReadyForCommand
     .if clearSuppression
         lsr OutputSuppressed
@@ -72,6 +109,10 @@ NextCharacter:
     lda #<ReadyMessage
     ldy #>ReadyMessage
     jsr PrintText
+    .if STANDARD_KERNAL
+        lda #KERNAL_CONTROL_MESSAGES
+        jsr KernalSetMessages
+    .endif
     ; Falls into CommandLoop.
     .endproc
 .endmacro
@@ -92,9 +133,18 @@ NextCharacter:
     ;; Reads and executes a direct command, or inserts, replaces or deletes a numbered program line.
     ;;
     ;; Where `resetBeforeInsert` is 1 (BASIC 2 and 4), a new line first clears the variables and relinks the program.
+    ;; With <BASIC_RAM_VECTORS> (the VIC-20), it jumps through `CommandLoopVector`, to its `Default` entry unless a
+    ;; program has changed the vector.
     ;; See: <InputLine>, <Tokenize>, <FindLine>, <LinkProgram>
-    ;; Also: MAIN (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;; Also: MAIN (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     .proc CommandLoop
+    .if BASIC_RAM_VECTORS
+        jmp (CommandLoopVector)
+
+;; The ROM's command loop, where <CommandLoopVector> points unless a program changes it.
+;; Also: NMAIN (BV20)
+Default:
+    .endif
     jsr InputLine
     stx TextPointer
     sty TextPointer+1
@@ -112,7 +162,7 @@ NextCharacter:
     DeleteOldLine Pointer1
 
 ;; After any deletion: an empty line relinks; otherwise opens space with <MoveRangeUp>.
-;; Also: NODEL (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: NODEL (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 InsertLine:
     .if resetBeforeInsert
         jsr ResetProgramState
@@ -138,7 +188,7 @@ InsertLine:
     iny
 
 ;; Stores the high byte of the move's end and opens the gap with <MoveRangeUp>.
-;; Also: NODELC (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: NODELC (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 OpenGap:
     sty DestinationEnd+1
     jsr MoveRangeUp
@@ -156,7 +206,7 @@ OpenGap:
     dey
 
 ;; Copies the tokenized line from the input buffer into the program.
-;; Also: STOLOP (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: STOLOP (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 CopyLine:
     lda InputBuffer-4,y
     sta (SourceStart),y
@@ -168,7 +218,7 @@ CopyLine:
     ;; Clears execution state and relinks the program after an edit, then enters <CommandLoop>; where `linkReturns`
     ;; is 0 (BASIC 1) it falls into <LinkProgram>, which enters <CommandLoop> itself.
     ;; See: <ResetProgramState>, <LinkProgram>
-    ;; Also: FINI (M6502, CBM4S79, K4S79, HV1, HV1R, HV2, HV4, HV4R, HVK4)
+    ;; Also: FINI (M6502, CBM4S79, K4S79, HV1, HV1R, HV2, HV4, HV4R, HVK4, BV20)
     .proc ClearAndRelink
     jsr ResetProgramState
     .if linkReturns
@@ -181,7 +231,7 @@ CopyLine:
     ;;
     ;; Where `linkReturns` is 0 (BASIC 1) it enters <CommandLoop> at the end; in BASIC 2 and 4 it returns.
     ;; In: ProgramStart = the first line, with a zero high link byte marking the end of the program
-    ;; Also: LNKPRG (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;; Also: LNKPRG (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     .proc LinkProgram
     lda ProgramStart
     ldy ProgramStart+1
@@ -190,7 +240,7 @@ CopyLine:
     clc
 
 ;; Tests a line's link high byte; zero ends the program.
-;; Also: CHEAD (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: CHEAD (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 NextLine:
     ldy #ProgramLine::LINK + 1
     lda (Pointer1),y
@@ -207,7 +257,7 @@ StoreLink:
     .if linkReturns
 
 ;; Returns at the end of the program.
-;; Also: LNKRTS (M6502, CBM4S79, HV2, HV4, HV4R)
+;; Also: LNKRTS (M6502, CBM4S79, HV2, HV4, HV4R, BV20)
 Return:
         rts
     .endif
@@ -216,7 +266,8 @@ Return:
 
 ;; Emits the terminal-line reader, <InputLine>, and, where `checkedInput` is 0, its character-input wrapper.
 ;; Parameters: earlyDelete = 1 to retain the early line-editing entries;
-;;   checkedInput = 1 to reject a full buffer and call the kernal directly
+;;   checkedInput = 1 to reject a full buffer and read without the wrapper: from the kernal directly, or with
+;;   <STANDARD_KERNAL> through `CheckedCharacterIn`
 .macro CommodoreTerminalInput earlyDelete, checkedInput
     .assert earlyDelete = 0 || earlyDelete = 1, "earlyDelete is 0 or 1."
     .assert checkedInput = 0 || checkedInput = 1, "checkedInput is 0 or 1."
@@ -243,19 +294,22 @@ Return:
     ;; Reads a carriage-return-terminated line into <InputBuffer>.
     ;;
     ;; Where `checkedInput` is 1 (BASIC 4), it reports STRING TOO LONG when it fills the buffer. The earlier readers
-    ;; rely on the editor's limit and continue until carriage return or an eight-bit index wrap.
+    ;; rely on the editor's limit and continue until carriage return or an eight-bit index wrap. With
+    ;; <STANDARD_KERNAL> (the VIC-20), it reads through `CheckedCharacterIn`, which reports the kernal's errors.
     ;; Out: X/Y = address before <InputBuffer> after <FinishInputLine>
     ;; Errors: STRING TOO LONG for a full buffer where `checkedInput` is 1
     ;; Entry:
     ;;   NextCharacter = reads and stores the next character; BASIC 1's erase step branches here
-    ;; Also: INLIN (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;; Also: INLIN (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     .proc InputLine
     ldx #$00
 
 ;; Reads and stores the next character.
-;; Also: INLINC (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: INLINC (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 NextCharacter:
-    .if checkedInput
+    .if checkedInput && STANDARD_KERNAL
+        jsr CheckedCharacterIn
+    .elseif checkedInput
         jsr KernalCharacterIn
     .else
         jsr InputCharacter
@@ -272,7 +326,11 @@ StoreCharacter:
     inx
     .if checkedInput
         cpx #INPUT_BUFFER_LENGTH
-        bne NextCharacter
+        .if STANDARD_KERNAL
+            bcc NextCharacter
+        .else
+            bne NextCharacter
+        .endif
         ldx #<ERROR_STRING_TOO_LONG
         jmp ReportError
     .else
@@ -280,7 +338,7 @@ StoreCharacter:
     .endif
 
 ;; Jumps on to <FinishInputLine>.
-;; Also: FININ1 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: FININ1 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 ToFinishInputLine:
     jmp FinishInputLine
     .endproc
@@ -329,19 +387,27 @@ Return:
     ;; ends a `DATA` field and `?` abbreviates `PRINT`. High-bit characters other than pi are discarded outside
     ;; quoted strings and `REM` text, including in an unquoted `DATA` field. Where `skipKeywordSpaces` is 1
     ;; (BASIC 1), the walker ignores spaces within a word; where `indirectTable` is 1 (BASIC 4), it walks the table
-    ;; through <Pointer1>.
+    ;; through <Pointer1>. With <BASIC_RAM_VECTORS> (the VIC-20), it jumps through `TokenizeVector`, to its `Default`
+    ;; entry unless a program has changed the vector.
     ;; In: TextPointer = the first character's address, whose low byte is its offset in <InputBuffer>'s page
     ;; Out: TextPointer = address before <InputBuffer>, Y = encoded line length including the link and line-number
     ;;   header
     ;; See: <Statements::List>
-    ;; Also: CRUNCH (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;; Also: CRUNCH (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     .proc Tokenize
+    .if BASIC_RAM_VECTORS
+        jmp (TokenizeVector)
+
+;; The ROM's tokenizer, where <TokenizeVector> points unless a program changes it.
+;; Also: NCRNCH (BV20)
+Default:
+    .endif
     ldx TextPointer
     ldy #$04                        ; the stores, to InputBuffer-5,y after an increment, start at InputBuffer
     sty TokenizeState
 
 ;; Reads the next input character; a high-bit character other than pi is skipped.
-;; Also: KLOOP (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: KLOOP (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 NextCharacter:
     lda INPUT_BUFFER_BASE,x
     bpl CheckSpace
@@ -351,7 +417,7 @@ NextCharacter:
     bne NextCharacter
 
 ;; Copies a space; records the end delimiter and starts a quoted copy at a quote.
-;; Also: CMPSPC (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: CMPSPC (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 CheckSpace:
     cmp #' '
     beq StoreByte
@@ -366,7 +432,7 @@ CheckSpace:
     bne StoreByte
 
 ;; Copies digits, `:` and `;` unchanged.
-;; Also: KLOOP1 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: KLOOP1 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 CheckDigit:
     cmp #'0'
     bcc SearchWords
@@ -374,7 +440,7 @@ CheckDigit:
     bcc StoreByte
 
 ;; Sets up the walk of <ReservedWords> from the current input position.
-;; Also: MUSTCR (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: MUSTCR (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 SearchWords:
     sty TokenizePointer
     ldy #$00
@@ -388,7 +454,7 @@ SearchWords:
         bne CompareCharacter
 
 ;; A character matched: advances in the table and the input.
-;; Also: RESER (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: RESER (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 CharacterMatched:
         inx
         inc Pointer1
@@ -400,7 +466,7 @@ CharacterMatched:
         dex
 
 ;; A character matched: advances in the table and the input.
-;; Also: RESER (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: RESER (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 CharacterMatched:
         iny
 
@@ -411,7 +477,7 @@ AdvanceInput:
     .endif
 
 ;; Compares the input character with the table's.
-;; Also: RESCON (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: RESCON (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 CompareCharacter:
     lda INPUT_BUFFER_BASE,x
     .if skipKeywordSpaces
@@ -432,13 +498,13 @@ CompareCharacter:
     TokenStore INPUT_BUFFER_BASE, 0
 
 ;; A mismatch: restores the input index, counts the word and skips to its end.
-;; Also: NTHIS (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: NTHIS (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 NextWord:
     ldx TextPointer
     inc Counter
 
 ;; Reads table bytes until the word's last character.
-;; Also: NTHIS1 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: NTHIS1 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 SkipWord:
     .if indirectTable
         lda (Pointer1),y
@@ -466,7 +532,7 @@ TestWordEnd:
     bpl StoreToken
 
 ;; Stores the line's end and sets <TextPointer> to the byte before <InputBuffer>.
-;; Also: CRDONE (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: CRDONE (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 Finish:
     sta InputBuffer-3,y
     .if INPUT_BUFFER_PAGE

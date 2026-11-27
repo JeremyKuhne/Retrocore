@@ -28,7 +28,7 @@
     ;; Allocates space for a result string, saving the current descriptor pointer in <DescriptorPointer>.
     ;; In: A = string length, FacMantissa3 = descriptor address (low byte), FacMantissa4 = its high byte
     ;; Out: DescriptorPointer = original descriptor address, NewDescriptor = length and character address
-    ;; Also: STRINI (M6502, ASTIL, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;; Also: STRINI (M6502, ASTIL, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     .proc AllocateForFac
     ldx FacMantissa3
     ldy FacMantissa4
@@ -44,7 +44,7 @@
     ;; In: A = string length
     ;; Out: NewDescriptor = length and character address, A = the length, X = the address's low byte, Y = its high byte
     ;; Errors: OUT OF MEMORY if the string does not fit after collection
-    ;; Also: STRSPA (M6502, ASTIL, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;; Also: STRSPA (M6502, ASTIL, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     .proc Allocate
     jsr ReserveSpace
     stx NewDescriptor+1
@@ -61,7 +61,7 @@
     ;; Out: FacMantissa3 = temporary descriptor pointer (low byte), FacMantissa4 = 0,
     ;;   SecondStringPointer = position after a quote or at zero
     ;; Errors: FORMULA TOO COMPLEX if no temporary descriptor is available, or OUT OF MEMORY while copying
-    ;; Also: STRLIT (M6502, ASTIL, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;; Also: STRLIT (M6502, ASTIL, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     .proc FromText
     ldx #'"'
     stx Delimiter
@@ -78,7 +78,7 @@
     ;; Out: FacMantissa3 = temporary descriptor pointer (low byte), FacMantissa4 = 0,
     ;;   SecondStringPointer = position after a quote or at another terminator
     ;; Errors: FORMULA TOO COMPLEX if no temporary descriptor is available, or OUT OF MEMORY while copying
-    ;; Also: STRLT2 (M6502, ASTIL, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;; Also: STRLT2 (M6502, ASTIL, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     .proc FromTextUntil
     sta StringPointer
     sty StringPointer+1
@@ -87,7 +87,7 @@
     ldy #$FF
 
 ;; Reads characters until a terminator.
-;; Also: STRGET (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: STRGET (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 Scan:
     iny
     lda (StringPointer),y
@@ -98,18 +98,18 @@ Scan:
     bne Scan
 
 ;; Sets carry to skip a closing quote.
-;; Also: STRFIN (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: STRFIN (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 AtDelimiter:
     cmp #'"'
     beq SetLength
 
 ;; Clears carry: the terminator is not skipped.
-;; Also: STRFI1 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: STRFI1 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 AtZero:
     clc
 
 ;; Stores the length and the end position in <SecondStringPointer>.
-;; Also: STRFI2 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: STRFI2 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 SetLength:
     sty NewDescriptor
     tya
@@ -120,7 +120,7 @@ SetLength:
     inx
 
 ;; Chooses copying by the text's page.
-;; Also: STRST2 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: STRST2 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 CheckPage:
     stx SecondStringPointer+1
     lda StringPointer+1
@@ -133,7 +133,7 @@ CheckPage:
     bne PushTemporary
 
 ;; Allocates and copies the text into string space.
-;; Also: STRCP (M6502, CBM4S79, HV2, HV4, HV4R)
+;; Also: STRCP (M6502, CBM4S79, HV2, HV4, HV4R, BV20)
 CopyText:
     tya
     jsr AllocateForFac
@@ -151,7 +151,7 @@ CopyText:
     ;; Errors: FORMULA TOO COMPLEX if no temporary descriptor is available
     ;; Entry:
     ;;   ToError = jumps to <ReportError> with the error in X; both allocators branch here with OUT OF MEMORY
-    ;; Also: PUTNEW (M6502, ASTIL, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;; Also: PUTNEW (M6502, ASTIL, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     .proc PushTemporary
     ldx NextTemporary
     cpx #<(TemporaryDescriptors+DESCRIPTOR_SIZE*TEMPORARY_COUNT)
@@ -159,12 +159,12 @@ CopyText:
     ldx #<ERROR_FORMULA_TOO_COMPLEX
 
 ;; Jumps to <ReportError> with the error in X; both allocators branch here with OUT OF MEMORY.
-;; Also: ERRGO2 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: ERRGO2 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 ToError:
     jmp ReportError
 
 ;; Stores the descriptor and advances <NextTemporary> and <LastTemporary>.
-;; Also: PUTNW1 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: PUTNW1 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 Store:
     lda NewDescriptor
     sta StringDescriptor::LENGTH,x

@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 // See LICENSE file in the project root for full license information
 
+using Retrocore.Basic;
 using Retrocore.Debug;
 using System.Text.Json.Nodes;
 
@@ -113,6 +114,55 @@ public sealed class Trs80Model100DebugTargetTests
             byte[] rom = Trs80Model100RomTests.Rom("m100.bin");
             Action launch = () => Launch(image, new JsonObject { ["ramKilobytes"] = 8 }, rom);
             launch.Should().Throw<ArgumentException>().WithMessage("*has 32768 bytes; a 8 KB machine's has 8192*");
+        }
+        finally
+        {
+            Directory.Delete(folder, recursive: true);
+        }
+    }
+
+    /// <summary>
+    ///  The launch's files go into RAM's directory, the menu is drawn again with them, the Hardware view lists them,
+    ///  BASIC runs one, and the target's BASIC is the Model 100's; a file that is not a Model 100's is refused before any is
+    ///  written.
+    /// </summary>
+    [TestMethod]
+    public void LaunchedFilesGoOnTheMenu()
+    {
+        string folder = Folder();
+        try
+        {
+            string basic = Path.Join(folder, "hello.model100.bas");
+            File.WriteAllText(basic, "10 PRINT \"HI\";6*7\n");
+            string notes = Path.Join(folder, "notes.txt");
+            File.WriteAllText(notes, "first\nsecond\n");
+            string code = Path.Join(folder, "mc.co");
+            File.WriteAllBytes(code, [0x60, 0xEA, 0x01, 0x00, 0x60, 0xEA, 0xC9]);
+            JsonArray files = [basic, notes, code];
+            JsonObject options = new() { ["files"] = files };
+            Trs80Model100DebugTarget target = Launch(Path.Join(folder, "m100.ram"), options);
+            Run(target, 3);
+
+            string menu = string.Join("\n", target.Machine.ScreenText());
+            menu.Should().Contain("HELLO.BA").And.Contain("NOTES.DO").And.Contain("MC.CO");
+            target.Hardware().Single(row => row.Id == "files").Value.Should().Be("HELLO.BA, NOTES.DO, MC.CO");
+
+            Type(target, "BASIC\r");
+            Run(target, 1);
+            Type(target, "RUN \"HELLO\"\r");
+            Run(target, 1);
+            string.Join("\n", target.Machine.ScreenText()).Should().Contain("HI 42", "the program ran");
+            target.Basic.Should().BeSameAs(BasicDialect.Model100);
+
+            string text = Path.Join(folder, "TOOLONGNAME.txt");
+            File.WriteAllText(text, "x");
+            JsonArray bad = [notes, text];
+            JsonObject badOptions = new() { ["files"] = bad };
+            Action refused = () => Launch(Path.Join(folder, "other.ram"), badOptions);
+            refused.Should().Throw<ArgumentException>().WithMessage("*TOOLONGNAME.DO is not a Model 100 file name*");
+            JsonObject notList = new() { ["files"] = notes };
+            Action single = () => Launch(Path.Join(folder, "other.ram"), notList);
+            single.Should().Throw<ArgumentException>().WithMessage("files must be a list of paths.");
         }
         finally
         {

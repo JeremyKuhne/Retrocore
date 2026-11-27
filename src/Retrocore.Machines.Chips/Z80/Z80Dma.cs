@@ -21,6 +21,9 @@ namespace Retrocore.Machines.Chips;
 /// </remarks>
 public sealed class Z80Dma : IZ80DaisyDevice
 {
+    // Bits 1-2 of a vector that status affects, for an interrupt at the end of a block.
+    private const byte EndOfBlockCause = 0x04;
+
     private readonly Func<ushort, byte> _readMemory;
     private readonly Action<ushort, byte> _writeMemory;
     private readonly Func<ushort, byte> _readPort;
@@ -346,8 +349,14 @@ public sealed class Z80Dma : IZ80DaisyDevice
     }
 
     /// <inheritdoc/>
+    /// <remarks>
+    ///  <para>
+    ///   With status affecting the vector (the interrupt control byte's bit 5), bits 1-2 give the cause: 00 RDY, 01
+    ///   a match, 10 the end of a block, 11 both. This DMA interrupts only at the end of a block, so they read 10.
+    ///  </para>
+    /// </remarks>
     public byte? PendingVector => _pending && !_inService
-        ? (byte)((_interruptControl & 0x20) != 0 ? (_vector & 0xF9) | 0x02 : _vector)
+        ? (byte)((_interruptControl & 0x20) != 0 ? (_vector & 0xF9) | EndOfBlockCause : _vector)
         : null;
 
     /// <inheritdoc/>

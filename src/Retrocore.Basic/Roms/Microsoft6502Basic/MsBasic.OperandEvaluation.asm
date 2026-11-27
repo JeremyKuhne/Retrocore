@@ -8,8 +8,9 @@
 ;; Emits the operand parser and syntax checks preceding variable-value handling.
 ;; Parameters: piToken = 1 to accept the single-byte PI constant (the PET), bitwiseNot = 1 for signed 16-bit NOT (the
 ;;   PET), 0 for Boolean NOT (AppleSoft), functionEntry = the entry a function token goes to: <CallFunction>, or
-;;   AppleSoft's SCRN check
-.macro OperandEvaluation piToken, bitwiseNot, functionEntry
+;;   AppleSoft's SCRN check; vector = optional, the RAM vector the routine jumps through first (the VIC-20's);
+;;   farVariable = optional, 1 to reach <EvaluateVariable> with a JMP rather than a branch
+.macro OperandEvaluation piToken, bitwiseNot, functionEntry, vector, farVariable
     .assert piToken = 0 || piToken = 1, "piToken is 0 or 1."
     .assert bitwiseNot = 0 || bitwiseNot = 1, "bitwiseNot is 0 or 1."
 
@@ -17,27 +18,47 @@
     ;;
     ;; A quoted literal falls into <ReadQuotedString>, a unary minus goes to <ApplyPrefixOperator>, and the other tokens
     ;; to <EvaluateTokenOperand>, which sends `NOT` to <ApplyPrefixOperator> and the rest to <EvaluateFunctionOperand>.
+    ;; Where the build gives `vector` (the VIC-20), the routine jumps through it first, to its `Default` entry unless a
+    ;; program has changed the vector.
     ;; In: TextPointer = character preceding the operand
     ;; Out: Fac = value or string descriptor, ValueType = result type, TextPointer = terminating character
-    ;; Also: EVAL (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;; Also: EVAL (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     .proc EvaluateOperand
+    .ifnblank vector
+        jmp (vector)
+
+;; The ROM's operand evaluation, where the RAM vector points unless a program changes it.
+Default:
+    .endif
     lda #$00
     sta ValueType
 ;; Reads the next character; a unary plus comes back here.
-;; Also: EVAL0 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: EVAL0 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 NextCharacter:
     jsr GetNextCharacter
     bcs NotDigit
 ;; Jumps to <Float::ReadNumber> for a digit or decimal point.
-;; Also: EVAL1 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: EVAL1 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 ToParseNumber:
     jmp Float::ReadNumber
 ;; Not a digit: a letter goes to the vendor's variable operand, <EvaluateVariable>, and where `piToken` is 1 the `PI`
 ;; token loads pi.
-;; Also: EVAL2 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: EVAL2 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 NotDigit:
     jsr IsLetter
-    bcs EvaluateVariable
+    .ifnblank farVariable
+        .if farVariable
+            bcc NotLetter
+            jmp EvaluateVariable
+
+;; Not a letter: the `PI` token, a point, a quote or a token.
+NotLetter:
+        .else
+            bcs EvaluateVariable
+        .endif
+    .else
+        bcs EvaluateVariable
+    .endif
     .if piToken
         cmp #<TOKEN_PI
         bne CheckPoint
@@ -47,12 +68,12 @@ NotDigit:
         jmp GetNextCharacter
 
 ;; Five-byte floating-point approximation of pi used by the PI token.
-;; Also: PIVAL (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: PIVAL (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 Pi:
         .byte $82, $49, $0F, $DA, $A1
     .endif
 ;; Checks for a decimal point, the minus and plus tokens and a quote.
-;; Also: QDOT (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: QDOT (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 CheckPoint:
     cmp #'.'
     beq ToParseNumber
@@ -68,7 +89,7 @@ CheckPoint:
     ;; Builds a descriptor for the quoted literal at <TextPointer> and advances past it.
     ;; In: TextPointer = the opening quote, carry = set (as the comparison that found the quote leaves it), so that
     ;;   adding it skips the quote
-    ;; Also: STRTXT (M6502, ASTIL, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;; Also: STRTXT (M6502, ASTIL, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     .proc ReadQuotedString
     lda TextPointer
     ldy TextPointer+1
@@ -76,7 +97,7 @@ CheckPoint:
     bcc HaveAddress
     iny
 ;; Text address in A/Y (carry from the quote added): makes the string and sets <TextPointer>.
-;; Also: STRTX2 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: STRTX2 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 HaveAddress:
     jsr Strings::FromText
     jmp SetTextPointer
@@ -85,7 +106,7 @@ HaveAddress:
     ;; An operand starting with a token: `NOT` goes to <ApplyPrefixOperator> with its table entry, others to
     ;; <EvaluateFunctionOperand>.
     ;; In: A = the token
-    ;; Also: EVAL3 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;; Also: EVAL3 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     .proc EvaluateTokenOperand
     cmp #<TOKEN_NOT
     bne EvaluateFunctionOperand
@@ -102,7 +123,7 @@ HaveAddress:
     ;; In: Fac = the operand
     ;; Out: Fac = numeric result
     ;; Errors: ILLEGAL QUANTITY where `bitwiseNot` is 1 and the operand is outside -32768 to 32767
-    ;; Also: NOTOP (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;; Also: NOTOP (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     .proc Not
     .if bitwiseNot
         jsr FacToInteger
@@ -128,7 +149,7 @@ LoadFalse:
     ;; An operand starting with a token other than `NOT`: `FN` goes to <Functions::Fn>, a function token to
     ;; `functionEntry`, and any other token to <EvaluateParenthesized>, which requires a parenthesis.
     ;; In: A = the token
-    ;; Also: EVAL4 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;; Also: EVAL4 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     .proc EvaluateFunctionOperand
     cmp #<TOKEN_FN
     bne NotFn
@@ -144,7 +165,7 @@ NotFn:
     ;; Requires an opening parenthesis, evaluates an expression, and requires the closing parenthesis.
     ;; Out: Fac = the value, ValueType = its type, A = the character after the parenthesis
     ;; Errors: SYNTAX for a missing parenthesis, and those of <EvaluateExpression>
-    ;; Also: PARCHK (M6502, ASTIL, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;; Also: PARCHK (M6502, ASTIL, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     .proc EvaluateParenthesized
     jsr CheckOpenParenthesis
     jsr EvaluateExpression
@@ -154,7 +175,7 @@ NotFn:
     ;; Requires and consumes a closing parenthesis.
     ;; Out: A = the next character, as <GetNextCharacter> returns it
     ;; Errors: SYNTAX if the character is not `)`
-    ;; Also: CHKCLS (M6502, ASTIL, CBM4S79, K4S79, HV1, HV1R, HV2, HV4, HV4R, HVK4)
+    ;; Also: CHKCLS (M6502, ASTIL, CBM4S79, K4S79, HV1, HV1R, HV2, HV4, HV4R, HVK4, BV20)
     .proc CheckCloseParenthesis
     lda #')'
     .byte $2C                   ; BIT absolute skips the next two bytes
@@ -164,7 +185,7 @@ NotFn:
     ;; Requires and consumes an opening parenthesis.
     ;; Out: A = the next character, as <GetNextCharacter> returns it
     ;; Errors: SYNTAX if the character is not `(`
-    ;; Also: CHKOPN (M6502, ASTIL, CBM4S79, K4S79, HV1, HV1R, HV2, HV4, HV4R, HVK4)
+    ;; Also: CHKOPN (M6502, ASTIL, CBM4S79, K4S79, HV1, HV1R, HV2, HV4, HV4R, HVK4, BV20)
     .proc CheckOpenParenthesis
     lda #'('
     .byte $2C                   ; BIT absolute skips the next two bytes
@@ -174,7 +195,7 @@ NotFn:
     ;; Requires and consumes a comma.
     ;; Out: A = the next character, as <GetNextCharacter> returns it
     ;; Errors: SYNTAX if the character is not a comma
-    ;; Also: CHKCOM (M6502, ASTIL, CBM4S79, K4S79, HV1, HV1R, HV2, HV4, HV4R, HVK4)
+    ;; Also: CHKCOM (M6502, ASTIL, CBM4S79, K4S79, HV1, HV1R, HV2, HV4, HV4R, HVK4, BV20)
     .proc CheckComma
     lda #','
     ; Falls into CheckCharacter.
@@ -184,7 +205,7 @@ NotFn:
     ;; In: A = the character required
     ;; Out: A = the next character, as <GetNextCharacter> returns it, with its carry and zero
     ;; Errors: SYNTAX if the character does not match
-    ;; Also: SYNCHR (M6502, ASTIL, CBM4S79, K4S79, HV1, HV1R, HV2, HV4, HV4R, HVK4)
+    ;; Also: SYNCHR (M6502, ASTIL, CBM4S79, K4S79, HV1, HV1R, HV2, HV4, HV4R, HVK4, BV20)
     .proc CheckCharacter
     ldy #$00
     cmp (TextPointer),y
@@ -197,14 +218,14 @@ ToGetNextCharacter:
 
     ;; Reports a syntax error.
     ;; Errors: SYNTAX
-    ;; Also: SNERR (M6502, CBM4S79, K4S79, HV1, HV1R, HV2, HV4, HV4R, HVK4)
+    ;; Also: SNERR (M6502, CBM4S79, K4S79, HV1, HV1R, HV2, HV4, HV4R, HVK4, BV20)
     .proc SyntaxError
     ldx #<ERROR_SYNTAX
     jmp ReportError
     .endproc
 
     ;; Selects the unary-minus entry of <OperatorTable> and falls into <ApplyPrefixOperator>.
-    ;; Also: DOMIN (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;; Also: DOMIN (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     .proc ApplyMinus
     ldy #<(OperatorTable::Negation - OperatorTable)
     ; Falls into ApplyPrefixOperator.
@@ -212,7 +233,7 @@ ToGetNextCharacter:
 
     ;; Drops <EvaluateOperand>'s return address and jumps to <EvaluateExpression::Prefix> with Y = the operator's table
     ;; offset.
-    ;; Also: GONPRC (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;; Also: GONPRC (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     .proc ApplyPrefixOperator
     pla
     pla
@@ -221,15 +242,21 @@ ToGetNextCharacter:
 .endmacro
 
 ;; Emits the integer-variable conversion path, falling through for floating-point variables.
-.macro IntegerVariableValue
+;; Parameters: keepX = optional, 1 (when given) to test <IntegerType> with `BIT`, keeping X (the VIC-20's)
+.macro IntegerVariableValue keepX
     ;; Loads an integer variable through <FacMantissa3> and converts it to floating point.
     ;; For a real variable it returns nothing: the code after it, in the vendor's file, loads the value.
     ;; In: IntegerType = negative for an integer variable, FacMantissa3 = the value's address (low byte),
     ;;   FacMantissa4 = its high byte
     ;; Out: Fac = numeric value for an integer variable
-    ;; Also: GOOO (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;; Also: GOOO (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     .proc LoadNumericVariable
-    ldx IntegerType
+    .ifnblank keepX
+        .assert keepX = 1, "keepX is 1 when given."
+        bit IntegerType
+    .else
+        ldx IntegerType
+    .endif
     bpl NotInteger
     ldy #$00
     lda (FacMantissa3),y
@@ -240,7 +267,7 @@ ToGetNextCharacter:
     txa
     jmp ReturnSignedWord
 ;; A real variable: goes on into the vendor's code that loads it.
-;; Also: GOOOOO (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: GOOOOO (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 NotInteger:
     .endproc
 .endmacro
@@ -251,7 +278,7 @@ NotInteger:
     ;;
     ;; The string slicing functions take a string and a byte argument; their descriptors and arguments are
     ;; stacked for the callee. Ordinary functions take one parenthesized expression.
-    ;; Also: ISFUN (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;; Also: ISFUN (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     .proc CallFunction
     asl a
     pha
@@ -278,13 +305,13 @@ NotInteger:
     pha
     jmp Dispatch
 ;; Ordinary function: evaluates the parenthesized argument.
-;; Also: OKNORM (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: OKNORM (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 OneArgument:
     jsr EvaluateParenthesized
     pla
     tay
 ;; Stores the routine's address from <FunctionTable> in <FunctionJump>, calls it, then requires a numeric result.
-;; Also: FINGO (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: FINGO (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 Dispatch:
     lda FunctionTable-2*TOKEN_FIRST_FUNCTION+256,y
     sta FunctionJump+1
@@ -306,7 +333,7 @@ Dispatch:
         ;; Computes OR on the numeric argument and <Fac>.
         ;; Out: Fac = numeric result
         ;; Errors: ILLEGAL QUANTITY if an operand is outside -32768 to 32767
-        ;; Also: OROP (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+        ;; Also: OROP (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
         .proc Or
         ldy #$FF
         .byte $2C                   ; BIT absolute skips the next two bytes

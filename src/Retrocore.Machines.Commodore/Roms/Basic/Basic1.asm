@@ -46,12 +46,12 @@ REVISD = 1
 ; Workspace changes are independent so their layout can be reused by another variant.
 .ifndef INPUT_BUFFER_PAGE
 ;; Input buffer page: 0 for page zero or 2 for page two.
-;; Also: BUFPAG (M6502, CBM4S79, HV2, HV4, HV4R)
+;; Also: BUFPAG (M6502, CBM4S79, HV2, HV4, HV4R, BV20)
 INPUT_BUFFER_PAGE = 0
 .endif
 .ifndef INPUT_BUFFER_LENGTH
 ;; Input buffer length in bytes.
-;; Also: BUFLEN (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: BUFLEN (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 INPUT_BUFFER_LENGTH = 80
 .endif
 .ifndef NULL_COMMAND
@@ -353,7 +353,7 @@ START_BANNER_AFTER_FREE = 1
 .endif
 
 ;; Start of the BASIC ROM protected by <Functions::Peek>.
-;; Also: ROMLOC (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: ROMLOC (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 ROM_ORIGIN = $C000
 
 ;; Omit BASIC 4's output patch space.

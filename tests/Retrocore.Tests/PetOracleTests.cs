@@ -226,7 +226,9 @@ public class PetOracleTests
     /// <param name="mame">MAME.</param>
     /// <param name="machineArguments">The machine and its slot and media options.</param>
     /// <param name="roms">The ROM path.</param>
-    /// <param name="seconds">The emulated seconds to trace.</param>
+    /// <param name="seconds">
+    ///  The emulated seconds to trace: the script stops at the first frame at or after them.
+    /// </param>
     /// <param name="script">The script, in <c>tools</c>.</param>
     /// <param name="environment">More settings for the script.</param>
     /// <returns>The rows.</returns>
@@ -234,7 +236,7 @@ public class PetOracleTests
         string mame,
         IReadOnlyList<string> machineArguments,
         string roms,
-        int seconds,
+        double seconds,
         string script,
         IReadOnlyDictionary<string, string> environment)
     {
@@ -254,7 +256,7 @@ public class PetOracleTests
             [
                 .. machineArguments, "-rompath", roms, "-cfg_directory", work, "-nvram_directory", work,
                 "-video", "none", "-sound", "none", "-nothrottle", "-skip_gameinfo",
-                "-debug", "-debugger", "none", "-seconds_to_run", (seconds + 5).ToString(CultureInfo.InvariantCulture),
+                "-debug", "-debugger", "none", "-seconds_to_run", ((int)Math.Ceiling(seconds) + 5).ToString(CultureInfo.InvariantCulture),
                 "-autoboot_script", FindTool(script), "-autoboot_delay", "0"
             ];
 

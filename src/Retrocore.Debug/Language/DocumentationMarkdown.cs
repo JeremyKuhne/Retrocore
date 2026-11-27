@@ -89,8 +89,14 @@ internal static class DocumentationMarkdown
 
     private static string Title(string name) => name == "See" ? "See also" : name;
 
-    // A historical name, then the documents that give it: "`COUT` (Apple II Reference Manual, Apple Computer, 1978)".
-    private static string Also(string item, DocumentationBibliography? bibliography)
+    /// <summary>
+    ///  Renders an <c>Also:</c> item: the historical name, then the documents that give it, as in
+    ///  "<c>`COUT` (Apple II Reference Manual, Apple Computer, 1978)</c>".
+    /// </summary>
+    /// <param name="item">The item, <c>NAME (KEYS)</c>.</param>
+    /// <param name="bibliography">The documents the keys name, or null to show the keys.</param>
+    /// <returns>The Markdown.</returns>
+    internal static string Also(string item, DocumentationBibliography? bibliography)
     {
         if (DocumentationAlso.Parse(item) is not { } also) { return $"`{item}`"; }
         if (also.Sources.Count == 0) { return $"`{also.Name}`"; }

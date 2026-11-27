@@ -173,6 +173,71 @@ public class Trs80Model2Tests
     }
 
     /// <summary>
+    ///  A block's end interrupts with the vector the program gave, and when status affects the vector, with bits 1-2
+    ///  set to 10, the end of a block, as Zilog's DMA gives them. TRSDOS's DMA test copies memory to video RAM and
+    ///  waits for the handler at that vector's entry; with 01, a match's, it stopped at <c>BOOT ERROR DM 23</c>.
+    /// </summary>
+    /// <param name="interruptControl">
+    ///  The interrupt control byte: the end of a block and a vector, with or without status affecting it.
+    /// </param>
+    /// <param name="expected">The vector the DMA gives.</param>
+    [TestMethod]
+    [DataRow((byte)0x32, (byte)0xAC)]
+    [DataRow((byte)0x12, (byte)0xA8)]
+    public void DmaEndOfBlockVector(byte interruptControl, byte expected)
+    {
+        Trs80Model2Bus bus = Create(new()).Bus;
+        for (int index = 0; index < 0x50; index++) { bus.Write((ushort)(0x2100 + index), (byte)(index + 1)); }
+
+        // As TRSDOS's test: A (memory at $2100, counting up) to B (memory at $3000, counting up), $4F, continuous,
+        // forced ready, interrupting at the block's end with vector $A8.
+        foreach (byte value in (byte[])[
+            0xC3, 0x7D, 0x00, 0x21, 0x4F, 0x00, 0x14, 0x10, 0xBD, 0x00, 0x30, interruptControl, 0xA8, 0x92, 0xCF, 0xB3,
+            0xAB, 0x87])
+        {
+            bus.Out(0xF8, value);
+        }
+
+        for (int cycle = 0; cycle < 10_000 && bus.Dma.Enabled; cycle++) { bus.Tick(); }
+
+        bus.Dma.Enabled.Should().BeFalse("the block ended");
+        bus.Read(0x3000).Should().Be(1);
+        bus.Read(0x304F).Should().Be(0x50, "a block moves one byte more than its length");
+        bus.Dma.PendingVector.Should().Be(expected);
+    }
+
+    /// <summary>
+    ///  The PIO's port A shows, in bit 1, that the selected drive's disk has sectors on side 1, following the sectors
+    ///  an image adds and formatting replaces.
+    /// </summary>
+    [TestMethod]
+    public void PortAShowsATwoSidedDisk()
+    {
+        Trs80Model2Machine machine = Create(new());
+        Trs80Model2Bus bus = machine.Bus;
+        FloppyDisk disk = new();
+        disk.Add(0, 0, new FloppySector(0, 0, 1, new byte[128], doubleDensity: false));
+        machine.Drives[0].Insert(disk, "test", "IMD");
+        bus.Out(0xEF, 0x4E);
+
+        disk.Sides.Should().Be(1);
+        (bus.In(0xE0) & 0x02).Should().Be(0);
+        FloppySector tooLong = new(3, 1, 1, new byte[16384], doubleDensity: true);
+        disk.Invoking(target => target.Add(3, 1, tooLong)).Should().Throw<InvalidDataException>("the sector is longer than a track");
+        disk.Sides.Should().Be(1, "the sector that did not fit left side 1 empty");
+        disk.Add(1, 1, new FloppySector(1, 1, 1, new byte[256], doubleDensity: true));
+        disk.Sides.Should().Be(2);
+        (bus.In(0xE0) & 0x02).Should().Be(0x02);
+        disk.Format(1, 1, []);
+        disk.Sides.Should().Be(1, "formatting left side 1 empty");
+        (bus.In(0xE0) & 0x02).Should().Be(0);
+        disk.Format(2, 1, [new FloppySector(2, 1, 1, new byte[256], doubleDensity: true)]);
+        disk.Sides.Should().Be(2);
+        disk.Format(2, 1, [new FloppySector(2, 1, 2, new byte[256], doubleDensity: true)]);
+        disk.Sides.Should().Be(2, "reformatting a track on side 1 keeps it");
+    }
+
+    /// <summary>
     ///  With the PIO's port A in bit control mode, as LS-DOS 6.3.1 sets it to take the FD1791's INTRQ as an interrupt,
     ///  the PIO reads port A at every T-state, and with it whether the selected drive's disk is two-sided. That costs
     ///  nothing: once it sorted all the disk's tracks each time, which slowed LS-DOS's boot after its welcome screen

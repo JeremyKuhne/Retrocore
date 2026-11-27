@@ -5,6 +5,7 @@
 using Retrocore.Cpu.I8080;
 using Retrocore.Isa;
 using Retrocore.Machines.Devices;
+using Retrocore.Basic;
 using Retrocore.Machines.Trs80Model100;
 using System.Text.Json.Nodes;
 
@@ -45,6 +46,9 @@ internal sealed partial class Trs80Model100DebugTarget : IDebugTarget, IRecordin
     private bool _acknowledged;
     private bool _resetPending;
     private string? _ramImagePath;
+
+    // The emulated seconds the ROM takes to reach its menu after the power comes on.
+    private const double BootSeconds = 3;
 
     /// <summary>
     ///  Wraps a machine.
@@ -162,6 +166,19 @@ internal sealed partial class Trs80Model100DebugTarget : IDebugTarget, IRecordin
 
     /// <inheritdoc/>
     public int MaximumKey => 140;
+
+    /// <inheritdoc/>
+    /// <remarks>
+    ///  <para>
+    ///   The program is the one BASIC has open, a <c>.BA</c> file or BASIC's unsaved program; writing it moves the
+    ///   files after it in RAM. Stepping by BASIC's lines waits for the ROM as an SDK source.
+    ///  </para>
+    /// </remarks>
+    public BasicDialect? Basic => BasicDialect.Model100;
+
+    /// <inheritdoc/>
+    public string? BasicAwayMessage =>
+        "BASIC is not at its prompt: choose BASIC on the menu, and stop any program it is running, then try again.";
 
     /// <inheritdoc/>
     public IReadOnlyDictionary<string, Func<JsonObject, JsonObject>> Requests { get; }
@@ -418,8 +435,20 @@ internal sealed partial class Trs80Model100DebugTarget : IDebugTarget, IRecordin
                 "RAM image",
                 _ramImagePath ?? "none",
                 "The launch's ramImage option: the file that keeps the RAM between sessions, saved as the session ends."),
+            new(
+                "files",
+                "Files",
+                Files(),
+                "The files in RAM's directory, without the ROM's own programs and its hidden entries; the launch's files option puts host files in it."),
             new("io", "Serial, modem, cassette, printer, wand", "not connected", "Coming in later phases.")
         ];
+    }
+
+    // The files in RAM's directory; before the ROM has set it up, whatever its bytes say.
+    private string Files()
+    {
+        IReadOnlyList<Model100File> files = new Model100Files(new TargetBasicMemory(this)).List();
+        return files.Count == 0 ? "none" : string.Join(", ", files.Select(file => file.Name));
     }
 
     private JsonObject VideoState() => new()

@@ -67,7 +67,8 @@ public sealed partial class BasicRenameGateTests
         typeof(BasicDiskRoutineTests), typeof(BasicCommodoreConversionTests), typeof(BasicCommodoreRoutineTests),
         typeof(PetBasic4ExtensionTests),
         typeof(PetBasic4RevisionTests), typeof(PetBasicConformanceTests), typeof(PetNativeEquatesTests),
-        typeof(PetRomSourceTests), typeof(PetSharedFloatAssemblyTests), typeof(BasicNamesBuildTests)
+        typeof(PetRomSourceTests), typeof(PetSharedFloatAssemblyTests), typeof(BasicNamesBuildTests),
+        typeof(Vic20RomSourceTests)
     ];
 
     // Test sources that assemble BASIC but are not run against the renamed copy, each for its reason.
@@ -415,7 +416,7 @@ public sealed partial class BasicRenameGateTests
     }
 
     // A source that assembles the native or MACRO-10 BASIC, or one of its shared modules.
-    [GeneratedRegex(@"AssembleAppleSoft|AppleSoftPath|PetSdkModules\.AssembleBasic|PetLegacyBasic\.Assemble|Microsoft6502Basic|BasicMachines\.AppleSoft")]
+    [GeneratedRegex(@"AssembleAppleSoft|AppleSoftPath|PetSdkModules\.AssembleBasic|Vic20SdkModules\.AssembleBasic|PetLegacyBasic\.Assemble|Microsoft6502Basic|BasicMachines\.AppleSoft")]
     private static partial Regex AssemblesBasic();
 
     // The renamed label, as a whole word.

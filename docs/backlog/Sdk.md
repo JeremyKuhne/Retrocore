@@ -127,6 +127,13 @@ that the machines showing lowercase set. `init` adds to the repository's tool ma
 root `projects`, and the `.gitignore` beside the project, rather than replacing them, and gives a project below the
 root a workflow of its own. `retrocore --version` prints the version `new` pins.
 
+A fresh clone builds every target with `dotnet tool restore` and `dotnet retrocore build --all`, with the tool from a
+local pack until a feed exists: [`tools/Test-FreshClone.mjs`](../../tools/Test-FreshClone.mjs) commits and clones a
+project `retrocore new` makes and the adventure sample's files alone, and builds each, in CI on Linux, Windows and
+macOS. The sample is ready to move to its own repository: it pins the tool, recommends the extension, ignores its
+output and has its own workflow, which builds every target and plays the transcripts once the tool is on a source it
+can restore from. Its README lists what else changes on the move.
+
 ## The project
 
 A repository has one `retrocore.json` at its root. It is either a single project, or it lists the folders of its

@@ -8,7 +8,7 @@
 // The ROMs are assembled from the SDK's sources unless RETROCORE_TRS80_ROMS names the dumps.
 
 import { resolve, join } from "node:path";
-import { readFileSync, existsSync, unlinkSync, statSync, writeFileSync } from "node:fs";
+import { readFileSync, existsSync, unlinkSync, statSync, writeFileSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import assert from "node:assert/strict";
 import { startDap } from "./DapClient.mjs";
@@ -110,6 +110,7 @@ const levelOneTape = join(tmpdir(), `retrocore-${process.pid}-level1.cas`);
 const levelOneImage = join(tmpdir(), `retrocore-${process.pid}-level1.bin`);
 const levelOneFile = join(tmpdir(), `retrocore-${process.pid}.level1.bas`);
 const levelTwoFile = join(tmpdir(), `retrocore-${process.pid}.level2.bas`);
+const otherRoms = mkdtempSync(join(tmpdir(), "retrocore-level1-"));
 try {
     await request("initialize", { adapterID: "retrocore", linesStartAt1: true, columnsStartAt1: true });
     phase("initialized");
@@ -470,12 +471,21 @@ try {
     await assert.rejects(request("launch", { machine: "trs80-model1", sdkRoms, rom: "level1", basic: levelTwoFile }),
         /is Level II BASIC, and the machine runs Level I BASIC/);
 
+    // A level1.rom dump that is not the SDK's build gets no BASIC thread, as Level1.asm's addresses are not its own.
+    // The stand-in is a jump to itself, at $0000.
+    const standIn = Buffer.alloc(0x1000);
+    standIn.set([0x18, 0xFE]);
+    writeFileSync(join(otherRoms, "level1.rom"), standIn);
+    await launch({ rom: "level1", romDirectory: otherRoms }, ["basicStart"]);
+    assert.deepEqual((await request("threads")).threads.map(thread => thread.name), ["Model I Z80"]);
+
     await request("disconnect");
     console.log("Model I DAP passed: boot to READY, a Level II source breakpoint with the Z80 call stack, a cassette round trip, RUN and CONT stops, the reset button, power-on and entry stops, 1x and 2x speed, stepping from a Z80 source into Level2.asm"
-        + (existsSync(dos) ? ", a NEWDOS/80 boot" : "") + ", a fast cassette load at real speed, tapes for the other Level warned of, and Level I's BASIC thread: RUN's start, steps, a line breakpoint in a GOSUB, its variables, STOP, a Level I tape round trip, an error in a DATA item, and a Level I file's basic launch.");
+        + (existsSync(dos) ? ", a NEWDOS/80 boot" : "") + ", a fast cassette load at real speed, tapes for the other Level warned of, and Level I's BASIC thread: RUN's start, steps, a line breakpoint in a GOSUB, its variables, STOP, a Level I tape round trip, an error in a DATA item, a Level I file's basic launch, and no thread for another Level I ROM.");
 } finally {
     clearTimeout(timeout);
     close();
     for (const file of [cassette, levelOneTape, levelOneImage, levelOneFile, levelTwoFile]) if (existsSync(file)) unlinkSync(file);
+    rmSync(otherRoms, { recursive: true, force: true });
 }
 if (failure()) throw failure();

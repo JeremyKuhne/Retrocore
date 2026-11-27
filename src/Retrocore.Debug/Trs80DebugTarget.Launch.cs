@@ -91,7 +91,8 @@ internal sealed partial class Trs80DebugTarget
         Trs80Machine machine = new(configuration, new(system, characters));
         Trs80DebugTarget target = new(machine, level1 ? null : Trs80SdkModules.RevisionOf(system))
         {
-            FastCassette = args.Bool("fastCassette") ?? true
+            FastCassette = args.Bool("fastCassette") ?? true,
+            SystemRomImage = system
         };
 
         if (args.String("cassette") is { } cassette) { target.Insert(cassette); }

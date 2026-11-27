@@ -524,6 +524,26 @@ public class SdkDocumentationTests
     }
 
     /// <summary>
+    ///  An <c>Entry:</c> whose meaning ends in a keeps clause has that contract at its address: DFS_OSBPUT keeps A, X
+    ///  and Y, but DFS_OSBPUT_CHANNEL, entered after its caller's SAVE_REGISTERS, keeps nothing itself, so a call there
+    ///  is not checked; SET_ENTRY_EXEC_ADDRESS_MERGE keeps X and Y, not A.
+    /// </summary>
+    [TestMethod]
+    public void EntriesKeepWhatTheirClauseSays()
+    {
+        AssemblyResult dnfs = BbcSdkModules.AssembleDnfs(Path.Join(s_inputs, "Acorn"));
+        SourceMapModule module = new(dnfs, area: null);
+        long? Symbol(string name) => module.TryResolve(name, out long value) ? value : null;
+        Dictionary<ushort, DebugContract> contracts = DebugContracts.Build(
+            new DocumentationResolver(module.Documentation), model: "", new DebugRegisters(M6502Isa.Description), Symbol);
+
+        contracts[(ushort)dnfs.Symbols["DFS_OSBPUT"]].Registers.Should().BeEquivalentTo(["A", "X", "Y"]);
+        contracts.Should().NotContainKey((ushort)dnfs.Symbols["DFS_OSBPUT_CHANNEL"]);
+        contracts[(ushort)dnfs.Symbols["SET_ENTRY_EXEC_ADDRESS"]].Registers.Should().BeEquivalentTo(["A", "X", "Y"]);
+        contracts[(ushort)dnfs.Symbols["SET_ENTRY_EXEC_ADDRESS_MERGE"]].Registers.Should().BeEquivalentTo(["X", "Y"]);
+    }
+
+    /// <summary>
     ///  A note in parentheses after a Uses: item, as in the MOS's <c>Y (for a sound channel)</c>, still names the
     ///  item for the debugger's check.
     /// </summary>

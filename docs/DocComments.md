@@ -177,7 +177,7 @@ Both forms parse to the same sections, so every tool treats them alike.
 | `Errors:` | `<exception>` | How failure is reported: `carry = set on a checksum error`, or error codes | |
 | `Uses:` | | A comma list of what the routine changes beyond `Out:` | Optionally checked by the debugger |
 | `Keeps:` | | A comma list of registers, flags and memory the routine preserves | Checked by the debugger (section 5) |
-| `Entry:` | | Other labels that enter this routine, each with how it differs: `PLOT1 = skips the address calculation` | Names must be labels inside the routine |
+| `Entry:` | | Other labels that enter this routine, each with how it differs: `PLOT1 = skips the address calculation`; a meaning that ends in `; keeps X, Y` or `; keeps nothing` says what that entry keeps, in place of `Keeps:` | Names must be labels inside the routine |
 | `Calls:` | | Hooks or routines called indirectly, which the tools cannot see | |
 | `Cycles:` | | Timing, as text or a formula: `17`, `26 + 27A + 5A^2, halved` | |
 | `Stack:` | | Bytes of stack used, including calls | |
@@ -461,7 +461,9 @@ broken link.
   back at its depth, as for cycle counting), the debugger compares each listed register, flag (by its word) and
   memory location with its value at entry. A difference is reported with the routine, the item and both values. It
   is a debugger warning, optionally a stop, not an assembly error. `Keeps: none` documents that nothing is
-  preserved. Sections that apply only to one model (from `.if`) are checked only on that model. The launch
+  preserved. A call to an `Entry:` label is checked against the routine's `Keeps:` too, unless the entry's meaning
+  ends in a keeps clause, as `Aux = stores from an auxiliary byte; keeps A` or `; keeps nothing` for an entry that
+  relies on its caller to save the registers: that clause is the entry's promise, and its `Uses:` is not checked. Sections that apply only to one model (from `.if`) are checked only on that model. The launch
   option `checkContracts` selects `warn` (the default: a Debug Console message), `stop` (also stops, with
   reason `exception`, at the instruction after the call) or `off`. With `warn`, ticking the **Routine broke
   its Keeps: promise** exception filter in VS Code's Breakpoints view also stops; its hover explains it. The

@@ -437,7 +437,7 @@ STORE_STATUS_DONE:
 ;; Marks the input file as at its end.
 ;; Out: A = CFS_STATUS
 ;; Keeps: X, Y, carry
-;; Entry: SET_STATUS_BITS = sets the bits set in A
+;; Entry: SET_STATUS_BITS = sets the bits set in A, which has one set, as every caller's constant has
 SET_EOF:
     lda #CFS_AT_EOF
 SET_STATUS_BITS:

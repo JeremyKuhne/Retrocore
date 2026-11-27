@@ -306,7 +306,8 @@ Store40:
 ;; Out: carry = set
 ;; Keeps: A, X
 ;; Entry:
-;;   Aux = stores from an auxiliary byte: Y = the byte, X = minus the columns to store, ScrollBase = X to put back
+;;   Aux = stores from an auxiliary byte: Y = the byte, X = minus the columns to store, ScrollBase = X to put back;
+;;     keeps A
 ;; Also: FILL80 (UNKN), CLR80 (IIETRM85)
 .proc Fill80
 .assert * = $CCBD, "Fill80 must stay at $CCBD."

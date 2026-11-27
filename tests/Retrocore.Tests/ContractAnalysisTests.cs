@@ -116,6 +116,43 @@ public class ContractAnalysisTests
     }
 
     /// <summary>
+    ///  An <c>Entry:</c> whose meaning ends in <c>; keeps ...</c> promises that from there, in place of the
+    ///  routine's <c>Keeps:</c>: an entry that skips the save keeps less, and is checked for what it says.
+    /// </summary>
+    [TestMethod]
+    public void EntriesKeepWhatTheirClauseSays()
+    {
+        const string Wrong = """
+            ;; Returns, or from Change clears X first.
+            ;; Keeps: X
+            ;; Entry: Change = clears X; keeps X
+            Saver:
+                rts
+            Change:
+                ldx #0
+                rts
+            """;
+
+        (List<string> findings, _, _) = Check(Wrong, "Mos6502");
+        findings.Should().Equal("Saver ($1000) documents Keeps: X, but X is changed by the instruction at $1001.");
+
+        const string Right = """
+            ;; Returns, or from Change clears X first.
+            ;; Keeps: X
+            ;; Entry: Change = clears X; keeps nothing
+            Saver:
+                rts
+            Change:
+                ldx #0
+                rts
+            """;
+
+        (findings, int count, _) = Check(Right, "Mos6502");
+        findings.Should().BeEmpty();
+        count.Should().Be(1);
+    }
+
+    /// <summary>
     ///  A path the analysis cannot follow, such as an indirect jump, leaves the routine unchecked, not wrong, even
     ///  where its other paths return.
     /// </summary>

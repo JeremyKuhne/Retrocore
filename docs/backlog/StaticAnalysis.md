@@ -620,12 +620,15 @@ SET_EOF. Routines followed now for the first time found three documentation erro
 - CHKRES's `Out:` had HL inside the zero flag's meaning; HL now has its own entry.
 
 The closing review's fixes made the check stricter: 888 routines checked, 32 findings, 121 `Keeps:` items not
-verified. Most of the drop is routines now listed as followed in part, about 120 of them, which were counted as checked
-before; the rest write into the stack through an address worked out from a stack pointer. The 7 new findings are
-all from `Entry:` labels, now checked too: SET_ENTRY_EXEC_ADDRESS_MERGE skips SAVE_REGISTERS, so A, which the
-DFS routine's `Keeps:` names, is changed from there, and the MOS's SET_STATUS_BITS, with A and CFS_STATUS 0, falls
-through its `bne` into the next routine, so SET_EOF's `Keeps: X, Y` holds only for the bits its callers pass. The
-documentation is not yet changed for them.
+verified. Most of the drop is routines now listed as followed in part, about 120 of them, which were counted as
+checked before; the rest write into the stack through an address worked out from a stack pointer. The 7 new findings
+were all from `Entry:` labels, now checked too. Most were entries whose callers set something up first: Fill80::Aux
+gets X back from ScrollBase, and DFS_OSBPUT_CHANNEL and SET_ENTRY_EXEC_ADDRESS_MERGE run after their callers'
+SAVE_REGISTERS. For those, an `Entry:` meaning may now end in a keeps clause (`; keeps A`, `; keeps nothing`), which
+the check and the debugger take in place of the routine's `Keeps:` for that entry, and the three entries say what
+they keep: 27 findings remain. Two of them are the MOS's SET_STATUS_BITS: with A and CFS_STATUS both 0 it falls
+through its `bne` into the next routine, so SET_EOF's `Keeps: X, Y` holds only because every caller passes a bit to
+set. The entry now says so, but the check does not read conditions on what a caller passes.
 
 What it costs, measured in Release over the MOS, the DFS and MBASIC with their maps: about 190 ms for the three
 once warm, and 114 MB allocated (220 ms and 107 MB before the review's fixes). Without maps it was about 140 ms and

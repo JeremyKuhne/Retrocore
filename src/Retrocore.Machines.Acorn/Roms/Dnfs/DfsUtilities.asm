@@ -305,7 +305,8 @@ SET_ENTRY_LOAD_ADDRESS:
 ;; In: FS_SCRATCH = the control block, X = the entry's catalogue offset
 ;; Out: overflow = clear
 ;; Keeps: A, X, Y
-;; Entry: SET_ENTRY_EXEC_ADDRESS_MERGE = with A = the top-bits byte's new bits exclusive-ORed with its old ones
+;; Entry: SET_ENTRY_EXEC_ADDRESS_MERGE = with A = the top-bits byte's new bits exclusive-ORed with its old ones, after
+;;   the caller's <SAVE_REGISTERS>, as <SET_ENTRY_LOAD_ADDRESS> does; keeps X, Y
 SET_ENTRY_EXEC_ADDRESS:
     jsr SAVE_REGISTERS
     ldy #$06                        ; the control block's execution address

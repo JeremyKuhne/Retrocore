@@ -176,21 +176,8 @@ internal sealed class DebugContracts
             DocumentationTopic topic = resolver.Effective(documented);
             bool Applies(DocumentationSection section) => DocumentationResolver.Applies(section.Condition, model, symbol);
 
-            List<string> kept = [];
-            List<(string, ushort, int)> memory = [];
-            foreach (string item in topic.SectionsNamed("Keeps").Where(Applies).SelectMany(section => section.Items).Select(WithoutNote))
-            {
-                string upper = item.ToUpperInvariant();
-                if (registers.Knows(upper))
-                {
-                    // Registers read in capitals; flags keep their words, as in "kept carry".
-                    kept.Add(registers.IndexOf(item) >= 0 ? upper : item.ToLowerInvariant());
-                }
-                else if (Memory(set, item) is { } location)
-                {
-                    memory.Add((item, location.Address, location.Length));
-                }
-            }
+            (List<string> kept, List<(string, ushort, int)> memory) = Kept(
+                topic.SectionsNamed("Keeps").Where(Applies).SelectMany(section => section.Items).Select(WithoutNote));
 
             HashSet<string>? changes = null;
             if (topic.SectionsNamed("Uses").Any(Applies))
@@ -204,12 +191,30 @@ internal sealed class DebugContracts
                 }
             }
 
-            if (kept.Count == 0 && memory.Count == 0 && changes is null) { continue; }
-            DebugContract contract = new(topic.Name, kept, memory, changes);
-            contracts.TryAdd((ushort)value, contract);
+            // An Entry: whose meaning ends in "; keeps ..." promises that instead, and no Uses:, at a call there.
+            Dictionary<string, IReadOnlyList<string>> entryKeeps = [];
+            foreach (DocumentationEntry entry in topic.SectionsNamed("Entry").Where(Applies).SelectMany(section => section.Entries))
+            {
+                if (entry.Keeps is { } keeps) { entryKeeps[set.EntrySymbol(documented, entry.Name)] = keeps; }
+            }
+
+            if (kept.Count != 0 || memory.Count != 0 || changes is not null)
+            {
+                contracts.TryAdd((ushort)value, new(topic.Name, kept, memory, changes));
+            }
+
             foreach (string label in topic.EntryLabels.Select(entry => set.EntrySymbol(documented, entry)))
             {
-                if (set.Symbols.TryGetValue(label, out long entry) && set.Find(label) is null)
+                if (!set.Symbols.TryGetValue(label, out long entry) || set.Find(label) is not null) { continue; }
+                if (entryKeeps.TryGetValue(label, out IReadOnlyList<string>? own))
+                {
+                    (List<string> entryKept, List<(string, ushort, int)> entryMemory) = Kept(own);
+                    if (entryKept.Count != 0 || entryMemory.Count != 0)
+                    {
+                        contracts.TryAdd((ushort)entry, new(topic.Name, entryKept, entryMemory, Changes: null));
+                    }
+                }
+                else if (contracts.TryGetValue((ushort)value, out DebugContract? contract))
                 {
                     contracts.TryAdd((ushort)entry, contract);
                 }
@@ -217,6 +222,28 @@ internal sealed class DebugContracts
         }
 
         return contracts;
+
+        // The registers, flags and memory a Keeps: list names.
+        (List<string> Kept, List<(string, ushort, int)> Memory) Kept(IEnumerable<string> items)
+        {
+            List<string> kept = [];
+            List<(string, ushort, int)> memory = [];
+            foreach (string item in items)
+            {
+                string upper = item.ToUpperInvariant();
+                if (registers.Knows(upper))
+                {
+                    // Registers read in capitals; flags keep their words, as in "kept carry".
+                    kept.Add(registers.IndexOf(item) >= 0 ? upper : item.ToLowerInvariant());
+                }
+                else if (Memory(set, item) is { } location)
+                {
+                    memory.Add((item, location.Address, location.Length));
+                }
+            }
+
+            return (kept, memory);
+        }
     }
 
     // A kept memory item: a symbol, symbol+n, or a range symbol..symbol+n.

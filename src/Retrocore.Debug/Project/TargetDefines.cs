@@ -68,6 +68,7 @@ internal static class TargetDefines
         ["pet2001"] = 8,
         ["pet4032"] = 32,
         ["pet4032-business"] = 32,
+        ["vic20"] = 5,
         ["bbcb"] = 32,
         ["bbca"] = 16,
         ["atari800"] = 48,
@@ -87,6 +88,7 @@ internal static class TargetDefines
         ["trs80"] = (64, 16),
         ["coco"] = (32, 16),
         ["pet"] = (40, 25),
+        ["vic20"] = (22, 23),
         ["bbc"] = (40, 25),
         ["atari"] = (40, 24),
         ["altair"] = (80, 24),
@@ -173,9 +175,29 @@ internal static class TargetDefines
     /// <returns>The RAM.</returns>
     // The target's RAM: its ramKilobytes, or the machine's default. The Model I's default follows its Expansion
     // Interface, which a Level II machine has unless its target says not and a Level I one only when it says so:
-    // 48K with it, otherwise 16K under Level II and 4K under Level I, as the launch has it.
+    // 48K with it, otherwise 16K under Level II and 4K under Level I, as the launch has it. The VIC-20's follows its
+    // ramExpansion.
     internal static int RamKilobytes(ProjectTarget target)
     {
+        // The VIC-20's RAM is its 5K and the expansion's, whatever ramKilobytes says, which its launch does not read; an
+        // expansion it does not know is the launch's to refuse.
+        if (target.Machine.Machine == "vic20")
+        {
+            string? expansion = target.Options["ramExpansion"]?.GetValueKind() == System.Text.Json.JsonValueKind.String
+                ? target.Options["ramExpansion"]?.GetValue<string>()
+                : null;
+
+            return expansion switch
+            {
+                "3k" => 8,
+                "8k" => 13,
+                "16k" => 21,
+                "24k" => 29,
+                "32k" => 32,
+                _ => 5
+            };
+        }
+
         // Read as the launch reads it. One that is not a whole number leaves the define the default; a size the
         // machine does not offer is the define's value as given, and the launch refuses it.
         try

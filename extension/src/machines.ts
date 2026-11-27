@@ -272,6 +272,42 @@ const petSnow: MachineChoice = {
 
 // The 2001 with BASIC 2 launches without snow unless snow is asked for, so its choice starts off.
 const petSnowOff: MachineChoice = { ...petSnow, default: false };
+
+// The VIC-20's choices: the video standard, which picks the VIC and the kernal, the RAM in the expansion port, which
+// moves BASIC and the screen, and its sound.
+const vic20Video: MachineChoice = {
+    option: "video",
+    label: "Video",
+    values: [
+        { label: "NTSC", detail: "The 6560: 60 Hz, a 1.02 MHz 6502 and kernal 901486-06", value: "ntsc" },
+        { label: "PAL", detail: "The 6561: 50 Hz, a 1.11 MHz 6502 and kernal 901486-07", value: "pal" }
+    ],
+    default: "ntsc"
+};
+
+const vic20Ram: MachineChoice = {
+    option: "ramExpansion",
+    label: "Memory",
+    values: [
+        { label: "Unexpanded", detail: "5 KB, 3583 bytes free for BASIC", value: "none" },
+        { label: "3K expansion", detail: "At $0400, as the VIC-1210 adds; BASIC starts at $0401", value: "3k" },
+        { label: "8K expansion", detail: "Block 1, as the VIC-1110 adds; BASIC starts at $1201 and the screen moves to $1000", value: "8k" },
+        { label: "16K expansion", detail: "Blocks 1 and 2, as the VIC-1111 adds", value: "16k" },
+        { label: "24K expansion", detail: "Blocks 1 to 3, the most BASIC can use", value: "24k" },
+        { label: "32K expansion", detail: "The 3K and blocks 1 to 3", value: "32k" }
+    ],
+    default: "none"
+};
+
+const vic20Sound: MachineChoice = {
+    option: "sound",
+    label: "Sound",
+    values: [
+        { label: "Speaker", detail: "The VIC's three tones and noise, as the TV plays them", value: "speaker" },
+        { label: "Off", value: "off" }
+    ],
+    default: "speaker"
+};
 // The Atari 400's and 800's choices: Atari BASIC's revision in the left slot, the video standard (PAL brings the
 // PAL OS), how the disk drives are emulated, and sound.
 const atariChoices: MachineChoice[] = [
@@ -714,6 +750,21 @@ export const machines: readonly Machine[] = [
         basicDialects: ["petbasic"],
         dos: false,
         choices: [pet4032Ram, petSound]
+    },
+    // Without dumps, the VIC-20 builds BASIC, the kernal and the character ROM from the SDK's sources. A tape starts in
+    // the Datasette with PLAY down, a cartridge goes in the expansion port, and a disk brings a 1541 as device 8.
+    {
+        id: "vic20",
+        label: "Commodore VIC-20",
+        detail: "6502, BASIC 2, 5 KB, the VIC's 22x23 colour screen and the Datasette",
+        configuration: { machine: "vic20" },
+        diskFormats: ["d64", "g64"],
+        tapeFormats: ["tap", "wav", "prg"],
+        programFormats: ["prg", "bin"],
+        basicDialects: ["petbasic"],
+        cartridgeFormats: ["a0", "20", "40", "60", "70", "prg", "crt", "bin"],
+        dos: false,
+        choices: [vic20Video, vic20Ram, vic20Sound]
     },
     // Without dumps, the BBC Micro builds its ROMs from the SDK's sources: MOS 1.20, BASIC II, DNFS 1.20 and the
     // SAA5050's characters.

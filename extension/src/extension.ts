@@ -248,10 +248,12 @@ export function activate(context: vscode.ExtensionContext): void {
                     endedSession = undefined;
                     const machine = typeof message.body === "object" && message.body !== null && "machine" in message.body ? message.body.machine : undefined;
                     const model = typeof message.body === "object" && message.body !== null && "model" in message.body && typeof message.body.model === "string" ? message.body.model : undefined;
+                    const standard = typeof message.body === "object" && message.body !== null && "standard" in message.body ? message.body.standard : undefined;
                     const title = machine === "trs80-model1" ? "TRS-80 Model I"
                         : (machine === "trs80-model3" || machine === "trs80-model2") && model !== undefined ? `TRS-80 ${model}`
                             : machine === "apple1" ? "Apple-1"
                                 : machine === "pet" ? petTitle(model)
+                                : machine === "vic20" ? (standard === "pal" ? "Commodore VIC-20 (PAL)" : "Commodore VIC-20")
                                     : machine === "bbc" ? `BBC Micro ${model ?? "Model B"}`
                                         : machine === "atari800" ? model ?? "Atari 800"
                                             : machine === "altair" ? "Altair 8800" : model ?? "Apple IIe";
@@ -259,7 +261,8 @@ export function activate(context: vscode.ExtensionContext): void {
                     // PET 2001's screen do; the Model II's and the Kaypro II's are green, like the IIe's. The Kaypro II's model is
                     // its title.
                     const phosphor = machine === "trs80-model1" || machine === "trs80-model3" || machine === "altair" || machine === "pet" ? "trs80-model1"
-                        : machine === "apple1" || machine === "coco" ? machine : machine === "bbc" || machine === "atari800" ? "coco" : "apple2";
+                        : machine === "apple1" || machine === "coco" ? machine
+                            : machine === "bbc" || machine === "atari800" || machine === "vic20" ? "coco" : "apple2";
                     // The screen glows in the machine's phosphor while it runs, and goes dark when it stops.
                     const running = typeof message.body === "object" && message.body !== null && "running" in message.body && message.body.running === true;
                     const screen = running ? phosphor : "off";
@@ -393,7 +396,7 @@ function soundRequest(session: vscode.DebugSession): string {
 /**
  * The display panel's tab icon: a CRT monitor framed in the theme's tab text color, whose screen glows in the
  * machine's phosphor while it runs (green for the IIe, white for the Model I, the PET and the Apple-1, the Color Computer's
- * green text screen) and is dark (off) when it stops.
+ * green text screen, which the colour machines such as the VIC-20 share) and is dark (off) when it stops.
  */
 function machineIcon(extension: vscode.Uri, screen: "apple2" | "trs80-model1" | "apple1" | "coco" | "off"): { light: vscode.Uri; dark: vscode.Uri } {
     const name = screen === "off" ? "crt-off" : screen;

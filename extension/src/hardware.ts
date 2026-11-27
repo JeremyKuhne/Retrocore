@@ -34,6 +34,9 @@ export interface Card { label: string; detail: string; args: Record<string, unkn
 /** The PET's IEEE-488 device numbers a disk unit can take, as the Machine view's rows name them. */
 const ieeeDevices = ["ieee8", "ieee9", "ieee10", "ieee11", "ieee12", "ieee13", "ieee14", "ieee15"];
 
+// The VIC-20's serial bus takes drives as devices 8 to 11.
+const serialDevices = ["serial8", "serial9", "serial10", "serial11"];
+
 /** The cards Add Card offers. */
 export const cards: Card[] = [
     { label: "Disk II controller", detail: "16-sector: DOS 3.3 and ProDOS disks", args: { action: "addDiskII", sectors: 16 } },
@@ -77,6 +80,14 @@ export const cards: Card[] = [
     {
         label: "2040 dual disk drive", detail: "Commodore's DOS 1.2 drive on the IEEE-488 bus; insert .d67, .d64 or .g64 disks",
         args: { action: "add2040" }, slots: ieeeDevices, machines: ["pet"]
+    },
+    {
+        label: "1541 disk drive", detail: "Commodore's single drive on the serial bus; insert .d64 or .g64 disks",
+        args: { action: "add1541" }, slots: serialDevices, machines: ["vic20"]
+    },
+    {
+        label: "1540 disk drive", detail: "The 1541's forerunner, timed for the VIC-20's serial bus alone; insert .d64 or .g64 disks",
+        args: { action: "add1540" }, slots: serialDevices, machines: ["vic20"]
     }
 ];
 

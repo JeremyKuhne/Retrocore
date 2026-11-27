@@ -6,13 +6,14 @@
 // written doubled, or it becomes the character itself; display.test.ts checks that the script parses.
 
 /**
- * The key code in a message from the display panel, or undefined for another message: a whole number from 0 to 255,
+ * The key code in a message from the display panel, or undefined for another message: a whole number from 0 to 258,
  * since the BBC Micro's COPY, cursor and function keys and the Atari's START, SELECT, OPTION, BREAK and SYSTEM RESET
- * have codes above 127.
+ * have codes above 127, and the VIC-20's RESTORE, RUN/STOP with RESTORE, and SHIFT with the Commodore key are 256-258.
+ * The debug host refuses a code above its machine's own largest.
  */
 export function panelKeyCode(input: unknown): number | undefined {
     return typeof input === "object" && input !== null && "code" in input && typeof input.code === "number"
-        && Number.isInteger(input.code) && input.code >= 0 && input.code < 256 ? input.code : undefined;
+        && Number.isInteger(input.code) && input.code >= 0 && input.code <= 258 ? input.code : undefined;
 }
 
 /** The display panel's page, with its script allowed by the nonce. */
@@ -127,13 +128,26 @@ select{font-family:inherit;font-size:12px;padding:1px 4px;border-radius:2px;back
 <button data-code="147" title="CLR, the shifted HOME: clears the screen and homes the cursor">Clr</button>
 <button id="pet-reset" title="A reset switch (or Ctrl+F12 or Ctrl+Break): the 6502, PIAs and VIA reset, keeping memory; the PET has no RESET key">Reset</button>
 </span>
+<span class="keys" data-machine="vic20">
+<button data-code="3" title="RUN/STOP (or Esc)">Run/Stop</button>
+<button data-code="256" title="RESTORE: the NMI, which does nothing unless a program asks it to, or RUN/STOP is down">Restore</button>
+<button data-code="257" title="RUN/STOP and RESTORE together: the kernal's warm start, back to READY. with the program kept">Stop+Restore</button>
+<button data-code="147" title="CLR, the shifted CLR/HOME: clears the screen and homes the cursor">Clr</button>
+<button data-code="19" title="HOME (or Home)">Home</button>
+<button data-code="258" title="SHIFT and the Commodore key: switches between the upper-case and graphics characters and the lower-case ones">C= Shift</button>
+<button data-code="133" title="f1">f1</button><button data-code="137" title="f2, the shifted f1">f2</button>
+<button data-code="134" title="f3">f3</button><button data-code="138" title="f4, the shifted f3">f4</button>
+<button data-code="135" title="f5">f5</button><button data-code="139" title="f6, the shifted f5">f6</button>
+<button data-code="136" title="f7">f7</button><button data-code="140" title="f8, the shifted f7">f8</button>
+<button id="vic20-reset" title="A reset switch on the expansion port (or Ctrl+F12 or Ctrl+Break): the 6502, the VIAs and the drives reset, keeping memory; the VIC-20 has no RESET key">Reset</button>
+</span>
 <span class="keys end">
 <button id="basic" hidden title="Opens the BASIC program in the machine's memory in an editor; saving puts it back">BASIC program</button>
 <label class="speed" title="How fast the machine runs, as a multiple of its clock. Sound plays only at 1x.">Speed <select id="speed" aria-label="Speed">
 <option value="1">1×</option><option value="2">2×</option><option value="4">4×</option><option value="8">8×</option><option value="max">Max</option>
 </select></label>
 </span>
-<span class="keys" data-machine="apple2 apple3 coco pet bbc atari800">
+<span class="keys" data-machine="apple2 apple3 coco pet vic20 bbc atari800">
 <button id="sound" title="What you hear while the machine runs at its real speed: off, the speaker, or, with the Mockingboard in slot 4, the speaker and the Mockingboard (which slows emulation by about a quarter)">Sound: speaker</button>
 <label class="volume" title="The sound's volume">Volume <input id="volume" type="range" min="0" max="100" step="1" value="50" aria-label="Volume"></label>
 </span>
@@ -156,8 +170,8 @@ const screen=document.getElementById('screen');
 let lastFrame;
 // The IIe's 560 dots span its 280-dot-wide picture; the Model I's 384x192 and the Color Computer's picture, with its
 // border, fill a 4:3 screen. The PET's 320x200 dots are square, and the Atari's 376 dots by 240
-// lines fill 4:3.
-const aspect={'apple2':'280/192','apple3':'280/192','trs80-model1':'4/3','trs80-model3':'4/3','trs80-model2':'4/3','kaypro2':'4/3','trs80-model100':'240/64','apple1':'280/192','coco':'4/3','altair':'4/3','pet':'320/200','bbc':'704/576','atari800':'4/3'};
+// lines fill 4:3, as the VIC-20's 200 dots by 248 lines (224 by 296 on PAL) do.
+const aspect={'vic20':'4/3','apple2':'280/192','apple3':'280/192','trs80-model1':'4/3','trs80-model3':'4/3','trs80-model2':'4/3','kaypro2':'4/3','trs80-model100':'240/64','apple1':'280/192','coco':'4/3','altair':'4/3','pet':'320/200','bbc':'704/576','atari800':'4/3'};
 // The picture is kept between frames: a running frame whose picture has not changed carries no pixels. The pixels
 // decode straight into the kept ImageData, and the canvas is resized only when the picture's size changes.
 let image;
@@ -172,9 +186,9 @@ speedSelect.addEventListener('change',()=>{
 function speedText(frame){
     const speed=frame.speed;
     if(!speed||typeof speed.actual!=='number')return [];
-    // Accelerated is the Model I's, Apple-1's, Color Computer's, PET's or Atari's fast cassette or the IIe's
+    // Accelerated is the Model I's, Apple-1's, Color Computer's, PET's, VIC-20's or Atari's fast cassette or the IIe's
     // fast disk, running flat out while the media moves.
-    const tapes=['trs80-model1','trs80-model3','apple1','coco','pet','bbc','atari800'];
+    const tapes=['trs80-model1','trs80-model3','apple1','coco','pet','vic20','bbc','atari800'];
     const fast=speed.accelerated===true?[tapes.includes(frame.machine)?'Fast tape':'Fast disk']:[];
     return [...(speed.setting==='max'?['Max']:[]),...fast,speed.actual.toFixed(2)+'×',(speed.hertz/1e6).toFixed(2)+' MHz'];
 }
@@ -218,8 +232,10 @@ function draw(frame){
     }
     if(!iie){
         const media=frame.media;
-        // The Apple-1 has a cassette and no disks.
-        const tape=media?.cassette?.path?['Tape '+(media.cassette.recording?'recording':'playing')+(media.cassette.motor?' · motor on':'')]:[];
+        // The Apple-1 has a cassette and no disks; the VIC-20's one Datasette has keys, as the PET's have.
+        const cassette=media?.cassette;
+        const state=cassette?.recording?'recording':cassette?.mode===undefined||cassette.mode==='playing'?'playing':'stopped';
+        const tape=cassette?.path?['Tape '+state+(cassette.motor?' · motor on':'')]:[];
         // The PET's two Datasettes, each with its keys: stopped, playing or recording.
         for(const port of [1,2]){
             const deck=media?.['cassette'+port];
@@ -228,9 +244,10 @@ function draw(frame){
         }
         // The Atari's drives are D1: to D4:, numbered from 0 like the others'.
         const drive=disk=>frame.machine==='atari800'?'D'+(disk.drive+1)+':':'D'+disk.drive;
-        // The TRS-80s name a drive and its cylinder; the PET's 4040 and 2040 name a unit's drive, as disk8-0, and a track.
+        // The TRS-80s name a drive and its cylinder; the PET's 4040 and 2040 name a unit's drive, as disk8-0, and a track,
+        // and the VIC-20's 1541 and 1540 their device, as disk8.
         const diskLabel=disk=>typeof disk.device==='string'
-            ?disk.device.replace(/^disk(\\d+)-(\\d)$/,'Unit $1 drive $2')+' track '+(Number.isInteger(disk.track)?disk.track:disk.track.toFixed(1))+(disk.motor?' · motor on':'')
+            ?disk.device.replace(/^disk(\\d+)-(\\d)$/,'Unit $1 drive $2').replace(/^disk(\\d+)$/,'Device $1')+' track '+(Number.isInteger(disk.track)?disk.track:disk.track.toFixed(1))+(disk.motor?' · motor on':'')
             :drive(disk)+' cylinder '+disk.cylinder+(disk.selected?' · selected':'');
         const disks=media?.disks?media.disks.filter(disk=>disk.mounted).map(diskLabel):[];
         document.getElementById('status').textContent=[running?'Running':frame.cycles+' cycles'].concat(running?speedText(frame):[],tape).join(' · ');
@@ -284,7 +301,8 @@ window.addEventListener('message',event=>{
     if(event.data&&typeof event.data.basic==='boolean'){document.getElementById('basic').hidden=!event.data.basic;return;}
     if(event.data&&event.data.ended){showOff(event.data.ended);return;}
     off.hidden=true;
-    const changed=lastFrame?.machine!==event.data?.machine||lastFrame?.model!==event.data?.model;
+    // A VIC-20 that changes standard changes its frame's size too.
+    const changed=lastFrame?.machine!==event.data?.machine||lastFrame?.model!==event.data?.model||lastFrame?.standard!==event.data?.standard;
     lastFrame=event.data;draw(lastFrame);
     // A frame without it, as the Apple III's or the Color Computer's, is a machine with no Mockingboard.
     mockingboard=lastFrame?.mockingboard===true;
@@ -431,7 +449,9 @@ const keys={
     'altair':{Enter:13,Backspace:8,Tab:9,Escape:27,Delete:127,ArrowLeft:8,ArrowRight:12,ArrowUp:11,ArrowDown:10},
     // The PET's keys are PETSCII: DEL 20, INST 148, the cursor keys 157, 29, 145 and 17, HOME 19 and STOP 3; Tab is
     // the business keyboard's TAB, which the graphics keyboard lacks.
-    'pet':{Enter:13,Backspace:20,Delete:20,Insert:148,ArrowLeft:157,ArrowRight:29,ArrowUp:145,ArrowDown:17,Home:19,Escape:3,Tab:9}
+    'pet':{Enter:13,Backspace:20,Delete:20,Insert:148,ArrowLeft:157,ArrowRight:29,ArrowUp:145,ArrowDown:17,Home:19,Escape:3,Tab:9},
+    // The VIC-20's are PETSCII too, as the PET's are; it has no TAB.
+    'vic20':{Enter:13,Backspace:20,Delete:20,Insert:148,ArrowLeft:157,ArrowRight:29,ArrowUp:145,ArrowDown:17,Home:19,Escape:3}
 };
 const hints={
     'apple2':'Ctrl+letter: control character · Ctrl+F12: CONTROL-RESET · left/right Alt: Open/Closed Apple',
@@ -446,6 +466,7 @@ const hints={
     'bbc':'Esc: ESCAPE · End: COPY · Scroll Lock: SHIFT LOCK · arrows: the cursor keys · the buttons: f0-f9 · Ctrl+F12: BREAK · Ctrl+Shift+F12: SHIFT-BREAK',
     'altair':'Ctrl+letter: control character · arrows: ^H ^J ^K ^L, as the ADM-3A sends them · Ctrl+F12: RESET',
     'pet':'Esc: STOP · Home: HOME · arrows: the cursor keys · Backspace: DEL · Insert: INST · Tab: TAB (business keyboard) · Ctrl+F12: reset',
+    'vic20':'Esc: RUN/STOP · Home: HOME · arrows: the cursor keys · Backspace: DEL · Insert: INST · the buttons: RESTORE, CLR, the Commodore key and f1-f8 · Ctrl+F12: reset',
     'atari800':'Esc: ESC · Backspace: BACK S · Home: CLEAR · arrows: the cursor keys · Pause: BREAK · the buttons: START, SELECT, OPTION and SYSTEM RESET · Ctrl+F12: off and on',
 };
 // The II and II Plus have no Apple keys: the same buttons are the game port's push buttons 0 and 1, and the keyboard
@@ -458,11 +479,13 @@ const ctrl=document.getElementById('ctrl');
 // rows are twice as tall as its dots are wide (560x384 at 1x); the Model I's dots are 2 wide by 3 tall on its 4:3
 // screen (768x576); the CoCo 1 and 2's 320x240 frame doubles to 640x480, and the CoCo 3's 704 dots by 249 lines
 // show its lines twice over, about 4:3; the PET's 320x200 doubles to 640x400, and the
-// Atari's 376 dots by 240 lines to 752x480, a little wider than 4:3. Sizes are in CSS pixels for the
+// Atari's 376 dots by 240 lines to 752x480, a little wider than 4:3. The VIC-20's dots are three wide by two tall,
+// 600x496 on NTSC and 672x592 on PAL, a little narrower than its 4:3 TV. Sizes are in CSS pixels for the
 // display's scaling, ratio physical pixels to each.
-const sharpBase={'apple2':[560,384],'apple3':[560,384],'trs80-model1':[768,576],'trs80-model3':[640,480],'trs80-model2':[640,576],'kaypro2':[560,480],'trs80-model100':[720,192],'apple1':[560,384],'coco':[640,480],'coco3':[704,498],'altair':[640,480],'pet':[640,400],'bbc':[704,576],'atari800':[752,480]};
+const sharpBase={'vic20':[600,496],'vic20pal':[672,592],'apple2':[560,384],'apple3':[560,384],'trs80-model1':[768,576],'trs80-model3':[640,480],'trs80-model2':[640,576],'kaypro2':[560,480],'trs80-model100':[720,192],'apple1':[560,384],'coco':[640,480],'coco3':[704,498],'altair':[640,480],'pet':[640,400],'bbc':[704,576],'atari800':[752,480]};
 function sharpSize(machine,width,height,ratio){
-    const key=machine==='coco'&&typeof lastFrame?.model==='string'&&lastFrame.model.endsWith('3')?'coco3':machine;
+    const key=machine==='coco'&&typeof lastFrame?.model==='string'&&lastFrame.model.endsWith('3')?'coco3'
+        :machine==='vic20'&&lastFrame?.standard==='pal'?'vic20pal':machine;
     const [w,h]=sharpBase[key]??sharpBase['apple2'];
     const scale=Math.floor(Math.min(width*ratio/w,height*ratio/h));
     return scale>=1?{width:w*scale/ratio,height:h*scale/ratio,scale}:null;
@@ -506,6 +529,7 @@ function showKeys(){
         :'CONTROL-RESET (or Ctrl+F12 or Ctrl+Break); with Open Apple down it restarts the machine';
     document.getElementById('sound').title=three?'What you hear while the machine runs at its real speed: off, or the speaker and the DAC'
         :machine()==='pet'?'What you hear while the machine runs at its real speed: off, or the speaker on the user port, which the VIA drives'
+        :machine()==='vic20'?'What you hear while the machine runs at its real speed: off, or the three tones and noise of the VIC, through the TV'
         :'What you hear while the machine runs at its real speed: off, the speaker, or, with the Mockingboard in slot 4, the speaker and the Mockingboard (which slows emulation by about a quarter)';
     for(const button of [0,1]){
         const element=document.querySelector('[data-button="'+button+'"]');
@@ -594,7 +618,7 @@ for(const button of document.querySelectorAll('[data-code]')){
     button.addEventListener('click',()=>{api.postMessage({code:Number(button.dataset.code)});screen.focus();});
 }
 ctrl.addEventListener('click',()=>{ctrl.setAttribute('aria-pressed',String(ctrl.getAttribute('aria-pressed')!=='true'));screen.focus();});
-for(const id of ['reset','trs80-reset','model3-reset','model2-reset','model100-reset','kaypro-reset','apple1-reset','coco-reset','pet-reset','altair-reset','bbc-reset']){
+for(const id of ['reset','trs80-reset','model3-reset','model2-reset','model100-reset','kaypro-reset','apple1-reset','coco-reset','pet-reset','vic20-reset','altair-reset','bbc-reset']){
     document.getElementById(id).addEventListener('click',event=>{api.postMessage(event.shiftKey?{command:'reset',shift:true}:{command:'reset'});screen.focus();});
 }
 for(const id of ['apple1-clear','altair-clear']){

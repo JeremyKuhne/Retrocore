@@ -14,6 +14,8 @@ namespace Retrocore.Tests;
 [TestClass]
 public sealed class DapTransportTests
 {
+    private static readonly TimeSpan s_threadTimeout = TimeSpan.FromSeconds(30);
+
     /// <summary>
     ///  Each request gets a response with its sequence number, command and the handler's body, numbered in order.
     /// </summary>
@@ -155,8 +157,7 @@ public sealed class DapTransportTests
         });
 
         events.Start();
-        transport.Run();
-        events.Join();
+        transport.Run(events.Join);
 
         List<JsonObject> messages = Frames(output.ToArray());
         messages.Should().HaveCount(Count * 2);
@@ -165,6 +166,110 @@ public sealed class DapTransportTests
             .Select(message => Body(message).Int("index") ?? -1)
             .Should().Equal(Enumerable.Range(0, Count));
     }
+
+    /// <summary>
+    ///  A slow pipe does not block control requests, reorder replies, or read pixels from a reused frame buffer.
+    /// </summary>
+    /// <returns>The test task.</returns>
+    [TestMethod]
+    public async Task ControlRequestsCanRunWhileOutputIsBackpressured()
+    {
+        using ManualResetEventSlim writing = new();
+        using ManualResetEventSlim release = new();
+        using ManualResetEventSlim controlled = new();
+        using GatedWriteStream output = new(writing, release);
+        using MemoryStream input = Input(Request(1, "initialize", []), Request(2, "produce", []), Request(3, "pause", []));
+        DapTransport transport = new(input, output);
+        transport.On("initialize", _ => new JsonObject());
+        transport.On("produce", _ =>
+        {
+            writing.Wait(s_threadTimeout).Should().BeTrue();
+            byte[] pixels = new byte[63 * 8192];
+            pixels[0] = 1;
+            transport.SendFrame(Frame(), pixels);
+            pixels[0] = 2;
+            transport.SendFrame(Frame(), pixels);
+            pixels[0] = 3;
+            return new JsonObject();
+        });
+
+        transport.On("pause", _ =>
+        {
+            controlled.Set();
+            return new JsonObject();
+        });
+
+        Task host = StartHost(() => transport.Run(WaitForRelease));
+        try
+        {
+            controlled.Wait(s_threadTimeout).Should().BeTrue("the writer is still blocked");
+            transport.Backpressured.Should().BeTrue();
+        }
+        finally
+        {
+            release.Set();
+            await host.WaitAsync(s_threadTimeout).ConfigureAwait(continueOnCapturedContext: false);
+        }
+
+        List<JsonObject> messages = Frames(output.ToArray());
+        messages.Select(message => message.Int("seq")).Should().Equal(1, 2, 3, 4, 5);
+        messages.Select(message => message.String("command") ?? message.String("event"))
+            .Should().Equal("initialize", "retro/frame", "retro/frame", "produce", "pause");
+
+        Pixels(messages[1])[0].Should().Be(1);
+        Pixels(messages[2])[0].Should().Be(2);
+        transport.Backpressured.Should().BeFalse();
+
+        void WaitForRelease() => release.Wait(s_threadTimeout).Should().BeTrue("shutdown waits until the test releases output");
+        static JsonObject Frame() => new() { ["video"] = new JsonObject() };
+        static byte[] Pixels(JsonObject message) =>
+            Convert.FromBase64String(Body(message).Object("video")?.String("pixels")
+                ?? throw new AssertFailedException("No frame pixels."));
+    }
+
+    /// <summary>
+    ///  Disconnect returns even if the peer keeps the output open without reading; only the blocked write retains
+    ///  ownership of its payload.
+    /// </summary>
+    /// <returns>The test task.</returns>
+    [TestMethod]
+    public async Task DisconnectAbandonsStalledOutput()
+    {
+        using ManualResetEventSlim writing = new();
+        using ManualResetEventSlim release = new();
+        using GatedWriteStream output = new(writing, release);
+        using MemoryStream input = Input(Request(1, "disconnect", []));
+        TaskCompletionSource inFlightReleased = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        TaskCompletionSource queuedReleased = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        DapTransport transport = new(input, output);
+        transport.On("disconnect", _ =>
+        {
+            transport.SendEvent("output", writer => writer.WriteNullValue(), release: inFlightReleased.SetResult);
+            writing.Wait(s_threadTimeout).Should().BeTrue();
+            transport.SendEvent("output", writer => writer.WriteNullValue(), release: queuedReleased.SetResult);
+            return Stopped(transport);
+        });
+
+        bool ended = false;
+        Task host = StartHost(() => transport.Run(() => ended = true, outputDrainMilliseconds: 0));
+        try
+        {
+            await host.WaitAsync(s_threadTimeout).ConfigureAwait(continueOnCapturedContext: false);
+            ended.Should().BeTrue();
+            transport.OutputFailed.Should().BeTrue();
+            queuedReleased.Task.IsCompletedSuccessfully.Should().BeTrue();
+            inFlightReleased.Task.IsCompleted.Should().BeFalse("the peer still blocks the first write");
+        }
+        finally
+        {
+            release.Set();
+            await host.WaitAsync(s_threadTimeout).ConfigureAwait(continueOnCapturedContext: false);
+            await inFlightReleased.Task.WaitAsync(s_threadTimeout).ConfigureAwait(continueOnCapturedContext: false);
+        }
+    }
+
+    private static Task StartHost(Action run) =>
+        Task.Factory.StartNew(run, CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default);
 
     private static List<JsonObject> Exchange(Action<DapTransport> register, params byte[][] requests)
     {

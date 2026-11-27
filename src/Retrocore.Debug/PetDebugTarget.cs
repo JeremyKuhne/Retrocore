@@ -22,6 +22,11 @@ internal sealed partial class PetDebugTarget : IDebugTarget
     private static readonly DebugRegisters s_registers = new(M6502Isa.Description);
 
     private readonly PetMachine _machine;
+    private ushort _editorWait;
+    private ushort _inputDevice;
+    private ushort _keyCount;
+    private ushort _keyBuffer;
+    private GuestInputPath? _editorInput;
     private readonly DebugCallStack _calls;
     private readonly byte[] _pixels;
     private string _screen;
@@ -291,8 +296,9 @@ internal sealed partial class PetDebugTarget : IDebugTarget
 
         Assembler.AssemblyResult basic = PetSdkModules.AssembleBasic(sdk, model, OriginalBasic, BasicSource);
         Assembler.AssemblyResult editor = PetSdkModules.AssembleEditor(sdk, model);
+        bool editorMatches = Matches(PetSdkModules.EditorImage(basic, editor, model), PetSdkModules.EditorOrigin);
         if (Matches(PetSdkModules.BasicImage(basic, model).Span, PetSdkModules.BasicOrigin(model))
-            && Matches(PetSdkModules.EditorImage(basic, editor, model), PetSdkModules.EditorOrigin))
+            && editorMatches)
         {
             debug.Add(new SourceMapModule(basic, PetMemoryArea.Basic, collapseSingleStatementMacros: true));
             debug.Add(new SourceMapModule(editor, PetMemoryArea.Editor));
@@ -303,7 +309,49 @@ internal sealed partial class PetDebugTarget : IDebugTarget
         if (Matches(kernal.Sections[0].Bytes.Span, PetSdkModules.KernalOrigin))
         {
             debug.Add(new SourceMapModule(kernal, PetMemoryArea.Kernal));
+            if (editorMatches)
+            {
+                _editorWait = InputFirmware.Symbol(editor, "LOOP3");
+                _inputDevice = InputFirmware.Symbol(editor, "DFLTN");
+                _keyCount = InputFirmware.Symbol(editor, "NDX");
+                _keyBuffer = InputFirmware.Symbol(editor, "KEYD");
+                if (_editorWait != 0 && _inputDevice != 0 && _keyCount != 0 && _keyBuffer != 0)
+                {
+                    _editorInput = new($"petBasic{model.BasicVersion()}Editor", "petKeyboardBuffer", SendEditorKey);
+                }
+            }
         }
+    }
+
+    /// <inheritdoc/>
+    public bool SupportsGuestInput => true;
+
+    /// <inheritdoc/>
+    public int? PendingKeys => _machine.Keyboard.Pending;
+
+    /// <inheritdoc/>
+    public GuestInputPath? WaitingForInput() =>
+        ProgramCounter == _editorWait
+            && _editorInput is not null
+            && !_machine.Keyboard.IsTyping
+            && !_machine.Keyboard.AnyPressed
+            && Peek(_inputDevice) == 0
+            && Peek(_keyCount) == 0
+                ? _editorInput
+                : null;
+
+    private InputReceipt SendEditorKey(int code)
+    {
+        int petscii = code is >= 'a' and <= 'z' ? code - 32 : code;
+        if (petscii is not (>= 0x20 and <= 0x5F or '\r') && (petscii != '\t' || !_machine.Keyboard.Business))
+        {
+            return InputReceipt.Rejected;
+        }
+
+        // The verified editor's buffer holds ten. Only publish a single byte to an empty buffer.
+        Poke(_keyBuffer, (byte)petscii);
+        Poke(_keyCount, 1);
+        return InputReceipt.Accepted;
     }
 
     /// <inheritdoc/>
@@ -314,6 +362,13 @@ internal sealed partial class PetDebugTarget : IDebugTarget
     ///  </para>
     /// </remarks>
     public bool Key(int code) => code is >= 0 and <= 0xFF && _machine.Keyboard.Type((byte)code);
+
+    /// <inheritdoc/>
+    public bool SetFastIo(bool enabled)
+    {
+        _machine.Keyboard.FastTyping = enabled;
+        return true;
+    }
 
     /// <inheritdoc/>
     /// <remarks>
@@ -367,6 +422,16 @@ internal sealed partial class PetDebugTarget : IDebugTarget
         ["screens"] = Screens.ToJsonArray(),
         ["running"] = running
     };
+
+    /// <inheritdoc/>
+    public DebugTextSurface? ReadTextSurface(string surface)
+    {
+        if (surface is not ("visibleText" or "textMemory")) { return null; }
+        bool enabled = _machine.Video.Enabled;
+        return new(DebugMachines.Pet, ModelId(_machine.Model), enabled ? "text" : "blank", 40, 25, 0,
+            enabled || surface == "textMemory" ? TextRows() : [],
+            _machine.Video.Lowercase ? "petLowercaseScreenCodes" : "petGraphicsScreenCodes");
+    }
 
     /// <inheritdoc/>
     public IReadOnlyList<string> Screens => DebugScreens.Monochrome;
@@ -504,7 +569,8 @@ internal sealed partial class PetDebugTarget : IDebugTarget
         _soundMode = mode;
     }
 
-    private JsonObject VideoState() => new JsonObject
+    /// <inheritdoc/>
+    public JsonObject VideoState() => new JsonObject
     {
         ["width"] = _machine.Video.Width,
         ["height"] = _machine.Video.Height,

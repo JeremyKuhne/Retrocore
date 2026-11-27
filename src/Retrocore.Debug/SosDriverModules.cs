@@ -44,6 +44,7 @@ internal sealed class SosDriverModules
         [".RAM"] = ["Ram", "TitanRam"]
     };
 
+    private readonly Apple3DebugTarget _target;
     private readonly Apple3Bus _bus;
     private readonly string _drivers;
     private readonly ushort _maxDeviceNumber;
@@ -55,14 +56,20 @@ internal sealed class SosDriverModules
     private readonly HashSet<(string Name, ushort Dib, byte Bank)> _mapped = [];
 
     /// <summary>
+    ///  Gets the discovered console input profile, if one has been loaded.
+    /// </summary>
+    internal SosConsoleInput? Console { get; private set; }
+
+    /// <summary>
     ///  Prepares to map drivers for a kernel.
     /// </summary>
-    /// <param name="bus">The machine's bus.</param>
+    /// <param name="target">The machine running SOS.</param>
     /// <param name="kernel">SOS's kernel, assembled, for the device table's addresses.</param>
     /// <param name="drivers">The <c>Sos/Drivers</c> folder.</param>
-    internal SosDriverModules(Apple3Bus bus, AssemblyResult kernel, string drivers)
+    internal SosDriverModules(Apple3DebugTarget target, AssemblyResult kernel, string drivers)
     {
-        _bus = bus;
+        _target = target;
+        _bus = target.Machine.Bus;
         _drivers = drivers;
         Dictionary<string, long> symbols = kernel.SymbolDefinitions.ToDictionary(symbol => symbol.Name, symbol => symbol.Value);
         _maxDeviceNumber = Symbol(symbols, "DEVMGR::MAX_DNUM");
@@ -101,6 +108,17 @@ internal sealed class SosDriverModules
                 if (folders.Length > 1 && !Matches(driver, bank, dib)) { continue; }
 
                 debug.Add(new SourceMapModule(driver, _bus.BankArea(bank)));
+                if (name == ".CONSOLE" && release is 0x1300 or 0x1310)
+                {
+                    int slot = device;
+                    Console = SosConsoleInput.Create(_target, driver, dib, bank, release, () =>
+                        KernelIsRunning()
+                            && slot <= _bus.Peek(_maxDeviceNumber)
+                            && _bus.Peek((ushort)(_bank + slot)) == bank
+                            && (_bus.Peek((ushort)(_dibLow + slot)) | (_bus.Peek((ushort)(_dibHigh + slot)) << 8)) == dib + DibName
+                            && DeviceName(bank, dib) == ".CONSOLE");
+                }
+
                 added = true;
                 break;
             }

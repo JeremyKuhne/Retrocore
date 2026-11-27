@@ -40,7 +40,7 @@ internal sealed class DapTestClient : DisposableBase
         _hostOutput = new(PipeDirection.Out, _fromHost.ClientSafePipeHandle);
         DapTransport transport = new(_hostInput, _hostOutput);
         _session.Register(transport, transport.Stop);
-        _host = new(transport.Run) { IsBackground = true };
+        _host = new(() => transport.Run(_session.End)) { IsBackground = true };
 
         _reader = new(Read) { IsBackground = true };
         _host.Start();
@@ -122,6 +122,20 @@ internal sealed class DapTestClient : DisposableBase
         while (_events.TryTake(out JsonObject? message, Remaining(end)))
         {
             message.String("event").Should().NotBe("stopped", because);
+        }
+    }
+
+    /// <summary>
+    ///  Checks that no event with a name comes for a while, passing over other events.
+    /// </summary>
+    /// <param name="name">The event that must not come.</param>
+    /// <param name="wait">How long to watch.</param>
+    internal void NoEvent(string name, TimeSpan wait)
+    {
+        DateTime end = DateTime.UtcNow + wait;
+        while (_events.TryTake(out JsonObject? message, Remaining(end)))
+        {
+            message.String("event").Should().NotBe(name);
         }
     }
 

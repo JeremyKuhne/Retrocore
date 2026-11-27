@@ -143,11 +143,7 @@ if (args.Length > 0 && args[0] is "--boot-probe" or "--boot-state")
 DebugSession session = new();
 DapTransport transport = new(Console.OpenStandardInput(), Console.OpenStandardOutput());
 session.Register(transport, transport.Stop);
-try
-{
-    transport.Run();
-}
-finally
+transport.Run(() =>
 {
     // A client that closes the pipe without disconnecting still gets its recordings saved. There is no client to tell
     // if that fails, so it goes to standard error.
@@ -159,4 +155,7 @@ finally
     {
         Console.Error.WriteLine($"A recording could not be saved: {exception.Message}");
     }
-}
+});
+
+// A peer that stopped draining output cannot receive a final error on that same wire.
+if (transport.OutputFailed) { Environment.ExitCode = 1; }

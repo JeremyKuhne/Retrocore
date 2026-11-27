@@ -30,6 +30,8 @@ internal sealed partial class Apple1DebugTarget : DisposableBase, IDebugTarget, 
     // The terminal is white on black; a monitor of another phosphor shows it in that color.
     private string _screen = DebugScreens.Green;
     private bool _resetPending;
+    private GuestInputPath? _monitorInput;
+    private GuestInputPath? _basicInput;
 
     // The path a recording is saved to when its tape is ejected.
     private string? _recordingPath;
@@ -338,7 +340,12 @@ internal sealed partial class Apple1DebugTarget : DisposableBase, IDebugTarget, 
         string monitor = Path.Join(roms, "WozMonitor.asm");
         if (File.Exists(monitor))
         {
-            debug.Add(new SourceMapModule(Apple1SdkModules.AssembleMonitor(monitor), Apple1MemoryArea.Monitor));
+            Assembler.AssemblyResult result = Apple1SdkModules.AssembleMonitor(monitor);
+            debug.Add(new SourceMapModule(result, Apple1MemoryArea.Monitor));
+            if (InputFirmware.Matches(this, 0xFF00, result.Sections[0].Bytes.Span))
+            {
+                _monitorInput = PiaInput("wozMonitor", 0xFF29);
+            }
         }
 
         string cassette = Path.Join(roms, "Aci.asm");
@@ -353,7 +360,47 @@ internal sealed partial class Apple1DebugTarget : DisposableBase, IDebugTarget, 
             Assembler.AssemblyResult result = Apple1SdkModules.AssembleBasic(basic);
             debug.Add(new SourceMapModule(result, Apple1BasicArea.Basic));
             SetBasicSymbols(result.Symbols);
+            _basicInput = PiaInput("apple1Basic", 0xE003);
         }
+    }
+
+    /// <inheritdoc/>
+    public bool SupportsGuestInput => _monitorInput is not null || _basicInput is not null;
+
+    /// <inheritdoc/>
+    public int? PendingKeys => _machine.Keyboard.Pending + ((_machine.Bus.Pia.ControlA & 0x80) != 0 ? 1 : 0);
+
+    /// <inheritdoc/>
+    public GuestInputPath? WaitingForInput()
+    {
+        ushort pc = ProgramCounter;
+        if (pc is not (0xFF29 or 0xE003) || PendingKeys != 0 || (_machine.Bus.Pia.ControlA & 6) != 6) { return null; }
+        if (!InputFirmware.Matches(this, pc, [0xAD, 0x11, 0xD0, 0x10, 0xFB, 0xAD, 0x10, 0xD0])) { return null; }
+        return pc == 0xFF29 ? _monitorInput : BasicActive ? _basicInput : null;
+    }
+
+    private GuestInputPath PiaInput(string profile, ushort poll) => new(profile, "keyboardDevice",
+        code => Key(code) ? InputReceipt.Pending : InputReceipt.Rejected,
+        code =>
+        {
+            if (PendingKeys != 0) { return InputReceipt.Pending; }
+            int expected = (code is >= 'a' and <= 'z' ? code - 32 : code) | 0x80;
+            ProcessorCycle last = LastCycle;
+            return IsInstructionBoundary
+                && ProgramCounter == poll + 8
+                && last.Operation == BusOperation.Read
+                && last.Address == 0xD010
+                && last.Value == expected
+                    ? InputReceipt.Accepted
+                    : InputReceipt.Unconfirmed;
+        });
+
+    /// <inheritdoc/>
+    public bool SetConsoleSink(string name, Action<byte>? sink)
+    {
+        if (name != "apple1Terminal") { return false; }
+        _machine.Terminal.AcceptedByte = sink;
+        return true;
     }
 
     /// <inheritdoc/>
@@ -365,8 +412,17 @@ internal sealed partial class Apple1DebugTarget : DisposableBase, IDebugTarget, 
     }
 
     /// <inheritdoc/>
+    public bool SetFastIo(bool enabled)
+    {
+        _machine.Keyboard.FastTyping = enabled;
+        _machine.Terminal.FastOutput = enabled;
+        return true;
+    }
+
+    /// <inheritdoc/>
     public void Reset()
     {
+        _machine.Keyboard.Clear();
         _machine.Reset();
         _resetPending = true;
     }
@@ -392,16 +448,30 @@ internal sealed partial class Apple1DebugTarget : DisposableBase, IDebugTarget, 
     }
 
     /// <inheritdoc/>
+    public DebugTextSurface? ReadTextSurface(string surface)
+    {
+        if (surface != "visibleText") { return null; }
+        Apple1Terminal terminal = _machine.Terminal;
+        return new(DebugMachines.Apple1, Model: null, "terminal", Apple1Terminal.Columns, Apple1Terminal.Rows, 0,
+            TerminalRows(), "apple1TerminalAscii", (terminal.CursorRow, terminal.CursorColumn));
+    }
+
+    private string[] TerminalRows()
+    {
+        string[] rows = new string[Apple1Terminal.Rows];
+        for (int row = 0; row < rows.Length; row++) { rows[row] = _machine.Terminal.Line(row); }
+        return rows;
+    }
+
+    /// <inheritdoc/>
     public JsonObject DisplayState(bool running)
     {
         Apple1Terminal terminal = _machine.Terminal;
-        string[] rows = new string[Apple1Terminal.Rows];
-        for (int row = 0; row < rows.Length; row++) { rows[row] = terminal.Line(row); }
         return new JsonObject
         {
             ["machine"] = DebugMachines.Apple1,
             ["columns"] = Apple1Terminal.Columns,
-            ["rows"] = rows.ToJsonArray(),
+            ["rows"] = TerminalRows().ToJsonArray(),
             ["cursor"] = new JsonObject { ["row"] = terminal.CursorRow, ["column"] = terminal.CursorColumn },
             ["cycles"] = CycleCount,
             ["video"] = VideoState(),
@@ -579,7 +649,8 @@ internal sealed partial class Apple1DebugTarget : DisposableBase, IDebugTarget, 
         return new JsonObject { ["cassette"] = cassette };
     }
 
-    private JsonObject VideoState() => new JsonObject
+    /// <inheritdoc/>
+    public JsonObject VideoState() => new JsonObject
     {
         ["width"] = _machine.Terminal.Width,
         ["height"] = _machine.Terminal.Height,

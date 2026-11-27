@@ -29,6 +29,7 @@ internal sealed partial class BbcDebugTarget : IDebugTarget
     private static readonly DebugRegisters s_registers = new(M6502Isa.Description);
 
     private readonly BbcMachine _machine;
+    private BbcMosInput? _mosInput;
     private readonly DebugCallStack _calls;
     private readonly byte[] _pixels;
     private DebugAudioSink? _sound;
@@ -290,7 +291,9 @@ internal sealed partial class BbcDebugTarget : IDebugTarget
         if (!File.Exists(Path.Join(sdk, "Mos.asm"))) { return; }
         if (BbcSdkModules.IsMos(_machine.Bus.MosRom))
         {
-            debug.Add(new SourceMapModule(BbcSdkModules.AssembleMos(sdk), BbcMemoryArea.Mos));
+            Assembler.AssemblyResult mos = BbcSdkModules.AssembleMos(sdk);
+            debug.Add(new SourceMapModule(mos, BbcMemoryArea.Mos));
+            _mosInput = new(this, mos);
         }
 
         for (int socket = 0; socket < BbcRoms.Sockets; socket++)
@@ -318,6 +321,22 @@ internal sealed partial class BbcDebugTarget : IDebugTarget
     ///  </para>
     /// </remarks>
     public bool Key(int code) => _machine.Keyboard.Type((byte)code);
+
+    /// <inheritdoc/>
+    public bool SupportsGuestInput => true;
+
+    /// <inheritdoc/>
+    public int? PendingKeys => _machine.Keyboard.Pending;
+
+    /// <inheritdoc/>
+    public GuestInputPath? WaitingForInput() => _mosInput?.Waiting(ProgramCounter);
+
+    /// <inheritdoc/>
+    public bool SetFastIo(bool enabled)
+    {
+        _machine.Keyboard.FastTyping = enabled;
+        return true;
+    }
 
     /// <inheritdoc/>
     /// <remarks>
@@ -388,6 +407,20 @@ internal sealed partial class BbcDebugTarget : IDebugTarget
             ["screens"] = Screens.ToJsonArray(),
             ["running"] = running
         };
+    }
+
+    /// <inheritdoc/>
+    public DebugTextSurface? ReadTextSurface(string surface)
+    {
+        if (surface != "visibleText") { return null; }
+        BbcVideo video = _machine.Video;
+        int rows = video.Crtc[6];
+        int bytesPerCharacter = video.Teletext ? 1 : Math.Max(1, 8 / ((2 << ((video.Control >> 2) & 3)) / (video.FastClock ? 2 : 1)));
+        int columns = video.Crtc[1] / bytesPerCharacter;
+        bool fontHeight = (video.Crtc[9] & 31) == 7;
+        return new(DebugMachines.Bbc, ModelName, video.Teletext ? "teletext" : "bitmap", columns, rows, 0,
+            video.Teletext || fontHeight ? _machine.ReadTextScreen() : [],
+            video.Teletext ? "bbcTeletextCodes" : fontHeight ? "bbcMosFontInference" : "unsupportedRasterHeight");
     }
 
     /// <inheritdoc/>
@@ -471,7 +504,8 @@ internal sealed partial class BbcDebugTarget : IDebugTarget
         _soundMode = mode;
     }
 
-    private JsonObject VideoState() => new JsonObject
+    /// <inheritdoc/>
+    public JsonObject VideoState() => new JsonObject
     {
         ["width"] = _machine.Video.Width,
         ["height"] = _machine.Video.Height,

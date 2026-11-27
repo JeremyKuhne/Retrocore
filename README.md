@@ -179,6 +179,8 @@ its memory bank and active only while memory still holds the bytes it assembled 
 code never shows stale source lines. The [extension README](extension/README.md) covers all launch options; the
 [Apple II](docs/Apple2.md), [Model I](docs/Trs80ModelI.md), [Color Computer](docs/Coco.md),
 [BBC Micro](docs/BbcMicro.md) and [Atari](docs/Atari800.md) guides cover each machine.
+For headless scripts, [Debug Adapter automation](docs/DebugAdapter.md) describes verified keyboard input,
+run conditions, and text and screen snapshots.
 
 ## SDK ROM sources
 

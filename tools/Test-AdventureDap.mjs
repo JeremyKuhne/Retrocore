@@ -27,6 +27,18 @@ import assert from "node:assert/strict";
 
 const root = resolve(import.meta.dirname, "..");
 const sample = join(root, "sample", "adventure");
+const ioModeOverride = process.env.RETROCORE_DAP_IO_MODE;
+const inputBackend = process.env.RETROCORE_DAP_INPUT ?? "guestDemand";
+assert.ok(ioModeOverride === undefined || ioModeOverride === "realistic" || ioModeOverride === "fast",
+    "RETROCORE_DAP_IO_MODE must be realistic or fast");
+assert.ok(inputBackend === "physical" || inputBackend === "guestDemand", "RETROCORE_DAP_INPUT must be physical or guestDemand");
+
+// Transcripts are exact with either peripheral timing, so every target defaults to fast; realistic timing would pace
+// every Apple-1 byte through its beam-synchronized terminal at hardware speed. RETROCORE_DAP_IO_MODE=realistic checks
+// the games with hardware peripheral timing.
+const ioModeFor = () => ioModeOverride ?? "fast";
+console.log(`Adventure DAP: ${inputBackend} input (physical on Apple-1), `
+    + `${ioModeFor()} peripheral timing`);
 
 // The targets played, each with its platform folder and the transcripts it plays. The bare Apple III's console is
 // built but not played: a bare Apple III has no character set loaded. Its sos target plays, with its own console.
@@ -35,7 +47,7 @@ const plays = {
     "apple1-wozmon": { family: "apple1", transcripts: ["pirate-win"], hex: true },
     pet: { family: "pet", transcripts: ["pirate-win", "pirate-die"] },
     "pet-basic": { family: "pet", transcripts: ["pirate-win", "pirate-die"] },
-    "apple3-sos": { family: "apple3", folder: "sos", transcripts: ["pirate-win", "pirate-die"], typeAtPrompt: true },
+    "apple3-sos": { family: "apple3", folder: "sos", transcripts: ["pirate-win", "pirate-die"] },
     "pet-disk": { family: "pet", transcripts: ["pirate-win"], needs: "the 4040's ROMs" },
     apple2: { family: "apple2", transcripts: ["pirate-win", "pirate-die"] },
     "apple2-dos": { family: "apple2", transcripts: ["pirate-win", "pirate-die"] },
@@ -66,8 +78,6 @@ const screens = {
         expected: "The game is now over."
     }
 };
-const gameOver = "The game is now over.\n";
-
 // The line of the first instruction of a routine of a console.s, which each call reaches once.
 function firstLine(consoleSource, routine) {
     const lines = readFileSync(consoleSource, "utf8").split(/\r?\n/);
@@ -98,8 +108,9 @@ async function checkHex(target, entry) {
     console.log(`${target}: its hex stores the ${bytes} bytes the launch loaded, and ${run} runs them.`);
 }
 
-const { request, event, events, fail, close, failure } = startDap(root);
+const { request, event, events, fail, close, failure, received } = startDap(root);
 const skippedTargets = [];
+const measured = { prepMs: 0, playMs: 0, prepCycles: 0, playCycles: 0 };
 // A whole run takes about two minutes; each play may take three.
 const timeout = setTimeout(() => fail(new Error("Adventure DAP integration timed out.")),
     180000 * Math.max(1, targets.reduce((count, target) => count + (plays[target]?.transcripts.length ?? 0), 0)));
@@ -121,6 +132,23 @@ function transcript(commands) {
     return text;
 }
 
+async function addressOf(routine) {
+    const result = await request("evaluate", { expression: `Console::${routine}`, context: "repl" });
+    const match = /^\$([0-9A-F]+)\b/i.exec(result.result);
+    assert.ok(match, `${routine} resolves to an instruction address: ${result.result}`);
+    return parseInt(match[1], 16);
+}
+
+async function runTo(address, input) {
+    const wait = await request("retro/runUntil", {
+        stopOn: { kind: "instruction", address }, input, policy: "scripted", maxCycles: 1_000_000_000
+    });
+    const result = await event("retro/run/result", body => body.launchId === wait.launchId && body.runId === wait.runId);
+    const stopped = await event("stopped");
+    assert.notEqual(stopped.reason, "exception", `the machine stopped: ${stopped.description}`);
+    return result;
+}
+
 try {
     await request("initialize", { adapterID: "retrocore", linesStartAt1: true, columnsStartAt1: true });
     for (const target of targets) {
@@ -132,15 +160,21 @@ try {
         let skipped = false;
         for (const name of transcripts) {
             if (skipped) break;
-            const commands = readFileSync(join(sample, "games", `${name}.in`), "utf8").split(/\r?\n/);
-            if (commands.at(-1) === "") commands.pop();
+            const script = readFileSync(join(sample, "games", `${name}.in`), "utf8").split(/\r?\n/);
+            if (script.at(-1) === "") script.pop();
             const expected = readFileSync(join(sample, "games", `${name}.out`), "utf8").replace(/\r\n/g, "\n");
+            // test-drown ends before its last scripted command. Compare both backends on the actual reference work.
+            const commands = [...expected.matchAll(/^> (.*)$/gm)].map(match => match[1]);
+            assert.ok(commands.length > 0, `${name}: the reference ran commands`);
+            assert.deepEqual(script.slice(0, commands.length), commands, `${name}: the reference used this script`);
             events.length = 0;
-            const launchArgs = { project: sample, target, stopOnEntry: false, speed: "max", sound: "off", logpointLimit: 0,
-                checkContracts: "stop" };
+            const launchArgs = { project: sample, target, stopOnEntry: true, speed: "max", sound: "off", textOnly: true,
+                ioMode: ioModeFor(),
+                logpointLimit: 0, checkContracts: "stop" };
 
             // A target that needs dumps the SDK does not build, such as the 4040's ROMs for the PET's disk, is skipped,
             // and reported as skipped, when the launch does not find them.
+            const preparationStarted = performance.now();
             let launched;
             try {
                 launched = await request("launch", launchArgs);
@@ -158,28 +192,36 @@ try {
                 { line: readLine, logMessage: "READ" }, { line: write, logMessage: "{A,d}" }
             ] });
             assert.ok(set.breakpoints.every(breakpoint => breakpoint.verified), "the console's logpoints map to their source");
+            const readAddress = await addressOf("ReadLine");
+            const finishAddress = await addressOf("Finish");
             await request("configurationDone");
+            assert.equal((await event("stopped")).reason, "entry");
 
-            // Under SOS, keys typed before the console driver is open are lost, so they go in once the engine first
-            // reads a line, as a user would type them.
-            if (plays[target].typeAtPrompt) {
-                for (const end = performance.now() + 60000; !events.some(message => message.event === "output" && message.body.output.trim() === "READ");) {
-                    assert.ok(performance.now() < end, `${target} ${name}: the engine reads a line`);
-                    await new Promise(done => setTimeout(done, 100));
-                }
+            // This application's ReadLine is a stable start barrier even when preceded by an OS boot. Apple-1's
+            // own RAM PIA loop is not a verified firmware demand path, so use physical input there explicitly.
+            const ready = await runTo(readAddress);
+            assert.equal(ready.outcome, "matched", `${target} ${name}: first application read`);
+            measured.prepMs += performance.now() - preparationStarted;
+            measured.prepCycles += ready.cycles - ready.startCycle;
+            const backend = family === "apple1" ? "physical" : inputBackend;
+            const text = script.slice(0, commands.length).map(command => `${command}\n`).join("");
+            const playStarted = performance.now();
+            const result = await runTo(finishAddress, { text, backend });
+            measured.playMs += performance.now() - playStarted;
+            measured.playCycles += result.cycles - result.startCycle;
+            if (result.outcome !== "matched") {
+                console.log(`${target} ${name}: partial transcript\n${transcript(commands)}\n${JSON.stringify(result)}`);
             }
-
-            await request("retro/type", { text: commands.map(command => `${command}\n`).join("") });
-
-            // The engine runs to the end of the game.
-            for (const end = performance.now() + 180000; performance.now() < end && !transcript(commands).endsWith(gameOver);) {
-                const broken = events.find(message => message.event === "stopped" && message.body.reason === "exception");
-                assert.ok(!broken, `${target} ${name}: the machine stopped: ${broken?.body.description}`);
-                await new Promise(done => setTimeout(done, 200));
+            assert.equal(result.outcome, "matched", `${target} ${name}: the game reaches Console::Finish`);
+            assert.equal(result.input.skipped + result.input.rejected + result.input.cancelled + result.input.pending, 0,
+                `${target} ${name}: every command byte was delivered`);
+            assert.equal(result.input.delivered, text.length, `${target} ${name}: all mapped bytes were delivered`);
+            if (backend === "guestDemand") {
+                assert.equal(result.input.unconfirmed, 0, `${target} ${name}: no unconfirmed delivery`);
+                assert.equal(result.input.accepted, text.length, `${target} ${name}: all mapped bytes were admitted`);
             }
-
-            const stopped = events.find(message => message.event === "stopped" && message.body.reason === "exception");
-            assert.ok(!stopped, `${target} ${name}: the machine stopped: ${stopped?.body.description}`);
+            assert.ok(!events.some(message => ["retro/frame", "retro/cycles", "retro/audio"].includes(message.event)),
+                `${target} ${name}: text-only launch suppresses video, audio and cycle events`);
             const played = transcript(commands);
             let differs = 0;
             while (differs < played.length && played[differs] === expected[differs]) differs++;
@@ -191,14 +233,14 @@ try {
 
             // The Apple II's screen shows it in capitals, as the Apple II Plus has no lowercase.
             if (family === "apple2") {
-                const screen = (await request("apple2/text")).rows.join("\n");
+                const screen = (await request("retro/text")).rows.join("\n");
                 assert.match(screen, /^THE GAME IS NOW OVER\. *$/m, `${name}: the screen shows the game's end:\n${screen}`);
             }
 
             // The Apple III's console under SOS shows it too, through the console driver, in the character set SOS
             // loaded.
             if (family === "apple3") {
-                const screen = (await request("retro/display")).rows.join("\n");
+                const screen = (await request("retro/text")).rows.join("\n");
                 assert.match(screen, /^The game is now over\. *$/m, `${target} ${name}: the screen shows the game's end:\n${screen}`);
             }
 
@@ -214,9 +256,7 @@ try {
                 const screen = (wraps ? [...bytes, ...bytes] : bytes).map(text).join("");
                 assert.ok(screen.includes(end), `${target} ${name}: the screen shows "${end}"`);
             }
-            await request("pause", { threadId: 1 });
-            await event("stopped");
-            console.log(`${target} ${name}: ${commands.length} commands, ${played.length} characters, as the reference engine plays them.`);
+            console.log(`${target} ${name} (${backend}): ${commands.length} commands, ${played.length} characters, exact transcript.`);
         }
     }
 
@@ -228,6 +268,7 @@ try {
     if (skippedTargets.length !== 0) {
         console.log(`Adventure DAP skipped ${skippedTargets.join(", ")}: not played, so not passed, as their dumps were not found.`);
     }
+    console.log(`Adventure work: ${JSON.stringify({ ...measured, ...received() })}`);
 } finally {
     clearTimeout(timeout);
     close();

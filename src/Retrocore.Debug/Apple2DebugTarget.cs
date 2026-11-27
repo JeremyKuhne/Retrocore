@@ -28,6 +28,7 @@ internal sealed partial class Apple2DebugTarget : DisposableBase, IZ80CardHost
     private readonly Apple2Model _model;
     private readonly DebugCallStack _calls;
     private readonly byte[] _pixels = new byte[Apple2Video.Width * Apple2Video.Height * 4];
+    private bool _fastIo;
 
     // The sectors per track of each slot's Disk II firmware, when it was built from the SDK's sources.
     private readonly Dictionary<int, int> _diskSectors = [];
@@ -1049,6 +1050,8 @@ internal sealed partial class Apple2DebugTarget : DisposableBase, IZ80CardHost
                 _model,
                 directory,
                 out Assembler.AssemblyResult? integer,
+                out Assembler.AssemblyResult? monitor,
+                out Assembler.AssemblyResult? firmware,
                 Autostart,
                 BasicSource)?.SymbolsWithHistoricalNames,
             "MAIN",
@@ -1057,6 +1060,7 @@ internal sealed partial class Apple2DebugTarget : DisposableBase, IZ80CardHost
             [("STOP", "STOP"), ("END", "END"), ("ENDCON", "ENDCON")]);
 
         _integerRom = IntegerBasicRom(integer?.SymbolsWithHistoricalNames);
+        AddInputFirmware(monitor, firmware);
     }
 
     /// <inheritdoc/>
@@ -1206,7 +1210,14 @@ internal sealed partial class Apple2DebugTarget : DisposableBase, IZ80CardHost
     ///   own type-ahead, which overflows if a pasted program comes faster.
     ///  </para>
     /// </remarks>
-    public (ulong Key, ulong Line)? TypingPace => (30_000, 300_000);
+    public (ulong Key, ulong Line)? TypingPace => _fastIo ? null : (30_000, 300_000);
+
+    /// <inheritdoc/>
+    public bool SetFastIo(bool enabled)
+    {
+        _fastIo = enabled;
+        return true;
+    }
 
     /// <inheritdoc/>
     public void Reset()
@@ -1353,6 +1364,42 @@ internal sealed partial class Apple2DebugTarget : DisposableBase, IZ80CardHost
             ["fastDisk"] = FastDisk,
             ["running"] = running
         };
+    }
+
+    /// <inheritdoc/>
+    public DebugTextSurface? ReadTextSurface(string surface)
+    {
+        if (surface is not ("visibleText" or "textMemory")) { return null; }
+        Apple2Switches switches = _machine.Bus.Switches;
+        int columns = (switches & Apple2Switches.Column80) != 0 ? 80 : 40;
+        string mode = (switches & Apple2Switches.Text) != 0 ? "text"
+            : (switches & Apple2Switches.Mixed) != 0 ? "mixed" : "graphics";
+
+        int first = surface == "visibleText" && mode == "mixed" ? 20 : 0;
+        int count = surface == "visibleText" && mode == "graphics" ? 0 : 24 - first;
+        string decoding = (switches & Apple2Switches.AlternateCharacters) != 0
+            ? "apple2AlternateGlyphs" : "apple2PrimaryGlyphs";
+
+        return new(DebugMachines.Apple2, _model.DisplayName(), mode, columns, 24, first, TextRows(first, count, columns), decoding);
+    }
+
+    private string[] TextRows(int first, int count, int columns)
+    {
+        string[] rows = new string[count];
+        Span<char> line = stackalloc char[columns];
+        for (int row = 0; row < count; row++)
+        {
+            for (int column = 0; column < columns; column++)
+            {
+                byte code = _machine.Bus.TextByte(first + row, column);
+                char character = _machine.Bus.Video.Character(code);
+                line[column] = character != '\0' ? character : '\uFFFD';
+            }
+
+            rows[row] = new(line);
+        }
+
+        return rows;
     }
 
     /// <summary>
@@ -1915,7 +1962,8 @@ internal sealed partial class Apple2DebugTarget : DisposableBase, IZ80CardHost
         return frame;
     }
 
-    private JsonObject VideoState() => new JsonObject
+    /// <inheritdoc/>
+    public JsonObject VideoState() => new JsonObject
     {
         ["width"] = Apple2Video.Width,
         ["height"] = Apple2Video.Height,

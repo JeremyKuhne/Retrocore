@@ -31,7 +31,7 @@ internal sealed class AnalysisEvaluationBus : IProcessorBus, IIoBus
     internal int ReadCount { get; private set; }
 
     /// <summary>
-    ///  Gets how many bytes the instruction wrote, its pushes included.
+    ///  Gets how many writes the instruction made, its pushes and a read-modify-write's first write included.
     /// </summary>
     internal int WriteCount { get; private set; }
 

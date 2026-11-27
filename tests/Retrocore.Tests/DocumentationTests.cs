@@ -105,6 +105,17 @@ public class DocumentationTests
         Required(dashed.Section("In")).Entries.Select(entry => (entry.Name, entry.Meaning)).Should().Equal(
             ("HL", "the names"),
             ("DE", "the names"));
+
+        DocumentationComment both = Parse("""
+            ;; Moves bytes.
+            ;; In:    HL, DE - the names = their addresses
+            MOVE:
+                rts
+            """).Comments.Single();
+
+        Required(both.Section("In")).Entries.Select(entry => (entry.Name, entry.Meaning)).Should().Equal(
+            ("HL", "the names = their addresses"),
+            ("DE", "the names = their addresses"));
     }
 
     /// <summary>

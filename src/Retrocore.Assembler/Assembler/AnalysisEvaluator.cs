@@ -34,7 +34,8 @@ internal sealed class AnalysisEvaluator
     private readonly string _programCounter;
 
     /// <summary>
-    ///  Gets how many bytes the last instruction <see cref="TryRun"/> ran wrote, its pushes included.
+    ///  Gets how many writes the last instruction <see cref="TryRun"/> ran made, its pushes and a read-modify-write's
+    ///  first write of the old value included.
     /// </summary>
     internal int WriteCount => _bus.WriteCount;
 

@@ -18,8 +18,8 @@ namespace Retrocore.Tests;
 public class MemoryMapTests
 {
     /// <summary>
-    ///  Every memory area of the machines the contract report analyzes (the Apple IIe, the BBC Micro, the CoCo and
-    ///  the Kaypro) has the kind its name says: RAM (video memory and banks included), ROM, devices, or nothing.
+    ///  Every memory area of the Apple IIe, the BBC Micro, the CoCo and the Kaypro has the kind its name says: RAM
+    ///  (video memory and banks included), ROM, devices, or nothing.
     /// </summary>
     [TestMethod]
     public void AreasHaveTheirKinds()

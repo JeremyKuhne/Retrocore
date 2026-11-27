@@ -490,9 +490,11 @@ where its value came from (`AnalysisValue`). Two paths that meet keep the bits b
 - The instruction's bytes and the byte after them, which the 6502 reads ahead, come from the image; its other
   reads take the values being tried, one byte each in the order it reads, at most four. A run that reads more, or
   a different number from the first, or touches a port, gives no result, nor does one that pushes or pulls, nor
-  one that goes back to itself, as the Z80's `LDIR` does until BC is 0. An instruction whose bytes some code
-  stores to at a fixed address is not run at all, as code that patches another's operand is not as assembled.
-  Each run starts from the core as it was built, so a `HALT` or `WAI` before leaves nothing behind.
+  one that goes back to itself, as the Z80's `LDIR` does until BC is 0. Each run starts from the core as it was
+  built, so a `HALT` or `WAI` before leaves nothing behind.
+- Code a store may change is not the code assembled, so the analysis stops where it reaches it: a byte in RAM that
+  a store at a fixed address, or from an indexed store's base, may write, and the byte after, as `STA Patch+1` and
+  `STA Patch,Y` do. MBASIC's LPTOUT stops so: its `CALL $0000` takes the BIOS's address from Init.asm.
 - The runs try all ones and two alternations first, and stop as soon as every bit written has varied, so an
   instruction whose result is unknown costs a few runs. Flags the effects lines set or clear are not waited for.
   Only the registers an instruction reads are set and only those it writes read back, which the effects lines'
@@ -571,14 +573,14 @@ changed only what a fixed address held was not followed on. With known bits in m
 `bmi NUMBER_TO_STRING_SMALL` look never taken.
 
 `SdkSourcesReport` now also compares the fixed conditions with the sources' own comments. Of the branches the
-sources mark `always`, 124 are proved; 119 are not, mostly because a value from RAM or from a caller decides them,
+sources mark `always`, 122 are proved; 121 are not, mostly because a value from RAM or from a caller decides them,
 as SET_VDU_STATUS's `ora VDU_STATUS` with the A its caller passes, or because a routine the analysis gave up on
 reaches them. 10 conditions are fixed without the mark, and each was checked by hand: real always-branches such
 as `ldy #TEXT_INVERSE` then `bne`, `clc` then `bcc`, a `bvs` followed by a `bvc`, the Enhanced firmware's
 `ora #MODE_CURSOR_OFF` then `bne`, whose comment is on the line above, and from the memory map, the DFS's
 `bit FS_CONTROL_BLOCK_TEMPLATE_HIGH` of a ROM byte of `&FF`, then `bvs`.
 
-For the Keeps and Uses check: 1,020 routines checked (from 990), 25 findings (from 30), 34 `Keeps:` items not
+For the Keeps and Uses check: 1,017 routines checked (from 990), 25 findings (from 30), 34 `Keeps:` items not
 verified; NetFS's NFS_OSFILE_INFO now gives X and Y first in its `Out:`, so they parse. Gone: the Monitor's
 ScreenOutNoInverse, the MOS's START_TRANSMITTING, VDU_PAGED_MODE_ON, SET_CURSOR_START and INVERT_TEXT_CELL, whose
 paths only an impossible fall-through reached, and with known bits, the Enhanced firmware's CursorOff and the MOS's
@@ -601,7 +603,8 @@ allocation, and a follow-up could cut them.
 - **Writes through other pointers** are taken to miss the stack: only one through a stack pointer, or a register
   holding its entry value, changes what was pushed, and one at an offset past what the routine pushed, into its
   caller's data, is not seen.
-- **Patched code** is found only through stores to a fixed address; one through a pointer is not.
+- **Patched code** is found only through stores to a fixed address or from an indexed store's base; one through a
+  pointer or on the 6809's direct page is not.
 - **Names later in a section** that share a meaning, as `carry = set when found, X, Y = the offset`, are read as
   part of the meaning before them: 76 `In:` and `Out:` lines in the sources have such a run, as Business BASIC's
   `FORPNT, FORPNTB = the variable, VALTYP, INTFLG, ISARA = its type`, and the check takes their names as not

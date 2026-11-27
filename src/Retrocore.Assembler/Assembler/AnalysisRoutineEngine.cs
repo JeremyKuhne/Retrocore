@@ -94,8 +94,8 @@ internal sealed class AnalysisRoutineEngine
     ///  Which bytes of the image the source assembles as data; only those of ROM read as constants. Null for none.
     /// </param>
     /// <param name="patched">
-    ///  Which bytes of the image some instruction stores to at a fixed address, as code that patches the operand of
-    ///  another does; an instruction with such a byte is not run for its values. Null for none.
+    ///  Which bytes of the image a store may change, as code that patches another's operand or opcode does; the
+    ///  analysis does not follow code with such a byte. Null for none.
     /// </param>
     internal AnalysisRoutineEngine(
         InstructionSet set,
@@ -218,6 +218,13 @@ internal sealed class AnalysisRoutineEngine
                 continue;
             }
 
+            // Code a store changes is not the code assembled: neither its effects nor where it goes are known.
+            if (Patched(pc, instruction.Size))
+            {
+                Stop("it runs code that a store changes", pc);
+                continue;
+            }
+
             Step(state, instruction, pc);
         }
 
@@ -300,6 +307,9 @@ internal sealed class AnalysisRoutineEngine
                     break;
                 case AnalysisRoutineOutcome.Lost:
                     Stop("it changes the stack pointer", pc, stack: true);
+                    break;
+                case AnalysisRoutineOutcome.PulledOtherBytes:
+                    Stop("it pulls other bytes than it pushed", pc, stack: true);
                     break;
                 case AnalysisRoutineOutcome.WroteStack:
                     Stop("it writes into the stack under its return address", pc, stack: true);
@@ -404,6 +414,30 @@ internal sealed class AnalysisRoutineEngine
                 work.Enqueue(target);
             }
         }
+    }
+
+    // Whether some store may change one of an instruction's bytes.
+    private bool Patched(ushort pc, int size)
+    {
+        for (int offset = 0; _patched is not null && offset < size; offset++)
+        {
+            if (_patched[(ushort)(pc + offset)]) { return true; }
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    ///  Gets the address a store's operand starts from: the fixed address, or an indexed form's base, as STA Patch,Y
+    ///  names; -1 for a pointer form, and for one on the 6809's direct page, which DP decides.
+    /// </summary>
+    /// <param name="instruction">The instruction.</param>
+    /// <returns>The address, or -1.</returns>
+    internal int BaseAddress(DisassembledInstruction instruction)
+    {
+        OperandForm form = instruction.Form;
+        bool memory = form.Role == OperandRole.Memory && form.FieldCount >= 1 && !form.HasPostbyte;
+        return memory && (_directPage < 0 || !instruction.Effects.Reads(_directPage)) ? instruction.Operand : -1;
     }
 
     /// <summary>
@@ -746,7 +780,7 @@ internal sealed class AnalysisRoutineEngine
         }
 
         // The instruction's bytes and the one after them, which the 6502 reads ahead after a one-byte instruction;
-        // an instruction whose bytes some code stores to is not as assembled, and a stored byte after it not either.
+        // a byte a store may change is not as assembled, and the code that holds one is not followed at all.
         Span<byte> bytes = stackalloc byte[8];
         int count = 0;
         for (; count < instruction.Size; count++)
@@ -879,7 +913,7 @@ internal sealed class AnalysisRoutineEngine
         AnalysisRoutineFrame top = frames[^1];
 
         // A pull of other bytes than the last push saved leaves the stack where the model cannot follow it.
-        if (top.Bytes != bytes) { return AnalysisRoutineOutcome.Lost; }
+        if (top.Bytes != bytes) { return AnalysisRoutineOutcome.PulledOtherBytes; }
         frames.RemoveAt(frames.Count - 1);
         bool matches = top.Units.Count == targets.Count;
         for (int index = 0; index < targets.Count; index++)

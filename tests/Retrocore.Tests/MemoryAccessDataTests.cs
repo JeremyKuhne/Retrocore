@@ -16,9 +16,12 @@ public class MemoryAccessDataTests
 {
     private const int CasesPerEncoding = 16;
 
+    // Writes a port feeds, which the evaluator does not run: their access lines are written by hand.
+    private static readonly HashSet<string> s_portFed = ["INI", "IND", "INIR", "INDR"];
+
     /// <summary>
     ///  Every encoding that writes memory other than by pushing is a write or a read-write, and every one that is
-    ///  writes in some case.
+    ///  runs and writes in some case, but the Z80's block inputs, which a port feeds and the evaluator does not run.
     /// </summary>
     /// <param name="name">The instruction set.</param>
     /// <param name="seed">The random cases' seed, fixed so a failure repeats.</param>
@@ -66,7 +69,12 @@ public class MemoryAccessDataTests
                 wrote |= evaluator.WriteCount > effects.Pushed + effects.MayPush;
             }
 
-            if (wrote && access == MemoryAccess.Read)
+            string mnemonic = set.MnemonicName(value.Mnemonic);
+            if (!ran && access != MemoryAccess.Read && !s_portFed.Contains(mnemonic))
+            {
+                failures.Add($"{label}: its access is {access}, but it never ran to show it");
+            }
+            else if (wrote && access == MemoryAccess.Read)
             {
                 failures.Add($"{label}: writes memory, but its access is read");
             }

@@ -96,7 +96,7 @@ public class AnalysisSoundnessTests
                 rts
             """, "M6809", MemoryMap.AllRam);
 
-        Fixed(contracts, 0x1000).Should().NotContain(new KeyValuePair<ushort, bool>(0x100A, value: true));
+        Fixed(contracts, 0x1000).Should().NotContain(new KeyValuePair<ushort, bool>(0x100B, value: true));
     }
 
     /// <summary>
@@ -201,7 +201,7 @@ public class AnalysisSoundnessTests
                 ret
             """, "Z80", MemoryMap.AllRam);
 
-        Fixed(contracts, 0x1000).Should().NotContain(new KeyValuePair<ushort, bool>(0x100C, value: true));
+        Fixed(contracts, 0x1000).Should().NotContainKey(0x100C);
     }
 
     /// <summary>
@@ -248,6 +248,43 @@ public class AnalysisSoundnessTests
     }
 
     /// <summary>
+    ///  An instruction a store changes is not the one assembled: storing CLC's opcode over SEC leaves carry clear,
+    ///  through a fixed address or an index.
+    /// </summary>
+    [TestMethod]
+    public void PatchedInstructionsAreNotTheirAssembledEffects()
+    {
+        NotKept("""
+            ;; Stores CLC over the SEC below, so BCS is not taken.
+            ;; Keeps: X
+            Holder:
+                lda #$18
+                sta Patch
+            Patch:
+                sec
+                bcs Done
+                ldx #0
+            Done:
+                rts
+            """, "Mos6502", "X");
+
+        NotKept("""
+            ;; Stores CLC over the SEC below through an index.
+            ;; Keeps: X
+            Holder:
+                ldy #0
+                lda #$18
+                sta Patch,y
+            Patch:
+                sec
+                bcs Done
+                ldx #0
+            Done:
+                rts
+            """, "Mos6502", "X");
+    }
+
+    /// <summary>
     ///  Code a table points into may be entered there with any flags.
     /// </summary>
     [TestMethod]
@@ -265,6 +302,29 @@ public class AnalysisSoundnessTests
                 rts
             Vector:
                 .word Inner
+            """, "Mos6502", MemoryMap.AllRam);
+
+        report.FixedConditions.Should().BeEmpty();
+
+        // A table naming a local label reaches that label, not another scope's of the same name.
+        (_, report) = Analyze("""
+            .proc Other
+            Loop:
+                rts
+            .endproc
+
+            ;; Loads 1 and branches on it, but its own table enters at Loop.
+            ;; Keeps: X
+            .proc Routine
+                lda #1
+            Loop:
+                bne Skip
+                ldx #0
+            Skip:
+                rts
+            Vector:
+                .word Loop
+            .endproc
             """, "Mos6502", MemoryMap.AllRam);
 
         report.FixedConditions.Should().BeEmpty();

@@ -37,5 +37,10 @@ internal enum AnalysisRoutineOutcome
     /// <summary>
     ///  It wrote into the stack with nothing pushed, so into its return address or its caller's data.
     /// </summary>
-    WroteStack
+    WroteStack,
+
+    /// <summary>
+    ///  It pulled other bytes than its last push saved.
+    /// </summary>
+    PulledOtherBytes
 }

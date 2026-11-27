@@ -33,6 +33,7 @@ internal sealed partial class AnalysisContracts
     private readonly List<ushort> _instructions = [];
     private readonly bool[] _patched = new bool[0x10000];
     private readonly HashSet<ushort> _referenced = [];
+    private readonly MemoryMap? _map;
     private readonly Dictionary<ushort, AnalysisContract> _contracts = [];
     private readonly Dictionary<ushort, DocumentationTopic> _routines = [];
     private readonly Dictionary<ushort, AnalysisRoutineSummary?> _analyzed = [];
@@ -61,6 +62,7 @@ internal sealed partial class AnalysisContracts
     {
         _set = set;
         _documentation = documentation;
+        _map = map;
         foreach (AssemblySection section in result.Sections)
         {
             ReadOnlySpan<byte> bytes = section.Bytes.Span;
@@ -207,28 +209,37 @@ internal sealed partial class AnalysisContracts
         return new(findings, count, unverified, skipped, conditions);
     }
 
-    // What the image's statements say of its code: the bytes stores to a fixed address change, which may be another
-    // instruction's operand, and the code addresses a table or an operand names other than as a branch's, jump's
+    // What the image's statements say of its code: the bytes stores may change, which may be another instruction's
+    // opcode or operand, and the code addresses a table or an operand names other than as a branch's, jump's
     // or call's target, which code may be entered at through a vector or a pushed address.
     private void Scan(AssemblyResult result)
     {
         foreach (ushort address in _instructions)
         {
             if (!_engine.TryDecode(address, out DisassembledInstruction instruction)) { continue; }
-            if (_set.EncodingAccess(instruction.EncodingId) != MemoryAccess.Read && _engine.StaticAddress(instruction) is int stored and >= 0)
+            // A store at a fixed address or from an indexed one's base, into RAM, may patch code there: the byte
+            // and the one after, as STA Patch+1 and STA Patch,Y do. Stores through a pointer or the 6809's direct
+            // page are not seen.
+            if (_set.EncodingAccess(instruction.EncodingId) == MemoryAccess.Read || _engine.BaseAddress(instruction) is not (int stored and >= 0))
             {
-                _patched[stored] = true;
-                _patched[(stored + 1) & 0xFFFF] = true;
+                continue;
+            }
+
+            for (int offset = 0; offset < 2; offset++)
+            {
+                ushort at = (ushort)(stored + offset);
+                if ((_map?[at] ?? MemoryKind.Ram) == MemoryKind.Ram) { _patched[at] = true; }
             }
         }
 
-        // Each symbol by its name and by its last part, as Inner of Routine::Inner, the first of them where two share it.
-        Dictionary<string, ushort> symbols = [with(StringComparer.Ordinal)];
+        // Each symbol by its name and by its last part, as Inner of Routine::Inner, with every address a part names
+        // where scopes share it, as two routines' Loop labels.
+        Dictionary<string, List<ushort>> symbols = [with(StringComparer.Ordinal)];
         foreach ((string symbol, long value) in result.Symbols)
         {
-            symbols.TryAdd(symbol, (ushort)value);
+            Add(symbol, (ushort)value);
             int scope = symbol.LastIndexOf("::", StringComparison.Ordinal);
-            if (scope >= 0) { symbols.TryAdd(symbol[(scope + 2)..], (ushort)value); }
+            if (scope >= 0) { Add(symbol[(scope + 2)..], (ushort)value); }
         }
 
         foreach (AssemblySourceMapEntry entry in result.SourceMap)
@@ -242,12 +253,23 @@ internal sealed partial class AnalysisContracts
 
             foreach (System.Text.RegularExpressions.Match name in Identifier().Matches(entry.Operand))
             {
-                if (symbols.TryGetValue(name.Value, out ushort address) && address != target)
+                foreach (ushort address in symbols.TryGetValue(name.Value, out List<ushort>? named) ? named : [])
                 {
-                    _referenced.Add(address);
+                    if (address != target) { _referenced.Add(address); }
                 }
 
             }
+        }
+
+        void Add(string name, ushort value)
+        {
+            if (!symbols.TryGetValue(name, out List<ushort>? list))
+            {
+                list = [];
+                symbols[name] = list;
+            }
+
+            list.Add(value);
         }
     }
 

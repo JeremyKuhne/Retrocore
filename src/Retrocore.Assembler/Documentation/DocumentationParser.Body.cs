@@ -263,8 +263,10 @@ public static partial class DocumentationParser
 
     private static List<DocumentationEntry>? Shared(string text, int line)
     {
-        int separator = text.IndexOf(" = ", StringComparison.Ordinal);
-        if (separator < 0) { separator = text.IndexOf(" - ", StringComparison.Ordinal); }
+        // The first separator, of either kind, after names alone: "HL, DE - the names = x" shares at the dash.
+        int equals = text.IndexOf(" = ", StringComparison.Ordinal);
+        int dash = text.IndexOf(" - ", StringComparison.Ordinal);
+        int separator = equals < 0 || (dash >= 0 && dash < equals) ? dash : equals;
         if (separator <= 0) { return null; }
         string[] names = text[..separator].Split(", ");
         if (names.Length < 2 || !IsNames(text[..separator])) { return null; }

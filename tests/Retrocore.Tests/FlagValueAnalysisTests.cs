@@ -73,7 +73,7 @@ public class FlagValueAnalysisTests
 
         // Without CLD, decimal mode may be on, and $09 + $01 is $10 there: the carry is clear either way, but the
         // sum is not known, so the last branch is not either.
-        // The literal ends its lines as the checkout does, so they are made \n before the line is taken out.
+        // In LF, so the replacement finds its line in a checkout with CRLF endings.
         string source = Source.ReplaceLineEndings("\n");
         source.Should().Contain("    cld\n");
         (_, contracts) = Check(source.Replace("    cld\n", "", StringComparison.Ordinal), "Mos6502");

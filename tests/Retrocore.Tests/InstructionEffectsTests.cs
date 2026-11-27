@@ -275,7 +275,7 @@ public class InstructionEffectsTests
     [DataRow("copies X=A", "copies X=A X=A X=A X=A X=A", "Line 16: Expected one to four copies.")]
     public void MalformedEffectsFail(string replace, string with, string message)
     {
-        // The rows give lines ending in \n, and the source's literal ends its lines as the checkout does.
+        // In LF, as the rows' text is, so a replacement that spans a line finds it in a checkout with CRLF endings.
         string tiny = Tiny.ReplaceLineEndings("\n");
         tiny.Should().Contain(replace);
         Action parse = () => IsaParser.Parse(tiny.Replace(replace, with, StringComparison.Ordinal));

@@ -138,7 +138,7 @@ Address column (`= $30`), as the kernal's table writes them.
 | 12 | NMODES | = 4 | Files::MODE_COUNT | constant | D1541 | open 1 | The four letters of the mode table, R, W, A and M. |
 | 13 | TOBIG | = 4 | Controller::FORMAT_TRACK_TOO_SHORT | constant | D1541 | lccfmt2 1 | Formatting's result when the track can't hold its sectors at their smallest size. |
 | 14 | ERRCHN | = 5 | MESSAGE_CHANNEL | constant | D1541 | erproc 3, dskintsf 3, tst4 2, memrw 1 | The error channel's channel number, which reading secondary address 15 reaches (Q6 for the name). |
-| 15 | MXFILS | = 5 | FILE_NAME_COUNT | constant | D1541 | parsex 2, block 1 | The most file names a command may give: the FileName tables' length. |
+| 15 | MXFILS | = 5 | FILE_NAME_COUNT | constant | D1541 | parsex 2, block 1 | The FileName tables' length; ScanFor fails at the fourth comma, so a command gives at most MXFILS-1, four, names. |
 | 16 | NTYPES | = 5 | TYPE_COUNT | constant | D1541 | setdrv 1, open 1 | The five letters of the type tables, D, S, P, U and R or L. |
 | 17 | NUMSYN | = 5 | Controller::SYNC_LENGTH | constant | D1541 | lccfmt2 2, lccwrt 1 | The $FF bytes written for a sync, 40 one bits. |
 | 18 | TOSMAL | = 5 | Controller::FORMAT_GAP_TOO_SMALL | constant | D1541 | lccfmt2 1 | Formatting's result when the gap left between sectors is under MIN_SECTOR_GAP. |
@@ -163,7 +163,7 @@ Address column (`= $30`), as the kernal's table writes them.
 | 37 | IWSA | = 18 | INTERNAL_WRITE_SECONDARY | constant | D1541 | rename 4, tst4 2, tst2 1 | The secondary address of the DOS's own write channel. |
 | 38 | MAXSA | = 18 | LAST_SECONDARY | constant | D1541 | tst2 2, tstflg 1, dskintsf 1 | The highest secondary address in SecondaryChannels; higher ones are taken modulo 16. (The listing says one above it.) |
 | 39 | HEADER | $0016 | LastHeader | location | D1541 | lccseek 12, lccread 9, lccconhdr 5, tst2 2 | The last header read, in binary: the ID's two bytes, the track, the sector and the checksum. |
-| 40 | DIRLEN | = 24 | Directory::LISTING_LINE_LENGTH | constant | D1541 | trnsfr 3 | The length of a listing line built in ListingLine. |
+| 40 | DIRLEN | = 24 | Directory::BLOCK_COUNT_END | constant | D1541 | trnsfr 3 | ListingLine's starting column for the spacing after a line's block count: 24, less for a wider count (256 or more, 10 or more), so the names line up. |
 | 41 | ACTJOB | $001B | DROP | location | D1541 | none | The controller's active job; not used. Named in prose. |
 | 42 | NBSIZ | = 27 | Directory::LISTING_TEXT_LENGTH | constant | D1541 | trnsfr 1 | The listing line's text that is blanked before each entry. |
 | 43 | WPSW | $001C | DiskChanged | location | D1541 | dskintsf 2, idlesf 2, lookup 1, tst2 1, lccend 1 | Each drive's flag, set by the controller when the write-protect sense changes (a disk going in or out); the DOS reinitializes. |
@@ -239,7 +239,7 @@ Address column (`= $30`), as the kernal's table writes them.
 | 113 | SYSTS | = $67 | ERROR_ILLEGAL_SYSTEM_TRACK_SECTOR | constant | D1541 | tstfnd 1 | 67 ILLEGAL TRACK OR SECTOR, the same message as $66 (the message table holds them together): raised by the free-block search for a track beyond the last. |
 | 114 | AUTOFG | $0068 | Bam::AutoInitializeOff | location | D1541 | lookup 1 | Non-zero to stop a changed disk being initialized on its next use; only a memory write sets it. |
 | 115 | SECINC | $0069 | SectorInterleave | location | D1541 | tst4 3, dskintsf 1, tstfnd 1 | The sectors between a file's blocks that the free-block search skips. |
-| 116 | REVCNT | $006A | Jobs::Retries | location | D1541 | jobssf 3, dskintsf 1 | A failed job's recovery: bits 0-5 the tries, bit 6 set for no head offsets, bit 7 for a last bump. |
+| 116 | REVCNT | $006A | Jobs::Retries | location | D1541 | jobssf 3, dskintsf 1 | A failed job's recovery: bits 0-5 the tries, bit 6 set for no head offsets, bit 7 set to give up without the last bump (CheckBump bumps when it is clear). |
 | 117 | USRJMP | $006B | Commands::UserVectorsPointer | location | D1541 | block 4 | A pointer to UserCommandVectors, the U commands' jump table. |
 | 118 | BMPNT | $006D | BamPointer | location | D1541 | frets 12, map 7, tstfnd 5, new 2, tst2 1 | A pointer to the BAM entry of the track being allocated or freed. |
 | 119 | T0 | $006F | Temporary | location | D1541 | tst3 5, frets 4, map 3 | As TEMP: its first byte's second name. |
@@ -355,7 +355,7 @@ Address column (`= $30`), as the kernal's table writes them.
 | 229 | PATFLG | $028A | PatternFlag | location | D1541 | parsex 8, lookup 2 | Counts "*" and "?" while a name is parsed. |
 | 230 | IMAGE | $028B | Commands::Structure | location | D1541 | parsex 6, setdrv 2, copset 2 | The command's shape as parsed (patterns, several names, drives, names given), checked against its syntax image. |
 | 231 | DRVCNT | $028C | DriveSearches | location | D1541 | lookup 7, copall 1 | The drives still to search. |
-| 232 | DRVFLG | $028D | DriveSearchFlag | location | D1541 | trnsfr 5, lookup 3 | Set while the search goes on to the other drive. |
+| 232 | DRVFLG | $028D | Directory::DriveSearchFlag | location | D1541 | trnsfr 5, lookup 3 | The directory code's (the listing half of trnsfr, and lookup): set while the search goes on to the other drive. |
 | 233 | LSTDRV | $028E | LastDrive | location | D1541 | parsex 2, open 2, setdrv 1, block 1 | The last drive used without an error, the default. |
 | 234 | FOUND | $028F | Directory::Found | location | D1541 | lookup 7 | Set once every name has been found. |
 | 235 | DIRSEC | $0290 | Directory::SearchSector | location | D1541 | lookup 2 | The directory sector being searched. |
@@ -384,7 +384,7 @@ Address column (`= $30`), as the kernal's table writes them.
 | 258 | RAMEND | $0300 | DROP | location | D1541 | none | The variables' end; not used. Named in prose. |
 | 259 | BUFF1 | $0400 | DROP | location | D1541 | none | Buffer 1; not used by name. Named in prose. |
 | 260 | BUFF2 | $0500 | Buffer2 | location | D1541 | lccfmt2 2, lccfmt3 1 | Buffer 2, where formatting builds a sector's data. |
-| 261 | CNT | $0620 | Controller::FormatRetries | location | D1541 | lccfmt1 1, lccfmt4 1 | Formatting: the errors still allowed on a track, from 10. |
+| 261 | CNT | $0620 | Controller::FormatRetries | location | D1541 | lccfmt1 1, lccfmt4 1 | Formatting: the errors still allowed for the whole format, set to 10 once as it starts and counted down by each error. |
 | 262 | FMTVAR | $0620 | Controller::FormatVariables | location | D1541 | lccfmt1 7 | Formatting's variables, in buffer 3; the rows after it are its bytes. |
 | 263 | NUM | $0621 | Controller::SegmentLength | location | D1541 | lccfmt1 6, lccfmt4 2 | Formatting: the bytes of sync, and then of non-sync, written to time the track, adjusted until they match. |
 | 264 | TRYS | $0623 | Controller::VerifyRetries | location | D1541 | lccfmt3 2 | Formatting: the tries left to read back a header. |
@@ -469,7 +469,7 @@ Address column (`= $30`), as the kernal's table writes them.
 | 343 | EXECD | = $60 | Controller::JOB_CODE_EXECUTE | constant | D1541 | lcccntrl 1, lccseek 1 | JOB_EXECUTE as JobCode holds it. |
 | 344 | ZP2 | = $65 | DROP | constant | D1541 | ramvarsf 1 | The DOS's zero page's start, used only as the origin. Named in prose. |
 | 345 | MASK6 | = $7C | Controller::CODE6 | constant | D1541 | lccgcrbin 1 | GCR decoding: the sixth code, bits 2-6 of the fourth byte. |
-| 346 | ATN | = $80 | Serial::ATN_IN | constant | D1541 | seratn 1 | Via1PortB's bit 7: the ATN line, read. |
+| 346 | ATN | = $80 | DROP | constant | D1541 | none | Via1PortB's bit 7, the ATN line as read; never an operand (seratn tests it with BIT and BPL; its other hits are comments), so dropped by Q7 and named in prose. |
 | 347 | EOIOUT | = $80 | CHANNEL_TALK_LAST | constant | D1541 | iodefsf 1, tst2 1, tst4 1, lstdir 1 | ChannelStatus's bit 7 alone: the channel has one byte left, to send with EOI. |
 | 348 | MASK5X | = $80 | Controller::CODE5_LOW | constant | D1541 | lccgcrbin 1 | GCR decoding: the fifth code's low bit, bit 7 of the fourth byte. |
 | 349 | READ | = $80 | JOB_READ | constant | D1541 | tsutil 3, tst2 1, tst4 1, jobssf 1, ssutil 1, erproc 1, lccread 1 | Job code $80: read the header's block into the buffer. |
@@ -634,7 +634,7 @@ part 1's, named here by their listing names (`JOBS`, `HDRS`, `LSTJOB`, `DRVST`, 
 | # | Old | Address | New | Kind | Documents (checked) | Used in | Reason |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | 1 | SETLJB | $D506 | Jobs::StartOnLastDrive | routine | D1541 | tst2 1, tsutil 1 | A = `CMD` plus the drive bit of buffer X's last job (`LSTJOB`); falls into Start. |
-| 2 | SETJOB | $D50E | Jobs::Start | routine | D1541 | jobssf 1 | Checks job X's track and sector against `MAXTRK` and MAXSEC, and a write's disk version against `VERNUM`; falls into TrackSectorError when they are bad, branches to Queue when good. |
+| 2 | SETJOB | $D50E | Jobs::Start | routine | D1541 | jobssf 1 | Checks job X's track against `MAXTRK`, and for a write the disk version against `VERNUM` and the sector against MAXSEC; falls into TrackSectorError when they are bad, branches to Queue when good. |
 | 3 | SJB2 | $D535 | Jobs::Start::SecondDriveVersion | local | D1541 | jobssf 1 | A = drive 1's `DSKVER`. |
 | 4 | SJB3 | $D538 | Jobs::Start::CheckVersion | local | D1541 | jobssf 1 | A version of 0 (none read yet) passes; any other must be `VERNUM`. |
 | 5 | SJB4 | $D53F | Jobs::Start::CheckSector | local | D1541 | jobssf 1 | The sector must be below the track's MAXSEC. |
@@ -720,7 +720,7 @@ part 1's, named here by their listing names (`JOBS`, `HDRS`, `LSTJOB`, `DRVST`, 
 | 85 | L470 | $F483 | Controller::ChooseSector::NextJob | local | D1541 | lccseek 7 | The next lower job. |
 | 86 | L490 | $F48D | Controller::ChooseSector::Dispatch | local | D1541 | lccseek 1 | Loads the chosen job and goes to Read with its type. |
 | 87 | CNVBIN | $F497 | Controller::DecodeHeader | routine | D1541 | lccseek 1 | Decodes the 8 GCR bytes in `STAB` into `HEADER` (ID, ID, track, sector, checksum); keeps `BUFPNT`. |
-| 88 | REED | $F4CA | Controller::Read | routine | D1541 | lccseek 1 | A = job type: anything but a read goes on to Write. Reads the sector's 325 GCR bytes into the buffer and the overflow buffer, decodes them, and checks the block ID (error 4) and checksum (error 5). |
+| 88 | REED | $F4CA | Controller::Read | routine | D1541 | lccseek 1 | A = job type: anything but a read goes on to Write. Reads the sector's 326 GCR bytes into the buffer and the overflow buffer, decodes them, and checks the block ID (error 4) and checksum (error 5). |
 | 89 | READ01 | $F4D1 | Controller::Read::Start | local | D1541 | lccread 1 | Finds the sector's header and then its data block's sync. |
 | 90 | READ11 | $F4D4 | Controller::Read::ReadBuffer | local | D1541 | lccread 1 | The first 256 GCR bytes, into the buffer. |
 | 91 | READ20 | $F4E1 | Controller::Read::ReadOverflow | local | D1541 | lccread 1 | The rest, into the overflow buffer from $01BA. |
@@ -772,9 +772,9 @@ part 1's, named here by their listing names (`JOBS`, `HDRS`, `LSTJOB`, `DRVST`, 
 | 137 | GCRB20 | $F92B | Controller::DecodeBlock::Finish | local | D1541 | lccgcrbin 1 | Keeps the checksum and restores `BUFPNT`. |
 | 138 | CONHDR | $F934 | Controller::EncodeHeader | routine | D1541 | lccread 1, lccconhdr 1 | Encodes `HEADER` with `HBID` (block ID, checksum, sector, track, ID, ID, 0, 0) as the 10 GCR bytes in `STAB`, which FindHeader compares. |
 | 139 | ERRR | $F969 | Controller::FinishJob | routine | D1541 | lccread 3, lcccntrl 2, lccseek 2, lccwrt 2, lccfmt3 1, lccfmt4 1 | Ends job `JOBN` with code A (1 success, 2-15 errors) in its queue byte. Decodes a buffer left in GCR, starts the motor's timeout, resets the stack to ScanJobs' and rescans. |
-| 140 | ERRR10 | $F975 | Controller::FinishJob::Rescan | local | D1541 | lccutil 1 | Starts the timeout, resets the stack, and goes back to ScanJobs. |
-| 141 | TURNON | $F97E | Controller::MotorOn | routine | D1541 | lcccntrl 1 | Starts the motor: `DRVST` = on and spinning up, `ACLTIM` = 60 ticks (at least 0.9 s; the listing says 1.5 s). |
-| 142 | TRNOFF | $F98F | Controller::MotorTimeout | routine | D1541 | lccutil 1, vector 1 | Sets `DRVST`'s timeout bit and `ACLTIM` = 255 ticks (at least 3.8 s), after which EndPass stops the motor; the user command table points here too. |
+| 140 | ERRR10 | $F975 | Controller::FinishJob::Restart | local | D1541 | lccutil 1 | Starts the timeout, resets the stack, and goes back to ScanJobs. |
+| 141 | TURNON | $F97E | Controller::MotorOn | routine | D1541 | lcccntrl 1 | Starts the motor: `DRVST` = on and spinning up, `ACLTIM` = 60 ticks (at least 0.89 s; the listing says 1.5 s). |
+| 142 | TRNOFF | $F98F | Controller::MotorTimeout | routine | D1541 | lccutil 1, vector 1 | Sets `DRVST`'s timeout bit and `ACLTIM` = 255 ticks (at least 3.79 s), after which EndPass stops the motor; MotorOffVector, the word at $FFE8 before the user command table, points here too. |
 | 143 | END | $F99C | Controller::EndPass | routine | D1541 | lcccntrl 4, lccfmt1 2, lccseek 1, lccfmt3 1, lccfmt4 1 | Ends each pass. Restarts the tick, notes a change of the write-protect sense (`WPSW`) and takes a half-track step the DOS asked for in `PHASE`. Counts down the spin-up and timeout (stopping the motor when it ends) and runs the stepper's state in `NXTST`; disables byte-ready and returns. |
 | 144 | END001 | $F9A5 | DROP | local | D1541 | none | Not referenced. |
 | 145 | END002 | $F9B1 | Controller::EndPass::CheckHeadOffset | local | D1541 | lccend 1 | `PHASE` 1 or $FF: steps once and sets it to 2, which StepHead waits for; StepHead then clears the 2 to 0 (MOVHED). |
@@ -904,10 +904,10 @@ two parts agree.
   the character A, filling FILTBL on the way); TAGCMD, which works out the names and the string's shape, is
   `Commands::ParseNames`, with TC30 and TC35 as its entries `AfterColon` (C) and `Equals` (LOAD); CMDSET is
   `Commands::Prepare` and CMDRST, which LOAD also calls, its entry `ClearTables`. IMAGE's bits are described in
-  ParseNames' reason; part 1 should name IMAGE's and CommandPatterns' bits as constants (`IMAGE_FIRST_PATTERN` ...)
-  for the code that tests them (`copset`). *Recommended.*
+  ParseNames' reason and Structure's; the code tests them with literal masks, as the listing does, and the source
+  comments each mask. *Recommended.*
   **Settled:** `ScanFor`, `ParseNames` (entries `AfterColon`, `Equals`) and `Prepare` (entry `ClearTables`), as
-  recommended; naming the image bits is left to part 1.
+  recommended; IMAGE's bits stay literal masks, each commented.
 - D-P3-Q4. **The block commands' shared parser.** B- and U1 and U2 parse their numbers with one routine,
   `Commands::BlockParameters` (BLKPAR), whose entry `FromY` (BP05) OPEN "#n" uses, and `Commands::ParseNumber`
   (ASCHEX). The numbers go into the file-name tables: FILSEC,X their low bytes and FILTRK,X their high, F1CNT
@@ -970,7 +970,7 @@ two parts agree.
   **Settled:** as recommended, with the three scope changes above.
 - D-P3-Q10. **OPEN "#"** (OPNBLK) is in `block`'s file and only Files' OPEN jumps to it; all it does is make the
   direct-access channel the block commands work on, touching channel and buffer state only (it parses its number
-  with BlockParameters::FromY). It is `Files::OpenDirect`. *Recommended.* The alternative is `Files::OpenDirect`,
+  with BlockParameters::FromY). It is `Files::OpenDirect`. *Recommended.* The alternative is `Commands::OpenDirect`,
   by its file. **Settled:** `Files::OpenDirect`.
 - D-P3-Q11. **The copy command's pieces.** DSKCPY, C's handler, is `Commands::Copy` (it checks the string);
   COPY, which it jumps to, `Commands::CopyFiles` (it looks up and decides on appending); CY `Commands::CreateCopy`,
@@ -1023,7 +1023,7 @@ two parts agree.
 | 23 | TC70 | $C24C | Commands::ParseNames::SecondGiven | local | D1541 | parsex 1 | Bit 1 set and bit 0 cleared (one EOR does both), with bits 3 and 2. |
 | 24 | TC75 | $C254 | Commands::ParseNames::Check | local | D1541 | parsex 1 | IMAGE against the command's byte of CommandPatterns: no bit in both, and it returns. |
 | 25 | TC80 | $C260 | Commands::ParseNames::BadSyntax | local | D1541 | parsex 1 | ERWORD = the clashing bits; 30 SYNTAX ERROR. |
-| 26 | PARSE | $C268 | Commands::ScanFor | routine | D1541 | parsex 4, block 2, open 1, utlodr 1 | Scans CMDBUF from Y to CMDSIZ for the character A, on the way putting the start of each name after a ',' into FILTBL+1,X and marking in PATTYP the names with '*' or '?' (PATFLG counts them). Returns Y just past the character, or 0 with Z set if it is not there or there are more than MXFILS-1 commas; FILTBL+1,X = CMDSIZ, the end. |
+| 26 | PARSE | $C268 | Commands::ScanFor | routine | D1541 | parsex 4, block 2, open 1, utlodr 1 | Scans CMDBUF from Y to CMDSIZ for the character A, on the way putting the start of each name after a ',' into FILTBL+1,X and marking in PATTYP the names with '*' or '?' (PATFLG counts them). Returns Y just past the character, or 0 with Z set if it is not there or there are MXFILS-1 (4) commas or more; FILTBL+1,X = CMDSIZ, the end. |
 | 27 | PR10 | $C26B | Commands::ScanFor::Next | local | D1541 | parsex 2 | The next character; the string's end is NotFound. |
 | 28 | PR20 | $C280 | Commands::ScanFor::Pattern | local | D1541 | parsex 1 | '*' or '?': PATFLG counts it. |
 | 29 | PR25 | $C283 | Commands::ScanFor::Comma | local | D1541 | parsex 1 | A ',' ends a name: the next one's start into FILTBL+1,X. |
@@ -1100,10 +1100,10 @@ two parts agree.
 | 100 | DEL1 | $C8AD | Bam::FreeChain::FreeNext | local | D1541 | scrtch 1 | Frees the next block and reads it. |
 | 101 | DELDIR | $C8B6 | Directory::DeleteEntry | routine | D1541 | scrtch 1, open 1, verdir 1 | The directory entry at DIRBUF gets type 0 (deleted), and its sector is written and waited for. |
 | 102 | DUPLCT | $C8C1 | Commands::Duplicate | routine | D1541 | romtblsf 2, copset 1 | D: there is no second drive to copy to: 31 SYNTAX ERROR. A C without ':' comes here too. (Reached through the command table.) |
-| 103 | FORMAT | $C8C6 | Commands::Format | routine | D1541 | new 1, vector 1 | Puts a JMP to the controller's format routine (FORMT) at buffer 3's start ($0600), then gives buffer 3 the execute job for DRVNUM, and waits; a result of 2 or more is the job's error (ERROR). The ROM's vector at $FFE6 points here too. |
+| 103 | FORMAT | $C8C6 | Commands::Format | routine | D1541 | new 1, vector 1 | Puts a JMP to the controller's format routine (FORMT) at buffer 3's start ($0600), then gives buffer 3 the execute job for DRVNUM, and waits; a result of 2 or more is reported as error 3, 21 READ ERROR, whatever the job's code (ERROR). The ROM's vector at $FFE6 points here too. |
 | 104 | FMT105 | $C8E0 | Commands::Format::Wait | local | D1541 | duplct 1 | Until the job's bit 7 clears. |
 | 105 | FMT110 | $C8EF | Commands::Format::Return | local | D1541 | duplct 1 | Done. |
-| 106 | DSKCPY | $C8F0 | Commands::Copy | routine | D1541 | romtblsf 2 | C: the BAM's buffer and the channels freed (the BAM marked out of memory), ':' found (none: Duplicate's error), the names parsed and their drives; one destination name, no patterns, else 30 SYNTAX ERROR; then CopyFiles. (With no pattern bits but IMAGE's bit 7, it also tests whether the first name starts with '*'; a '*' sets bit 7, which the check at NoPatterns rejects anyway, so that test is redundant.) (Reached through the command table.) |
+| 106 | DSKCPY | $C8F0 | Commands::Copy | routine | D1541 | romtblsf 2 | C: the BAM's buffer and the channels freed (the BAM marked out of memory), ':' found (none: Duplicate's error), the names parsed and their drives; one destination name, no patterns, else 30 SYNTAX ERROR; then CopyFiles. (When none of IMAGE's bits 6, 4, 2 and 0 is set, one destination and one source, it also tests whether the destination name starts with '*'; a '*' sets bit 7, which the check at NoPatterns (AND #%11011001) rejects anyway, so that test is redundant.) (Reached through the command table.) |
 | 107 | DX0000 | $C90C | Commands::Copy::Parse | local | D1541 | copset 1 | The names (ParseNames::AfterColon) and their drives. |
 | 108 | DX0005 | $C90F | DROP | local | D1541 | none | Not referenced; only the listing names it. |
 | 109 | DX0010 | $C923 | Commands::Copy::BadSyntax | local | D1541 | copset 1 | 30 SYNTAX ERROR. |
@@ -1135,7 +1135,7 @@ two parts agree.
 | 135 | CK30 | $CAF4 | Commands::CheckFiles::Next | local | D1541 | rename 1 | The next name down. |
 | 136 | MEM | $CAF8 | Commands::Memory | routine | D1541 | romtblsf 2 | M-R, M-W and M-E: the '-' must be character 1 (else 31 SYNTAX ERROR); the address from characters 3 and 4 into TEMP. M-R reads, M-W writes from character 6 on (character 5 the count), M-E jumps to the address. None ends through Finish: they return to the idle loop with the error channel as Execute set it, 00 OK (JSR OKERR at $C150). (Reached through the command table.) |
 | 137 | MEMEX | $CB1D | DROP | local | D1541 | none | Not referenced: M-E's JMP (TEMP); only the listing names it. |
-| 138 | MEMRD | $CB20 | Commands::Memory::Read | local | D1541 | memrw 1 | M-R: the byte at the address into DATA; with a count (character 5) of 0 or 2 or more, the error channel's pointer set to the address and its last byte to the address plus the count less one (0 gives 256 bytes), so the bytes are read on channel 15 straight from memory; a count of 1, or none, takes OneByte. |
+| 138 | MEMRD | $CB20 | Commands::Memory::Read | local | D1541 | memrw 1 | M-R: the byte at the address into DATA; with a count (character 5) of 0 or 2 or more, the error channel's pointer set to the address plus one (the first byte goes through DATA) and its last byte to the address plus the count less one (0 gives 256 bytes), so the bytes are read on channel 15 straight from memory; a count of 1, or none, takes OneByte. |
 | 139 | M30 | $CB45 | Commands::Memory::OneByte | local | D1541 | memrw 2 | One byte: Files' NextByte::ErrorEnd (GE15) resets the error channel's pointer to ERRBUF-1, and NextByte::ErrorReady (GE20) makes DATA ready to talk. |
 | 140 | MEMERR | $CB4B | Commands::Memory::BadSyntax | local | D1541 | memrw 2 | 31 SYNTAX ERROR. |
 | 141 | M10 | $CB50 | Commands::Memory::Write | local | D1541 | memrw 1 | M-W: each of the count's bytes from CMDBUF+6 to the address (at least one, even for a count of 0); returns. One address with MEMWRT, both in Also. |
@@ -1148,7 +1148,7 @@ two parts agree.
 | 148 | OB05 | $CBA0 | Files::OpenDirect::NoChannel | local | D1541 | block 3 | 70 NO CHANNEL. |
 | 149 | OB10 | $CBA5 | Files::OpenDirect::Requested | local | D1541 | block 1 | "#n": n from character 1 (BlockParameters::FromY) into FILSEC; marked used in BUFUSE if it was free, and given the drive's job. |
 | 150 | OB15 | $CBB8 | Files::OpenDirect::Bit | local | D1541 | block 1 | The buffer's bit in TEMP, TEMP+1. |
-| 151 | OB30 | $CBF1 | Files::OpenDirect::SetChannel | local | D1541 | block 1 | The channel set up: LINTAB's bit 6 (it can write), LSTCHR $FF, ready to talk and listen, the buffer's number as its first byte to read, the pointer at 1, the direct type. Then Finish. |
+| 151 | OB30 | $CBF1 | Files::OpenDirect::SetChannel | local | D1541 | block 1 | The channel set up: LINTAB's bit 6 (reads and writes), LSTCHR $FF, ready to talk and listen, the buffer's number as its first byte to read, the pointer at 1, the direct type. Then Finish. |
 | 152 | BLOCK | $CC1B | Commands::Block | routine | D1541 | romtblsf 2 | B-: finds the '-', looks the next letter up in Subcommands (no ',' before it, else 30; not there, 31), CMDNUM = its index with bit 7, the parameters parsed (BlockParameters), and jumps to its handler. (Reached through the command table.) |
 | 153 | BLK10 | $CC26 | Commands::Block::BadCommand | local | D1541 | block 1 | 31 SYNTAX ERROR (no '-' or an unknown letter). |
 | 154 | BLK30 | $CC2B | Commands::Block::BadSyntax | entry | D1541 | block 2 | 30 SYNTAX ERROR; an entry of Block, since BlockParameters (BCS at $CC9F, outside Block) comes here with too many numbers. |

@@ -35,12 +35,17 @@ internal enum AnalysisRoutineOutcome
     Lost,
 
     /// <summary>
-    ///  It wrote into the stack with nothing pushed, so into its return address or its caller's data.
+    ///  It wrote into the stack, where it may have changed its return address, its caller's data or its own.
     /// </summary>
     WroteStack,
 
     /// <summary>
     ///  It pulled other bytes than its last push saved.
     /// </summary>
-    PulledOtherBytes
+    PulledOtherBytes,
+
+    /// <summary>
+    ///  It set the program counter other than by a return, as the 6809's <c>TFR X,PC</c> and <c>PULU PC</c>.
+    /// </summary>
+    Jumped
 }

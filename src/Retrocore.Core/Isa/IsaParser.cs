@@ -342,6 +342,7 @@ public static partial class IsaParser
                     "read" => MemoryAccess.Read,
                     "write" => MemoryAccess.Write,
                     "read-write" => MemoryAccess.ReadWrite,
+                    "address" => MemoryAccess.Address,
                     _ => throw Error(number, $"Unknown access '{tokens[1]}'.")
                 };
 

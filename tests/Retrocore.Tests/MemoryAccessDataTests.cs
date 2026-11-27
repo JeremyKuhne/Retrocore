@@ -49,6 +49,7 @@ public class MemoryAccessDataTests
             IsaEncoding value = set.GetEncoding(encoding);
             string label = $"{set.MnemonicName(value.Mnemonic)} {set.GetForm(value.Form).Name}";
             MemoryAccess access = set.EncodingAccess(encoding);
+            bool writes = access is MemoryAccess.Write or MemoryAccess.ReadWrite;
             bool ran = false, wrote = false;
             for (int index = 0; index < CasesPerEncoding; index++)
             {
@@ -75,15 +76,15 @@ public class MemoryAccessDataTests
             {
                 failures.Add($"{label}: a port feeds its writes to memory, but its access is {access}");
             }
-            else if (!ran && access != MemoryAccess.Read && !s_portFed.Contains(mnemonic))
+            else if (!ran && writes && !s_portFed.Contains(mnemonic))
             {
                 failures.Add($"{label}: its access is {access}, but it never ran to show it");
             }
-            else if (wrote && access == MemoryAccess.Read)
+            else if (wrote && !writes)
             {
-                failures.Add($"{label}: writes memory, but its access is read");
+                failures.Add($"{label}: writes memory, but its access is {access}");
             }
-            else if (ran && !wrote && access != MemoryAccess.Read)
+            else if (ran && !wrote && writes)
             {
                 failures.Add($"{label}: its access is {access}, but it never wrote");
             }

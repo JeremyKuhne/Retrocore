@@ -80,7 +80,8 @@ public class AnalysisSoundnessTests
                 ret
             """, "Z80", "A");
 
-        // The 6809 stores X high byte first: $2000 holds $12, so A is $12 and BEQ is never taken.
+        // The 6809 stores X high byte first: $2000 holds $12, so A is $12 and BEQ is never taken; were the bytes the
+        // other way round, A would be $34 and BEQ always taken.
         (AnalysisContracts contracts, _) = Analyze("""
             ;; Stores X and compares its first byte with the low byte.
             ;; Keeps: B
@@ -96,7 +97,7 @@ public class AnalysisSoundnessTests
                 rts
             """, "M6809", MemoryMap.AllRam);
 
-        Fixed(contracts, 0x1000).Should().NotContain(new KeyValuePair<ushort, bool>(0x100B, value: true));
+        Fixed(contracts, 0x1000).Should().Contain(new KeyValuePair<ushort, bool>(0x100B, value: false));
     }
 
     /// <summary>
@@ -331,6 +332,165 @@ public class AnalysisSoundnessTests
             """, "Mos6502", MemoryMap.AllRam);
 
         report.FixedConditions.Should().BeEmpty();
+    }
+
+    /// <summary>
+    ///  A write of the program counter other than a return is a jump the analysis cannot see, as the 6809's
+    ///  <c>TFR X,PC</c>, or its <c>PULU PC</c> through the user stack.
+    /// </summary>
+    [TestMethod]
+    public void WritesOfThePcAreJumps()
+    {
+        NotKept("""
+            ;; Jumps through X to the change.
+            ;; Keeps: B
+            Transfer:
+                ldx #Change
+                tfr x,pc
+                rts
+            Change:
+                ldb #0
+                rts
+            """, "M6809", "B");
+
+        NotKept("""
+            ;; Jumps through the user stack.
+            ;; Keeps: B
+            UserStack:
+                pulu pc
+            """, "M6809", "B");
+    }
+
+    /// <summary>
+    ///  A pointer worked out from the stack pointer addresses the stack, as the Z80's <c>ADD HL,SP</c>.
+    /// </summary>
+    [TestMethod]
+    public void PointersFromTheStackPointerWriteTheStack()
+    {
+        NotKept("""
+            ;; Saves BC, then clears its low byte on the stack through HL.
+            ;; Keeps: BC
+            Slot:
+                push bc
+                ld hl,0
+                add hl,sp
+                ld [hl],0
+                pop bc
+                ret
+            """, "Z80", "BC");
+
+        NotKept("""
+            ;; Saves A, then writes over it a byte above S.
+            ;; Keeps: A
+            Above:
+                pha
+                tsx
+                inx
+                lda #0
+                sta $0100,x
+                pla
+                rts
+            """, "Mos6502", "A");
+    }
+
+    /// <summary>
+    ///  A write into the stack with data pushed may land under it, on the return address, as
+    ///  <c>PHA; TSX; INC $0102,X</c> does to skip inline data.
+    /// </summary>
+    [TestMethod]
+    public void WritesUnderPushedDataChangeTheReturn()
+    {
+        NotReturning("""
+            ;; Saves A and writes over the return address under it.
+            ;; Keeps: Y
+            Under:
+                pha
+                tsx
+                lda #$FF
+                sta $0103,x
+                pla
+                rts
+            """, "Mos6502");
+
+        NotReturning("""
+            ;; Saves A and writes over the return address under it.
+            ;; Keeps: Y
+            Under:
+                pshs a
+                stb 2,s
+                puls a
+                rts
+            """, "M6809");
+    }
+
+    /// <summary>
+    ///  The 6809 pulls a list in its own order, CC first, so a pull of other registers than were pushed gives each
+    ///  another's value: after <c>PSHS A,DP</c>, <c>PULS A,CC</c> puts A in CC and DP in A.
+    /// </summary>
+    [TestMethod]
+    public void PullsOfOtherListsRestoreNothing()
+    {
+        NotKept("""
+            ;; Pushes A and DP and pulls A and CC.
+            ;; Keeps: A
+            Lists:
+                pshs a,dp
+                puls a,cc
+                rts
+            """, "M6809", "A");
+    }
+
+    /// <summary>
+    ///  A call to an <c>Entry:</c> label takes what the code from there does, not from the routine's start, and the
+    ///  routine's <c>Keeps:</c> is checked from there too.
+    /// </summary>
+    [TestMethod]
+    public void EntriesAreTheirOwnCode()
+    {
+        NotKept("""
+            ;; Calls the second entry.
+            ;; Keeps: X
+            Caller:
+                jsr Alternate
+                rts
+
+            ;; Copies X to A, or from Alternate clears X.
+            ;; Keeps: Y
+            ;; Entry: Alternate = clears X first
+            Main:
+                txa
+                jmp Common
+            Alternate:
+                ldx #0
+            Common:
+                rts
+            """, "Mos6502", "X");
+
+        // And the routine's Keeps: holds from each entry: X is kept from the start, but not from Alternate.
+        (_, AnalysisContractReport report) = Analyze("""
+            ;; Copies X to A, or from Alternate clears X.
+            ;; Keeps: X
+            ;; Entry: Alternate = clears X first
+            Main:
+                txa
+                jmp Common
+            Alternate:
+                ldx #0
+            Common:
+                rts
+            """, "Mos6502", MemoryMap.AllRam);
+
+        report.Findings.Should().ContainSingle().Which.ToString().Should().Contain("Keeps: X");
+        report.Checked.Should().Be(1);
+    }
+
+    // The routine at $1000 is not reported to return normally to its caller.
+    private static void NotReturning(string source, string cpu)
+    {
+        (AnalysisContracts contracts, _) = Analyze(source, cpu, MemoryMap.AllRam);
+        AnalysisRoutineSummary summary = contracts.Analyzed(0x1000) ?? throw new AssertFailedException("No analysis.");
+        bool claimed = summary is { Returns: true, Incomplete: null, ChangesCallerStack: false };
+        claimed.Should().BeFalse("the stack under the return address changes, but the analysis returns normally");
     }
 
     // The routine at $1000 is not reported complete with the register kept.

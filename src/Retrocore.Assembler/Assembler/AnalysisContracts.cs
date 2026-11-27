@@ -144,38 +144,33 @@ internal sealed partial class AnalysisContracts
         IsaDescription description = _set.Description;
         foreach ((ushort address, AnalysisContract contract) in _contracts)
         {
-            if (address != contract.Address) { continue; }
             AnalysisRoutineSummary? summary = Analyzed(address);
+
+            // An Entry: label keeps what the routine says too: a sure change from there is a finding.
+            if (address != contract.Address)
+            {
+                if (summary is { Returns: true }) { unverified += CheckKeeps(contract, summary, findings); }
+                continue;
+            }
+
             if (summary is not { Returns: true })
             {
                 skipped.Add($"{contract.Topic.Name} (${address:X4}): {summary?.Incomplete ?? "it never returns"}");
                 continue;
             }
 
-            count++;
-
-            // Only a sure change is a finding; a register or flag unknown at a return is not verified.
-            uint changedRegisters = _engine.Registers & ~summary.KeptRegisters & ~summary.UnknownRegisters;
-            byte changedFlags = (byte)(_engine.Flags & ~summary.KeptFlags & ~summary.UnknownFlags);
-            foreach ((string item, uint registers, byte flags) in contract.KeepItems)
+            // A routine followed only in part may change on a path not followed what no path followed changes.
+            unverified += CheckKeeps(contract, summary, findings);
+            if (summary.Incomplete is not null)
             {
-                uint changed = registers & changedRegisters;
-                byte changedFlag = (byte)(flags & changedFlags);
-                if (changed == 0 && changedFlag == 0)
-                {
-                    if (((registers & summary.UnknownRegisters) | (uint)(flags & summary.UnknownFlags)) != 0)
-                    {
-                        unverified++;
-                    }
-
-                    continue;
-                }
-
-                int slot = changed != 0 ? BitOperations.TrailingZeroCount(changed) : 32 + BitOperations.TrailingZeroCount(changedFlag);
-                ushort? at = summary.ChangedAt.TryGetValue(slot, out ushort where) ? where : null;
-                findings.Add(Finding(contract, item, AnalysisContractProblem.NotKept, at));
+                skipped.Add($"{contract.Topic.Name} (${address:X4}): followed in part, as {summary.Incomplete}");
+            }
+            else
+            {
+                count++;
             }
 
+            uint changedRegisters = _engine.Registers & ~summary.KeptRegisters & ~summary.UnknownRegisters;
             if (contract.Listed is not { } listed) { continue; }
             uint unlisted = _general & changedRegisters & ~listed & ~contract.Kept;
             for (int bit = 0; bit < 32; bit++)
@@ -221,7 +216,7 @@ internal sealed partial class AnalysisContracts
             // A store into RAM may patch code there: at a fixed address, the byte and the one after, as STA Patch+1
             // does; from an indexed one's base, every byte the index reaches, as STA Patch,Y does. Stores through a
             // pointer, a base register or the 6809's direct page are not seen.
-            if (_set.EncodingAccess(instruction.EncodingId) == MemoryAccess.Read) { continue; }
+            if (_set.EncodingAccess(instruction.EncodingId) is MemoryAccess.Read or MemoryAccess.Address) { continue; }
             (int first, int count, bool zeroPage) = _engine.StoredBytes(instruction);
             for (int offset = 0; offset < count; offset++)
             {
@@ -380,17 +375,44 @@ internal sealed partial class AnalysisContracts
         return summary;
     }
 
+    // The findings for a routine's Keeps: items, a sure change of each; returns the number not verified, unknown
+    // at a return or not followed on every path.
+    private int CheckKeeps(AnalysisContract contract, AnalysisRoutineSummary summary, List<AnalysisContractFinding> findings)
+    {
+        int unverified = 0;
+        uint changedRegisters = _engine.Registers & ~summary.KeptRegisters & ~summary.UnknownRegisters;
+        byte changedFlags = (byte)(_engine.Flags & ~summary.KeptFlags & ~summary.UnknownFlags);
+        foreach ((string item, uint registers, byte flags) in contract.KeepItems)
+        {
+            uint changed = registers & changedRegisters;
+            byte changedFlag = (byte)(flags & changedFlags);
+            if (changed == 0 && changedFlag == 0)
+            {
+                bool unknown = ((registers & summary.UnknownRegisters) | (uint)(flags & summary.UnknownFlags)) != 0;
+                if (unknown || summary.Incomplete is not null) { unverified++; }
+                continue;
+            }
+
+            int slot = changed != 0 ? BitOperations.TrailingZeroCount(changed) : 32 + BitOperations.TrailingZeroCount(changedFlag);
+            ushort? at = summary.ChangedAt.TryGetValue(slot, out ushort where) ? where : null;
+            AnalysisContractFinding finding = Finding(contract, item, AnalysisContractProblem.NotKept, at);
+            if (!findings.Contains(finding)) { findings.Add(finding); }
+        }
+
+        return unverified;
+    }
+
     // A call takes the callee's contract where it has one, as its callers rely on it, or its code's analysis.
     private AnalysisRoutineSummary? Callee(ushort address) =>
-        _contracts.TryGetValue(address, out AnalysisContract? contract) ? Documented(contract) : Analyzed(address);
+        _contracts.TryGetValue(address, out AnalysisContract? contract) ? Documented(contract, address) : Analyzed(address);
 
     // A branch, jump or fall-through to a documented routine's start is a tail call into it.
     private AnalysisRoutineSummary? RoutineAt(ushort address) =>
-        _contracts.TryGetValue(address, out AnalysisContract? contract) && contract.Address == address ? Documented(contract) : null;
+        _contracts.TryGetValue(address, out AnalysisContract? contract) && contract.Address == address ? Documented(contract, address) : null;
 
-    // What a routine promises: Keeps:, and where there is a Uses:, every register it and Out: do not list; without
-    // Uses:, what its code is found to keep as well.
-    private AnalysisRoutineSummary Documented(AnalysisContract contract)
+    // What a routine promises, entered at its start or an Entry: label: Keeps:, and where there is a Uses:, every
+    // register it and Out: do not list; without Uses:, what its code from there is found to keep as well.
+    private AnalysisRoutineSummary Documented(AnalysisContract contract, ushort address)
     {
         uint kept = contract.Kept;
         byte keptFlags = contract.KeptFlags;
@@ -400,7 +422,7 @@ internal sealed partial class AnalysisContracts
         {
             kept |= _engine.Registers & ~listed;
         }
-        else if (Analyzed(contract.Address) is { Returns: true, Incomplete: null } code)
+        else if (Analyzed(address) is { Returns: true, Incomplete: null } code)
         {
             // Without Uses:, what the documentation does not settle comes from the code.
             kept |= code.KeptRegisters;
@@ -421,7 +443,7 @@ internal sealed partial class AnalysisContracts
             UnknownFlags = unknownFlags,
             Returns = true,
             Documented = true,
-            ChangesCallerStack = Analyzed(contract.Address)?.ChangesCallerStack == true
+            ChangesCallerStack = Analyzed(address)?.ChangesCallerStack == true
         };
     }
 

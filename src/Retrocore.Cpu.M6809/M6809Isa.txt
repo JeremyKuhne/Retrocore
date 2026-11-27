@@ -39,7 +39,8 @@ flow return RTS RTI
 flow wait SYNC CWAI
 flow stop XHCF
 
-# How an instruction accesses a memory operand; the rest read it.
+# How an instruction accesses a memory operand; the rest read it. LEA works out its address only.
+access address LEAX LEAY LEAS LEAU
 access write STA STB STD STX STY STU STS CLR
 access read-write NEG COM LSR ROR ASR ASL ROL DEC INC XNC XDEC
 access write XSTS XSTU XSTX XSTY

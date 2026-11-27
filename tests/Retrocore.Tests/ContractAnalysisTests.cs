@@ -116,7 +116,8 @@ public class ContractAnalysisTests
     }
 
     /// <summary>
-    ///  A path the analysis cannot follow, such as an indirect jump, leaves the routine unchecked, not wrong.
+    ///  A path the analysis cannot follow, such as an indirect jump, leaves the routine unchecked, not wrong, even
+    ///  where its other paths return.
     /// </summary>
     [TestMethod]
     public void IndirectJumpsLeaveRoutinesUnchecked()
@@ -132,6 +133,24 @@ public class ContractAnalysisTests
         findings.Should().BeEmpty();
         count.Should().Be(0);
         skipped.Should().Equal("Dispatch ($1000): it jumps indirectly");
+
+        // With another path that returns, the routine is followed in part: not checked, and what it keeps not
+        // verified, though a sure change on the paths followed is still a finding.
+        const string Partly = """
+            ;; Returns, or jumps through a vector.
+            ;; Keeps: X, Y
+            Dispatch:
+                bcc Done
+                jmp ($0300)
+            Done:
+                ldy #0
+                rts
+            """;
+
+        (findings, count, skipped) = Check(Partly, "Mos6502");
+        findings.Should().ContainSingle().Which.Should().Contain("Keeps: Y");
+        count.Should().Be(0);
+        skipped.Should().Equal("Dispatch ($1000): followed in part, as it jumps indirectly");
     }
 
     /// <summary>

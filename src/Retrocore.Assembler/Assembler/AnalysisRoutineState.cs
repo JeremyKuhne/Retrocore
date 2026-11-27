@@ -37,6 +37,12 @@ internal sealed class AnalysisRoutineState
     internal bool StackLost { get; set; }
 
     /// <summary>
+    ///  Gets or sets the registers, by bit, that may hold an address worked out from a stack pointer, as after the
+    ///  Z80's <c>ADD HL,SP</c> or the 6502's <c>TSX</c> and <c>INX</c>, so a write through them may land in the stack.
+    /// </summary>
+    internal uint StackAddresses { get; set; }
+
+    /// <summary>
     ///  Copies the state.
     /// </summary>
     /// <returns>The copy.</returns>
@@ -46,6 +52,7 @@ internal sealed class AnalysisRoutineState
         {
             Slots = (AnalysisValue[])Slots.Clone(),
             StackLost = StackLost,
+            StackAddresses = StackAddresses,
             Memory = [with(Memory)]
         };
 
@@ -64,7 +71,10 @@ internal sealed class AnalysisRoutineState
     /// <returns>Whether they are the same.</returns>
     internal bool SameAs(AnalysisRoutineState other)
     {
-        if (StackLost != other.StackLost || !Slots.AsSpan().SequenceEqual(other.Slots) || Memory.Count != other.Memory.Count)
+        if (StackLost != other.StackLost
+            || StackAddresses != other.StackAddresses
+            || !Slots.AsSpan().SequenceEqual(other.Slots)
+            || Memory.Count != other.Memory.Count)
         {
             return false;
         }
@@ -83,7 +93,7 @@ internal sealed class AnalysisRoutineState
             {
                 AnalysisRoutineFrame a = frames[index];
                 AnalysisRoutineFrame b = theirs[index];
-                if (a.Bytes != b.Bytes || a.Units.Count != b.Units.Count) { return false; }
+                if (a.Bytes != b.Bytes || a.Listed != b.Listed || a.Units.Count != b.Units.Count) { return false; }
                 for (int unit = 0; unit < a.Units.Count; unit++)
                 {
                     if (!a.Units[unit].Values.AsSpan().SequenceEqual(b.Units[unit].Values))

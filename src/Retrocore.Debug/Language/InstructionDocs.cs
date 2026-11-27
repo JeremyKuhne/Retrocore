@@ -163,8 +163,9 @@ internal static partial class InstructionDocs
     /// </summary>
     /// <param name="instruction">The instruction.</param>
     /// <returns>
-    ///  The flags: from the effects lines where the set has them, whether or not the mnemonic has documentation,
-    ///  else from the mnemonic's documentation; null where neither says.
+    ///  The flags: from the instruction's effects where the set has them, whether or not the mnemonic has
+    ///  documentation; else, for a documented mnemonic, what its encodings change in the description's sets, as its
+    ///  hover gives them; null for one without documentation.
     /// </returns>
     internal static string? FlagsOf(in DisassembledInstruction instruction)
     {

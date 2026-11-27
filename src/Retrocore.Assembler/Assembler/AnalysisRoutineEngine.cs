@@ -54,6 +54,7 @@ internal sealed class AnalysisRoutineEngine
     private readonly uint _stackRegisters;
     private readonly int _flagsRegister;
     private readonly int _programCounter;
+    private readonly bool _bigEndian;
     private readonly byte _allFlags;
     private readonly AnalysisEvaluator? _evaluator;
     private readonly int[] _registers;
@@ -139,6 +140,7 @@ internal sealed class AnalysisRoutineEngine
         IsaDescription description = set.Description;
         _flagsRegister = description.Flags.Count == 0 ? -1 : Bit(description, description.Flags[0].Register);
         _programCounter = Bit(description, "PC");
+        _bigEndian = set.Endianness == Endianness.Big;
         foreach (IsaFlag flag in description.Flags) { _allFlags |= (byte)(1 << flag.Bit); }
         for (int bit = 0; bit < description.EffectRegisters.Count; bit++)
         {
@@ -313,8 +315,11 @@ internal sealed class AnalysisRoutineEngine
                 case AnalysisRoutineOutcome.PulledOtherBytes:
                     Stop("it pulls other bytes than it pushed", pc, stack: true);
                     break;
+                case AnalysisRoutineOutcome.Jumped:
+                    Stop("it jumps indirectly", pc);
+                    break;
                 case AnalysisRoutineOutcome.WroteStack:
-                    Stop("it writes into the stack under its return address", pc, stack: true);
+                    Stop("it writes into the stack, which holds its return address", pc, stack: true);
                     break;
                 default:
                     Stop("it returns through data it pushed", pc, stack: true);
@@ -483,46 +488,12 @@ internal sealed class AnalysisRoutineEngine
     internal int StaticAddress(DisassembledInstruction instruction) =>
         _fixedForms[instruction.Form.Id] && (_directPage < 0 || !instruction.Effects.Reads(_directPage)) ? instruction.Operand : -1;
 
-    // Whether an instruction addresses memory through a stack pointer, or a register holding one's value, as the
-    // 6809's STB ,S, the Z80's EX [SP],HL, or the 6502's STA $0101,X after TSX.
-    private bool StackRelative(AnalysisRoutineState state, InstructionEffects effects)
+    // The stack pointers: those calls and returns use, and any with data pushed on it, as the 6809's U.
+    private uint StackPointers(AnalysisRoutineState state)
     {
         uint stacks = _stackRegisters;
         foreach ((int pointer, _) in state.Stacks) { stacks |= 1u << pointer; }
-        if ((effects.RegistersRead & stacks) != 0) { return true; }
-        for (int bit = 0; bit < 32; bit++)
-        {
-            if ((effects.RegistersRead & _leaves & (1u << bit)) == 0) { continue; }
-            for (int pointer = 0; pointer < 32; pointer++)
-            {
-                // Only a stack pointer's own entry value, as TSX copies it, says the register holds it.
-                int origin = state.Slots[pointer].Origin;
-                bool holds = origin >= 0 && state.Slots[bit].Origin == origin;
-                if ((stacks & (1u << pointer)) != 0 && holds) { return true; }
-            }
-        }
-
-        return false;
-    }
-
-    // What was pushed may have been written over: every stacked value is unknown.
-    private static void ForgetFrames(AnalysisRoutineState state, ushort at)
-    {
-        foreach (List<AnalysisRoutineFrame> frames in state.Stacks.Values)
-        {
-            for (int index = 0; index < frames.Count; index++)
-            {
-                List<AnalysisRoutineUnit> units = [];
-                foreach (AnalysisRoutineUnit unit in frames[index].Units)
-                {
-                    AnalysisValue[] values = new AnalysisValue[unit.Values.Length];
-                    Array.Fill(values, AnalysisValue.Of(Unknown(at)));
-                    units.Add(unit with { Values = values });
-                }
-
-                frames[index] = frames[index] with { Units = units };
-            }
-        }
+        return stacks;
     }
 
     // The address an instruction reads or writes with no index or pointer: its operand, or on the 6809 a direct
@@ -641,6 +612,16 @@ internal sealed class AnalysisRoutineEngine
         byte writtenFlags = (byte)(effects.FlagsWritten | effects.FlagsMayWrite);
         AnalysisRoutineOutcome outcome = AnalysisRoutineOutcome.Next;
 
+        // The program counter written other than by a pull, as by the 6809's TFR X,PC, is a jump.
+        uint pcBit = _programCounter >= 0 ? 1u << _programCounter : 0;
+        if (((effects.RegistersWritten | effects.RegistersMayWrite) & pcBit) != 0 && (effects.Pulled | effects.MayPull) == 0)
+        {
+            return AnalysisRoutineOutcome.Jumped;
+        }
+
+        // Whether what the instruction works out may be an address in a stack, before it changes the registers.
+        bool reachesStack = (effects.RegistersRead & (StackPointers(state) | state.StackAddresses)) != 0;
+
         // The bits the core leaves known, from the bits of what the instruction reads that are known.
         bool evaluated = Evaluate(state, instruction, effects, pc, out int flagsKnown, out int flagsBits);
 
@@ -660,6 +641,7 @@ internal sealed class AnalysisRoutineEngine
         int address = FixedAddress(state, instruction, effects);
         bool direct = address >= 0;
         uint readLeaves = effects.RegistersRead & _leaves & ~(_directPage >= 0 ? 1u << _directPage : 0);
+        bool writes = access is MemoryAccess.Write or MemoryAccess.ReadWrite;
         if (access == MemoryAccess.Read
             && direct
             && readLeaves == 0
@@ -677,7 +659,7 @@ internal sealed class AnalysisRoutineEngine
         if (effects.Pushed != 0)
         {
             List<AnalysisRoutineUnit> units = Units(state, effects.RegistersRead & ~stackBit, effects.FlagsRead);
-            Frames(state, stack).Add(new AnalysisRoutineFrame(effects.Pushed, units));
+            Frames(state, stack).Add(new AnalysisRoutineFrame(effects.Pushed, units, effects.DependsOnPostbyte));
         }
 
         if (effects.Pulled != 0)
@@ -686,16 +668,13 @@ internal sealed class AnalysisRoutineEngine
             if (outcome is not (AnalysisRoutineOutcome.Next or AnalysisRoutineOutcome.Returned)) { return outcome; }
         }
 
-        // A write to memory: a store of one byte-wide register to a fixed address keeps its value there; another
-        // write there is a new value in each byte it writes; a write through a pointer or an index may land on any,
-        // whose values become unknown, and one through the stack pointer changes what was pushed.
-        if (access != MemoryAccess.Read)
+        // A write to memory: a store of a register to a fixed address keeps its bytes there; another write there is
+        // a new value in each byte it writes; a write through a pointer or an index may land on any, whose values
+        // become unknown; and one through a stack pointer, or an address worked out from one, may land anywhere in
+        // the stack, under what was pushed as well, on the return address.
+        if (writes)
         {
-            if (!direct && StackRelative(state, effects))
-            {
-                if (!HasFrames(state)) { return AnalysisRoutineOutcome.WroteStack; }
-                ForgetFrames(state, pc);
-            }
+            if (!direct && reachesStack) { return AnalysisRoutineOutcome.WroteStack; }
 
             int width = 0;
             for (int bit = 0; bit < 32; bit++)
@@ -712,12 +691,16 @@ internal sealed class AnalysisRoutineEngine
                     // ROM keeps its bytes, and a device or nothing may not give back what was written.
                     state.Memory.Remove(at);
                 }
-                else if (width == 1 && access == MemoryAccess.Write && OneBit(readLeaves) is int stored and >= 0)
+                else if (access == MemoryAccess.Write && OneBit(readLeaves) is int stored and >= 0 && width <= 2)
                 {
-                    // Without the machine's memory map a fixed address may be I/O, as the BBC's keyboard scan writes
-                    // a VIA register and tests it, so memory then keeps where the value came from but no bits of it.
+                    // A 16-bit register's bytes go in the CPU's order. Without the machine's memory map a fixed
+                    // address may be I/O, as the BBC's keyboard scan writes a VIA register and tests it, so memory then
+                    // keeps where the value came from but no bits of it.
                     AnalysisValue value = state.Slots[stored];
-                    state.Memory[at] = _map is null ? value.WithoutBits : value.WithBits(value.Known & 0xFF, value.Bits);
+                    int shift = width == 1 ? 0 : (offset == 0) == _bigEndian ? 8 : 0;
+                    AnalysisValue part = width == 1 ? value : AnalysisValue.Of(Changed(pc));
+                    int known = (value.Known >> shift) & 0xFF;
+                    state.Memory[at] = _map is null ? part.WithoutBits : part.WithBits(known, value.Bits >> shift);
                 }
                 else
                 {
@@ -752,6 +735,14 @@ internal sealed class AnalysisRoutineEngine
 
             state.Slots[bit] = value.WithBits(known, bits);
         }
+
+        // An address worked out from a stack pointer stays one through arithmetic and copies, as TSX then INX or
+        // ADD HL,SP; a register loaded from memory holds data, but a pointer the load steps keeps what it held.
+        bool pulls = (effects.Pulled | effects.MayPull) != 0;
+        bool computes = !pulls && (access == MemoryAccess.Address || instruction.Form.Role != OperandRole.Memory);
+        uint carried = computes ? written : written & effects.RegistersRead & state.StackAddresses;
+        uint addresses = (state.StackAddresses & ~written) | (reachesStack ? carried : 0);
+        state.StackAddresses = addresses & ~StackPointers(state);
 
         // A flag the instruction sets or clears, or the core leaves known, is a constant.
         for (int bit = 0; bit < 8; bit++)
@@ -940,6 +931,9 @@ internal sealed class AnalysisRoutineEngine
         if (state.StackLost) { return AnalysisRoutineOutcome.Lost; }
         List<AnalysisRoutineFrame> frames = Frames(state, stack);
         bool loadsPc = _programCounter >= 0 && (effects.RegistersWritten & (1u << _programCounter)) != 0;
+
+        // The program counter pulled from another stack than calls use, as the 6809's PULU PC, is a jump.
+        if (loadsPc && (_stackRegisters & (1u << stack)) == 0) { return AnalysisRoutineOutcome.Jumped; }
         int bytes = effects.Pulled - (loadsPc ? 2 : 0);
         AnalysisRoutineOutcome outcome = loadsPc ? AnalysisRoutineOutcome.Returned : AnalysisRoutineOutcome.Next;
         if (bytes == 0)
@@ -955,7 +949,15 @@ internal sealed class AnalysisRoutineEngine
         // A pull of other bytes than the last push saved leaves the stack where the model cannot follow it.
         if (top.Bytes != bytes) { return AnalysisRoutineOutcome.PulledOtherBytes; }
         frames.RemoveAt(frames.Count - 1);
+        // Pushes and pulls of one register or pair each pair up in register order, high part first; a list, as the
+        // 6809's, stacks in its own order, so only a pull of the same list restores it.
         bool matches = top.Units.Count == targets.Count;
+        bool listed = top.Listed || effects.DependsOnPostbyte;
+        for (int index = 0; matches && listed && index < targets.Count; index++)
+        {
+            matches = top.Units[index].Flags == targets[index].Flags && top.Units[index].Slot == targets[index].Slot;
+        }
+
         for (int index = 0; index < targets.Count; index++)
         {
             AnalysisRoutineUnit target = targets[index];
@@ -966,7 +968,7 @@ internal sealed class AnalysisRoutineEngine
                 for (int bit = 0; bit < 8; bit++) { state.Slots[FlagSlot + bit] = savedFlags.Values[bit]; }
                 writtenFlags = 0;
             }
-            else if (source is { Flags: false } saved)
+            else if (source is { Flags: false } saved && _widths[saved.Slot] == _widths[target.Slot])
             {
                 results[target.Slot] = saved.Values[0];
             }
@@ -1139,6 +1141,7 @@ internal sealed class AnalysisRoutineEngine
         }
 
         joined.StackLost |= second.StackLost;
+        joined.StackAddresses |= second.StackAddresses;
 
         // A stack with frames on one path only differs too, whichever path arrived first.
         foreach ((int stack, List<AnalysisRoutineFrame> frames) in first.Stacks)
@@ -1178,7 +1181,7 @@ internal sealed class AnalysisRoutineEngine
                     units.Add(left with { Values = values });
                 }
 
-                mine[index] = mine[index] with { Units = units };
+                mine[index] = mine[index] with { Units = units, Listed = mine[index].Listed || frames[index].Listed };
             }
         }
 

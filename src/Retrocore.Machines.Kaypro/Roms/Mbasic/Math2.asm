@@ -890,7 +890,7 @@ DDIV10_3:
 ;; Halves the FAC by decrementing its exponent, making it zero on underflow.
 ;;
 ;; In:    FAC = a nonzero number
-;; Out:   FAC = the number / 2
+;; Out:   FAC = the number / 2, or 0 on underflow
 ;; Uses:  A, HL
 DHALVE:
     LD HL,FAC

@@ -9,4 +9,8 @@ namespace Retrocore.Assembler;
 /// </summary>
 /// <param name="Bytes">The bytes pushed.</param>
 /// <param name="Units">The values, in register order.</param>
-internal sealed record AnalysisRoutineFrame(int Bytes, List<AnalysisRoutineUnit> Units);
+/// <param name="Listed">
+///  Whether a register list pushed them, as the 6809's <c>PSHS</c>, which stacks in its own order rather than the
+///  registers', so only a pull of the same list restores them.
+/// </param>
+internal sealed record AnalysisRoutineFrame(int Bytes, List<AnalysisRoutineUnit> Units, bool Listed = false);

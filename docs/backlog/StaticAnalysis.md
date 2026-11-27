@@ -326,8 +326,8 @@ without writing D or U.
 
 ### The API
 
-`InstructionSet.Effects(encoding)` (and `DisassembledInstruction.Effects`) returns an `InstructionEffects` by
-reference into an array built with the set, so a lookup neither allocates nor copies. It holds the registers read,
+`InstructionSet.Effects(encoding)` returns an `InstructionEffects` by reference into an array built with the set,
+so a lookup neither allocates nor copies; `DisassembledInstruction.Effects` returns a copy. It holds the registers read,
 written and maybe written as bits by index in `IsaDescription.EffectRegisters`, which `RegisterMask(name)` gives
 for a name (a pair's parts' bits); the flags read, written, maybe written, set and cleared as bits of the flags
 register; the flags copied from the operand, with `OperandBit(flag)`; the bytes pushed and pulled, always and on
@@ -341,12 +341,12 @@ condition decides on, held with a truth table of 16 bits; `Taken(known, values)`
 the flags known (true, false, or null when the unknown ones decide), and `Implied(taken, ...)` what each outcome
 tells of its flags, as `BHI` taken says carry and zero are clear.
 
-What it costs, measured in Release: a lookup about 1.3 ns, with nothing allocated; the tables 36 bytes an encoding,
-about 37 KB for the four 6502 family sets, 45 KB for the Z80's 1,255 encodings, and for the 6809 its encodings' and
-about 20 KB of postbyte tables (four field kinds, 256 postbytes each); nothing for a set whose description has no
-effects. Parsing a description, done once a process and only when first used, allocates 260 KB (6502) and 395 KB (Z80)
-of short-lived memory more than without the lines, and takes roughly 0.5 to 1 ms more. The cores do not read the data,
-and the generator that builds the 6502 cores skips `[isa]`, so execution is unchanged.
+What it costs, measured in Release: a lookup about 1.3 ns, with nothing allocated; the tables 56 bytes an encoding,
+about 57 KB for the four 6502 family sets, 70 KB for the Z80's 1,255 encodings, and for the 6809 18 KB for its 320
+encodings and about 20 KB of postbyte tables (four field kinds, 256 postbytes each); nothing for a set whose
+description has no effects. Parsing a description, done once a process and only when first used, allocates 260 KB
+(6502) and 395 KB (Z80) of short-lived memory more than without the lines, and takes roughly 0.5 to 1 ms more. The
+cores do not read the data, and the generator that builds the 6502 cores skips `[isa]`, so execution is unchanged.
 
 ### How it is checked
 
@@ -381,7 +381,7 @@ and the generator that builds the 6502 cores skips `[isa]`, so execution is unch
   IY, the block moves, `EX [SP],HL` and `XTHL`, the 6809's undocumented `XSTX`-style stores and the 8085's `SHLX`,
   and the 6502's accumulator shifts, which wrote nothing. The Z80's `INI`-style block inputs, which a port feeds,
   were added by hand.
-- `InstructionFlagsTests`: every CPU's hover and inspector flags now come from the data, and change the flags the
+- `InstructionFlagsTests`: every CPU's hover and inspector flags now come from the data, and match the flags the
   hovers listed by hand before, kept as the tests' expectations (`M6502HoverFlagsComeFromTheEffects`,
   `OtherHoverFlagsComeFromTheEffects`). Only documented flags are shown, so the Z80's X and Y and the 8085's K and V
   are left out, and "all" means every documented flag. B, only a bit of the byte `BRK` and `PHP` push, is no flag,
@@ -430,17 +430,26 @@ with the routines checked, the `Keeps:` items it could not verify, and the routi
   `LD [nn],HL` and the 6809's `STX`, changes both bytes it writes, and a 16-bit load takes nothing from memory but
   what the core makes of its bytes. An address formed with a register, as `{},X` or `[IX+d]`, is not fixed: a
   write there, or through a pointer, forgets what memory held. A write through a stack pointer, or a register
-  holding its entry value, as the 6809's `STB ,S`, the Z80's `EX [SP],HL` or the 6502's `STA $0101,X` after `TSX`,
-  makes what was pushed unknown. `copies` carry a value from register to register, as `TXA ... TAX` does.
+  holding an address worked out from one, may land anywhere in the stack, under what was pushed as well: the 6809's
+  `STB ,S`, the Z80's `EX [SP],HL` and `LD [HL],n` after `ADD HL,SP`, the 6502's `STA $0101,X` after `TSX`. An
+  address stays one through arithmetic, copies and the 6809's `LEA` (its `access address` line), but not through
+  a load, whose register holds data. `copies` carry a value from register to register, as `TXA ... TAX` does. A
+  6809 register list pulls in its own order, CC first, so only a pull of the list pushed restores it; single
+  registers and pairs, as `PUSH BC` then `POP DE`, pair up in order.
 - At a call it applies the callee's documented contract, where there is one, else the callee's own analysis; a
-  callee the analysis could not follow to its end keeps nothing. A jump to the start of another routine with a
-  contract, with nothing pushed, is a tail call, whose contract applies; a jump to an internal label is followed.
-- It gives up on a routine, and skips it, where the code does what the model cannot follow: an indirect jump; a
-  return through data it pushed, a pull of its return address, or a pull of other bytes than a push saved; a
-  change of the stack pointer; a write through the stack pointer with nothing pushed, into its return address; a
+  callee the analysis could not follow to its end keeps nothing. A call to an `Entry:` label takes the analysis of
+  the code from there, and the routine's `Keeps:` is checked from each entry as well as from its start. A jump to
+  the start of another routine with a contract, with nothing pushed, is a tail call, whose contract applies; a
+  jump to an internal label is followed.
+- It gives up on a routine, and skips it, where the code does what the model cannot follow: an indirect jump, or
+  a write of the program counter other than a return, as the 6809's `TFR X,PC` and `PULU PC`; a return through
+  data it pushed, a pull of its return address, or a pull of other bytes than a push saved; a change of the stack
+  pointer; a write into the stack, as above; a
   call into a routine that changes the stack under its return address, as Acorn's SAVE_REGISTERS inserts a
   restoring return; and bytes the source does not assemble. A routine that pushes data and then calls such a
-  helper, as SAVE_X_Y does, changes its own caller's stack, so its callers are skipped too.
+  helper, as SAVE_X_Y does, changes its own caller's stack, so its callers are skipped too. A routine with other
+  paths that return is followed in part: a sure change on those is still a finding, but the routine is listed with
+  the skipped ones, not counted as checked, and the `Keeps:` items it does not contradict are not verified.
 
 ### What it found
 
@@ -472,6 +481,8 @@ and the documentation:
   contracts would let them be checked.
 - **Hints a source cannot give yet:** calls that never return or take inline bytes.
 - `Keeps:` of memory is not checked, only of registers and flags.
+- **Stack addresses through memory or the stack,** as a stack pointer stored with `LD [nn],SP` and loaded back, or
+  pushed and pulled, are not known to be stack addresses again, so a write through them is not seen as one.
 - Where the check runs, as for the other analyses, is the first open question below.
 
 ## Flag values
@@ -570,7 +581,11 @@ at a device, and paths that join with only memory different.
 `AnalysisSoundnessTests` hold the cases a review of the whole change found the analysis claiming what the code
 does not do, each now fixed: a store through a pointer (on the Z80 and 8080, whose `access` lines lacked them)
 or an index, a 16-bit store, stacks that differ where paths meet, pulls of other bytes than pushed, writes into the
-stack, `LDIR` taken as one step, a callee followed only in part, patched code, and code a table enters.
+stack, `LDIR` taken as one step, a callee followed only in part, patched code, and code a table enters. A closing
+review found more, also fixed: values the core took from hidden state (the Z80's Q, WZ, IFF2 and refresh count, the
+8085's interrupt masks), writes of the 6809's PC, addresses worked out from a stack pointer, writes under pushed
+data, 6809 lists pulled in another order than pushed, calls to `Entry:` labels, and routines followed in part
+counted as checked.
 
 Following those joins found a bug the Keeps and Uses check had had all along: `AnalysisRoutineState.SameAs`, which
 decides whether a join changed anything, compared registers, flags and stacks but not memory, so a path that
@@ -578,7 +593,7 @@ changed only what a fixed address held was not followed on. With known bits in m
 `bmi NUMBER_TO_STRING_SMALL` look never taken.
 
 `SdkSourcesReport` now also compares the fixed conditions with the sources' own comments. Of the branches the
-sources mark `always`, 122 are proved; 121 are not, mostly because a value from RAM or from a caller decides them,
+sources mark `always`, 122 are proved; 116 are not, mostly because a value from RAM or from a caller decides them,
 as SET_VDU_STATUS's `ora VDU_STATUS` with the A its caller passes, or because a routine the analysis gave up on
 reaches them. 12 conditions are fixed without the mark, and each was checked by hand: real always-branches such
 as `ldy #TEXT_INVERSE` then `bne`, `clc` then `bcc`, a `bvs` followed by a `bvc`, AppleSoft's `bcs`, `dec` and
@@ -595,6 +610,14 @@ SET_EOF. Routines followed now for the first time found three documentation erro
 - DHALVE underflows into ZERO, which clears A; its `Uses:` now lists A.
 - DEL's `Out: VARTAB = HL = ...` named only VARTAB; it is now `HL, VARTAB = ...`.
 - CHKRES's `Out:` had HL inside the zero flag's meaning; HL now has its own entry.
+
+The closing review's fixes made the check stricter: 890 routines checked, 32 findings, 118 `Keeps:` items not
+verified. Most of the drop is routines now listed as followed in part, 120 of them, which were counted as checked
+before; the rest write into the stack through an address worked out from a stack pointer. The 7 new findings are
+all from `Entry:` labels, now checked too: SET_ENTRY_EXEC_ADDRESS_MERGE skips SAVE_REGISTERS, so A, which the
+DFS routine's `Keeps:` names, is changed from there, and the MOS's SET_STATUS_BITS, with A and CFS_STATUS 0, falls
+through its `bne` into the next routine, so SET_EOF's `Keeps: X, Y` holds only for the bits its callers pass. The
+documentation is not yet changed for them.
 
 What it costs, measured in Release over the MOS, the DFS and MBASIC with their maps: about 190 ms for the three
 once warm, and 114 MB allocated (220 ms and 107 MB before the review's fixes). Without maps it was about 140 ms and

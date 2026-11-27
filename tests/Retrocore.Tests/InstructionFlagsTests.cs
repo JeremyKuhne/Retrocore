@@ -50,7 +50,7 @@ public sealed class InstructionFlagsTests
 
     /// <summary>
     ///  The hover's flags for each documented 6502 family mnemonic, which come from the description's effects
-    ///  lines, change the flags the hover listed by hand before; B, only a bit of the byte BRK and PHP push, is
+    ///  lines, match the flags the hover listed by hand before; B, only a bit of the byte BRK and PHP push, is
     ///  no flag, and the 65C02's BRK also clears D.
     /// </summary>
     [TestMethod]
@@ -89,7 +89,7 @@ public sealed class InstructionFlagsTests
     }
 
     /// <summary>
-    ///  The Z80's, 6809's and 8080's hover flags, which come from the effects lines, change the flags the hover
+    ///  The Z80's, 6809's and 8080's hover flags, which come from the effects lines, match the flags the hover
     ///  listed by hand before, kept here as the expectations: as sets of letters, the union over a mnemonic's
     ///  operands, where "all", or a note naming AF or CC, means every flag.
     /// </summary>

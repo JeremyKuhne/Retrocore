@@ -5,11 +5,10 @@ known good dump, byte-identical to MAME's dumps, and boot to their prompts. This
 the Model I. Hardware beyond that, such as the RS-232 ports, hard disks and the Model 16's 68000, is out of its
 scope; the page's [What is not done yet](../Trs80Model3And2.md#what-is-not-done-yet) lists it.
 
-**Status:** every stage is built; what each still lacks is listed with it: LS-DOS 6.3.1 on the Model II, whose
-screen is reported to stay blank; the Model II's oracle past TRSDOS's prompt, and with LS-DOS; TRSDOS on the Model II
-writing a file; the PIO's bit-mode interrupt when its condition already holds; Teledisk images, for TRSDOS-II 4.2;
-the Model II's keyboard codes against its keyboard's ROM; MAME's `cpu_fc86` Model II boot ROM, which needs a good
-dump; and TRSDOS 1.3 writing.
+**Status:** every stage is built; what each still lacks is listed with it: the Model II's oracle past TRSDOS's prompt,
+and with LS-DOS; TRSDOS on the Model II writing a file; the PIO's bit-mode interrupt when its condition already holds;
+Teledisk images, for TRSDOS-II 4.2; the Model II's keyboard codes against its keyboard's ROM; MAME's `cpu_fc86` Model II
+boot ROM, which needs a good dump; and TRSDOS 1.3 writing.
 
 ## Stages
 
@@ -53,11 +52,12 @@ dump; and TRSDOS 1.3 writing.
        [Comparing with MAME](../Trs80Model3And2.md#comparing-with-mame)).
    - **LS-DOS 6.3.1 boots.** Done: from its DMK image it shows its welcome screen, takes the date and lists its
      directory (`Trs80Model2Tests.BootsLsDos`). Its boot had slowed: launched through the debug adapter at full speed,
-     it reached the date prompt in 13 seconds at #32 and in 151 on main, so a launch watched for less looked blank. By
-     the date LS-DOS has the PIO's port A in bit control mode, taking the FD1791's INTRQ as an interrupt, so the PIO
-     reads port A at every T-state, and port A's bit 1 asks the selected disk whether it is two-sided. #49 (`2901dbc`,
-     found by bisecting) made `FloppyDisk.Sides` sort all the disk's tracks, about 5 KB allocated each time; a disk now
-     keeps its geometry as its tracks change (`Trs80Model2Tests.PioWatchingTheControllerDoesNotAllocate`). Still open:
+     it reached the date prompt in 13 seconds at #32 and in 151 at `fa0b5b2`, so a launch watched for less looked blank;
+     the welcome screen came up in 5 to 9 seconds throughout. By the date LS-DOS has the PIO's port A in bit control
+     mode, taking the FD1791's INTRQ as an interrupt, so the PIO reads port A at every T-state, and port A's bit 1 asks
+     the selected disk whether it is two-sided. #49 (`2901dbc`, found by bisecting) made `FloppyDisk.Sides` sort all the
+     disk's tracks, about 5 KB allocated each time. #244 made `Sides` cheap for TRSDOS's boot, and a disk now keeps all
+     its geometry as its tracks change (`Trs80Model2Tests.PioWatchingTheControllerDoesNotAllocate`). Still open:
      comparing it with MAME's `trs80m2`.
    - **Teledisk.** TRSDOS-II 4.2 is a Teledisk (`.td0`) image, which the media library does not read; see the
      [media backlog](Media.md).

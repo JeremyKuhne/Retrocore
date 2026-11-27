@@ -130,9 +130,11 @@ root a workflow of its own. `retrocore --version` prints the version `new` pins.
 
 A fresh clone builds every target with `dotnet tool restore` and `dotnet retrocore build --all`, with the tool from a
 local pack until a feed exists: [`tools/Test-FreshClone.mjs`](../../tools/Test-FreshClone.mjs) commits and clones a
-project `retrocore new` makes and the adventure sample's files alone, and builds each, in CI on Linux, Windows and
-macOS. The sample is ready to move to its own repository: it pins the tool, recommends the extension, ignores its
-output and has its own workflow, which builds every target and plays the transcripts once the tool is on a source it
+project `retrocore new` makes and the adventure sample's files alone, and builds each. It ran on Linux, Windows and
+macOS in CI when phase 5 was built, and now runs there when started by hand
+([`fresh-clone.yml`](../../.github/workflows/fresh-clone.yml)), not on every change. The sample is ready to move to
+its own repository: it pins the tool, recommends the extension, ignores its output and has its own workflow, which
+builds every target and plays the transcripts once the tool is on a source it
 can restore from. Its README lists what else changes on the move.
 
 In VS Code, *Retrocore: New Project* asks for the machines, a name and a folder and runs the host's `retrocore new`.
@@ -142,8 +144,8 @@ and a Restore button when its version differs ([open questions](#open-questions)
 Preview builds: [`.github/workflows/preview.yml`](../../.github/workflows/preview.yml), on each push to main or by
 hand, packs the tool as `0.1.0-preview.<run>` (checking that it installs from its package alone, says its version and
 makes a project that pins it) and the extension's VSIX with a host of that same version, and keeps both as the run's
-artifacts. They are published nowhere: a NuGet feed for the tool, a release, or the Marketplace each wait for a
-decision of their own.
+artifacts. They are published nowhere. The tool goes on a NuGet feed only when the rest of the project is published
+with it, the extension included, not ahead of it.
 
 ## The project
 
@@ -520,9 +522,10 @@ and 80 on the Apple III's SOS console.
 adventures are normally hosted and the terms given there. Recording the exact page and terms is part of adding the
 file.
 
-**Where it lives.** The sample starts in this repository, in `sample/adventure/`, so it can change with the SDK. Once
-the tool has its first preview build, it moves to a repository of its own, made with `retrocore new` and keeping its
-history, and its CI builds it with the published tool. This repository's tests then build it at a pinned commit.
+**Where it lives.** The sample starts in this repository, in `sample/adventure/`, so it can change with the SDK. It is
+ready to move to a repository of its own, keeping its history (phase 5). Its own CI builds it once the tool is
+published, which waits until the rest of the project, the extension included, is published with it. This
+repository's tests then build it at a pinned commit.
 
 ## Dialects
 
@@ -608,9 +611,10 @@ media writers can go alongside them, each in its own change.
    file format, its image and how F5 loads it, and boot media lookup by hash. Done when Pirate Adventure plays on all
    five targets from their disks and tapes, loading `PIRATE.DAT` where there is a disk.
 5. **The repository workflow.** `retrocore new` and `retrocore init` with their templates, *Retrocore: New Project*,
-   the generated CI workflow, and preview builds of the tool and the extension. Then the sample moves to its own
-   repository. Done when a fresh clone builds every target with `dotnet tool restore` and `dotnet retrocore build --all`
-   on Windows, macOS and Linux.
+   the generated CI workflow, and preview builds of the tool and the extension. Then the sample is ready to move to its
+   own repository, which it does once the tool is published. Done when a fresh clone builds every target with
+   `dotnet tool restore` and `dotnet retrocore build --all` on Windows, macOS and Linux (`fresh-clone.yml`, run by
+   hand).
 6. **Deprecation.** Deprecation warnings from `retrocore build`, and the previous-major support, needed before the
    SDK's first breaking change.
 7. **More environments.** `prodos`, `cpm`, `level2`, `trsdos`, `colorbasic` and `diskbasic`, and SOS interpreters that

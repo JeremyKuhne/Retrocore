@@ -464,12 +464,14 @@ broken link.
   preserved. Sections that apply only to one model (from `.if`) are checked only on that model.
 
   A call to an `Entry:` label is checked against the routine's `Keeps:` too, where the label has no comment of
-  its own. An entry whose meaning ends in a keeps clause, as `Aux = stores from an auxiliary byte; keeps A`, or
+  its own; a label with a comment of its own is checked against that comment's `Keeps:` and `Uses:`, if any. An
+  entry whose meaning ends in a keeps clause, as `Aux = stores from an auxiliary byte; keeps A`, or
   `; keeps nothing` for one that relies on its caller to save the registers, is checked against that clause
-  instead, and not for `Uses:`, unless the label has a comment of its own with a `Keeps:` or `Uses:`. The clause
-  lists items as `Keeps:` does, separated by commas or "and"; the documentation check warns about one it does not
-  know. The launch
-  option `checkContracts` selects `warn` (the default: a Debug Console message), `stop` (also stops, with
+  instead of the routine's `Keeps:`, and not for `Uses:`; where the label's own comment has a `Keeps:` or `Uses:`,
+  that comment wins. The clause lists items as `Keeps:` does, separated by commas or "and", each with an optional
+  note in parentheses; the documentation check warns about one it does not know.
+
+  The launch option `checkContracts` selects `warn` (the default: a Debug Console message), `stop` (also stops, with
   reason `exception`, at the instruction after the call) or `off`. With `warn`, ticking the **Routine broke
   its Keeps: promise** exception filter in VS Code's Breakpoints view also stops; its hover explains it. The
   filter is listed only when some loaded source has a `Keeps:` section and `checkContracts` is not `off`.

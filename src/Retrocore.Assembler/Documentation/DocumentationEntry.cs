@@ -17,8 +17,8 @@ public sealed record DocumentationEntry(string Name, string Meaning, int Line)
     /// <summary>
     ///  Gets what an <c>Entry:</c> label keeps where its meaning ends in a clause that says, as
     ///  <c>Aux = stores from an auxiliary byte; keeps A</c>, <c>; keeps X, Y</c> or <c>; keeps nothing</c>: the
-    ///  items, in place of the routine's <c>Keeps:</c> for a call there, split at commas and "and", a final period
-    ///  dropped. Null where the meaning has no such clause, so the routine's <c>Keeps:</c> applies.
+    ///  items, in place of the routine's <c>Keeps:</c> for a call there, split at commas and "and", each without a
+    ///  note in parentheses, a final period dropped. Null where the meaning has no such clause, so the routine's <c>Keeps:</c> applies.
     /// </summary>
     public IReadOnlyList<string>? Keeps
     {
@@ -28,10 +28,19 @@ public sealed record DocumentationEntry(string Name, string Meaning, int Line)
             if (clause < 0) { return null; }
             string items = Meaning[(clause + KeepsClause.Length)..].Trim().TrimEnd('.');
             if (items.Equals("nothing", StringComparison.OrdinalIgnoreCase)) { return []; }
-            List<string> kept = [];
-            foreach (string item in items.Replace(" and ", ",").Split(','))
+            // "and" separates items as commas do.
+            for (int and; (and = items.IndexOf(" and ", StringComparison.OrdinalIgnoreCase)) >= 0;)
             {
+                items = $"{items[..and]},{items[(and + 5)..]}";
+            }
+
+            List<string> kept = [];
+            foreach (string item in items.Split(','))
+            {
+                // A note in parentheses may follow an item, as in Keeps:: "Y (for a sound channel)".
                 string name = item.Trim();
+                int note = name.IndexOf(" (", StringComparison.Ordinal);
+                if (note > 0 && name[^1] == ')') { name = name[..note]; }
                 if (name.Length != 0) { kept.Add(name); }
             }
 

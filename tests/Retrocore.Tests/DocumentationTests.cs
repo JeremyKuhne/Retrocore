@@ -663,8 +663,8 @@ public class DocumentationTests
     }
 
     /// <summary>
-    ///  An <c>Entry:</c> meaning's keeps clause lists items as <c>Keeps:</c> does, by commas or "and", in any case
-    ///  and with a final period, and the check reports an item it does not know.
+    ///  An <c>Entry:</c> meaning's keeps clause lists items as <c>Keeps:</c> does, by commas or "and", with notes in
+    ///  parentheses, in any case and with a final period, and the check reports an item it does not know.
     /// </summary>
     [TestMethod]
     public void EntryKeepsClausesAreRead()
@@ -673,7 +673,7 @@ public class DocumentationTests
             ;; Moves a byte.
             ;; Keeps: X, Y
             ;; Entry:
-            ;;   Later = skips the first; Keeps X and Y.
+            ;;   Later = skips the first; Keeps X (the index) And Y.
             ;;   Last = skips both; keeps nothing
             ;;   Wrong = skips all; keeps the carry
             ROUTINE:
@@ -694,7 +694,7 @@ public class DocumentationTests
         new DocumentationEntry("Plain", "skips the first", 0).Keeps.Should().BeNull();
 
         List<string> messages = [.. new DocumentationResolver(set).Check().Select(diagnostic => diagnostic.Message)];
-        messages.Should().Equal("Entry: 'Wrong' keeps registers and memory separated by commas, not 'the carry'.");
+        messages.Should().Equal("Entry: 'Wrong' keeps 'the carry', which is not a register, flag or symbol.");
     }
 
     /// <summary>

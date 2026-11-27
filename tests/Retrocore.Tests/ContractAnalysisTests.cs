@@ -153,6 +153,23 @@ public class ContractAnalysisTests
         (findings, int count, _) = Check(Right, "Mos6502");
         findings.Should().BeEmpty();
         count.Should().Be(1);
+
+        // An entry with a comment of its own is a routine of its own: the routine's Keeps: does not reach it.
+        const string Own = """
+            ;; Returns.
+            ;; Keeps: X
+            ;; Entry: Clear = clears X first
+            Saver:
+                rts
+
+            ;; Clears X and returns.
+            Clear:
+                ldx #0
+                rts
+            """;
+
+        (findings, _, _) = Check(Own, "Mos6502");
+        findings.Should().BeEmpty();
     }
 
     /// <summary>

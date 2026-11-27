@@ -376,7 +376,7 @@ public sealed partial class DocumentationResolver
                     {
                         if (item.Contains(' ', StringComparison.Ordinal))
                         {
-                            warn($"Entry: '{entry.Name}' keeps registers and memory separated by commas, not '{item}'.", entry.Line);
+                            warn($"Entry: '{entry.Name}' keeps '{item}', which is not a register, flag or symbol.", entry.Line);
                         }
                         else if (Unknown(topic, item) is { } unknown)
                         {

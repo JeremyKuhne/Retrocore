@@ -21,7 +21,8 @@ public class MemoryAccessDataTests
 
     /// <summary>
     ///  Every encoding that writes memory other than by pushing is a write or a read-write, and every one that is
-    ///  runs and writes in some case, but the Z80's block inputs, which a port feeds and the evaluator does not run.
+    ///  runs and writes in some case; the Z80's block inputs, which a port feeds and the evaluator does not run, are
+    ///  writes.
     /// </summary>
     /// <param name="name">The instruction set.</param>
     /// <param name="seed">The random cases' seed, fixed so a failure repeats.</param>
@@ -70,7 +71,11 @@ public class MemoryAccessDataTests
             }
 
             string mnemonic = set.MnemonicName(value.Mnemonic);
-            if (!ran && access != MemoryAccess.Read && !s_portFed.Contains(mnemonic))
+            if (s_portFed.Contains(mnemonic) && access != MemoryAccess.Write)
+            {
+                failures.Add($"{label}: a port feeds its writes to memory, but its access is {access}");
+            }
+            else if (!ran && access != MemoryAccess.Read && !s_portFed.Contains(mnemonic))
             {
                 failures.Add($"{label}: its access is {access}, but it never ran to show it");
             }

@@ -493,8 +493,9 @@ where its value came from (`AnalysisValue`). Two paths that meet keep the bits b
   one that goes back to itself, as the Z80's `LDIR` does until BC is 0. Each run starts from the core as it was
   built, so a `HALT` or `WAI` before leaves nothing behind.
 - Code a store may change is not the code assembled, so the analysis stops where it reaches it: a byte in RAM that
-  a store at a fixed address, or from an indexed store's base, may write, and the byte after, as `STA Patch+1` and
-  `STA Patch,Y` do. MBASIC's LPTOUT stops so: its `CALL $0000` takes the BIOS's address from Init.asm.
+  a store at a fixed address may write, with the byte after, as `STA Patch+1` does, or that an indexed store may
+  reach from its base, as `STA Patch,Y` may reach any of the 256 bytes from Patch. MBASIC's LPTOUT stops so: its
+  `CALL $0000` takes the BIOS's address from Init.asm.
 - The runs try all ones and two alternations first, and stop as soon as every bit written has varied, so an
   instruction whose result is unknown costs a few runs. Flags the effects lines set or clear are not waited for.
   Only the registers an instruction reads are set and only those it writes read back, which the effects lines'
@@ -575,8 +576,9 @@ changed only what a fixed address held was not followed on. With known bits in m
 `SdkSourcesReport` now also compares the fixed conditions with the sources' own comments. Of the branches the
 sources mark `always`, 122 are proved; 121 are not, mostly because a value from RAM or from a caller decides them,
 as SET_VDU_STATUS's `ora VDU_STATUS` with the A its caller passes, or because a routine the analysis gave up on
-reaches them. 10 conditions are fixed without the mark, and each was checked by hand: real always-branches such
-as `ldy #TEXT_INVERSE` then `bne`, `clc` then `bcc`, a `bvs` followed by a `bvc`, the Enhanced firmware's
+reaches them. 12 conditions are fixed without the mark, and each was checked by hand: real always-branches such
+as `ldy #TEXT_INVERSE` then `bne`, `clc` then `bcc`, a `bvs` followed by a `bvc`, AppleSoft's `bcs`, `dec` and
+`bcc` to the same label and its `ldx #Fac` then `bne`, the Enhanced firmware's
 `ora #MODE_CURSOR_OFF` then `bne`, whose comment is on the line above, and from the memory map, the DFS's
 `bit FS_CONTROL_BLOCK_TEMPLATE_HIGH` of a ROM byte of `&FF`, then `bvs`.
 
@@ -603,8 +605,8 @@ allocation, and a follow-up could cut them.
 - **Writes through other pointers** are taken to miss the stack: only one through a stack pointer, or a register
   holding its entry value, changes what was pushed, and one at an offset past what the routine pushed, into its
   caller's data, is not seen.
-- **Patched code** is found only through stores to a fixed address or from an indexed store's base; one through a
-  pointer or on the 6809's direct page is not.
+- **Patched code** is found only through stores to a fixed address or an indexed one from a base; one through a
+  pointer, a base register (the Z80's `[IX+d]`) or the 6809's direct page is not.
 - **Names later in a section** that share a meaning, as `carry = set when found, X, Y = the offset`, are read as
   part of the meaning before them: 76 `In:` and `Out:` lines in the sources have such a run, as Business BASIC's
   `FORPNT, FORPNTB = the variable, VALTYP, INTFLG, ISARA = its type`, and the check takes their names as not

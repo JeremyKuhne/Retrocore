@@ -64,6 +64,7 @@ internal sealed class AnalysisRoutineEngine
     private readonly bool[]? _data;
     private readonly bool[]? _patched;
     private readonly bool[] _fixedForms;
+    private readonly int[] _spans;
     private readonly int _directPage;
     private readonly Func<ushort, int> _knownByte;
     private AnalysisRoutineState? _evaluating;
@@ -111,6 +112,7 @@ internal sealed class AnalysisRoutineEngine
         _data = data;
         _patched = patched;
         _fixedForms = FixedForms(set.Description);
+        _spans = Spans(set.Description);
         _evaluator = evaluator;
         _map = map;
         _knownByte = KnownByte;
@@ -428,16 +430,48 @@ internal sealed class AnalysisRoutineEngine
     }
 
     /// <summary>
-    ///  Gets the address a store's operand starts from: the fixed address, or an indexed form's base, as STA Patch,Y
-    ///  names; -1 for a pointer form, and for one on the 6809's direct page, which DP decides.
+    ///  Gets the bytes a store may write, from its operand alone: a fixed address and the byte after, as STA Patch+1
+    ///  may patch an operand's two bytes, or every byte an index can reach from a base, as STA Patch,Y, within the
+    ///  zero page for a zero-page form. Empty where the operand does not say, as for a pointer, a base register,
+    ///  as the Z80's [IX+d], or the 6809's direct page, which DP decides.
     /// </summary>
     /// <param name="instruction">The instruction.</param>
-    /// <returns>The address, or -1.</returns>
-    internal int BaseAddress(DisassembledInstruction instruction)
+    /// <returns>The first address, how many bytes, and whether they wrap within the zero page.</returns>
+    internal (int First, int Count, bool ZeroPage) StoredBytes(DisassembledInstruction instruction)
     {
-        OperandForm form = instruction.Form;
-        bool memory = form.Role == OperandRole.Memory && form.FieldCount >= 1 && !form.HasPostbyte;
-        return memory && (_directPage < 0 || !instruction.Effects.Reads(_directPage)) ? instruction.Operand : -1;
+        int span = _spans[instruction.Form.Id];
+        if (span == 0 || (_directPage >= 0 && instruction.Effects.Reads(_directPage))) { return (0, 0, false); }
+        return (instruction.Operand, span, instruction.Form.Size == 1 && span > 2);
+    }
+
+    // How many bytes each memory form's store may write from its operand: 2 for a fixed address (the byte and the
+    // one after), one more than an index register reaches for {},X, and 0 where a register forms the base.
+    private static int[] Spans(IsaDescription description)
+    {
+        int[] spans = new int[description.Forms.Count];
+        foreach (OperandForm form in description.Forms)
+        {
+            if (form.Role != OperandRole.Memory || form.FieldCount < 1 || form.HasPostbyte || form.Patterns.Count == 0)
+            {
+                continue;
+            }
+
+            string pattern = form.Patterns[0];
+            int open = pattern.IndexOf('[', StringComparison.Ordinal);
+            int close = pattern.IndexOf(']', StringComparison.Ordinal);
+            string address = (open >= 0 && close > open ? pattern[(open + 1)..close] : pattern).Trim();
+            if (address == "{}")
+            {
+                spans[form.Id] = 2;
+                continue;
+            }
+
+            string index = address.StartsWith("{},", StringComparison.Ordinal) ? address[3..].Trim() : "";
+            IsaRegister? register = description.Registers.FirstOrDefault(candidate => candidate.Name == index);
+            if (register is not null) { spans[form.Id] = Math.Min((1 << register.Bits) + 1, 0x10000); }
+        }
+
+        return spans;
     }
 
     /// <summary>

@@ -217,17 +217,15 @@ internal sealed partial class AnalysisContracts
         foreach (ushort address in _instructions)
         {
             if (!_engine.TryDecode(address, out DisassembledInstruction instruction)) { continue; }
-            // A store at a fixed address or from an indexed one's base, into RAM, may patch code there: the byte
-            // and the one after, as STA Patch+1 and STA Patch,Y do. Stores through a pointer or the 6809's direct
-            // page are not seen.
-            if (_set.EncodingAccess(instruction.EncodingId) == MemoryAccess.Read || _engine.BaseAddress(instruction) is not (int stored and >= 0))
-            {
-                continue;
-            }
 
-            for (int offset = 0; offset < 2; offset++)
+            // A store into RAM may patch code there: at a fixed address, the byte and the one after, as STA Patch+1
+            // does; from an indexed one's base, every byte the index reaches, as STA Patch,Y does. Stores through a
+            // pointer, a base register or the 6809's direct page are not seen.
+            if (_set.EncodingAccess(instruction.EncodingId) == MemoryAccess.Read) { continue; }
+            (int first, int count, bool zeroPage) = _engine.StoredBytes(instruction);
+            for (int offset = 0; offset < count; offset++)
             {
-                ushort at = (ushort)(stored + offset);
+                ushort at = zeroPage ? (ushort)((first + offset) & 0xFF) : (ushort)(first + offset);
                 if ((_map?[at] ?? MemoryKind.Ram) == MemoryKind.Ram) { _patched[at] = true; }
             }
         }

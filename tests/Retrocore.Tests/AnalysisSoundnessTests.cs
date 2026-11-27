@@ -249,7 +249,7 @@ public class AnalysisSoundnessTests
 
     /// <summary>
     ///  An instruction a store changes is not the one assembled: storing CLC's opcode over SEC leaves carry clear,
-    ///  through a fixed address or an index.
+    ///  through a fixed address, or through an index that reaches past the base.
     /// </summary>
     [TestMethod]
     public void PatchedInstructionsAreNotTheirAssembledEffects()
@@ -269,13 +269,15 @@ public class AnalysisSoundnessTests
             """, "Mos6502", "X");
 
         NotKept("""
-            ;; Stores CLC over the SEC below through an index.
+            ;; Stores CLC over the SEC two bytes on through an index.
             ;; Keeps: X
             Holder:
-                ldy #0
+                ldy #2
                 lda #$18
                 sta Patch,y
             Patch:
+                nop
+                nop
                 sec
                 bcs Done
                 ldx #0
@@ -306,7 +308,8 @@ public class AnalysisSoundnessTests
 
         report.FixedConditions.Should().BeEmpty();
 
-        // A table naming a local label reaches that label, not another scope's of the same name.
+        // A table naming a local label reaches it, wherever another scope has one of the same name: each is taken
+        // as named, as which one a name means is the assembler's to say.
         (_, report) = Analyze("""
             .proc Other
             Loop:

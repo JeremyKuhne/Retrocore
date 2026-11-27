@@ -1318,7 +1318,7 @@ are part 5's; the routines here they use are said to be shared in their reasons.
 | 6 | OS45 | $C41B | Directory::ChooseDrives::NotReady | local | D1541 | lookup 1 | Error 74, DRIVE NOT READY. |
 | 7 | OS50 | $C420 | Directory::ChooseDrives::CheckOther | local | D1541 | lookup 1 | The first drive has a disk: the other is checked too (DRVNUM put back), and left out of the search if it has none. |
 | 8 | OS60 | $C434 | Directory::ChooseDrives::OneDrive | local | D1541 | lookup 1 | One drive: error 74 if it has no disk. |
-| 9 | OS70 | $C439 | Directory::ChooseDrives::Done | local | D1541 | lookup 3 | On to SetLeds (setlds). |
+| 9 | OS70 | $C439 | Directory::ChooseDrives::Done | local | D1541 | lookup 3 | On to TurnOnActivityLed (SETLDS). |
 | 10 | OS40 | $C43C | Directory::ChooseDrives::FixedDrive | local | D1541 | lookup 1 | Bit 6 clear: the entry's bit 7 is the drive to start on. |
 | 11 | SCHTBL | $C440 | Directory::SearchOrder | table | D1541 | lookup 1 | For each mask of drives the names ask for (bits 0-1 named, 2-3 by default): bits 0-1 the drives after the first to search, bit 6 set to start on the first name's drive, else bit 7 the drive. |
 | 12 | LOOKUP | $C44F | Directory::FindAll | routine | D1541 | rename 2, utlodr 1 | LOOKUP: looks up every name in the stream on the drives ChooseDrives picks, filling the tables (FILTRK, FILSEC, PATTYP, ENTSEC, ENTIND) for each found; FOUND nonzero once all are. |
@@ -2071,7 +2071,8 @@ differ.
     once and leaves the three NOPs the listing has.
   - -02 and -03: `RSR` in the fill at `$FFE2`.
   - -06: a patch at `$FF2F` (`LDA #$FF`, `STA $51`, `JMP FORMAT`) that NEW calls (the `JSR` at `$EE3D`; `$EE3E` is its
-    operand; part 3's) instead of FORMAT; it needs a new name, which belongs with part 3's.
+    operand; part 3's) instead of FORMAT, so the format starts with FormatTrack at `$FF`; it has no listing name, and is
+    `Commands::FormatPatch`, beside `Commands::Format`.
   - ECHKSM: `$FD`, `$10`, `$0E`, `$3E` and `$EC` for -01, -02, -03, -05 and -06; `$60` in the 1540's 325303-01.
   - 325303-01, the 1540, is -01 with four changes in this part: no SLOWD, CLKDAT or NNMI (`$FEF3-$FF0F` is fill),
     TALK's ISRCLK clocks each bit without the speed test (`JSR CLKHI`, four NOPs, `JSR CLKLOW`, `JSR DATHI` at
@@ -2081,7 +2082,7 @@ differ.
   wherever the code exists; the patch routines (and their `JMP`s) are built only in the revisions that have
   them; the rows are 901229-05's. *Recommended.* **Settled:** each revision difference is one `.if` on the revision's
   constant at its place, with the corrected addresses (`$E683`, `$E68B`, `$E9DC`, `$EE3D`) and four changes for the
-  1540.
+  1540; -06's patch is `Commands::FormatPatch`, built for R6 only.
 - D-P6-Q8. **Labels nothing reaches.** As the brief and K-P7 (RAMTBT) have it, a label nothing refers to and that
   marks no data is dropped, its code kept and its name in prose: ISR02, ERMSG2, CR20, CR30, RAMTST, INTTAB and
   SETERR (SETERR's place, where 73's message and the bus's set-up begin, gets a comment naming it, since the
@@ -2280,11 +2281,11 @@ differ.
 | 167 | BUFIND | $FEE0 | BufferPages | table | D1541 | ssutil 4, trnsfr 1, block 1, tst4 1, close 1, dskintsf 1, map 1 | Each buffer's page, $03-$07, by its number (a sixth byte repeats $07). |
 | 168 | ECHKSM | $FEE6 | Startup::UpperRomChecksum | table | D1541 | none | The byte that makes the $E000 ROM's sum come out at $E0; each revision has its own (Q7). |
 | 169 | NMI | $FEE7 | Startup::Reinitialize | routine | D1541 | vector 1 | JMP (VNMI): VNMI holds Reset::Initialize, so a plain UI re-initializes the drive without the self-test; the 1540's NMI vector points here (Q5). |
-| 170 | PEA7A | $FEEA | Startup::BlinkFaultPatch | routine | D1541 | dskintsf 1 | -05's fix: lights the LEDs and sets VIA 2's port B direction (LEDOUT) so the LED is an output before CNTINT has run, and back to BlinkFault::LedsLit (Q6). |
+| 170 | PEA7A | $FEEA | Startup::BlinkFaultPatch | routine | D1541 | dskintsf 1 | The power-on patch, the same in every build (vector.src's first): lights the LEDs and sets VIA 2's port B direction (LEDOUT) so the LED is an output before CNTINT has run, and back to BlinkFault::LedsLit (Q6). |
 | 171 | SLOWD | $FEF3 | Serial::SlowDown | routine | D1541 | sertalk 1 | About 40 µs more for each bit sent at the VIC-20's speed; X kept, A lost. |
 | 172 | SLOWE | $FEF6 | Serial::SlowDown::Wait | local | D1541 | vector 1 | Five counts. |
 | 173 | CLKDAT | $FEFB | Serial::PullClockAndReleaseData | routine | D1541 | sertalk 1 | Ends a bit: PullClock, then ReleaseData. |
-| 174 | NNMI | $FF01 | Startup::Nmi | routine | D1541 | vector 1 | The NMI vector's target, which UI reaches through the user table: UI- sets SerialNoDelay nonzero (the 64's speed), UI+ zero (the VIC-20's), and UI alone goes to Restart. |
+| 174 | NNMI | $FF01 | Startup::Nmi | routine | D1541 | vector 1 | The NMI vector's target, which UI reaches through the user table: UI- sets SerialNoDelay nonzero (the 64's speed), UI+ zero (the VIC-20's), and UI alone goes to `Startup::Reinitialize`. |
 | 175 | NNMI10 | $FF0D | Startup::Nmi::SetSpeed | local | D1541 | vector 1 | SerialNoDelay = A. |
 | 176 | PATCH5 | $FF10 | Startup::ResetPatch | routine | D1541 | dskintsf 1 | -05's fix: VIA 1's port A all outputs, then port B = $02 and its directions set, so CLK is released and DATA pulled during the self-test (the comment says the clock); back to Reset::SelfTest (Q6, Q10). |
 | 177 | PATCH6 | $FF20 | Serial::ReceiveBytePatch | routine | D1541 | serlistn 1, vector 1 | -05's fix to EOI's timing: waits until DATA reads released, every listener ready, before starting the 256 µs timer; back to ReceiveByte::WaitForClock. |

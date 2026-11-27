@@ -157,7 +157,9 @@ public sealed class Model100Files
     /// <exception cref="ArgumentException">
     ///  The name is not a Model 100 file's, or a <c>.CO</c> file's length is wrong.
     /// </exception>
-    /// <exception cref="InvalidDataException">A <c>.BA</c> file's lines do not end.</exception>
+    /// <exception cref="InvalidDataException">
+    ///  The <c>.BA</c> file's lines do not end, or those of a <c>.BA</c> file in RAM or BASIC's unsaved program.
+    /// </exception>
     /// <exception cref="InvalidOperationException">The directory is full, or RAM has no room.</exception>
     public void Write(string name, ReadOnlySpan<byte> bytes)
     {
@@ -224,8 +226,9 @@ public sealed class Model100Files
             throw new InvalidOperationException($"BASIC has {file.Name} open, and the ROM's KILL refuses it too; open another program first.");
         }
 
-        // Measured first, so a file with no end is refused before RAM changes.
+        // Measured first, and every program checked, so a file with no end is refused before RAM changes.
         int length = Length(file.Type, file.Address);
+        CheckPrograms();
         int entry = EntryOf(file.Address);
         for (int index = 0; index < EntrySize; index++)
         {

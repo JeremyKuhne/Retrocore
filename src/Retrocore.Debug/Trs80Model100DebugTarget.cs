@@ -439,7 +439,7 @@ internal sealed partial class Trs80Model100DebugTarget : IDebugTarget, IRecordin
                 "files",
                 "Files",
                 Files(),
-                "The files in RAM's directory, beside the ROM's own programs; the launch's files option puts host files in it."),
+                "The files in RAM's directory, without the ROM's own programs and its hidden entries; the launch's files option puts host files in it."),
             new("io", "Serial, modem, cassette, printer, wand", "not connected", "Coming in later phases.")
         ];
     }

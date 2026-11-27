@@ -204,10 +204,10 @@ public class Trs80Model3OracleTests
 
     /// <summary>
     ///  Each Model II TRSDOS boots from drive 0, with version 5 of the boot ROM (MAME's <c>9733</c>), and takes the
-    ///  date and time. The times are MAME 0.264's. MAME 0.264 asks for the date after about 31 seconds, where this side asks after about 16: in MAME,
-    ///  TRSDOS 1.2 restores the drive in single density and seeks again 17 times in its first 30 seconds, where here
-    ///  it seeks once, so the keys wait for MAME. TRSDOS 1.2 in MAME is as slow to list its directory, whose heading
-    ///  shows the time, so the comparison stops at the prompt; the listing is
+    ///  date and time. MAME, 0.264 and 0.289 alike, asks for the date after about 30 seconds, where this side asks
+    ///  after about 16: in MAME, TRSDOS 1.2 restores the drive in single density and seeks again 17 times in its first
+    ///  30 seconds, where here it seeks once, so the keys wait for MAME. TRSDOS 1.2 in MAME is as slow to list its
+    ///  directory, whose heading shows the time, so the comparison stops at the prompt; the listing is
     ///  <c>Trs80Model2RomTests.BootsItsDos</c>'s.
     /// </summary>
     /// <param name="image">The image's file name, in <c>trs80-disks</c>.</param>

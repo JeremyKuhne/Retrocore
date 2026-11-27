@@ -136,12 +136,12 @@ Internet Archive.
 
 The item names are the download pages' last path segment, `https://archive.org/details/<item>`.
 
-The Model II's DOSes are not among those items. They are in MAME's `trs80m2` software list, in the Internet Archive
-item `MAME_0.202_Software_List_ROMs_merged`, as `trs80m2.zip` (SHA-256 `813f8840…`). That holds a zip for each
-entry, named below with the file in it. The fixtures keep them under new names. TRSDOS 1.2, 2.0a and 2.0b boot,
-take the date and time and list their directories (`Trs80Model2RomTests.BootsItsDos`), and match MAME at their
-prompt in MAME 0.264 (`Trs80Model3OracleTests.Model2DosMatchesMame`). LS-DOS 6.3.1 is not tested; its screen is
-reported to stay blank (see the [backlog](backlog/Trs80Model3AndModel2.md#stages), stage 2). TRSDOS-II 4.2 is a Teledisk image, which the media
+The Model II's DOSes are not among those items. They are in MAME's `trs80m2` software list, in the Internet Archive item
+`MAME_0.202_Software_List_ROMs_merged`, as `trs80m2.zip` (SHA-256 `813f8840…`). That holds a zip for each entry, named
+below with the file in it. The fixtures keep them under new names. TRSDOS 1.2, 2.0a and 2.0b boot, take the date and
+time and list their directories (`Trs80Model2RomTests.BootsItsDos`), and match MAME at their prompt in MAME 0.264 and
+0.289 (`Trs80Model3OracleTests.Model2DosMatchesMame`). LS-DOS 6.3.1 is not tested; its screen is reported to stay blank
+(see the [backlog](backlog/Trs80Model3AndModel2.md#stages), stage 2). TRSDOS-II 4.2 is a Teledisk image, which the media
 library does not read.
 
 TRSDOS's boot code checks the machine before it loads the DOS. One check copies 80 bytes to video RAM with the DMA,
@@ -281,7 +281,7 @@ types the same keystrokes at the same emulated seconds and dumps the screen's vi
 T-states while the Model 4 runs at 4 MHz. The screens must then match, cell for cell. MAME comes from
 `RETROCORE_MAME`, `mame/mame` or `mame/mame.exe` in the external data folder, or a Linux package's (`apt install
 mame` puts it in `/usr/games`). The tests target MAME 0.289; Ubuntu 24.04's package is 0.264, which passes all but
-the DMK images' tests. The Model II's DOS comparison's times are MAME 0.264's; it has not been run with 0.289. Retrocore's cloud environment sets up 0.289 from Ubuntu 26.10's package as
+the DMK images' tests. Retrocore's cloud environment sets up 0.289 from Ubuntu 26.10's package as
 `/usr/local/bin/mame-0.289`, in `RETROCORE_MAME`. Its ROM sets, `trs80m3`, `trs80m4` and `trs80m2`, are in
 `trs80-roms/mame`. Without its set the Model 4's tests build MAME's `trs80m4` set from the SDK's sources, after checking
 that the builds have the SHA-1s MAME lists for it (`mame -listroms trs80m4`), and the others are inconclusive.
@@ -320,11 +320,11 @@ What the comparison has to allow for:
   another BIOS, changes the run.
 - **The Model II's boot ROM** is chosen by MAME's BIOS name: `c8ff`, `2bff`, `2119` and `9733` for versions 1, 2, 3
   and 5.
-- **The Model II's TRSDOS in MAME** asks for the date after about 31 seconds, where it asks here after about 16. In
-  its first 30 seconds MAME's TRSDOS 1.2 restores the drive in single density and seeks again 17 times, where here it
-  does once; until then the two give the controller the same commands at nearly the same times. So the keys wait for
-  MAME, and as TRSDOS 1.2 in MAME is as slow to list its directory, whose heading shows the time, the comparison stops
-  at `TRSDOS READY`.
+- **The Model II's TRSDOS in MAME**, 0.264 and 0.289 alike, asks for the date after about 30 seconds, where it asks here
+  after about 16. In its first 30 seconds MAME's TRSDOS 1.2 restores the drive in single density and seeks again 17
+  times, where here it does once; until then the two give the controller the same commands at nearly the same times. So
+  the keys wait for MAME, and as TRSDOS 1.2 in MAME is as slow to list its directory, whose heading shows the time, the
+  comparison stops at `TRSDOS READY`.
 
 ## What is not done yet
 

@@ -35,22 +35,21 @@ dump; and TRSDOS 1.3 writing.
      `M2LSDOS631.dmk`, with the TRSDOS 2.0 set's calculator disk as `M2TDOSCALC.imd`. The
      [DOSes](../Trs80Model3And2.md#doses) table gives each one's source file and SHA-256.
    - **TRSDOS.** Done: TRSDOS 1.2, 2.0a and 2.0b boot, take the date and time and list their directories
-     (`Trs80Model2RomTests.BootsItsDos`), and match MAME 0.264 at their prompt
-     (`Trs80Model3OracleTests.Model2DosMatchesMame`, whose times are MAME 0.264's; it has not run with 0.289). They
-     had stopped at `BOOT ERROR DM 23`. The boot code the ROM loads first checks the machine (at `$1404`, `DIAG`),
-     and its DMA test copies 80 bytes to video RAM, interrupting at the block's end with vector `$A8` and status
-     affecting it, then looks for the flag set by the routine its table names at `$AC`. Zilog's DMA puts the cause
-     in the vector's bits 1-2, 10 for the end of a block, but ours put 01, a match's, so the interrupt took the
-     table's entry at `$AA`, and the test failed with its code `23`. Still open:
+     (`Trs80Model2RomTests.BootsItsDos`), and match MAME 0.264 and 0.289 at their prompt
+     (`Trs80Model3OracleTests.Model2DosMatchesMame`). They had stopped at `BOOT ERROR DM 23`. The boot code the ROM
+     loads first checks the machine (at `$1404`, `DIAG`), and its DMA test copies 80 bytes to video RAM, interrupting at
+     the block's end with vector `$A8` and status affecting it, then looks for the flag set by the routine its table
+     names at `$AC`. Zilog's DMA puts the cause in the vector's bits 1-2, 10 for the end of a block, but ours put 01, a
+     match's, so the interrupt took the table's entry at `$AA`, and the test failed with its code `23`. Still open:
      - **The PIO's bit-mode interrupt.** In the same checks, ours interrupts as soon as port A's interrupt is enabled
        with the controller's INTRQ already high, where MAME's waits for INTRQ to rise. TRSDOS's routine does not keep
        A, so here TRSDOS then writes the controller `$01` (restore) where MAME's writes `$D0`; the check passes
        either way. Check the Z80 PIO's documentation for which is right.
      - **Writing.** TRSDOS on the Model II writing a file and its image saved back is untested.
      - **The keyboard codes** need checking against the Model II keyboard's ROM.
-     - **The oracle past the prompt.** MAME 0.264's TRSDOS 1.2 restores the drive and seeks again 17 times in its
-       first 30 seconds, where ours seeks once, so it asks for the date about 15 seconds later and is as slow to list
-       its directory; the comparison stops at `TRSDOS READY` (see
+     - **The oracle past the prompt.** MAME's TRSDOS 1.2, in 0.264 and 0.289 alike, restores the drive and seeks again
+       17 times in its first 30 seconds, where ours seeks once, so it asks for the date about 15 seconds later and is as
+       slow to list its directory; the comparison stops at `TRSDOS READY` (see
        [Comparing with MAME](../Trs80Model3And2.md#comparing-with-mame)).
    - **LS-DOS 6.3.1's screen stays blank.** At PR #32's head (`a5086f3`) it booted to its welcome screen. On main at
      `5c7ce12`, the screen is still blank after 60 seconds while its code runs from RAM, so something since then

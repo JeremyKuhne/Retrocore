@@ -93,6 +93,7 @@ The workflow a developer follows, and the one this plan's sample is built with:
      retrocore.json                 the project, its targets and steps
      src/main.s                     a hello world that builds for every target
      src/platform/<family>/         each family's console layer, started for you
+     src/platform/<environment>/    how a program ends in each environment, and bare's
      .config/dotnet-tools.json      retrocore, pinned
      .vscode/extensions.json        recommends the Retrocore extension
      .gitignore                     artifacts/ and obj/
@@ -115,6 +116,16 @@ The workflow a developer follows, and the one this plan's sample is built with:
 uses the repository's pinned tool when there is one and its own bundled copy otherwise, and it says so when the two
 differ. Retrocore is not published yet, so the tool and the extension need preview builds first. Until then the
 workflow runs from a local build of this repository.
+
+**As built so far (phase 5).** `retrocore new <template> <name> [--machines list] [--output folder]` and
+`retrocore init <template> [--name name] [--machines list] [--output folder]`, from the templates in
+[`sdk/1/templates/`](../../sdk/1/templates/README.md), which is their contract. The one template so far is `6502`: the
+Apple-1 (`wozmon`), the Apple II (`dos33`), the Apple III (`sos`), the PET (`basic`) and the BBC Micro (`dfs`), any of
+their machines by catalog id, with a family's console in `src/platform/<family>/` (SOS's in `src/platform/sos/`,
+as SOS owns the screen), each environment's `Exit` in `src/platform/<environment>/`, and a `LOWERCASE` build switch
+that the machines showing lowercase set. `init` adds to the repository's tool manifest, extension recommendations and
+root `projects`, and the `.gitignore` beside the project, rather than replacing them, and gives a project below the
+root a workflow of its own. `retrocore --version` prints the version `new` pins.
 
 ## The project
 

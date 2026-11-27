@@ -275,6 +275,17 @@ public class SdkDocumentationTests
             problems.AddRange(sources.SelectMany(analysis => OwnProblems(analysis, reach, $"sample/{folder}")));
         }
 
+        // The templates retrocore new copies into a project, whose sources they become.
+        foreach (string template in Directory.EnumerateDirectories(Path.Join(repository, "sdk", "1", "templates")))
+        {
+            List<string> roots = Sources(template);
+            if (roots.Count == 0) { continue; }
+            List<SourceAnalysis> sources = [.. roots.Select(file => SourceAnalysis.Assemble(file, _ => null))];
+            List<SourceAnalysis> reach = [.. sources, .. projects["Retrocore.Machines.Apple2"]];
+            string name = $"sdk/1/templates/{Path.GetFileName(template)}";
+            problems.AddRange(sources.SelectMany(analysis => OwnProblems(analysis, reach, name)));
+        }
+
         problems.Should().BeEmpty($"the editor's lint found:{Environment.NewLine}{string.Join(Environment.NewLine, problems.Order())}");
     }
 

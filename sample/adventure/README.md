@@ -58,11 +58,32 @@ there shows text once a character set is loaded, which SOS does as it boots. `ap
 
 ## Building and running
 
-From this folder, build every target:
+The sample is a repository of its own in waiting: it pins the `retrocore` tool in `.config/dotnet-tools.json`, so a
+clone of it builds every target with the .NET 11 SDK and a source for the tool's package:
+
+```powershell
+dotnet tool restore
+dotnet retrocore build --all
+```
+
+`retrocore` is published nowhere yet, so `dotnet tool restore` needs a source that holds its package, made by
+`dotnet pack src/Retrocore.Debug -c Release -o <folder>` in Retrocore. `--add-source <folder>` gives one; a
+`nuget.config` above the clone whose `packageSourceMapping` takes `retrocore` from that folder alone is safer, so
+that no package of that name on nuget.org stands in for it. Here, inside Retrocore, the Release build serves as well,
+from this folder:
 
 ```powershell
 dotnet ../../artifacts/AnyCPU/Release/Retrocore.Debug/net11.0/Retrocore.Debug.dll build --all
 ```
+
+Its own `.github/workflows/build.yml` builds every target and plays the transcripts once the sample is the root of a
+repository and the tool is on a source the workflow can restore it from; until the tool is published, its restore
+fails unless its restore step adds a source or the repository has a nuget.config that does. In Retrocore, GitHub
+runs only the root's workflows, and Retrocore's CI checks that a fresh clone of the sample's files alone restores
+the tool from a local pack and builds every target ([`tools/Test-FreshClone.mjs`](../../tools/Test-FreshClone.mjs)).
+`.vscode/extensions.json` recommends the Retrocore extension. What changes on the move: the links into Retrocore's `docs/`, `sdk/` and `tools/` here, and into its
+`LICENSE` in [games/README.md](games/README.md), become links to Retrocore's repository on GitHub, the repository
+gets Retrocore's `LICENSE` (the tools' headers name it), and the Release-build command above goes.
 
 The project's `steps` pack each game with the packer into `obj/` first, printing each part's size, and are skipped
 while the packer and the games are unchanged. The build writes each target's binary, debug information and map to
@@ -128,4 +149,4 @@ fails if they reach anything the machine keeps ([sdk/1/README.md](../../sdk/1/RE
 
 Pirate Adventure is Scott and Alexis Adams' game. Its file, `games/pirate.dat`, is in this repository, with
 [games/README.md](games/README.md) recording where it is hosted and on what terms, and the reference engine plays it
-(`games/pirate-win.in` wins). It is not built into any target yet: the targets that link or load it are to come.
+(`games/pirate-win.in` wins). Every target but `apple2-test` plays it: linked in, or loaded from the target's disk.

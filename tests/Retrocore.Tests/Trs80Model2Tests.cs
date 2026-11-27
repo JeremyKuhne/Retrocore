@@ -172,6 +172,37 @@ public class Trs80Model2Tests
     }
 
     /// <summary>
+    ///  The PIO's port A shows, in bit 1, that the selected drive's disk has sectors on side 1, following the sectors
+    ///  an image adds and formatting replaces.
+    /// </summary>
+    [TestMethod]
+    public void PortAShowsATwoSidedDisk()
+    {
+        Trs80Model2Machine machine = Create(new());
+        Trs80Model2Bus bus = machine.Bus;
+        FloppyDisk disk = new();
+        disk.Add(0, 0, new FloppySector(0, 0, 1, new byte[128], doubleDensity: false));
+        machine.Drives[0].Insert(disk, "test", "IMD");
+        bus.Out(0xEF, 0x4E);
+
+        disk.Sides.Should().Be(1);
+        (bus.In(0xE0) & 0x02).Should().Be(0);
+        FloppySector tooLong = new(3, 1, 1, new byte[16384], doubleDensity: true);
+        disk.Invoking(target => target.Add(3, 1, tooLong)).Should().Throw<InvalidDataException>("the sector is longer than a track");
+        disk.Sides.Should().Be(1, "the sector that did not fit left side 1 empty");
+        disk.Add(1, 1, new FloppySector(1, 1, 1, new byte[256], doubleDensity: true));
+        disk.Sides.Should().Be(2);
+        (bus.In(0xE0) & 0x02).Should().Be(0x02);
+        disk.Format(1, 1, []);
+        disk.Sides.Should().Be(1, "formatting left side 1 empty");
+        (bus.In(0xE0) & 0x02).Should().Be(0);
+        disk.Format(2, 1, [new FloppySector(2, 1, 1, new byte[256], doubleDensity: true)]);
+        disk.Sides.Should().Be(2);
+        disk.Format(2, 1, [new FloppySector(2, 1, 2, new byte[256], doubleDensity: true)]);
+        disk.Sides.Should().Be(2, "reformatting a track on side 1 keeps it");
+    }
+
+    /// <summary>
     ///  The 6845's registers set the picture: rows, scanlines, the start address and the cursor.
     /// </summary>
     [TestMethod]

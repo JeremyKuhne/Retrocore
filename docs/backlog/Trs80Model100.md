@@ -1,7 +1,7 @@
 # Backlog: the TRS-80 Model 100
 
-Status: **phases 1, 2 and 3 built (2026-11-27)**; [the guide](../Trs80Model100.md) covers them. Phase 4, the
-serial port, the printer and the TPDD, is next.
+Status: **phases 1, 2 and 3 built (2026-11-27)**, with WAV tapes but not yet byte tapes; [the
+guide](../Trs80Model100.md) covers them. Phase 4, the serial port, the printer and the TPDD, is next.
 
 ## Why the Model 100
 
@@ -400,14 +400,15 @@ and from a `CSAVE` MAME 0.264 recorded to WAV. No new downloads.
 
 - **The cassette.** `Trs80Model100Tape` keeps a tape as its level changes in the 80C85's cycles, read from and written
   to WAV; `Trs80Model100Cassette` drives it from SOD and gives SID its level inverted, as MAME's driver does, while
-  port `$E0` bit 3 runs the motor. The ROM's `CSAVE` and `CLOAD` round-trip; `CLOAD` reads MAME 0.264's recording of
-  a `CSAVE`, and MAME's `CLOAD` reads Retrocore's. The recording decodes to MAME's blocks; the header's bytes after the
+  port `$E0` bit 3 runs the motor. The ROM's `CSAVE` and `CLOAD` round-trip; by hand, `CLOAD` read MAME 0.264's
+  recording of a `CSAVE`, and MAME's `CLOAD` read Retrocore's. The recording decodes to MAME's blocks; the header's bytes after the
   name are RAM the ROM leaves unset, `$00` here and `$FF` in MAME, which fills RAM with `$FF`.
 - **The buzzer.** Port B bit 5 while bit 2 is set; the 81C55's timer output while bit 2 is clear and bit 5 set (MAME's
   `i8155_pb_w` and `i8155_to_w`). `BEEP` sounds.
 - **The debugger.** The `cassette`, `fastCassette` and `sound` launch options; the cassette in Retro Devices (Insert,
   Record and Eject), saved through a file beside the recording when it comes out or the session ends; the Machine
-  view's Cassette and Sound rows; the display panel's sound. A recording goes to a new file, as the Apple-1's does.
+  view's Cassette and Sound rows; the display panel's sound. A recording goes to the file Record names, replacing it as the Apple-1's
+  does; one that holds nothing writes nothing.
 - **Not yet.** A byte-level tape format (no common one for the Model 100 was found), and the cassette's tape in the
   recovery journal.
 

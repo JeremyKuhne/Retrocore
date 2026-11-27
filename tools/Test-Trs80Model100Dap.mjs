@@ -3,14 +3,15 @@
 // See LICENSE file in the project root for full license information
 
 // TRS-80 Model 100 DAP integration. A launch with no ROM says which ROM it needs. With the US Model 100's ROM in the
-// external test data (RETROCORE_TRS80M100_ROMS, or the cache's trs80m100-roms folder), the ROM boots to its menu, and
-// an 8085 source loaded at $E000 prints through the ROM's RST 4 onto the LCD; it stops at a breakpoint in its Print
-// routine with the 80C85's call stack and registers, steps out to the caller, and shows the LCD's frames and the
-// hardware. A logpoint in a loop the ROM's RST 7.5 keeps interrupting logs once per run, and one at $003C once per
-// interrupt. Then a launch with no program boots to the menu, enters BASIC with ENTER, runs a line typed at it, and
-// turns the power off and back on with Reset. A launch's files go on the menu, BASIC's program is read and written
-// through the debugger, and a program goes onto a tape with CSAVE and back with CLOAD. The Tandy 102's ROM, when present, boots to the menu too. Without the
-// ROM, everything after the first launch is skipped, which is not a pass.
+// external test data (RETROCORE_TRS80M100_ROMS, or the cache's trs80m100-roms folder), the ROM boots to its menu,
+// and an 8085 source loaded at $E000 prints through the ROM's RST 4 onto the LCD; it stops at a breakpoint in its
+// Print routine with the 80C85's call stack and registers, steps out to the caller, and shows the LCD's frames and
+// the hardware. A logpoint in a loop the ROM's RST 7.5 keeps interrupting logs once per run, and one at $003C once
+// per interrupt. Then a launch with no program boots to the menu, enters BASIC with ENTER, runs a line typed at it,
+// and turns the power off and back on with Reset. A launch's files go on the menu, BASIC's program is read and
+// written through the debugger, and a program goes onto a tape with CSAVE and back with CLOAD. The Tandy 102's ROM,
+// when present, boots to the menu too. Without the ROM, everything after the first launch is skipped, which is not a
+// pass.
 
 import { resolve, join } from "node:path";
 import { writeFileSync, existsSync, unlinkSync, statSync, mkdtempSync, rmSync } from "node:fs";

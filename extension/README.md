@@ -1072,6 +1072,7 @@ supply: `rom` names its file, or it is found in `romDirectory` (or `RETROCORE_TR
 - `files`: host files to put in RAM's directory, so the menu lists them: `.ba`, `.do` and `.co` files, BASIC text
   as `.bas` and text as `.txt`;
 - `cassette`: a `.wav` tape, which plays when the ROM runs the motor (`CLOAD`); Record in the Drives view writes one;
+- `fastCassette`: run as fast as possible while the motor moves a tape, true by default;
 - `sound`: `speaker` (the buzzer) or `off`.
 
 Model 100 BASIC has `.model100.bas` source files, and `.ba` files open as listings. While BASIC is at its prompt,

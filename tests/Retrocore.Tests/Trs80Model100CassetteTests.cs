@@ -37,7 +37,7 @@ public sealed class Trs80Model100CassetteTests
 
     /// <summary>
     ///  A tape plays only while the motor runs, SID reads its level inverted and is high with no tape, and a recording
-    ///  takes SOD's changes only while the motor runs.
+    ///  takes SOD's changes only while the motor runs, keeping its level SOD's.
     /// </summary>
     [TestMethod]
     public void TheMotorMovesTheTape()
@@ -62,13 +62,14 @@ public sealed class Trs80Model100CassetteTests
         Toggle(cassette, motor: true, [30, 5], ref level);
         Toggle(cassette, motor: false, [100], ref level);
         Toggle(cassette, motor: true, [7], ref level);
-        recording.HalfCycles.Should().Equal(30, 5, 7);
+        // SOD changed while the motor was stopped, so the tape takes that change as it moves again, then the next.
+        recording.HalfCycles.Should().Equal(30, 5, 1, 6);
         recording.StartsHigh.Should().BeFalse();
     }
 
     /// <summary>
     ///  The buzzer follows port B bit 5 while bit 2 is set, and the 81C55's timer output while bit 2 is clear and bit 5
-    ///  set; sound reaches the sink only while it changes.
+    ///  set; the timer's square wave reaches the sound's sink.
     /// </summary>
     [TestMethod]
     public void TheBuzzerFollowsItsSource()

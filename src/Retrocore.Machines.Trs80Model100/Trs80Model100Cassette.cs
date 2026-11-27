@@ -14,7 +14,8 @@ namespace Retrocore.Machines.Trs80Model100;
 ///  <para>
 ///   The tape moves only while the motor runs: a tape that plays gives SID its changes then, and one that records
 ///   takes each change of SOD then, so time with the motor stopped is on neither. SID reads the input's level
-///   inverted, as MAME's driver has it: low while the tape's level is high, and high with no tape playing.
+///   inverted, as MAME's driver has it: low while the tape's level is high, high with no tape, and while recording
+///   the inverse of SOD, which MAME's recorder gives back as its input.
 ///  </para>
 /// </remarks>
 public sealed class Trs80Model100Cassette
@@ -25,6 +26,7 @@ public sealed class Trs80Model100Cassette
     private int _position;
     private bool _output;
     private bool _level;
+    private bool _recorded;
 
     /// <summary>
     ///  Gets what the deck is doing.
@@ -37,9 +39,15 @@ public sealed class Trs80Model100Cassette
     public bool Motor { get; private set; }
 
     /// <summary>
-    ///  Gets the SID input's level: low while the tape plays a high level, and high otherwise.
+    ///  Gets the SID input's level: low while the tape plays a high level, the inverse of SOD while it records, and
+    ///  high with no tape.
     /// </summary>
-    public bool SerialInput => !(Mode == TapeMode.Playing && _level);
+    public bool SerialInput => Mode switch
+    {
+        TapeMode.Playing => !_level,
+        TapeMode.Recording => !_output,
+        _ => true
+    };
 
     /// <summary>
     ///  Gets the half cycles played or recorded.
@@ -81,6 +89,7 @@ public sealed class Trs80Model100Cassette
         Mode = TapeMode.Recording;
         _sinceChange = 0;
         tape.Start(_output);
+        _recorded = _output;
     }
 
     /// <summary>
@@ -101,17 +110,19 @@ public sealed class Trs80Model100Cassette
     internal void Tick(bool motor, bool output)
     {
         Motor = motor;
-        bool changed = output != _output;
         _output = output;
         if (!motor || _tape is null) { return; }
 
+        // A recording changes level where SOD differs from the level it last took, so SOD's changes with the motor
+        // stopped leave its polarity right.
         if (Mode == TapeMode.Recording)
         {
             _sinceChange++;
-            if (changed)
+            if (output != _recorded)
             {
                 _tape.Add(_sinceChange);
                 _sinceChange = 0;
+                _recorded = output;
             }
 
             return;

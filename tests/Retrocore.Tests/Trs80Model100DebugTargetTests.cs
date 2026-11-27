@@ -237,34 +237,94 @@ public sealed class Trs80Model100DebugTargetTests
         try
         {
             string wave = Path.Join(folder, "rec.wav");
+            File.WriteAllText(wave, "was here");
             Trs80Model100DebugTarget target = Launch(Path.Join(folder, "m100.ram"));
             IDevice drive = target.Devices.Single();
             JsonObject recording = new() { ["path"] = wave };
             target.DeviceAction(drive, "record", recording);
+            target.DeviceAction(drive, "eject", []);
+            File.ReadAllText(wave).Should().Be("was here", "a recording that holds nothing writes nothing");
 
+            // A recording with changes on it: SOD toggled while the motor runs.
+            target.DeviceAction(drive, "record", recording);
+            Record(target, changes: 4);
             string bad = Path.Join(folder, "bad.wav");
             File.WriteAllText(bad, "not a wave");
             JsonObject insertBad = new() { ["path"] = bad };
             Action insert = () => target.DeviceAction(drive, "insert", insertBad);
             insert.Should().Throw<InvalidDataException>();
-            drive.Media?.Label.Should().Be(wave, "the recording is still in");
+            drive.Media.Should().NotBeNull("the recording is still in");
+            drive.Media?.Label.Should().Be(wave);
             File.Delete(wave);
 
             Directory.CreateDirectory(wave);
             Action eject = () => target.DeviceAction(drive, "eject", []);
-            eject.Should().Throw<IOException>();
-            drive.Media?.Label.Should().Be(wave, "the recording is still in");
+            Exception thrown = eject.Should().Throw<Exception>().Which;
+            (thrown is IOException or UnauthorizedAccessException).Should().BeTrue(thrown.ToString());
+            drive.Media.Should().NotBeNull("the recording is still in");
+            drive.Media?.Label.Should().Be(wave);
             Directory.GetFiles(folder, "*.tmp").Should().BeEmpty();
 
             Directory.Delete(wave);
             target.DeviceAction(drive, "eject", []);
             drive.Media.Should().BeNull();
-            Trs80Model100Tape.FromWave(File.ReadAllBytes(wave)).HalfCycles.Should().BeEmpty();
+            Trs80Model100Tape.FromWave(File.ReadAllBytes(wave)).HalfCycles.Should().NotBeEmpty();
         }
         finally
         {
             Directory.Delete(folder, recursive: true);
         }
+    }
+
+    /// <summary>
+    ///  Saving the session's recordings writes the cassette's recording and the RAM image, and a recording that cannot
+    ///  be written does not keep the RAM image from saving.
+    /// </summary>
+    [TestMethod]
+    public void SessionsSaveTheRecordingAndTheRam()
+    {
+        string folder = Folder();
+        try
+        {
+            string image = Path.Join(folder, "m100.ram");
+            string wave = Path.Join(folder, "rec.wav");
+            Trs80Model100DebugTarget target = Launch(image);
+            IDevice drive = target.Devices.Single();
+            JsonObject recording = new() { ["path"] = wave };
+            target.DeviceAction(drive, "record", recording);
+            Record(target, changes: 4);
+            target.SaveRecordings();
+            File.Exists(wave).Should().BeTrue();
+            File.Exists(image).Should().BeTrue();
+            drive.Media.Should().NotBeNull("the recording stays in");
+
+            File.Delete(wave);
+            File.Delete(image);
+            Directory.CreateDirectory(wave);
+            Action save = target.SaveRecordings;
+            Exception thrown = save.Should().Throw<Exception>().Which;
+            (thrown is IOException or UnauthorizedAccessException).Should().BeTrue(thrown.ToString());
+            File.Exists(image).Should().BeTrue("the RAM image is saved all the same");
+            Directory.Delete(wave);
+        }
+        finally
+        {
+            Directory.Delete(folder, recursive: true);
+        }
+    }
+
+    // Runs the cassette's motor and toggles SOD, as CSAVE does, on the cassette alone.
+    private static void Record(Trs80Model100DebugTarget target, int changes)
+    {
+        Trs80Model100Cassette cassette = target.Machine.Bus.Cassette;
+        bool level = false;
+        for (int change = 0; change < changes; change++)
+        {
+            level = !level;
+            for (int cycle = 0; cycle < 500; cycle++) { cassette.Tick(motor: true, output: level); }
+        }
+
+        cassette.Tick(motor: false, output: level);
     }
 
     /// <summary>

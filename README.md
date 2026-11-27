@@ -404,7 +404,7 @@ Design notes for upcoming work live in [`docs/backlog`](docs/backlog):
   [its ROM sources](docs/backlog/CocoRomSources.md);
 - [the Apple III's open checks and later work](docs/backlog/Apple3.md);
 - [the Intel 8080 and 8085](docs/backlog/I8080.md), and [the Altair 8800](docs/backlog/Altair8800.md): CP/M's sources and its front panel view;
-- [the TRS-80 Model 100](docs/backlog/Trs80Model100.md): its files, cassette, serial port and disk drive, its ROM as an SDK source, and its relatives;
+- [the TRS-80 Model 100](docs/backlog/Trs80Model100.md): its serial port, printer and disk drive, its ROM as an SDK source, and its relatives;
 - [the 3.5 disk controller at the hardware level](docs/backlog/Disk35Hardware.md), running Apple's EPROM on an emulated 65C02 and SWIM;
 - [SOS sources: the Apple III's kernel and drivers](docs/backlog/SosSources.md);
 - [Business BASIC's other versions, modules and DEF FN view](docs/backlog/BusinessBasic.md);

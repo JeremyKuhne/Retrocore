@@ -82,12 +82,13 @@ public sealed class Trs80Model100Tape
     internal void Add(long cycles) => _halves.Add((int)Math.Clamp(cycles, 1, int.MaxValue));
 
     /// <summary>
-    ///  Reads a recording from a WAV file: PCM, 8 or 16 bits, the first channel of any number.
+    ///  Reads a recording from a WAV file: PCM (or WAVE_FORMAT_EXTENSIBLE's PCM), 8 or 16 bits, the first channel of
+    ///  any number.
     /// </summary>
     /// <remarks>
     ///  <para>
     ///   The level changes where the signal crosses its middle, with some hysteresis against noise, as the Model
-    ///   100's input comparator does.
+    ///   100's input comparator does; a file that starts silent starts low.
     ///  </para>
     /// </remarks>
     /// <param name="wave">The file's bytes.</param>
@@ -112,7 +113,10 @@ public sealed class Trs80Model100Tape
             ReadOnlySpan<byte> body = wave.Slice(offset + 8, size);
             if (id.SequenceEqual("fmt "u8) && size >= 16)
             {
-                if (BinaryPrimitives.ReadUInt16LittleEndian(body) != 1)
+                // PCM, or WAVE_FORMAT_EXTENSIBLE with the PCM subformat.
+                int format = BinaryPrimitives.ReadUInt16LittleEndian(body);
+                if (format == 0xFFFE && size >= 26) { format = BinaryPrimitives.ReadUInt16LittleEndian(body[24..]); }
+                if (format != 1)
                 {
                     throw new InvalidDataException("Only PCM WAV files are supported.");
                 }
@@ -140,7 +144,7 @@ public sealed class Trs80Model100Tape
 
         const int Hysteresis = 1024;
         List<int> halves = [];
-        bool high = Sample(samples, 0, bits) >= 0;
+        bool high = Sample(samples, 0, bits) > Hysteresis;
         bool startsHigh = high;
         long last = 0;
         for (int index = 1; index < count; index++)

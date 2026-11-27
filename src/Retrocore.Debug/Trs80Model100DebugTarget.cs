@@ -143,7 +143,6 @@ internal sealed partial class Trs80Model100DebugTarget : IDebugTarget, IRecordin
     public int ClockHertz => Trs80Model100Timing.ClockHertz;
 
     /// <inheritdoc/>
-    /// <inheritdoc/>
     public IDebugCallStack CallStack => _calls;
 
     /// <inheritdoc/>
@@ -337,7 +336,6 @@ internal sealed partial class Trs80Model100DebugTarget : IDebugTarget, IRecordin
         return true;
     }
 
-    /// <inheritdoc/>
     /// <summary>
     ///  Gets the file the RAM is kept in between sessions, or null when the launch named none.
     /// </summary>
@@ -351,22 +349,34 @@ internal sealed partial class Trs80Model100DebugTarget : IDebugTarget, IRecordin
     ///   tried again. The CPU's state is not kept, as it is not when the power goes, so the next session starts with
     ///   the power coming on.
     ///  </para>
+    ///  <para>
+    ///   A recording on the cassette is written to its file first, the same way, and stays in the recorder.
+    ///  </para>
     /// </remarks>
     public void SaveRecordings()
     {
-        // A recording on the cassette is saved too, and a failure of either does not keep the other from saving.
+        // The cassette's recording is saved first, and a failure of it does not keep the RAM image from saving; it is
+        // reported once the image is saved, or with the image's own failure.
         Exception? failure = null;
         try
         {
-            SaveRecording();
+            SaveCassetteRecording();
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {
             failure = exception;
         }
 
-        SaveRamImage();
-        if (failure is not null) { throw failure; }
+        try
+        {
+            SaveRamImage();
+        }
+        catch (Exception exception) when (failure is not null && exception is IOException or UnauthorizedAccessException)
+        {
+            throw new IOException($"Neither the recording nor the RAM image was saved: {failure.Message} {exception.Message}", exception);
+        }
+
+        if (failure is not null) { System.Runtime.ExceptionServices.ExceptionDispatchInfo.Throw(failure); }
     }
 
     private void SaveRamImage()
@@ -384,7 +394,6 @@ internal sealed partial class Trs80Model100DebugTarget : IDebugTarget, IRecordin
         }
     }
 
-    /// <inheritdoc/>
     /// <inheritdoc/>
     public JsonObject DisplayState(bool running) => new()
     {

@@ -95,7 +95,7 @@ internal sealed partial class Trs80Model100DebugTarget
     {
         string full = Path.GetFullPath(path);
         if (!File.Exists(full)) { throw new ArgumentException($"The tape {full} does not exist."); }
-        SaveRecording();
+        SaveCassetteRecording();
         Trs80Model100Tape tape = Trs80Model100Tape.FromWave(File.ReadAllBytes(full));
         EjectCassette();
         _machine.Bus.CassetteDrive.Play(tape, full);
@@ -135,10 +135,12 @@ internal sealed partial class Trs80Model100DebugTarget
     }
 
     // Writes a recording to its path, leaving it in the recorder: to a file beside it first, then over it, so a save
-    // that fails leaves what was there.
-    private void SaveRecording()
+    // that fails leaves what was there. A recording that holds nothing writes nothing, so recording then ejecting
+    // leaves a file at the path as it was.
+    private void SaveCassetteRecording()
     {
         if (_recordingPath is not { } path || _machine.Bus.CassetteDrive.Tape is not { } tape) { return; }
+        if (tape.HalfCycles.Count == 0) { return; }
         string temporary = $"{path}.{Environment.ProcessId}.tmp";
         try
         {
@@ -155,7 +157,7 @@ internal sealed partial class Trs80Model100DebugTarget
     // again.
     private void EjectCassette()
     {
-        SaveRecording();
+        SaveCassetteRecording();
         _machine.Bus.CassetteDrive.Eject();
         _recordingPath = null;
     }

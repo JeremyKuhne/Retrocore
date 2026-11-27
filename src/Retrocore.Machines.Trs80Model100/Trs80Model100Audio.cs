@@ -29,7 +29,7 @@ public sealed class Trs80Model100Audio
     ///  Creates the sound output.
     /// </summary>
     /// <param name="sampleRate">The sample rate in hertz, at most a sample a CPU cycle.</param>
-    /// <exception cref="ArgumentOutOfRangeException">The rate is not 1 to the CPU's clock.</exception>
+    /// <exception cref="ArgumentOutOfRangeException">The rate is not positive, or is past the CPU's clock.</exception>
     public Trs80Model100Audio(int sampleRate = 48000)
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(sampleRate);

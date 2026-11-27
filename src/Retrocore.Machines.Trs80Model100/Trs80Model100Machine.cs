@@ -48,6 +48,7 @@ public sealed class Trs80Model100Machine : IMachine
         Bus = new(configuration, roms) { PowerOff = TurnOff };
         Processor = new(Bus, I8080Variant.I8085);
         Processor.Signals = I8080Signals.SerialInput;
+        Devices = [Bus.CassetteDrive];
     }
 
     /// <summary>
@@ -91,7 +92,7 @@ public sealed class Trs80Model100Machine : IMachine
     public bool IsPoweredOff { get; private set; }
 
     /// <inheritdoc/>
-    public IReadOnlyList<IDevice> Devices { get; } = [];
+    public IReadOnlyList<IDevice> Devices { get; }
 
     /// <inheritdoc/>
     public ProcessorCycle LastCycle => Processor.LastCycle;
@@ -118,8 +119,10 @@ public sealed class Trs80Model100Machine : IMachine
     {
         if (!IsPoweredOff) { Processor.StepCycle(); }
         Bus.Tick();
+        Bus.Cassette.Tick(Bus.CassetteMotor, Processor.Registers.SerialOutput);
         I8080Signals signals = Processor.Signals;
         I8080Signals next = Bus.Clock.TimingPulse ? signals | I8080Signals.Restart75 : signals & ~I8080Signals.Restart75;
+        next = Bus.Cassette.SerialInput ? next | I8080Signals.SerialInput : next & ~I8080Signals.SerialInput;
         if (next != signals) { Processor.Signals = next; }
     }
 

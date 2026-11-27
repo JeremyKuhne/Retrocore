@@ -152,10 +152,14 @@ errors 1 to 9 share.
 | [`tools/Test-Vic20Dap.mjs`](../tools/Test-Vic20Dap.mjs) | The debugger end to end: BASIC from the sources, breakpoints in BASIC's and the kernal's sources with the call stack, the colour picture, the reset stop, RUN/STOP and RESTORE, a program recorded on tape and saved as TAP, loaded back, a `.prg` on two expansions and a source launched, the free bytes unexpanded and with 3K, 8K and 32K, and PAL. With the 1541's ROMs, a blank disk on device 8 formatted, a program saved, the disk saved as D64 and listed, and a second drive added and removed. |
 
 The ROM-source builds, the debug target's tests and the DAP scripts need nothing external, apart from the DAP script's
-1541 part, which needs the `c1541` set and is skipped without it. The tests on the dumps, the tape, cartridge and disk
-tests and the comparisons with MAME are inconclusive without these, under the fixture folder (`RETROCORE_CACHE`, or
-`%USERPROFILE%\Retrocore`): MAME 0.264's `vic20`, `vic20p`, `c1540` and `c1541` sets from the [MAME ROM sets on
-archive.org](https://archive.org/download/mame-0.264-roms-non-merged/), zipped in `vic20-roms\mame` and unzipped in
-`vic20-roms\extract` (or `RETROCORE_VIC20_ROMS`); MAME 0.202's `vic1001_cart`, `vic1001_cass` and `vic1001_flop`
-software lists in `vic20-media\extract`, with MAME's `vic1001_cart.xml` in `mame\hash`; and a MAME in `RETROCORE_MAME`
-for the comparisons, whose own `hash` folder the cartridge comparison reads. They have been run with MAME 0.264.
+1541 part, which is skipped without the `c1541` set. The other tests are inconclusive without their fixtures. `<root>` is
+`RETROCORE_CACHE`, or `%USERPROFILE%\Retrocore`:
+
+- MAME 0.264's `vic20`, `vic20p`, `c1540` and `c1541` sets, from the
+  [MAME ROM sets on archive.org](https://archive.org/download/mame-0.264-roms-non-merged/): unzipped, each in its
+  folder, in `RETROCORE_VIC20_ROMS` or `<root>\vic20-roms\extract`, and zipped in the `mame` folder beside it. The DAP
+  script reads the `c1541` set from `RETROCORE_VIC20_ROMS` or `%USERPROFILE%\Retrocore\vic20-roms\extract`.
+- MAME 0.202's `vic1001_cart`, `vic1001_cass` and `vic1001_flop` software lists, each list's zips in
+  `<root>\vic20-media\extract\<list>\<list>`, and MAME's `vic1001_cart.xml` in `<root>\mame\hash`.
+- For the comparisons, a MAME in `RETROCORE_MAME` (or `<root>\mame\mame.exe`); the cartridge comparison reads the
+  `hash` folder beside it. They have been run with MAME 0.264.

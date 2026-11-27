@@ -129,14 +129,17 @@ internal sealed partial class AnalysisContracts
                 foreach (ushort entry in own) { _contracts.TryAdd(entry, contract); }
             }
 
-            // An Entry: whose meaning ends in "; keeps ..." has that in place of the routine's Keeps:.
+            // An Entry: whose meaning ends in "; keeps ..." has that in place of the routine's Keeps:, unless it is a
+            // routine of its own with a contract, as the debugger takes it.
             foreach (DocumentationEntry entry in topic.SectionsNamed("Entry")
                 .Where(section => DocumentationResolver.Applies(section.Condition, model, Symbol))
                 .SelectMany(section => section.Entries))
             {
+                string label = documentation.EntrySymbol(documented, entry.Name);
                 if (entry.Keeps is not { } keeps
-                    || !documentation.Symbols.TryGetValue(documentation.EntrySymbol(documented, entry.Name), out long at)
+                    || !documentation.Symbols.TryGetValue(label, out long at)
                     || (ushort)at == address
+                    || documentation.Find(label) is { HasContract: true }
                     || Read(topic, model, Symbol, own, address, keeps) is not { } entered)
                 {
                     continue;
@@ -162,7 +165,8 @@ internal sealed partial class AnalysisContracts
         {
             AnalysisRoutineSummary? summary = Analyzed(address);
 
-            // An Entry: label keeps what the routine says too: a sure change from there is a finding.
+            // An Entry: label keeps what the routine says, or what its keeps clause says: a sure change from there is
+            // a finding.
             if (address != contract.Address)
             {
                 if (summary is { Returns: true }) { unverified += CheckKeeps(contract, summary, findings); }

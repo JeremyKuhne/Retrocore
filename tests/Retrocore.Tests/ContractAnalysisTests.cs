@@ -122,19 +122,22 @@ public class ContractAnalysisTests
     [TestMethod]
     public void EntriesKeepWhatTheirClauseSays()
     {
+        // Narrower than Keeps: and checked for what it says: from Change A is changed and X is kept, as its clause
+        // says, but Y, which the clause names, is not.
         const string Wrong = """
-            ;; Returns, or from Change clears X first.
-            ;; Keeps: X
-            ;; Entry: Change = clears X; keeps X
+            ;; Returns, or from Change clears A and Y first.
+            ;; Keeps: A, X, Y
+            ;; Entry: Change = clears A and Y; keeps X, Y
             Saver:
                 rts
             Change:
-                ldx #0
+                lda #0
+                ldy #0
                 rts
             """;
 
         (List<string> findings, _, _) = Check(Wrong, "Mos6502");
-        findings.Should().Equal("Saver ($1000) documents Keeps: X, but X is changed by the instruction at $1001.");
+        findings.Should().Equal("Saver ($1000) documents Keeps: Y, but Y is changed by the instruction at $1003.");
 
         const string Right = """
             ;; Returns, or from Change clears X first.

@@ -549,8 +549,8 @@ PUT_BYTE:
 ;; In: A = the byte, Y = the file's handle
 ;; Keeps: A, X, Y
 ;; Errors: "Channel", &C1 "Read only", &C3 "Locked", &BF "Can't extend", and the disc errors
-;; Entry: DFS_OSBPUT_CHANNEL = with the channel's offset in Y, after the caller's <SAVE_REGISTERS>, which puts its
-;;   registers back, as <PUT_BYTE> does; keeps nothing
+;; Entry: DFS_OSBPUT_CHANNEL = with the channel's offset in Y, after the caller has called <SAVE_REGISTERS> to put
+;;   its registers back, as <PUT_BYTE> does; keeps nothing
 ;; See: <DFS_OSBGET>, <PUT_BYTE>
 DFS_OSBPUT:
     jsr SAVE_REGISTERS                       ; keep A, X and Y for the caller

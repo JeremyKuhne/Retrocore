@@ -461,9 +461,14 @@ broken link.
   back at its depth, as for cycle counting), the debugger compares each listed register, flag (by its word) and
   memory location with its value at entry. A difference is reported with the routine, the item and both values. It
   is a debugger warning, optionally a stop, not an assembly error. `Keeps: none` documents that nothing is
-  preserved. A call to an `Entry:` label is checked against the routine's `Keeps:` too, unless the entry's meaning
-  ends in a keeps clause, as `Aux = stores from an auxiliary byte; keeps A` or `; keeps nothing` for an entry that
-  relies on its caller to save the registers: that clause is the entry's promise, and its `Uses:` is not checked. Sections that apply only to one model (from `.if`) are checked only on that model. The launch
+  preserved. Sections that apply only to one model (from `.if`) are checked only on that model.
+
+  A call to an `Entry:` label is checked against the routine's `Keeps:` too, where the label has no comment of
+  its own. An entry whose meaning ends in a keeps clause, as `Aux = stores from an auxiliary byte; keeps A`, or
+  `; keeps nothing` for one that relies on its caller to save the registers, is checked against that clause
+  instead, and not for `Uses:`, unless the label has a comment of its own with a `Keeps:` or `Uses:`. The clause
+  lists items as `Keeps:` does, separated by commas or "and"; the documentation check warns about one it does not
+  know. The launch
   option `checkContracts` selects `warn` (the default: a Debug Console message), `stop` (also stops, with
   reason `exception`, at the instruction after the call) or `off`. With `warn`, ticking the **Routine broke
   its Keeps: promise** exception filter in VS Code's Breakpoints view also stops; its hover explains it. The

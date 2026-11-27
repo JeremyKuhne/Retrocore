@@ -205,16 +205,20 @@ internal sealed class DebugContracts
 
             foreach (string label in topic.EntryLabels.Select(entry => set.EntrySymbol(documented, entry)))
             {
-                if (!set.Symbols.TryGetValue(label, out long entry) || set.Find(label) is not null) { continue; }
+                if (!set.Symbols.TryGetValue(label, out long entry) || (ushort)entry == (ushort)value) { continue; }
+
+                // An entry with a keeps clause has it, unless the label is a routine of its own with a contract;
+                // one without takes the routine's contract where it has no comment of its own.
                 if (entryKeeps.TryGetValue(label, out IReadOnlyList<string>? own))
                 {
+                    if (set.Find(label) is { HasContract: true }) { continue; }
                     (List<string> entryKept, List<(string, ushort, int)> entryMemory) = Kept(own);
                     if (entryKept.Count != 0 || entryMemory.Count != 0)
                     {
                         contracts.TryAdd((ushort)entry, new(topic.Name, entryKept, entryMemory, Changes: null));
                     }
                 }
-                else if (contracts.TryGetValue((ushort)value, out DebugContract? contract))
+                else if (set.Find(label) is null && contracts.TryGetValue((ushort)value, out DebugContract? contract))
                 {
                     contracts.TryAdd((ushort)entry, contract);
                 }

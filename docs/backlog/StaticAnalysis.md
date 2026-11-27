@@ -440,7 +440,8 @@ with the routines checked, the `Keeps:` items it could not verify, and the routi
   registers and pairs, as `PUSH BC` then `POP DE`, pair up in order.
 - At a call it applies the callee's documented contract, where there is one, else the callee's own analysis; a
   callee the analysis could not follow to its end keeps nothing. A call to an `Entry:` label takes the analysis of
-  the code from there, and the routine's `Keeps:` is checked from each entry as well as from its start. A jump to
+  the code from there, and the routine's `Keeps:` is checked from each entry as well as from its start, or, for an
+  entry whose meaning ends in a keeps clause (`; keeps A`), that clause. A jump to
   the start of another routine with a contract, with nothing pushed, is a tail call, whose contract applies; a
   jump to an internal label is followed.
 - It gives up on a routine, and skips it, where the code does what the model cannot follow: an indirect jump, or
@@ -626,9 +627,10 @@ were all from `Entry:` labels, now checked too. Most were entries whose callers 
 gets X back from ScrollBase, and DFS_OSBPUT_CHANNEL and SET_ENTRY_EXEC_ADDRESS_MERGE run after their callers'
 SAVE_REGISTERS. For those, an `Entry:` meaning may now end in a keeps clause (`; keeps A`, `; keeps nothing`), which
 the check and the debugger take in place of the routine's `Keeps:` for that entry, and the three entries say what
-they keep: 27 findings remain. Two of them are the MOS's SET_STATUS_BITS: with A and CFS_STATUS both 0 it falls
-through its `bne` into the next routine, so SET_EOF's `Keeps: X, Y` holds only because every caller passes a bit to
-set. The entry now says so, but the check does not read conditions on what a caller passes.
+they keep: 27 findings remain. Two of them are the MOS's SET_STATUS_BITS, an entry of SET_EOF: with A and
+CFS_STATUS both 0 it falls through its `bne` into the next routine, so SET_EOF's `Keeps: X, Y, carry` holds from
+there only because every caller of SET_STATUS_BITS passes a bit to set. The entry now says so, but the check does
+not read conditions on what a caller passes.
 
 What it costs, measured in Release over the MOS, the DFS and MBASIC with their maps: about 190 ms for the three
 once warm, and 114 MB allocated (220 ms and 107 MB before the review's fixes). Without maps it was about 140 ms and

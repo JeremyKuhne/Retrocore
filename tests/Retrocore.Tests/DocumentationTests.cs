@@ -663,6 +663,41 @@ public class DocumentationTests
     }
 
     /// <summary>
+    ///  An <c>Entry:</c> meaning's keeps clause lists items as <c>Keeps:</c> does, by commas or "and", in any case
+    ///  and with a final period, and the check reports an item it does not know.
+    /// </summary>
+    [TestMethod]
+    public void EntryKeepsClausesAreRead()
+    {
+        DocumentationSet set = Set("""
+            ;; Moves a byte.
+            ;; Keeps: X, Y
+            ;; Entry:
+            ;;   Later = skips the first; Keeps X and Y.
+            ;;   Last = skips both; keeps nothing
+            ;;   Wrong = skips all; keeps the carry
+            ROUTINE:
+                nop
+            Later:
+                nop
+            Last:
+                nop
+            Wrong:
+                rts
+            """);
+
+        DocumentationTopic topic = set.Find("ROUTINE") ?? throw new AssertFailedException("ROUTINE");
+        List<DocumentationEntry> entries = [.. topic.SectionsNamed("Entry").SelectMany(section => section.Entries)];
+        entries[0].Keeps.Should().Equal("X", "Y");
+        entries[1].Keeps.Should().BeEmpty();
+        entries[2].Keeps.Should().Equal("the carry");
+        new DocumentationEntry("Plain", "skips the first", 0).Keeps.Should().BeNull();
+
+        List<string> messages = [.. new DocumentationResolver(set).Check().Select(diagnostic => diagnostic.Message)];
+        messages.Should().Equal("Entry: 'Wrong' keeps registers and memory separated by commas, not 'the carry'.");
+    }
+
+    /// <summary>
     ///  Each CPU's flags have words and a description, which hover text shows with the CPU's own letter.
     /// </summary>
     [TestMethod]

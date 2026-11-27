@@ -16,20 +16,20 @@ public sealed record DocumentationEntry(string Name, string Meaning, int Line)
 
     /// <summary>
     ///  Gets what an <c>Entry:</c> label keeps where its meaning ends in a clause that says, as
-    ///  <c>Aux = stores from an auxiliary byte; keeps A</c> or <c>; keeps nothing</c>: the items, in place of the
-    ///  routine's <c>Keeps:</c> for a call there. Null where the meaning has no such clause, so the routine's
-    ///  <c>Keeps:</c> applies.
+    ///  <c>Aux = stores from an auxiliary byte; keeps A</c>, <c>; keeps X, Y</c> or <c>; keeps nothing</c>: the
+    ///  items, in place of the routine's <c>Keeps:</c> for a call there, split at commas and "and", a final period
+    ///  dropped. Null where the meaning has no such clause, so the routine's <c>Keeps:</c> applies.
     /// </summary>
     public IReadOnlyList<string>? Keeps
     {
         get
         {
-            int clause = Meaning.LastIndexOf(KeepsClause, StringComparison.Ordinal);
+            int clause = Meaning.LastIndexOf(KeepsClause, StringComparison.OrdinalIgnoreCase);
             if (clause < 0) { return null; }
-            string items = Meaning[(clause + KeepsClause.Length)..].Trim();
-            if (items == "nothing") { return []; }
+            string items = Meaning[(clause + KeepsClause.Length)..].Trim().TrimEnd('.');
+            if (items.Equals("nothing", StringComparison.OrdinalIgnoreCase)) { return []; }
             List<string> kept = [];
-            foreach (string item in items.Split(','))
+            foreach (string item in items.Replace(" and ", ",").Split(','))
             {
                 string name = item.Trim();
                 if (name.Length != 0) { kept.Add(name); }

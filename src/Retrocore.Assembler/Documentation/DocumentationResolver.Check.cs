@@ -370,6 +370,19 @@ public sealed partial class DocumentationResolver
                     {
                         warn($"Entry: '{entry.Name}' is not a label inside {topic.Name}.", entry.Line);
                     }
+
+                    // A keeps clause names what Keeps: would: registers, flags by word, memory.
+                    foreach (string item in entry.Keeps ?? [])
+                    {
+                        if (item.Contains(' ', StringComparison.Ordinal))
+                        {
+                            warn($"Entry: '{entry.Name}' keeps registers and memory separated by commas, not '{item}'.", entry.Line);
+                        }
+                        else if (Unknown(topic, item) is { } unknown)
+                        {
+                            warn(NotKnown(topic, section.Name, unknown), entry.Line);
+                        }
+                    }
                 }
 
                 break;

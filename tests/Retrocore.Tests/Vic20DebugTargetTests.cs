@@ -109,6 +109,11 @@ public sealed class Vic20DebugTargetTests
         characters.Character(0x81).Should().Be('A', "reversed characters read as their own");
         characters.Character(0x66).Should().Be('\0', "graphics read as nothing");
 
+        // In the lower-case set, as SHIFT with the Commodore key or POKE 36869,242 chooses, the screen reads lower case.
+        target.Machine.Bus.Write(0x9005, (byte)((target.Peek(0x9005) & 0xF0) | 0x02));
+        JsonArray? rows = target.DisplayState(running: false)["rows"] as JsonArray;
+        rows?.Select(row => row?.GetValue<string>().TrimEnd()).Should().Contain("ready.");
+
         ProcessorRegisters registers = target.Machine.Processor.Registers;
         registers.X = 11;
         target.Machine.Processor.Registers = registers;

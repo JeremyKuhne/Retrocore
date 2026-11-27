@@ -23,7 +23,8 @@ internal sealed partial class Vic20DebugTarget : IDebugTarget
     internal const int RestoreKey = 256;
 
     /// <summary>
-    ///  The key code for RUN/STOP and RESTORE together, the kernal's warm start back to BASIC's READY.
+    ///  The key code for RUN/STOP and RESTORE together, the kernal's warm start: back to BASIC's READY, or with a
+    ///  cartridge in, to the cartridge's warm start.
     /// </summary>
     internal const int StopRestoreKey = 257;
 
@@ -412,7 +413,7 @@ internal sealed partial class Vic20DebugTarget : IDebugTarget
     /// <inheritdoc/>
     public JsonObject DisplayState(bool running)
     {
-        string[] rows = _machine.ReadTextScreen();
+        string[] rows = TextRows();
         return new JsonObject
         {
             ["machine"] = DebugMachines.Vic20,
@@ -532,6 +533,29 @@ internal sealed partial class Vic20DebugTarget : IDebugTarget
     private string CartridgeText() => _machine.Bus.Cartridge is { } cartridge
         ? $"{CartridgeName ?? "a cartridge"}{(cartridge.Autostarts ? ", which starts itself" : "")}"
         : "empty";
+
+    // The screen as text, each code as the character set the VIC shows reads it, graphics as spaces.
+    private string[] TextRows()
+    {
+        Vic6560 vic = _machine.Vic;
+        IVicMemory memory = _machine.Bus;
+        int columns = vic.Columns;
+        string[] rows = new string[vic.Rows];
+        char[] line = new char[columns];
+        for (int row = 0; row < rows.Length; row++)
+        {
+            for (int column = 0; column < columns; column++)
+            {
+                byte code = memory.FetchVideo((vic.ScreenAddress + (row * columns) + column) & 0x3FFF);
+                char character = _characters.Character(code);
+                line[column] = character == '\0' ? ' ' : character;
+            }
+
+            rows[row] = new string(line);
+        }
+
+        return rows;
+    }
 
     // Presses or releases a key that types nothing.
     private void Hold(int code, bool pressed)

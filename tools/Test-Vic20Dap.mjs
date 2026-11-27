@@ -45,7 +45,8 @@ function drop(name) {
     }
 }
 
-// The screen's rows joined: the VIC's 22 columns wrap BASIC's 40-column lines, so a test reads across rows too.
+// The screen's rows joined: BASIC's lines wrap across the VIC's 22-column rows, up to four of them, so a test reads
+// across rows too.
 const text = frame => frame.rows.map(row => row.trimEnd()).join("\n");
 const joined = screen => screen.replace(/\n/g, "");
 
@@ -232,7 +233,8 @@ try {
     await launch({ program: prg, ramExpansion: "8k" });
     await screen(screen => screen.includes("VIC 42"), "the .prg program's output with 8K");
 
-    // A launched source prints through the kernal's character output.
+    // A launched source prints through the kernal's character output, then waits, as it was started with no return
+    // address of its own to go back to.
     writeFileSync(hello, [
         ".cpu Mos6502",
         "CHROUT = $FFD2",
@@ -242,7 +244,7 @@ try {
         "        jsr CHROUT",
         "        inx",
         "        bne Next",
-        "Done:   rts",
+        "Done:   jmp Done",
         "Message: .byte \"HELLO\", 0",
         ""
     ].join("\n"));

@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: MIT
 // See LICENSE file in the project root for full license information
 
-// VIC-20 BASIC through the debug adapter, from the SDK's sources, on NTSC and PAL, unexpanded and with the 3K and
-// 8K expansions, which move BASIC's program to $0401 and $1201: a file launched on the BASIC thread, stopping on its
+// VIC-20 BASIC through the debug adapter, from the SDK's sources, on NTSC and PAL, unexpanded and with the 3K, 8K
+// and 32K expansions, which move BASIC's program to $0401 and $1201: a file launched on the BASIC thread, stopping on its
 // first statement; stepping statement by statement through colons; a breakpoint inside a GOSUB, with the GOSUB's
 // frame below it; the variables and the FOR loop; the program in memory read and written as text; an error with
 // BASIC's message, which the VIC-20 finds by number; Step Into on SYS stopping in the machine code; and a statement
@@ -134,7 +134,8 @@ try {
     await session("pal", "none");
     await session("ntsc", "3k");
     await session("ntsc", "8k");
-    console.log("VIC-20 BASIC DAP passed on NTSC and PAL, unexpanded and with 3K and 8K: stops on entry, steps through colons, stops in a GOSUB with its caller below, shows the variables and the FOR loop, reads and writes the program, stops on an error with BASIC's message, steps into SYS's machine code, and starts no statement twice for an interrupt.");
+    await session("ntsc", "32k");
+    console.log("VIC-20 BASIC DAP passed on NTSC and PAL, unexpanded and with 3K, 8K and 32K: stops on entry, steps through colons, stops in a GOSUB with its caller below, shows the variables and the FOR loop, reads and writes the program, stops on an error with BASIC's message, steps into SYS's machine code, and starts no statement twice for an interrupt.");
 } finally {
     unlinkSync(file);
 }

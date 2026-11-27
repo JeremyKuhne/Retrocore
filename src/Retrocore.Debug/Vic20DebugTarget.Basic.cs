@@ -35,10 +35,11 @@ internal sealed partial class Vic20DebugTarget
     /// <inheritdoc/>
     /// <remarks>
     ///  <para>
-    ///   The kernal's RAM test and BASIC's start-up take under a second, even with every block expanded.
+    ///   The kernal tests RAM a byte at a time from <c>$0401</c>: about half a second unexpanded, and over two seconds
+    ///   with 32K, before BASIC starts.
     ///  </para>
     /// </remarks>
-    public double BasicBootSeconds => 3;
+    public double BasicBootSeconds => 4;
 
     /// <inheritdoc/>
     public bool PressesReturnForPrompt => false;

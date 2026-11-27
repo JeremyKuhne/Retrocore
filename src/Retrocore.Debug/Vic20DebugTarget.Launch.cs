@@ -203,19 +203,6 @@ internal sealed partial class Vic20DebugTarget
     }
 
     /// <summary>
-    ///  Gets the Datasette, which a <c>basic</c> target's tape plays in.
-    /// </summary>
-    internal CommodoreDatasette BootDeck => _machine.Cassette;
-
-    /// <summary>
-    ///  Gets device 8's drive, which a <c>basic</c> target's disk boots from.
-    /// </summary>
-    /// <exception cref="InvalidOperationException">No drive is connected as 8.</exception>
-    internal CommodoreFloppyDrive BootDiskDrive =>
-        _machine.Disks.FirstOrDefault(unit => unit.Address == FirstDiskAddress)?.Drive
-            ?? throw new InvalidOperationException("No disk drive is connected as device 8.");
-
-    /// <summary>
     ///  Gets whether BASIC's screen shows its READY prompt on a line of its own.
     /// </summary>
     internal bool ShowsReady => _machine.ReadTextScreen().Any(line => line.TrimEnd() == "READY.");

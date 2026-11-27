@@ -1394,11 +1394,12 @@ internal sealed partial class DebugSession
         return target;
     }
 
-    // As on the PET: the kernal tests RAM and BASIC starts before a program loads.
+    // As on the PET: the kernal tests RAM and BASIC starts before a program loads; with 32K the RAM test alone takes
+    // over two seconds.
     private static Vic20DebugTarget LaunchVic20(JsonObject args, bool loads)
     {
         Vic20DebugTarget target = Vic20DebugTarget.Launch(args);
-        target.Boot(args.Double("bootSeconds") ?? (loads ? 3 : 0));
+        target.Boot(args.Double("bootSeconds") ?? (loads ? 4 : 0));
         return target;
     }
 

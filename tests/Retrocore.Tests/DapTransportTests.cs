@@ -117,6 +117,56 @@ public sealed class DapTransportTests
     }
 
     /// <summary>
+    ///  Disconnect does not leave a reader waiting for more input from a peer that has not closed its pipe.
+    /// </summary>
+    [TestMethod]
+    public void DisconnectStopsReadingBeforeThePeerCloses()
+    {
+        using ManualResetEventSlim readingPastMessage = new();
+        using ManualResetEventSlim close = new();
+        using DisconnectReadStream input = new(Request(1, "disconnect", []), readingPastMessage, close);
+        using MemoryStream output = new();
+        DapTransport transport = new(input, output);
+        bool readAhead = false;
+        transport.On("disconnect", _ =>
+        {
+            readAhead = readingPastMessage.Wait(TimeSpan.FromMilliseconds(250));
+            return Stopped(transport);
+        });
+
+        try
+        {
+            transport.Run();
+            readAhead.Should().BeFalse();
+            Frames(output.ToArray()).Should().ContainSingle().Which.Bool("success").Should().BeTrue();
+        }
+        finally
+        {
+            close.Set();
+        }
+    }
+
+    /// <summary>
+    ///  A failed disconnect leaves the reader available to service a retry.
+    /// </summary>
+    [TestMethod]
+    public void FailedDisconnectDoesNotStopReading()
+    {
+        bool first = true;
+        List<JsonObject> messages = Exchange(transport =>
+        {
+            transport.On("disconnect", _ =>
+            {
+                if (!first) { return Stopped(transport); }
+                first = false;
+                throw new IOException("Retry disconnect");
+            });
+        }, Request(1, "disconnect", []), Request(2, "disconnect", []));
+
+        messages.Select(message => message.Bool("success")).Should().Equal(false, true);
+    }
+
+    /// <summary>
     ///  A message that is not JSON is skipped, and the ones after it are answered.
     /// </summary>
     [TestMethod]

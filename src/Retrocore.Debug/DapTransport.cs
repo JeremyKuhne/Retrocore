@@ -198,11 +198,11 @@ internal sealed class DapTransport(Stream input, Stream output)
     private void ReadLoop()
     {
         // A paced image boot can wait for minutes. Read cancellation ahead without dispatching handlers out of order.
-        BlockingCollection<JsonObject> requests = [with(boundedCapacity: 256)];
+        BlockingCollection<(JsonObject Message, TaskCompletionSource? Disconnect)> requests = [with(boundedCapacity: 256)];
         Task reader = Task.Factory.StartNew(
             () => ReadRequests(requests), CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default);
 
-        foreach (JsonObject message in requests.GetConsumingEnumerable())
+        foreach ((JsonObject message, TaskCompletionSource? disconnect) in requests.GetConsumingEnumerable())
         {
             if (_stopped) { break; }
             int? launch = ReadAhead<string>(message, "command") == "launch"
@@ -226,6 +226,7 @@ internal sealed class DapTransport(Stream input, Stream output)
             }
             finally
             {
+                disconnect?.SetResult();
                 if (launch is int completed)
                 {
                     _launchCancellation = default;
@@ -242,17 +243,17 @@ internal sealed class DapTransport(Stream input, Stream output)
             if (_stopped) { break; }
         }
 
-        if (!_stopped) { reader.GetAwaiter().GetResult(); }
+        if (!_outputFailed) { reader.GetAwaiter().GetResult(); }
     }
 
-    private void ReadRequests(BlockingCollection<JsonObject> requests)
+    private void ReadRequests(BlockingCollection<(JsonObject Message, TaskCompletionSource? Disconnect)> requests)
     {
         try { ReadRequestsUntilStopped(requests); }
         catch (OperationCanceledException) when (_stopped) { }
         finally { requests.CompleteAdding(); }
     }
 
-    private void ReadRequestsUntilStopped(BlockingCollection<JsonObject> requests)
+    private void ReadRequestsUntilStopped(BlockingCollection<(JsonObject Message, TaskCompletionSource? Disconnect)> requests)
     {
         while (!_stopped)
         {
@@ -292,13 +293,17 @@ internal sealed class DapTransport(Stream input, Stream output)
                 }
             }
 
-            if (!requests.TryAdd(message))
+            // A successful disconnect stops the transport. Don't enter another blocking read before it is handled.
+            TaskCompletionSource? disconnect = command == "disconnect" ? new(TaskCreationOptions.RunContinuationsAsynchronously) : null;
+            if (!requests.TryAdd((message, disconnect)))
             {
                 // A full queue cannot carry a later cancel past a paced launch. Unblock the consumer without
                 // dropping or reordering requests.
                 lock (_pendingLaunches) { CancelPendingLaunches(); }
-                requests.Add(message, _stopReading.Token);
+                requests.Add((message, disconnect), _stopReading.Token);
             }
+
+            disconnect?.Task.WaitAsync(_stopReading.Token).GetAwaiter().GetResult();
         }
     }
 

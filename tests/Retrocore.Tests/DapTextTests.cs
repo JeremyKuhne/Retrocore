@@ -27,6 +27,29 @@ public sealed class DapTextTests
     };
 
     /// <summary>
+    ///  An explicit legacy setting controls both project boot and the device preference unless a new mode is supplied.
+    /// </summary>
+    /// <param name="tape">Whether to check the tape or disk alias.</param>
+    [TestMethod]
+    [DataRow(data: true)]
+    [DataRow(data: false)]
+    public void LegacyMediaSpeedControlsProjectBoot(bool tape)
+    {
+        JsonObject launch = Apple1(textOnly: true);
+        MediaSpeedPolicy policy = new(Apple1DebugTarget.Launch(launch));
+        policy.Boot(tape).Should().Be(MediaSpeed.Fast, "an unspecified project boot is unpaced");
+        launch[tape ? "fastCassette" : "fastDisk"] = false;
+        policy.Apply(launch);
+        policy.Boot(tape).Should().Be(MediaSpeed.Normal);
+        MediaSpeedPolicy.LaunchMode(launch, tape).Should().Be(MediaSpeed.Normal);
+
+        launch[tape ? "tapeSpeed" : "diskSpeed"] = "skip";
+        policy.Apply(launch);
+        policy.Boot(tape).Should().Be(MediaSpeed.Skip);
+        MediaSpeedPolicy.LaunchMode(launch, tape).Should().Be(MediaSpeed.Skip);
+    }
+
+    /// <summary>
     ///  An explicit media mode overrides the legacy flag and remains selected independently of machine speed.
     /// </summary>
     [TestMethod]

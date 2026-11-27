@@ -893,7 +893,7 @@ internal sealed class MachinePane : ScrollViewer
                 if (tape) { _settings.TapeSpeed = mode; }
                 else { _settings.DiskSpeed = mode; }
                 string option = tape ? "tapeSpeed" : "diskSpeed";
-                if (_session.Configuration.ContainsKey(option))
+                if (MediaSpeedPolicy.LaunchMode(_session.Configuration, tape) is not null)
                 {
                     _session.Configuration[option] = MediaSpeedPolicy.Name(mode);
                 }

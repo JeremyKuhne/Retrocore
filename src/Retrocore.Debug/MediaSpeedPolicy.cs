@@ -91,18 +91,26 @@ internal sealed class MediaSpeedPolicy(IDebugTarget target)
     /// <param name="args">The launch arguments.</param>
     internal void Apply(JsonObject args)
     {
-        if (args["tapeSpeed"] is { } tape) { Set(tape: true, Parse(tape)); }
-        if (args["diskSpeed"] is { } disk) { Set(tape: false, Parse(disk)); }
-        if (args["mediaSpeedDefaults"] is not JsonObject defaults) { return; }
-        if (_tape is null && args["fastCassette"] is null)
-        {
-            _tape = Read(defaults["tape"]);
-        }
+        JsonObject? defaults = args["mediaSpeedDefaults"] as JsonObject;
+        _tape = LaunchMode(args, tape: true) ?? Read(defaults?["tape"]);
+        _disk = LaunchMode(args, tape: false) ?? Read(defaults?["disk"]);
+    }
 
-        if (_disk is null && args["fastDisk"] is null)
+    /// <summary>
+    ///  Gets an explicit launch preference, favoring the new mode over its legacy boolean.
+    /// </summary>
+    /// <param name="args">The launch arguments.</param>
+    /// <param name="tape">Whether to resolve tape rather than disk speed.</param>
+    /// <returns>The launch preference, or null when neither setting was given.</returns>
+    internal static MediaSpeed? LaunchMode(JsonObject args, bool tape)
+    {
+        if (args[tape ? "tapeSpeed" : "diskSpeed"] is { } mode) { return Parse(mode); }
+        return args.Bool(tape ? "fastCassette" : "fastDisk") switch
         {
-            _disk = Read(defaults["disk"]);
-        }
+            true => MediaSpeed.Fast,
+            false => MediaSpeed.Normal,
+            null => null
+        };
     }
 
     /// <summary>

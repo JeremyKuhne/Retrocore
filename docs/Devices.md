@@ -55,9 +55,10 @@ Interactive tape loads, other ROMs and tape formats, saves and all disk operatio
 For unthrottled but cycle-accurate tests, choose Normal and machine speed `max`.
 
 Use `tapeSpeed` and `diskSpeed` in a debug launch, with lower-case values. Existing `fastCassette` and `fastDisk`
-booleans are still accepted (`false` selects Normal; `true` selects Fast); an explicit new setting wins. Project
-boot remains unpaced unless Normal is selected explicitly. The [debug adapter guide](DebugAdapter.md#media-speed)
-describes the effective-mode reports. The [backlog](backlog/MediaSpeed.md) tracks support for additional drives.
+booleans are still accepted (`false` selects Normal; `true` selects Fast), including for project boots and Desktop.
+An explicit new setting wins. Project boot remains unpaced unless Normal is selected. The
+[debug adapter guide](DebugAdapter.md#media-speed) describes the effective-mode reports. The
+[backlog](backlog/MediaSpeed.md) tracks support for additional drives.
 
 ## The debug protocol
 

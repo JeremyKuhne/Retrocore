@@ -225,8 +225,8 @@ internal sealed class MachineSession : DisposableBase
     {
         MachineHost host = new(configuration, saved);
         Problems = saved is null ? [] : host.Restore(saved);
-        host.SetMediaSpeed(tape: true, configuration["tapeSpeed"] is { } tape ? MediaSpeedPolicy.Parse(tape) : _settings.TapeSpeed);
-        host.SetMediaSpeed(tape: false, configuration["diskSpeed"] is { } disk ? MediaSpeedPolicy.Parse(disk) : _settings.DiskSpeed);
+        host.SetMediaSpeed(tape: true, MediaSpeedPolicy.LaunchMode(configuration, tape: true) ?? _settings.TapeSpeed);
+        host.SetMediaSpeed(tape: false, MediaSpeedPolicy.LaunchMode(configuration, tape: false) ?? _settings.DiskSpeed);
         return host;
     }
 

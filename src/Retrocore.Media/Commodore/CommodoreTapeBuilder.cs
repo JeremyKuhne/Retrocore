@@ -102,7 +102,7 @@ public static class CommodoreTapeBuilder
     /// <param name="length">The number of program bytes.</param>
     /// <returns>The number of pulses.</returns>
     internal static int ProgramPulseCount(int length) =>
-        HeaderLeader + ProgramLeader + ((HeaderLength + length + (4 * (SyncLength + 1))) * 40) + (2 * ((2 * GapLength) + 1));
+        BlockPulseCount(HeaderLeader, HeaderLength) + BlockPulseCount(ProgramLeader, length);
 
     /// <summary>
     ///  Appends the header and data blocks for a program with a name already in PETSCII.
@@ -126,6 +126,9 @@ public static class CommodoreTapeBuilder
         Block(pulses, HeaderLeader, header);
         Block(pulses, ProgramLeader, program);
     }
+
+    private static int BlockPulseCount(int leader, int length) =>
+        leader + (2 * (length + SyncLength + 1) * 20) + (2 + (GapLength - 1) + GapLength);
 
     private static void Block(List<int> pulses, int leader, ReadOnlySpan<byte> data)
     {

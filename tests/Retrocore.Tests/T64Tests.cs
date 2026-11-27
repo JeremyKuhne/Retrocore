@@ -119,14 +119,20 @@ public sealed class T64Tests
     }
 
     /// <summary>
-    ///  Even a small archive whose many leaders would exceed the pulse limit is refused before expanding.
+    ///  An archive that expands to exactly the pulse limit is accepted; one more program byte is refused.
     /// </summary>
+    /// <param name="extraBytes">The bytes beyond the archive that fills the limit.</param>
     [TestMethod]
-    public void RefusesExcessiveTapeExpansion()
+    [DataRow(0)]
+    [DataRow(1)]
+    public void ChecksTapeExpansionAtThePulseLimit(int extraBytes)
     {
-        const ushort files = 406;
+        const ushort files = 24;
+        const int standardLength = 16_443;
+        // Each file contributes 41,314 framing pulses plus 40 per program byte.
+        int lastLength = standardLength + 10 + extraBytes;
         const int directoryEnd = 64 + (32 * files);
-        byte[] image = new byte[directoryEnd + files];
+        byte[] image = new byte[directoryEnd + ((files - 1) * standardLength) + lastLength];
         "C64 tape image file"u8.CopyTo(image);
         BinaryPrimitives.WriteUInt16LittleEndian(image.AsSpan(0x22), files);
         BinaryPrimitives.WriteUInt16LittleEndian(image.AsSpan(0x24), files);
@@ -135,12 +141,20 @@ public sealed class T64Tests
             Span<byte> entry = image.AsSpan(64 + (32 * i), 32);
             entry[0] = 1;
             entry[1] = 0x82;
-            entry[4] = 1;
-            BinaryPrimitives.WriteInt32LittleEndian(entry[8..], directoryEnd + i);
+            int length = i == files - 1 ? lastLength : standardLength;
+            BinaryPrimitives.WriteUInt16LittleEndian(entry[4..], (ushort)length);
+            BinaryPrimitives.WriteInt32LittleEndian(entry[8..], directoryEnd + (i * standardLength));
         }
 
-        FluentActions.Invoking(() => T64Format.Read(image)).Should().Throw<InvalidDataException>()
-            .WithMessage("*too much program data*");
+        if (extraBytes == 0)
+        {
+            T64Format.Read(image).Pulses.Count.Should().Be(16 * 1024 * 1024);
+        }
+        else
+        {
+            FluentActions.Invoking(() => T64Format.Read(image)).Should().Throw<InvalidDataException>()
+                .WithMessage("*too much program data*");
+        }
     }
 
     /// <summary>

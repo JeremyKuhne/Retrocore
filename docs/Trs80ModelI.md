@@ -150,7 +150,9 @@ The ROM and the memory are settings of the machine, in Start Machine's options a
   keeps Level II, and one that runs a BASIC file that names its dialect, by its name (`.level1.bas`) or its first line,
   keeps the ROM whose BASIC that is; a plain `.bas` goes into whichever BASIC the ROM has. While it runs, the Machine view's ROM row
   (or the ROM setting) offers to change it: after asking, since what is only in the machine's memory is lost, it
-  stops the session, sets the ROM as it would off, and starts the machine again with its tape.
+  stops the session, sets the ROM as it would off, and starts the machine again with its tape. The running ROM row
+  names the Level II revision by the ROM's power-up message, and calls a ROM with neither revision's message plain
+  Level II BASIC.
 - **Memory**: 4, 16, 32 or 48 KB, `ramKilobytes`. 32 and 48 KB bring the Expansion Interface, and taking the
   interface out brings the memory down to 16 KB. Left out, it is 48 KB with the interface, else 16 KB, or 4 KB for
   Level I; Level I Model Is were sold with 4 KB or 16 KB, and Level I finds its memory's top by probing, so

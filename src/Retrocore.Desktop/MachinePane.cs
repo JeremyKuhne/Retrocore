@@ -881,28 +881,31 @@ internal sealed class MachinePane : ScrollViewer
 
         _display.Children.Add(Options.Row("Speed", speed, "How fast the machine runs, as a multiple of its clock. Sound plays only at 1x."));
 
-        // As the display panel's Fast disk: a disk or tape loads as fast as the machine can run, whatever the speed.
-        if (host.FastDriveKind is { } kind)
+        const string MediaHelp = "Skip supported media operations. Other operations run at Fast speed.";
+        foreach (bool tape in new[] { true, false })
         {
-            host.FastDrives = _settings.FastDrives;
-            CheckBox fast = new()
+            if (!host.HasMedia(tape)) { continue; }
+            ComboBox media = Options.Choice(["Normal", "Fast", "Skip"], (int)host.GetMediaSpeed(tape));
+            media.SelectionChanged += (_, _) =>
             {
-                IsChecked = _settings.FastDrives,
-                MinWidth = 0,
-                MinHeight = 0,
-                Padding = new Thickness(0)
-            };
-
-            fast.IsCheckedChanged += (_, _) =>
-            {
-                _settings.FastDrives = fast.IsChecked == true;
-                _session.Host.FastDrives = _settings.FastDrives;
+                if (media.SelectedIndex < 0) { return; }
+                MediaSpeed mode = (MediaSpeed)media.SelectedIndex;
+                if (tape) { _settings.TapeSpeed = mode; }
+                else { _settings.DiskSpeed = mode; }
+                _session.Host.SetMediaSpeed(tape, mode);
                 _settings.Save();
             };
 
-            _display.Children.Add(Options.Row(kind == "disk" ? "Fast disk" : "Fast tape", fast, kind == "disk"
-                ? "Runs as fast as it can while a disk drive's motor turns, then back at the chosen speed"
-                : "Runs as fast as it can while the tape plays, then back at the chosen speed"));
+            _display.Children.Add(Options.Row(tape ? "Tape speed" : "Disk speed", media, MediaHelp));
+        }
+
+        if (host.HasMedia(tape: true) || host.HasMedia(tape: false))
+        {
+            _display.Children.Add(new HyperlinkButton
+            {
+                Content = "Media speed support",
+                NavigateUri = new("https://github.com/JeremyKuhne/Retrocore/blob/main/docs/Devices.md#media-speed")
+            });
         }
 
         // The machine's own modes, starting from the one it launched with.

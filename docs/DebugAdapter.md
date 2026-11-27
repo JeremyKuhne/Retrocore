@@ -124,3 +124,19 @@ Apple-1 terminal actually accepted, before screen normalization or scrolling. No
 on other machines. If a byte arrives while the buffer is full, the adapter parks and reports an explicit overflow
 on the next execution boundary; the retained prefix is readable and the stream is no longer complete. Relaunch to
 start a new stream.
+
+## Media speed
+
+`tapeSpeed` and `diskSpeed` launch arguments accept `normal`, `fast` or `skip`. They are independent of machine
+`speed` and keyboard/peripheral `ioMode`. `retro/mediaSpeed` with `{ "kind": "tape", "mode": "skip" }` changes the
+requested mode; omit both arguments to read the current settings. The response and launch body's `mediaSpeed`
+have `tape` and `disk` values (`null` for a kind not installed).
+
+A project-image launch returns `mediaSpeedResult` with `kind`, `device`, `requested`, `effective`, and `reason`,
+plus `cycles` and `elapsedMilliseconds` for the boot media phase. `effective: "skip"` means a shortcut actually
+ran. `requested: "skip"` with `effective: "fast"` and `reason: "unsupportedOperation"` means real guest cycles ran
+unthrottled. During ordinary execution a `retro/mediaSpeed` event reports that fallback when an unsupported device
+becomes active. The requested setting does not change. A DAP `cancel` request naming a pending launch's `requestId`
+can interrupt its project-image boot.
+
+See [media speed support](Devices.md#media-speed) for the machines and operations that can Skip.

@@ -95,7 +95,7 @@ function loadPanel(state?: unknown, audioContext?: unknown): {
     document: PanelDocument; frames: (() => void)[];
 } {
     const posted: unknown[] = [];
-    const ids = ["screen", "display", "text", "status", "disk", "details", "overlay", "ctrl", "reset", "trs80-reset", "model3-reset", "model2-reset", "model100-reset", "kaypro-reset", "apple1-reset", "apple1-clear", "coco-reset", "pet-reset", "vic20-reset", "altair-reset", "altair-clear", "bbc-reset", "hint", "sound", "volume", "bezel", "scale", "speed", "fastDisk", "off", "offName", "restart", "startMachine", "close", "basic", "screenType", "screenChoice", "mouseState"];
+    const ids = ["screen", "display", "text", "status", "disk", "details", "overlay", "ctrl", "reset", "trs80-reset", "model3-reset", "model2-reset", "model100-reset", "kaypro-reset", "apple1-reset", "apple1-clear", "coco-reset", "pet-reset", "vic20-reset", "altair-reset", "altair-clear", "bbc-reset", "hint", "sound", "volume", "bezel", "scale", "speed", "tapeSpeed", "diskSpeed", "tapeSpeedChoice", "diskSpeedChoice", "mediaSpeedHelp", "off", "offName", "restart", "startMachine", "close", "basic", "screenType", "screenChoice", "mouseState"];
     const byId = new Map(ids.map(id => [id, new Element()]));
     byId.get("ctrl")?.setAttribute("aria-pressed", "false");
     const buttons = [new Element({ button: "0" }), new Element({ button: "1" })];
@@ -579,26 +579,27 @@ test("Speed asks the host for a speed, follows the host's setting, and the statu
     assert.equal(byId.get("status")?.textContent, "Running", "nothing measured yet");
 });
 
-test("Fast disk follows the host, asks it to change, and the status line says when it runs flat out", () => {
+test("Tape and disk speeds follow the host and report Skip fallback without losing the selection", () => {
     const { posted, byId, window } = loadPanel();
-    const fast = byId.get("fastDisk") as Element & { checked: boolean };
-    const frame = (fastDisk: boolean, accelerated: boolean, machine = "apple2"): Record<string, unknown> => ({
-        machine, rows: [""], cycles: 1, running: true, fastDisk,
+    const disk = byId.get("diskSpeed") as Element & { value: string };
+    const frame = (mediaSpeed: Record<string, unknown>, accelerated: boolean, machine = "apple2"): Record<string, unknown> => ({
+        machine, rows: [""], cycles: 1, running: true, mediaSpeed,
         speed: { setting: 1, accelerated, actual: accelerated ? 13.9 : 1, hertz: accelerated ? 14184728 : 1020484 },
         video: { width: 2, height: 1, pixelFormat: "rgba", pixels: "AAAAAAAAAAA=", beam: { scanline: 0, column: 30 } }
     });
-    window.dispatch("message", { data: frame(false, false) });
-    assert.equal(fast.checked, false, "the host's setting shows");
+    window.dispatch("message", { data: frame({ tape: null, disk: "normal" }, false) });
+    assert.equal(disk.value, "normal", "the host's setting shows");
+    assert.equal(byId.get("tapeSpeedChoice")?.hidden, true);
     assert.equal(byId.get("status")?.textContent, "Running · 1.00× · 1.02 MHz");
-    window.dispatch("message", { data: frame(true, true) });
-    assert.equal(byId.get("status")?.textContent, "Running · Fast disk · 13.90× · 14.18 MHz");
-    window.dispatch("message", { data: frame(true, true, "trs80-model1") });
-    assert.equal(byId.get("status")?.textContent, "Running · Fast tape · 13.90× · 14.18 MHz");
+    window.dispatch("message", { data: frame({ tape: "fast", disk: "skip", diskFallback: true }, true) });
+    assert.equal(byId.get("tapeSpeedChoice")?.hidden, false);
+    assert.equal(disk.value, "skip");
+    assert.match(byId.get("status")?.textContent ?? "", /Disk: Fast \(Skip not supported\)/);
 
     posted.splice(0);
-    fast.checked = false;
-    fast.dispatch("change");
-    assert.deepEqual(posted, [{ command: "fastDisk", enabled: false }]);
+    disk.value = "fast";
+    disk.dispatch("change");
+    assert.deepEqual(posted, [{ command: "mediaSpeed", kind: "disk", mode: "fast" }]);
 });
 
 test("the volume starts at 50%, is kept with the panel's state and is restored", () => {

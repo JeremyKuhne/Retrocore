@@ -115,6 +115,7 @@ export function activate(context: vscode.ExtensionContext): void {
     const showError = (error: unknown) => vscode.window.showErrorMessage(`Retrocore: ${String(error)}`);
     // Restart starts the ended session's launch again. Its configuration is the one VS Code resolved, so the machine
     // it saved is dropped: resolving again restores the one saved since.
+    const changedMediaSpeeds = new Map<string, Partial<Record<"tapeSpeed" | "diskSpeed", string>>>();
     const restart = async (): Promise<boolean> => {
         if (endedSession === undefined) return false;
         const { machineState: _saved, ...configuration } = endedSession.configuration;
@@ -136,9 +137,11 @@ export function activate(context: vscode.ExtensionContext): void {
     context.subscriptions.push(vscode.window.onDidChangeVisibleTextEditors(annotate));
     context.subscriptions.push(vscode.debug.onDidTerminateDebugSession(session => {
         cycleSessions.delete(session.id);
+        const mediaSpeeds = changedMediaSpeeds.get(session.id);
+        changedMediaSpeeds.delete(session.id);
         if (displaySession?.id === session.id) {
             displaySession = undefined;
-            endedSession = { name: session.name, configuration: session.configuration, folder: session.workspaceFolder };
+            endedSession = { name: session.name, configuration: { ...session.configuration, ...mediaSpeeds }, folder: session.workspaceFolder };
             if (panel !== undefined) {
                 panel.iconPath = machineIcon(context.extensionUri, "off");
                 panelScreen = "off";
@@ -211,6 +214,16 @@ export function activate(context: vscode.ExtensionContext): void {
                 console.warn(`retrocore: running the debug adapter in place: ${String(error)}`);
             }
             return new vscode.DebugAdapterExecutable("dotnet", [adapter, "--sdk-roms", path.join(path.dirname(filename), "Sdk", "Roms")]);
+        }
+    }));
+    context.subscriptions.push(vscode.debug.registerDebugConfigurationProvider("retrocore", {
+        resolveDebugConfiguration(_folder, configuration) {
+            for (const [option, legacy] of [["tapeSpeed", "fastCassette"], ["diskSpeed", "fastDisk"]] as const) {
+                if (configuration[option] !== undefined || configuration[legacy] !== undefined) continue;
+                const mode = context.workspaceState.get<unknown>(`retrocore.${option}`);
+                if (isMediaSpeed(mode)) configuration[option] = mode;
+            }
+            return configuration;
         }
     }));
     context.subscriptions.push(vscode.debug.registerDebugAdapterTrackerFactory("retrocore", {
@@ -333,11 +346,20 @@ export function activate(context: vscode.ExtensionContext): void {
                                 if (displaySession !== undefined) {
                                     void displaySession.customRequest(soundRequest(displaySession), { mode: input.mode }).then(undefined, showError);
                                 }
-                            } else if (typeof input === "object" && input !== null && "command" in input && input.command === "fastDisk"
-                                && "enabled" in input && typeof input.enabled === "boolean") {
-                                if (displaySession !== undefined) {
-                                    void displaySession.customRequest(`${applePrefix(displaySession)}/fastDisk`, { enabled: input.enabled }).then(undefined, showError);
+                            } else if (typeof input === "object" && input !== null && "command" in input && input.command === "mediaSpeed"
+                                && "kind" in input && (input.kind === "tape" || input.kind === "disk")
+                                && "mode" in input && isMediaSpeed(input.mode)) {
+                                const session = displaySession;
+                                if (session !== undefined) {
+                                    const { kind, mode } = input;
+                                    const option = kind === "tape" ? "tapeSpeed" : "diskSpeed";
+                                    void session.customRequest("retro/mediaSpeed", { kind, mode }).then(() => {
+                                        changedMediaSpeeds.set(session.id, { ...changedMediaSpeeds.get(session.id), [option]: mode });
+                                        return context.workspaceState.update(`retrocore.${option}`, mode);
+                                    }).then(undefined, showError);
                                 }
+                            } else if (typeof input === "object" && input !== null && "command" in input && input.command === "mediaSpeedHelp") {
+                                void vscode.env.openExternal(vscode.Uri.parse("https://github.com/JeremyKuhne/Retrocore/blob/main/docs/Devices.md#media-speed")).then(undefined, showError);
                             } else if (typeof input === "object" && input !== null && "command" in input && input.command === "speed"
                                 && "speed" in input && (input.speed === "max" || input.speed === 1 || input.speed === 2 || input.speed === 4 || input.speed === 8)) {
                                 if (displaySession !== undefined) {
@@ -377,6 +399,10 @@ function petTitle(model: string | undefined): string {
         case "pet4032-business": return "Commodore PET 4032 (business keyboard)";
         default: return "Commodore PET 2001 (BASIC 2)";
     }
+}
+
+function isMediaSpeed(value: unknown): value is "normal" | "fast" | "skip" {
+    return value === "normal" || value === "fast" || value === "skip";
 }
 
 function applePrefix(session: vscode.DebugSession): string {

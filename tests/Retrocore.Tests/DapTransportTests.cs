@@ -5,6 +5,7 @@
 using Retrocore.Debug;
 using System.Text;
 using System.Text.Json.Nodes;
+using System.Diagnostics;
 
 namespace Retrocore.Tests;
 
@@ -266,6 +267,33 @@ public sealed class DapTransportTests
             await host.WaitAsync(s_threadTimeout).ConfigureAwait(continueOnCapturedContext: false);
             await inFlightReleased.Task.WaitAsync(s_threadTimeout).ConfigureAwait(continueOnCapturedContext: false);
         }
+    }
+
+    /// <summary>
+    ///  A queued cancellation interrupts a launch without reordering the two responses.
+    /// </summary>
+    [TestMethod]
+    public void CancelInterruptsLaunch()
+    {
+        List<JsonObject> messages = Exchange(transport =>
+        {
+            transport.On("launch", _ =>
+            {
+                long started = Stopwatch.GetTimestamp();
+                while (Stopwatch.GetElapsedTime(started) < s_threadTimeout)
+                {
+                    transport.ThrowIfLaunchCancelled();
+                    Thread.Sleep(1);
+                }
+
+                return new JsonObject();
+            });
+
+            transport.On("cancel", _ => new JsonObject());
+        }, Request(1, "launch", []), Request(2, "cancel", new JsonObject { ["requestId"] = 1 }));
+
+        messages.Select(message => message.Int("request_seq")).Should().Equal(1, 2);
+        messages.Select(message => message.Bool("success")).Should().Equal(false, true);
     }
 
     private static Task StartHost(Action run) =>

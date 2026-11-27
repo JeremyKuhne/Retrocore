@@ -81,6 +81,7 @@ internal sealed class MachineHost : DisposableBase
     {
         Configuration = configuration;
         _target = OffMachine.Build(LaunchMedia.WithSaved(configuration, saved));
+        _mediaSpeed = new(_target);
         _measureCycles = _target.CycleCount;
         _thread = new(Run) { IsBackground = true, Name = "Machine" };
     }
@@ -128,105 +129,52 @@ internal sealed class MachineHost : DisposableBase
         }
     }
 
-    /// <summary>
-    ///  Gets what the machine's fast drive setting speeds up, <c>disk</c> or <c>tape</c>, or null when it has none.
-    /// </summary>
-    internal string? FastDriveKind => _target switch
-    {
-        Apple2DebugTarget or Apple3DebugTarget or Trs80Model2DebugTarget or KayproDebugTarget => "disk",
-        Apple1DebugTarget
-            or CocoDebugTarget
-            or PetDebugTarget
-            or Vic20DebugTarget
-            or Trs80DebugTarget
-            or Trs80Model3DebugTarget
-            or AltairDebugTarget
-            or BbcDebugTarget
-            or AtariDebugTarget
-            or Trs80Model100DebugTarget => "tape",
-        _ => null
-    };
+    private readonly MediaSpeedPolicy _mediaSpeed;
 
     /// <summary>
-    ///  Gets or sets whether the machine runs as fast as it can while a disk drive's motor turns or a tape plays,
-    ///  as the display panel's Fast disk does, then goes back to its speed.
+    ///  Gets whether the machine has a drive of the selected kind.
     /// </summary>
-    internal bool FastDrives
+    /// <param name="tape">Whether to look for tape rather than disk.</param>
+    /// <returns>Whether the machine has that kind of drive.</returns>
+    internal bool HasMedia(bool tape)
     {
-        get
+        using (Gate()) { return tape ? _mediaSpeed.HasTape : _mediaSpeed.HasDisk; }
+    }
+
+    /// <summary>
+    ///  Gets the requested mode for one kind of media.
+    /// </summary>
+    /// <param name="tape">Whether to get tape rather than disk speed.</param>
+    /// <returns>The requested mode.</returns>
+    internal MediaSpeed GetMediaSpeed(bool tape)
+    {
+        using (Gate()) { return tape ? _mediaSpeed.Tape : _mediaSpeed.Disk; }
+    }
+
+    /// <summary>
+    ///  Sets the requested mode for one kind of media.
+    /// </summary>
+    /// <param name="tape">Whether to set tape rather than disk speed.</param>
+    /// <param name="speed">The requested mode.</param>
+    internal void SetMediaSpeed(bool tape, MediaSpeed speed)
+    {
+        using (Gate())
         {
-            using (Gate())
-            {
-                return _target switch
-                {
-                    Apple2DebugTarget apple2 => apple2.FastDisk,
-                    Apple3DebugTarget apple3 => apple3.FastDisk,
-                    Trs80Model2DebugTarget model2 => model2.FastDisk,
-                    KayproDebugTarget kaypro => kaypro.FastDisk,
-                    Apple1DebugTarget apple1 => apple1.FastCassette,
-                    CocoDebugTarget coco => coco.FastCassette,
-                    PetDebugTarget pet => pet.FastCassette,
-                    Vic20DebugTarget vic20 => vic20.FastCassette,
-                    Trs80DebugTarget model1 => model1.FastCassette,
-                    Trs80Model3DebugTarget model3 => model3.FastCassette,
-                    AltairDebugTarget altair => altair.FastCassette,
-                    BbcDebugTarget bbc => bbc.FastCassette,
-                    AtariDebugTarget atari => atari.FastCassette,
-                    Trs80Model100DebugTarget model100 => model100.FastCassette,
-                    _ => false
-                };
-            }
+            _mediaSpeed.Set(tape, speed);
+            _paceAgain = true;
         }
-        set
+    }
+
+    /// <summary>
+    ///  Gets whether a busy device cannot run its requested Skip policy.
+    /// </summary>
+    /// <param name="tape">Whether to check for tape rather than disk activity.</param>
+    /// <returns>Whether the operation runs in Fast instead.</returns>
+    internal bool MediaSpeedFellBack(bool tape)
+    {
+        using (Gate())
         {
-            using (Gate())
-            {
-                switch (_target)
-                {
-                    case Apple2DebugTarget apple2:
-                        apple2.FastDisk = value;
-                        break;
-                    case Apple3DebugTarget apple3:
-                        apple3.FastDisk = value;
-                        break;
-                    case Trs80Model2DebugTarget model2:
-                        model2.FastDisk = value;
-                        break;
-                    case KayproDebugTarget kaypro:
-                        kaypro.FastDisk = value;
-                        break;
-                    case Apple1DebugTarget apple1:
-                        apple1.FastCassette = value;
-                        break;
-                    case CocoDebugTarget coco:
-                        coco.FastCassette = value;
-                        break;
-                    case PetDebugTarget pet:
-                        pet.FastCassette = value;
-                        break;
-                    case Vic20DebugTarget vic20:
-                        vic20.FastCassette = value;
-                        break;
-                    case Trs80DebugTarget model1:
-                        model1.FastCassette = value;
-                        break;
-                    case Trs80Model3DebugTarget model3:
-                        model3.FastCassette = value;
-                        break;
-                    case AltairDebugTarget altair:
-                        altair.FastCassette = value;
-                        break;
-                    case BbcDebugTarget bbc:
-                        bbc.FastCassette = value;
-                        break;
-                    case AtariDebugTarget atari:
-                        atari.FastCassette = value;
-                        break;
-                    case Trs80Model100DebugTarget model100:
-                        model100.FastCassette = value;
-                        break;
-                }
-            }
+            return (tape ? _mediaSpeed.Tape : _mediaSpeed.Disk) == MediaSpeed.Skip && _mediaSpeed.Active(tape) is not null;
         }
     }
 
@@ -820,7 +768,7 @@ internal sealed class MachineHost : DisposableBase
 
                 // While a drive is busy with fast drives on, the machine runs as fast as it can, and its pacing
                 // starts over from wherever it is once the drive is done, rather than waiting for the clock.
-                bool accelerated = speed != 0 && _target.Accelerated;
+                bool accelerated = speed != 0 && _mediaSpeed.Accelerated;
                 if (accelerated)
                 {
                     paceTime = slice;

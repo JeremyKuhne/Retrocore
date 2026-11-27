@@ -28,10 +28,14 @@ import assert from "node:assert/strict";
 const root = resolve(import.meta.dirname, "..");
 const sample = join(root, "sample", "adventure");
 const ioModeOverride = process.env.RETROCORE_DAP_IO_MODE;
+const tapeSpeed = process.env.RETROCORE_DAP_TAPE_SPEED;
+const diskSpeed = process.env.RETROCORE_DAP_DISK_SPEED;
 const inputBackend = process.env.RETROCORE_DAP_INPUT ?? "guestDemand";
 assert.ok(ioModeOverride === undefined || ioModeOverride === "realistic" || ioModeOverride === "fast",
     "RETROCORE_DAP_IO_MODE must be realistic or fast");
 assert.ok(inputBackend === "physical" || inputBackend === "guestDemand", "RETROCORE_DAP_INPUT must be physical or guestDemand");
+assert.ok(tapeSpeed === undefined || ["normal", "fast", "skip"].includes(tapeSpeed), "Invalid RETROCORE_DAP_TAPE_SPEED");
+assert.ok(diskSpeed === undefined || ["normal", "fast", "skip"].includes(diskSpeed), "Invalid RETROCORE_DAP_DISK_SPEED");
 
 // Transcripts are exact with either peripheral timing, so every target defaults to fast; realistic timing would pace
 // every Apple-1 byte through its beam-synchronized terminal at hardware speed. RETROCORE_DAP_IO_MODE=realistic checks
@@ -169,7 +173,7 @@ try {
             assert.deepEqual(script.slice(0, commands.length), commands, `${name}: the reference used this script`);
             events.length = 0;
             const launchArgs = { project: sample, target, stopOnEntry: true, speed: "max", sound: "off", textOnly: true,
-                ioMode: ioModeFor(),
+                ioMode: ioModeFor(), tapeSpeed, diskSpeed,
                 logpointLimit: 0, checkContracts: "stop" };
 
             // A target that needs dumps the SDK does not build, such as the 4040's ROMs for the PET's disk, is skipped,
@@ -184,6 +188,24 @@ try {
                 skippedTargets.push(target);
                 skipped = true;
                 break;
+            }
+
+            if (target === "pet-basic" && tapeSpeed !== undefined) {
+                const transfer = launched.mediaSpeedResult;
+                assert.equal(transfer?.kind, "tape");
+                assert.equal(transfer.requested, tapeSpeed);
+                assert.equal(transfer.effective, tapeSpeed, "the selected PET project path ran, not fallback");
+                assert.ok(tapeSpeed === "skip" ? transfer.cycles < 20_000_000 : transfer.cycles > 190_000_000,
+                    `unexpected PET cassette cycles: ${transfer.cycles}`);
+                console.log(`${target} ${name} LOAD: ${transfer.effective}, ${transfer.cycles} cycles, ${transfer.elapsedMilliseconds.toFixed(1)} ms`);
+            }
+
+            if (diskSpeed === "skip" && ["apple2-dos", "apple3-sos", "bbc-dfs", "pet-disk"].includes(target)) {
+                assert.equal(launched.mediaSpeed?.disk, "skip", "falling back keeps the requested disk speed");
+                assert.equal(launched.mediaSpeedResult?.requested, "skip");
+                assert.equal(launched.mediaSpeedResult.kind, "disk");
+                assert.equal(launched.mediaSpeedResult.effective, "fast", "disk Skip is not implemented");
+                assert.equal(launched.mediaSpeedResult.reason, "unsupportedOperation");
             }
 
             // A wozmon target's hex, typed in, stores what the launch loaded, and runs it at its entry.

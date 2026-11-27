@@ -25,7 +25,7 @@ names it with `"machine": "apple3"`:
 | `ramKilobytes` | 128, 256 (the default) or 512 (third-party upgrades). |
 | `disks` | Images for .D1, the built-in drive, then the external .D2-.D4: DOS-order (`.dsk`, `.do`), ProDOS-order (`.po`) or WOZ. Disks load write-protected; **Unlock** in the Drives view lets the machine write one, in memory, and **Save** saves it. |
 | `romDirectory` | MAME's `apple3` set (`apple3.rom`, `341-0028-a.rom`), or `RETROCORE_APPLE3_ROMS`. Without it the ROM comes from the SDK. |
-| `fastDisk` | Runs flat out while a drive's motor turns (on by default). |
+| `diskSpeed` | [Normal, Fast or Skip](Devices.md#media-speed). Fast is the default; Skip falls back to Fast. The older `fastDisk` boolean is still accepted. |
 | `sound` | `speaker` (the default) or `off`. |
 | `screen` | The monitor: `color` (the default), or a monochrome `white`, `green` or `amber` one, which shows each pixel in the phosphor's color by its brightness. The display panel's **Screen** changes it. |
 | `proFiles` | ProFile cards, each `{ "slot": 4, "image": "profile.po" }` with slot 1-4 and an optional image ([The ProFile](#the-profile)). |
@@ -163,7 +163,7 @@ The SDK also has the source of Business BASIC 1.23's interpreter, byte-identical
 debugs at that source where SOS loads it. Programs in Business BASIC debug on a BASIC thread, statement by statement.
 [BusinessBasic.md](BusinessBasic.md) covers both.
 
-The display panel shows the screen, with **Fast disk**, **Sound** and its volume, and buttons for Ctrl, CONTROL-C,
+The display panel shows the screen, with **Disk speed**, **Sound** and its volume, and buttons for Ctrl, CONTROL-C,
 CONTROL-RESET, Esc and the Apple keys. Left Alt is Open Apple, right Alt Solid Apple, and Ctrl+F12 CONTROL-RESET.
 
 ## Against MAME and the manual

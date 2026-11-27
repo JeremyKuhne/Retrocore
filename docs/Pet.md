@@ -218,8 +218,9 @@ The options are:
 - `sdkRoms`: the folder of the ROM sources, such as the repository's, so breakpoints set there bind;
 - `snow`: on by default on the 2001, off on the others;
 - `sound`: `speaker` (the default) or `off`;
-- `cassette1`, `cassette2`: a `.tap`, `.wav` or `.prg` tape, put in with PLAY down; and `fastCassette` (on by
-  default), which runs as fast as it can while a tape moves;
+- `cassette1`, `cassette2`: a `.tap`, `.wav` or `.prg` tape, put in with PLAY down;
+- `tapeSpeed`, `diskSpeed`: [Normal, Fast or Skip](Devices.md#media-speed). Tape defaults to Fast, as with the old
+  `fastCassette` boolean. Skip can accelerate a verified PET 4032 project tape; unsupported operations use Fast;
 - `diskUnits`: the device numbers of disk units on the IEEE-488 bus, such as `[8]`; `diskModel`: `4040` (the
   default) or `2040`; `disks`: `.d64`, `.d67` or `.g64` images for the first unit's drive 0, its drive 1, then the
   next unit's (without `diskUnits`, as many units as they need, from 8, and on a 4032 at least one); and

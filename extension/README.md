@@ -919,15 +919,16 @@ launch option sets where a session starts. While it runs, the status line shows 
 speed the debug host measures, such as `Running · 1.00× · 1.02 MHz`, or at Max how
 fast it really goes. Sound plays only at 1x.
 
-**Fast disk**, on by default (the `fastDisk` launch option), runs the IIe as fast as it
-can while any Disk II drive's motor turns, then returns to the chosen speed; the
-status line says `Fast disk` while it does. The machine runs the same cycles either
-way, so copy protection that times the disk still works; only the real time
-shrinks. At 1x, the DOS 3.3 System Master boots in about 3 seconds instead of 12,
-and `CATALOG` takes 0.2 seconds instead of 1.4. Sound goes quiet while it's fast,
-and slot 7's block storage is instant already. On the Model I, the fast cassette
-does the same while the tape motor turns (`Fast tape`). Click the screen
-to type into the machine. While it has focus, its keys go only to the machine, so
+**Disk speed** and **Tape speed** offer **Normal**, **Fast** and **Skip** for the
+installed drive kinds. Normal uses the chosen machine speed. Fast unthrottles
+the whole machine while the media is active, then returns to the chosen speed;
+it runs the same guest cycles, so timing-sensitive programs still work. Skip
+skips supported operations and falls back to Fast without changing the selection.
+The [media speed guide](../docs/Devices.md#media-speed) lists current support.
+Use `diskSpeed` and `tapeSpeed` in launch configurations; the old `fastDisk` and
+`fastCassette` booleans remain accepted.
+
+Click the screen to type into the machine. While it has focus, its keys go only to the machine, so
 Ctrl+P is CONTROL-P rather than Quick Open; function keys (the debugger's F5, F10
 and F11) and Ctrl+Shift+P still reach VS Code, as does Cmd on a Mac. The keys that
 aren't letters:

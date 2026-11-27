@@ -1,7 +1,7 @@
 # Backlog: tape and disk speed
 
-Status: **planned, not implemented.** The first Skip implementation is a PET BASIC project cassette load.
-The same controls and fallback work for other media before they acquire their own Skip paths.
+Status: **first implementation: PET BASIC project cassette load.** The same controls and Fast fallback work
+for other media before they acquire their own Skip paths. See [current support](../Devices.md#media-speed).
 
 ## What the choices mean
 
@@ -43,7 +43,7 @@ loop. `ioMode` is separate and remains unchanged. On the PET it controls keyboar
    again for the next operation after a setting change. Don't try to undo a published Skip transition.
 4. Cover both ordinary execution and project boot. Set the policy and read the selected machine speed before a
    project enters its media loop. In Normal, media activity obeys that speed; at 1x, a real-length tape may take minutes.
-   Keep such launches cancellable and responsive rather than adding sleeps to the synchronous DAP request handler.
+   Keep the DAP reader responsive to cancellation during the paced launch. Preserve request/response ordering.
    Do not change unrelated firmware boot delays just to implement media pacing. Existing cycle-accurate test launches
    that need to finish quickly can select Normal plus `speed: "max"`.
 5. Document support by machine, ROM, controller, image and operation in the [device guide](../Devices.md),
@@ -63,6 +63,13 @@ The measured Release baseline at `b3f258642e91e7ad4b84798e61bf61a4bd477b44` reac
 196 million guest cycles. An exact stepping probe reduced the 194.06-million-cycle LOAD phase from **6.42 s** to
 **4.12 s** without reducing guest work. The two data copies alone occupy **180.30 million cycles**,
 about **92%** of the tape's playback interval. That is the work to remove, not the duplicate boot in the test runner.
+
+Release measurement on the implementation, .NET 11 JIT on Windows x64, affinity `0x50`: three interleaved
+fresh debugger launches per mode with machine speed `max`. The media phase's median was **6.665 s Normal versus
+0.327 s Skip** (Skip range 0.305–0.663 s); whole launch was **8.055 s versus 1.745 s**. Phase work fell from
+194,059,869 to 11,812,587 cycles. The complete payload, status, BASIC pointers, IRQ vector, screen and tape position
+matched at entry. The separate adventure matrix verified both PET Skip hits and active disk fallback with exact
+transcripts; the 4040 remained untested because its ROMs were unavailable.
 
 1. **Capture the real transition first.** For Normal at `max`, probe just before the `LD100` program-data
    `jmp TRD` and at the instruction after the enclosing `LOAD`'s `jsr LD15` in the

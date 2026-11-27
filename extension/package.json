@@ -1863,6 +1863,11 @@
                 "default": false,
                 "description": "BBC Micro: hold SHIFT as the machine starts, as SHIFT-BREAK does, so the filing system boots the disk in drive 0 (its !BOOT) or, without a disk interface, the tape."
               },
+              "tapeSpeed": {
+                "type": "string",
+                "enum": ["normal", "fast", "skip"],
+                "description": "Tape speed: normal honors machine speed, fast unthrottles without changing guest timing, and skip skips supported operations or falls back to fast. See the Devices and media guide for Skip support."
+              },
               "fastCassette": {
                 "type": "boolean",
                 "default": true,
@@ -1918,6 +1923,11 @@
                 "type": "boolean",
                 "default": false,
                 "description": "Apple II: put Programmer's Aid #1 in the II's D0 socket ($D000-$D7FF), from the romDirectory's dump if it is there and otherwise built from the SDK's source. CALL -12288 starts its hi-res graphics. Other models have no D0 socket."
+              },
+              "diskSpeed": {
+                "type": "string",
+                "enum": ["normal", "fast", "skip"],
+                "description": "Disk speed: normal honors machine speed, fast unthrottles without changing guest timing, and skip skips supported operations or falls back to fast. See the Devices and media guide for Skip support."
               },
               "fastDisk": {
                 "type": "boolean",

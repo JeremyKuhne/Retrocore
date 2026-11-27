@@ -1,0 +1,182 @@
+// Copyright (c) 2025 Jeremy W Kuhne
+// SPDX-License-Identifier: MIT
+// See LICENSE file in the project root for full license information
+
+using System.Text.Json.Nodes;
+using Retrocore.Machines.Devices;
+
+namespace Retrocore.Debug;
+
+/// <summary>
+///  Controls host pacing and records the requested policy for each kind of media.
+/// </summary>
+/// <param name="target">The machine with the media devices.</param>
+internal sealed class MediaSpeedPolicy(IDebugTarget target)
+{
+    private MediaSpeed? _tape;
+    private MediaSpeed? _disk;
+
+    /// <summary>
+    ///  Gets whether the machine has a tape drive.
+    /// </summary>
+    internal bool HasTape => target.Devices.Any(device => device is ITapeDrive);
+
+    /// <summary>
+    ///  Gets whether the machine has a disk or block drive.
+    /// </summary>
+    internal bool HasDisk => target.Devices.Any(IsDisk);
+
+    /// <summary>
+    ///  Gets the requested tape speed.
+    /// </summary>
+    internal MediaSpeed Tape => _tape ?? Default(tape: true);
+
+    /// <summary>
+    ///  Gets the requested disk speed.
+    /// </summary>
+    internal MediaSpeed Disk => _disk ?? Default(tape: false);
+
+    /// <summary>
+    ///  Gets the image boot policy, retaining unthrottled legacy project launches.
+    /// </summary>
+    /// <param name="tape">Whether the boot uses tape rather than disk.</param>
+    /// <returns>The requested boot policy.</returns>
+    internal MediaSpeed Boot(bool tape) => (tape ? _tape : _disk) ?? MediaSpeed.Fast;
+
+    /// <summary>
+    ///  Gets whether current media work calls for unthrottled execution.
+    /// </summary>
+    internal bool Accelerated
+    {
+        get
+        {
+            if (target.Accelerated
+                && !(_tape == MediaSpeed.Normal && LegacyFast(tape: true) is not null)
+                && !(_disk == MediaSpeed.Normal && LegacyFast(tape: false) is not null))
+            {
+                return true;
+            }
+
+            if ((_tape is null or MediaSpeed.Normal) && (_disk is null or MediaSpeed.Normal)) { return false; }
+            IReadOnlyList<IDevice> devices = target.Devices;
+            for (int i = 0; i < devices.Count; i++)
+            {
+                IDevice device = devices[i];
+                if (device.Activity != DeviceActivity.Idle
+                    && (device is ITapeDrive ? _tape is MediaSpeed.Fast or MediaSpeed.Skip
+                        : IsDisk(device) && _disk is MediaSpeed.Fast or MediaSpeed.Skip))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+    }
+
+    /// <summary>
+    ///  Sets the requested speed for one media kind.
+    /// </summary>
+    /// <param name="tape">Whether to set tape rather than disk speed.</param>
+    /// <param name="speed">The requested value.</param>
+    internal void Set(bool tape, MediaSpeed speed)
+    {
+        if (tape) { _tape = speed; }
+        else { _disk = speed; }
+    }
+
+    /// <summary>
+    ///  Applies explicit media speed settings from launch arguments.
+    /// </summary>
+    /// <param name="args">The launch arguments.</param>
+    internal void Apply(JsonObject args)
+    {
+        if (args["tapeSpeed"] is { } tape) { Set(tape: true, Parse(tape)); }
+        if (args["diskSpeed"] is { } disk) { Set(tape: false, Parse(disk)); }
+    }
+
+    /// <summary>
+    ///  Writes both settings, with null for a kind not installed.
+    /// </summary>
+    /// <returns>The settings object.</returns>
+    internal JsonObject ToJson() => new()
+    {
+        ["tape"] = HasTape ? Name(Tape) : null,
+        ["disk"] = HasDisk ? Name(Disk) : null
+    };
+
+    /// <summary>
+    ///  Finds an active device of the indicated media kind.
+    /// </summary>
+    /// <param name="tape">Whether to look for tape rather than disk.</param>
+    /// <returns>The first busy device, or null.</returns>
+    internal IDevice? Active(bool tape) => target.Devices.FirstOrDefault(device =>
+        (tape ? device is ITapeDrive : IsDisk(device)) && device.Activity != DeviceActivity.Idle);
+
+    /// <summary>
+    ///  Builds a protocol result for a media operation.
+    /// </summary>
+    /// <param name="tape">Whether the operation uses tape rather than disk.</param>
+    /// <param name="requested">The selected mode.</param>
+    /// <param name="effective">The mode that actually ran.</param>
+    /// <param name="device">The device ID.</param>
+    /// <param name="reason">The fallback reason, if any.</param>
+    /// <returns>The result object.</returns>
+    internal static JsonObject Outcome(bool tape, MediaSpeed requested, MediaSpeed effective, string device, string? reason = null) => new()
+    {
+        ["kind"] = tape ? "tape" : "disk",
+        ["requested"] = Name(requested),
+        ["effective"] = Name(effective),
+        ["device"] = device,
+        ["reason"] = reason
+    };
+
+    /// <summary>
+    ///  Parses a media speed from a configuration value.
+    /// </summary>
+    /// <param name="value">The value to parse.</param>
+    /// <returns>The parsed mode.</returns>
+    internal static MediaSpeed Parse(JsonNode? value) => (value is JsonValue json && json.TryGetValue(out string? name) ? name : null) switch
+    {
+        "normal" => MediaSpeed.Normal,
+        "fast" => MediaSpeed.Fast,
+        "skip" => MediaSpeed.Skip,
+        _ => throw new ArgumentException("Media speed must be normal, fast or skip.")
+    };
+
+    /// <summary>
+    ///  Gets the protocol name of a media speed.
+    /// </summary>
+    /// <param name="speed">The mode to name.</param>
+    /// <returns>The protocol name.</returns>
+    internal static string Name(MediaSpeed speed) => speed switch
+    {
+        MediaSpeed.Normal => "normal",
+        MediaSpeed.Fast => "fast",
+        MediaSpeed.Skip => "skip",
+        _ => throw new ArgumentOutOfRangeException(nameof(speed))
+    };
+
+    private static bool IsDisk(IDevice device) => device is IDiskDrive or IBlockStorage;
+
+    private MediaSpeed Default(bool tape) => LegacyFast(tape) == true ? MediaSpeed.Fast : MediaSpeed.Normal;
+
+    private bool? LegacyFast(bool tape) => target switch
+    {
+        Apple2DebugTarget apple when !tape => apple.FastDisk,
+        Apple3DebugTarget apple when !tape => apple.FastDisk,
+        Trs80Model2DebugTarget trs when !tape => trs.FastDisk,
+        KayproDebugTarget kaypro when !tape => kaypro.FastDisk,
+        Apple1DebugTarget apple when tape => apple.FastCassette,
+        CocoDebugTarget coco when tape => coco.FastCassette,
+        PetDebugTarget pet when tape => pet.FastCassette,
+        Vic20DebugTarget vic when tape => vic.FastCassette,
+        Trs80DebugTarget trs when tape => trs.FastCassette,
+        Trs80Model3DebugTarget trs when tape => trs.FastCassette,
+        AltairDebugTarget altair when tape => altair.FastCassette,
+        BbcDebugTarget bbc when tape => bbc.FastCassette,
+        AtariDebugTarget atari when tape => atari.FastCassette,
+        Trs80Model100DebugTarget trs when tape => trs.FastCassette,
+        _ => null
+    };
+}

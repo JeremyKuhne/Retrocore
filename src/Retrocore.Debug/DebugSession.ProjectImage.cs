@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: MIT
 // See LICENSE file in the project root for full license information
 
+using System.Diagnostics;
+using System.Text.Json.Nodes;
 using Retrocore.Debug.Project;
 using Retrocore.Media;
 using Retrocore.Machines.Commodore;
@@ -42,6 +44,7 @@ internal sealed partial class DebugSession
 
         string label = $"{target.Project.Name}/{target.Name}: {Path.GetFileName(image)}, as built";
         byte[] bytes = File.ReadAllBytes(image);
+        string device;
         switch (Target)
         {
             case Apple2DebugTarget apple2:
@@ -51,18 +54,21 @@ internal sealed partial class DebugSession
                 WozDisk disk = SectorDiskConverter.Convert(bytes, proDosOrder: false);
                 MediaActions.KeepReplaced(apple2.BootDrive, $"the build's {build.Media.ImageKind} took its place");
                 apple2.BootDrive.Insert(disk, label, "DSK");
+                device = apple2.BootDrive.Id;
                 break;
             case BbcDebugTarget bbc:
                 // Drive 0, which SHIFT-BREAK boots.
                 FloppyDisk floppy = AcornDfsDisk.Read(bytes).ToDisk();
                 MediaActions.KeepReplaced(bbc.BootDrive, $"the build's {build.Media.ImageKind} took its place");
                 bbc.BootDrive.Insert(floppy, label, "SSD");
+                device = bbc.BootDrive.Id;
                 break;
             case Apple3DebugTarget apple3:
                 // The built-in drive, .D1, which the boot ROM boots.
                 WozDisk sos = SectorDiskConverter.Convert(bytes, proDosOrder: false);
                 MediaActions.KeepReplaced(apple3.BootDrive, $"the build's {build.Media.ImageKind} took its place");
                 apple3.BootDrive.Insert(sos, label, "DSK");
+                device = apple3.BootDrive.Id;
                 break;
             case PetDebugTarget pet:
                 BootPet(build, pet, bytes, label);
@@ -71,7 +77,11 @@ internal sealed partial class DebugSession
                 throw new ProjectException($"{target.Project.File}: target {target.Name}: {target.Machine.Id} cannot boot the '{target.Environment}' environment's image yet.");
         }
 
-        RunToEntry(build);
+        MediaSpeed mode = MediaSpeedSettings.Boot(tape: false);
+        ulong start = Target.CycleCount;
+        long began = Stopwatch.GetTimestamp();
+        RunToEntry(build, pace: mode == MediaSpeed.Normal ? new ImageBootPace(began, _speed, Target.ClockHertz) : default);
+        RecordImageLoad(tape: false, mode, device, skipped: false, start, began);
     }
 
     // Boots a PET from a basic target's tape, in cassette 1 with PLAY down, or its disk, in unit 8: at BASIC's prompt
@@ -81,6 +91,9 @@ internal sealed partial class DebugSession
     {
         ProjectTarget target = build.Target;
         string name = BasicEnvironment.ProgramName(target);
+        bool cassette = target.ImageBoot != "disk";
+        MediaSpeed mode = MediaSpeedSettings.Boot(cassette);
+        PetTapeSkip? skip = null;
         Machines.Devices.IDevice drive;
         string load;
         if (target.ImageBoot == "disk")
@@ -99,6 +112,11 @@ internal sealed partial class DebugSession
             MediaActions.KeepReplaced(deck, $"the build's {build.Media.ImageKind} took its place");
             deck.Insert(tape, label, "TAP");
             deck.Play();
+            if (mode == MediaSpeed.Skip && !ObservesTapeBoot())
+            {
+                skip = PetTapeSkip.Prepare(pet, name, BasicEnvironment.Program(build));
+            }
+
             drive = deck;
             load = "LOAD\r";
         }
@@ -108,8 +126,15 @@ internal sealed partial class DebugSession
         long limit = (long)(target.Built?.BootSeconds ?? 0) * Target.ClockHertz;
         long used = 0;
         RunUntil(build, () => pet.ShowsReady, "BASIC's READY prompt", limit, ref used);
+        long began = Stopwatch.GetTimestamp();
+        ulong before = Target.CycleCount;
         foreach (char key in load) { pet.Key(key); }
-        RunUntil(build, () => drive.Activity == Machines.Devices.DeviceActivity.Idle && Loaded(start, program), "the program loaded", limit, ref used);
+        bool skipped = RunUntil(
+            build, () => drive.Activity == Machines.Devices.DeviceActivity.Idle && Loaded(start, program),
+            "the program loaded", limit, ref used, skip,
+            mode == MediaSpeed.Normal ? new ImageBootPace(began, _speed, Target.ClockHertz, used) : default);
+
+        RecordImageLoad(cassette, mode, drive.Id, skipped, before, began);
         foreach (char key in "RUN\r") { pet.Key(key); }
         RunToEntry(build, limit - used);
     }
@@ -117,15 +142,18 @@ internal sealed partial class DebugSession
     // Runs the machine one cycle at a time until a condition holds at an instruction's start, counting the cycles it
     // takes against the boot's limit. The condition, which may read the screen or the program's bytes, is tested every
     // 4,096 cycles, about 4 ms of a 1 MHz machine's time, not at every instruction.
-    private void RunUntil(TargetBuild build, Func<bool> done, string what, long limit, ref long used)
+    private bool RunUntil(
+        TargetBuild build, Func<bool> done, string what, long limit, ref long used,
+        PetTapeSkip? skip = null, ImageBootPace pace = default)
     {
         const int Interval = 4096;
+        bool skipped = false;
         for (long tested = used - Interval; ; used++)
         {
             if (used - tested >= Interval && Target.IsInstructionBoundary)
             {
                 tested = used;
-                if (done()) { return; }
+                if (done()) { return skipped; }
             }
 
             if (used >= limit)
@@ -135,13 +163,31 @@ internal sealed partial class DebugSession
                     $"{target.Project.File}: target {target.Name}: booted from its {build.Media.ImageKind}, the machine did not reach {what} within {target.Built?.BootSeconds} seconds.");
             }
 
+            if ((used & (Interval - 1)) == 0) { pace.Wait(used, _transport); }
+            if (skip is not null && Target.CycleCount < skip.EarliestCycle && used - tested < Interval)
+            {
+                _transport?.ThrowIfLaunchCancelled();
+                long untilCheck = Math.Min(Interval - (used - tested), limit - used);
+                int count = (int)Math.Min((ulong)untilCheck, skip.EarliestCycle - Target.CycleCount);
+                Target.RunCycles(count);
+                used += count - 1;
+                continue;
+            }
+
+            if (skip is not null && Target.ProgramCounter == PetTapeSkip.Boundary && Target.IsInstructionBoundary)
+            {
+                _transport?.ThrowIfLaunchCancelled();
+                skipped = skip.TryComplete();
+                skip = null;
+            }
+
             Target.StepCycle();
         }
     }
 
     // Runs the machine until an instruction starts at the program's entry with its bytes in memory: from power-on, for
     // as long as the environment takes to boot, or, after a boot's earlier steps, for the cycles they left it.
-    private void RunToEntry(TargetBuild build, long? cycles = null)
+    private void RunToEntry(TargetBuild build, long? cycles = null, ImageBootPace pace = default)
     {
         (int start, byte[] bytes) = ProjectBuild.Image(build);
         if (cycles is null) { ForgetBoundaries(); }
@@ -157,11 +203,33 @@ internal sealed partial class DebugSession
                     $"{target.Project.File}: target {target.Name}: booted from its {build.Media.ImageKind}, the machine did not start the program at its entry, ${build.Entry:X4}, within the {seconds} seconds its boot had left.");
             }
 
+            if ((cycle & 4095) == 0) { pace.Wait(cycle, _transport); }
             Target.StepCycle();
         }
 
         Target.CallStack.Reset();
     }
+
+    private void RecordImageLoad(bool tape, MediaSpeed mode, string device, bool skipped, ulong before, long began)
+    {
+        MediaSpeed effective = mode == MediaSpeed.Skip && !skipped ? MediaSpeed.Fast : mode;
+        _bootMediaSpeed = MediaSpeedPolicy.Outcome(
+            tape, mode, effective, device, mode == effective ? null : "unsupportedOperation");
+
+        _bootMediaSpeed["cycles"] = Target.CycleCount - before;
+        _bootMediaSpeed["elapsedMilliseconds"] = Stopwatch.GetElapsedTime(began).TotalMilliseconds;
+    }
+
+    // Breakpoints in application source, including ones from a previous launch, do not observe this ROM-only interval.
+    private bool ObservesTapeBoot() => _frozen.Count != 0
+        || _dataRequest?["breakpoints"] is JsonArray { Count: > 0 }
+        || _states.Values.Any(state => state.Line is not { } line
+            || IsTapeFirmwareSource(line.Path));
+
+    private static bool IsTapeFirmwareSource(string path) => Path.GetFileName(path) is { } file
+        && (file.Equals("Kernal4.asm", StringComparison.OrdinalIgnoreCase)
+            || file.Equals("Editor4.asm", StringComparison.OrdinalIgnoreCase)
+            || file.Equals("Basic4.asm", StringComparison.OrdinalIgnoreCase));
 
     // The memory areas a booted program's bytes are in as the CPU reads them, each once, in the segments' order.
     private List<Enum> ProgramAreas(TargetBuild build)

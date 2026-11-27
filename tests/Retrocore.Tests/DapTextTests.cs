@@ -27,6 +27,36 @@ public sealed class DapTextTests
     };
 
     /// <summary>
+    ///  An explicit media mode overrides the legacy flag and remains selected independently of machine speed.
+    /// </summary>
+    [TestMethod]
+    public void MediaSpeedCanChangeWithoutChangingMachineSpeed()
+    {
+        using DapTestClient client = new();
+        client.Request("initialize", []);
+        JsonObject launch = Apple1(textOnly: false);
+        launch["fastCassette"] = false;
+        launch["tapeSpeed"] = "skip";
+        JsonObject started = client.Request("launch", launch);
+        Object(started, "mediaSpeed").String("tape").Should().Be("skip");
+        client.Request("configurationDone", []);
+        client.Event("stopped").String("reason").Should().Be("entry");
+        JsonObject requested = client.Request("retro/mediaSpeed", new JsonObject
+        {
+            ["kind"] = "tape", ["mode"] = "normal"
+        });
+
+        requested.String("tape").Should().Be("normal");
+        client.Request("retro/mediaSpeed", []).String("tape").Should().Be("normal");
+        client.Fails("retro/mediaSpeed", new JsonObject
+        {
+            ["kind"] = "tape", ["mode"] = "invalid"
+        }).Should().Contain("normal, fast or skip");
+
+        client.Request("retro/mediaSpeed", []).String("tape").Should().Be("normal");
+    }
+
+    /// <summary>
     ///  Text-only sessions return the terminal buffer, suppress frame events, and complete text waits asynchronously.
     /// </summary>
     [TestMethod]

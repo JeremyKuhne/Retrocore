@@ -273,7 +273,7 @@ rest, in the [extension README](../extension/README.md)):
 | `diskImage`, `diskController`, `diskSectors` | all | A disk in slot 6 (`diskII`) or slot 7 (`slot7`, the default for `.po`), and 16- or 13-sector Disk II firmware |
 | `diskBootRom`, `diskSequencerRom`, `sequencerLayout` | all | Disk II P5/P6 ROM dumps in place of the SDK's ([DiskII.md](DiskII.md)) |
 | `dos`, `dosYear` | all | Boot a program from a fresh DOS `3.3` (`1983` or `1980`) or `3.2` disk ([Dos.md](Dos.md)) |
-| `fastDisk` | all | Run as fast as possible while any Disk II drive motor turns (`true` by default; toggled by **Fast disk** in the panel) |
+| `diskSpeed` | all | [Normal, Fast or Skip](Devices.md#media-speed) in the display's **Disk speed** control. Fast is the default for Disk II; Skip falls back to Fast. The older `fastDisk` boolean is still accepted. |
 | `controllers` | all | Game controllers on the game port (`true` by default), or `false` for none |
 | `softCard` | all | The Z80 SoftCard in a free slot, 1 to 7 (the manual uses 4); none by default |
 

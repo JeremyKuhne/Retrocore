@@ -3,6 +3,7 @@
 // See LICENSE file in the project root for full license information
 
 using System.Buffers;
+using System.Collections.Concurrent;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 
@@ -37,6 +38,9 @@ internal sealed class DapTransport(Stream input, Stream output)
     private volatile bool _outputFailed;
     private bool _finished;
     private volatile bool _stopped;
+    private readonly CancellationTokenSource _stopReading = new();
+    private readonly Dictionary<int, CancellationTokenSource> _pendingLaunches = [];
+    private CancellationToken _launchCancellation;
 
     /// <summary>
     ///  Whether the emulator should yield instead of producing more events. Requests can still use the machine.
@@ -121,7 +125,16 @@ internal sealed class DapTransport(Stream input, Stream output)
     /// <summary>
     ///  Stops reading once the request being answered has its response.
     /// </summary>
-    internal void Stop() => _stopped = true;
+    internal void Stop()
+    {
+        _stopped = true;
+        _stopReading.Cancel();
+    }
+
+    /// <summary>
+    ///  Stops a launch when the reader sees its cancellation request.
+    /// </summary>
+    internal void ThrowIfLaunchCancelled() => _launchCancellation.ThrowIfCancellationRequested();
 
     /// <summary>
     ///  Answers requests until <see cref="Stop"/> or the end of the input.
@@ -184,6 +197,62 @@ internal sealed class DapTransport(Stream input, Stream output)
 
     private void ReadLoop()
     {
+        // A paced image boot can wait for minutes. Read cancellation ahead without dispatching handlers out of order.
+        BlockingCollection<JsonObject> requests = [with(boundedCapacity: 256)];
+        Task reader = Task.Factory.StartNew(
+            () => ReadRequests(requests), CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default);
+
+        foreach (JsonObject message in requests.GetConsumingEnumerable())
+        {
+            if (_stopped) { break; }
+            int? sequence = message.Int("seq");
+            int? launch = message.String("command") == "launch" ? sequence : null;
+            if (launch is int current)
+            {
+                lock (_pendingLaunches)
+                {
+                    if (_pendingLaunches.TryGetValue(current, out CancellationTokenSource? pending))
+                    {
+                        _launchCancellation = pending.Token;
+                    }
+                }
+            }
+
+            try
+            {
+                Answer(message);
+            }
+            finally
+            {
+                if (launch is int completed)
+                {
+                    _launchCancellation = default;
+                    lock (_pendingLaunches)
+                    {
+                        if (_pendingLaunches.Remove(completed, out CancellationTokenSource? pending))
+                        {
+                            pending.Dispose();
+                        }
+                    }
+
+                }
+            }
+
+            if (_stopped) { break; }
+        }
+
+        if (!_stopped) { reader.GetAwaiter().GetResult(); }
+    }
+
+    private void ReadRequests(BlockingCollection<JsonObject> requests)
+    {
+        try { ReadRequestsUntilStopped(requests); }
+        catch (OperationCanceledException) when (_stopped) { }
+        finally { requests.CompleteAdding(); }
+    }
+
+    private void ReadRequestsUntilStopped(BlockingCollection<JsonObject> requests)
+    {
         while (!_stopped)
         {
             JsonObject? message;
@@ -199,7 +268,27 @@ internal sealed class DapTransport(Stream input, Stream output)
             }
 
             if (message is null || _stopped) { return; }
-            if (message.String("type") == "request") { Answer(message); }
+            if (message.String("type") != "request") { continue; }
+            string? command = message.String("command");
+            lock (_pendingLaunches)
+            {
+                if (command == "launch" && message.Int("seq") is { } sequence)
+                {
+                    _pendingLaunches.TryAdd(sequence, new());
+                }
+                else if (command == "cancel"
+                    && message.Object("arguments")?.Int("requestId") is { } requestId
+                    && _pendingLaunches.TryGetValue(requestId, out CancellationTokenSource? pending))
+                {
+                    pending.Cancel();
+                }
+                else if (command == "disconnect")
+                {
+                    foreach (CancellationTokenSource launch in _pendingLaunches.Values) { launch.Cancel(); }
+                }
+            }
+
+            requests.Add(message, _stopReading.Token);
         }
     }
 

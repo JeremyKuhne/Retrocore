@@ -39,6 +39,26 @@ Inserting media belongs to the concrete devices, since the image formats are the
 | Apple II, Apple III | ProFile (slot N) | `slotNprofile` | Apple's ProFile hard disk on a ProFile card (`proFiles`, or **Add Card**). Takes ProDOS-order images (`.po`, `.hdv`, or a `.2mg` of them) of up to 65535 blocks, which the machine can write unless locked; inserting, ejecting, locking and saving (to its image, or as `.po`, `.hdv` or `.2mg`) are allowed. A ProFile has no write-protect tab, so a write to a locked image fails as a failed write does: an I/O error to ProDOS and SOS, which cannot be told why. A block it reads or writes shows as reading or writing for a thirtieth of a second. |
 | Apple II | Slot 7 disk | `slot7` | The ProDOS block device given at launch (a `.po`, `.hdv` or `.2mg` `diskImage`, unless `diskController: "diskII"` asks for the Disk II). Its media is fixed and loads locked, as it always has; unlocked, the machine writes it and it saves (to its image, or as `.po`, `.hdv` or `.2mg`). The lock refuses writes at once (ProDOS's write-protected error, $2B); the slot's ROM, which ProDOS reads as it starts, says whether the device writes from the next reset. A block command shows as reading or writing for a thirtieth of a second. |
 
+## Media speed
+
+The display offers **Tape speed** and **Disk speed** for the kinds of drives installed. Each has three choices:
+
+- **Normal** runs every guest cycle at the selected machine speed.
+- **Fast** runs every guest cycle but unthrottles the whole machine while the media is active.
+- **Skip** omits supported transfers. Other operations run at Fast speed without changing your selection.
+
+Skip is supported for a project-generated PET 4032 BASIC cassette boot with the verified BASIC 4 ROMs, no
+connected disk unit and no second tape mounted. It plays the real header, takes the program data from the verified
+mounted tape, and lets BASIC finish `LOAD`. Skip preserves the program, load status, tape head and continuation,
+but not the skipped guest time, timer or tape phase, intermediate interrupts, writes or debugger stops.
+Interactive tape loads, other ROMs and tape formats, saves and all disk operations fall back to Fast.
+For unthrottled but cycle-accurate tests, choose Normal and machine speed `max`.
+
+Use `tapeSpeed` and `diskSpeed` in a debug launch, with lower-case values. Existing `fastCassette` and `fastDisk`
+booleans are still accepted (`false` selects Normal; `true` selects Fast); an explicit new setting wins. Project
+boot remains unpaced unless Normal is selected explicitly. The [debug adapter guide](DebugAdapter.md#media-speed)
+describes the effective-mode reports. The [backlog](backlog/MediaSpeed.md) tracks support for additional drives.
+
 ## The debug protocol
 
 `retro/devices` returns `{ devices: [...] }`, one object per device:

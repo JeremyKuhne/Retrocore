@@ -1,4 +1,4 @@
-(** PASCALCO1A.TEXT: part 1 of 2 of PASCALCO1: PASCALCO, segment 1: its globals
+(** PASCALCO1A.TEXT: part 1 of 2 of PASCALCO1, PASCALCO, segment 1: its globals
     and FORWARD headings.
 
     Included by COMPILER.TEXT after SYSGLOBALS.TEXT and before PASCALCO1B.TEXT.
@@ -341,7 +341,7 @@ SEGMENT PROCEDURE PASCALCO(CodeBuffer: CodeReference; SourceBuffer:
 
         UCSD Pascal II.0 calls it SEGTABLE (UCSD20). *)
     SegmentDictionary: SegmentTable;
-    (** The slot of each segment number in SEGTABLE. *)
+    (** The slot of each segment number in SegmentDictionary. *)
     SlotOfSegment: SlotTable;
     (** $C: the code file's comment. *)
     Comment: StringReference;

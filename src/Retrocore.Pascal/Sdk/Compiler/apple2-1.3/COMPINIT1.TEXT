@@ -1,5 +1,4 @@
-(** COMPINIT1.TEXT: part 1 of 2 of COMPINIT: COMPINIT, segment 7: starting a
-    compile.
+(** COMPINIT1.TEXT: part 1 of 2 of COMPINIT, segment 7: starting a compile.
 
     Included by COMPILER.TEXT after PASCALCO1B.TEXT and before COMPINIT2.TEXT.
 

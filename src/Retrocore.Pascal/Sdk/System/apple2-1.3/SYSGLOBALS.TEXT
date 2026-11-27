@@ -190,10 +190,10 @@ PROCEDURE ClearScreen; FORWARD;
 PROCEDURE ClearLine; FORWARD;
 (** Shows a command line's prompt. *)
 PROCEDURE Prompt; FORWARD;
-(** II.0's.
+(** Waits for the space bar to be pressed.
     Also: SPACEWAIT (UCSD20) *)
 PROCEDURE WaitForSpace; FORWARD;
-(** II.0's.
+(** Reads a character from the keyboard, a lower-case letter as a capital.
     Also: GETCHAR (UCSD20) *)
 PROCEDURE GetCharacter; FORWARD;
 (** Reads a directory.

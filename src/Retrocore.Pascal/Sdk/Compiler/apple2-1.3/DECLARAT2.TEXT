@@ -1,4 +1,4 @@
-(** DECLARAT2.TEXT: part 2 of 4 of DECLARAT: DECLARAT, segment 8: declarations.
+(** DECLARAT2.TEXT: part 2 of 4 of DECLARAT, segment 8: declarations.
 
     Included by COMPILER.TEXT after DECLARAT1.TEXT and before DECLARAT3.TEXT.
 
@@ -573,7 +573,7 @@
           OldNextRoutine: INTEGER;
           (** Not used. *)
           Unused: INTEGER;
-          (** SEG before. *)
+          (** CurrentSegment before. *)
           OldSegment: INTEGER;
           (** DataCounter before. *)
           OldDataCounter: INTEGER;

@@ -1,4 +1,4 @@
-(** PASCALCO2B.TEXT: part 2 of 3 of PASCALCO2: PASCALCO's procedures and body.
+(** PASCALCO2B.TEXT: part 2 of 3 of PASCALCO2, PASCALCO's procedures and body.
 
     Included by COMPILER.TEXT after PASCALCO2A.TEXT and before PASCALCO2C.TEXT.
 
@@ -45,7 +45,7 @@
       IsString := Tested^.ArrayIsString
   END;
 
-  (** The words a long integer of Digits digits takes.
+  (** The words a long integer with Digits digits takes.
       Also: DECSIZE (UCSD20) *)
   FUNCTION DecimalSize;
   BEGIN
@@ -385,7 +385,8 @@
   END;
 
   (** Ends a segment: writes its procedure dictionary, its number and
-      procedures' count, and its length to SEGTABLE (II.0: BLOCK's end). *)
+      procedures' count, and its length to SegmentDictionary (II.0: BLOCK's
+      end). *)
   PROCEDURE FinishSegment;
     VAR
       (** A procedure. *)

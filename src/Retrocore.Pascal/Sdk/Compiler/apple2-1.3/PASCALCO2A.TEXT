@@ -1,4 +1,4 @@
-(** PASCALCO2A.TEXT: part 1 of 3 of PASCALCO2: PASCALCO's procedures and body.
+(** PASCALCO2A.TEXT: part 1 of 3 of PASCALCO2, PASCALCO's procedures and body.
 
     Included by COMPILER.TEXT after FINISHUP.TEXT and before PASCALCO2B.TEXT.
 
@@ -485,7 +485,7 @@
 
   (** Finds TokenName in the scopes, innermost first, of a class in Classes;
       one not found is reported (104) and stands for its class's dummy entry
-      (DummyType, DummyVariable...).
+      (DummyType, DummyVariable and the others).
       Also: SEARCHID (UCSD20) *)
   PROCEDURE FindIdentifier;
     LABEL 1;
@@ -563,8 +563,8 @@
       Error(LimitError)
   END;
 
-  (** Takes the next slot of the segment dictionary for SEG, with NewNumber a
-      new segment number too. *)
+  (** Takes the next slot of the segment dictionary for CurrentSegment, with
+      NewNumber a new segment number too. *)
   PROCEDURE TakeSegmentSlot;
   BEGIN
     IF NewNumber THEN

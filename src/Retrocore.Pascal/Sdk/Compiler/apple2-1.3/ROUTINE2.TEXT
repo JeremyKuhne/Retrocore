@@ -1,5 +1,5 @@
-(** ROUTINE2.TEXT: part 2 of 2 of ROUTINE: ROUTINE, segment 10: the special
-    standard procedures.
+(** ROUTINE2.TEXT: part 2 of 2 of ROUTINE, segment 10: the special standard
+    procedures.
 
     Included by COMPILER.TEXT after ROUTINE1.TEXT and before STATEMEN1.TEXT.
 

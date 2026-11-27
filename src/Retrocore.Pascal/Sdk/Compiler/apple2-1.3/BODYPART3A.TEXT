@@ -1,4 +1,4 @@
-(** BODYPART3A.TEXT: part 1 of 3 of BODYPART3: BODYPART's code generator.
+(** BODYPART3A.TEXT: part 1 of 3 of BODYPART3, BODYPART's code generator.
 
     Included by COMPILER.TEXT after BODY3.TEXT and before BODYPART3B.TEXT.
 

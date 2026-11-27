@@ -717,6 +717,29 @@ public sealed class PascalSourceTests
     }
 
     /// <summary>
+    ///  A file that includes itself, in another case, is read once: the shape doesn't expand it without end.
+    /// </summary>
+    [TestMethod]
+    public void CodeShapeReadsASelfIncludeOnce()
+    {
+        const string Source = """
+            PROGRAM Loop;
+            (*$I p.text*)
+            BEGIN
+            END.
+            """;
+
+        Dictionary<string, string> files = new(StringComparer.OrdinalIgnoreCase)
+        {
+            [Path.Join("SRC", "P.TEXT")] = Source,
+        };
+
+        PascalProgram program = PascalProgram.Analyze(Path.Join("SRC", "P.TEXT"), files.GetValueOrDefault);
+
+        PascalCodeShape.Digest(program).Should().Be(PascalCodeShape.Digest(Analyze(Source.Replace("(*$I p.text*)", "", StringComparison.Ordinal))));
+    }
+
+    /// <summary>
     ///  A file's size is its text as the disk stores it: leading blanks compressed, and no page's padding.
     /// </summary>
     [TestMethod]

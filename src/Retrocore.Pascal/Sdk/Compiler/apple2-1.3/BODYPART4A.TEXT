@@ -1,4 +1,4 @@
-(** BODYPART4A.TEXT: part 1 of 2 of BODYPART4: BODYPART's expressions and body.
+(** BODYPART4A.TEXT: part 1 of 2 of BODYPART4, BODYPART's expressions and body.
 
     Included by COMPILER.TEXT after BODYPART3C.TEXT and before BODYPART4B.TEXT.
 
@@ -21,7 +21,7 @@
         Comparison: INTEGER;
         (** What a comparison compares, for its p-code: 0 words (scalars and
             pointers), 1 reals, 2 strings, 3 booleans, 4 sets, 5 packed
-            characters, 6 other arrays, 7 long integers. *)
+            characters, 6 other arrays and records, 7 long integers. *)
         CompareKind: INTEGER;
         (** Their words, or bytes. *)
         CompareSize: INTEGER;

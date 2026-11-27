@@ -1,5 +1,5 @@
-(** ROUTINE1.TEXT: part 1 of 2 of ROUTINE: ROUTINE, segment 10: the special
-    standard procedures.
+(** ROUTINE1.TEXT: part 1 of 2 of ROUTINE, segment 10: the special standard
+    procedures.
 
     Included by COMPILER.TEXT after BODYPART1.TEXT and before ROUTINE2.TEXT.
 
@@ -316,7 +316,8 @@
         Operand.DataType^.Capacity := TotalLength
       END;
 
-      (** DELETE and COPY, whose first arguments are strings, and GOTOXY. *)
+      (** Compiles a call of DELETE, COPY or GOTOXY; DELETE's and COPY's first
+          argument is a string. *)
       PROCEDURE StringRoutineCall;
         VAR
           (** A temporary. *)

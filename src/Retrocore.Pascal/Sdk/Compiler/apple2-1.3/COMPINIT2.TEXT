@@ -1,5 +1,4 @@
-(** COMPINIT2.TEXT: part 2 of 2 of COMPINIT: COMPINIT, segment 7: starting a
-    compile.
+(** COMPINIT2.TEXT: part 2 of 2 of COMPINIT, segment 7: starting a compile.
 
     Included by COMPILER.TEXT after COMPINIT1.TEXT and before DECLARAT1.TEXT.
 

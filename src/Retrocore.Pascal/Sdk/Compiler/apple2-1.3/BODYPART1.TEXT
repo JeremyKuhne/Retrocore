@@ -30,7 +30,7 @@
   (** Compiles a procedure's body, from BEGIN to END, into p-code. The GEN
       procedures take p-code opcodes less 128, II.0's numbering, written as
       the PCODE constants: 30 CSP, 33 FJP, 35 IND, 50 LDA, 51 LDC, 54 LOD, 56
-      STR, 57 UJP, 77 CXP [II.0, PS]. *)
+      STR, 57 UJP, 77 CXP. *)
   SEGMENT PROCEDURE BODYPART(Followers: TokenSet; BodyRoutine: Identifier);
 
     (** Also: LINKERREF (UCSD20) *)

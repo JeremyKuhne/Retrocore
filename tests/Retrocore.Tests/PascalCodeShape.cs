@@ -50,7 +50,7 @@ internal static class PascalCodeShape
         }
 
         using IncrementalHash shape = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
-        foreach (PascalToken token in Expand(program, program.Files[0], includes, []).Where(token => !token.IsComment))
+        foreach (PascalToken token in Expand(program, program.Files[0], includes, [with(StringComparer.OrdinalIgnoreCase)]).Where(token => !token.IsComment))
         {
             string text = token.Kind switch
             {
@@ -67,7 +67,7 @@ internal static class PascalCodeShape
     }
 
     // A file's tokens, each include's file's in its place; a file already being expanded, included again inside
-    // itself, is left out, as the model reads it once.
+    // itself, is left out, as the model reads it once. Paths compare without case, as the model's files do.
     private static IEnumerable<PascalToken> Expand(
         PascalProgram program,
         PascalSourceFile file,

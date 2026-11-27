@@ -179,6 +179,25 @@ internal static class TargetDefines
     // ramExpansion.
     internal static int RamKilobytes(ProjectTarget target)
     {
+        // The VIC-20's RAM is its 5K and the expansion's, whatever ramKilobytes says, which its launch does not read; an
+        // expansion it does not know is the launch's to refuse.
+        if (target.Machine.Machine == "vic20")
+        {
+            string? expansion = target.Options["ramExpansion"]?.GetValueKind() == System.Text.Json.JsonValueKind.String
+                ? target.Options["ramExpansion"]?.GetValue<string>()
+                : null;
+
+            return expansion switch
+            {
+                "3k" => 8,
+                "8k" => 13,
+                "16k" => 21,
+                "24k" => 29,
+                "32k" => 32,
+                _ => 5
+            };
+        }
+
         // Read as the launch reads it. One that is not a whole number leaves the define the default; a size the
         // machine does not offer is the define's value as given, and the launch refuses it.
         try
@@ -201,24 +220,6 @@ internal static class TargetDefines
             };
 
             return expansion ? 48 : level1 ? 4 : 16;
-        }
-
-        // The VIC-20's RAM is its 5K and the expansion's; an expansion it does not know is the launch's to refuse.
-        if (target.Machine.Machine == "vic20")
-        {
-            string? expansion = target.Options["ramExpansion"]?.GetValueKind() == System.Text.Json.JsonValueKind.String
-                ? target.Options["ramExpansion"]?.GetValue<string>()
-                : null;
-
-            return expansion switch
-            {
-                "3k" => 8,
-                "8k" => 13,
-                "16k" => 21,
-                "24k" => 29,
-                "32k" => 32,
-                _ => 5
-            };
         }
 
         return s_ram.GetValueOrDefault(target.Machine.Id);

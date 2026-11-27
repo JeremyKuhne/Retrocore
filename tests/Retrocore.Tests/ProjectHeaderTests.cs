@@ -163,6 +163,7 @@ public sealed partial class ProjectHeaderTests
     [DataRow("{ \"ramExpansion\": \"16k\" }", 21)]
     [DataRow("{ \"ramExpansion\": \"24k\" }", 29)]
     [DataRow("{ \"ramExpansion\": \"32k\" }", 32)]
+    [DataRow("{ \"ramExpansion\": \"8k\", \"ramKilobytes\": 16 }", 13)]
     public void Vic20RamFollowsItsExpansion(string options, int ram)
     {
         Write("retrocore.json", $$"""

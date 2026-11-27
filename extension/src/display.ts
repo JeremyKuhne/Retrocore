@@ -301,7 +301,8 @@ window.addEventListener('message',event=>{
     if(event.data&&typeof event.data.basic==='boolean'){document.getElementById('basic').hidden=!event.data.basic;return;}
     if(event.data&&event.data.ended){showOff(event.data.ended);return;}
     off.hidden=true;
-    const changed=lastFrame?.machine!==event.data?.machine||lastFrame?.model!==event.data?.model;
+    // A VIC-20 that changes standard changes its frame's size too.
+    const changed=lastFrame?.machine!==event.data?.machine||lastFrame?.model!==event.data?.model||lastFrame?.standard!==event.data?.standard;
     lastFrame=event.data;draw(lastFrame);
     // A frame without it, as the Apple III's or the Color Computer's, is a machine with no Mockingboard.
     mockingboard=lastFrame?.mockingboard===true;

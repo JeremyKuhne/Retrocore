@@ -681,9 +681,9 @@ internal sealed class MainWindow : Window
                 Code("Run/Stop", 3, "RUN/STOP (or Esc)");
                 Code("Restore", 256, "RESTORE: the NMI, which does nothing unless a program asks it to, or RUN/STOP is down");
                 Code("Stop+Restore", 257, "RUN/STOP and RESTORE together: the kernal's warm start, back to READY. with the program kept");
-                Code("Clr", 147, "CLR, the shifted CLR/HOME: clears the screen");
+                Code("Clr", 147, "CLR, the shifted CLR/HOME: clears the screen and homes the cursor");
                 Code("C= Shift", 258, "SHIFT and the Commodore key: switches between the upper-case and graphics characters and the lower-case ones");
-                Reset("Reset", "A reset switch on the expansion port (or Ctrl+F12 or Ctrl+Break): the kernal starts again, keeping memory");
+                Reset("Reset", "A reset switch on the expansion port (or Ctrl+F12 or Ctrl+Break): the 6502, the VIAs and the drives reset, keeping memory");
                 break;
             case "atari800":
                 Code("Start", 0xF0, "START (or F2)");

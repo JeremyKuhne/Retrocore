@@ -32,6 +32,8 @@ node tools/Test-Apple1Dap.mjs
 node tools/Test-Apple1BasicDap.mjs
 node tools/Test-PetDap.mjs
 node tools/Test-PetBasicDap.mjs
+node tools/Test-Vic20Dap.mjs
+node tools/Test-Vic20BasicDap.mjs
 node tools/Test-IntegerBasicDap.mjs
 node tools/Test-Breakpoints.mjs
 node tools/Test-InterruptHitsDap.mjs
@@ -165,7 +167,7 @@ Code, and normal terminals.
 | `RETROCORE_ALTAIR_BASIC`, `RETROCORE_ALTAIR_DISK` | SIMH Altair BASIC memory/tape images and 8-inch CP/M, Disk BASIC, and Altair DOS disks plus PROM dumps for Altair tests and `Test-AltairDap.mjs` (defaults `<cache>\altair-basic` and `<cache>\altair-disk`). |
 | `RETROCORE_KAYPRO` | Kaypro II dumps and disks for tests and `tools\Test-KayproDap.mjs`: `81-149c.rom`, `81-146a.bin`, `cpm22-rom149.img` (CP/M 2.2), and `MBasic.img` (default `<cache>\kaypro`). |
 | `RETROCORE_KAYPRO_ROMS` | Kaypro II chip dumps for debugging in place of the SDK's builds (MAME's `kayproii` names, or the names above); optional. |
-| `RETROCORE_MAME` | `mame.exe` path for the Model I, Model III, Apple III, Color Computer, PET, 4040, 2040, VIC-20, 1541, BBC Micro, Atari, and SoftCard oracle tests (default `<cache>\mame\mame.exe`). |
+| `RETROCORE_MAME` | `mame.exe` path for the Model I, Model III, Apple III, Color Computer, PET, 4040, 2040, VIC-20, 1540, 1541, BBC Micro, Atari, and SoftCard oracle tests (default `<cache>\mame\mame.exe`). |
 | `RETROCORE_TEST_CACHE` | Processor test suites fetched by `tools\Fetch-ProcessorTests.ps1` (~3 GiB), `tools\Fetch-Z80Tests.ps1` (~1.4 GiB), `tools\Fetch-M6809Tests.ps1`, and `tools\Fetch-I8080Tests.ps1`, all requiring `gh` and `git` (default `<cache>\processor-tests`). |
 | `RETROCORE_ZEXDOC` | Set to any value to run ZEXDOC in addition to ZEXALL. Skipped by default because ZEXALL runs the same instructions and checks all flags; ZEXDOC only isolates whether a ZEXALL failure is in undocumented flags. |
 | `RETROCORE_CC65`, `RETROCORE_CA65_CORPUS`, `RETROCORE_CA65_ASMINC` | Directory containing `ca65` and `ld65`, optional `rom4x` ca65 source corpus, and `cc65`'s `asminc` header directory for the ca65 differential and SDK tests. |

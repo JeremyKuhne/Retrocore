@@ -48,9 +48,9 @@ port A and VIA 2's PB7. The paddles are the VIC's.
 and runs the motor. Tapes are TAP images (which save for the VIC-20, machine 1, at the video standard's clock), WAV
 recordings, or a `.prg` made into the tape SAVE writes.
 
-**Cartridges.** MAME's chip files, named for their address (`.a0`, `.20`, `.40`, `.60`, `.70`), a `.prg` at its
-address, VICE `.crt` images, and plain images placed by their size. A chip smaller than its block repeats through it,
-and a cartridge whose ROM at `$A004` reads `A0CBM` starts at power-on. Any RAM a cartridge brings is added.
+**Cartridges.** MAME's chip files, named for their address (`.20`, `.40`, `.60`, `.70`, `.a0`, `.b0`), a `.prg` at
+its address, and VICE `.crt` images; any other file is a chip at `$A000`. A chip that fills a whole power-of-two part
+of its block repeats through the block, and a cartridge whose ROM at `$A004` reads `A0CBM` starts at power-on. Any RAM a cartridge brings is added.
 
 **Drives.** 1541s and 1540s on the serial bus as devices 8 to 11, each with its own 6502, 2K of RAM, two VIAs and the
 gate array that reads and writes GCR, running its own DOS from MAME's `c1541` or `c1540` set. Disks are D64 and G64
@@ -86,7 +86,7 @@ file, a cartridge, a disk (in a 1541 as device 8) or a tape. Launch configuratio
 }
 ```
 
-The ROMs run for `bootSeconds` (three seconds by default when something loads) to `READY.` before the program loads,
+The ROMs run for `bootSeconds` (four seconds by default when something loads, as the RAM test takes over two with 32K) to `READY.` before the program loads,
 at `$1400` by default, so the kernal's routines are ready for `JSR $FFD2`. A `.prg` file loads as the kernal's LOAD
 does: one at BASIC's start on some VIC-20 (`$0401`, `$1001` or `$1201`) is a BASIC program, which moves to this
 machine's start, is linked again there, has its pointers set and is started by RUN (`run` false leaves it); any other
@@ -95,7 +95,7 @@ is machine code, which starts at its first byte or `entryAddress`.
 The options are:
 
 - `video`: `ntsc` (the default) or `pal`;
-- `ramExpansion`: `none` (the default), `3k`, `8k`, `16k`, `24k` or `32k` (the 3K and 24K);
+- `ramExpansion`: `none` (the default), `3k`, `8k`, `16k`, `24k` (blocks 1 to 3) or `32k` (the 3K and blocks 1 to 3);
 - `cartridge`: a file, or a list of a cartridge's chip files;
 - `sound`: `speaker` (the default) or `off`;
 - `cassette`: a `.tap`, `.wav` or `.prg` tape, put in with PLAY down; and `fastCassette` (on by default), which runs as
@@ -145,10 +145,11 @@ errors 1 to 9 share.
 | `Cbm1541GateArrayTests` | The 1541's gate array on its own, with no disk and no ROMs. |
 | `Vic20RomSourceTests` | Every chip's source by digest and against the dumps, the kernal's citations, and the machine booting from the SDK's builds on both standards. `BuildLinkTests` checks each build's links. |
 | `Vic20DebugTargetTests` | The debug target on the SDK's ROMs: its launch options, the keys that type nothing, its BASIC's pointers, its errors and screen, and the Machine view. |
-| [`tools/Test-Vic20BasicDap.mjs`](../tools/Test-Vic20BasicDap.mjs) | A BASIC file on the BASIC thread on NTSC and PAL, unexpanded and with 3K and 8K: stopping on entry, stepping, a GOSUB's frame, variables and the FOR loop, the program as text, an error, Step Into on SYS, and one hit for each statement though an interrupt returns to GONE. |
+| [`tools/Test-Vic20BasicDap.mjs`](../tools/Test-Vic20BasicDap.mjs) | A BASIC file on the BASIC thread unexpanded on NTSC and PAL, and with 3K, 8K and 32K on NTSC: stopping on entry, stepping, a GOSUB's frame, variables and the FOR loop, the program as text, an error, Step Into on SYS, and one hit for each statement though an interrupt returns to GONE. |
 | [`tools/Test-Vic20Dap.mjs`](../tools/Test-Vic20Dap.mjs) | The debugger end to end: BASIC from the sources, breakpoints in BASIC's and the kernal's sources with the call stack, the colour picture, the reset stop, RUN/STOP and RESTORE, a program recorded on tape and saved as TAP, loaded back, a `.prg` on two expansions and a source launched, each expansion's free bytes, and PAL. With the 1541's ROMs, a blank disk on device 8 formatted, a program saved, the disk saved as D64 and listed, and a second drive added and removed. |
 
-The ROM-source, debug-target and DAP tests need nothing external. The tests on the dumps, the tape, cartridge and disk
-tests and the comparisons with MAME are inconclusive without MAME 0.264's sets, from the
+The ROM-source builds, the debug target's tests and the DAP scripts need nothing external, apart from the DAP script's
+1541 part, which needs the `c1541` set and is skipped without it. The tests on the dumps, the tape, cartridge and disk
+tests and the comparisons with MAME (`RETROCORE_MAME`, MAME 0.264) are inconclusive without MAME 0.264's sets, from the
 [MAME ROM sets on archive.org](https://archive.org/download/mame-0.264-roms-non-merged/): `vic20.zip`, `vic20p.zip`,
 `c1540.zip` and `c1541.zip`, and its `vic1001_cart`, `vic1001_cass` and `vic1001_flop` software lists.

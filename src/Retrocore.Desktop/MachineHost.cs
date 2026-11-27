@@ -91,7 +91,8 @@ internal sealed class MachineHost : DisposableBase
     internal JsonObject Configuration { get; }
 
     /// <summary>
-    ///  Gets the machine's name, as its model row names it, such as <c>Apple IIe</c>.
+    ///  Gets the machine's name, as its model row names it, such as <c>Apple IIe</c>, or else as the catalog names it,
+    ///  such as <c>Commodore VIC-20</c>.
     /// </summary>
     internal string Name
     {
@@ -100,7 +101,7 @@ internal sealed class MachineHost : DisposableBase
             using (Gate())
             {
                 HardwareRow? model = _target.Hardware().FirstOrDefault(row => row.Id == "model");
-                return model?.Name ?? Configuration["machine"]?.GetValue<string>() ?? "Machine";
+                return model?.Name ?? MachineCatalog.Find(Configuration)?.Label ?? Configuration["machine"]?.GetValue<string>() ?? "Machine";
             }
         }
     }
@@ -389,7 +390,10 @@ internal sealed class MachineHost : DisposableBase
     ///  but a key that interrupts goes now and drops the rest of the paste, as the debug host has it: CONTROL-C, the
     ///  Model II's BREAK, and the BREAK of the Model I and Model III.
     /// </summary>
-    /// <param name="code">The ASCII code, 0-127, or a Kaypro II arrow key's, $F1-$F4.</param>
+    /// <param name="code">
+    ///  The ASCII code, 0-127, or a machine's own code above it, such as a Kaypro II arrow key's, $F1-$F4, PETSCII up
+    ///  to 255, or the VIC-20's RESTORE keys, 256-258.
+    /// </param>
     internal void Key(int code)
     {
         using (Gate())

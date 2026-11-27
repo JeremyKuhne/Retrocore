@@ -5,6 +5,7 @@
 using Retrocore.Basic;
 using Retrocore.Debug;
 using Retrocore.Machines.Devices;
+using Retrocore.Machines.Trs80Model100;
 using System.Text.Json.Nodes;
 
 namespace Retrocore.Tests;
@@ -217,6 +218,48 @@ public sealed class Trs80Model100DebugTargetTests
             Type(loader, "RUN\r");
             Run(loader, 1);
             string.Join("\n", loader.Machine.ScreenText()).Should().Contain("CAS 42");
+        }
+        finally
+        {
+            Directory.Delete(folder, recursive: true);
+        }
+    }
+
+    /// <summary>
+    ///  A recording whose file cannot be written stays in the recorder when it is ejected, with nothing left beside
+    ///  it, and comes out once its path can be written; a tape that is not a WAV file is refused, leaving the
+    ///  recording in.
+    /// </summary>
+    [TestMethod]
+    public void FailedRecordingsStayIn()
+    {
+        string folder = Folder();
+        try
+        {
+            string wave = Path.Join(folder, "rec.wav");
+            Trs80Model100DebugTarget target = Launch(Path.Join(folder, "m100.ram"));
+            IDevice drive = target.Devices.Single();
+            JsonObject recording = new() { ["path"] = wave };
+            target.DeviceAction(drive, "record", recording);
+
+            string bad = Path.Join(folder, "bad.wav");
+            File.WriteAllText(bad, "not a wave");
+            JsonObject insertBad = new() { ["path"] = bad };
+            Action insert = () => target.DeviceAction(drive, "insert", insertBad);
+            insert.Should().Throw<InvalidDataException>();
+            drive.Media?.Label.Should().Be(wave, "the recording is still in");
+            File.Delete(wave);
+
+            Directory.CreateDirectory(wave);
+            Action eject = () => target.DeviceAction(drive, "eject", []);
+            eject.Should().Throw<IOException>();
+            drive.Media?.Label.Should().Be(wave, "the recording is still in");
+            Directory.GetFiles(folder, "*.tmp").Should().BeEmpty();
+
+            Directory.Delete(wave);
+            target.DeviceAction(drive, "eject", []);
+            drive.Media.Should().BeNull();
+            Trs80Model100Tape.FromWave(File.ReadAllBytes(wave)).HalfCycles.Should().BeEmpty();
         }
         finally
         {

@@ -240,6 +240,7 @@ internal static class OffMachine
             DebugMachines.Apple1 => Apple1DebugTarget.Launch(args),
             DebugMachines.Coco => CocoDebugTarget.Launch(args),
             DebugMachines.Pet => PetDebugTarget.Launch(args),
+            DebugMachines.Vic20 => Vic20DebugTarget.Launch(args),
             DebugMachines.Altair => AltairDebugTarget.Launch(args),
             DebugMachines.Bbc => BbcDebugTarget.Launch(args),
             DebugMachines.Atari => AtariDebugTarget.Launch(args),

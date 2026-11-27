@@ -107,7 +107,8 @@ internal static class Vic20SdkModules
         string full = Path.GetFullPath(path);
         AssemblyOptions options = new(ProcessorVariant.Mos6502, origin, size)
         {
-            SourceResolver = new FileAssemblySourceResolver(),
+            // The shared Microsoft modules, from the SDK's copy beside the debug host or from the repository's layout.
+            SourceResolver = new OverlayBaseResolver(Path.Join(Path.GetDirectoryName(full) ?? full, "..", "..", "Microsoft6502Basic")),
             PredefinedSymbols = standard is { } given
                 ? new Dictionary<string, long> { ["PAL"] = given == VicVideoStandard.Pal ? 1 : 0 }
                 : []

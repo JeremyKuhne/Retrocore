@@ -136,6 +136,9 @@ internal sealed partial class DebugSession
             // A BRK on BASIC 2 enters its machine-language monitor.
             DebugMachines.Pet => [reset, brk, .. checks, .. BasicFilters],
 
+            // A BRK on the VIC-20 goes to the kernal's warm start, as RUN/STOP and RESTORE do.
+            DebugMachines.Vic20 => [reset, brk, .. checks, .. BasicFilters],
+
             // The Model 100's BASIC is not a dialect here yet, and the 8085 has no break instruction.
             DebugMachines.Trs80Model100 => [reset, .. checks],
 

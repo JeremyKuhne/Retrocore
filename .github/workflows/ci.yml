@@ -84,6 +84,8 @@ jobs:
           node tools/Test-Apple1BasicDap.mjs
           node tools/Test-PetDap.mjs
           node tools/Test-PetBasicDap.mjs
+          node tools/Test-Vic20Dap.mjs
+          node tools/Test-Vic20BasicDap.mjs
           node tools/Test-IntegerBasicDap.mjs
           node tools/Test-Breakpoints.mjs
           node tools/Test-InterruptHitsDap.mjs

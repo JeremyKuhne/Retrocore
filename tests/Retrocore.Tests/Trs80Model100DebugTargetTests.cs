@@ -4,6 +4,7 @@
 
 using Retrocore.Basic;
 using Retrocore.Debug;
+using Retrocore.Machines.Devices;
 using System.Text.Json.Nodes;
 
 namespace Retrocore.Tests;
@@ -163,6 +164,59 @@ public sealed class Trs80Model100DebugTargetTests
             JsonObject notList = new() { ["files"] = notes };
             Action single = () => Launch(Path.Join(folder, "other.ram"), notList);
             single.Should().Throw<ArgumentException>().WithMessage("files must be a list of paths.");
+        }
+        finally
+        {
+            Directory.Delete(folder, recursive: true);
+        }
+    }
+
+    /// <summary>
+    ///  A tape recorded through the cassette's record action takes the ROM's CSAVE, the machine runs fast while the
+    ///  motor moves it, ejecting it writes its WAV file, and the launch's cassette option plays that file to CLOAD; a
+    ///  record to a folder that does not exist is refused and leaves the deck as it was.
+    /// </summary>
+    [TestMethod]
+    public void CassettesRecordAndPlay()
+    {
+        string folder = Folder();
+        try
+        {
+            string wave = Path.Join(folder, "prog.wav");
+            Trs80Model100DebugTarget saver = Launch(Path.Join(folder, "a.ram"));
+            Run(saver, 3);
+            Type(saver, "BASIC\r");
+            Run(saver, 1);
+            Type(saver, "10 PRINT \"CAS\";6*7\r");
+            IDevice drive = saver.Devices.Single();
+            JsonObject missing = new() { ["path"] = Path.Join(folder, "no", "x.wav") };
+            Action nowhere = () => saver.DeviceAction(drive, "record", missing);
+            nowhere.Should().Throw<ArgumentException>().WithMessage("*does not exist*");
+            JsonObject recording = new() { ["path"] = wave };
+            saver.DeviceAction(drive, "record", recording);
+            saver.Hardware().Single(row => row.Id == "cassette").Value.Should().Be(wave);
+            saver.Accelerated.Should().BeFalse("the motor is off");
+            Type(saver, "CSAVE \"PROG\"\r");
+            Run(saver, 1);
+            saver.Accelerated.Should().BeTrue("CSAVE runs the motor");
+            Run(saver, 14);
+            File.Exists(wave).Should().BeFalse("nothing is written until the tape comes out");
+            saver.DeviceAction(drive, "eject", []);
+            File.Exists(wave).Should().BeTrue();
+            Directory.GetFiles(folder, "*.tmp").Should().BeEmpty();
+
+            JsonObject options = new() { ["cassette"] = wave, ["sound"] = "off" };
+            Trs80Model100DebugTarget loader = Launch(Path.Join(folder, "b.ram"), options);
+            loader.Hardware().Single(row => row.Id == "sound").Value.Should().Be("off");
+            loader.TakeAudio().Should().BeNull();
+            Run(loader, 3);
+            Type(loader, "BASIC\r");
+            Run(loader, 1);
+            Type(loader, "CLOAD \"PROG\"\r");
+            Run(loader, 15);
+            Type(loader, "RUN\r");
+            Run(loader, 1);
+            string.Join("\n", loader.Machine.ScreenText()).Should().Contain("CAS 42");
         }
         finally
         {

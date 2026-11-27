@@ -8,8 +8,8 @@
 // routine with the 80C85's call stack and registers, steps out to the caller, and shows the LCD's frames and the
 // hardware. A logpoint in a loop the ROM's RST 7.5 keeps interrupting logs once per run, and one at $003C once per
 // interrupt. Then a launch with no program boots to the menu, enters BASIC with ENTER, runs a line typed at it, and
-// turns the power off and back on with Reset. A launch's files go on the menu, and BASIC's program is read and written
-// through the debugger. The Tandy 102's ROM, when present, boots to the menu too. Without the
+// turns the power off and back on with Reset. A launch's files go on the menu, BASIC's program is read and written
+// through the debugger, and a program goes onto a tape with CSAVE and back with CLOAD. The Tandy 102's ROM, when present, boots to the menu too. Without the
 // ROM, everything after the first launch is skipped, which is not a pass.
 
 import { resolve, join } from "node:path";
@@ -121,7 +121,7 @@ try {
         assert.equal((await request("evaluate", { expression: "PC" })).result, "$E000 (57344)");
         assert.equal((await request("threads")).threads[0].name, "TRS-80 Model 100 80C85");
         const hardware = Object.fromEntries((await request("retro/devices")).hardware.map(row => [row.id, row]));
-        assert.deepEqual(Object.keys(hardware), ["model", "rom", "optionRom", "memory", "lcd", "clock", "power", "ramImage", "files", "io"]);
+        assert.deepEqual(Object.keys(hardware), ["model", "rom", "optionRom", "memory", "lcd", "clock", "power", "ramImage", "files", "cassette", "sound", "io"]);
         assert.equal(hardware.rom.value, "32 KB, the US Model 100's");
         assert.equal(hardware.memory.value, "32 KB at $8000-$FFFF");
         assert.equal(hardware.clock.value, "uPD1990AC, TP at 256 Hz on RST 7.5");
@@ -254,6 +254,32 @@ try {
         await type("run\r");
         await screen(screenText => screenText.includes("CHANGED 42"), "the written program's output");
 
+        // CSAVE records onto a tape in the recorder, ejecting it writes its WAV file, and a launch with that file as
+        // its cassette CLOADs the program back.
+        phase("recording a tape");
+        const tape = join(files, "prog.wav");
+        await request("retro/media", { device: "cassette", action: "record", path: tape });
+        await type("csave \"PROG\"\r");
+        await screen(screenText => /csave "PROG"\nOk/i.test(screenText), "CSAVE");
+        assert.ok(!existsSync(tape), "the recording is written when it comes out");
+        const ejected = await request("retro/media", { device: "cassette", action: "eject" });
+        assert.equal(ejected.cassette.path, null);
+        assert.ok(statSync(tape).size > 100000, "the WAV file holds the recording");
+        events.length = 0;
+        await request("launch", { machine: "trs80-model100", romDirectory: roms, stopOnEntry: false, speed: "max", cassette: tape });
+        await request("setExceptionBreakpoints", { filters: [] });
+        await request("configurationDone");
+        const tapeMenu = await screen(screenText => screenText.includes("Select:"), "the menu with a tape in");
+        const tapeHardware = Object.fromEntries((await request("retro/devices")).hardware.map(row => [row.id, row]));
+        assert.equal(tapeHardware.cassette.value, tape);
+        await screen((_, running) => running.cycles > tapeMenu.cycles + 2 * 2457600, "two seconds at the menu");
+        await type("BASIC\r");
+        await screen(screenText => /^Ok$/m.test(screenText), "BASIC from the menu");
+        await type("cload \"PROG\"\r");
+        await screen(screenText => screenText.includes("Found:PROG") && /Found:PROG\nOk/.test(screenText), "CLOAD");
+        await type("run\r");
+        await screen(screenText => screenText.includes("CHANGED 42\nOk"), "the loaded program's output");
+
         if (existsSync(tandy102)) {
             phase("launching the Tandy 102");
             events.length = 0;
@@ -275,7 +301,7 @@ try {
     console.log(skipped.length === 0
         ? "Model 100 DAP integration passed: the missing-ROM messages, a source's breakpoint, call stack, registers, "
             + "step out and LCD output, a logpoint met once a run through RST 7.5, the menu, BASIC, POWER OFF and Reset, a RAM image resumed in a new session, "
-            + "a launch's files on the menu, BASIC's program read and written, and the "
+            + "a launch's files on the menu, BASIC's program read and written, a tape CSAVEd and CLOADed, and the "
             + "Tandy 102's menu."
         : `Model 100 DAP integration checked the missing-ROM messages${skipped.length === 1 && existsSync(model100) ? " and the Model 100" : ""}; `
             + `skipped (inconclusive, not passed): ${skipped.join("; ")}.`);

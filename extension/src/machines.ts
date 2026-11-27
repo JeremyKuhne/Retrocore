@@ -159,6 +159,16 @@ const model4Ram: MachineChoice = {
     default: 128
 };
 
+const model100Sound: MachineChoice = {
+    option: "sound",
+    label: "Sound",
+    values: [
+        { label: "Speaker", detail: "The piezo buzzer, from port B or the 81C55's timer", value: "speaker" },
+        { label: "Off", value: "off" }
+    ],
+    default: "speaker"
+};
+
 const model100Ram: MachineChoice = {
     option: "ramKilobytes",
     label: "Memory",
@@ -516,10 +526,10 @@ export const machines: readonly Machine[] = [
         detail: "80C85 at 2.4 MHz, a 240x64 LCD and 32 KB, from your ROM",
         configuration: { machine: "trs80-model100", model: "100" },
         diskFormats: [],
-        tapeFormats: [],
+        tapeFormats: ["wav"],
         basicDialects: [],
         dos: false,
-        choices: [model100Ram]
+        choices: [model100Ram, model100Sound]
     },
     {
         id: "tandy102",
@@ -527,10 +537,10 @@ export const machines: readonly Machine[] = [
         detail: "The Model 100 with its revised ROM: 80C85, a 240x64 LCD and 32 KB, from your ROM",
         configuration: { machine: "trs80-model100", model: "102" },
         diskFormats: [],
-        tapeFormats: [],
+        tapeFormats: ["wav"],
         basicDialects: [],
         dos: false,
-        choices: [model100Ram]
+        choices: [model100Ram, model100Sound]
     },
     {
         id: "apple1",

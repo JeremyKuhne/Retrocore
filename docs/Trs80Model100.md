@@ -90,7 +90,10 @@ view and breakpoints as the other machines:
   fails leaves the old image and can be tried again. The CPU's state is not kept, as it is not when the power goes;
 - `coldStart`: start from empty RAM even when `ramImage` exists;
 - `time`: the clock's start, such as `2026-11-26T09:30:00`;
-- `files`: host files to put in RAM's directory, so the menu lists them (see [Files](#files)).
+- `files`: host files to put in RAM's directory, so the menu lists them (see [Files](#files));
+- `cassette`: a WAV file's tape to put in the recorder (see [The cassette](#the-cassette)); `fastCassette`, true by
+  default, runs the machine as fast as it can while the motor moves a tape;
+- `sound`: `speaker` (the default) plays the buzzer, `off` doesn't.
 
 A `source` or `program` loads at `$E000` by default, once the ROM has had 3 seconds to set up its RAM
 (`bootSeconds`), and can call the ROM: `RST 4` writes the character in A to the screen. The call stack follows
@@ -136,6 +139,32 @@ the bottom of RAM, so adding, changing or removing one moves those after it. Ret
   `--list` writes a `.BA` file's listing instead of its bytes. A change is written back only when it succeeds. Like
   the ROM's `KILL`, `delete` refuses the program BASIC has open.
 
+## The cassette
+
+The ROM writes a tape through the 8085's SOD and reads one through SID, and port `$E0` bit 3 runs the recorder's
+motor through its REM jack. A bit is one cycle: 2400 Hz for a 1 and 1200 Hz for a 0. A block is a leader of `$55`
+bytes, a `$7F`, then bytes of eight bits, most significant first, each with a ninth after it. `CSAVE` writes a header
+block (`$D3`, the six-character name, the length and a checksum) and a data block (`$8D`, the program and a
+checksum).
+
+Retrocore keeps a tape as its level changes, timed in the 80C85's cycles while the motor runs, and reads and writes
+WAV files (8 or 16-bit PCM in, 16-bit 44.1 kHz out). The tape moves only while the motor runs. SID reads the tape's
+level inverted, as MAME's driver has it, and is high with no tape playing.
+
+- **Playing:** `cassette` in the launch, or **Insert** on the cassette in Retro Devices, puts a WAV file's tape in.
+  It plays from its start once the ROM runs the motor, as `CLOAD` does.
+- **Recording:** **Record** in Retro Devices names the WAV file to write. The tape takes SOD's changes while the motor
+  runs, as `CSAVE` runs it, and is written to the file, through a file beside it, when it comes out: on
+  **Eject**, on **Insert** of another tape, or when the session ends.
+
+`CLOAD` reads MAME 0.264's own `CSAVE` recordings, and MAME's `CLOAD` reads Retrocore's.
+
+## Sound
+
+The piezo buzzer follows port B bit 5 while bit 2 is set. With bit 2 clear, it follows the 81C55's timer output while
+bit 5 is set, and keeps its level while bit 5 is clear, as MAME's driver has it. BASIC's `BEEP` and `SOUND` use the
+timer. The display panel plays it while the machine runs at its own speed, as it does for the other machines.
+
 ## BASIC
 
 Model 100 BASIC is a dialect of its own, `model100`, with `.model100.bas` source files and `' retrocore model100` as
@@ -174,6 +203,9 @@ menu, in TEXT or while a program runs, it is refused. A program can't yet be ste
   replacing them, programs moved and linked again, bad names and full RAM; and with the ROM, files written at the
   menu matched byte for byte against the ROM's own `SAVE`, `SAVEM` and `OPEN`, then run and read by BASIC.
 - `Model100CommandTests`: the `--model100` command on a RAM image, and host files read by kind.
+- `Trs80Model100CassetteTests`:
+  - tapes through WAV files, the motor, SID's polarity, and the buzzer's two sources, without the ROM;
+  - with the ROM, `CSAVE` decoded into MAME's blocks and loaded back with `CLOAD`, and `BEEP`'s sound.
 - [`tools/Test-Trs80Model100Dap.mjs`](../tools/Test-Trs80Model100Dap.mjs): a source's breakpoint, call stack, registers
   and output, the menu, BASIC, POWER OFF and Reset, a RAM image resumed in a new session, a launch's files on the menu,
   BASIC's program read and written, and the Tandy 102, through the debug adapter. Without the ROM it checks the

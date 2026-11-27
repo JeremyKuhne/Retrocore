@@ -1070,7 +1070,9 @@ supply: `rom` names its file, or it is found in `romDirectory` (or `RETROCORE_TR
   ends; `coldStart` starts from empty RAM anyway;
 - `time`: the clock's start, the host's time by default;
 - `files`: host files to put in RAM's directory, so the menu lists them: `.ba`, `.do` and `.co` files, BASIC text
-  as `.bas` and text as `.txt`.
+  as `.bas` and text as `.txt`;
+- `cassette`: a `.wav` tape, which plays when the ROM runs the motor (`CLOAD`); Record in the Drives view writes one;
+- `sound`: `speaker` (the buzzer) or `off`.
 
 Model 100 BASIC has `.model100.bas` source files, and `.ba` files open as listings. While BASIC is at its prompt,
 **Retrocore: Open BASIC Program** edits the program it has open. A program (`source` or `program`, loaded at `$E000` by

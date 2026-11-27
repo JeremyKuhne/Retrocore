@@ -60,6 +60,9 @@ internal static class MachineCatalog
     // The 2001 with BASIC 2 launches without snow, so its choice starts off.
     private static readonly MachineChoice s_petSnowOff = s_petSnow with { Default = false };
 
+    private static readonly MachineChoice s_model100Sound = new("sound", "Sound",
+        [new("On", "speaker", "The piezo buzzer, from port B or the 81C55's timer"), new("Off", "off")], "speaker");
+
     private static readonly MachineChoice s_petSound = new("sound", "Sound",
         [new("On", "speaker", "The VIA's CB2, as a speaker on the user port plays it"), new("Off", "off")], "speaker");
 
@@ -172,10 +175,10 @@ internal static class MachineCatalog
             Options(("machine", "trs80-model2"), ("model", "16")), [s_model2Ram]),
         new("trs80-model100", "TRS-80 Model 100", "80C85 at 2.4 MHz, a 240x64 LCD and 32 KB, from your ROM",
             Options(("machine", "trs80-model100"), ("model", "100")),
-            [s_model100Ram]),
+            [s_model100Ram, s_model100Sound]),
         new("tandy102", "Tandy 102", "The Model 100 with its revised ROM: 80C85, a 240x64 LCD and 32 KB, from your ROM",
             Options(("machine", "trs80-model100"), ("model", "102")),
-            [s_model100Ram]),
+            [s_model100Ram, s_model100Sound]),
         new("apple1", "Apple-1", "6502, the Woz Monitor, 4 KB plus 4 KB at $E000, and the cassette interface",
             Options(("machine", "apple1")),
             [

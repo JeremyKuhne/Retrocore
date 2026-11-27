@@ -1,8 +1,6 @@
 # Backlog: the Commodore VIC-20, 64 and 128
 
-Status: **agreed 2026-11-25** ("Start phase V1"). Phases V1 to V4 are built and land in the pull requests that follow
-this plan, each adding its phase's notes: the machine, tape and cartridges (V1, V2), the drives (V3), then the ROM
-sources (V4).
+Status: **agreed 2026-11-25** ("Start phase V1"). Phases V1 to V4 are built; V5, the drives' DOS sources, is next.
 
 Commodore's three home computers after the PET share most of what they are made of: a 6502 family processor,
 Commodore BASIC 2 (7.0 on the 128), a kernal with the same jump table, the Datasette, and the serial bus with the
@@ -423,6 +421,26 @@ plan (#239).
   the SDK's builds without dumps.
 - **Done when** every build is byte-identical, `SdkDocumentationIsClean` passes, and both standards boot from the
   SDK's builds.
+
+**Built 2026-11-26** (started 2026-11-25 after "Start phase V4"); see [the conversion log](../conversions/Vic20.md).
+
+- The character ROM is built: `Vic20/CharacterGenerator.asm` over the PET's source with a `VIC20` switch (£ at
+  `$1C`, each set followed by its reversed copy), byte-identical to 901460-03 (`Vic20RomSourceTests`). The PET's two
+  chips still assemble byte-identically.
+- Decided: the kernal is in the maintained style from the start, one standalone source for now (sharing with the 64
+  is decided at C3), and its rename table is reviewed whole, in parts, before conversion (K1-K3).
+- Part 1 of the kernal's rename table, the variables, RAM vectors, VIAs and constants (199 rows), is accepted (K5).
+  Part 2, the screen editor and keyboard (193 rows), is accepted (K6), and part 3, the serial bus (49 rows) (K7).
+  Part 4, the tape (119 rows, with corrections to part 1's tape variables), is accepted (K8). Part 5, RS-232 and
+  the NMI (72 rows), is accepted (K9). The owner left the rest to the drafter's judgement: part 6, the channels,
+  files, messages, errors and clock (175 rows), and part 7, start-up, the IRQ, the jump table and the VIC's
+  registers (94 rows), are settled as recommended (K10, K11), so
+  [the table](../conversions/Vic20KernalRenames.md) is complete.
+- The kernal is converted (`Vic20/Kernal.asm`): byte-identical to 901486-06 and, with `PAL = 1`, to -07, with
+  every routine's contract written (the log's step 4).
+- BASIC is built (`Vic20/Basic.asm`), byte-identical to 901486-01 and its part of each kernal chip, over the
+  shared modules with new switches (the log's step 5), and the machine boots from the SDK's builds on both standards
+  with no dumps (`Vic20SdkModules`, `Vic20RomSourceTests`).
 
 #### V5. The drives' DOS sources
 

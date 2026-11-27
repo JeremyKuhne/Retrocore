@@ -101,11 +101,13 @@ jobs:
           node tools/Test-AtariDap.mjs
           node tools/Test-AdventureDap.mjs
           node tools/Test-ProjectDap.mjs
+          node tools/Test-NewProjectDap.mjs
           node tools/Test-OffMachine.mjs
 
       # The host packed as the .NET tool retrocore, installed from that package alone into a local folder (it is
       # published nowhere, and no other source may supply a package of its name), builds and debugs the project sample
-      # as the host itself does.
+      # as the host itself does, and makes a project with retrocore new from the templates it carries, builds it and runs
+      # each target.
       - name: The retrocore tool
         run: |
           rm -rf artifacts/tool-package artifacts/tool
@@ -114,6 +116,7 @@ jobs:
           printf '<configuration>\n  <packageSources>\n    <clear />\n    <add key="retrocore" value="." />\n  </packageSources>\n</configuration>\n' > artifacts/tool-package/nuget.config
           dotnet tool install retrocore --version 0.1.0-dev --tool-path artifacts/tool --configfile artifacts/tool-package/nuget.config
           RETROCORE_DAP_HOST="$PWD/artifacts/tool/retrocore" node tools/Test-ProjectDap.mjs
+          RETROCORE_DAP_HOST="$PWD/artifacts/tool/retrocore" node tools/Test-NewProjectDap.mjs
 
       - name: Extension tests
         working-directory: Retrocore/extension

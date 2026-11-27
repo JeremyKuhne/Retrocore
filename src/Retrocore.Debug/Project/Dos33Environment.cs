@@ -180,9 +180,16 @@ internal sealed class Dos33Environment : TargetEnvironment
     /// </summary>
     /// <param name="target">The target.</param>
     /// <returns>The name, or <c>PROGRAM</c> when that does not start with a letter.</returns>
-    internal static string ProgramName(ProjectTarget target)
+    internal static string ProgramName(ProjectTarget target) => ProgramName(target.Project.Name);
+
+    /// <summary>
+    ///  Gets the name a project's program has on its targets' disks: its name in capitals, its letters, digits and dots.
+    /// </summary>
+    /// <param name="projectName">The project's name.</param>
+    /// <returns>The name, or <c>PROGRAM</c> when that does not start with a letter.</returns>
+    internal static string ProgramName(string projectName)
     {
-        string name = new([.. target.Project.Name.ToUpperInvariant().Where(character => character is (>= 'A' and <= 'Z') or (>= '0' and <= '9') or '.')]);
+        string name = new([.. projectName.ToUpperInvariant().Where(character => character is (>= 'A' and <= 'Z') or (>= '0' and <= '9') or '.')]);
         return name.Length == 0 || !char.IsAsciiLetter(name[0]) ? "PROGRAM" : name[..Math.Min(name.Length, NameLength)];
     }
 

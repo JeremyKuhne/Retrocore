@@ -441,8 +441,9 @@ with the routines checked, the `Keeps:` items it could not verify, and the routi
 - At a call it applies the callee's documented contract, where there is one, else the callee's own analysis; a
   callee the analysis could not follow to its end keeps nothing. A call to an `Entry:` label takes the analysis of
   the code from there. The routine's `Keeps:` is checked from each entry as well as from its start, as the
-  debugger checks it: from an entry whose meaning ends in a keeps clause (`; keeps A`), that clause instead, and
-  from a label with a comment of its own, that label's own contract, if it has one. A jump to the start of another
+  debugger checks it, except from an entry whose meaning ends in a keeps clause (`; keeps A`), which is checked
+  against that clause, and from a label with a comment of its own, which is checked against that label's own
+  contract, if it has one. A jump to the start of another
   routine with a contract, with nothing pushed, is a tail call, whose contract applies; a jump to an internal label
   is followed.
 - It gives up on a routine, and skips it, where the code does what the model cannot follow: an indirect jump, or

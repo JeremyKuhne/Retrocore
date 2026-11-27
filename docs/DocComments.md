@@ -468,8 +468,9 @@ broken link.
   entry whose meaning ends in a keeps clause, as `Aux = stores from an auxiliary byte; keeps A`, or
   `; keeps nothing` for one that relies on its caller to save the registers, is checked against that clause
   instead of the routine's `Keeps:`, and not for `Uses:`; where the label's own comment has a `Keeps:` or `Uses:`,
-  that comment wins. The clause lists items as `Keeps:` does, separated by commas or "and", each with an optional
-  note in parentheses; the documentation check warns about one it does not know.
+  that comment wins, and a label at the same address with no comment of its own takes the clause too. The clause
+  names items as `Keeps:` does, each with an optional note in parentheses, separated by commas or, unlike
+  `Keeps:`, "and"; the documentation check warns about one it does not know.
 
   The launch option `checkContracts` selects `warn` (the default: a Debug Console message), `stop` (also stops, with
   reason `exception`, at the instruction after the call) or `off`. With `warn`, ticking the **Routine broke

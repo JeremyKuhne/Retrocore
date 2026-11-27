@@ -191,36 +191,49 @@ internal sealed class DebugContracts
                 }
             }
 
-            // An Entry: whose meaning ends in "; keeps ..." promises that instead, and no Uses:, at a call there.
-            Dictionary<string, IReadOnlyList<string>> entryKeeps = [];
+            // An Entry: whose meaning ends in "; keeps ..." promises that instead, and no Uses:, at a call there,
+            // unless the label is a routine of its own with a contract; a label at the same address takes the clause
+            // too.
+            Dictionary<ushort, IReadOnlyList<string>> clauses = [];
             foreach (DocumentationEntry entry in topic.SectionsNamed("Entry").Where(Applies).SelectMany(section => section.Entries))
             {
-                if (entry.Keeps is { } keeps) { entryKeeps[set.EntrySymbol(documented, entry.Name)] = keeps; }
+                string label = set.EntrySymbol(documented, entry.Name);
+                if (entry.Keeps is { } keeps
+                    && set.Symbols.TryGetValue(label, out long at)
+                    && (ushort)at != (ushort)value
+                    && set.Find(label) is not { HasContract: true })
+                {
+                    clauses.TryAdd((ushort)at, keeps);
+                }
             }
 
+            // Another entry takes the routine's contract where the label has no comment of its own. The first
+            // contract at an address wins.
+            DebugContract? routine = null;
             if (kept.Count != 0 || memory.Count != 0 || changes is not null)
             {
-                contracts.TryAdd((ushort)value, new(topic.Name, kept, memory, changes));
+                routine = new(topic.Name, kept, memory, changes);
+                contracts.TryAdd((ushort)value, routine);
             }
 
             foreach (string label in topic.EntryLabels.Select(entry => set.EntrySymbol(documented, entry)))
             {
-                if (!set.Symbols.TryGetValue(label, out long entry) || (ushort)entry == (ushort)value) { continue; }
-
-                // An entry with a keeps clause has it, unless the label is a routine of its own with a contract;
-                // one without takes the routine's contract where it has no comment of its own.
-                if (entryKeeps.TryGetValue(label, out IReadOnlyList<string>? own))
+                if (routine is not null
+                    && set.Symbols.TryGetValue(label, out long entry)
+                    && (ushort)entry != (ushort)value
+                    && !clauses.ContainsKey((ushort)entry)
+                    && set.Find(label) is null)
                 {
-                    if (set.Find(label) is { HasContract: true }) { continue; }
-                    (List<string> entryKept, List<(string, ushort, int)> entryMemory) = Kept(own);
-                    if (entryKept.Count != 0 || entryMemory.Count != 0)
-                    {
-                        contracts.TryAdd((ushort)entry, new(topic.Name, entryKept, entryMemory, Changes: null));
-                    }
+                    contracts.TryAdd((ushort)entry, routine);
                 }
-                else if (set.Find(label) is null && contracts.TryGetValue((ushort)value, out DebugContract? contract))
+            }
+
+            foreach ((ushort at, IReadOnlyList<string> keeps) in clauses)
+            {
+                (List<string> entryKept, List<(string, ushort, int)> entryMemory) = Kept(keeps);
+                if ((entryKept.Count != 0 || entryMemory.Count != 0) && !contracts.ContainsKey(at))
                 {
-                    contracts.TryAdd((ushort)entry, contract);
+                    contracts.Add(at, new(topic.Name, entryKept, entryMemory, Changes: null));
                 }
             }
         }

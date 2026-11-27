@@ -663,8 +663,9 @@ public class DocumentationTests
     }
 
     /// <summary>
-    ///  An <c>Entry:</c> meaning's keeps clause lists items as <c>Keeps:</c> does, by commas or "and", with notes in
-    ///  parentheses, in any case and with a final period, and the check reports an item it does not know.
+    ///  An <c>Entry:</c> meaning's keeps clause names items as <c>Keeps:</c> does, with notes in parentheses, split
+    ///  at commas and, unlike <c>Keeps:</c>, "and" outside them, in any case and with a final period; the check
+    ///  reports an item it does not know.
     /// </summary>
     [TestMethod]
     public void EntryKeepsClausesAreRead()
@@ -692,6 +693,8 @@ public class DocumentationTests
         entries[1].Keeps.Should().BeEmpty();
         entries[2].Keeps.Should().Equal("the carry");
         new DocumentationEntry("Plain", "skips the first", 0).Keeps.Should().BeNull();
+        new DocumentationEntry("Noted", "skips; keeps X (the index, or the count) and Y (and so on)", 0).Keeps
+            .Should().Equal("X", "Y");
 
         List<string> messages = [.. new DocumentationResolver(set).Check().Select(diagnostic => diagnostic.Message)];
         messages.Should().Equal("Entry: 'Wrong' keeps 'the carry', which is not a register, flag or symbol.");

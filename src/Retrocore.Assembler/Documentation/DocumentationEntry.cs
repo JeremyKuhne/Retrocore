@@ -16,9 +16,10 @@ public sealed record DocumentationEntry(string Name, string Meaning, int Line)
 
     /// <summary>
     ///  Gets what an <c>Entry:</c> label keeps where its meaning ends in a clause that says, as
-    ///  <c>Aux = stores from an auxiliary byte; keeps A</c>, <c>; keeps X, Y</c> or <c>; keeps nothing</c>: the
-    ///  items, in place of the routine's <c>Keeps:</c> for a call there, split at commas and "and", each without a
-    ///  note in parentheses, a final period dropped. Null where the meaning has no such clause, so the routine's <c>Keeps:</c> applies.
+    ///  <c>Aux = stores from an auxiliary byte; keeps A</c>, <c>; keeps X and Y</c> or <c>; keeps nothing</c>: the
+    ///  items, in place of the routine's <c>Keeps:</c> for a call there. Items are split at commas and "and" outside
+    ///  parentheses, each without its note in parentheses, and a final period is dropped. Null where the meaning has
+    ///  no such clause, so the routine's <c>Keeps:</c> applies.
     /// </summary>
     public IReadOnlyList<string>? Keeps
     {
@@ -28,23 +29,39 @@ public sealed record DocumentationEntry(string Name, string Meaning, int Line)
             if (clause < 0) { return null; }
             string items = Meaning[(clause + KeepsClause.Length)..].Trim().TrimEnd('.');
             if (items.Equals("nothing", StringComparison.OrdinalIgnoreCase)) { return []; }
-            // "and" separates items as commas do.
-            for (int and; (and = items.IndexOf(" and ", StringComparison.OrdinalIgnoreCase)) >= 0;)
+
+            // Commas and "and" outside parentheses separate items, as in "X (the index, or the count) and Y".
+            List<string> kept = [];
+            int depth = 0, start = 0;
+            for (int index = 0; index <= items.Length; index++)
             {
-                items = $"{items[..and]},{items[(and + 5)..]}";
+                char current = index < items.Length ? items[index] : ',';
+                if (current == '(') { depth++; }
+                else if (current == ')') { depth--; }
+
+                int separator = 0;
+                if (depth == 0 && current == ',') { separator = 1; }
+                else if (depth == 0 && string.Compare(items, index, " and ", 0, 5, StringComparison.OrdinalIgnoreCase) == 0)
+                {
+                    separator = 5;
+                }
+
+                if (separator == 0) { continue; }
+                Add(items[start..index]);
+                start = index + separator;
+                index = start - 1;
             }
 
-            List<string> kept = [];
-            foreach (string item in items.Split(','))
+            return kept;
+
+            // An item without the note in parentheses that may follow it, as Keeps: has "Y (for a sound channel)".
+            void Add(string item)
             {
-                // A note in parentheses may follow an item, as in Keeps:: "Y (for a sound channel)".
                 string name = item.Trim();
                 int note = name.IndexOf(" (", StringComparison.Ordinal);
                 if (note > 0 && name[^1] == ')') { name = name[..note]; }
                 if (name.Length != 0) { kept.Add(name); }
             }
-
-            return kept;
         }
     }
 }

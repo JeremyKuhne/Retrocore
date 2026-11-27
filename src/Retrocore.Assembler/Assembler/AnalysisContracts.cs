@@ -122,17 +122,34 @@ internal sealed partial class AnalysisContracts
                 }
             }
 
-            // A call to an entry takes the routine's contract where the label has no comment of its own, as the
-            // debugger takes it; one with a comment is a routine of its own.
+            // An Entry: whose meaning ends in "; keeps ..." has that in place of the routine's Keeps:, unless the
+            // label is a routine of its own with a contract; a label at the same address takes the clause too.
+            Dictionary<ushort, IReadOnlyList<string>> clauses = [];
+            foreach (DocumentationEntry entry in topic.SectionsNamed("Entry")
+                .Where(section => DocumentationResolver.Applies(section.Condition, model, Symbol))
+                .SelectMany(section => section.Entries))
+            {
+                string label = documentation.EntrySymbol(documented, entry.Name);
+                if (entry.Keeps is { } keeps
+                    && documentation.Symbols.TryGetValue(label, out long at)
+                    && (ushort)at != address
+                    && documentation.Find(label) is not { HasContract: true })
+                {
+                    clauses.TryAdd((ushort)at, keeps);
+                }
+            }
+
+            // A call to another entry takes the routine's contract where the label has no comment of its own, as the
+            // debugger takes it; one with a comment is a routine of its own. The first contract at an address wins.
             _routines.TryAdd(address, topic);
-            AnalysisContract? contract = Read(topic, model, Symbol, own, address, keeps: null);
-            if (contract is not null)
+            if (Read(topic, model, Symbol, own, address, keeps: null) is { } contract)
             {
                 _contracts.TryAdd(address, contract);
                 foreach (string label in topic.EntryLabels.Select(entry => documentation.EntrySymbol(documented, entry)))
                 {
                     if (documentation.Symbols.TryGetValue(label, out long entry)
                         && (ushort)entry != address
+                        && !clauses.ContainsKey((ushort)entry)
                         && documentation.Find(label) is null)
                     {
                         _contracts.TryAdd((ushort)entry, contract);
@@ -140,25 +157,12 @@ internal sealed partial class AnalysisContracts
                 }
             }
 
-            // An Entry: whose meaning ends in "; keeps ..." has that in place of the routine's Keeps:, unless it is a
-            // routine of its own with a contract, as the debugger takes it, or another routine's contract or clause
-            // came first at its address.
-            foreach (DocumentationEntry entry in topic.SectionsNamed("Entry")
-                .Where(section => DocumentationResolver.Applies(section.Condition, model, Symbol))
-                .SelectMany(section => section.Entries))
+            foreach ((ushort at, IReadOnlyList<string> keeps) in clauses)
             {
-                string label = documentation.EntrySymbol(documented, entry.Name);
-                if (entry.Keeps is not { } keeps
-                    || !documentation.Symbols.TryGetValue(label, out long at)
-                    || (ushort)at == address
-                    || documentation.Find(label) is { HasContract: true }
-                    || (_contracts.TryGetValue((ushort)at, out AnalysisContract? first) && !ReferenceEquals(first, contract))
-                    || Read(topic, model, Symbol, own, address, keeps) is not { } entered)
+                if (!_contracts.ContainsKey(at) && Read(topic, model, Symbol, own, address, keeps) is { } entered)
                 {
-                    continue;
+                    _contracts[at] = entered;
                 }
-
-                _contracts[(ushort)at] = entered;
             }
         }
     }

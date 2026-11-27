@@ -170,6 +170,45 @@ public class ContractAnalysisTests
 
         (findings, _, _) = Check(Own, "Mos6502");
         findings.Should().BeEmpty();
+
+        // One with a contract of its own is checked for that, whatever order the routines come in. TYA copies the
+        // value LDY #0 made, so A is changed there.
+        const string OwnContract = """
+            ;; Returns.
+            ;; Keeps: X
+            ;; Entry: Clear = clears X and Y first
+            Saver:
+                rts
+
+            ;; Clears X and Y and returns.
+            ;; Keeps: A
+            Clear:
+                ldx #0
+                ldy #0
+                tya
+                rts
+            """;
+
+        (findings, _, _) = Check(OwnContract, "Mos6502");
+        findings.Should().Equal("Clear ($1001) documents Keeps: A, but A is changed by the instruction at $1003.");
+
+        // A label with no comment at the same address as an entry with a clause takes the clause.
+        const string Shared = """
+            ;; Returns, or from Later or Clause clears X.
+            ;; Keeps: X
+            ;; Entry:
+            ;;   Later = clears X
+            ;;   Clause = clears X; keeps nothing
+            Saver:
+                rts
+            Later:
+            Clause:
+                ldx #0
+                rts
+            """;
+
+        (findings, _, _) = Check(Shared, "Mos6502");
+        findings.Should().BeEmpty();
     }
 
     /// <summary>

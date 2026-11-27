@@ -91,7 +91,8 @@ internal sealed class MachineHost : DisposableBase
     internal JsonObject Configuration { get; }
 
     /// <summary>
-    ///  Gets the machine's name, as its model row names it, such as <c>Apple IIe</c>.
+    ///  Gets the machine's name, as its model row names it, such as <c>Apple IIe</c>, or else as the catalog names it,
+    ///  such as <c>Commodore VIC-20</c>.
     /// </summary>
     internal string Name
     {
@@ -100,7 +101,7 @@ internal sealed class MachineHost : DisposableBase
             using (Gate())
             {
                 HardwareRow? model = _target.Hardware().FirstOrDefault(row => row.Id == "model");
-                return model?.Name ?? Configuration["machine"]?.GetValue<string>() ?? "Machine";
+                return model?.Name ?? MachineCatalog.Find(Configuration)?.Label ?? Configuration["machine"]?.GetValue<string>() ?? "Machine";
             }
         }
     }
@@ -136,6 +137,7 @@ internal sealed class MachineHost : DisposableBase
         Apple1DebugTarget
             or CocoDebugTarget
             or PetDebugTarget
+            or Vic20DebugTarget
             or Trs80DebugTarget
             or Trs80Model3DebugTarget
             or AltairDebugTarget
@@ -164,6 +166,7 @@ internal sealed class MachineHost : DisposableBase
                     Apple1DebugTarget apple1 => apple1.FastCassette,
                     CocoDebugTarget coco => coco.FastCassette,
                     PetDebugTarget pet => pet.FastCassette,
+                    Vic20DebugTarget vic20 => vic20.FastCassette,
                     Trs80DebugTarget model1 => model1.FastCassette,
                     Trs80Model3DebugTarget model3 => model3.FastCassette,
                     AltairDebugTarget altair => altair.FastCassette,
@@ -200,6 +203,9 @@ internal sealed class MachineHost : DisposableBase
                         break;
                     case PetDebugTarget pet:
                         pet.FastCassette = value;
+                        break;
+                    case Vic20DebugTarget vic20:
+                        vic20.FastCassette = value;
                         break;
                     case Trs80DebugTarget model1:
                         model1.FastCassette = value;
@@ -384,7 +390,10 @@ internal sealed class MachineHost : DisposableBase
     ///  but a key that interrupts goes now and drops the rest of the paste, as the debug host has it: CONTROL-C, the
     ///  Model II's BREAK, and the BREAK of the Model I and Model III.
     /// </summary>
-    /// <param name="code">The ASCII code, 0-127, or a Kaypro II arrow key's, $F1-$F4.</param>
+    /// <param name="code">
+    ///  The ASCII code, 0-127, or a machine's own code above it, such as a Kaypro II arrow key's, $F1-$F4, PETSCII up
+    ///  to 255, or the VIC-20's RESTORE, RUN/STOP with RESTORE, and SHIFT with the Commodore key, 256-258.
+    /// </param>
     internal void Key(int code)
     {
         using (Gate())

@@ -915,9 +915,12 @@ internal sealed class MachinePane : ScrollViewer
             Math.Max(0, modes.ToList().IndexOf(host.SoundMode)));
 
         sound.SelectionChanged += (_, _) => _session.Host.SoundMode = modes[Math.Max(0, sound.SelectedIndex)];
-        _display.Children.Add(Options.Row("Sound", sound, host.KeyMapName == "apple3"
-            ? "What you hear while the machine runs at its real speed: off, or the speaker and the DAC"
-            : "What you hear while the machine runs at its real speed: off, the speaker, or, with the Mockingboard in slot 4, the speaker and the Mockingboard (which slows emulation by about a quarter)"));
+        _display.Children.Add(Options.Row("Sound", sound, host.KeyMapName switch
+        {
+            "apple3" => "What you hear while the machine runs at its real speed: off, or the speaker and the DAC",
+            "vic20" => "What you hear while the machine runs at its real speed: off, or the three tones and noise of the VIC, through the TV",
+            _ => "What you hear while the machine runs at its real speed: off, the speaker, or, with the Mockingboard in slot 4, the speaker and the Mockingboard (which slows emulation by about a quarter)"
+        }));
 
         Slider volume = new()
         {

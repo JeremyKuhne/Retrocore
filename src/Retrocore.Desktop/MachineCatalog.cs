@@ -66,6 +66,26 @@ internal static class MachineCatalog
     private static readonly MachineChoice s_petSound = new("sound", "Sound",
         [new("On", "speaker", "The VIA's CB2, as a speaker on the user port plays it"), new("Off", "off")], "speaker");
 
+    // The VIC-20's video standard, which picks the VIC and the kernal, the RAM in its expansion port, and its sound.
+    private static readonly MachineChoice s_vic20Video = new("video", "Video",
+    [
+        new("NTSC", "ntsc", "The 6560: 60 Hz, a 1.02 MHz 6502 and kernal 901486-06"),
+        new("PAL", "pal", "The 6561: 50 Hz, a 1.11 MHz 6502 and kernal 901486-07"),
+    ], "ntsc");
+
+    private static readonly MachineChoice s_vic20Ram = new("ramExpansion", "Memory",
+    [
+        new("Unexpanded", "none", "5 KB, 3583 bytes free for BASIC"),
+        new("3K expansion", "3k", "At $0400, as the VIC-1210 adds; BASIC starts at $0401"),
+        new("8K expansion", "8k", "Block 1, as the VIC-1110 adds; BASIC starts at $1201 and the screen moves to $1000"),
+        new("16K expansion", "16k", "Blocks 1 and 2, as the VIC-1111 adds"),
+        new("24K expansion", "24k", "Blocks 1 to 3, the most BASIC can use"),
+        new("32K expansion", "32k", "The 3K and blocks 1 to 3"),
+    ], "none");
+
+    private static readonly MachineChoice s_vic20Sound = new("sound", "Sound",
+        [new("On", "speaker", "The VIC's three tones and noise, as the TV plays them"), new("Off", "off")], "speaker");
+
     private static readonly MachineChoice s_cocoDisk = new("diskController", "Disk controller",
     [
         new("None", Value: false, "Tapes and ROM packs"),
@@ -248,6 +268,9 @@ internal static class MachineCatalog
             "6502, BASIC 4, the business keyboard, a 4040 disk drive and 32 KB",
             Options(("machine", "pet"), ("model", "pet4032-business")),
             [s_pet4032Ram, s_basic4Revision, s_petSound]),
+        new("vic20", "Commodore VIC-20", "6502, BASIC 2, the VIC's 22x23 colour screen, the Datasette and 5 KB",
+            Options(("machine", "vic20")),
+            [s_vic20Video, s_vic20Ram, s_vic20Sound]),
         new("bbcb", "BBC Micro Model B", "6502 at 2 MHz, MOS 1.20, BASIC II, DNFS 1.20 and 32 KB",
             Options(("machine", "bbc"), ("model", "bbcb")),
             [

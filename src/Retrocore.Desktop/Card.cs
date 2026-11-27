@@ -56,6 +56,18 @@ internal sealed record Card(
             "add2040",
             Slots: ["ieee8", "ieee9", "ieee10", "ieee11", "ieee12", "ieee13", "ieee14", "ieee15"],
             Machines: ["pet"]),
+        new(
+            "1541 disk drive",
+            "Commodore's single drive on the serial bus; insert .d64 or .g64 disks",
+            "add1541",
+            Slots: ["serial8", "serial9", "serial10", "serial11"],
+            Machines: ["vic20"]),
+        new(
+            "1540 disk drive",
+            "The 1541's forerunner, timed for the VIC-20's serial bus alone; insert .d64 or .g64 disks",
+            "add1540",
+            Slots: ["serial8", "serial9", "serial10", "serial11"],
+            Machines: ["vic20"]),
     ];
 
     /// <summary>

@@ -124,6 +124,29 @@ internal static class KeyMap
             // The business keyboard's TAB; the graphics keyboard has none and ignores it.
             [Key.Tab] = 9
         },
+        // The VIC-20's are the PET's PETSCII, with no TAB, and its f1-f8 on F1-F8: f1, f3, f5 and f7 are 133-136, and
+        // f2, f4, f6 and f8, their shifted keys, 137-140.
+        ["vic20"] = new()
+        {
+            [Key.Enter] = 13,
+            [Key.Back] = 20,
+            [Key.Delete] = 20,
+            [Key.Insert] = 148,
+            [Key.Left] = 157,
+            [Key.Right] = 29,
+            [Key.Up] = 145,
+            [Key.Down] = 17,
+            [Key.Home] = 19,
+            [Key.Escape] = 3,
+            [Key.F1] = 133,
+            [Key.F2] = 137,
+            [Key.F3] = 134,
+            [Key.F4] = 138,
+            [Key.F5] = 135,
+            [Key.F6] = 139,
+            [Key.F7] = 136,
+            [Key.F8] = 140
+        },
         // The Atari types ATASCII: BACK S is $7E, TAB $7F, CLEAR $7D and the cursor keys $1C-$1F; the keys that type
         // nothing are the debug host's codes from $F0, F2-F4 for START, SELECT and OPTION, and Pause for BREAK.
         ["atari800"] = new()

@@ -677,6 +677,14 @@ internal sealed class MainWindow : Window
                 Code("Clr", 147, "CLR, the shifted HOME: clears the screen");
                 Reset("Reset", "A reset switch (or Ctrl+F12 or Ctrl+Break): the kernal starts again, keeping memory");
                 break;
+            case "vic20":
+                Code("Run/Stop", 3, "RUN/STOP (or Esc)");
+                Code("Restore", 256, "RESTORE: the NMI, which does nothing unless a program asks it to, or RUN/STOP is down");
+                Code("Stop+Restore", 257, "RUN/STOP and RESTORE together: the kernal's warm start, back to READY. with the program kept");
+                Code("Clr", 147, "CLR, the shifted CLR/HOME: clears the screen and homes the cursor");
+                Code("C= Shift", 258, "SHIFT and the Commodore key: switches between the upper-case and graphics characters and the lower-case ones");
+                Reset("Reset", "A reset switch on the expansion port (or Ctrl+F12 or Ctrl+Break): the 6502, the VIAs and the drives reset, keeping memory");
+                break;
             case "atari800":
                 Code("Start", 0xF0, "START (or F2)");
                 Code("Select", 0xF1, "SELECT (or F3)");
@@ -711,6 +719,7 @@ internal sealed class MainWindow : Window
                 "apple3" => "Ctrl+letter: control character · arrows and Esc: the arrow and ESCAPE keys · Ctrl+F12: CONTROL-RESET · left/right Alt: Open/Solid Apple",
                 "apple1" => "Backspace: the back arrow (_) · Esc: ESC · Ctrl+F12: RESET · letters arrive as capitals",
                 "altair" => "Ctrl+letter: control character · arrows: ^H ^J ^K ^L, as the ADM-3A sends them · Ctrl+F12: RESET",
+                "vic20" => "Esc: RUN/STOP · Home: HOME · arrows: the cursor keys · Backspace: DEL · Insert: INST · F1-F8: f1-f8 · Ctrl+F12: reset",
                 "bbc" => "Esc: ESCAPE · End: COPY · arrows: the cursor keys · F1-F9 and F10: f1-f9 and f0 · Ctrl+F12: BREAK",
                 "atari800" => "Backspace: BACK S · Home: CLEAR · arrows: the cursor keys · F2-F4: START, SELECT, OPTION · Pause: BREAK · Ctrl+F12: power",
                 _ => "",

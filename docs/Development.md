@@ -32,6 +32,8 @@ node tools/Test-Apple1Dap.mjs
 node tools/Test-Apple1BasicDap.mjs
 node tools/Test-PetDap.mjs
 node tools/Test-PetBasicDap.mjs
+node tools/Test-Vic20Dap.mjs
+node tools/Test-Vic20BasicDap.mjs
 node tools/Test-IntegerBasicDap.mjs
 node tools/Test-Breakpoints.mjs
 node tools/Test-InterruptHitsDap.mjs
@@ -81,7 +83,8 @@ Test coverage spans:
   Dormann's 6502 functional tests, ZEXALL (all 67 exerciser groups run in parallel as individual test cases; ZEXDOC
   optional), FUSE Z80 tests, Motorola 6809 tests, and Intel 8080/8085 exercisers;
 - **Machines** against their ROMs, Apple2TS (for IIe ProDOS boot and double hi-res video), and MAME oracles (for the
-  Model I, Model III, Apple III, Color Computer, PET and 4040/2040 drives, BBC Micro, Atari, and SoftCard);
+  Model I, Model III, Apple III, Color Computer, PET and 4040/2040 drives, VIC-20 and 1540/1541 drives, BBC Micro,
+  Atari, and SoftCard);
 - **SDK ROM, DOS, and SOS sources** pinned byte for byte by SHA-256 and compared against chip or disk dumps when
   present;
 - **BASIC and Pascal** against lines tokenized by the real ROMs, programs on Apple's DOS 3.3 System Master, Business
@@ -159,11 +162,12 @@ Code, and normal terminals.
 | `RETROCORE_COCO_ROMS` | Color Computer ROM dumps under MAME's names (default `<cache>\coco-roms\extract`); optional for debugging. |
 | `RETROCORE_BBC_ROMS` | BBC Micro ROM dumps: MAME's `bbcb` set unzipped (default `<cache>\bbc-roms\extract\bbcb` for tests); optional for debugging. |
 | `RETROCORE_PET_ROMS` | MAME's `pet2001`, `pet2001n`, `pet4016`, `pet4032b`, `c4040`, and `c2040` sets unzipped, each in its folder (default `<cache>\pet-roms\extract`); optional for PET machines themselves, while the 4040 and 2040 drives use `c4040` and `c2040`. |
+| `RETROCORE_VIC20_ROMS` | MAME's `vic20`, `vic20p`, `c1541`, and `c1540` sets unzipped, each in its folder (default `<cache>\vic20-roms\extract`); optional for the VIC-20 itself, whose ROMs are built from the SDK's sources without them, while the 1541 and 1540 drives use `c1541` and `c1540`. |
 | `RETROCORE_ATARI_ROMS` | MAME's `a800` set unzipped (default `<cache>\atari8-roms\extract\a800`), with the 810's firmware in an `atari810` folder beside it (a PAL launch takes the folder holding `a800` and `a800pal`); optional for debugging. |
 | `RETROCORE_ALTAIR_BASIC`, `RETROCORE_ALTAIR_DISK` | SIMH Altair BASIC memory/tape images and 8-inch CP/M, Disk BASIC, and Altair DOS disks plus PROM dumps for Altair tests and `Test-AltairDap.mjs` (defaults `<cache>\altair-basic` and `<cache>\altair-disk`). |
 | `RETROCORE_KAYPRO` | Kaypro II dumps and disks for tests and `tools\Test-KayproDap.mjs`: `81-149c.rom`, `81-146a.bin`, `cpm22-rom149.img` (CP/M 2.2), and `MBasic.img` (default `<cache>\kaypro`). |
 | `RETROCORE_KAYPRO_ROMS` | Kaypro II chip dumps for debugging in place of the SDK's builds (MAME's `kayproii` names, or the names above); optional. |
-| `RETROCORE_MAME` | `mame.exe` path for the Model I, Model III, Apple III, Color Computer, PET, 4040, 2040, BBC Micro, Atari, and SoftCard oracle tests (default `<cache>\mame\mame.exe`). |
+| `RETROCORE_MAME` | `mame.exe` path for the Model I, Model III, Apple III, Color Computer, PET, 4040, 2040, VIC-20, 1540, 1541, BBC Micro, Atari, and SoftCard oracle tests (default `<cache>\mame\mame.exe`). |
 | `RETROCORE_TEST_CACHE` | Processor test suites fetched by `tools\Fetch-ProcessorTests.ps1` (~3 GiB), `tools\Fetch-Z80Tests.ps1` (~1.4 GiB), `tools\Fetch-M6809Tests.ps1`, and `tools\Fetch-I8080Tests.ps1`, all requiring `gh` and `git` (default `<cache>\processor-tests`). |
 | `RETROCORE_ZEXDOC` | Set to any value to run ZEXDOC in addition to ZEXALL. Skipped by default because ZEXALL runs the same instructions and checks all flags; ZEXDOC only isolates whether a ZEXALL failure is in undocumented flags. |
 | `RETROCORE_CC65`, `RETROCORE_CA65_CORPUS`, `RETROCORE_CA65_ASMINC` | Directory containing `ca65` and `ld65`, optional `rom4x` ca65 source corpus, and `cc65`'s `asminc` header directory for the ca65 differential and SDK tests. |
@@ -197,7 +201,7 @@ C++ tools), ProDOS 2.4.3, Microsoft's 6502 BASIC source and `msbasic` reference 
 | [`Retrocore.Machines.Trs80Model100`](../src/Retrocore.Machines.Trs80Model100) | TRS-80 Model 100 and Tandy 102: 80C85 memory and ports, HD44102 LCD drivers, keyboard matrix, uPD1990AC clock, cassette, buzzer, and RAM-image file exchange. |
 | [`Retrocore.Machines.Coco`](../src/Retrocore.Machines.Coco) | TRS-80 Color Computer 1, 2, and 3: SAM, VDG, GIME, PIAs, cassette, sound, cartridges, disk controller, and SDK ROM sources. |
 | [`Retrocore.Machines.Acorn`](../src/Retrocore.Machines.Acorn) | BBC Micro Model B and Model A: paged ROMs, VIAs, video ULA and SAA5050, sound, serial ULA and cassette, Intel 8271, and SDK ROM sources. |
-| [`Retrocore.Machines.Commodore`](../src/Retrocore.Machines.Commodore) | Commodore PET 2001 and 4032: PIAs and VIA, video, keyboards, sound, Datasettes, IEEE-488 bus with 4040/2040 dual drives, and SDK ROM sources. |
+| [`Retrocore.Machines.Commodore`](../src/Retrocore.Machines.Commodore) | Commodore PET 2001 and 4032: PIAs and VIA, video, keyboards, sound, Datasettes, IEEE-488 bus with 4040/2040 dual drives; the VIC-20: VIAs, keyboard, Datasette, cartridges, expansion RAM, and the serial bus with 1540/1541 drives; and SDK ROM sources. |
 | [`Retrocore.Machines.Atari`](../src/Retrocore.Machines.Atari) | Atari 400 and 800: ANTIC, GTIA/CTIA, POKEY, PIA, cartridges, SIO bus with 410 recorder and hardware-level 810 drive, and SDK ROM sources. |
 | [`Retrocore.Machines.Altair`](../src/Retrocore.Machines.Altair) | MITS Altair 8800: 88-2SIO/88-SIO serial cards, 88-ACR cassette, front panel, 88-DCDD 8-inch drives, and DBL/MBL boot PROM sources. |
 | [`Retrocore.Machines.Kaypro`](../src/Retrocore.Machines.Kaypro) | Kaypro II: banked memory, Z80 PIO/SIO, serial keyboard, 80x24 video, FD1793 drives, and monitor, font, and MBASIC 5.21 SDK sources. |

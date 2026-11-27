@@ -1,6 +1,7 @@
 # Backlog: the Commodore VIC-20, 64 and 128
 
-Status: **agreed 2026-11-25** ("Start phase V1"). Phases V1 to V4 are built; V5, the drives' DOS sources, is next.
+Status: **agreed 2026-11-25** ("Start phase V1"). Phases V1 to V4 and V6 are built; V5, the drives' DOS sources, is
+next, and the `cbmbasic` rename is still to do.
 
 Commodore's three home computers after the PET share most of what they are made of: a 6502 family processor,
 Commodore BASIC 2 (7.0 on the 128), a kernal with the same jump table, the Datasette, and the serial bus with the
@@ -463,6 +464,22 @@ plan (#239).
 - `docs/Vic20.md`, the README, the extension README, and a `tools/Test-Vic20Dap.mjs` and BASIC DAP script in CI.
 - **Done when** a kernal breakpoint and a BASIC line breakpoint both stop, Start Machine runs a `.bas` file on each
   expansion, and the DAP scripts pass.
+
+**Built 2026-11-27** after "Start phase V6", except the `cbmbasic` rename, which is its own change next.
+
+- `Vic20DebugTarget` (machine `vic20`): `video`, `ramExpansion`, `cartridge`, `sound`, `cassette` and the drives'
+  `diskUnits`, `diskModel`, `disks` and `driveRomDirectory`; BASIC and the kernal at source level from the SDK's
+  builds, BASIC's source covering its end in the kernal's chip; the call stack, memory, the colour screen and its
+  text, sound, the Datasette's keys, and 1541s and 1540s added and removed as devices 8-11. RESTORE, RUN/STOP with
+  RESTORE, and SHIFT with the Commodore key are the key codes 256-258, held for a tenth of a second.
+- BASIC on the BASIC thread: the dialect's VIC-20 variant, the PET's BASIC 2 with its page zero three bytes higher,
+  and errors read through the numbered table. A `.prg` BASIC program moves to where the expansion puts BASIC.
+- `Vic20SdkModules` assembles from the repository's layout as well as the SDK's copy beside the debug host.
+- The extension's `vic20` entry, launch schema, Start Machine (a source, a `.prg`, a `.bas`, a cartridge, a disk or a
+  tape), the key bar, the display's 4:3 aspect, and the 1541 and 1540 in Add Card; the projects' catalog entry.
+- The Desktop's catalog entry, icon, key map and key bar.
+- [`docs/Vic20.md`](../Vic20.md), the README and the extension's README; `tools/Test-Vic20Dap.mjs` and
+  `tools/Test-Vic20BasicDap.mjs` in CI, and `Vic20DebugTargetTests`.
 
 ### The Commodore 64
 

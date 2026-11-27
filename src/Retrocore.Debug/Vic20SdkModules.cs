@@ -4,16 +4,17 @@
 
 using Retrocore.Assembler;
 using Retrocore.Machines.Chips;
+using Retrocore.Machines.Commodore.Vic20;
 
 namespace Retrocore.Debug;
 
 /// <summary>
-///  Assembles the SDK's VIC-20 ROM sources: BASIC and the character ROM.
+///  Assembles the SDK's VIC-20 ROM sources: BASIC, the kernal for NTSC or PAL, and the character ROM.
 /// </summary>
 /// <remarks>
 ///  <para>
-///   BASIC runs past <c>$DFFF</c> into the kernal chip's first bytes, to <c>$E47B</c>; the kernal's own code begins
-///   at <c>$E47C</c>.
+///   BASIC runs past <c>$DFFF</c> into the kernal chip's first bytes, to <c>$E47B</c>, so the kernal chip is built
+///   from both sources, as the PET's editor chip is.
 ///  </para>
 /// </remarks>
 internal static class Vic20SdkModules
@@ -24,9 +25,19 @@ internal static class Vic20SdkModules
     internal const int BasicOrigin = 0xC000;
 
     /// <summary>
-    ///  The address the kernal's own code starts at, after BASIC's last byte.
+    ///  The address the kernal chip starts at.
+    /// </summary>
+    internal const int KernalChipOrigin = 0xE000;
+
+    /// <summary>
+    ///  The address the kernal's source starts at, after BASIC's last byte.
     /// </summary>
     internal const int KernalOrigin = 0xE47C;
+
+    /// <summary>
+    ///  The size of each 8K ROM chip.
+    /// </summary>
+    internal const int ChipSize = 0x2000;
 
     /// <summary>
     ///  The size of the character ROM.
@@ -52,6 +63,19 @@ internal static class Vic20SdkModules
         standard);
 
     /// <summary>
+    ///  Assembles the kernal, <c>$E47C-$FFFF</c>.
+    /// </summary>
+    /// <param name="directory">The VIC-20 sources' directory.</param>
+    /// <param name="standard">The video standard: 901486-06 for NTSC, -07 for PAL.</param>
+    /// <returns>The assembly.</returns>
+    /// <exception cref="InvalidDataException">The source has errors.</exception>
+    internal static AssemblyResult AssembleKernal(string directory, VicVideoStandard standard) => Assemble(
+        Path.Join(directory, "Kernal.asm"),
+        KernalOrigin,
+        0x10000 - KernalOrigin,
+        standard);
+
+    /// <summary>
     ///  Assembles the character ROM, 901460-03.
     /// </summary>
     /// <param name="directory">The VIC-20 sources' directory.</param>
@@ -59,6 +83,24 @@ internal static class Vic20SdkModules
     /// <exception cref="InvalidDataException">The source has errors.</exception>
     internal static AssemblyResult AssembleCharacters(string directory) =>
         Assemble(Path.Join(directory, "CharacterGenerator.asm"), 0, CharacterRomSize, standard: null);
+
+    /// <summary>
+    ///  Builds the ROMs from the sources, byte-identical to the chips: BASIC 901486-01, the kernal 901486-06 or -07,
+    ///  and the characters 901460-03.
+    /// </summary>
+    /// <param name="standard">The video standard, which picks the kernal.</param>
+    /// <param name="directory">The VIC-20 sources' directory, or null for the copy beside the debug host.</param>
+    /// <returns>The ROMs.</returns>
+    /// <exception cref="InvalidDataException">A source has errors.</exception>
+    internal static Vic20Roms BuildRoms(VicVideoStandard standard, string? directory = null)
+    {
+        string roms = directory ?? RomDirectory;
+        ReadOnlySpan<byte> basic = AssembleBasic(roms, standard).Sections[0].Bytes.Span;
+        byte[] kernal = new byte[ChipSize];
+        basic[ChipSize..].CopyTo(kernal);
+        AssembleKernal(roms, standard).Sections[0].Bytes.Span.CopyTo(kernal.AsSpan(KernalOrigin - KernalChipOrigin));
+        return new(basic[..ChipSize], kernal, AssembleCharacters(roms).Sections[0].Bytes.Span);
+    }
 
     private static AssemblyResult Assemble(string path, int origin, int size, VicVideoStandard? standard)
     {

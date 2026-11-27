@@ -345,7 +345,7 @@ test("the PET types PETSCII: STOP, HOME, the cursor keys, DEL and INST, and its 
     assert.deepEqual(posted.splice(0), [{ command: "reset" }], "the reset switch");
 });
 
-test("the VIC-20 types PETSCII, shows its Datasette stopped and its drive by device, and its key bar's codes reach the machine", () => {
+test("the VIC-20 types PETSCII, shows its Datasette stopped and its drive by device, and its RESTORE codes pass to the host", () => {
     const { posted, screen, byId, window } = loadPanel();
     window.dispatch("message", { data: {
         machine: "vic20", standard: "pal", rows: [""], cycles: 1, running: true,
@@ -366,7 +366,13 @@ test("the VIC-20 types PETSCII, shows its Datasette stopped and its drive by dev
         screen.dispatch("keydown", { key, code: "", ctrlKey: false, altKey: false, shiftKey: false });
     }
     assert.deepEqual(posted.splice(0).map(message => (message as { code: number }).code), [3, 19, 157, 29, 145, 17, 20, 148, 13, 97]);
-    for (const code of [256, 257, 258]) assert.equal(panelKeyCode({ code }), code, "the key bar's RESTORE keys pass to the host");
+    // The key bar's buttons post their data-code, which the key bar's test reads; those above 255 pass the panel's check.
+    const html = webviewHtml("NONCE");
+    const bar = /<span class="keys" data-machine="vic20">([\s\S]*?)<\/span>/.exec(html)?.[1] ?? "";
+    for (const code of [256, 257, 258]) {
+        assert.match(bar, new RegExp(`data-code="${code}"`));
+        assert.equal(panelKeyCode({ code }), code, "the key bar's RESTORE keys pass to the host");
+    }
     byId.get("vic20-reset")?.dispatch("click");
     assert.deepEqual(posted.splice(0), [{ command: "reset" }], "the reset switch");
 });
@@ -513,7 +519,7 @@ test("Beam overlay shows on the IIe running or stopped, starts off, and is kept 
 });
 
 test("sharp scales are whole physical pixels per dot, in the screen's shape, as large as fit", () => {
-    const { sharpSize } = loadPanel();
+    const { sharpSize, window } = loadPanel();
     const size = (machine: string, width: number, height: number, ratio: number): unknown =>
         JSON.parse(JSON.stringify(sharpSize(machine, width, height, ratio)));
     assert.deepEqual(size("apple2", 1200, 900, 1), { width: 1120, height: 768, scale: 2 });
@@ -523,7 +529,12 @@ test("sharp scales are whole physical pixels per dot, in the screen's shape, as 
     assert.deepEqual(size("trs80-model1", 1000, 900, 1), { width: 768, height: 576, scale: 1 }, "Model I dots are 2 by 3");
     assert.deepEqual(size("pet", 1300, 900, 1), { width: 1280, height: 800, scale: 2 }, "the PET's 320x200 square dots, doubled at 1x");
     assert.deepEqual(size("vic20", 1300, 1000, 1), { width: 1200, height: 992, scale: 2 }, "the VIC-20's dots three wide by two tall");
-    assert.deepEqual(size("vic20pal", 1400, 1200, 1), { width: 1344, height: 1184, scale: 2 }, "PAL's 224x296 frame");
+    // A PAL VIC-20's frame says so, and its 224x296 frame sizes larger.
+    window.dispatch("message", { data: {
+        machine: "vic20", standard: "pal", rows: [""], cycles: 1, running: false,
+        video: { width: 1, height: 1, pixelFormat: "rgba", pixels: Buffer.from([0, 0, 0, 255]).toString("base64") }
+    } });
+    assert.deepEqual(size("vic20", 1400, 1200, 1), { width: 1344, height: 1184, scale: 2 }, "PAL's 224x296 frame");
     assert.equal(size("trs80-model1", 700, 900, 1), null, "too small for 1x");
 });
 

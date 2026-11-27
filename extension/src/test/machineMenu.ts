@@ -53,7 +53,7 @@ export async function testMachineMenu(workspace: vscode.WorkspaceFolder): Promis
         "TRS-80 Model 16 (Z80 side) (Retrocore)", "TRS-80 Model 100 (Retrocore)", "Tandy 102 (Retrocore)", "Apple-1 (Retrocore)",
         "TRS-80 Color Computer (Retrocore)", "TRS-80 Color Computer 2 (Retrocore)", "TRS-80 Color Computer 3 (Retrocore)",
         "Commodore PET 2001 (BASIC 2) (Retrocore)", "Commodore PET 2001 (Retrocore)",
-        "Commodore PET 4032 (Retrocore)", "Commodore PET 4032 (business keyboard) (Retrocore)",
+        "Commodore PET 4032 (Retrocore)", "Commodore PET 4032 (business keyboard) (Retrocore)", "Commodore VIC-20 (Retrocore)",
         "BBC Micro Model B (Retrocore)", "BBC Micro Model A (Retrocore)", "Atari 800 (Retrocore)", "Atari 400 (Retrocore)",
         "MITS Altair 8800 (Retrocore)", "Kaypro II (Retrocore)"
     ]);

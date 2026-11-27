@@ -228,8 +228,9 @@ public sealed class Trs80Model100DebugTargetTests
     /// <summary>
     ///  A recording that holds nothing writes nothing when it comes out; one whose file cannot be written stays in the
     ///  recorder when it is ejected, with nothing left beside it, and comes out once its path can be written; a tape
-    ///  that is not a WAV file, or one that does not exist, is refused, leaving the recording in and unwritten; and a
-    ///  recording put in again from its own path is saved first and plays.
+    ///  that is not a WAV file is refused with the recording saved and left in, and one that does not exist is
+    ///  refused with the recording left in, unwritten; a recording put in again from its own path is saved first and
+    ///  plays.
     /// </summary>
     [TestMethod]
     public void FailedRecordingsStayIn()
@@ -280,6 +281,8 @@ public sealed class Trs80Model100DebugTargetTests
             Action missing = () => target.DeviceAction(drive, "insert", missingTape);
             missing.Should().Throw<ArgumentException>().WithMessage("*does not exist*");
             File.Exists(fresh).Should().BeFalse("a refused insert writes nothing");
+            drive.Media?.Label.Should().Be(fresh, "the recording is still in");
+            Directory.GetFiles(folder, "*.tmp").Should().BeEmpty();
             target.DeviceAction(drive, "insert", freshRecording);
             Trs80Model100Tape.FromWave(File.ReadAllBytes(fresh)).HalfCycles.Should().NotBeEmpty("the recording was saved first");
             drive.Media.Should().NotBeNull();

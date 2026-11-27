@@ -84,8 +84,9 @@ internal sealed partial class Trs80Model100DebugTarget
     /// <remarks>
     ///  <para>
     ///   The new tape is read before the one in the recorder comes out, so a file that cannot be read leaves it in. A
-    ///   recording is saved first, where it stays in, so a tape put in from the recording's own path is the one just
-    ///   recorded.
+    ///   recording is saved first, and stays in the recorder until the new tape is read, so a tape put in from the
+    ///   recording's own path is the one just recorded; a recording that holds nothing writes nothing, so its own path
+    ///   is refused as a missing tape.
     ///  </para>
     /// </remarks>
     /// <param name="path">The WAV file.</param>

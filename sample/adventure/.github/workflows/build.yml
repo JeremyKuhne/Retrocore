@@ -2,9 +2,9 @@
 # plays each game's transcripts with the reference engine, and keeps what each target built. The restore needs the tool
 # on a NuGet source; retrocore is on no feed yet, so until it is, the restore fails unless the restore step adds
 # a source or the repository has a nuget.config that does. In Retrocore's own repository this file does nothing, as
-# GitHub runs only the root's workflows; Retrocore's CI builds the sample there and plays its transcripts, and checks
-# that a fresh clone of its files alone restores the tool from a local pack and builds every target
-# (tools/Test-FreshClone.mjs).
+# GitHub runs only the root's workflows; Retrocore's CI builds the sample there and plays its transcripts, and its
+# fresh-clone workflow, run by hand, checks that a fresh clone of its files alone restores the tool from a local pack
+# and builds every target (tools/Test-FreshClone.mjs).
 
 name: Build
 

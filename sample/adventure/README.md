@@ -80,8 +80,9 @@ dotnet ../../artifacts/AnyCPU/Release/Retrocore.Debug/net11.0/Retrocore.Debug.dl
 Its own `.github/workflows/build.yml` builds every target and plays the transcripts once the sample is the root of a
 repository and the tool is on a source the workflow can restore it from; until the tool is published, its restore
 fails unless its restore step adds a source or the repository has a nuget.config that does. In Retrocore, GitHub
-runs only the root's workflows, and Retrocore's CI checks that a fresh clone of the sample's files alone restores
-the tool from a local pack and builds every target ([`tools/Test-FreshClone.mjs`](../../tools/Test-FreshClone.mjs)).
+runs only the root's workflows. Retrocore's [`fresh-clone.yml`](../../.github/workflows/fresh-clone.yml) workflow,
+run by hand, checks that a fresh clone of the sample's files alone restores the tool from a local pack and builds
+every target ([`tools/Test-FreshClone.mjs`](../../tools/Test-FreshClone.mjs)).
 `.vscode/extensions.json` recommends the Retrocore extension. What changes on the move: the links into Retrocore's `docs/`, `sdk/` and `tools/` here, and into its
 `LICENSE` in [games/README.md](games/README.md), become links to Retrocore's repository on GitHub, the repository
 gets Retrocore's `LICENSE` (the tools' headers name it), and the Release-build command above goes.

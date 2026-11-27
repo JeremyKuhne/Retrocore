@@ -76,7 +76,7 @@ public class MemoryAccessDataTests
             {
                 failures.Add($"{label}: a port feeds its writes to memory, but its access is {access}");
             }
-            else if (!ran && writes && !s_portFed.Contains(mnemonic))
+            else if (!ran && access != MemoryAccess.Read && !s_portFed.Contains(mnemonic))
             {
                 failures.Add($"{label}: its access is {access}, but it never ran to show it");
             }

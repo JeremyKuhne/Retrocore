@@ -444,7 +444,7 @@ with the routines checked, the `Keeps:` items it could not verify, and the routi
 - It gives up on a routine, and skips it, where the code does what the model cannot follow: an indirect jump, or
   a write of the program counter other than a return, as the 6809's `TFR X,PC` and `PULU PC`; a return through
   data it pushed, a pull of its return address, or a pull of other bytes than a push saved; a change of the stack
-  pointer; a write into the stack, as above; a
+  pointer; a write into the stack through a pointer, as above; a
   call into a routine that changes the stack under its return address, as Acorn's SAVE_REGISTERS inserts a
   restoring return; and bytes the source does not assemble. A routine that pushes data and then calls such a
   helper, as SAVE_X_Y does, changes its own caller's stack, so its callers are skipped too. A routine with other
@@ -482,7 +482,10 @@ and the documentation:
 - **Hints a source cannot give yet:** calls that never return or take inline bytes.
 - `Keeps:` of memory is not checked, only of registers and flags.
 - **Stack addresses through memory or the stack,** as a stack pointer stored with `LD [nn],SP` and loaded back, or
-  pushed and pulled, are not known to be stack addresses again, so a write through them is not seen as one.
+  pushed and pulled, are not known to be stack addresses again, so a write through them is not seen as one; nor
+  are those a callee the analysis cannot see leaves. A callee it follows passes them on.
+- **Stores to a fixed address in the stack,** as the 6502's `STY $0104`, are not seen as writes into it, since
+  where the stack pointer is at entry is not known.
 - Where the check runs, as for the other analyses, is the first open question below.
 
 ## Flag values

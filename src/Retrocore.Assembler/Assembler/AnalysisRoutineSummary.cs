@@ -46,6 +46,12 @@ internal sealed record AnalysisRoutineSummary
     public bool ChangesCallerStack { get; init; }
 
     /// <summary>
+    ///  Gets the registers, by bit, that may hold an address in the stack at a return, as after <c>ADD HL,SP</c>, so
+    ///  a caller's write through one may land in its own stack.
+    /// </summary>
+    public uint StackAddresses { get; init; }
+
+    /// <summary>
     ///  Gets, for each register and flag some path to a return surely changes, the address of an instruction that
     ///  changes it: registers by bit, then flags at 32 plus their bit; one missing is changed where the paths disagree.
     /// </summary>

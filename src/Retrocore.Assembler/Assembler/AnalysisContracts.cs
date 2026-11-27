@@ -443,7 +443,8 @@ internal sealed partial class AnalysisContracts
             UnknownFlags = unknownFlags,
             Returns = true,
             Documented = true,
-            ChangesCallerStack = Analyzed(address)?.ChangesCallerStack == true
+            ChangesCallerStack = Analyzed(address)?.ChangesCallerStack == true,
+            StackAddresses = (Analyzed(address)?.StackAddresses ?? 0) & ~kept
         };
     }
 

@@ -362,7 +362,8 @@ public class AnalysisSoundnessTests
     }
 
     /// <summary>
-    ///  A pointer worked out from the stack pointer addresses the stack, as the Z80's <c>ADD HL,SP</c>.
+    ///  A pointer worked out from the stack pointer addresses the stack, as the Z80's <c>ADD HL,SP</c>, also where a
+    ///  callee works it out.
     /// </summary>
     [TestMethod]
     public void PointersFromTheStackPointerWriteTheStack()
@@ -391,6 +392,22 @@ public class AnalysisSoundnessTests
                 pla
                 rts
             """, "Mos6502", "A");
+
+        // A callee that leaves such an address, as one returning SP plus 2, the caller's pushed C.
+        NotKept("""
+            ;; Saves BC, then clears its low byte through the address a helper gives.
+            ;; Keeps: BC
+            Caller:
+                push bc
+                call Helper
+                ld [hl],0
+                pop bc
+                ret
+            Helper:
+                ld hl,2
+                add hl,sp
+                ret
+            """, "Z80", "BC");
     }
 
     /// <summary>

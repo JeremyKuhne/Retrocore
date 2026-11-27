@@ -319,7 +319,7 @@ internal sealed class AnalysisRoutineEngine
                     Stop("it jumps indirectly", pc);
                     break;
                 case AnalysisRoutineOutcome.WroteStack:
-                    Stop("it writes into the stack, which holds its return address", pc, stack: true);
+                    Stop("it writes into the stack, where its return address and what it pushed are", pc, stack: true);
                     break;
                 default:
                     Stop("it returns through data it pushed", pc, stack: true);
@@ -1026,6 +1026,8 @@ internal sealed class AnalysisRoutineEngine
             state.Slots[FlagSlot + bit] = AnalysisValue.Of((summary.UnknownFlags & mask) != 0 ? Unknown(at) : Changed(at));
         }
 
+        // A register the callee leaves holding an address in its stack holds one in the caller's.
+        state.StackAddresses = (state.StackAddresses & summary.KeptRegisters) | summary.StackAddresses;
         Forget(state, at);
     }
 
@@ -1085,7 +1087,8 @@ internal sealed class AnalysisRoutineEngine
             Returns = exit is not null,
             Incomplete = incomplete,
             IncompleteAt = incompleteAt,
-            ChangesCallerStack = changesCallerStack
+            ChangesCallerStack = changesCallerStack,
+            StackAddresses = exit is null ? 0 : exit.StackAddresses & ~kept
         };
     }
 

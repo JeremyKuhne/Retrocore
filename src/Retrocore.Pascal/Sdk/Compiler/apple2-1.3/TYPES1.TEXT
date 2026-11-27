@@ -1,5 +1,5 @@
-(** TYPES1.TEXT: part 1 of 3 of TYPES, the types of the symbol table's entries,
-    types and constants, operands, scopes, labels and the code file's records.
+(** TYPES1.TEXT: part 1 of 3 of TYPES: the symbol table's entries, types and
+    constants, operands, scopes, labels and the code file's records.
 
     Included by COMPILER.TEXT after CONSTANTS2.TEXT and before TYPES2.TEXT. *)
 

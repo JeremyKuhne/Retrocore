@@ -1,4 +1,4 @@
-(** BODYPART4B.TEXT: part 2 of 2 of BODYPART4, BODYPART's expressions and body.
+(** BODYPART4B.TEXT: part 2 of 2 of BODYPART4: BODYPART's expressions and body.
 
     Included by COMPILER.TEXT after BODYPART4A.TEXT and before WRITELIN.TEXT.
 

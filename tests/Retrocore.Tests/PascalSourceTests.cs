@@ -736,7 +736,8 @@ public sealed class PascalSourceTests
 
         PascalProgram program = PascalProgram.Analyze(Path.Join("SRC", "P.TEXT"), files.GetValueOrDefault);
 
-        PascalCodeShape.Digest(program).Should().Be(PascalCodeShape.Digest(Analyze(Source.Replace("(*$I p.text*)", "", StringComparison.Ordinal))));
+        string alone = Source.Replace("(*$I p.text*)", "", StringComparison.Ordinal);
+        PascalCodeShape.Digest(program).Should().Be(PascalCodeShape.Digest(Analyze(alone)));
     }
 
     /// <summary>

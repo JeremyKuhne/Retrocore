@@ -48,8 +48,8 @@ procedures in 6502 code are `ASSEMBLED.TEXT`, for Apple's Assembler. One build:
   after a `.` by name, not by the record's type, so hover on a shared field name may show another record's.
 - **PC8. OTHERWISE.** 1.3's Compiler reserves `OTHERWISE` (its IDSCAN's table, which has no `SEPARATE`), which 1.1's
   doesn't. The SDK's reserved words stay 1.1's, so a 1.1 program may still use `OTHERWISE` as a name; it is a later
-  keyword (`PascalNames.IsLaterKeyword`): the lint reports a declaration with that name, and the editor's model never
-  takes it for a declaration. The Compiler's own token for it is `CaseElseToken`.
+  keyword (`PascalNames.IsLaterKeyword`): the lint reports a declaration with that name, and the editor's model doesn't
+  take a use of it for a declaration unless the program declares it. The Compiler's own token for it is `CaseElseToken`.
 - **PC9. The assembled procedures.** `ASSEMBLED.TEXT` stays the source of Apple's 1.3 Assembler, which the Linker
   links in. Its `.PROC` and `.FUNC` names are the Pascal names in full (`SCANIDENTIFIER`), of which the Linker
   reads 8 letters; its comments use the new names. The lint checks it as text: lines, name, size.

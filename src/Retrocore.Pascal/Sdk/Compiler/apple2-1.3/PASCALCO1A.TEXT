@@ -1,4 +1,4 @@
-(** PASCALCO1A.TEXT: part 1 of 2 of PASCALCO1, PASCALCO, segment 1: its globals
+(** PASCALCO1A.TEXT: part 1 of 2 of PASCALCO1: PASCALCO, segment 1: its globals
     and FORWARD headings.
 
     Included by COMPILER.TEXT after SYSGLOBALS.TEXT and before PASCALCO1B.TEXT.

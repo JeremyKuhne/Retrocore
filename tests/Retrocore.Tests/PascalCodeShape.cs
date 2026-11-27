@@ -50,7 +50,8 @@ internal static class PascalCodeShape
         }
 
         using IncrementalHash shape = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
-        foreach (PascalToken token in Expand(program, program.Files[0], includes, [with(StringComparer.OrdinalIgnoreCase)]).Where(token => !token.IsComment))
+        IEnumerable<PascalToken> tokens = Expand(program, program.Files[0], includes, [with(StringComparer.OrdinalIgnoreCase)]);
+        foreach (PascalToken token in tokens.Where(token => !token.IsComment))
         {
             string text = token.Kind switch
             {

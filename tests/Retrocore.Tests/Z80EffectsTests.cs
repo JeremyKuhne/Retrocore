@@ -256,7 +256,8 @@ public class Z80EffectsTests
     }
 
     // Each register and flag the data says is read or written made a difference in some case. An instruction
-    // can write a register with its own value, as LD B,B and AND A do; those are not expected to change it.
+    // can write a register with its own value, as LD B,B and AND A do; those are not expected to change it, but
+    // AND A's and OR A's flags are.
     private static void CheckObserved(InstructionEffects effects, OperandForm form, string mnemonic, Observed observed, string label, List<string> failures)
     {
         string[] operands = form.Name.Split(',');
@@ -283,7 +284,7 @@ public class Z80EffectsTests
             failures.Add($"{label}: flags ${flagsRead:X2} are read, but changing them never made a difference.");
         }
 
-        if (flagsWritten != 0 && !idempotent)
+        if (flagsWritten != 0)
         {
             failures.Add($"{label}: flags ${flagsWritten:X2} are written, but never changed.");
         }

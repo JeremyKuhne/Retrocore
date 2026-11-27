@@ -62,6 +62,8 @@ internal sealed class AnalysisRoutineEngine
     private readonly int[] _widths;
     private readonly MemoryMap? _map;
     private readonly bool[]? _data;
+    private readonly bool[]? _patched;
+    private readonly bool[] _fixedForms;
     private readonly int _directPage;
     private readonly Func<ushort, int> _knownByte;
     private AnalysisRoutineState? _evaluating;
@@ -91,6 +93,10 @@ internal sealed class AnalysisRoutineEngine
     /// <param name="data">
     ///  Which bytes of the image the source assembles as data; only those of ROM read as constants. Null for none.
     /// </param>
+    /// <param name="patched">
+    ///  Which bytes of the image some instruction stores to at a fixed address, as code that patches the operand of
+    ///  another does; an instruction with such a byte is not run for its values. Null for none.
+    /// </param>
     internal AnalysisRoutineEngine(
         InstructionSet set,
         byte[] memory,
@@ -99,9 +105,12 @@ internal sealed class AnalysisRoutineEngine
         Func<ushort, AnalysisRoutineSummary?> routineAt,
         AnalysisEvaluator? evaluator = null,
         MemoryMap? map = null,
-        bool[]? data = null)
+        bool[]? data = null,
+        bool[]? patched = null)
     {
         _data = data;
+        _patched = patched;
+        _fixedForms = FixedForms(set.Description);
         _evaluator = evaluator;
         _map = map;
         _knownByte = KnownByte;
@@ -292,6 +301,9 @@ internal sealed class AnalysisRoutineEngine
                 case AnalysisRoutineOutcome.Lost:
                     Stop("it changes the stack pointer", pc, stack: true);
                     break;
+                case AnalysisRoutineOutcome.WroteStack:
+                    Stop("it writes into the stack under its return address", pc, stack: true);
+                    break;
                 default:
                     Stop("it returns through data it pushed", pc, stack: true);
                     break;
@@ -322,7 +334,8 @@ internal sealed class AnalysisRoutineEngine
                 return;
             }
 
-            if (callee is null) { Unknown(state, pc); }
+            // A callee followed only in part keeps nothing for certain; a documented one keeps what it says.
+            if (callee is null || callee is { Incomplete: not null, Documented: false }) { Unknown(state, pc); }
             else { Apply(state, callee, pc); }
             if (callee is null || callee.Returns || callee.Incomplete is not null) { Follow(next, state, pc); }
         }
@@ -393,15 +406,87 @@ internal sealed class AnalysisRoutineEngine
         }
     }
 
+    /// <summary>
+    ///  Gets the fixed address an instruction's operand names, whatever the registers hold: -1 for an indexed or
+    ///  pointer form, and for one on the 6809's direct page, which DP decides.
+    /// </summary>
+    /// <param name="instruction">The instruction.</param>
+    /// <returns>The address, or -1.</returns>
+    internal int StaticAddress(DisassembledInstruction instruction) =>
+        _fixedForms[instruction.Form.Id] && (_directPage < 0 || !instruction.Effects.Reads(_directPage)) ? instruction.Operand : -1;
+
+    // Whether an instruction addresses memory through a stack pointer, or a register holding one's value, as the
+    // 6809's STB ,S, the Z80's EX [SP],HL, or the 6502's STA $0101,X after TSX.
+    private bool StackRelative(AnalysisRoutineState state, InstructionEffects effects)
+    {
+        uint stacks = _stackRegisters;
+        foreach ((int pointer, _) in state.Stacks) { stacks |= 1u << pointer; }
+        if ((effects.RegistersRead & stacks) != 0) { return true; }
+        for (int bit = 0; bit < 32; bit++)
+        {
+            if ((effects.RegistersRead & _leaves & (1u << bit)) == 0) { continue; }
+            for (int pointer = 0; pointer < 32; pointer++)
+            {
+                // Only a stack pointer's own entry value, as TSX copies it, says the register holds it.
+                int origin = state.Slots[pointer].Origin;
+                bool holds = origin >= 0 && state.Slots[bit].Origin == origin;
+                if ((stacks & (1u << pointer)) != 0 && holds) { return true; }
+            }
+        }
+
+        return false;
+    }
+
+    // What was pushed may have been written over: every stacked value is unknown.
+    private static void ForgetFrames(AnalysisRoutineState state, ushort at)
+    {
+        foreach (List<AnalysisRoutineFrame> frames in state.Stacks.Values)
+        {
+            for (int index = 0; index < frames.Count; index++)
+            {
+                List<AnalysisRoutineUnit> units = [];
+                foreach (AnalysisRoutineUnit unit in frames[index].Units)
+                {
+                    AnalysisValue[] values = new AnalysisValue[unit.Values.Length];
+                    Array.Fill(values, AnalysisValue.Of(Unknown(at)));
+                    units.Add(unit with { Values = values });
+                }
+
+                frames[index] = frames[index] with { Units = units };
+            }
+        }
+    }
+
     // The address an instruction reads or writes with no index or pointer: its operand, or on the 6809 a direct
     // page offset with DP known; -1 for any other.
     private int FixedAddress(AnalysisRoutineState state, DisassembledInstruction instruction, InstructionEffects effects)
     {
-        OperandForm form = instruction.Form;
-        if (form.Role != OperandRole.Memory || form.FieldCount < 1 || form.HasPostbyte) { return -1; }
+        if (!_fixedForms[instruction.Form.Id]) { return -1; }
         if (_directPage < 0 || !effects.Reads(_directPage)) { return instruction.Operand; }
         AnalysisValue page = state.Slots[_directPage];
         return page.IsConstant(0xFF) ? ((page.Bits & 0xFF) << 8) | (instruction.Operand & 0xFF) : -1;
+    }
+
+    // The forms whose memory operand is a fixed address: a memory form whose address is the operand alone, as the
+    // 6502's {} or the Z80's [{}],A, not one formed with a register, as {},X or [IX{}].
+    private static bool[] FixedForms(IsaDescription description)
+    {
+        bool[] forms = new bool[description.Forms.Count];
+        foreach (OperandForm form in description.Forms)
+        {
+            if (form.Role != OperandRole.Memory || form.FieldCount < 1 || form.HasPostbyte || form.Patterns.Count == 0)
+            {
+                continue;
+            }
+
+            string pattern = form.Patterns[0];
+            int open = pattern.IndexOf('[', StringComparison.Ordinal);
+            int close = pattern.IndexOf(']', StringComparison.Ordinal);
+            string address = open >= 0 && close > open ? pattern[(open + 1)..close] : pattern;
+            forms[form.Id] = address.Trim() == "{}";
+        }
+
+        return forms;
     }
 
     private static void StripMemory(AnalysisRoutineState state)
@@ -507,7 +592,11 @@ internal sealed class AnalysisRoutineEngine
         int address = FixedAddress(state, instruction, effects);
         bool direct = address >= 0;
         uint readLeaves = effects.RegistersRead & _leaves & ~(_directPage >= 0 ? 1u << _directPage : 0);
-        if (access == MemoryAccess.Read && direct && readLeaves == 0 && OneBit(written & ~stackBit) is int loaded and >= 0)
+        if (access == MemoryAccess.Read
+            && direct
+            && readLeaves == 0
+            && OneBit(written & ~stackBit) is int loaded and >= 0
+            && _widths[loaded] == 0xFF)
         {
             // A load from a fixed address gets what a store left there, where it is RAM or the map is not known;
             // anything else there is a new value.
@@ -529,31 +618,46 @@ internal sealed class AnalysisRoutineEngine
             if (outcome is not (AnalysisRoutineOutcome.Next or AnalysisRoutineOutcome.Returned)) { return outcome; }
         }
 
-        // A write to memory: a store of one register to a fixed address keeps its value there; another write there
-        // is a new value; a write through a pointer or an index may land on any, whose values become unknown.
+        // A write to memory: a store of one byte-wide register to a fixed address keeps its value there; another
+        // write there is a new value in each byte it writes; a write through a pointer or an index may land on any,
+        // whose values become unknown, and one through the stack pointer changes what was pushed.
         if (access != MemoryAccess.Read)
         {
-            MemoryKind kind = direct && _map is not null ? _map[(ushort)address] : MemoryKind.Ram;
-            if (direct && kind != MemoryKind.Ram)
+            if (!direct && StackRelative(state, effects))
             {
-                // ROM keeps its bytes, and a device or nothing may not give back what was written.
-                state.Memory.Remove(address);
+                if (!HasFrames(state)) { return AnalysisRoutineOutcome.WroteStack; }
+                ForgetFrames(state, pc);
             }
-            else if (direct && access == MemoryAccess.Write && OneBit(readLeaves) is int stored and >= 0)
+
+            int width = 0;
+            for (int bit = 0; bit < 32; bit++)
             {
-                // Without the machine's memory map a fixed address may be I/O, as the BBC's keyboard scan writes a
-                // VIA register and tests it, so memory then keeps where the value came from but no bits of it.
-                AnalysisValue value = state.Slots[stored];
-                state.Memory[address] = _map is null ? value.WithoutBits : value.WithBits(value.Known & 0xFF, value.Bits);
+                if ((readLeaves & (1u << bit)) != 0) { width += _widths[bit] == 0xFF ? 1 : 2; }
             }
-            else if (direct)
+
+            for (int offset = 0; direct && offset < Math.Max(width, 1); offset++)
             {
-                state.Memory[address] = AnalysisValue.Of(Changed(pc));
+                int at = (address + offset) & 0xFFFF;
+                MemoryKind kind = _map?[(ushort)at] ?? MemoryKind.Ram;
+                if (kind != MemoryKind.Ram)
+                {
+                    // ROM keeps its bytes, and a device or nothing may not give back what was written.
+                    state.Memory.Remove(at);
+                }
+                else if (width == 1 && access == MemoryAccess.Write && OneBit(readLeaves) is int stored and >= 0)
+                {
+                    // Without the machine's memory map a fixed address may be I/O, as the BBC's keyboard scan writes
+                    // a VIA register and tests it, so memory then keeps where the value came from but no bits of it.
+                    AnalysisValue value = state.Slots[stored];
+                    state.Memory[at] = _map is null ? value.WithoutBits : value.WithBits(value.Known & 0xFF, value.Bits);
+                }
+                else
+                {
+                    state.Memory[at] = AnalysisValue.Of(Changed(pc));
+                }
             }
-            else
-            {
-                Forget(state, pc);
-            }
+
+            if (!direct) { Forget(state, pc); }
         }
 
         // A stack pointer changed other than by a push or pull, as by TXS, loses the stack.
@@ -641,15 +745,18 @@ internal sealed class AnalysisRoutineEngine
             }
         }
 
-        // The instruction's bytes and the code after them, which a core may read ahead, as the 6502 reads the byte
-        // after a one-byte instruction.
+        // The instruction's bytes and the one after them, which the 6502 reads ahead after a one-byte instruction;
+        // an instruction whose bytes some code stores to is not as assembled, and a stored byte after it not either.
         Span<byte> bytes = stackalloc byte[8];
         int count = 0;
-        for (; count < bytes.Length && (count < instruction.Size || _defined[(ushort)(pc + count)]); count++)
+        for (; count < instruction.Size; count++)
         {
+            if (_patched?[(ushort)(pc + count)] == true) { return false; }
             bytes[count] = _memory[(ushort)(pc + count)];
         }
 
+        ushort after = (ushort)(pc + count);
+        if (_defined[after] && _patched?[after] != true) { bytes[count++] = _memory[after]; }
         bytes = bytes[..count];
 
         // The first run, with every unknown bit and memory byte 0, says how many bytes of memory it reads.
@@ -659,7 +766,20 @@ internal sealed class AnalysisRoutineEngine
         int firstFlags = baseFlags;
         uint writtenRegisters = (effects.RegistersWritten | effects.RegistersMayWrite) & _leaves;
         _evaluating = state;
-        if (!_evaluator.TryRun(pc, bytes, _first, ref firstFlags, reads, out int readCount, out _, read, writtenRegisters, _knownByte))
+        // An instruction that goes back to itself, as the Z80's LDIR until BC is 0, is more than the one step run.
+        bool first = _evaluator.TryRun(
+            pc,
+            bytes,
+            _first,
+            ref firstFlags,
+            reads,
+            out int readCount,
+            out ushort next,
+            read,
+            writtenRegisters,
+            _knownByte);
+
+        if (!first || next != (ushort)(pc + instruction.Size))
         {
             return false;
         }
@@ -709,12 +829,12 @@ internal sealed class AnalysisRoutineEngine
                 ref flags,
                 reads[..readCount],
                 out int again,
-                out _,
+                out ushort onward,
                 read,
                 writtenRegisters,
                 _knownByte);
 
-            if (!ran || again != readCount) { return false; }
+            if (!ran || again != readCount || onward != (ushort)(pc + instruction.Size)) { return false; }
 
             bool all = true;
             for (int bit = 0; bit < registers.Length; bit++)
@@ -757,8 +877,11 @@ internal sealed class AnalysisRoutineEngine
         uint written = effects.RegistersWritten & _leaves & ~(1u << stack);
         List<AnalysisRoutineUnit> targets = Units(state, written, effects.FlagsWritten);
         AnalysisRoutineFrame top = frames[^1];
+
+        // A pull of other bytes than the last push saved leaves the stack where the model cannot follow it.
+        if (top.Bytes != bytes) { return AnalysisRoutineOutcome.Lost; }
         frames.RemoveAt(frames.Count - 1);
-        bool matches = top.Bytes == bytes && top.Units.Count == targets.Count;
+        bool matches = top.Units.Count == targets.Count;
         for (int index = 0; index < targets.Count; index++)
         {
             AnalysisRoutineUnit target = targets[index];
@@ -942,6 +1065,13 @@ internal sealed class AnalysisRoutineEngine
         }
 
         joined.StackLost |= second.StackLost;
+
+        // A stack with frames on one path only differs too, whichever path arrived first.
+        foreach ((int stack, List<AnalysisRoutineFrame> frames) in first.Stacks)
+        {
+            if (frames.Count != 0 && !second.Stacks.ContainsKey(stack)) { joined.StackLost = true; }
+        }
+
         foreach ((int stack, List<AnalysisRoutineFrame> frames) in second.Stacks)
         {
             List<AnalysisRoutineFrame> mine = Frames(joined, stack);

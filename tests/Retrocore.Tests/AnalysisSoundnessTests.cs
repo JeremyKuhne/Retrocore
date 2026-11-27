@@ -1,0 +1,303 @@
+// Copyright (c) 2025 Jeremy W Kuhne
+// SPDX-License-Identifier: MIT
+// See LICENSE file in the project root for full license information
+
+using Retrocore.Assembler;
+using Retrocore.Documentation;
+using Retrocore.Machines;
+
+namespace Retrocore.Tests;
+
+/// <summary>
+///  The routine analysis never claims what the code does not do: a register kept that a path changes, a branch
+///  fixed that can go the other way, or a return the stack does not allow. Each case is code that once fooled it.
+/// </summary>
+[TestClass]
+public class AnalysisSoundnessTests
+{
+    /// <summary>
+    ///  A store through a pointer may change any byte of memory, as the Z80's <c>LD [HL],B</c> does.
+    /// </summary>
+    [TestMethod]
+    public void StoresThroughPointersForgetMemory()
+    {
+        const string Source = """
+            ;; Saves A in memory, then stores B over it through HL.
+            ;; Keeps: A
+            Pointer:
+                ld [$4000],a
+                ld hl,$4000
+                ld [hl],b
+                ld a,[$4000]
+                ret
+            """;
+
+        NotKept(Source, "Z80", "A");
+    }
+
+    /// <summary>
+    ///  An indexed store may land on any byte from its base, not just the base.
+    /// </summary>
+    [TestMethod]
+    public void IndexedStoresAreNotFixed()
+    {
+        const string Source = """
+            ;; Saves A at $11, then stores Y at $10 plus X, which may be $11.
+            ;; Keeps: A
+            Indexed:
+                sta $11
+                sty $10,x
+                lda $11
+                rts
+            """;
+
+        NotKept(Source, "Mos6502", "A");
+    }
+
+    /// <summary>
+    ///  A 16-bit store writes two bytes, and a 16-bit load reads two.
+    /// </summary>
+    [TestMethod]
+    public void WideStoresWriteTwoBytes()
+    {
+        NotKept("""
+            ;; Saves A at $2011, then stores X over it at $2010.
+            ;; Keeps: A
+            Wide:
+                sta $2011
+                stx $2010
+                lda $2011
+                rts
+            """, "M6809", "A");
+
+        NotKept("""
+            ;; Saves A at $4001, then stores HL over it at $4000.
+            ;; Keeps: A
+            Wide:
+                ld [$4001],a
+                ld [$4000],hl
+                ld a,[$4001]
+                ret
+            """, "Z80", "A");
+
+        // The 6809 stores X high byte first: $2000 holds $12, so A is $12 and BEQ is never taken.
+        (AnalysisContracts contracts, _) = Analyze("""
+            ;; Stores X and compares its first byte with the low byte.
+            ;; Keeps: B
+            BigEndian:
+                ldx #$1234
+                stx $2000
+                lda $2000
+                cmpa #$34
+                beq Change
+                rts
+            Change:
+                ldb #0
+                rts
+            """, "M6809", MemoryMap.AllRam);
+
+        Fixed(contracts, 0x1000).Should().NotContain(new KeyValuePair<ushort, bool>(0x100A, value: true));
+    }
+
+    /// <summary>
+    ///  Paths that meet with different stacks lose the stack, whichever arrives first.
+    /// </summary>
+    [TestMethod]
+    public void StacksThatDifferLoseTheStack()
+    {
+        NotKept("""
+            ;; Pushes A on one path only, then pulls it.
+            ;; Keeps: A
+            Joiner:
+                bcs Push
+                jmp Join
+            Push:
+                pha
+            Join:
+                pla
+                rts
+            """, "Mos6502", "A");
+    }
+
+    /// <summary>
+    ///  A pull of other bytes than the push saved does not return normally.
+    /// </summary>
+    [TestMethod]
+    public void PullsOfOtherBytesLoseTheStack()
+    {
+        NotKept("""
+            ;; Pushes A and B but pulls only A.
+            ;; Keeps: B
+            Short:
+                pshs a,b
+                puls a
+                rts
+            """, "M6809", "B");
+
+        NotKept("""
+            ;; Pushes A but pulls A and B.
+            ;; Keeps: X
+            Long:
+                pshs a
+                puls a,b
+                rts
+            """, "M6809", "X");
+    }
+
+    /// <summary>
+    ///  A write into stacked data changes what a pull restores.
+    /// </summary>
+    [TestMethod]
+    public void WritesIntoTheStackChangeWhatIsPulled()
+    {
+        NotKept("""
+            ;; Pushes A, stores B over it, and pulls it.
+            ;; Keeps: A
+            Over:
+                pshs a
+                stb ,s
+                puls a
+                rts
+            """, "M6809", "A");
+
+        NotKept("""
+            ;; Pushes BC, swaps HL into its place, and pulls it.
+            ;; Keeps: BC
+            Swap:
+                push bc
+                ex [sp],hl
+                pop bc
+                ret
+            """, "Z80", "B");
+
+        NotKept("""
+            ;; Swaps HL with the return address.
+            ;; Keeps: A
+            Return:
+                ex [sp],hl
+                ret
+            """, "Z80", "A");
+    }
+
+    /// <summary>
+    ///  A block move runs until BC is 0, not once.
+    /// </summary>
+    [TestMethod]
+    public void BlockInstructionsAreNotOneStep()
+    {
+        (AnalysisContracts contracts, _) = Analyze("""
+            ;; Moves three bytes, then tests P/V, which LDIR leaves clear.
+            ;; Keeps: B
+            Move:
+                xor a
+                ld hl,$5000
+                ld de,$6000
+                ld bc,3
+                ldir
+                jp pe,Change
+                ret
+            Change:
+                ld b,0
+                ret
+            """, "Z80", MemoryMap.AllRam);
+
+        Fixed(contracts, 0x1000).Should().NotContain(new KeyValuePair<ushort, bool>(0x100C, value: true));
+    }
+
+    /// <summary>
+    ///  A callee the analysis could not follow to its end keeps nothing it can vouch for.
+    /// </summary>
+    [TestMethod]
+    public void IncompleteCalleesKeepNothing()
+    {
+        NotKept("""
+            ;; Calls a helper that may jump anywhere.
+            ;; Keeps: A
+            Caller:
+                jsr Helper
+                rts
+            Helper:
+                bcc Ok
+                jmp ($0300)
+            Ok:
+                rts
+            """, "Mos6502", "A");
+    }
+
+    /// <summary>
+    ///  Code that stores into the code after it changes what that code does.
+    /// </summary>
+    [TestMethod]
+    public void PatchedCodeIsNotItsAssembledBytes()
+    {
+        (AnalysisContracts contracts, _) = Analyze("""
+            ;; Stores A into the operand of the load after it, so the load loads A.
+            ;; Keeps: X
+            Patcher:
+                sta Patch+1
+                lda Patch+1
+            Patch:
+                lda #0
+                beq Done
+                ldx #0
+            Done:
+                rts
+            """, "Mos6502", MemoryMap.AllRam);
+
+        Fixed(contracts, 0x1000).Should().BeEmpty();
+    }
+
+    /// <summary>
+    ///  Code a table points into may be entered there with any flags.
+    /// </summary>
+    [TestMethod]
+    public void TablesEnterCodeAnywhere()
+    {
+        (_, AnalysisContractReport report) = Analyze("""
+            ;; Loads 1 and branches on it, but a vector enters at Inner.
+            ;; Keeps: X
+            Routine:
+                lda #1
+            Inner:
+                bne Skip
+                ldx #0
+            Skip:
+                rts
+            Vector:
+                .word Inner
+            """, "Mos6502", MemoryMap.AllRam);
+
+        report.FixedConditions.Should().BeEmpty();
+    }
+
+    // The routine at $1000 is not reported complete with the register kept.
+    private static void NotKept(string source, string cpu, string register)
+    {
+        (AnalysisContracts contracts, _) = Analyze(source, cpu, MemoryMap.AllRam);
+        AnalysisRoutineSummary summary = contracts.Analyzed(0x1000) ?? throw new AssertFailedException("No analysis.");
+        uint mask = CpuCatalog.Get(cpu).Description.RegisterMask(register);
+        bool claimed = summary is { Returns: true, Incomplete: null } && (summary.KeptRegisters & mask) == mask;
+        claimed.Should().BeFalse($"{register} is not kept, but the analysis says so");
+
+        (contracts, _) = Analyze(source, cpu, map: null);
+        summary = contracts.Analyzed(0x1000) ?? throw new AssertFailedException("No analysis.");
+        claimed = summary is { Returns: true, Incomplete: null } && (summary.KeptRegisters & mask) == mask;
+        claimed.Should().BeFalse($"{register} is not kept, but the analysis without a map says so");
+    }
+
+    private static IReadOnlyDictionary<ushort, bool> Fixed(AnalysisContracts contracts, ushort address) =>
+        (contracts.Analyzed(address) ?? throw new AssertFailedException("No analysis.")).FixedConditions;
+
+    private static (AnalysisContracts Contracts, AnalysisContractReport Report) Analyze(string source, string cpu, MemoryMap? map)
+    {
+        string path = Path.Join(AppContext.BaseDirectory, $"Soundness.{cpu}.asm");
+        AssemblyResult result = new Retrocore.Assembler.Assembler().Assemble(
+            new AssemblySource(source, path),
+            new AssemblyOptions(cpu, 0x1000, 0x100));
+
+        result.Diagnostics.Should().BeEmpty();
+        DocumentationSet documentation = DocumentationSet.Create([DocumentationParser.Parse(source, path)], result);
+        AnalysisContracts contracts = new(result, documentation, CpuCatalog.Get(cpu), map: map);
+        return (contracts, contracts.Check());
+    }
+}

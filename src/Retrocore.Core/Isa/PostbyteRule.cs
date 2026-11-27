@@ -46,11 +46,6 @@ internal readonly record struct PostbyteRule
     internal OperandFieldKind Kind { get; init; }
 
     /// <summary>
-    ///  Gets the postbyte's offset in the instruction, after the opcode.
-    /// </summary>
-    internal byte PostbyteAt { get; init; }
-
-    /// <summary>
     ///  Gets any slot named, nonzero when one is.
     /// </summary>
     internal int Slots => ReadSlots | WriteSlots | MayWriteSlots | PushSlot | PullSlot | (SlotCopies?.Count ?? 0);

@@ -23,7 +23,7 @@ namespace Retrocore.Assembler;
 ///   <c>Keeps:</c> is not checked yet.
 ///  </para>
 /// </remarks>
-internal sealed class AnalysisContracts
+internal sealed partial class AnalysisContracts
 {
     private readonly InstructionSet _set;
     private readonly DocumentationSet _documentation;
@@ -31,6 +31,8 @@ internal sealed class AnalysisContracts
     private readonly bool[] _defined = new bool[0x10000];
     private readonly bool[] _data = new bool[0x10000];
     private readonly List<ushort> _instructions = [];
+    private readonly bool[] _patched = new bool[0x10000];
+    private readonly HashSet<ushort> _referenced = [];
     private readonly Dictionary<ushort, AnalysisContract> _contracts = [];
     private readonly Dictionary<ushort, DocumentationTopic> _routines = [];
     private readonly Dictionary<ushort, AnalysisRoutineSummary?> _analyzed = [];
@@ -84,7 +86,8 @@ internal sealed class AnalysisContracts
             for (int offset = 0; offset < entry.Size; offset++) { _data[(entry.Address + offset) & 0xFFFF] = true; }
         }
 
-        _engine = new(set, _memory, _defined, Callee, RoutineAt, AnalysisEvaluator.For(set), map, _data);
+        _engine = new(set, _memory, _defined, Callee, RoutineAt, AnalysisEvaluator.For(set), map, _data, _patched);
+        Scan(result);
         IsaDescription description = set.Description;
         _general = _engine.Registers & ~AnalysisRoutineEngine.StackRegisters(set);
         foreach (string name in description.EffectRegisters)
@@ -204,6 +207,53 @@ internal sealed class AnalysisContracts
         return new(findings, count, unverified, skipped, conditions);
     }
 
+    // What the image's statements say of its code: the bytes stores to a fixed address change, which may be another
+    // instruction's operand, and the code addresses a table or an operand names other than as a branch's, jump's
+    // or call's target, which code may be entered at through a vector or a pushed address.
+    private void Scan(AssemblyResult result)
+    {
+        foreach (ushort address in _instructions)
+        {
+            if (!_engine.TryDecode(address, out DisassembledInstruction instruction)) { continue; }
+            if (_set.EncodingAccess(instruction.EncodingId) != MemoryAccess.Read && _engine.StaticAddress(instruction) is int stored and >= 0)
+            {
+                _patched[stored] = true;
+                _patched[(stored + 1) & 0xFFFF] = true;
+            }
+        }
+
+        // Each symbol by its name and by its last part, as Inner of Routine::Inner, the first of them where two share it.
+        Dictionary<string, ushort> symbols = [with(StringComparer.Ordinal)];
+        foreach ((string symbol, long value) in result.Symbols)
+        {
+            symbols.TryAdd(symbol, (ushort)value);
+            int scope = symbol.LastIndexOf("::", StringComparison.Ordinal);
+            if (scope >= 0) { symbols.TryAdd(symbol[(scope + 2)..], (ushort)value); }
+        }
+
+        foreach (AssemblySourceMapEntry entry in result.SourceMap)
+        {
+            if (entry.Size == 0 || entry.Operand.Length == 0) { continue; }
+            ushort? target = null;
+            if (entry.InstructionSet?.GetMnemonic(entry.Operation) >= 0 && _engine.TryDecode((ushort)entry.Address, out DisassembledInstruction instruction))
+            {
+                target = instruction.DirectTarget;
+            }
+
+            foreach (System.Text.RegularExpressions.Match name in Identifier().Matches(entry.Operand))
+            {
+                if (symbols.TryGetValue(name.Value, out ushort address) && address != target)
+                {
+                    _referenced.Add(address);
+                }
+
+            }
+        }
+    }
+
+    [System.Text.RegularExpressions.GeneratedRegex(@"[A-Za-z_][A-Za-z0-9_:.]*")]
+    private static partial System.Text.RegularExpressions.Regex Identifier();
+
     // A condition that went one way stays fixed only when the analysis reached everything that leads to it: walking
     // back from it over fall-throughs and direct branches and jumps, through instructions the analysis reached, it
     // meets none it did not. The walk stops at an address analyzed as a routine's start, whose analysis took any
@@ -226,10 +276,16 @@ internal sealed class AnalysisContracts
             Queue<ushort> work = new([at]);
             while (work.TryDequeue(out ushort address))
             {
-                if (_analyzed.ContainsKey(address) || !predecessors.TryGetValue(address, out List<ushort>? before))
+                if (_analyzed.ContainsKey(address)) { continue; }
+
+                // Code a table or an operand names may be entered there, from code no analysis followed.
+                if (_referenced.Contains(address))
                 {
-                    continue;
+                    conditions[at] = 3;
+                    break;
                 }
+
+                if (!predecessors.TryGetValue(address, out List<ushort>? before)) { continue; }
 
                 foreach (ushort from in before)
                 {
@@ -324,7 +380,7 @@ internal sealed class AnalysisContracts
         {
             kept |= _engine.Registers & ~listed;
         }
-        else if (Analyzed(contract.Address) is { Returns: true } code)
+        else if (Analyzed(contract.Address) is { Returns: true, Incomplete: null } code)
         {
             // Without Uses:, what the documentation does not settle comes from the code.
             kept |= code.KeptRegisters;

@@ -53,6 +53,7 @@ internal sealed class EffectRegisterMap
     /// <returns>The map, or null when the flags are not of one register of the line.</returns>
     internal static EffectRegisterMap? Create(List<IsaRegister> registers, List<IsaFlag> flags)
     {
+        if (flags.Count == 0) { return null; }
         EffectRegisterMap map = new();
         foreach (IsaRegister register in registers) { map.Add(register.Name); }
         foreach (IsaFlag flag in flags)

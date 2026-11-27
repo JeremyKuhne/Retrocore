@@ -26,16 +26,28 @@ internal sealed class AnalysisEvaluator
 {
     private readonly ICpuDebugView _view;
     private readonly Func<ProcessorExecutionResult> _step;
+    private readonly Action _restore;
     private readonly AnalysisEvaluationBus _bus;
     private readonly string?[] _names;
     private readonly (string Name, int High, int Low)[] _pairs;
     private readonly string _flagsRegister;
     private readonly string _programCounter;
 
-    private AnalysisEvaluator(ICpuDebugView view, Func<ProcessorExecutionResult> step, AnalysisEvaluationBus bus, IsaDescription description)
+    /// <summary>
+    ///  Gets how many bytes the last instruction <see cref="TryRun"/> ran wrote, its pushes included.
+    /// </summary>
+    internal int WriteCount => _bus.WriteCount;
+
+    private AnalysisEvaluator(
+        ICpuDebugView view,
+        Func<ProcessorExecutionResult> step,
+        Action restore,
+        AnalysisEvaluationBus bus,
+        IsaDescription description)
     {
         _view = view;
         _step = step;
+        _restore = restore;
         _bus = bus;
         _flagsRegister = description.Flags.Count == 0 ? "" : description.Flags[0].Register;
         _programCounter = "PC";
@@ -84,13 +96,16 @@ internal sealed class AnalysisEvaluator
                 return M6502(bus, ProcessorVariant.Rockwell65C02, set);
             case "Z80":
                 Z80Processor<AnalysisEvaluationBus> z80 = new(bus);
-                return new(z80, () => z80.StepInstruction(), bus, set.Description);
+                Z80Snapshot z80Start = z80.CaptureState();
+                return new(z80, () => z80.StepInstruction(), () => z80.RestoreState(z80Start), bus, set.Description);
             case "M6809":
                 M6809Processor<AnalysisEvaluationBus> m6809 = new(bus);
-                return new(m6809, () => m6809.StepInstruction(), bus, set.Description);
+                M6809Snapshot m6809Start = m6809.CaptureState();
+                return new(m6809, () => m6809.StepInstruction(), () => m6809.RestoreState(m6809Start), bus, set.Description);
             case "I8080" or "I8085":
                 I8080Processor<AnalysisEvaluationBus> i8080 = new(bus, set.Name.EndsWith('5') ? I8080Variant.I8085 : I8080Variant.I8080);
-                return new(i8080, () => i8080.StepInstruction(), bus, set.Description);
+                I8080Snapshot i8080Start = i8080.CaptureState();
+                return new(i8080, () => i8080.StepInstruction(), () => i8080.RestoreState(i8080Start), bus, set.Description);
             default:
                 return null;
         }
@@ -99,7 +114,8 @@ internal sealed class AnalysisEvaluator
     private static AnalysisEvaluator M6502(AnalysisEvaluationBus bus, ProcessorVariant variant, InstructionSet set)
     {
         Processor<AnalysisEvaluationBus> cpu = new(bus, variant);
-        return new(cpu, () => cpu.StepInstruction(), bus, set.Description);
+        ProcessorSnapshot start = cpu.CaptureState();
+        return new(cpu, () => cpu.StepInstruction(), () => cpu.RestoreState(start), bus, set.Description);
     }
 
     /// <summary>
@@ -144,6 +160,9 @@ internal sealed class AnalysisEvaluator
     {
         next = pc;
         readCount = 0;
+
+        // Each run starts from the core as it was built, so a HALT, WAI or STP before leaves nothing behind.
+        _restore();
         _bus.Start(pc, bytes, reads, known);
         try
         {

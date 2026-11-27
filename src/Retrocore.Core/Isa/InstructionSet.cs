@@ -346,7 +346,7 @@ public sealed partial class InstructionSet
             Pulled = rule.PullSlot == 1 ? field.Bytes : (byte)0
         };
 
-        // A copy between the postbyte's registers, as TFR X,Y; a pair of another width copies nothing.
+        // A copy between the postbyte's registers, as TFR X,Y; one naming a register with parts, as D, copies nothing.
         foreach ((int destination, int source) in rule.SlotCopies ?? [])
         {
             int to = SingleBit(destination == -1 ? field.First : destination == -2 ? field.Second : 0);

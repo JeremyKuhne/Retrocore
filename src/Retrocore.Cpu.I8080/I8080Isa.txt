@@ -47,6 +47,9 @@ flow wait HLT
 
 # How an instruction accesses a memory operand; the rest read it.
 access write STA SHLD
+# Stores and read-modify-writes through HL, BC and DE (and the 8085's SHLX through DE), and XTHL's swap with the stack.
+access write MOV:M,A MOV:M,B MOV:M,C MOV:M,D MOV:M,E MOV:M,H MOV:M,L MVI:M,n STAX:B STAX:D SHLX
+access read-write DCR:M INR:M XTHL
 
 # Register and flag effects, for analysis, in the 6502 description's form (see OpcodeTables.txt): flags by
 # word, the 8085's K and V by name. $1 and $2 are the operands of the form's name; M is memory at HL, which the
@@ -140,7 +143,7 @@ effects POP:B                   reads SP                writes BC SP            
 effects POP:D                   reads SP                writes DE SP                    pull 2
 effects POP:H                   reads SP                writes HL SP                    pull 2
 effects POP:PSW                 reads SP                writes A negative zero half-carry parity carry SP pull 2
-# The 8085: arithmetic also writes V, the overflow, and K, V exclusive-or the sign; INX and DCX write K, the
+# The 8085: arithmetic also writes V, the overflow, and K, which is V exclusive-or the sign; INX and DCX write K, the
 # carry out of the incrementer; ANA sets the half-carry.
 # The 8085's PSW holds K and V as well.
 effects in I8085 PUSH:PSW       reads PSW SP            writes SP                       push 2

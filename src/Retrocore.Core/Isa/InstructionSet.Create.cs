@@ -65,7 +65,6 @@ public sealed partial class InstructionSet
             set._allFlags = map.AllFlags;
         }
 
-
         // The :Form keys effects are looked up by, built once per form rather than once per encoding.
         string?[] formKeys = new string?[description.Forms.Count];
         foreach (IsaEntry entry in entries.Values)
@@ -100,11 +99,7 @@ public sealed partial class InstructionSet
                 if (postbytes is not null && form.HasPostbyte && named && set.PostbyteTable(form.Field(0), postbytes))
                 {
                     effects = effects with { DependsOnPostbyte = true };
-                    (set._postbyteRules ??= [])[set._encodings.Count] = rule with
-                    {
-                        Kind = form.Field(0),
-                        PostbyteAt = entry.Length
-                    };
+                    (set._postbyteRules ??= [])[set._encodings.Count] = rule with { Kind = form.Field(0) };
                 }
             }
 

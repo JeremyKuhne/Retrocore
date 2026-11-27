@@ -14,7 +14,8 @@ namespace Retrocore.Isa;
 ///   <see cref="IsaDescription.RegisterMask"/> gives for a name: a register with parts, such as the Z80's HL, is
 ///   its parts' bits. Flags are bits by their bit in the flags register (<see cref="IsaFlag.Bit"/>). Reading or
 ///   writing the flags register as a whole, as the 6502's <c>PHP</c> and <c>PLP</c> do, sets its register bit and
-///   every flag's bit. The program counter is left to <see cref="InstructionFlow"/>, and a memory operand to
+///   every flag's bit. The program counter is left to <see cref="InstructionFlow"/>, but where a 6809 postbyte
+///   names it, as <c>PULS PC</c>, <c>TFR X,PC</c> and a <c>PCR</c> offset do; a memory operand is left to
 ///   <see cref="MemoryAccess"/>.
 ///  </para>
 ///  <para>
@@ -149,13 +150,14 @@ public readonly record struct InstructionEffects
     }
 
     /// <summary>
-    ///  Gets these effects with one more copy, unless four are already given.
+    ///  Gets these effects with one more copy.
     /// </summary>
     /// <param name="destination">The register set, by bit.</param>
     /// <param name="source">The register whose value it takes, by bit.</param>
     /// <returns>The effects.</returns>
+    /// <exception cref="InvalidOperationException">Four copies are already given.</exception>
     internal InstructionEffects WithCopy(int destination, int source) => CopyCount >= 4
-        ? this
+        ? throw new InvalidOperationException("An instruction's effects hold at most four copies.")
         : this with
         {
             Copies = Copies | ((ulong)(((destination & 0x3F) << 6) | (source & 0x3F)) << (CopyCount * 12)),

@@ -35,6 +35,8 @@ public class InstructionEffectsTests
         effects TST                 reads A             writes negative=bit7 overflow=bit6
         effects NOP none
         effects in Big NOP                              writes carry=1
+        effects TAX                 reads A             writes X            copies X=A
+        effects BRC                 reads carry negative overflow           taken carry=0|negative!=overflow
         [forms]
         Imp ""
         Imm "#{}"   fields=byte
@@ -48,6 +50,8 @@ public class InstructionEffectsTests
         04 PSH Imp
         05 PUL Imp
         06 TST Abs
+        08 TAX Imp
+        09 BRC Imm
         [Big : Small]
         07 NOP Abs
         """;
@@ -208,6 +212,41 @@ public class InstructionEffectsTests
     }
 
     /// <summary>
+    ///  A copy and a condition parse: TAX sets X to A, and BRC is taken when carry is clear or negative and
+    ///  overflow differ, which every combination of the three flags checks; not taken, it says carry is set.
+    /// </summary>
+    [TestMethod]
+    public void CopiesAndConditionsParse()
+    {
+        InstructionSet set = IsaParser.Parse(Tiny).InstructionSets["Small"];
+        set.TryDecode([0x08], out int tax).Should().BeTrue();
+        InstructionEffects copy = set.Effects(tax);
+        copy.CopyCount.Should().Be(1);
+        copy.GetCopy(0, out int destination, out int source);
+        (destination, source).Should().Be((X, A));
+
+        set.TryDecode([0x09, 0x00], out int brc).Should().BeTrue();
+        InstructionEffects branch = set.Effects(brc);
+        const byte N = 0x80, V = 0x40, C = 0x01;
+        branch.ConditionFlags.Should().Be(N | V | C);
+        for (int row = 0; row < 8; row++)
+        {
+            byte flags = (byte)(((row & 1) != 0 ? C : 0) | ((row & 2) != 0 ? N : 0) | ((row & 4) != 0 ? V : 0));
+            bool taken = (flags & C) == 0 || ((flags & N) != 0) != ((flags & V) != 0);
+            branch.Taken(0xFF, flags).Should().Be(taken, $"flags ${flags:X2}");
+        }
+
+        branch.Taken(0, 0).Should().BeNull();
+        branch.Taken(C, 0).Should().BeTrue();
+        branch.Implied(taken: false, known: 0, values: 0, out byte implied, out byte values);
+        implied.Should().Be(C);
+        values.Should().Be(C);
+        branch.Implied(taken: true, known: C | N, values: C | N, out implied, out values);
+        implied.Should().Be(N | V | C);
+        values.Should().Be(N | C);
+    }
+
+    /// <summary>
     ///  Malformed or incomplete effects fail to parse, naming the line where there is one.
     /// </summary>
     /// <param name="replace">Text of the tiny description to replace.</param>
@@ -228,6 +267,12 @@ public class InstructionEffectsTests
     [DataRow("effects NOP none", "effects NOP none reads A", "Line 14: Expected 'effects*")]
     [DataRow("effects NOP none", "effects NOP", "Line 14: Expected 'effects*")]
     [DataRow("effects NOP none", "# no NOP", "Instruction set 'Small': no effects line gives NOP Imp.")]
+    [DataRow("taken carry=0|negative!=overflow", "taken carry!=0", "Line 17: Expected 'taken' and a condition*")]
+    [DataRow("taken carry=0|negative!=overflow", "taken", "Line 17: Expected 'taken' and a condition*")]
+    [DataRow("taken carry=0|negative!=overflow", "taken carry=0|", "Line 17: Expected 'taken' and a condition*")]
+    [DataRow("reads carry negative overflow ", "reads carry negative ", "Line 17: A condition's flags are read*")]
+    [DataRow("copies X=A", "copies X=Q", "Line 16: Expected 'copies Register=Register'*")]
+    [DataRow("copies X=A", "copies X=A X=A X=A X=A X=A", "Line 16: Expected one to four copies.")]
     public void MalformedEffectsFail(string replace, string with, string message)
     {
         Tiny.Should().Contain(replace);

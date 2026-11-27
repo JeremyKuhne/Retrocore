@@ -41,6 +41,8 @@ flow stop STP JAM
 # How an instruction accesses a memory operand; the rest read it.
 access write STA STX STY STZ SAX AHX SHX SHY TAS
 access read-write ASL LSR ROL ROR INC DEC TRB TSB RMB SMB SLO RLA SRE RRA DCP ISC
+# The accumulator forms of the shifts, INC and DEC touch no memory.
+access read ASL:Accumulator DEC:Accumulator INC:Accumulator LSR:Accumulator ROL:Accumulator ROR:Accumulator
 
 # Register and flag effects, for analysis. 'reads' lists the registers and flags an instruction reads,
 # 'writes' those it always assigns; the rest keep their values. Registers go by name and flags by word, and P

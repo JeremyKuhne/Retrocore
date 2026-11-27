@@ -39,8 +39,8 @@ public class FlagValueAnalysisTests
     }
 
     /// <summary>
-    ///  The core computes results from known inputs: a count down from a constant, a carry set and added in binary
-    ///  mode, a comparison. ADC reads the decimal flag, so without CLD its result is not known.
+    ///  The core computes results from known inputs: a count down from a constant, a sum in binary mode, a
+    ///  comparison. ADC reads the decimal flag, so without CLD it is run both ways, and only what both give is known.
     /// </summary>
     [TestMethod]
     public void TheCoreComputesKnownResults()
@@ -54,11 +54,11 @@ public class FlagValueAnalysisTests
                 dex
                 bne Change
                 cld
-                sec
-                lda #$FF
-                adc #0
-                bcc Change
-                cmp #0
+                clc
+                lda #$09
+                adc #$01
+                bcs Change
+                cmp #$0A
                 bne Change
                 rts
             Change:
@@ -68,8 +68,15 @@ public class FlagValueAnalysisTests
 
         (List<string> findings, AnalysisContracts contracts) = Check(Source, "Mos6502");
         findings.Should().BeEmpty();
-        Summary(contracts, 0x1000).FixedConditions.Values.Should().AllBeEquivalentTo(expectation: false);
-        Summary(contracts, 0x1000).FixedConditions.Should().HaveCount(3);
+        Summary(contracts, 0x1000).FixedConditions.Should().Equal(
+            new Dictionary<ushort, bool> { [0x1004] = false, [0x100C] = false, [0x1010] = false });
+
+        // Without CLD, decimal mode may be on, and $09 + $01 is $10 there: the carry is clear either way, but the
+        // sum is not known, so the last branch is not either.
+        Source.Should().Contain("    cld\n");
+        (_, contracts) = Check(Source.Replace("    cld\n", "", StringComparison.Ordinal), "Mos6502");
+        Summary(contracts, 0x1000).FixedConditions.Should().Equal(
+            new Dictionary<ushort, bool> { [0x1004] = false, [0x100B] = false });
     }
 
     /// <summary>

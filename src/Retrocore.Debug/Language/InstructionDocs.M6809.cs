@@ -198,12 +198,12 @@ internal static partial class InstructionDocs
                         : value.Cycles.ToString(CultureInfo.InvariantCulture)
                 : $"{value.CyclesTaken}/{value.Cycles}";
 
-            rows.Add($"| {mode} | `{M6809Bytes(value, form)}` | {cycles} | {EncodingFlags(set, encoding).Text} |");
+            rows.Add($"| {mode} | `{M6809Bytes(value, form)}` | {cycles} | {EncodingFlags(set, encoding)} |");
         }
 
         string header = "| Mode | Opcode | Cycles | Flags |\n| --- | --- | --- | --- |";
         string table = rows.Count == 0 ? "" : $"\n\n{header}\n{string.Join('\n', rows)}";
-        return $"**{mnemonic.ToUpperInvariant()}**: {summary}\n\nFlags: {MnemonicFlags(mnemonic, set).Text}{table}";
+        return $"**{mnemonic.ToUpperInvariant()}**: {summary}\n\nFlags: {MnemonicFlags(mnemonic, set)}{table}";
     }
 
     private static string M6809ModeText(OperandForm form) => form.Name switch

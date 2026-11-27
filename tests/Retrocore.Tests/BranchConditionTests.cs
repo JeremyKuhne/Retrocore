@@ -25,20 +25,21 @@ public class BranchConditionTests
     ///  is taken exactly when the condition holds.
     /// </summary>
     /// <param name="name">The instruction set.</param>
+    /// <param name="seed">The random cases' seed, fixed so a failure repeats.</param>
     [TestMethod]
-    [DataRow("Mos6502")]
-    [DataRow("Wdc65C02")]
-    [DataRow("Rockwell65C02")]
-    [DataRow("Z80")]
-    [DataRow("M6809")]
-    [DataRow("I8080")]
-    [DataRow("I8085")]
-    public void ConditionsMatchExecution(string name)
+    [DataRow("Mos6502", 6502)]
+    [DataRow("Wdc65C02", 65021)]
+    [DataRow("Rockwell65C02", 65022)]
+    [DataRow("Z80", 80)]
+    [DataRow("M6809", 6809)]
+    [DataRow("I8080", 8080)]
+    [DataRow("I8085", 8085)]
+    public void ConditionsMatchExecution(string name, int seed)
     {
         InstructionSet set = CpuCatalog.Get(name);
         AnalysisEvaluator evaluator = AnalysisEvaluator.For(set) ?? throw new AssertFailedException($"No core for {name}.");
         IsaDescription description = set.Description;
-        Random random = new(name.GetHashCode(StringComparison.Ordinal) & 0xFFFF);
+        Random random = new(seed);
         byte[] bytes = new byte[8];
         byte[] reads = new byte[8];
         int[] registers = new int[description.EffectRegisters.Count];
@@ -50,7 +51,17 @@ public class BranchConditionTests
             IsaEncoding value = set.GetEncoding(encoding);
             string mnemonic = set.MnemonicName(value.Mnemonic);
             string label = $"{mnemonic} {set.GetForm(value.Form).Name}";
-            if (!IsConditional(set, encoding, effects)) { continue; }
+            if (!IsConditional(set, encoding, effects))
+            {
+                // A condition on an encoding this test would not run is a condition nothing checks.
+                if (effects.ConditionFlags != 0)
+                {
+                    failures.Add($"{label}: has a 'taken' condition, but is not conditional");
+                }
+
+                continue;
+            }
+
             if (effects.ConditionFlags == 0)
             {
                 if (!s_notOnFlags.Contains(mnemonic.TrimEnd('0', '1', '2', '3', '4', '5', '6', '7')))
@@ -68,12 +79,22 @@ public class BranchConditionTests
                 ushort pc = (ushort)random.Next(0x10000);
                 for (int bit = 0; bit < registers.Length; bit++) { registers[bit] = random.Next(256); }
                 registers = Widen(description, registers, random);
-                int flags = random.Next(256);
-                bool expected = effects.Taken(0xFF, (byte)flags) == true;
+                int before = random.Next(256);
+                int flags = before;
+                bool expected = effects.Taken(0xFF, (byte)before) == true;
                 random.NextBytes(reads);
+                int stack = effects.StackRegister;
+                int pointer = stack >= 0 ? registers[stack] : 0;
                 if (!evaluator.TryRun(pc, bytes.AsSpan(0, size), registers, ref flags, reads, out _, out ushort next))
                 {
                     failures.Add($"{label}: did not run");
+                    break;
+                }
+
+                // A conditional call or return moves the stack exactly when it is taken.
+                if (stack >= 0 && (effects.MayPush | effects.MayPull) != 0 && (registers[stack] != pointer) != expected)
+                {
+                    failures.Add($"{label}: with flags ${before:X2} the stack {(expected ? "did not move" : "moved")}");
                     break;
                 }
 
@@ -82,7 +103,7 @@ public class BranchConditionTests
                 if (next == fallThrough && expected) { continue; }
                 if ((next != fallThrough) != expected)
                 {
-                    failures.Add($"{label}: with flags ${flags:X2} it was {(expected ? "not " : "")}taken");
+                    failures.Add($"{label}: with flags ${before:X2} it was {(expected ? "not " : "")}taken");
                     break;
                 }
             }

@@ -112,13 +112,13 @@ internal static partial class InstructionDocs
                 : $"{value.CyclesTaken}/{value.Cycles}";
 
             string note = value.Undocumented ? " (undocumented)" : "";
-            string flags = EncodingFlags(set, encoding).Text;
+            string flags = EncodingFlags(set, encoding);
             rows.Add($"| `{mnemonic.ToUpperInvariant()}{operands}`{note} | `{Bytes(value, form)}` | {cycles} | {flags} |");
         }
 
         string header = $"| Operands | Opcode | {cyclesHeading} | Flags |\n| --- | --- | --- | --- |";
         string table = rows.Count == 0 ? "" : $"\n\n{header}\n{string.Join('\n', rows)}";
-        return $"**{mnemonic.ToUpperInvariant()}**: {summary}\n\nFlags: {MnemonicFlags(mnemonic, set).Text}{table}";
+        return $"**{mnemonic.ToUpperInvariant()}**: {summary}\n\nFlags: {MnemonicFlags(mnemonic, set)}{table}";
     }
 
     // The opcode bytes in order with their operand fields: d a displacement, n a byte, nn a word, e a branch.

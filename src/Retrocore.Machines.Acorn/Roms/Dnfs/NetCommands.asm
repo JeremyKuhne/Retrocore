@@ -274,8 +274,8 @@ NFS_EOF_RETURN:
 ;;
 ;; Larger values of A do nothing. An error the server returns is raised.
 ;; In:    A = OSFILE's A, NFS_CALL_XY = the control block, NFS_NAME_POINTER = the name, ending in a carriage return
-;; Out:   A = for A = 5, the object's type (0 not found, 1 a file, 2 a directory); otherwise NFS_CALL_A,
-;;          X, Y = the call's
+;; Out:   X, Y = the call's, A = for A = 5, the object's type (0 not found, 1 a file, 2 a directory); otherwise
+;;          NFS_CALL_A
 ;; Uses:  NFS_REQUEST
 NFS_OSFILE_INFO:
     sta NFS_REQUEST_DATA

@@ -154,7 +154,7 @@ internal static partial class InstructionDocs
         else if (ReferenceEquals(set.Description, I8080Isa.Description)) { docs = s_i8080; }
         else if (mnemonic.Length == 4 && char.IsAsciiDigit(mnemonic[3])) { key = mnemonic[..3]; }
 
-        return docs.TryGetValue(key, out string? summary) ? (summary, MnemonicFlags(mnemonic, set).Text) : null;
+        return docs.TryGetValue(key, out string? summary) ? (summary, MnemonicFlags(mnemonic, set)) : null;
     }
 
     /// <summary>
@@ -162,7 +162,10 @@ internal static partial class InstructionDocs
     ///  operands: ADD HL,BC changes only H, N and C, BIT #$80 only Z, and TFR A,CC every flag.
     /// </summary>
     /// <param name="instruction">The instruction.</param>
-    /// <returns>The flags, or null where its mnemonic has no documentation.</returns>
+    /// <returns>
+    ///  The flags: from the effects lines where the set has them, whether or not the mnemonic has documentation,
+    ///  else from the mnemonic's documentation; null where neither says.
+    /// </returns>
     internal static string? FlagsOf(in DisassembledInstruction instruction)
     {
         // The effects lines say, with what a postbyte names, as the 6809's TFR A,CC.
@@ -176,7 +179,7 @@ internal static partial class InstructionDocs
     // mnemonic, another set of its description that has it, so a hover still says what it would do. Where the
     // encodings or their postbytes change different flags, as ADD A,B and ADD HL,BC do, each possibility, fewest
     // first: "H N C or S Z H PV N C, by operands".
-    private static (string Text, bool Varies) MnemonicFlags(string mnemonic, InstructionSet set)
+    private static string MnemonicFlags(string mnemonic, InstructionSet set)
     {
         int id = set.GetMnemonic(mnemonic);
         foreach (InstructionSet other in set.Description.InstructionSets.Values)
@@ -192,19 +195,14 @@ internal static partial class InstructionDocs
             if (set.GetEncoding(encoding).Mnemonic == id) { distinct.UnionWith(Choices(set, encoding)); }
         }
 
-        if (distinct.Count == 0) { return ("none", false); }
+        if (distinct.Count == 0) { return "none"; }
         string text = string.Join(" or ", distinct.Select(choice => FlagText(choice.Flags, set.Description)));
-        return distinct.Count == 1 ? (text, false) : ($"{text}, by operands", true);
+        return distinct.Count == 1 ? text : $"{text}, by operands";
     }
 
     // The flags one encoding changes, and where its postbyte decides, each it can: TFR's "none or all".
-    private static (string Text, byte Flags) EncodingFlags(InstructionSet set, int encoding)
-    {
-        SortedSet<(int Count, byte Flags)> choices = Choices(set, encoding);
-        byte union = 0;
-        foreach ((_, byte flags) in choices) { union |= flags; }
-        return (string.Join(" or ", choices.Select(choice => FlagText(choice.Flags, set.Description))), union);
-    }
+    private static string EncodingFlags(InstructionSet set, int encoding) =>
+        string.Join(" or ", Choices(set, encoding).Select(choice => FlagText(choice.Flags, set.Description)));
 
     // Each distinct set of documented flags an encoding can change, by its postbyte where it has one, fewest first.
     private static SortedSet<(int Count, byte Flags)> Choices(InstructionSet set, int encoding)
@@ -259,7 +257,7 @@ internal static partial class InstructionDocs
         List<string> modes = [];
         foreach ((AddressMode mode, byte code) in Encodings(variant, mnemonic))
         {
-            string flags = set.TryDecode([code], out int encoding) ? EncodingFlags(set, encoding).Text : "";
+            string flags = set.TryDecode([code], out int encoding) ? EncodingFlags(set, encoding) : "";
             modes.Add($"| {Syntax(mode)} | ${code:X2} | {flags} |");
         }
 
@@ -268,7 +266,7 @@ internal static partial class InstructionDocs
             ? $"\n\nNot an instruction of the {variant}."
             : $"\n\n| Mode | Opcode | Flags |\n| --- | --- | --- |\n{rows}";
 
-        return $"**{mnemonic.ToUpperInvariant()}**: {summary}\n\nFlags: {MnemonicFlags(mnemonic, set).Text}{table}";
+        return $"**{mnemonic.ToUpperInvariant()}**: {summary}\n\nFlags: {MnemonicFlags(mnemonic, set)}{table}";
     }
 
     /// <summary>

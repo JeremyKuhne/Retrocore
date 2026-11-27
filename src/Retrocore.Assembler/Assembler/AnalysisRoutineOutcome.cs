@@ -32,5 +32,10 @@ internal enum AnalysisRoutineOutcome
     /// <summary>
     ///  The stack pointer changed other than by a push or pull.
     /// </summary>
-    Lost
+    Lost,
+
+    /// <summary>
+    ///  It wrote into the stack with nothing pushed, so into its return address or its caller's data.
+    /// </summary>
+    WroteStack
 }

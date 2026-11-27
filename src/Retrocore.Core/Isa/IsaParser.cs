@@ -335,14 +335,16 @@ public static partial class IsaParser
                 for (int index = 2; index < tokens.Count; index++) { rules.Flows[tokens[index]] = flow; }
                 break;
             case "access":
-                MemoryAccess access = tokens.Count < 2 ? MemoryAccess.Read : tokens[1] switch
+                // Reads need no entry, but 'read' overrides an instruction's access for a form, as ASL:Accumulator.
+                if (tokens.Count < 3) { throw Error(number, "Expected 'access kind Instruction ...'."); }
+                MemoryAccess access = tokens[1] switch
                 {
+                    "read" => MemoryAccess.Read,
                     "write" => MemoryAccess.Write,
                     "read-write" => MemoryAccess.ReadWrite,
-                    _ => throw Error(number, $"Unknown access '{tokens[1]}'; reads need no entry.")
+                    _ => throw Error(number, $"Unknown access '{tokens[1]}'.")
                 };
 
-                if (access == MemoryAccess.Read) { throw Error(number, "Expected 'access kind Instruction ...'."); }
                 for (int index = 2; index < tokens.Count; index++) { rules.Access[tokens[index]] = access; }
                 break;
             case "parts":

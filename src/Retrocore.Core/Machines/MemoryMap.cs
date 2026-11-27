@@ -75,9 +75,9 @@ public sealed class MemoryMap
     }
 
     /// <summary>
-    ///  Gets the map's ranges of one kind, in address order.
+    ///  Gets the map as runs of addresses of one kind, in address order.
     /// </summary>
-    /// <returns>Each range's first and last address and kind.</returns>
+    /// <returns>Each run's first and last address and kind.</returns>
     public IEnumerable<(ushort First, ushort Last, MemoryKind Kind)> Ranges()
     {
         int start = 0;

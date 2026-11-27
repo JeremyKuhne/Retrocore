@@ -12,8 +12,8 @@ using Retrocore.Isa;
 namespace Retrocore.Tests;
 
 /// <summary>
-///  Checks the flags Retrocore Memory's inspector says one decoded instruction changes, where its mnemonic's depend
-///  on its operands.
+///  Checks the flags the hovers and Retrocore Memory's inspector say an instruction changes, which come from the
+///  effects lines: a mnemonic's, each of its forms', and one decoded instruction's, where they depend on operands.
 /// </summary>
 [TestClass]
 public sealed class InstructionFlagsTests
@@ -185,6 +185,13 @@ public sealed class InstructionFlagsTests
             {
                 string generated = InstructionDocs.Brief(mnemonic, set)?.Flags ?? "";
                 Letters(generated, set).Should().BeEquivalentTo(Letters(flags, set), $"{mnemonic}: \"{generated}\" for \"{flags}\"");
+
+                // A hand-written "none (POP AF: all)" is an instruction that changes no flag in some form.
+                if (flags.StartsWith("none ", StringComparison.Ordinal))
+                {
+                    generated.Should().StartWith("none or ", $"{mnemonic} changes no flag in some form");
+                }
+
                 InstructionDocs.Describe(mnemonic, set).Should().Contain($"Flags: {generated}", mnemonic);
             }
         }

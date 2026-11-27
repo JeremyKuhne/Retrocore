@@ -282,7 +282,7 @@ to its arithmetic, K to `INX` and `DCX`, and the whole of F to PSW.
   `DJNZ`'s B and `BBR`'s memory bit, have none.
 - `copies Dst=Src` says a written register takes another's value unchanged, as `TAX`, `LD A,B`, `MOV` and `TFR`
   do, and `EX DE,HL` and `XCHG` copy both ways (`copies D=H E=L H=D L=E`). Operand slots work as in `reads`; a
-  copy between operands that are not single registers, as `LD A,[HL]` and `LD HL,DE`, copies nothing. An
+  copy between operands that are not single registers, as `LD A,[HL]` and `LD SP,HL`, copies nothing. An
   instruction holds at most four. `LD A,R` is not a copy, and `LD A,I` is.
 - `parts Pair=Part,Part` makes a register stand for its parts: writing HL writes H and L, and the masks hold only
   the parts. A part the registers line lacks, as the Z80's IXH, is added for effects alone, so the debugger's
@@ -303,7 +303,10 @@ to its arithmetic, K to `INX` and `DCX`, and the whole of F to PSW.
   from, and the accumulator form's `reads A writes A` for the shifts, `INC` and `DEC`.
 - `effects in Set` lines win over the description's in that set, the sets built on it (`[Rockwell65C02 :
   Wdc65C02]`) and its subsets (`65SC02`). Within a scope, `Instruction:Form` wins over `Instruction`.
-- PC is left to the `flow` lines and the memory operand to the `access` lines. On the Z80 so are R's refresh
+- PC is left to the `flow` lines, but where a 6809 postbyte names it (`PULS PC`, `TFR X,PC`, a `PCR` offset), and
+  the memory operand to the `access` lines. Those say every store and read-modify-write, through a pointer or an
+  index too, as the Z80's `LD [HL],B` and `LDIR` and the 8080's `MOV M,B`; `access read` gives a form back its
+  read, as the 6502's `ASL:Accumulator`. On the Z80 so are R's refresh
   count and the state the registers line does not list: WZ, Q, IFF1 and IFF2, and the interrupt mode. `LD A,R`
   and `LD R,A` name R. On the 6809, NMI's arming and the flags an unprefixed store immediate takes from the
   instruction before it are left out.
@@ -365,9 +368,16 @@ and the generator that builds the 6502 cores skips `[isa]`, so execution is unch
   (`I8080ExerciserTests`, from `tools/Fetch-I8080Tests.ps1`), the 8085 the first two, and the 8085's K and V follow
   Ken Shirriff's tracing of the silicon, which the core cites, more than any exerciser.
 - `BranchConditionTests.ConditionsMatchExecution` runs every conditional branch, call and return of the 6502,
-  both 65C02s, the Z80, the 6809, the 8080 and the 8085 on its core, 64 times from random flags, and checks it goes
-  where its condition says; every conditional encoding must have one, but `DJNZ`, `BBR` and `BBS`. A planted
-  error in the 6809's `BGT` was caught.
+  both 65C02s, the Z80, the 6809, the 8080 and the 8085 on its core, 64 times from random flags with a fixed seed,
+  and checks it goes where its condition says, and that a conditional call or return moves the stack exactly when
+  taken; every conditional encoding must have a condition, but `DJNZ`, `BBR` and `BBS`, and every one with a
+  condition must be one it runs. A planted error in the 6809's `BGT` was caught.
+- `MemoryAccessDataTests.WritesAreDeclared` runs every encoding of the same sets on its core and checks the
+  `access` lines: one that writes memory beyond what it pushes is a write or a read-write, and one that is writes.
+  It found 235 encodings missing: the Z80's and 8080's stores and read-modify-writes through HL, BC, DE, IX and
+  IY, the block moves, `EX [SP],HL` and `XTHL`, the 6809's undocumented `XSTX`-style stores and the 8085's `SHLX`,
+  and the 6502's accumulator shifts, which wrote nothing. The Z80's `INI`-style block inputs, which a port feeds,
+  were added by hand.
 - `InstructionFlagsTests`: every CPU's hover and inspector flags now come from the data, and change the flags the
   hovers listed by hand before, kept as the tests' expectations (`M6502HoverFlagsComeFromTheEffects`,
   `OtherHoverFlagsComeFromTheEffects`). Only documented flags are shown, so the Z80's X and Y and the 8085's K and V
@@ -411,17 +421,23 @@ with the routines checked, the `Keeps:` items it could not verify, and the routi
   that differs is changed where it first was. Only definite changes are findings; unknown ones are counted as not
   verified, so the check does not report what it cannot show.
 - Pushes save values on a model of each stack, and a pull of exactly the bytes and registers a push saved restores
-  them; a push of the flags register saves its flags, as `PHP` and `PUSH AF` do. A store of one register to a fixed
-  address and a load back restore it too, as the BBC MOS saves X in zero page; a write through a pointer or an
-  index forgets what memory held. `copies` carry a value from register to register, as `TXA ... TAX` does.
-- At a call it applies the callee's documented contract, where there is one, else the callee's own analysis. A
-  jump to the start of another routine with a contract, with nothing pushed, is a tail call, whose contract
-  applies; a jump to an internal label is followed.
+  them; a push of the flags register saves its flags, as `PHP` and `PUSH AF` do. Paths that meet with different
+  stacks, whichever arrives first, lose the stack. A store of one byte-wide register to a fixed address and a load
+  of one back restore it too, as the BBC MOS saves X in zero page; a store of a pair or a 16-bit register, as
+  `LD [nn],HL` and the 6809's `STX`, changes both bytes it writes, and a 16-bit load takes nothing from memory but
+  what the core makes of its bytes. An address formed with a register, as `{},X` or `[IX+d]`, is not fixed: a
+  write there, or through a pointer, forgets what memory held. A write through a stack pointer, or a register
+  holding its entry value, as the 6809's `STB ,S`, the Z80's `EX [SP],HL` or the 6502's `STA $0101,X` after `TSX`,
+  makes what was pushed unknown. `copies` carry a value from register to register, as `TXA ... TAX` does.
+- At a call it applies the callee's documented contract, where there is one, else the callee's own analysis; a
+  callee the analysis could not follow to its end keeps nothing. A jump to the start of another routine with a
+  contract, with nothing pushed, is a tail call, whose contract applies; a jump to an internal label is followed.
 - It gives up on a routine, and skips it, where the code does what the model cannot follow: an indirect jump; a
-  return through data it pushed or a pull of its return address; a change of the stack pointer; a call into a
-  routine that changes the stack under its return address, as Acorn's SAVE_REGISTERS inserts a restoring return;
-  and bytes the source does not assemble. A routine that pushes data and then calls such a helper, as SAVE_X_Y
-  does, changes its own caller's stack, so its callers are skipped too.
+  return through data it pushed, a pull of its return address, or a pull of other bytes than a push saved; a
+  change of the stack pointer; a write through the stack pointer with nothing pushed, into its return address; a
+  call into a routine that changes the stack under its return address, as Acorn's SAVE_REGISTERS inserts a
+  restoring return; and bytes the source does not assemble. A routine that pushes data and then calls such a
+  helper, as SAVE_X_Y does, changes its own caller's stack, so its callers are skipped too.
 
 ### What it found
 
@@ -471,9 +487,12 @@ where its value came from (`AnalysisValue`). Two paths that meet keep the bits b
   has a bit set, which leaves the result non-zero whatever memory held, or `AND #$0F`, which leaves it positive.
   The core is the emulator's, checked against the single-step vectors, so the analysis has no rules of its own
   for how flags are computed.
-- The instruction's bytes and the code after them, which the 6502 reads ahead, come from the image; its other
+- The instruction's bytes and the byte after them, which the 6502 reads ahead, come from the image; its other
   reads take the values being tried, one byte each in the order it reads, at most four. A run that reads more, or
-  a different number from the first, or touches a port, gives no result, nor does one that pushes or pulls.
+  a different number from the first, or touches a port, gives no result, nor does one that pushes or pulls, nor
+  one that goes back to itself, as the Z80's `LDIR` does until BC is 0. An instruction whose bytes some code
+  stores to at a fixed address is not run at all, as code that patches another's operand is not as assembled.
+  Each run starts from the core as it was built, so a `HALT` or `WAI` before leaves nothing behind.
 - The runs try all ones and two alternations first, and stop as soon as every bit written has varied, so an
   instruction whose result is unknown costs a few runs. Flags the effects lines set or clear are not waited for.
   Only the registers an instruction reads are set and only those it writes read back, which the effects lines'
@@ -529,8 +548,9 @@ code runs in, or its tables read as the wrong bytes or as nothing.
 - Code no routine was followed through can reach a condition too, as BBC BASIC's `bne NUMBER_TO_STRING_POINT`
   does from a path no documented routine completes. So a condition stays fixed only if, walking back from it over
   fall-throughs and direct branches and jumps through instructions a complete analysis reached, it meets none such
-  an analysis did not reach; the walk stops at any address analyzed as a routine's start, whose analysis took any
-  values there.
+  an analysis did not reach, nor a code address a table or an operand names other than as a branch's, jump's or
+  call's target, which a vector or a pushed address may enter; the walk stops at any address analyzed as a
+  routine's start, whose analysis took any values there.
 
 ### What it found
 
@@ -540,31 +560,37 @@ IX, an untaken `CALL C`, bits known after `ORA`, `AND`, `OR` and `ANDA` with mem
 through a known range of indexes but not ROM code, RAM that keeps a stored byte but not round a polling loop nor
 at a device, and paths that join with only memory different.
 
+`AnalysisSoundnessTests` hold the cases a review of the whole change found the analysis claiming what the code
+does not do, each now fixed: a store through a pointer (on the Z80 and 8080, whose `access` lines lacked them)
+or an index, a 16-bit store, stacks that differ where paths meet, pulls of other bytes than pushed, writes into the
+stack, `LDIR` taken as one step, a callee followed only in part, patched code, and code a table enters.
+
 Following those joins found a bug the Keeps and Uses check had had all along: `AnalysisRoutineState.SameAs`, which
 decides whether a join changed anything, compared registers, flags and stacks but not memory, so a path that
 changed only what a fixed address held was not followed on. With known bits in memory it made BBC BASIC's
 `bmi NUMBER_TO_STRING_SMALL` look never taken.
 
 `SdkSourcesReport` now also compares the fixed conditions with the sources' own comments. Of the branches the
-sources mark `always`, 126 are proved (120 with whole constants alone, 125 with known bits); 119 are not, mostly
-because a value from RAM or from a caller decides them, as SET_VDU_STATUS's `ora VDU_STATUS` with the A its caller
-passes, or because a routine the analysis gave up on reaches them. 11 conditions are fixed without the mark, and
-each was checked by hand: real always-branches such as `ldy #TEXT_INVERSE` then `bne`, `clc` then `bcc`, a `bvs`
-followed by a `bvc`, the Enhanced firmware's `ora #MODE_CURSOR_OFF` then `bne`, whose comment is on the line above,
-and from the memory map, the DFS's `bit FS_CONTROL_BLOCK_TEMPLATE_HIGH` of a ROM byte of `&FF`, then `bvs`.
+sources mark `always`, 124 are proved; 119 are not, mostly because a value from RAM or from a caller decides them,
+as SET_VDU_STATUS's `ora VDU_STATUS` with the A its caller passes, or because a routine the analysis gave up on
+reaches them. 10 conditions are fixed without the mark, and each was checked by hand: real always-branches such
+as `ldy #TEXT_INVERSE` then `bne`, `clc` then `bcc`, a `bvs` followed by a `bvc`, the Enhanced firmware's
+`ora #MODE_CURSOR_OFF` then `bne`, whose comment is on the line above, and from the memory map, the DFS's
+`bit FS_CONTROL_BLOCK_TEMPLATE_HIGH` of a ROM byte of `&FF`, then `bvs`.
 
-For the Keeps and Uses check: 1,023 routines checked (from 990), 26 findings (from 30), 30 `Keeps:` items not
-verified. Gone: the Monitor's ScreenOutNoInverse, the MOS's START_TRANSMITTING, VDU_PAGED_MODE_ON,
-SET_CURSOR_START and INVERT_TEXT_CELL, whose paths only an impossible fall-through reached, and with known bits,
-the Enhanced firmware's CursorOff and the MOS's SET_EOF. Routines followed now for the first time found three
-documentation errors in MBASIC, fixed:
+For the Keeps and Uses check: 1,020 routines checked (from 990), 25 findings (from 30), 34 `Keeps:` items not
+verified; NetFS's NFS_OSFILE_INFO now gives X and Y first in its `Out:`, so they parse. Gone: the Monitor's
+ScreenOutNoInverse, the MOS's START_TRANSMITTING, VDU_PAGED_MODE_ON, SET_CURSOR_START and INVERT_TEXT_CELL, whose
+paths only an impossible fall-through reached, and with known bits, the Enhanced firmware's CursorOff and the MOS's
+SET_EOF. Routines followed now for the first time found three documentation errors in MBASIC, fixed:
 
 - DHALVE underflows into ZERO, which clears A; its `Uses:` now lists A.
 - DEL's `Out: VARTAB = HL = ...` named only VARTAB; it is now `HL, VARTAB = ...`.
 - CHKRES's `Out:` had HL inside the zero flag's meaning; HL now has its own entry.
 
-What it costs, measured in Release over the MOS, the DFS and MBASIC with their maps: about 220 ms for the three
-once warm, and 107 MB allocated. Without maps it was about 140 ms and 88 MB; with whole constants alone 150 to 200
+What it costs, measured in Release over the MOS, the DFS and MBASIC with their maps: about 190 ms for the three
+once warm, and 114 MB allocated (220 ms and 107 MB before the review's fixes). Without maps it was about 140 ms and
+88 MB; with whole constants alone 150 to 200
 ms and 58 MB, and without the core 52 MB. Each run sets and reads back only the registers the instruction uses; a
 run on the core takes 1 to 3 us. Most of the growth is revisits: of joins where only memory changed, which the
 fix above follows, and as known bits are joined away one at a time. The engine's copies of states are most of the
@@ -572,6 +598,14 @@ allocation, and a follow-up could cut them.
 
 ### Limits and follow-ups
 
+- **Writes through other pointers** are taken to miss the stack: only one through a stack pointer, or a register
+  holding its entry value, changes what was pushed, and one at an offset past what the routine pushed, into its
+  caller's data, is not seen.
+- **Patched code** is found only through stores to a fixed address; one through a pointer is not.
+- **Names later in a section** that share a meaning, as `carry = set when found, X, Y = the offset`, are read as
+  part of the meaning before them: 76 `In:` and `Out:` lines in the sources have such a run, as Business BASIC's
+  `FORPNT, FORPNTB = the variable, VALTYP, INTFLG, ISARA = its type`, and the check takes their names as not
+  documented. A lint could ask for them first, as OSFILE_SEARCH and NFS_OSFILE_INFO now have them.
 - **Maps are of one state.** A program that switches banks, as an Apple II one that runs from the language card,
   needs the map of the state each part runs in; a source cannot say it yet. Where the map is wrong, a table reads
   as the wrong bytes. RAM bits are kept between a store and a load with no loop between, which code that an

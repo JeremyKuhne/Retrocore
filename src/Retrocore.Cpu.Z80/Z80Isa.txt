@@ -41,6 +41,36 @@ flow wait HALT
 
 # How an instruction accesses a memory operand; the rest read it.
 access write LD:[nn],A LD:[nn],BC LD:[nn],DE LD:[nn],HL LD:[nn],SP LD:[nn],IX LD:[nn],IY
+# Stores and read-modify-writes through a pointer or index: the routine analysis forgets memory at each.
+access write LD:[BC],A LD:[DE],A LD:[HL],A LD:[HL],B LD:[HL],C LD:[HL],D LD:[HL],E LD:[HL],H LD:[HL],L LD:[HL],n
+access write LD:[IX+d],A LD:[IX+d],B LD:[IX+d],C LD:[IX+d],D LD:[IX+d],E LD:[IX+d],H LD:[IX+d],L LD:[IX+d],n
+access write LD:[IY+d],A LD:[IY+d],B LD:[IY+d],C LD:[IY+d],D LD:[IY+d],E LD:[IY+d],H LD:[IY+d],L LD:[IY+d],n INI IND
+access write INIR INDR
+access read-write DEC:[HL] DEC:[IX+d] DEC:[IY+d] EX:[SP],HL EX:[SP],IX EX:[SP],IY INC:[HL] INC:[IX+d] INC:[IY+d] LDD
+access read-write LDDR LDI LDIR RES:b,[HL] RES:b,[IX+d] RES:b,[IX+d],A RES:b,[IX+d],B RES:b,[IX+d],C RES:b,[IX+d],D
+access read-write RES:b,[IX+d],E RES:b,[IX+d],H RES:b,[IX+d],L RES:b,[IY+d] RES:b,[IY+d],A RES:b,[IY+d],B
+access read-write RES:b,[IY+d],C RES:b,[IY+d],D RES:b,[IY+d],E RES:b,[IY+d],H RES:b,[IY+d],L RL:[HL] RL:[IX+d]
+access read-write RL:[IX+d],A RL:[IX+d],B RL:[IX+d],C RL:[IX+d],D RL:[IX+d],E RL:[IX+d],H RL:[IX+d],L RL:[IY+d]
+access read-write RL:[IY+d],A RL:[IY+d],B RL:[IY+d],C RL:[IY+d],D RL:[IY+d],E RL:[IY+d],H RL:[IY+d],L RLC:[HL]
+access read-write RLC:[IX+d] RLC:[IX+d],A RLC:[IX+d],B RLC:[IX+d],C RLC:[IX+d],D RLC:[IX+d],E RLC:[IX+d],H
+access read-write RLC:[IX+d],L RLC:[IY+d] RLC:[IY+d],A RLC:[IY+d],B RLC:[IY+d],C RLC:[IY+d],D RLC:[IY+d],E
+access read-write RLC:[IY+d],H RLC:[IY+d],L RLD RR:[HL] RR:[IX+d] RR:[IX+d],A RR:[IX+d],B RR:[IX+d],C RR:[IX+d],D
+access read-write RR:[IX+d],E RR:[IX+d],H RR:[IX+d],L RR:[IY+d] RR:[IY+d],A RR:[IY+d],B RR:[IY+d],C RR:[IY+d],D
+access read-write RR:[IY+d],E RR:[IY+d],H RR:[IY+d],L RRC:[HL] RRC:[IX+d] RRC:[IX+d],A RRC:[IX+d],B RRC:[IX+d],C
+access read-write RRC:[IX+d],D RRC:[IX+d],E RRC:[IX+d],H RRC:[IX+d],L RRC:[IY+d] RRC:[IY+d],A RRC:[IY+d],B
+access read-write RRC:[IY+d],C RRC:[IY+d],D RRC:[IY+d],E RRC:[IY+d],H RRC:[IY+d],L RRD SET:b,[HL] SET:b,[IX+d]
+access read-write SET:b,[IX+d],A SET:b,[IX+d],B SET:b,[IX+d],C SET:b,[IX+d],D SET:b,[IX+d],E SET:b,[IX+d],H
+access read-write SET:b,[IX+d],L SET:b,[IY+d] SET:b,[IY+d],A SET:b,[IY+d],B SET:b,[IY+d],C SET:b,[IY+d],D
+access read-write SET:b,[IY+d],E SET:b,[IY+d],H SET:b,[IY+d],L SLA:[HL] SLA:[IX+d] SLA:[IX+d],A SLA:[IX+d],B
+access read-write SLA:[IX+d],C SLA:[IX+d],D SLA:[IX+d],E SLA:[IX+d],H SLA:[IX+d],L SLA:[IY+d] SLA:[IY+d],A
+access read-write SLA:[IY+d],B SLA:[IY+d],C SLA:[IY+d],D SLA:[IY+d],E SLA:[IY+d],H SLA:[IY+d],L SLL:[HL] SLL:[IX+d]
+access read-write SLL:[IX+d],A SLL:[IX+d],B SLL:[IX+d],C SLL:[IX+d],D SLL:[IX+d],E SLL:[IX+d],H SLL:[IX+d],L
+access read-write SLL:[IY+d] SLL:[IY+d],A SLL:[IY+d],B SLL:[IY+d],C SLL:[IY+d],D SLL:[IY+d],E SLL:[IY+d],H
+access read-write SLL:[IY+d],L SRA:[HL] SRA:[IX+d] SRA:[IX+d],A SRA:[IX+d],B SRA:[IX+d],C SRA:[IX+d],D SRA:[IX+d],E
+access read-write SRA:[IX+d],H SRA:[IX+d],L SRA:[IY+d] SRA:[IY+d],A SRA:[IY+d],B SRA:[IY+d],C SRA:[IY+d],D
+access read-write SRA:[IY+d],E SRA:[IY+d],H SRA:[IY+d],L SRL:[HL] SRL:[IX+d] SRL:[IX+d],A SRL:[IX+d],B SRL:[IX+d],C
+access read-write SRL:[IX+d],D SRL:[IX+d],E SRL:[IX+d],H SRL:[IX+d],L SRL:[IY+d] SRL:[IY+d],A SRL:[IY+d],B
+access read-write SRL:[IY+d],C SRL:[IY+d],D SRL:[IY+d],E SRL:[IY+d],H SRL:[IY+d],L
 
 # Register and flag effects, for analysis, in the 6502 description's form (see OpcodeTables.txt): reads,
 # writes and may-write list registers by name and flags by word, X and Y by name; F means every flag. $1, $2
@@ -52,7 +82,7 @@ access write LD:[nn],A LD:[nn],BC LD:[nn],DE LD:[nn],HL LD:[nn],SP LD:[nn],IX LD
 parts AF=A,F BC=B,C DE=D,E HL=H,L IX=IXH,IXL IY=IYH,IYL
 stack SP
 effects LD                      reads $2                writes $1                       copies $1=$2
-effects LD:A,I reads I writes A negative zero Y half-carry=0 X overflow subtract=0 copies A=I
+effects LD:A,I                  reads I                 writes A negative zero Y half-carry=0 X overflow subtract=0 copies A=I
 effects LD:A,R                  reads R                 writes A negative zero Y half-carry=0 X overflow subtract=0
 effects PUSH                    reads $1 SP             writes SP                       push 2
 effects POP                     reads SP                writes $1 SP                    pull 2

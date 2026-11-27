@@ -31,6 +31,11 @@ internal sealed class AnalysisEvaluationBus : IProcessorBus, IIoBus
     internal int ReadCount { get; private set; }
 
     /// <summary>
+    ///  Gets how many bytes the instruction wrote, its pushes included.
+    /// </summary>
+    internal int WriteCount { get; private set; }
+
+    /// <summary>
     ///  Gets the bus ready for an instruction.
     /// </summary>
     /// <param name="pc">Where the instruction is.</param>
@@ -47,6 +52,7 @@ internal sealed class AnalysisEvaluationBus : IProcessorBus, IIoBus
         reads.CopyTo(_reads);
         _readLength = reads.Length;
         ReadCount = 0;
+        WriteCount = 0;
         Failed = false;
     }
 
@@ -63,9 +69,7 @@ internal sealed class AnalysisEvaluationBus : IProcessorBus, IIoBus
     }
 
     /// <inheritdoc/>
-    public void Write(ushort address, byte value)
-    {
-    }
+    public void Write(ushort address, byte value) => WriteCount++;
 
     /// <inheritdoc/>
     public byte In(ushort port)

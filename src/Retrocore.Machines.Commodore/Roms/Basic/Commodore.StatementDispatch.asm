@@ -2,6 +2,7 @@
 ; COMMODORE BASIC: NEXT STATEMENT AND TOKEN DISPATCH
 
 .include "../../Microsoft6502Basic/MsBasic.Families.asm"
+.include "Commodore.Switches.asm"
 
 ;; Emits the next-statement fetcher: <NextStatement> and <ExecuteStatement>.
 ;; The workspace's <INPUT_BUFFER_PAGE> is the direct buffer's page: zero for page zero.
@@ -23,7 +24,7 @@
     ;; Errors: SYNTAX for a byte that is neither a colon nor a zero, here where `earlySeparators` is 1 and otherwise
     ;;   through the separator check that follows the dispatcher
     ;; See: <ExecuteStatement>, <Statements::StopOrEnd::Finish>
-    ;; Also: NEWSTT (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;; Also: NEWSTT (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     .proc NextStatement
     jsr CheckStop
     lda TextPointer
@@ -40,14 +41,14 @@
     .if INPUT_BUFFER_PAGE
 
 ;; Reads the byte at <TextPointer>: a zero reads the next line, and anything else is checked as a separator.
-;; Also: DIRCON (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: DIRCON (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 TestSeparator:
     .endif
     ldy #$00
     .if .not INPUT_BUFFER_PAGE
 
 ;; Reads the byte at <TextPointer>: a zero reads the next line, and anything else is checked as a separator.
-;; Also: DIRCON (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: DIRCON (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 TestSeparator:
     .endif
     lda (TextPointer),y
@@ -78,7 +79,7 @@ NextLine:
         jmp Statements::StopOrEnd::Finish
 
 ;; A line follows: reads its number and moves <TextPointer> to its text.
-;; Also: DIRCN1 (CBM4S79, HV2, HV4, HV4R)
+;; Also: DIRCN1 (CBM4S79, HV2, HV4, HV4R, BV20)
 ReadLine:
     .endif
     iny
@@ -97,9 +98,25 @@ ReadLine:
 
     ;; Fetches a statement's first character, dispatches it with <DispatchStatement>, then continues at
     ;; <NextStatement>.
-    ;; Also: GONE (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;;
+    ;; With <BASIC_RAM_VECTORS> (the VIC-20), it jumps through `StatementVector`, to its `Default` entry unless a
+    ;; program has changed the vector.
+    ;; Also: GONE (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     .proc ExecuteStatement
+    .if BASIC_RAM_VECTORS
+        jmp (StatementVector)
+
+;; The ROM's statement execution, where <StatementVector> points unless a program changes it.
+;; Also: NGONE (BV20)
+Default:
+    .endif
     jsr fetchToken
+    .if BASIC_RAM_VECTORS
+
+;; Dispatches the statement; nothing branches here, and the label is kept for its old name.
+;; Also: NGONE1 (BV20)
+Dispatch:
+    .endif
     jsr DispatchStatement
     jmp NextStatement
     .endproc
@@ -124,7 +141,7 @@ ReadLine:
     ;;   (BASIC 2) for `GO` without `TO`
     ;; Entry:
     ;;   WithToken = subtracts <TOKEN_END> from A and dispatches; <Statements::On> enters here
-    ;; Also: GONE3 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;; Also: GONE3 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     .proc DispatchStatement
     .if earlyDispatch
         beq Statements::Cont::Done
@@ -134,7 +151,7 @@ ReadLine:
     .endif
 
 ;; Subtracts <TOKEN_END> from A and dispatches.
-;; Also: GONE2 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: GONE2 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 WithToken:
     sbc #<TOKEN_END
     .if earlyDispatch
@@ -176,7 +193,7 @@ LookUp:
     .if .not earlyDispatch
 
 ;; Jumps on to <Statements::Let>.
-;; Also: GLET (M6502, CBM4S79, HV2, HV4, HV4R)
+;; Also: GLET (M6502, CBM4S79, HV2, HV4, HV4R, BV20)
 ToLet:
         jmp Statements::Let
     .endif
@@ -189,13 +206,13 @@ ToLet:
         ;;   ToSyntaxError = jumps to <SyntaxError>; for a token beyond the statements, <DispatchStatement> branches
         ;;     here where `diskCommands` is 1 (BASIC 4), and BASIC 2's `GO` check where it is 0
         ;; Errors: SYNTAX for any byte other than a colon
-        ;; Also: MORSTS (M6502, CBM4S79, HV2, HV4, HV4R)
+        ;; Also: MORSTS (M6502, CBM4S79, HV2, HV4, HV4R, BV20)
         .proc CheckStatementSeparator
         cmp #':'
         beq ExecuteStatement
 
 ;; Jumps on to <SyntaxError>.
-;; Also: SNERR1 (M6502, CBM4S79, HV2, HV4, HV4R)
+;; Also: SNERR1 (M6502, CBM4S79, HV2, HV4, HV4R, BV20)
 ToSyntaxError:
         jmp SyntaxError
         .endproc
@@ -217,7 +234,7 @@ ToSyntaxError:
             ;; BASIC 2's token past the statements: `GO` requires `TO` and continues as <Statements::GoTo>, and any
             ;; other token is a syntax error.
             ;; In: A = the token less <TOKEN_END>
-            ;; Also: SNERRX (M6502, HV2)
+            ;; Also: SNERRX (M6502, HV2, BV20)
             .proc CheckGoStatement
             cmp #<(TOKEN_GO-TOKEN_END)
             bne CheckStatementSeparator::ToSyntaxError

@@ -9,7 +9,7 @@
 
 ;; Consumes the comma between arrays in a `DIM` statement, then dimensions the next array.
 ;; Errors: SYNTAX if no comma follows
-;; Also: DIM3 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: DIM3 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 .proc DimNextArray
     jsr CheckComma
 ; Falls into Dim.
@@ -20,7 +20,7 @@
 ;; The nonzero character in X becomes <Dimensioning>, which tells the variable search to create arrays with the
 ;; supplied bounds and to reject an array that already exists.
 ;; In: A = the first character of the array's name
-;; Also: DIM (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: DIM (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 .proc Dim
     tax
 ;; Calls <FindVariable::WithDimensionFlag>, which creates the array.

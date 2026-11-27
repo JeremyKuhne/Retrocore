@@ -17,7 +17,7 @@ INTEGER_VARIABLES = 1
 .endif
 .ifndef ADDITIONAL_PRECISION
 ;; 1 includes the extra floating-point mantissa byte; code also uses it as that byte's count.
-;; Also: ADDPRC (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: ADDPRC (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 ADDITIONAL_PRECISION = 1
 .endif
 .ifndef LONG_ERRORS

@@ -17,7 +17,7 @@
 ;; Out: X = low product byte, A = high product byte, Y = high product byte
 ;; Errors: OUT OF MEMORY on 16-bit overflow
 ;; Uses: Addend, DigitCount, LinearIndex, Pointer1
-;; Also: UMULT (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: UMULT (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 .proc MultiplyByBound
     sty Pointer1
     lda (SourceStart),y
@@ -34,7 +34,7 @@
 ;; Out: X = low product byte, A = high product byte, Y = high product byte
 ;; Errors: OUT OF MEMORY on 16-bit overflow
 ;; Uses: Addend, DigitCount, LinearIndex
-;; Also: UMULTD (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: UMULTD (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 .proc MultiplyUnsigned
     sta Addend+1
     lda #$10
@@ -43,7 +43,7 @@
     ldy #$00
 
 ;; Doubles the partial product in X/Y and adds the multiplier when the bit shifted out of <LinearIndex> is set.
-;; Also: UMULTC (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: UMULTC (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 NextBit:
     ; Shift the partial product and add the multiplier for each set bit of LinearIndex.
     txa
@@ -66,13 +66,13 @@ NextBit:
     bcs ElementAddress::ToOutOfMemoryError
 
 ;; Counts down <DigitCount>, once for each of the 16 bits, and loops to <NextBit>.
-;; Also: UMLCNT (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: UMLCNT (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 CountBit:
     dec DigitCount
     bne NextBit
 
 ;; The routine's RTS; nothing branches here, and the label is kept for its old name.
-;; Also: UMLRTS (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: UMLRTS (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 Done:
     rts
 .endproc

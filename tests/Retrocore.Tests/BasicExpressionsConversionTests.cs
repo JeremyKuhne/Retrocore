@@ -35,12 +35,12 @@ public sealed class BasicExpressionsConversionTests
     /// </summary>
     internal static readonly Dictionary<string, string[]> CommodoreOldNames = new(StringComparer.Ordinal)
     {
-        ["COPYC"] = ["CBM4S79", "HV1", "HV1R", "HV2", "HV4", "HV4R"],
-        ["STRD"] = ["CBM4S79", "HV1", "HV1R", "HV2", "HV4", "HV4R"],
-        ["CHRD"] = ["CBM4S79", "HV1", "HV1R", "HV2", "HV4", "HV4R"],
-        ["LEFTD"] = ["CBM4S79", "HV1", "HV1R", "HV2", "HV4", "HV4R"],
-        ["RIGHTD"] = ["CBM4S79", "HV1", "HV1R", "HV2", "HV4", "HV4R"],
-        ["MIDD"] = ["CBM4S79", "HV1", "HV1R", "HV2", "HV4", "HV4R"],
+        ["COPYC"] = ["CBM4S79", "HV1", "HV1R", "HV2", "HV4", "HV4R", "BV20"],
+        ["STRD"] = ["CBM4S79", "HV1", "HV1R", "HV2", "HV4", "HV4R", "BV20"],
+        ["CHRD"] = ["CBM4S79", "HV1", "HV1R", "HV2", "HV4", "HV4R", "BV20"],
+        ["LEFTD"] = ["CBM4S79", "HV1", "HV1R", "HV2", "HV4", "HV4R", "BV20"],
+        ["RIGHTD"] = ["CBM4S79", "HV1", "HV1R", "HV2", "HV4", "HV4R", "BV20"],
+        ["MIDD"] = ["CBM4S79", "HV1", "HV1R", "HV2", "HV4", "HV4R", "BV20"],
         ["NXTPTR"] = ["CBM4S79", "HV4", "HV4R"],
         ["QDSVAR"] = ["CBM4S79", "HV4", "HV4R"],
         ["ARYVA2"] = ["CBM4S79", "HV4", "HV4R"],
@@ -57,20 +57,20 @@ public sealed class BasicExpressionsConversionTests
         ["TRYAG3"] = ["CBM4S79", "HV4", "HV4R"],
         ["TRYAG4"] = ["CBM4S79", "HV4", "HV4R"],
         ["GETRTS"] = ["CBM4S79", "HV4", "HV4R"],
-        ["ANDOP"] = ["M6502", "CBM4S79", "HV1", "HV1R", "HV2", "HV4", "HV4R"]
+        ["ANDOP"] = ["M6502", "CBM4S79", "HV1", "HV1R", "HV2", "HV4", "HV4R", "BV20"]
     };
 
     // The classic collector's steps, whose Microsoft names BASIC 1 and 2 give them and BASIC 4 gives its array
-    // back-link steps instead (K12), with the documents that give them in BASIC 1 and 2.
+    // back-link steps instead (K12), with the documents that give them in BASIC 1 and 2 and the VIC-20's.
     private static readonly Dictionary<string, string[]> s_classicCollectorNames = new(StringComparer.Ordinal)
     {
-        ["ARYVA2"] = ["M6502", "HV1", "HV1R", "HV2"],
-        ["ARYVA3"] = ["M6502", "HV1", "HV1R", "HV2"],
-        ["ARYVGO"] = ["M6502", "HV1", "HV1R", "HV2"],
-        ["ARYGET"] = ["M6502", "HV1", "HV1R", "HV2"],
-        ["GOGO"] = ["M6502", "HV1", "HV1R", "HV2"],
-        ["DVARTS"] = ["M6502", "HV1", "HV1R", "HV2"],
-        ["TRYAG3"] = ["M6502", "HV1", "HV1R", "HV2"]
+        ["ARYVA2"] = ["M6502", "HV1", "HV1R", "HV2", "BV20"],
+        ["ARYVA3"] = ["M6502", "HV1", "HV1R", "HV2", "BV20"],
+        ["ARYVGO"] = ["M6502", "HV1", "HV1R", "HV2", "BV20"],
+        ["ARYGET"] = ["M6502", "HV1", "HV1R", "HV2", "BV20"],
+        ["GOGO"] = ["M6502", "HV1", "HV1R", "HV2", "BV20"],
+        ["DVARTS"] = ["M6502", "HV1", "HV1R", "HV2", "BV20"],
+        ["TRYAG3"] = ["M6502", "HV1", "HV1R", "HV2", "BV20"]
     };
 
     /// <summary>
@@ -94,7 +94,7 @@ public sealed class BasicExpressionsConversionTests
 
     // The documents a vendor's file may cite: its vendor's, Microsoft's source, and UNKN.
     private static readonly string[] s_appleKeys = ["M6502", "UNKN", "ASTIL", "AS82", "ASRM78"];
-    private static readonly string[] s_commodoreKeys = ["M6502", "UNKN", "CBM4S79", "HV1", "HV1R", "HV2", "HV4", "HV4R"];
+    private static readonly string[] s_commodoreKeys = ["M6502", "UNKN", "CBM4S79", "HV1", "HV1R", "HV2", "HV4", "HV4R", "BV20"];
 
     // The definitions in the converted files that give no overlay name of their own: the families' guard, the input
     // modes, the labels only the SDK names (branch targets that were *+5), and the labels whose names only a vendor

@@ -38,7 +38,7 @@ PRECEDENCE_RELATION = $64
     ;; Each entry is one precedence byte followed by a little-endian handler address minus one. The evaluator
     ;; stacks that address for RTS dispatch. Higher precedence binds more tightly; the following entries provide
     ;; unary negation, NOT and the shared relational handler.
-    ;; Also: OPTAB (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;; Also: OPTAB (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     .proc OperatorTable
     .byte PRECEDENCE_ADD
     .word Float::AddArg - 1
@@ -60,7 +60,7 @@ PRECEDENCE_RELATION = $64
     .word Operators::Or - 1
 
 ;; Precedence and handler address minus one for unary negation.
-;; Also: NEGTAB (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: NEGTAB (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 Negation:
     .if powerBelowNegation
         .byte PRECEDENCE_TOP
@@ -70,7 +70,7 @@ Negation:
     .word Float::Negate - 1
 
 ;; Precedence and handler address minus one for NOT.
-;; Also: NOTTAB (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: NOTTAB (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 Not:
     .if highNot
         .byte PRECEDENCE_TOP
@@ -80,7 +80,7 @@ Not:
     .word Operators::Not - 1
 
 ;; Precedence and handler address minus one for relational comparisons.
-;; Also: PTDORL (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: PTDORL (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 Relation:
     .byte PRECEDENCE_RELATION
     .word ApplyRelation - 1

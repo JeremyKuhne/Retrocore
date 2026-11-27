@@ -25,7 +25,7 @@
     ;;
     ;; Where `existingArrays` is 1 (AppleSoft), the existing-array lookup's chooser enters at `Search` to skip the
     ;; subscripts.
-    ;; Also: ISARY (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;; Also: ISARY (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     .proc FindArray
     lda Dimensioning
     ora IntegerType
@@ -35,7 +35,7 @@
     ldy #$00
 
 ;; Evaluates one subscript and swaps it under the saved flags on the stack; loops while a comma follows.
-;; Also: INDLOP (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: INDLOP (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 NextSubscript:
     tya
     pha
@@ -80,7 +80,7 @@ Search:
     lda ArraysStart+1
 
 ;; Points <SourceStart> at the next array header and stops at <ArraysEnd>.
-;; Also: LOPFDA (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: LOPFDA (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 CheckEnd:
     stx SourceStart
     sta SourceStart+1
@@ -94,7 +94,7 @@ CheckEnd:
     .endif
 
 ;; Compares the header's two name bytes with <VariableName>.
-;; Also: LOPFDV (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: LOPFDV (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 CompareName:
     ldy #$00
     lda (SourceStart),y
@@ -107,7 +107,7 @@ CompareName:
 
 ;; Adds the header's length to <SourceStart>; on an address carry falls into <BadSubscriptError>, which a table that
 ;; ends below $FFFF never reaches.
-;; Also: NMARY1 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: NMARY1 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 NextArray:
     iny
     lda (SourceStart),y
@@ -126,7 +126,7 @@ NextArray:
     ;;
     ;; It loads the error and skips <IllegalQuantityError>'s load with a `BIT`.
     ;; Errors: BAD SUBSCRIPT
-    ;; Also: BSERR (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;; Also: BSERR (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     .proc BadSubscriptError
     ldx #<ERROR_BAD_SUBSCRIPT
     .byte $2C                   ; BIT absolute skips the next two bytes
@@ -137,12 +137,12 @@ NextArray:
     ;; Errors: ILLEGAL QUANTITY
     ;; Entry:
     ;;   ToError = jumps to <ReportError> with the error in X; <Variables::ArrayFound> branches here with REDIM'D ARRAY
-    ;; Also: FCERR (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;; Also: FCERR (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     .proc IllegalQuantityError
     ldx #<ERROR_ILLEGAL_QUANTITY
 
 ;; Jumps to <ReportError> with the error in X; <Variables::ArrayFound> branches here with REDIM'D ARRAY.
-;; Also: ERRGO3 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: ERRGO3 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 ToError:
     jmp ReportError
     .endproc
@@ -156,7 +156,7 @@ ToError:
     ;; In: SourceStart = the array's header, Counter = the number of subscripts on the stack
     ;; Errors: REDIM'D ARRAY when dimensioning, BAD SUBSCRIPT for a different number of subscripts or one out of
     ;;   bounds, OUT OF MEMORY if the element offset overflows
-    ;; Also: GOTARY (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;; Also: GOTARY (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     .proc ArrayFound
     ldx #<ERROR_REDIMENSIONED_ARRAY
     lda Dimensioning
@@ -198,7 +198,7 @@ CheckDimensions:
     ;; In: SourceStart = where the header goes (<ArraysEnd>), Counter = the number of subscripts on the stack
     ;; Errors: OUT OF MEMORY when the array does not fit; for an element reference, then BAD SUBSCRIPT for a
     ;;   subscript out of bounds
-    ;; Also: NOTFDD (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;; Also: NOTFDD (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     .proc CreateArray
     jsr ElementsStart
     jsr CheckFreeMemory
@@ -218,7 +218,7 @@ CheckDimensions:
     dex
 
 ;; Element size so far: 5, minus 1 if the first name byte has bit 7 set; now tests the second byte.
-;; Also: NOTFLT (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: NOTFLT (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 CheckSecond:
     iny
     lda VariableName+1
@@ -228,7 +228,7 @@ CheckSecond:
     dex
 
 ;; Saves the element size (5, 3 or 2) in <LinearIndex> and writes the dimension count.
-;; Also: STOMLT (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: STOMLT (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 StoreSize:
     stx LinearIndex
     lda Counter
@@ -238,7 +238,7 @@ StoreSize:
     sta (SourceStart),y
 
 ;; Takes the next bound: 11 by default, or the stacked DIM subscript plus one.
-;; Also: LOPPTA (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: LOPPTA (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 NextDimension:
     ldx #DEFAULT_BOUND
     lda #$00
@@ -252,7 +252,7 @@ NextDimension:
     adc #$00
 
 ;; Writes the bound high byte first and multiplies it into the running size.
-;; Also: NOTDIM (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: NOTDIM (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 StoreBound:
     iny
     sta (SourceStart),y
@@ -276,7 +276,7 @@ StoreBound:
     beq ElementAddress::ToOutOfMemoryError
 
 ;; Checks the new <ArraysEnd> with <CheckFreeMemory> and stores it, then clears the values page by page.
-;; Also: GREASE (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: GREASE (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 CheckRoom:
     jsr CheckFreeMemory
     sta ArraysEnd
@@ -287,14 +287,14 @@ CheckRoom:
     beq NextPage
 
 ;; Zeroes the bytes of one page of values downward.
-;; Also: ZERITA (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: ZERITA (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 ClearLoop:
     dey
     sta (ArrayPointer),y
     bne ClearLoop
 
 ;; Moves <ArrayPointer> down a page and counts pages, then writes the header's length.
-;; Also: DECCUR (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: DECCUR (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 NextPage:
     dec ArrayPointer+1
     dec LinearIndex+1
@@ -327,7 +327,7 @@ NextPage:
     ;; Entry:
     ;;   ToOutOfMemoryError = jumps to <ReportOutOfMemory>; <CreateArray> and <MultiplyUnsigned> branch here on overflow
     ;;   Done = returns; <CreateArray> (for DIM) and <RejectDirectMode> branch here as the nearest `RTS`
-    ;; Also: GETDEF (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;; Also: GETDEF (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     .proc ElementAddress
     lda (SourceStart),y
     sta Counter
@@ -335,7 +335,7 @@ NextPage:
     sta LinearIndex
 
 ;; Pops the next subscript into <ArrayIndex> and compares it with the bound, high byte first.
-;; Also: INLPNM (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: INLPNM (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 NextSubscript:
     sta LinearIndex+1
     iny
@@ -353,22 +353,22 @@ NextSubscript:
     bcc InBounds
 
 ;; Jumps to <BadSubscriptError> for a subscript at or above its bound.
-;; Also: BSERR7 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: BSERR7 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 ToBadSubscriptError:
     jmp BadSubscriptError
 
 ;; Jumps to <ReportOutOfMemory>; <CreateArray> and <MultiplyUnsigned> branch here on overflow.
-;; Also: OMERR1 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: OMERR1 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 ToOutOfMemoryError:
     jmp ReportOutOfMemory
 
 ;; High byte below the bound: skips the bound's low byte.
-;; Also: INLPN2 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: INLPN2 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 SkipLow:
     iny
 
 ;; Multiplies the index so far by this dimension's bound and adds the subscript's low byte.
-;; Also: INLPN1 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: INLPN1 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 InBounds:
     lda LinearIndex+1
     ora LinearIndex
@@ -382,7 +382,7 @@ InBounds:
     ldy Pointer1
 
 ;; Adds the subscript's high byte and counts down the dimensions.
-;; Also: ADDIND (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: ADDIND (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 AddSubscript:
     adc ArrayIndex+1
     stx LinearIndex
@@ -397,7 +397,7 @@ AddSubscript:
     dex
 
 ;; Element size so far from the first name byte; now tests the second.
-;; Also: NOTFL1 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: NOTFL1 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 CheckSecond:
     lda VariableName+1
     bpl ScaleBySize
@@ -405,7 +405,7 @@ CheckSecond:
     dex
 
 ;; Multiplies the linear index by the element size and adds <ArrayPointer> to give <VariablePointer>.
-;; Also: STOML1 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: STOML1 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 ScaleBySize:
     stx Addend
     lda #$00
@@ -420,7 +420,7 @@ ScaleBySize:
     lda VariablePointer
 
 ;; Returns; <CreateArray> (for DIM) and <RejectDirectMode> branch here as the nearest `RTS`.
-;; Also: DIMRTS (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: DIMRTS (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 Done:
     rts
     .endproc

@@ -15,7 +15,7 @@
 
     ;; Evaluates an expression and assigns it to a numeric or string variable.
     ;; See: <FindVariable>, <StoreNumber>, <AssignString>
-    ;; Also: LET (M6502, ASTIL, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;; Also: LET (M6502, ASTIL, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     .proc Let
     jsr FindVariable
     sta AssignedVariable
@@ -43,7 +43,7 @@ Number:
     ;; Stores numeric <Fac> in the variable at <AssignedVariable>, choosing integer or floating-point storage.
     ;; The integer is rounded and stored high byte first; a float is packed.
     ;; In: A = negative for an integer variable (as <IntegerType>), Fac = the value
-    ;; Also: QINTGR (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;; Also: QINTGR (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     .proc StoreNumber
     bpl ToPackFac
     jsr Float::Round
@@ -57,7 +57,7 @@ Number:
     rts
 
 ;; Jumps to <Float::StoreFacInVariable>, which packs <Fac> into the variable.
-;; Also: COPFLT (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: COPFLT (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 ToPackFac:
     jmp Float::StoreFacInVariable
     .endproc
@@ -65,7 +65,7 @@ ToPackFac:
     .scope Statements continued
 
     ;; LET's string path: drops the saved flag and falls into <AssignString>.
-    ;; Also: COPSTR (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;; Also: COPSTR (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     .proc LetString
     pla
     ; Falls into AssignString.
@@ -75,7 +75,7 @@ ToPackFac:
 ;; Assigns the string result of `LET`, `INPUT` or `READ` to the variable at <AssignedVariable>.
 ;;
 ;; The time-string implementation, when present, precedes <StoreString>.
-;; Also: INPCOM (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: INPCOM (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 AssignString:
 
 .endmacro
@@ -95,7 +95,7 @@ AssignString:
     ;; In: FacMantissa3 = the descriptor's address (low byte), FacMantissa4 = its high byte,
     ;;   AssignedVariable = the destination variable
     ;; See: <Strings::AllocateForFac>, <Strings::ReleaseTemporary>
-    ;; Also: GETSPT (M6502, ASTIL, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;; Also: GETSPT (M6502, ASTIL, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     .proc StoreString
     ldy #$02
     lda (FacMantissa3),y
@@ -111,7 +111,7 @@ AssignString:
     bcc KeepCharacters
 
 ;; String is in string space: copies it only if its descriptor lies at or above <VariablesStart> (a variable's).
-;; Also: QVARIA (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: QVARIA (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 CheckDescriptor:
     ldy FacMantissa4
     cpy VariablesStart+1
@@ -122,14 +122,14 @@ CheckDescriptor:
     bcs CopyCharacters
 
 ;; Uses the source descriptor as it is and jumps to <StoreDescriptor>.
-;; Also: DNTCPY (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: DNTCPY (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 KeepCharacters:
     lda FacMantissa3
     ldy FacMantissa4
     jmp StoreDescriptor
 
 ;; Allocates the length, copies the characters with <Strings::CopyString> and stores <NewDescriptor>.
-;; Also: COPY (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: COPY (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 CopyCharacters:
     ldy #$00
     lda (FacMantissa3),y

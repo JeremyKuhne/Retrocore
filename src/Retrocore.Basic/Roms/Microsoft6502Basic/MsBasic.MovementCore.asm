@@ -10,7 +10,7 @@
 
     ;; Moves the four-byte arithmetic result to <Fac> and normalizes it.
     ;; See: <Float::Normalize>
-    ;; Also: MOVFR (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;; Also: MOVFR (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     .proc NormalizeResult
     lda Result1
     sta FacMantissa1
@@ -26,7 +26,7 @@
     ;; Unpacks a five-byte memory value into <Fac> and clears <FacExtension>.
     ;; In: A = low byte of packed value address, Y = high byte of packed value address
     ;; Out: A = exponent of <Fac>, zero = set when the exponent is zero
-    ;; Also: MOVFM (M6502, ASTIL, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;; Also: MOVFM (M6502, ASTIL, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     .proc LoadFac
     sta Pointer1
     sty Pointer1+1
@@ -53,7 +53,7 @@
 
     ;; Rounds and packs <Fac> into the temporary at <FloatTemporary2>.
     ;; See: <Float::StoreFac>
-    ;; Also: MOV2F (M6502, ASTIL, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;; Also: MOV2F (M6502, ASTIL, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     .proc StoreFacInTemporary2
     ldx #FloatTemporary2
     .byte $2C                       ; BIT absolute skips the following LDX immediate
@@ -62,7 +62,7 @@
 
     ;; Rounds and packs <Fac> into the temporary at <FloatTemporary1>.
     ;; See: <Float::StoreFac>
-    ;; Also: MOV1F (M6502, ASTIL, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;; Also: MOV1F (M6502, ASTIL, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     .proc StoreFacInTemporary1
     ldx #FloatTemporary1
 
@@ -75,7 +75,7 @@ InPageZero:
 
     ;; Rounds and packs <Fac> into the variable addressed by <AssignedVariable>.
     ;; See: <Float::StoreFac>
-    ;; Also: MOVVF (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;; Also: MOVVF (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     .proc StoreFacInVariable
     ldx AssignedVariable
     ldy AssignedVariable+1
@@ -85,7 +85,7 @@ InPageZero:
     ;; In: X = low byte of destination address, Y = high byte of destination address
     ;; Out: Y = 0, FacExtension = 0
     ;; See: <Float::Round>
-    ;; Also: MOVMF (M6502, ASTIL, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;; Also: MOVMF (M6502, ASTIL, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     .proc StoreFac
     jsr Round
     stx Pointer1
@@ -112,19 +112,19 @@ InPageZero:
     .endproc
 
     ;; Copies the unpacked argument accumulator to <Fac>, clearing <FacExtension>.
-    ;; Also: MOVFA (M6502, ASTIL, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;; Also: MOVFA (M6502, ASTIL, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     .proc CopyArgToFac
     lda ArgSign
     .endproc
 
     ;; Uses A as the <Fac> sign instead of <ArgSign>.
-    ;; Also: MOVFA1 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;; Also: MOVFA1 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     .proc CopyArgToFacWithSign
     sta FacSign
     ldx #$05
 
 ;; Copies one byte, from the top down.
-;; Also: MOVFAL (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: MOVFAL (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 Loop:
     lda ArgExponent-1,x
     sta FacExponent-1,x
@@ -137,7 +137,7 @@ Loop:
     ;; Rounds <Fac> and copies it into the argument accumulator.
     ;; Out: A = exponent of <Fac>, X = 0, FacExtension = 0
     ;; See: <Float::Round>
-    ;; Also: MOVAF (M6502, ASTIL, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;; Also: MOVAF (M6502, ASTIL, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     .proc CopyFacToArg
     jsr Round
     .endproc
@@ -146,12 +146,12 @@ Loop:
     ;; Out: A = exponent of <Fac>, X = 0
     ;; Entry:
     ;;   Done = The shared rts
-    ;; Also: MOVEF (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;; Also: MOVEF (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     .proc CopyFacToArgUnrounded
     ldx #$06
 
 ;; Copies one byte, from the top down.
-;; Also: MOVAFL (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: MOVAFL (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 Loop:
     lda FacExponent-1,x
     sta ArgExponent-1,x
@@ -160,7 +160,7 @@ Loop:
     stx FacExtension
 
 ;; The shared rts.
-;; Also: MOVRTS (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: MOVRTS (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 Done:
     rts
     .endproc
@@ -172,7 +172,7 @@ Done:
     ;; Entry:
     ;;   Increment = <Float::IncrementMantissa>; a mantissa that wrapped to zero goes to <Float::ShiftInCarry>
     ;; See: <Float::IncrementMantissa>, <Float::ShiftInCarry>
-    ;; Also: ROUND (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;; Also: ROUND (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     .proc Round
     lda FacExponent
     beq CopyFacToArgUnrounded::Done
@@ -180,7 +180,7 @@ Done:
     bcc CopyFacToArgUnrounded::Done
 
 ;; <Float::IncrementMantissa>; a mantissa that wrapped to zero goes to <Float::ShiftInCarry>.
-;; Also: INCRND (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: INCRND (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 Increment:
     jsr IncrementMantissa
     bne CopyFacToArgUnrounded::Done

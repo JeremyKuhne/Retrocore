@@ -33,21 +33,21 @@ RELATION_TOKENS = 3
     ;;   PushSignedFac = pops its return address into <Pointer1>, pushes A (the sign) and the rounded <Fac>, and jumps
     ;;     back; `FOR` calls it
     ;;   PushFac = rounds <Fac>, pushes its five bytes and jumps through <Pointer1>; `FOR` enters here
-    ;; Also: FRMEVL (M6502, ASTIL, CBM4S79, K4S79, HV1, HV1R, HV2, HV4, HV4R, HVK4)
+    ;; Also: FRMEVL (M6502, ASTIL, CBM4S79, K4S79, HV1, HV1R, HV2, HV4, HV4R, HVK4, BV20)
     .proc EvaluateExpression
     ldx TextPointer
     bne BackUpLow
     dec TextPointer+1
 
 ;; Decrements <TextPointer>'s low byte so the first operand's character is reread; starts with precedence 0.
-;; Also: FRMEV1 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: FRMEV1 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 BackUpLow:
     dec TextPointer
     ldx #$00
     .byte $24                   ; BIT zero-page skips the next byte
 
 ;; Pushes the precedence and mask, checks stack room and evaluates the next operand.
-;; Also: LPOPER (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: LPOPER (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 NextOperand:
     pha
     txa
@@ -59,12 +59,12 @@ NextOperand:
     sta OperatorMask
 
 ;; Rereads the character after an operand; <Strings::Concatenate> jumps back here.
-;; Also: TSTOP (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: TSTOP (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 NextOperator:
     jsr GetCurrentCharacter
 
 ;; Accumulates the less-than, equal and greater-than signs into <OperatorMask>; a repeated one is a syntax error.
-;; Also: LOPREL (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: LOPREL (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 NextRelation:
     sec
     sbc #<TOKEN_GREATER
@@ -83,7 +83,7 @@ NextRelation:
 
 ;; No more relations: finishes a relation, ends without an operator, or picks the arithmetic operator (`+` on strings
 ;; jumps to <Strings::Concatenate>).
-;; Also: ENDREL (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: ENDREL (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 EndRelations:
     ldx OperatorMask
     bne FinishRelation
@@ -103,7 +103,7 @@ Arithmetic:
     tay
 
 ;; Compares the pending precedence with the new operator's in <OperatorTable>.
-;; Also: QPREC (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: QPREC (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 ComparePrecedence:
     pla
     cmp OperatorTable + OperatorEntry::PRECEDENCE,y
@@ -111,12 +111,12 @@ ComparePrecedence:
     jsr RequireNumber
 
 ;; The new operator binds tighter: keeps the pending precedence on the stack.
-;; Also: DOPREC (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: DOPREC (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 DeferOperator:
     pha
 
 ;; Pushes the operation at Y and evaluates its operand; <ApplyPrefixOperator> jumps here for unary minus and NOT.
-;; Also: NEGPRC (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: NEGPRC (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 Prefix:
     jsr PushOperation
     pla
@@ -127,7 +127,7 @@ Prefix:
     bne PopOperand
 
 ;; Combines the relation mask with the operand type and backs up <TextPointer>.
-;; Also: FINREL (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: FINREL (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 FinishRelation:
     lsr ValueType
     txa
@@ -137,7 +137,7 @@ FinishRelation:
     dec TextPointer+1
 
 ;; Decrements <TextPointer>'s low byte and selects the relational operator's table entry.
-;; Also: FINRE2 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: FINRE2 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 RelationBackUpLow:
     dec TextPointer
     ldy #<(OperatorTable::Relation - OperatorTable)
@@ -145,14 +145,14 @@ RelationBackUpLow:
     bne ComparePrecedence
 
 ;; After an operation's handler returns: compares precedence with the operator at <OperatorPointer>.
-;; Also: QPREC1 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: QPREC1 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 CompareAfterPrefix:
     cmp OperatorTable + OperatorEntry::PRECEDENCE,y
     bcs PopOperand
     bcc DeferOperator
 
 ;; Pushes the operator's dispatch address and <Fac> with its precedence, then evaluates the next operand.
-;; Also: DOPRE1 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: DOPRE1 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 PushOperation:
     lda OperatorTable + OperatorEntry::HANDLER + 1,y
     pha
@@ -163,12 +163,12 @@ PushOperation:
     jmp NextOperand
 
 ;; Jumps to <SyntaxError>.
-;; Also: SNERR5 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: SNERR5 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 ToSyntaxError:
     jmp SyntaxError
 
 ;; Saves the current <Fac> and operator precedence for a pending operation.
-;; Also: PUSHF1 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: PUSHF1 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 PushOperand:
     lda FacSign
     ldx OperatorTable + OperatorEntry::PRECEDENCE,y
@@ -177,7 +177,7 @@ PushOperand:
 ;;
 ;; Where `carryReturn` is 0 (AppleSoft, BASIC 1 and 2), only the return address's low byte is incremented, so a call
 ;; whose return address ends in $FF returns a page early; where it is 1 (BASIC 4), the increment carries.
-;; Also: PUSHF (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: PUSHF (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 PushSignedFac:
     tay
     pla
@@ -198,7 +198,7 @@ PushSignedFac:
 ;; Saves the rounded <Fac> on the stack without pushing its sign, then jumps through <Pointer1>.
 ;;
 ;; `FOR` sets <Pointer1> to its continuation before entering here; <PushSignedFac> takes it from the return address.
-;; Also: FORPSH (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: FORPSH (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 PushFac:
     jsr Float::Round
     lda FacMantissa4
@@ -214,30 +214,30 @@ PushFac:
     jmp (Pointer1)
 
 ;; End of the expression: sets Y to $FF and pulls the pending precedence.
-;; Also: QOP (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: QOP (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 NoOperator:
     ldy #$FF
     pla
 
 ;; Precedence 0 means no pending operation: returns the result.
-;; Also: QOPGO (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: QOPGO (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 CheckDone:
     beq Finish
 
 ;; A relation's precedence skips the numeric check, so strings compare; others require a number.
-;; Also: QCHNUM (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: QCHNUM (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 CheckOperands:
     cmp #PRECEDENCE_RELATION
     beq SaveOperator
     jsr RequireNumber
 
 ;; Saves Y in <OperatorPointer>.
-;; Also: UNPSTK (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: UNPSTK (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 SaveOperator:
     sty OperatorPointer
 
 ;; Pulls the mask into <RelationMask> and the stacked operand into the argument register, setting <ResultSign>.
-;; Also: PULSTK (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: PULSTK (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 PopOperand:
     pla
     lsr a
@@ -258,12 +258,12 @@ PopOperand:
     sta ResultSign
 
 ;; Loads <FacExponent> (sets the flags) before the RTS that dispatches to the operator or returns.
-;; Also: QOPRTS (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: QOPRTS (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 Finish:
     lda FacExponent
 
 ;; Returns into the operator routine whose address was pushed, or to the caller.
-;; Also: UNPRTS (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: UNPRTS (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 Return:
     rts
     .endproc

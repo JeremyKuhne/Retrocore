@@ -19,7 +19,7 @@
 
     ;; Skips DATA fields up to an unquoted colon or end of line.
     ;; See: <FindStatementEnd>, <Statements::Read>
-    ;; Also: DATA (M6502, ASTIL, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;; Also: DATA (M6502, ASTIL, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     .proc Data
     jsr FindStatementEnd
     .endproc
@@ -29,7 +29,7 @@
     ;; In: Y = offset of the terminator
     ;; Entry:
     ;;   Done = returns; <FindLineEnd>'s terminator branches return through it
-    ;; Also: ADDON (M6502, ASTIL, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;; Also: ADDON (M6502, ASTIL, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     .proc AdvanceTextPointer
     tya
     clc
@@ -38,7 +38,7 @@
     bcc Done
     inc TextPointer+1
 ;; Returns; <FindLineEnd>'s terminator branches return through it.
-;; Also: REMRTS (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: REMRTS (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 Done:
     rts
     .endproc
@@ -46,7 +46,7 @@ Done:
     ;; Scans from <TextPointer> to an unquoted colon or a zero byte.
     ;; Out: Y = terminator offset, A = the terminator, zero = set
     ;; See: <Statements::Data>, <AssignVariableList::SearchData>, <FindLineEnd>
-    ;; Also: DATAN (M6502, ASTIL, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;; Also: DATAN (M6502, ASTIL, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     .proc FindStatementEnd
     ldx #':'
     .byte $2C                   ; BIT absolute skips <FindLineEnd>'s LDX
@@ -54,21 +54,21 @@ Done:
 
     ;; Scans from <TextPointer> to the end-of-line zero.
     ;; Out: Y = terminator offset, A = 0, zero = set
-    ;; Also: REMN (M6502, ASTIL, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;; Also: REMN (M6502, ASTIL, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     .proc FindLineEnd
     ldx #$00
     stx Delimiter
     ldy #$00
     sty EndDelimiter
 ;; Exchanges <Delimiter> and <EndDelimiter> (on entry and at each quote).
-;; Also: EXCHQT (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: EXCHQT (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 SwapDelimiters:
     lda EndDelimiter
     ldx Delimiter
     sta Delimiter
     stx EndDelimiter
 ;; Zero or <EndDelimiter> ends; a quote swaps.
-;; Also: REMER (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: REMER (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 NextCharacter:
     lda (TextPointer),y
     beq AdvanceTextPointer::Done
@@ -107,7 +107,7 @@ NextCharacter:
 
     ;; Evaluates the condition; false skips the line, true executes the THEN statement or jumps to a line.
     ;; See: <Statements::Rem>, <Statements::GoTo>, <DispatchStatement>
-    ;; Also: IF (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;; Also: IF (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     .proc If
     jsr EvaluateExpression
     jsr GetCurrentCharacter
@@ -116,27 +116,27 @@ NextCharacter:
     lda #TOKEN_THEN
     jsr CheckCharacter
 ;; <FacExponent> nonzero: true.
-;; Also: OKGOTO (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: OKGOTO (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 Test:
     lda FacExponent
     bne IfTrue
     .endproc
 
     ;; Skips the rest of the line.
-    ;; Also: REM (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;; Also: REM (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     .proc Rem
     jsr FindLineEnd
     beq AdvanceTextPointer
     .endproc
     ;; A digit after `THEN` goes to its line through <Statements::GoTo>; anything else, `GOTO` included, runs as a
     ;; statement through <DispatchStatement>.
-    ;; Also: DOCOND (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;; Also: DOCOND (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     .proc IfTrue
     jsr GetCurrentCharacter
     bcs ToExecuteStatement
     jmp GoTo
 ;; Jumps to <DispatchStatement>.
-;; Also: DOCO (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: DOCO (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 ToExecuteStatement:
     jmp DispatchStatement
     .endproc
@@ -157,7 +157,7 @@ ToExecuteStatement:
     ;;   RequireGoto = requires <TOKEN_GOTO> in A, else a syntax error; <ReadLineNumber> branches here for a line
     ;;     number that is too large, with its high byte in A
     ;;   Done = returns; <ReadLineNumber> exits through it at a non-digit
-    ;; Also: ONGOTO (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;; Also: ONGOTO (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     .proc On
     jsr EvaluateByte
     pha
@@ -165,19 +165,19 @@ ToExecuteStatement:
     beq NextEntry
 ;; Requires <TOKEN_GOTO> in A, else a syntax error. <ReadLineNumber> branches here for a line number that is too
 ;; large, with its high byte in A, so a high byte equal to the token continues into the loop below.
-;; Also: SNERR3 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: SNERR3 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 RequireGoto:
     cmp #TOKEN_GOTO
     bne Return::ToSyntaxError
 ;; Decrements the selector; zero: dispatches the GOTO/GOSUB.
-;; Also: ONGLOP (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: ONGLOP (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 NextEntry:
     dec FacMantissa4
     bne SkipEntry
     pla
     jmp DispatchStatement::WithToken
 ;; Reads a line number; a comma continues.
-;; Also: ONGLP1 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: ONGLP1 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 SkipEntry:
     jsr GetNextCharacter
     jsr ReadLineNumber
@@ -185,7 +185,7 @@ SkipEntry:
     beq NextEntry
     pla
 ;; Returns; <ReadLineNumber> exits through it at a non-digit.
-;; Also: ONGRTS (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: ONGRTS (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 Done:
     rts
     .endproc

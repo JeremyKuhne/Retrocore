@@ -30,7 +30,7 @@ AddErrorSuffix:
     ;; <ReadyForCommand>.
     ;; In: A = message address low byte, Y = message address high byte
     ;; See: <ReportError>, <Statements::Stop>, <PrintText>, <Float::PrintInLineNumber>, <ReadyForCommand>
-    ;; Also: ERRFIN (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;; Also: ERRFIN (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     .proc ReportMessage
     jsr PrintText
     ldy CurrentLine+1
@@ -50,7 +50,7 @@ AddErrorSuffix:
 ;;
 ;; No matching line leaves <SourceStart> at the insertion position.
 ;; See: <ReadLineNumber>, <Tokenize>, <FindLine>
-;; Also: MAIN1 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: MAIN1 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 EditLine:
     jsr ReadLineNumber
     jsr Tokenize
@@ -85,7 +85,7 @@ EditLine:
     dec Pointer2+1
 
 ;; Both borrow paths join here to add the low offset into the move's source pointer.
-;; Also: QDECT1 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: QDECT1 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 SetMoveSource:
     clc
     adc source
@@ -94,7 +94,7 @@ SetMoveSource:
     clc
 
 ;; Copies a page at a time, X pages, from the source to <Pointer2>, closing the old line's gap.
-;; Also: MLOOP (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: MLOOP (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 MoveDown:
     lda (source),y
     sta (Pointer2),y
@@ -114,7 +114,7 @@ MoveDown:
     ldy #.sizeof(ProgramLine)        ; Y at the text: the scan reads from the byte after it
 
 ;; Steps Y to the line's zero, then stores the next line's address, just past it, as the line's link.
-;; Also: CZLOOP (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: CZLOOP (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 ScanLine:
     iny
     lda (Pointer1),y
@@ -146,13 +146,13 @@ ScanLine:
     .assert foldCase = 0 || foldCase = 1, "foldCase is 0 or 1."
 
 ;; Reloads Y from <TokenizePointer> and stores the token in A; the keyword matcher's exit.
-;; Also: GETBPT (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: GETBPT (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 StoreToken:
     ldy TokenizePointer
 
 ;; Stores A at the output position and ends at a zero; after a colon or `DATA` sets <TokenizeState>, and after `REM`
 ;; copies the rest of the line.
-;; Also: STUFFH (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: STUFFH (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 StoreByte:
     inx
     iny
@@ -166,12 +166,12 @@ StoreByte:
     bne CheckRem
 
 ;; Stores the colon's (0) or `DATA`'s (nonzero) difference in <TokenizeState>.
-;; Also: COLIS (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: COLIS (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 SetTokenizeState:
     sta TokenizeState
 
 ;; Not `REM`: goes back to the keyword loop; `REM`: clears <EndDelimiter> and copies the rest of the line.
-;; Also: NODATT (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: NODATT (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 CheckRem:
     sec
     sbc #(TOKEN_REM-':')
@@ -179,7 +179,7 @@ CheckRem:
     sta EndDelimiter
 
 ;; Reads the next input character, or folds its case, and stops at a zero or <EndDelimiter>.
-;; Also: STR1 (M6502, HV1, HV1R, HV2, HV4, HV4R, CBM4S79)
+;; Also: STR1 (M6502, HV1, HV1R, HV2, HV4, HV4R, CBM4S79, BV20)
 CopyLiteral:
     .if foldCase
         jsr UPCASE
@@ -191,7 +191,7 @@ CopyLiteral:
     beq StoreByte
 
 ;; Stores the literal character and continues copying; the vendor's tokenizer enters here at a quote.
-;; Also: STRNG (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: STRNG (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 StoreLiteral:
     iny
     sta InputBuffer-5,y

@@ -22,7 +22,7 @@
     ;; Out: A = byte count after a successful check, X = low address for a nonempty string,
     ;;   Y = high address for a nonempty string, NewString = address for a nonempty string
     ;; Errors: OUT OF MEMORY if a nonempty request still does not fit after collection
-    ;; Also: GETSPA (M6502, CBM4S79, K4S79, HV1, HV1R, HV2, HV4, HV4R, HVK4)
+    ;; Also: GETSPA (M6502, CBM4S79, K4S79, HV1, HV1R, HV2, HV4, HV4R, HVK4, BV20)
     .proc ReserveSpace
     lsr CollectionState
 

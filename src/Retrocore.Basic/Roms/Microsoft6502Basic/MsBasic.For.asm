@@ -19,7 +19,7 @@
 ;; Entry:
 ;;   ReadStep = the continuation the limit's push jumps to: loads 1, or evaluates the expression after `STEP`
 ;; See: <FindForFrame>, <EvaluateExpression::PushFac>, <Statements::Next>
-;; Also: FOR (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: FOR (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 .proc For
     lda #$80
     sta SubscriptMode
@@ -36,7 +36,7 @@
 ;; two-byte entries (<CheckStack>), and pushes the text pointer after the statement and <CurrentLine>. Then it requires
 ;; `TO`, evaluates the limit, puts its sign into the mantissa's top bit, and has <EvaluateExpression::PushFac> push it
 ;; and continue at <ReadStep>.
-;; Also: NOTOL (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: NOTOL (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 BuildFrame:
     pla
     pla
@@ -69,7 +69,7 @@ BuildFrame:
     jmp EvaluateExpression::PushFac
 
 ;; Loads the default step of one, or evaluates the expression after STEP, and completes the FOR frame.
-;; Also: LDFONE (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: LDFONE (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 ReadStep:
     lda #<Float::One
     ldy #>Float::One
@@ -82,7 +82,7 @@ ReadStep:
 
 ;; Pushes the step through <EvaluateExpression::PushSignedFac>, its sign first (from <Float::GetSign>), then
 ;; <AssignedVariable>.
-;; Also: ONEON (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: ONEON (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 PushStep:
     jsr Float::GetSign
     jsr EvaluateExpression::PushSignedFac

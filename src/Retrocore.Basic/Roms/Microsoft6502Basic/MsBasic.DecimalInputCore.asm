@@ -23,13 +23,13 @@
     ;; Entry:
     ;;   NextExponentCharacter = Reads the next exponent character
     ;; See: <GetNextCharacter>, <Float::AddSignedByte>
-    ;; Also: FIN (M6502, ASTIL, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;; Also: FIN (M6502, ASTIL, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     .proc ReadNumber
     ldy #$00
     ldx #$0A
 
 ;; Zeroes the eleven work bytes from <DigitCount> up without touching carry.
-;; Also: FINZLP (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: FINZLP (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 ClearLoop:
     ; Clear the decimal counters, sign flags and <Fac> workspace without changing carry.
     sty DigitCount,x
@@ -42,23 +42,23 @@ ClearLoop:
     beq NextCharacter
 
 ;; Skips a leading plus sign.
-;; Also: QPLUS (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: QPLUS (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 CheckPlus:
     cmp #'+'
     bne CheckPoint
 
 ;; Reads the next character (<GetNextCharacter>).
-;; Also: FINC (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: FINC (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 NextCharacter:
     jsr GetNextCharacter
 
 ;; A digit (carry clear) goes to <Float::ReadNumber::Digit>.
-;; Also: FINDGQ (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: FINDGQ (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 TestDigit:
     bcc Digit
 
 ;; Tests for '.' and 'E'; after E reads the exponent's sign, as a character or a sign token.
-;; Also: FIN1 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: FIN1 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 CheckPoint:
     cmp #'.'
     beq DecimalPoint
@@ -77,22 +77,22 @@ CheckPoint:
     bne ExponentDone
 
 ;; Sets <ExponentSign>'s bit 7 for a minus sign after E.
-;; Also: FINEC1 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: FINEC1 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 NegativeExponent:
     ror ExponentSign
 
 ;; Reads the next exponent character.
-;; Also: FINEC (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: FINEC (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 NextExponentCharacter:
     jsr GetNextCharacter
 
 ;; A digit goes to <Float::AccumulateExponentDigit>.
-;; Also: FNEDG1 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: FNEDG1 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 TestExponentDigit:
     bcc AccumulateExponentDigit
 
 ;; Negates <DecimalExponent> if <ExponentSign> is set, then scales.
-;; Also: FINEC2 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: FINEC2 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 ExponentDone:
     bit ExponentSign
     bpl EndOfNumber
@@ -102,19 +102,19 @@ ExponentDone:
     jmp AdjustExponent
 
 ;; Rotates carry into <DecimalPointSeen>; a second point (bit 6 then set) ends the number.
-;; Also: FINDP (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: FINDP (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 DecimalPoint:
     ror DecimalPointSeen
     bit DecimalPointSeen
     bvc NextCharacter
 
 ;; Loads <DecimalExponent> to scale.
-;; Also: FINE (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: FINE (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 EndOfNumber:
     lda DecimalExponent
 
 ;; Subtracts the digits counted after the point from <DecimalExponent> and picks the scaling loop.
-;; Also: FINE1 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: FINE1 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 AdjustExponent:
     sec
     sbc DigitCount                      ; account for digits accumulated after the decimal point
@@ -123,7 +123,7 @@ AdjustExponent:
     bpl MultiplyLoop
 
 ;; <Float::DivideByTen> until <DecimalExponent> is zero.
-;; Also: FINDIV (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: FINDIV (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 DivideLoop:
     jsr DivideByTen
     inc DecimalExponent
@@ -131,26 +131,26 @@ DivideLoop:
     beq ApplySign
 
 ;; <Float::MultiplyByTen> until <DecimalExponent> is zero.
-;; Also: FINMUL (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: FINMUL (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 MultiplyLoop:
     jsr MultiplyByTen
     dec DecimalExponent
     bne MultiplyLoop
 
 ;; Negates the result if <InputSign> is negative.
-;; Also: FINQNG (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: FINQNG (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 ApplySign:
     lda InputSign
     bmi ToNegate
     rts
 
 ;; Jumps on to <Float::Negate>.
-;; Also: NEGXQS (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: NEGXQS (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 ToNegate:
     jmp Negate
 
 ;; Counts a digit after the point, then multiplies <Fac> by ten.
-;; Also: FINDIG (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: FINDIG (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 Digit:
     pha
     bit DecimalPointSeen
@@ -158,7 +158,7 @@ Digit:
     inc DigitCount
 
 ;; <Float::MultiplyByTen>, then adds the digit's value (<Float::AddSignedByte>).
-;; Also: FINDG1 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: FINDG1 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 AddDigit:
     jsr MultiplyByTen
     pla
@@ -170,7 +170,7 @@ AddDigit:
 
     ;; Adds the signed byte in A to <Fac>, converting it to floating point first.
     ;; In: A = signed byte
-    ;; Also: FINLOG (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;; Also: FINLOG (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     .proc AddSignedByte
     pha
     jsr CopyFacToArg
@@ -189,7 +189,7 @@ AddDigit:
     ;; positive and makes it 100 when negative. With the earlier limit, a further digit after twelve or more signals
     ;; overflow when positive; when negative, the arithmetic uses eleven for the first term but still adds the old
     ;; <DecimalExponent>. The resulting exponent is (88 + twice the old exponent + the next digit), modulo 256.
-    ;; Also: FINEDG (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;; Also: FINEDG (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     .proc AccumulateExponentDigit
     lda DecimalExponent
     .if earlyExponentLimit
@@ -200,7 +200,7 @@ AddDigit:
         jmp OverflowError
 
 ;; Negative exponent over the limit: earlier build continues with 11, later build stores 100.
-;; Also: MLEXMI (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: MLEXMI (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 ClampNegative:
         lda #$0B
     .else
@@ -214,7 +214,7 @@ ClampNegative:
 
 ;; Computes (4 * A + <DecimalExponent>) * 2 + the digit at <TextPointer>: ten times <DecimalExponent> plus the digit,
 ;; except on the earlier build's clamp path, where A is 11.
-;; Also: MLEX10 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: MLEX10 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 TimesTen:
     asl a
     asl a
@@ -229,7 +229,7 @@ TimesTen:
 
     .if .not earlyExponentLimit
 ;; Negative exponent over the limit: earlier build continues with 11, later build stores 100.
-;; Also: MLEXMI (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: MLEXMI (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 ClampNegative:
     .endif
     sta DecimalExponent

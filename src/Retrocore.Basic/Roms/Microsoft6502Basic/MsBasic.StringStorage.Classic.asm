@@ -18,12 +18,12 @@
     ;; In: A = number of character bytes
     ;; Out: A = byte count after a successful check, X = low address, Y = high address, NewString = the address
     ;; Errors: OUT OF MEMORY if a nonempty request still does not fit after collection
-    ;; Also: GETSPA (M6502, ASTIL, CBM4S79, K4S79, HV1, HV1R, HV2, HV4, HV4R, HVK4)
+    ;; Also: GETSPA (M6502, ASTIL, CBM4S79, K4S79, HV1, HV1R, HV2, HV4, HV4R, HVK4, BV20)
     .proc ReserveSpace
     lsr CollectionState
 
 ;; Computes <StringsBottom> minus the length.
-;; Also: TRYAG2 (M6502, HV1, HV1R, HV2)
+;; Also: TRYAG2 (M6502, HV1, HV1R, HV2, BV20)
 Try:
     pha
     eor #$FF
@@ -43,7 +43,7 @@ CheckRoom:
     bcc Collect
 
 ;; Sets <StringsBottom> and <NewString> to the new bottom; returns X/Y = address, A = length.
-;; Also: STRFRE (M6502, HV1, HV1R, HV2)
+;; Also: STRFRE (M6502, HV1, HV1R, HV2, BV20)
 Take:
     sta StringsBottom
     sty StringsBottom+1
@@ -54,7 +54,7 @@ Take:
     rts
 
 ;; Collects once (OUT OF MEMORY if already collected) and retries a nonempty request.
-;; Also: GARBAG (M6502, HV1, HV1R, HV2)
+;; Also: GARBAG (M6502, HV1, HV1R, HV2, BV20)
 Collect:
     ldx #<ERROR_OUT_OF_MEMORY
     lda CollectionState

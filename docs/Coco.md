@@ -80,9 +80,8 @@ listing, the command loop, errors, BREAK and the screen's output reach Super Ext
 RAM. The debugger follows: on a CoCo 3 the three sources apply wherever their bytes are, and the patched places show
 the patches' source.
 
-Nothing external is needed: without dumps, every model's ROMs are built from the sources, disk controller included,
-and debugging steps into them wherever the BASICs run. Dumps can still take their place, from a directory of dumps
-under MAME's names: `romDirectory`, or `RETROCORE_COCO_ROMS`, in the directory itself or its `coco`, `coco2b`, `coco3`
+Debugging steps into these sources wherever the BASICs run—whether every model's ROMs (disk controller included) are
+built from the SDK sources by default or loaded from matching dumps under MAME's names: `romDirectory`, or `RETROCORE_COCO_ROMS`, in the directory itself or its `coco`, `coco2b`, `coco3`
 and `coco_fdc` folders. A blank `romDirectory`, as `${env:RETROCORE_COCO_ROMS}` gives when the variable is not set,
 names no dumps.
 

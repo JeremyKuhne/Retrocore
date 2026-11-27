@@ -174,8 +174,8 @@ and 3, and constants) and name each other's routines through `EditorEntries.asm`
 round from the 2001-N's: capitals at `$01-$1A` and lowercase at `$41-$5A`. BASIC 1's editor stores an unshifted letter
 at `$01-$1A`, so on a 2001 in the lowercase set, unshifted letters show as capitals and shifted ones as lowercase.
 
-Nothing external is needed: without dumps, both models' ROMs are built from the sources. Dumps can take their place
-from a directory under MAME's names: `romDirectory`, or `RETROCORE_PET_ROMS`, in the directory itself or its
+By default, every PET model's ROMs are built from these SDK sources; matching dumps can also be loaded from a directory
+under MAME's names: `romDirectory`, or `RETROCORE_PET_ROMS`, in the directory itself or its
 `pet2001`, `pet2001n`, `pet4016` and `pet4032b` folders. A blank `romDirectory`, as `${env:RETROCORE_PET_ROMS}` gives when the variable is
 not set, names no dumps.
 

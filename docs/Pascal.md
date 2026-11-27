@@ -234,8 +234,8 @@ keeps (`X4N`) are named as other fields are.
 With `--pcode`, each statement is written below the p-code it was decompiled from, in a brace comment (`{SLDO4;
 SLDC 10; LESI; FJP $0019}` above a `WHILE`): a compound statement's own code (an IF's or a loop's test, a CASE's
 selector) above it, and what follows its statements (a loop's jump back, a REPEAT's test) below them. Comments
-compile to nothing, so the source still compiles to the same code.
-Apple Pascal 1.3's Compiler, named and commented so, is kept outside this repository.
+compile to nothing, so the source still compiles to the same code. Apple Pascal 1.3's Compiler is maintained in the SDK
+under [`src/Retrocore.Pascal/Sdk/Compiler/apple2-1.3`](../src/Retrocore.Pascal/Sdk/Compiler/apple2-1.3).
 
 A unit's procedures are named from its interface text in the library (by default the disk's `SYSTEM.LIBRARY`, or
 `--library disk NAME`); the source `USES` them as the program did. Where some code cannot be decompiled, the

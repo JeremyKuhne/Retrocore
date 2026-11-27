@@ -8,9 +8,9 @@ Retrocore runs the TRS-80's other Z80 machines beside the [Model I](Trs80ModelI.
   and the Z80 side of the **Model 16, 16B and Tandy 6000**.
 
 The SDK has native sources for every ROM these machines run with a known good dump, byte-identical to the chips
-(see [ROMs](#roms)), so they run with nothing external, or from dumps. The real ROMs boot to their prompts, and the
-Model III, 4 and 4P and the Model II boot their DOSes from disk images (see [DOSes](#doses)). See
-[What is not done yet](#what-is-not-done-yet). The Model II's keyboard has its own processor and ROM (MAME's
+(see [ROMs](#roms)), so stepping into a ROM debugs at its source whether built from the SDK or loaded from a matching
+dump. The real ROMs boot to their prompts, and the Model III, 4 and 4P and the Model II boot their DOSes from disk
+images (see [DOSes](#doses)). See [What is not done yet](#what-is-not-done-yet). The Model II's keyboard has its own processor and ROM (MAME's
 `65-1991.z4`), which are not run here: the emulated keyboard queues its codes directly, as its documentation
 is remembered to give them rather than as its ROM sends them ([the Model II](#the-model-ii-12-and-16)).
 
@@ -103,7 +103,7 @@ TRSDOS-II, and not TRS-XENIX.
 
 ## Disk images
 
-The new machines, and now the Model I too, read four formats, by extension or, for `.dsk`, by contents:
+These machines, like the Model I, read four formats, by extension or, for `.dsk`, by contents:
 
 | Format | Notes |
 | --- | --- |
@@ -203,7 +203,9 @@ Without a ROM directory, a launch runs the SDK's builds: the Model III's revisio
 Level I ROM), the Model 4's, the 4P's boot ROM and the Model II's newest boot ROM (version 5). `sdkRoms` names another
 copy of the sources.
 
-**Level I.** A Model III with `"rom": "level1"` runs Level I BASIC from its 4K ROM, the ROM space above it empty, with
+### Level I
+
+A Model III with `"rom": "level1"` runs Level I BASIC from its 4K ROM, the ROM space above it empty, with
 250 baud tapes (`CSAVE` and `CLOAD`) and `LPRINT` and `LLIST` on the printer. It has the BASIC thread, as Level I on
 the [Model I](Trs80ModelI.md#debugging) does, from the symbols of `Level1.asm`'s Model III build, and its `basic`
 launch runs a `.level1.bas` file. Neither ROM reads the other's tapes; a tape recorded for the other one still goes in, and the debug
@@ -253,7 +255,7 @@ starts the machine again with the other ROM, after asking.
 The display panel types the Model I's keys on the Model III family (Esc is BREAK, Home is CLEAR), and ASCII on the
 Model II (Esc is BREAK, the arrows `$1C`-`$1F`), with buttons for BREAK, HOLD, F1 and F2. **Machine reset** stops at
 `$0066` on the Model III family, whose reset button raises the NMI, and at `$0000` on the Model II, whose reset switch
-resets the Z80. The Retro Devices view shows the cassette and drives.
+resets the Z80. The **Drives** view shows the cassette and drives.
 
 The call stack, registers, ports, memory and breakpoints work as on the Model I. When the running ROM is one the SDK's
 sources build (whether from the sources or a dump), its source debugs as a ROM module, so stepping into the ROM shows

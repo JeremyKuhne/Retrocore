@@ -50,7 +50,9 @@ node tools/Test-Trs80Model100Dap.mjs
 node tools/Test-AtariDap.mjs
 node tools/Test-AdventureDap.mjs
 node tools/Test-ProjectDap.mjs
+node tools/Test-NewProjectDap.mjs
 node tools/Test-OffMachine.mjs
+node tools/Test-FreshClone.mjs
 
 # Additional local debug-adapter scripts (need nothing external)
 node tools/Test-CycleEvents.mjs
@@ -146,9 +148,11 @@ Code, and normal terminals.
 | `RETROCORE_IIE_ROMS` | Apple IIe CD, EF, and video ROM dumps. Optional for debugging (which otherwise builds from the SDK); required by `AppleSharp` and the IIe chip/oracle tests; `extension`'s full `npm test` uses them when set and otherwise ROMs built from the SDK. |
 | `RETROCORE_IIPLUS_ROMS`, `RETROCORE_II_ROMS` | Apple II Plus and Apple II 2716 chip dumps (defaults `<cache>\apple2-roms\APPLE II+` and `<cache>\apple2-roms\APPLE II`); optional for debugging. |
 | `RETROCORE_DISKII_ROMS` | Disk II P5/P6 chip dumps under their `apple2.org.za` names (default `<cache>\disk2-roms`). |
+| `RETROCORE_SUPERDRIVE_ROMS`, `RETROCORE_MOUSE_ROMS` | Apple II 3.5 Disk Controller EPROM and AppleMouse II EPROM dumps for source comparison tests (defaults `<cache>\superdrive-roms` and `<cache>\mouse-roms`). |
+| `RETROCORE_SOFTCARD_DISKS`, `RETROCORE_SOFTCARD3` | SoftCard CP/M disks for the Apple II (default `<cache>\softcard-disks`), and SoftCard /// CP/M Master disk and `softcard3.rom` for the Apple III (default `<cache>\softcard3`). |
 | `RETROCORE_APPLE1_ROMS` | Apple-1 Monitor, ACI, and BASIC dumps, `wozmon.bin`, `aci.bin`, and `basic.bin` (default `<cache>\apple1-roms` for the ROM source checks); optional for debugging. |
 | `RETROCORE_APPLE3_ROMS` | MAME's `apple3` set unzipped (default `<cache>\apple3-roms\mame\apple3`); optional for debugging. |
-| `RETROCORE_APPLE3_DISKS` | SOS 1.3 disk images for the Apple III tests (default `<cache>\apple3-disks`). |
+| `RETROCORE_APPLE3_DISKS`, `RETROCORE_APPLE3_UTILITIES`, `RETROCORE_APPLE3_BUSINESS_BASIC` | SOS 1.3 disk images for the Apple III tests and `Test-Apple3Dap.mjs` (defaults `<cache>\apple3-disks`, `Apple3SOS1.3SysUtils.dsk`, and `Apple3BusBasic1.23.dsk`). |
 | `RETROCORE_TRS80_ROMS` | TRS-80 ROM dumps under MAME's names (default `<cache>\trs80-roms\extract`); optional for every TRS-80 Model I/III/4/4P/II, whose ROMs the SDK's sources build. |
 | `RETROCORE_TRS80_DOS` | A NEWDOS/80 JV1 disk image for `tools\Test-Trs80Dap.mjs` (default `<cache>\trs80-disks\NEWDOS_80sssd_jv1.DSK`). |
 | `RETROCORE_TRS80M100_ROMS` | Model 100 and Tandy 102 ROMs (`m100rom.m12` and `m102rom.m12`, or `m100.bin` and `t102.bin`; default `<cache>\trs80m100-roms` for tests); required to run either until SDK sources are written. |
@@ -156,6 +160,7 @@ Code, and normal terminals.
 | `RETROCORE_BBC_ROMS` | BBC Micro ROM dumps: MAME's `bbcb` set unzipped (default `<cache>\bbc-roms\extract\bbcb` for tests); optional for debugging. |
 | `RETROCORE_PET_ROMS` | MAME's `pet2001`, `pet2001n`, `pet4016`, `pet4032b`, `c4040`, and `c2040` sets unzipped, each in its folder (default `<cache>\pet-roms\extract`); optional for PET machines themselves, while the 4040 and 2040 drives use `c4040` and `c2040`. |
 | `RETROCORE_ATARI_ROMS` | MAME's `a800` set unzipped (default `<cache>\atari8-roms\extract\a800`), with the 810's firmware in an `atari810` folder beside it (a PAL launch takes the folder holding `a800` and `a800pal`); optional for debugging. |
+| `RETROCORE_ALTAIR_BASIC`, `RETROCORE_ALTAIR_DISK` | SIMH Altair BASIC memory/tape images and 8-inch CP/M, Disk BASIC, and Altair DOS disks plus PROM dumps for Altair tests and `Test-AltairDap.mjs` (defaults `<cache>\altair-basic` and `<cache>\altair-disk`). |
 | `RETROCORE_KAYPRO` | Kaypro II dumps and disks for tests and `tools\Test-KayproDap.mjs`: `81-149c.rom`, `81-146a.bin`, `cpm22-rom149.img` (CP/M 2.2), and `MBasic.img` (default `<cache>\kaypro`). |
 | `RETROCORE_KAYPRO_ROMS` | Kaypro II chip dumps for debugging in place of the SDK's builds (MAME's `kayproii` names, or the names above); optional. |
 | `RETROCORE_MAME` | `mame.exe` path for the Model I, Model III, Apple III, Color Computer, PET, 4040, 2040, BBC Micro, Atari, and SoftCard oracle tests (default `<cache>\mame\mame.exe`). |
@@ -196,12 +201,12 @@ C++ tools), ProDOS 2.4.3, Microsoft's 6502 BASIC source and `msbasic` reference 
 | [`Retrocore.Machines.Atari`](../src/Retrocore.Machines.Atari) | Atari 400 and 800: ANTIC, GTIA/CTIA, POKEY, PIA, cartridges, SIO bus with 410 recorder and hardware-level 810 drive, and SDK ROM sources. |
 | [`Retrocore.Machines.Altair`](../src/Retrocore.Machines.Altair) | MITS Altair 8800: 88-2SIO/88-SIO serial cards, 88-ACR cassette, front panel, 88-DCDD 8-inch drives, and DBL/MBL boot PROM sources. |
 | [`Retrocore.Machines.Kaypro`](../src/Retrocore.Machines.Kaypro) | Kaypro II: banked memory, Z80 PIO/SIO, serial keyboard, 80x24 video, FD1793 drives, and monitor, font, and MBASIC 5.21 SDK sources. |
-| [`Retrocore.Debug`](../src/Retrocore.Debug) | Combined debug adapter (DAP), assembly/BASIC/Pascal language server, `retrocore build` project builder, and `--assemble` / `--basic` / `--dos` / `--pascal` / `--model100` / `--disassemble` CLI (packs as the `retrocore` .NET tool). |
+| [`Retrocore.Debug`](../src/Retrocore.Debug) | Combined debug adapter (DAP), assembly/BASIC/Pascal language server, `retrocore build` / `new` / `init` project commands, and `--assemble` / `--basic` / `--dos` / `--pascal` / `--model100` / `--disassemble` CLI (packs as the `retrocore` .NET tool). |
 | [`Retrocore.Desktop`](../src/Retrocore.Desktop) | Standalone Native AOT Avalonia + SDL3 desktop emulator for the full machine catalog, sharing the extension's Machine, Drives, and Display & Sound views. |
 | [`AppleSharp`](../src/AppleSharp) | Minimal standalone SDL3 Native AOT desktop emulator for the Apple IIe (uses caller-supplied ROM dumps). |
 | [`Retrocore.Generators`](../src/Retrocore.Generators) | Roslyn source generators that compile instruction-set descriptions and `.rom.asm` sources into C# tables. |
 | [`tools/DosDisk`](../tools/DosDisk) | CLI tool that builds bootable DOS 3.3 and 3.2 disk images from the SDK's DOS sources and a folder of files ([Dos.md](Dos.md#building-disks)). |
-| [`sdk/1`](../sdk/1/README.md) | Target headers (`<cpu.inc>`, `<machine.inc>`, `<environment.inc>`), `RC_*` defines, and checked memory maps for multi-target `retrocore.json` projects. |
+| [`sdk/1`](../sdk/1/README.md) | Target headers (`<cpu.inc>`, `<machine.inc>`, `<environment.inc>`), `RC_*` defines, checked memory maps, and [`templates/`](../sdk/1/templates/README.md) for multi-target `retrocore.json` projects. |
 | [`extension`](../extension) | VS Code extension: assembly, BASIC, and Pascal language features, debugging, live machine display, and Machine and Drives views. |
 
 ## SDK system and ROM sources

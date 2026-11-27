@@ -50,11 +50,6 @@ internal sealed class InteractionRun(long id, ulong start, ulong budget)
     internal required string Surface { get; init; }
 
     /// <summary>
-    ///  Gets whether to use the compatibility response and result.
-    /// </summary>
-    internal bool Legacy { get; init; }
-
-    /// <summary>
     ///  Gets the screen substring to look for.
     /// </summary>
     internal string? Contains { get; init; }
@@ -112,7 +107,6 @@ internal sealed class InteractionRun(long id, ulong start, ulong budget)
             ["startCycle"] = Start
         };
 
-        if (Legacy) { body["waitId"] = Id; }
         JsonObject? errors = null;
         JsonObject? update = null;
         try
@@ -129,10 +123,9 @@ internal sealed class InteractionRun(long id, ulong start, ulong budget)
             }
 
             Observe("demand", () => body["demand"] = readDemand());
-            if (Snapshot is { } surface && (!Legacy || outcome == "matched"))
+            if (Snapshot is { } surface)
             {
-                string field = Legacy ? "text" : "snapshot";
-                Observe(field, () => body[field] = readSnapshot(surface));
+                Observe("snapshot", () => body["snapshot"] = readSnapshot(surface));
             }
 
             if (textUpdateSurface is not null)
@@ -143,7 +136,7 @@ internal sealed class InteractionRun(long id, ulong start, ulong budget)
         finally
         {
             if (errors is not null) { body["observationErrors"] = errors; }
-            notify(Legacy ? "retro/text/result" : "retro/run/result", body);
+            notify("retro/run/result", body);
         }
 
         if (update is not null) { notify("retro/text/update", update); }

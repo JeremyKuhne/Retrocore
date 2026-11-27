@@ -178,7 +178,13 @@ internal sealed partial class DebugSession
         // An image changed on disk shows in its drive, even while the machine is stopped.
         MediaActions.SourcesChanged += SourcesChanged;
         transport.On("initialize", _ => Capabilities());
-        transport.On("launch", args => Reply(() => Launch(args)));
+        transport.OnWithFollowUp("launch", args =>
+        {
+            bool configured = false;
+            JsonObject body = Reply(() => Launch(args, out configured));
+            return (body, configured ? StartConfiguredLaunch : null);
+        });
+
         transport.On("setBreakpoints", args => Reply(() => Breakpoints(args)));
         transport.On("setFunctionBreakpoints", args => Reply(() => FunctionBreakpoints(args)));
         transport.On("setInstructionBreakpoints", args => Reply(() => InstructionBreakpoints(args)));
@@ -525,7 +531,8 @@ internal sealed partial class DebugSession
         // retro/reset: presses the machine's reset. While stopped, the views show where it now is.
         transport.On("retro/reset", args => Reply(() =>
         {
-            if (_interaction is { Policy: "scripted" }) { RetireWorker(); }
+            bool scripted = _interaction is { Policy: "scripted" };
+            if (scripted) { RetireWorker(); }
             CompleteInteraction("reset");
             CancelPhysicalInput();
             // A reset abandons every call in progress, even where it keeps the stack pointer and RAM, as the 8080's does.
@@ -536,12 +543,20 @@ internal sealed partial class DebugSession
             Pascal?.Reset();
             _pascalFrames = null;
             Invalidate();
-            if (_run is not { IsCancellationRequested: false })
+            if (!IsRunning)
             {
                 // A reset switches banks back, as the language card's ROM does.
-                NotifyMemory();
+                if (!scripted) { NotifyMemory(); }
                 Notify("invalidated", new JsonObject { ["areas"] = new JsonArray("all") });
-                NotifyFrame(running: false);
+                if (scripted)
+                {
+                    Stopped("pause", description: "The machine reset during an automation run.");
+                    _unchecked = Cpu.IsInstructionBoundary;
+                }
+                else
+                {
+                    NotifyFrame(running: false);
+                }
             }
 
             return [];
@@ -975,10 +990,10 @@ internal sealed partial class DebugSession
     // The cards a launch's media options put in, which a saved machine and a target's cards leave to the launch.
     private static bool LaunchOwned(string card) => card.StartsWith("diskII", StringComparison.Ordinal) || card == "blockStorage";
 
-    private JsonObject Launch(JsonObject args)
+    private JsonObject Launch(JsonObject args, out bool configured)
     {
         // The launch takes a configurationDone that came before it, even if it fails.
-        bool configured = _configured;
+        configured = _configured;
         RetireWorker();
         CompleteInteraction("replaced");
         CancelPhysicalInput();
@@ -1273,14 +1288,6 @@ internal sealed partial class DebugSession
 
         _launchReady = true;
 
-        // A configurationDone that came before the launch starts the machine once the launch has returned. A launch
-        // after this one waits for a configurationDone of its own, and a launch that comes before the start runs,
-        // even one that fails, or the session ending, cancels that start.
-        if (configured)
-        {
-            Start();
-        }
-
         // A project launch says which machine it started, which only the target said, for the editor to follow.
         return built is null ? WithIdentity([]) : WithIdentity(new JsonObject
         {
@@ -1393,6 +1400,19 @@ internal sealed partial class DebugSession
         Vic20DebugTarget target = Vic20DebugTarget.Launch(args);
         target.Boot(args.Double("bootSeconds") ?? (loads ? 4 : 0));
         return target;
+    }
+
+    // Send startup stops after the launch response when configurationDone arrived early.
+    private void StartConfiguredLaunch()
+    {
+        try
+        {
+            lock (_gate) { Start(); }
+        }
+        catch (Exception exception) when (IsRunFailure(exception))
+        {
+            ExecutionFailed(exception, CancellationToken.None);
+        }
     }
 
     /// <summary>

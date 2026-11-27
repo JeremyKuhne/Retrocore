@@ -26,7 +26,7 @@ internal sealed class DapTransport(Stream input, Stream output)
     private const int OutputDrainMilliseconds = 2_000;
 
     private readonly MessageFraming _wire = new(input, output);
-    private readonly Dictionary<string, Func<JsonObject, JsonNode?>> _handlers = [with(StringComparer.Ordinal)];
+    private readonly Dictionary<string, Func<JsonObject, (JsonNode? Body, Action? FollowUp)>> _handlers = [with(StringComparer.Ordinal)];
     private readonly object _outboundGate = new();
     private Queue<(Action Write, Action? Release, int Weight)> _outbound = new();
 
@@ -54,7 +54,15 @@ internal sealed class DapTransport(Stream input, Stream output)
     /// <param name="command">The request's command, such as <c>launch</c>.</param>
     /// <param name="handler">Takes the request's arguments and returns the response's body.</param>
     /// <exception cref="InvalidOperationException">The command already has a handler.</exception>
-    internal void On(string command, Func<JsonObject, JsonNode?> handler)
+    internal void On(string command, Func<JsonObject, JsonNode?> handler) =>
+        OnWithFollowUp(command, args => (handler(args), null));
+
+    /// <summary>
+    ///  Registers a request handler that can schedule work after its successful response is queued, before the next request.
+    /// </summary>
+    /// <param name="command">The request's command.</param>
+    /// <param name="handler">Takes the arguments and returns a response body and optional follow-up.</param>
+    internal void OnWithFollowUp(string command, Func<JsonObject, (JsonNode? Body, Action? FollowUp)> handler)
     {
         if (!_handlers.TryAdd(command, handler))
         {
@@ -251,18 +259,21 @@ internal sealed class DapTransport(Stream input, Stream output)
     {
         string command = "";
         JsonObject response = new() { ["type"] = "response" };
+        Action? followUp = null;
         try
         {
             command = request.String("command") ?? "";
             response["request_seq"] = request.Int("seq") ?? 0;
             response["command"] = command;
-            if (!_handlers.TryGetValue(command, out Func<JsonObject, JsonNode?>? handler))
+            if (!_handlers.TryGetValue(command, out var handler))
             {
                 throw new NotSupportedException($"The debug host does not handle the {command} request.");
             }
 
-            response["body"] = handler(request.Object("arguments") ?? []);
+            (JsonNode? body, Action? afterResponse) = handler(request.Object("arguments") ?? []);
+            response["body"] = body;
             response["success"] = true;
+            followUp = afterResponse;
         }
 #pragma warning disable CA1031 // Any failure in a handler is the request's failure, reported to VS Code.
         catch (Exception exception)
@@ -275,6 +286,7 @@ internal sealed class DapTransport(Stream input, Stream output)
         }
 
         Write(response);
+        followUp?.Invoke();
     }
 
     private void Write(JsonObject message) => Enqueue(() => _wire.Write(writer =>

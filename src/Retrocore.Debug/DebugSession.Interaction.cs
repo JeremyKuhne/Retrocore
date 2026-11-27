@@ -26,8 +26,7 @@ internal sealed partial class DebugSession
     {
         transport.On("retro/text", args => Reply(() => Snapshot(TextSurface(args.String("surface")))));
         transport.On("retro/snapshot", args => Reply(() => Snapshot(SnapshotSurface(args.String("surface")))));
-        transport.On("retro/text/run", args => Reply(() => RunUntil(args, legacy: true)));
-        transport.On("retro/runUntil", args => Reply(() => RunUntil(args, legacy: false)));
+        transport.On("retro/runUntil", args => Reply(() => RunUntil(args)));
         transport.On("retro/run/cancel", args => Reply(() =>
         {
             if (args.Long("launchId") != _launchId || _interaction is not { } run || args.Long("runId") != run.Id)
@@ -156,7 +155,7 @@ internal sealed partial class DebugSession
         Notify("retro/text/update", Snapshot(_textSurface, next));
     }
 
-    private JsonObject RunUntil(JsonObject args, bool legacy)
+    private JsonObject RunUntil(JsonObject args)
     {
         if (!_launchReady || !_started)
         {
@@ -165,10 +164,9 @@ internal sealed partial class DebugSession
 
         if (_interaction is not null) { throw new InvalidOperationException("An automation run is already waiting."); }
 
-        JsonObject stop = legacy ? args : args.Object("stopOn")
-            ?? throw new ArgumentException("stopOn is required.");
+        JsonObject stop = args.Object("stopOn") ?? throw new ArgumentException("stopOn is required.");
 
-        string condition = legacy ? "screenContains" : Required(stop, "kind");
+        string condition = Required(stop, "kind");
         string surface = TextSurface(stop.String("surface"));
         string? contains = null;
         ConsoleMatch? transcript = null;
@@ -211,7 +209,7 @@ internal sealed partial class DebugSession
                 throw new ArgumentException($"Unknown stop condition '{condition}'.");
         }
 
-        string policy = legacy ? "legacy" : args.String("policy") switch
+        string policy = args.String("policy") switch
         {
             null or "scripted" => "scripted",
             "live" => "live",
@@ -220,24 +218,23 @@ internal sealed partial class DebugSession
 
         long maxCycles = args.Long("maxCycles") ?? (long)Target.ClockHertz * 60;
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maxCycles);
-        string? snapshot = legacy ? surface : args.Object("snapshot") is { } output ? SnapshotSurface(output.String("surface")) : null;
+        string? snapshot = args.Object("snapshot") is { } output ? SnapshotSurface(output.String("surface")) : null;
 
         InputBatch? batch = null;
-        if (!legacy && args["input"] is not (null or JsonObject))
+        if (args["input"] is not (null or JsonObject))
         {
             throw new ArgumentException("input must be an object.");
         }
 
-        JsonObject? input = legacy ? args : args.Object("input");
-        string? text = legacy ? args.String("text") : input is null ? null : Required(input, "text");
-        if (input is not null && text is not null)
+        if (args.Object("input") is { } input)
         {
+            string text = Required(input, "text");
             if (_typing.Count != 0)
             {
                 throw new InvalidOperationException("A physical paste is still queued.");
             }
 
-            bool guest = !legacy && input.String("backend") switch
+            bool guest = input.String("backend") switch
             {
                 null or "guestDemand" => true,
                 "physical" => false,
@@ -251,7 +248,6 @@ internal sealed partial class DebugSession
         ulong start = Target.CycleCount;
         InteractionRun run = new(++_nextRun, start, (ulong)maxCycles)
         {
-            Legacy = legacy,
             Condition = condition,
             Policy = policy,
             Contains = contains,
@@ -265,7 +261,7 @@ internal sealed partial class DebugSession
 
         _interaction = run;
         if (!IsRunning) { Continue(); }
-        JsonObject response = WithIdentity(new JsonObject
+        return WithIdentity(new JsonObject
         {
             ["runId"] = run.Id,
             ["startCycle"] = start,
@@ -273,15 +269,6 @@ internal sealed partial class DebugSession
             ["policy"] = policy,
             ["input"] = batch?.ToJson()
         });
-
-        if (legacy)
-        {
-            response["waitId"] = run.Id;
-            response["typed"] = batch?.Pending ?? 0;
-            response["skipped"] = batch?.ToJson()["skipped"]?.DeepClone() ?? 0;
-        }
-
-        return response;
     }
 
     private bool IsRunning => _run is { IsCancellationRequested: false };
@@ -357,6 +344,7 @@ internal sealed partial class DebugSession
     {
         if (code == 3)
         {
+            // End automation but leave the worker running at the launch's speed so the guest can process the key.
             CompleteInteraction("interrupted");
             CancelPhysicalInput();
         }
@@ -431,7 +419,7 @@ internal sealed partial class DebugSession
         GuestInputPath? demand = null;
         DebugTextSurface? captured = null;
         string? reason = null;
-        if (batch is not null && !run.Legacy && (batch.Rejected != 0 || batch.Unconfirmed != 0))
+        if (batch is not null && (batch.Rejected != 0 || batch.Unconfirmed != 0))
         {
             reason = "inputNotAccepted";
         }

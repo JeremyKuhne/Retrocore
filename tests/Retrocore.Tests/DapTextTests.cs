@@ -52,47 +52,37 @@ public sealed class DapTextTests
         client.NoEvent("retro/frame", TimeSpan.FromMilliseconds(100));
         client.NoEvent("retro/cycles", TimeSpan.FromMilliseconds(100));
 
-        JsonObject firstWait = client.Request("retro/text/run", new JsonObject
+        JsonObject firstWait = client.Request("retro/runUntil", new JsonObject
         {
-            ["contains"] = " ",
+            ["stopOn"] = new JsonObject { ["kind"] = "screenContains", ["contains"] = " " },
+            ["snapshot"] = new JsonObject { ["surface"] = "visibleText" },
             ["maxCycles"] = 50_000
         });
 
-        firstWait.Long("waitId").Should().Be(1);
-        JsonObject matched = client.Event("retro/text/result");
+        JsonObject matched = Result(client, firstWait);
         matched.String("outcome").Should().Be("matched");
-        JsonObject matchedText = matched.Object("text") ?? throw new AssertFailedException("No text snapshot.");
+        JsonObject matchedText = Object(matched, "snapshot");
         matchedText["rows"].Should().NotBeNull();
         client.Event("stopped").String("reason").Should().Be("pause");
         client.NoEvent("retro/frame", TimeSpan.FromMilliseconds(100));
         client.NoEvent("retro/cycles", TimeSpan.FromMilliseconds(100));
 
-        client.Request("retro/text/run", new JsonObject
-        {
-            ["contains"] = "NO TEXT BUFFER WILL CONTAIN THIS",
-            ["maxCycles"] = 1_000
-        });
-
-        JsonObject exhausted = client.Event("retro/text/result");
+        JsonObject never = new() { ["kind"] = "screenContains", ["contains"] = "NO TEXT BUFFER WILL CONTAIN THIS" };
+        JsonObject exhausted = Result(client, StartRun(client, never.DeepClone().AsObject(), maxCycles: 1_000));
         exhausted.String("outcome").Should().Be("cycleBudgetExceeded");
         client.Event("stopped").String("reason").Should().Be("pause");
         client.NoEvent("retro/frame", TimeSpan.FromMilliseconds(100));
 
-        client.Request("retro/text/run", new JsonObject
+        JsonObject waiting = StartRun(client, never, maxCycles: long.MaxValue);
+        string alreadyWaiting = client.Fails("retro/runUntil", new JsonObject
         {
-            ["contains"] = "NO TEXT BUFFER WILL CONTAIN THIS",
-            ["maxCycles"] = 1_000_000_000
-        });
-
-        string alreadyWaiting = client.Fails("retro/text/run", new JsonObject
-        {
-            ["contains"] = "another wait",
+            ["stopOn"] = new JsonObject { ["kind"] = "screenContains", ["contains"] = "another wait" },
             ["maxCycles"] = 1_000
         });
 
         alreadyWaiting.Should().Contain("already waiting");
         client.Request("pause", []);
-        client.Event("retro/text/result").String("outcome").Should().Be("stopped");
+        Result(client, waiting).String("outcome").Should().Be("stopped");
         client.Event("stopped").String("reason").Should().Be("pause");
         client.NoEvent("retro/frame", TimeSpan.FromMilliseconds(100));
     }
@@ -414,7 +404,15 @@ public sealed class DapTextTests
         waiting = StartRun(client, never.DeepClone().AsObject(), maxCycles: long.MaxValue);
         client.Request("retro/reset", []);
         Result(client, waiting).String("outcome").Should().Be("reset");
+        JsonObject resetStop = client.Event("stopped");
+        resetStop.String("reason").Should().Be("pause");
+        resetStop.Bool("allThreadsStopped").Should().BeTrue();
         client.Request("retro/input/status", []).Bool("running").Should().BeFalse();
+
+        waiting = StartRun(client, never.DeepClone().AsObject(), maxCycles: long.MaxValue, policy: "live");
+        client.Request("retro/reset", []);
+        Result(client, waiting).String("outcome").Should().Be("reset");
+        client.Request("retro/input/status", []).Bool("running").Should().BeTrue();
 
         waiting = StartRun(client, never.DeepClone().AsObject(), maxCycles: long.MaxValue);
         client.Request("launch", Apple1(textOnly: true));

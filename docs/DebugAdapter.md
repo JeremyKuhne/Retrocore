@@ -27,7 +27,7 @@ default backend). The `physical` backend uses ordinary device input and paste pa
 acceptance, so it is suitable for custom guests with their own application readiness markers.
 
 If a completion observation fails, the result still reports the run's outcome and IDs. `observationErrors`
-names each failed observation and gives its error message; an unavailable `demand` or `snapshot` (legacy `text`)
+names each failed observation and gives its error message; an unavailable `demand` or `snapshot`
 is omitted. A failed final receipt leaves the delivered byte unconfirmed and does not prevent cancelling unsent
 input.
 
@@ -52,8 +52,8 @@ stops take precedence. No polling instructions, IRQs, or device cycles are skipp
 Pause, breakpoints, exceptions, cancellation, reset, replacement, and disconnect retire the run. `retro/run/cancel`
 takes both IDs, parks the guest if it cancelled the active run, and returns `cancelled: false` for stale IDs.
 An active run must be paused or cancelled before a manual continue or step. A scripted reset leaves the machine
-stopped; a live reset retains ordinary reset behavior. A physical interrupt (`retro/key` code 3) cancels
-automation input and lets a running guest continue at its configured speed to process the interrupt. The
+stopped and emits a DAP `stopped` event; a live reset retains ordinary reset behavior. A physical interrupt
+(`retro/key` code 3) cancels automation input and lets a running guest continue at its configured speed. The
 result uses one of `inputDemand`, `matched`,
 `cycleBudgetExceeded`, `inputNotAccepted`, `captureOverflow`, `stopped`, `exception`, `cancelled`, `interrupted`,
 `reset`, `replaced`, or `disconnected`. `stopped` and `exception` have a corresponding DAP `stopped` event;
@@ -91,8 +91,6 @@ Check the result's counts even on a successful match: an application marker can 
 `ioMode: "fast"` is separate from all of the above. It changes peripheral timing: Apple-1 terminal acknowledgement
 and device typing delays on Apple-1, Apple II, Apple III, PET, and BBC. Other targets reject it. The default
 `realistic` mode preserves the normal device timing and works with guest-demand input. Use it for timing tests.
-`retro/text/run` remains a compatibility wrapper around sampled text matching and physical typing, returning
-`waitId` and `retro/text/result`.
 
 ## Snapshots and console capture
 

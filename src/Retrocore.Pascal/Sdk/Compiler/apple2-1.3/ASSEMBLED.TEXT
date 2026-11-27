@@ -1,0 +1,367 @@
+; ASSEMBLED.TEXT: ScanIdentifier and SearchTree, the Compiler's two procedures
+; in 6502 code, for Apple Pascal 1.3's Assembler. PASCALCO1B.TEXT declares
+; them EXTERNAL; the Linker links this file's code into PASCALCO, segment 1.
+; Each name is its procedure's, of which the Linker reads 8 letters.
+;
+; Assembled: scans the identifier at SourceBuffer^[SourceCursor] in
+; capitals, and looks it up in the reserved words, setting Token and Operator;
+; TokenName too when it is no reserved word (UCSD Pascal II.0's IDSEARCH, in
+; 6502 code)
+         .PROC   SCANIDENTIFIER,2
+         PLA
+         STA     7E
+         PLA
+         STA     7F
+         PLA
+         TAY
+         PLA
+         TAX
+         PLA
+         STA     94
+         PLA
+         STA     95
+         TYA
+         LDY     #0
+         CLC
+         ADC     (94),Y
+         STA     96
+         TXA
+         INY
+         ADC     (94),Y
+         STA     97
+         LDA     #20
+         LDX     #7
+; The scratch name at $88: blanks its last seven letters
+BLANKID  STA     88,X
+         DEX
+         BNE     BLANKID
+         DEY
+         LDA     (96),Y
+         CMP     #61
+         BCC     FIRSTCH
+         CMP     #7B
+         BCS     FIRSTCH
+         SEC
+         SBC     #20
+; The first letter, in capitals, into the scratch name
+FIRSTCH  STA     88
+; The next character
+NEXTCH   INY
+         LDA     (96),Y
+         CMP     #7B
+         BCS     NOTLOWER
+         CMP     #61
+         BCS     TOUPPER
+; Not a lower-case letter
+NOTLOWER CMP     #30
+         BCC     NOTDIGIT
+         CMP     #3A
+         BCC     PUTCH
+; Not a digit
+NOTDIGIT CMP     #41
+         BCC     IDEND
+         CMP     #5B
+         BCC     PUTCH
+         CMP     #5F
+         BNE     IDEND
+         BEQ     NEXTCH
+; A lower-case letter made a capital
+TOUPPER  SBC     #20
+; Into the scratch name, the first 8 only
+PUTCH    INX
+         CPX     #8
+         BCS     NEXTCH
+         STA     88,X
+         BCC     NEXTCH
+; The identifier's end: Cursor moved on to its last character
+IDEND    DEY
+         TYA
+         LDY     #0
+         CLC
+         ADC     (94),Y
+         STA     (94),Y
+; Also the base of the reserved words' table by first letter, low bytes (an
+; INY here)
+TABLO    INY
+; And its high bytes
+TABHI    LDA     (94),Y
+         ADC     #0
+         STA     (94),Y
+         LDA     88
+         ASL     A
+         TAY
+         LDA     TABLO,Y
+         STA     92
+         LDA     TABHI,Y
+         STA     93
+         LDY     #0
+         LDA     (92),Y
+         STA     90
+; The next reserved word of the letter's list
+NEXTWORD LDX     #0
+         LDY     #1
+; Compares its next letter with the scratch name's
+CMPCHAR  INX
+         INY
+         LDA     (92),Y
+         CMP     88,X
+         BEQ     MATCHED
+         DEC     90
+         BEQ     NOTWORD
+         LDA     92
+         CLC
+         ADC     #0A
+         STA     92
+         BCC     SKIPWORD
+         INC     93
+; To the next entry, 10 bytes on
+SKIPWORD BNE     NEXTWORD
+; A letter matched: all eight?
+MATCHED  CPX     #7
+         BNE     CMPCHAR
+         INY
+         LDA     (92),Y
+         STA     86
+         INY
+         LDA     (92),Y
+         STA     87
+         LDY     #2
+         LDA     86
+         STA     (94),Y
+         INY
+         LDA     #0
+         STA     (94),Y
+         INY
+         LDA     87
+         STA     (94),Y
+         INY
+         LDA     #0
+         STA     (94),Y
+         BEQ     IDRETURN
+; No reserved word: Token NameToken, Operator $15, and the scratch
+; name copied to the Compiler's TokenName
+NOTWORD  LDA     #0
+         LDY     #2
+         STA     (94),Y
+         INY
+         STA     (94),Y
+         INY
+         INY
+         STA     (94),Y
+         DEY
+         LDA     #15
+         STA     (94),Y
+         LDY     #0E
+         LDX     #7
+; The scratch name's letters, last first
+COPYID   DEY
+         LDA     88,X
+         STA     (94),Y
+         DEX
+         BPL     COPYID
+; Returns
+IDRETURN LDA     7F
+         PHA
+         LDA     7E
+         PHA
+         RTS
+         .WORD   AWORDS
+         .WORD   BWORDS
+         .WORD   CWORDS
+         .WORD   DWORDS
+         .WORD   EWORDS
+         .WORD   FWORDS
+         .WORD   GWORDS
+         .WORD   NOWORDS
+         .WORD   IWORDS
+         .WORD   NOWORDS
+         .WORD   NOWORDS
+         .WORD   LWORDS
+         .WORD   MWORDS
+         .WORD   NWORDS
+         .WORD   OWORDS
+         .WORD   PWORDS
+         .WORD   NOWORDS
+         .WORD   RWORDS
+         .WORD   SWORDS
+         .WORD   TWORDS
+         .WORD   UWORDS
+         .WORD   VWORDS
+         .WORD   WWORDS
+         .WORD   NOWORDS
+         .WORD   NOWORDS
+         .WORD   NOWORDS
+; A letter no reserved word starts with: an empty list
+NOWORDS  .BYTE   1,40,23
+; AND, ARRAY: each entry the word's eight letters, its Token and Operator
+AWORDS   .BYTE   2,41,4E,44,20,20,20,20
+         .BYTE   20,27,2,41,52,52,41,59
+         .BYTE   20,20,20,2C,0
+; BEGIN
+BWORDS   .BYTE   1,42,45,47,49,4E,20,20
+         .BYTE   20,13,0
+; CASE, CONST
+CWORDS   .BYTE   2,43,41,53,45,20,20,20
+         .BYTE   20,15,0,43,4F,4E,53,54
+         .BYTE   20,20,20,1C,0
+; DO, DIV, DOWNTO
+DWORDS   .BYTE   3,44,4F,20,20,20,20,20
+         .BYTE   20,6,0,44,49,56,20,20
+         .BYTE   20,20,20,27,3,44,4F,57
+         .BYTE   4E,54,4F,20,20,8,0
+; END, ELSE, EXTERNAL
+EWORDS   .BYTE   3,45,4E,44,20,20,20,20
+         .BYTE   20,9,0,45,4C,53,45,20
+         .BYTE   20,20,20,0D,0,45,58,54
+         .BYTE   45,52,4E,41,4C,35,0
+; FOR, FUNCTION, FILE, FORWARD
+FWORDS   .BYTE   4,46,4F,52,20,20,20,20
+         .BYTE   20,18,0,46,55,4E,43,54
+         .BYTE   49,4F,4E,20,0,46,49,4C
+         .BYTE   45,20,20,20,20,2E,0,46
+         .BYTE   4F,52,57,41,52,44,20,22
+         .BYTE   0
+; GOTO
+GWORDS   .BYTE   1,47,4F,54,4F,20,20,20
+         .BYTE   20,1A,0
+; IF, IN, IMPLEMENTATION, INTERFACE
+IWORDS   .BYTE   4,49,46,20,20,20,20,20
+         .BYTE   20,14,0,49,4E,20,20,20
+         .BYTE   20,20,20,29,0E,49,4D,50
+         .BYTE   4C,45,4D,45,4E,34,0,49
+         .BYTE   4E,54,45,52,46,41,43,33
+         .BYTE   0
+; LABEL
+LWORDS   .BYTE   1,4C,41,42,45,4C,20,20
+         .BYTE   20,1B,0
+; MOD
+MWORDS   .BYTE   1,4D,4F,44,20,20,20,20
+         .BYTE   20,27,4
+; NOT
+NWORDS   .BYTE   1,4E,4F,54,20,20,20,20
+         .BYTE   20,26,0
+; OF, OR, OTHERWISE
+OWORDS   .BYTE   3,4F,46,20,20,20,20,20
+         .BYTE   20,0B,0,4F,52,20,20,20
+         .BYTE   20,20,20,28,7,4F,54,48
+         .BYTE   45,52,57,49,53,36,0
+; PROCEDURE, PACKED, PROGRAM
+PWORDS   .BYTE   3,50,52,4F,43,45,44,55
+         .BYTE   52,1F,0,50,41,43,4B,45
+         .BYTE   44,20,20,2B,0,50,52,4F
+         .BYTE   47,52,41,4D,20,21,0
+; REPEAT, RECORD
+RWORDS   .BYTE   2,52,45,50,45,41,54,20
+         .BYTE   20,16,0,52,45,43,4F,52
+         .BYTE   44,20,20,2D,0
+; SET, SEGMENT
+SWORDS   .BYTE   2,53,45,54,20,20,20,20
+         .BYTE   20,2A,0,53,45,47,4D,45
+         .BYTE   4E,54,20,21,0
+; THEN, TO, TYPE
+TWORDS   .BYTE   3,54,48,45,4E,20,20,20
+         .BYTE   20,0C,0,54,4F,20,20,20
+         .BYTE   20,20,20,7,0,54,59,50
+         .BYTE   45,20,20,20,20,1D,0
+; UNTIL, USES, UNIT
+UWORDS   .BYTE   3,55,4E,54,49,4C,20,20
+         .BYTE   20,0A,0,55,53,45,53,20
+         .BYTE   20,20,20,31,0,55,4E,49
+         .BYTE   54,20,20,20,20,32,0
+; VAR
+VWORDS   .BYTE   1,56,41,52,20,20,20,20
+         .BYTE   20,1E,0
+; WHILE, WITH
+WWORDS   .BYTE   2,57,48,49,4C,45,20,20
+         .BYTE   20,17,0,57,49,54,48,20
+         .BYTE   20,20,20,19,0
+; Assembled: searches a scope's tree for a name; 0 found, 1 to go right, -1
+; left, with the last node looked at
+; (UCSD Pascal II.0's TREESEARCH, in 6502 code)
+         .FUNC   SEARCHTREE,3
+         PLA
+         STA     84
+         PLA
+         STA     85
+         PLA
+         PLA
+         PLA
+         PLA
+         PLA
+         STA     82
+         PLA
+         STA     83
+         PLA
+         STA     7E
+         PLA
+         STA     7F
+         PLA
+         STA     80
+         PLA
+         STA     81
+; Compares SoughtName with the node's
+VISIT    LDX     #8
+         LDY     #0FF
+; The next letter
+CMPNAME  DEX
+         BMI     FOUND
+         INY
+         LDA     (82),Y
+         CMP     (80),Y
+         BEQ     CMPNAME
+         BMI     TRYLEFT
+         LDY     #8
+         LDA     (80),Y
+         TAX
+         INY
+         LDA     (80),Y
+         CMP     #0
+         BNE     GORIGHT
+         CPX     #0
+         BEQ     RIGHTEND
+; Down the node's Right
+GORIGHT  STX     80
+         STA     81
+         JMP     VISIT
+; SoughtName sorts before the node's: its Left
+TRYLEFT  LDY     #0A
+         LDA     (80),Y
+         TAX
+         INY
+         LDA     (80),Y
+         CMP     #0
+         BNE     GOLEFT
+         CPX     #0
+         BEQ     LEFTEND
+; Down the node's Left
+GOLEFT   STX     80
+         STA     81
+         JMP     VISIT
+; All eight letters equal: 0
+FOUND    LDA     #0
+         PHA
+         PHA
+         JMP     SETLAST
+; No Left: -1, the name goes on the node's left
+LEFTEND  LDA     #0FF
+         PHA
+         PHA
+         JMP     SETLAST
+; No Right: 1, on its right
+RIGHTEND LDA     #0
+         PHA
+         LDA     #1
+         PHA
+; Found, the VAR parameter, := the node, and return
+SETLAST  LDY     #0
+         LDA     80
+         STA     (7E),Y
+         INY
+         LDA     81
+         STA     (7E),Y
+         LDA     85
+         PHA
+         LDA     84
+         PHA
+         RTS
+         .END

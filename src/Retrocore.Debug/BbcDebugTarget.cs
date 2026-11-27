@@ -93,6 +93,9 @@ internal sealed partial class BbcDebugTarget : IDebugTarget
     public DebugFrame Frame => M6502Frames.Of(_machine.Processor.Registers);
 
     /// <inheritdoc/>
+    public int StackPointer => _machine.Processor.Registers.StackPointer;
+
+    /// <inheritdoc/>
     public ushort ProgramCounter
     {
         get => _machine.Processor.Registers.ProgramCounter;
@@ -106,6 +109,17 @@ internal sealed partial class BbcDebugTarget : IDebugTarget
 
     /// <inheritdoc/>
     public bool IsInstructionBoundary => _machine.Processor.IsInstructionBoundary;
+
+    /// <inheritdoc/>
+    public bool IsTakingInterrupt => _machine.Processor.IsTakingInterrupt;
+
+    /// <inheritdoc/>
+    /// <remarks>
+    ///  <para>
+    ///   S is a byte: the stack is page one.
+    ///  </para>
+    /// </remarks>
+    public int StackMask => 0xFF;
 
     /// <inheritdoc/>
     public bool InInstruction => _machine.Processor.CurrentOpCode is not null;

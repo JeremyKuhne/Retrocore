@@ -11,6 +11,11 @@ export interface ChoiceValue {
     label: string;
     detail?: string;
     value: string | number | boolean;
+    /**
+     * The launch options the value stands for, when it is more than its option set to it, as the Model I's Level II
+     * 1.2 is rom level2 and revision 1.2.
+     */
+    launch?: Record<string, string>;
 }
 
 /** A setting of a machine the Start Machine command can ask about: a launch option and its values. */
@@ -44,6 +49,10 @@ export interface Machine {
     basicDialects: string[];
     /** The disk a basic launch boots for its BASIC, as the open dialog asks for it; none when BASIC is in ROM. */
     basicDisk?: string;
+    /** The executables it boots from a disk built for them (executable), such as the Atari's .xex; none by default. */
+    executableFormats?: string[];
+    /** The cartridge images it plugs in (cartridge), in place of its BASIC; none by default. */
+    cartridgeFormats?: string[];
     /** Whether a launch can put a program on a fresh DOS disk (dos). */
     dos: boolean;
     /** What the Start Machine command can set up, with its defaults. */
@@ -88,11 +97,88 @@ const lowercase: MachineChoice = {
     default: false
 };
 
+// The Model I's and the Model III's ROM, Level I or Level II BASIC, which their rom launch option picks: Level I
+// reads only 250 baud tapes and has no disks, and Level II only 500 baud ones. The Model I's Level II also has its
+// revision, 1.3 unless the revision option says 1.2.
+const model1Rom: MachineChoice = {
+    option: "rom",
+    label: "ROM",
+    values: [
+        { label: "Level II BASIC 1.3", detail: "500 baud tapes, and disks with the Expansion Interface", value: "level2" },
+        { label: "Level II BASIC 1.2", detail: "The earlier Level II ROM", value: "level2-1.2", launch: { rom: "level2", revision: "1.2" } },
+        { label: "Level I BASIC", detail: "4K of Tiny BASIC: 250 baud tapes and no disks", value: "level1" }
+    ],
+    default: "level2"
+};
+
+const model3Rom: MachineChoice = {
+    option: "rom",
+    label: "ROM",
+    values: [
+        { label: "Model III ROM", detail: "Level II BASIC: 500 and 1500 baud tapes, and disks", value: "level2" },
+        { label: "Level I BASIC", detail: "The Model III's Level I: 250 baud tapes and no disks", value: "level1" }
+    ],
+    default: "level2"
+};
+
+// The Model I's RAM: 4 or 16 KB in the keyboard unit, and up to 48 KB with the Expansion Interface, which choosing
+// more than 16 KB brings. Left out, it is 48 KB with the interface, else 16 KB, or 4 KB for Level I.
+const model1Ram = (initial: number): MachineChoice => ({
+    option: "ramKilobytes",
+    label: "Memory",
+    values: [
+        { label: "48 KB", detail: "With the Expansion Interface", value: 48 },
+        { label: "32 KB", detail: "With the Expansion Interface", value: 32 },
+        { label: "16 KB", detail: "The most the keyboard unit holds", value: 16 },
+        { label: "4 KB", detail: "As the first Level I machines came", value: 4 }
+    ],
+    default: initial
+});
+
+const model1Expansion = (initial: boolean): MachineChoice => ({
+    option: "expansionInterface",
+    label: "Expansion Interface",
+    values: [
+        { label: "With the Expansion Interface", detail: "Memory over 16 KB, the clock interrupt and disks", value: true },
+        { label: "Without it", detail: "16 KB at most, and tapes only", value: false }
+    ],
+    default: initial
+});
+
+const model3Ram: MachineChoice = {
+    option: "ramKilobytes",
+    label: "Memory",
+    values: [{ label: "48 KB", value: 48 }, { label: "32 KB", value: 32 }, { label: "16 KB", value: 16 }],
+    default: 48
+};
+
 const model4Ram: MachineChoice = {
     option: "ramKilobytes",
     label: "Memory",
     values: [{ label: "128 KB", value: 128 }, { label: "64 KB", value: 64 }],
     default: 128
+};
+
+const model100Sound: MachineChoice = {
+    option: "sound",
+    label: "Sound",
+    values: [
+        { label: "Speaker", detail: "The piezo buzzer, from port B or the 81C55's timer", value: "speaker" },
+        { label: "Off", value: "off" }
+    ],
+    default: "speaker"
+};
+
+const model100Ram: MachineChoice = {
+    option: "ramKilobytes",
+    label: "Memory",
+    values: [
+        { label: "32 KB", value: 32 },
+        { label: "24 KB", value: 24 },
+        { label: "16 KB", value: 16 },
+        { label: "8 KB", detail: "The smallest RAM size", value: 8 }
+    ],
+    default: 32
 };
 
 const model2Ram: MachineChoice = {
@@ -186,6 +272,48 @@ const petSnow: MachineChoice = {
 
 // The 2001 with BASIC 2 launches without snow unless snow is asked for, so its choice starts off.
 const petSnowOff: MachineChoice = { ...petSnow, default: false };
+// The Atari 400's and 800's choices: Atari BASIC's revision in the left slot, the video standard (PAL brings the
+// PAL OS), how the disk drives are emulated, and sound.
+const atariChoices: MachineChoice[] = [
+    {
+        option: "basicCartridge",
+        label: "BASIC",
+        values: [
+            { label: "Atari BASIC rev. C", value: "c" },
+            { label: "Atari BASIC rev. B", value: "b" },
+            { label: "Atari BASIC rev. A", detail: "The first, as the 400 and 800 shipped with", value: "a" },
+            { label: "None", detail: "The left slot is empty, and the OS starts in the memo pad or boots a disk", value: "none" }
+        ],
+        default: "c"
+    },
+    {
+        option: "video",
+        label: "Video",
+        values: [
+            { label: "NTSC", detail: "60 Hz, with OS rev. B", value: "ntsc" },
+            { label: "PAL", detail: "50 Hz, with the PAL OS", value: "pal" }
+        ],
+        default: "ntsc"
+    },
+    {
+        option: "diskDrive",
+        label: "Disk drives",
+        values: [
+            { label: "Atari 810", detail: "The 810's own 6507 and firmware, at the hardware level", value: "atari810" },
+            { label: "SIO", detail: "Drives that answer the serial bus's commands, without the 810's firmware", value: "sio" }
+        ],
+        default: "atari810"
+    },
+    {
+        option: "sound",
+        label: "Sound",
+        values: [
+            { label: "On", detail: "POKEY's four channels through the TV", value: "speaker" },
+            { label: "Off", value: "off" }
+        ],
+        default: "speaker"
+    }
+];
 
 /** The machines, in the order the dropdown and Start Machine list them. */
 export const machines: readonly Machine[] = [
@@ -287,6 +415,8 @@ export const machines: readonly Machine[] = [
             }
         ]
     },
+    // The Model I and the Model III each have an entry for each Level, which Start Machine lists; their ROM setting
+    // moves a machine between the two.
     {
         id: "trs80-model1-level2",
         label: "TRS-80 Model I (Level II)",
@@ -296,18 +426,7 @@ export const machines: readonly Machine[] = [
         tapeFormats: ["cas"],
         basicDialects: ["level2"],
         dos: false,
-        choices: [
-            {
-                option: "expansionInterface",
-                label: "Expansion Interface",
-                values: [
-                    { label: "With the Expansion Interface", detail: "48 KB, the clock interrupt and disks", value: true },
-                    { label: "Without it", detail: "16 KB, tapes only", value: false }
-                ],
-                default: true
-            },
-            lowercase
-        ]
+        choices: [model1Rom, model1Ram(48), model1Expansion(true), lowercase]
     },
     {
         id: "trs80-model1-level1",
@@ -316,9 +435,9 @@ export const machines: readonly Machine[] = [
         configuration: { machine: "trs80-model1", rom: "level1" },
         diskFormats: [],
         tapeFormats: ["cas"],
-        basicDialects: [],
+        basicDialects: ["level1"],
         dos: false,
-        choices: [lowercase]
+        choices: [model1Rom, model1Ram(4), model1Expansion(false), lowercase]
     },
     // The Model III family and the Model II run the SDK's builds of their ROMs, or dumps from romDirectory (or
     // RETROCORE_TRS80_ROMS). The Model III's and Model 4's BASIC is Level II's.
@@ -331,14 +450,7 @@ export const machines: readonly Machine[] = [
         tapeFormats: ["cas"],
         basicDialects: ["level2"],
         dos: false,
-        choices: [
-            {
-                option: "ramKilobytes",
-                label: "Memory",
-                values: [{ label: "48 KB", value: 48 }, { label: "32 KB", value: 32 }, { label: "16 KB", value: 16 }],
-                default: 48
-            }
-        ]
+        choices: [model3Rom, model3Ram]
     },
     {
         id: "trs80-model3-level1",
@@ -347,16 +459,9 @@ export const machines: readonly Machine[] = [
         configuration: { machine: "trs80-model3", model: "3", rom: "level1" },
         diskFormats: [],
         tapeFormats: ["cas"],
-        basicDialects: [],
+        basicDialects: ["level1"],
         dos: false,
-        choices: [
-            {
-                option: "ramKilobytes",
-                label: "Memory",
-                values: [{ label: "48 KB", value: 48 }, { label: "32 KB", value: 32 }, { label: "16 KB", value: 16 }],
-                default: 48
-            }
-        ]
+        choices: [model3Rom, model3Ram]
     },
     {
         id: "trs80-model4",
@@ -412,6 +517,30 @@ export const machines: readonly Machine[] = [
         basicDialects: [],
         dos: false,
         choices: [model2Ram]
+    },
+    // The Model 100 and Tandy 102 run your ROM, from romDirectory (or RETROCORE_TRS80M100_ROMS); Retrocore has
+    // none to build. A launch's ramImage keeps the RAM between sessions, as the battery does.
+    {
+        id: "trs80-model100",
+        label: "TRS-80 Model 100",
+        detail: "80C85 at 2.4 MHz, a 240x64 LCD and 32 KB, from your ROM",
+        configuration: { machine: "trs80-model100", model: "100" },
+        diskFormats: [],
+        tapeFormats: ["wav"],
+        basicDialects: [],
+        dos: false,
+        choices: [model100Ram, model100Sound]
+    },
+    {
+        id: "tandy102",
+        label: "Tandy 102",
+        detail: "The Model 100 with its revised ROM: 80C85, a 240x64 LCD and 32 KB, from your ROM",
+        configuration: { machine: "trs80-model100", model: "102" },
+        diskFormats: [],
+        tapeFormats: ["wav"],
+        basicDialects: [],
+        dos: false,
+        choices: [model100Ram, model100Sound]
     },
     {
         id: "apple1",
@@ -621,13 +750,42 @@ export const machines: readonly Machine[] = [
         dos: false,
         choices: [bbcSound]
     },
+    // Without dumps, the Atari 400 and 800 build their ROMs from the SDK's sources: the OS, the floating point package,
+    // Atari BASIC and the 810's firmware.
+    {
+        id: "atari800",
+        label: "Atari 800",
+        detail: "6502 at 1.79 MHz, OS rev. B, Atari BASIC rev. C and 48 KB",
+        configuration: { machine: "atari800", model: "atari800" },
+        diskFormats: ["atr", "xfd"],
+        tapeFormats: ["cas"],
+        basicDialects: ["atari"],
+        executableFormats: ["xex"],
+        cartridgeFormats: ["rom", "car"],
+        dos: false,
+        choices: atariChoices
+    },
+    {
+        id: "atari400",
+        label: "Atari 400",
+        detail: "6502 at 1.79 MHz, OS rev. B, Atari BASIC rev. C and 16 KB",
+        configuration: { machine: "atari800", model: "atari400" },
+        diskFormats: ["atr", "xfd"],
+        tapeFormats: ["cas"],
+        basicDialects: ["atari"],
+        executableFormats: ["xex"],
+        cartridgeFormats: ["rom", "car"],
+        dos: false,
+        choices: atariChoices
+    },
     // The Altair has no ROM: it starts in empty RAM, and a launched source or program runs on its terminal.
     {
         id: "altair",
         label: "MITS Altair 8800",
-        detail: "8080, a terminal on the 88-2SIO or 88-SIO, the 88-ACR cassette and 64 KB",
+        detail: "8080, a terminal on the 88-2SIO or 88-SIO, the 88-ACR cassette, 88-DCDD 8-inch disks and 64 KB",
         configuration: { machine: "altair" },
-        diskFormats: [],
+        // A disk boots through DBL, which a launch with disks fits.
+        diskFormats: ["dsk"],
         // A tape alone cannot start an Altair, which needs a bootstrap keyed in to read it, so tapes go in through
         // Retro Devices or a launch's cassette option instead.
         tapeFormats: [],
@@ -661,6 +819,15 @@ export const machines: readonly Machine[] = [
                 values: [
                     { label: "Off", value: false },
                     { label: "On", detail: "Letters type as capitals, as Altair BASIC needs", value: true }
+                ],
+                default: false
+            },
+            {
+                option: "diskController",
+                label: "Disk controller",
+                values: [
+                    { label: "None", value: false },
+                    { label: "88-DCDD", detail: "Four 8-inch drives, with DBL at $FF00 to boot drive 0", value: true }
                 ],
                 default: false
             }
@@ -702,8 +869,10 @@ const models: Record<string, Record<string, string>> = {
     coco: { "": "coco2" },
     pet: { "": "pet2001-basic2" },
     bbc: { "": "bbcb" },
+    atari800: { "": "atari800" },
     "trs80-model3": { "": "3", III: "3", model3: "3", model4: "4", "4P": "4p", model4p: "4p" },
-    "trs80-model2": { "": "2", II: "2", model2: "2", model12: "12", "16b": "16", "6000": "16", model16: "16" }
+    "trs80-model2": { "": "2", II: "2", model2: "2", model12: "12", "16b": "16", "6000": "16", model16: "16" },
+    "trs80-model100": { "": "100", m100: "100", model100: "100", t102: "102", tandy102: "102" }
 };
 
 // The machine names the debug host takes for another: the Model 4 is the Model III's machine, a 4 unless it says.
@@ -734,24 +903,97 @@ export function startsWithDisks(configuration: Record<string, unknown>): boolean
     return Array.isArray(configuration.disks) && configuration.disks.length !== 0;
 }
 
+// The machines whose rom launch option picks Level I or Level II BASIC.
+const romMachines = new Set(["trs80-model1", "trs80-model3"]);
+
+// Whether a launch configuration is a Model I's or a Model III's, whose rom picks its BASIC.
+function isRomMachine(configuration: Record<string, unknown>): boolean {
+    return romMachines.has(String(configuration.machine ?? ""));
+}
+
+/** Whether a launch configuration runs Level I BASIC, on a Model I or a Model III. */
+export function isLevel1(configuration: Record<string, unknown>): boolean {
+    return romMachines.has(String(configuration.machine ?? "")) && configuration.rom === "level1";
+}
+
+// The ROM a Model I or Model III configuration runs, as its ROM choice's value: level1, level2, or for the Model I's
+// Level II 1.2, level2-1.2.
+function romValue(configuration: Record<string, unknown>): string {
+    const rom = typeof configuration.rom === "string" ? configuration.rom : "level2";
+    return rom === "level2" && configuration.machine === "trs80-model1" && configuration.revision === "1.2" ? "level2-1.2" : rom;
+}
+
+// Whether a Model I has its Expansion Interface: as the launch says, or by default with Level II.
+function hasExpansion(configuration: Record<string, unknown>): boolean {
+    return typeof configuration.expansionInterface === "boolean" ? configuration.expansionInterface : !isLevel1(configuration);
+}
+
 /**
  * What a choice is when the configuration leaves it out, as the debug host decides: the choice's default, except that
- * disks given bring their disk controller.
+ * disks given bring their disk controller, an Atari cartridge takes BASIC's place in the left slot, the ROM is Level II, the Model I's Expansion Interface comes with Level II,
+ * and its memory is 48 KB with the interface, else 16 KB, or 4 KB for Level I.
  */
 export function impliedValue(choice: MachineChoice, configuration: Record<string, unknown>): string | number | boolean {
-    return choice.option === "diskController" && startsWithDisks(configuration) ? true : choice.default;
+    if (choice.option === "diskController" && startsWithDisks(configuration)) return true;
+    if (choice.option === "basicCartridge" && typeof configuration.cartridge === "string") return "none";
+    if (choice.option === "rom" && isRomMachine(configuration)) return "level2";
+    if (configuration.machine === "trs80-model1") {
+        if (choice.option === "expansionInterface") return !isLevel1(configuration);
+        if (choice.option === "ramKilobytes") return hasExpansion(configuration) ? 48 : isLevel1(configuration) ? 4 : 16;
+    }
+    return choice.default;
 }
 
 /** The value a launch configuration gives one of its machine's choices: its own, or what it is left out. */
 export function settingValue(choice: MachineChoice, configuration: Record<string, unknown>): string | number | boolean {
+    if (choice.option === "rom" && isRomMachine(configuration)) return romValue(configuration);
     const value = configuration[choice.option];
     return typeof value === "string" || typeof value === "number" || typeof value === "boolean" ? value : impliedValue(choice, configuration);
 }
 
-/** A launch configuration with one choice set, leaving the option out when it is what it would be without it. */
+// Leaves an option out when it is what the debug host would make it anyway.
+function dropImplied(configuration: Record<string, unknown>, choice: MachineChoice): void {
+    const { [choice.option]: value, ...rest } = configuration;
+    if (value !== undefined && value === impliedValue(choice, rest)) delete configuration[choice.option];
+}
+
+/**
+ * A launch configuration with one choice set, leaving the option out when it is what it would be without it, and
+ * keeping what still fits: a Model I given more than 16 KB gets its Expansion Interface, and one given more whose
+ * interface comes out gets 16 KB; with no size given, its memory is what the host gives without the interface. A
+ * change of ROM keeps the tape; Level I takes out the disks and their controller, as it has none, and the memory
+ * follows the new ROM's unless the launch gives its own.
+ */
 export function withSetting(configuration: Record<string, unknown>, choice: MachineChoice, value: string | number | boolean): Record<string, unknown> {
     const changed = { ...configuration };
-    if (value === impliedValue(choice, configuration)) delete changed[choice.option];
-    else changed[choice.option] = value;
+    const rom = choice.option === "rom" && isRomMachine(configuration);
+    if (rom) {
+        const launch = choice.values.find(candidate => candidate.value === value)?.launch ?? { rom: String(value) };
+        delete changed.rom;
+        delete changed.revision;
+        if (launch.rom !== "level2") changed.rom = launch.rom;
+        if (launch.revision !== undefined) changed.revision = launch.revision;
+        if (isLevel1(changed)) {
+            for (const option of ["disks", "diskController", "doubler"]) delete changed[option];
+        }
+    } else {
+        changed[choice.option] = value;
+    }
+
+    if (changed.machine === "trs80-model1") {
+        const ram = typeof changed.ramKilobytes === "number" ? changed.ramKilobytes : undefined;
+        // More than 16 KB needs the Expansion Interface, and without it 16 KB is the most.
+        if (choice.option === "expansionInterface" && value === false && ram !== undefined && ram > 16) changed.ramKilobytes = 16;
+        else if (ram !== undefined && ram > 16) changed.expansionInterface = true;
+        dropImplied(changed, model1Expansion(true));
+        dropImplied(changed, model1Ram(48));
+    }
+    if (!rom) dropImplied(changed, choice);
     return changed;
+}
+
+/** What a choice is when the configuration leaves it out, as the views mark it "default". */
+export function defaultValue(choice: MachineChoice, configuration: Record<string, unknown>): string | number | boolean {
+    const { [choice.option]: _given, ...rest } = configuration;
+    return impliedValue(choice, rest);
 }

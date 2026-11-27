@@ -1,0 +1,12 @@
+{
+  "description": "The Apple III, sos: a SOS.INTERP on a SOS 1.3 boot disk, which calls SOS, and which SOS loads at $2000 in the system bank and starts at its first byte, with its own zero page at $1A00.",
+  "load": "$2000",
+  "free": [
+    { "start": "$2000", "end": "$B7FF" }
+  ],
+  "zeroPage": ["$00-$FF"],
+  "reserved": [
+    { "start": "$0100", "end": "$1FFF", "why": "SOS's low pages: the stack, the screen's text pages, the character set from $0C00, and SOS's and the interpreter's zero and extend pages, keyboard buffers and layout from $1400" },
+    { "start": "$B800", "end": "$FFFF", "why": "SOS's kernel from $B800, with the I/O space and the boot ROM above it when SOS switches them in" }
+  ]
+}

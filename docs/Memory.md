@@ -120,8 +120,9 @@ the address asked for. A bank's gaps show as `··`. The design for what comes n
   changes, so one on a name moves with it.
   All of them are kept in the launch's hints file, the disassembler's (`--hints`), so what you learn while
   debugging leads straight to `--disassemble`: the launch's `hints` setting names it, and without one it is
-  `<name>.hints.json` beside the source, program or debug file, made at the first mark; a launch with none of
-  those asks where at the first mark. Each mark is made to the file as it is then, so edits to it are kept, and
+  `<name>.hints.json` beside the source, program or debug file, made at the first mark (a project launch's is
+  `<project name>.<target>.hints.json` beside its `retrocore.json`); a launch with none of those asks where at the
+  first mark. Each mark is made to the file as it is then, so edits to it are kept, and
   a file that cannot be read is left alone and marks nothing. A bank's marks keep its name, such as
   `"aux:$0400"`, and the disassembler, reading one image, leaves those and any outside its image out.
 - **Read-only bytes** (ROM, I/O, keyboard and unmapped addresses) are shaded, and typing there is refused before

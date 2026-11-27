@@ -45,6 +45,30 @@ public class Trs80OracleTests
     }
 
     /// <summary>
+    ///  Level II on a schedule and an end time in fractional seconds.
+    /// </summary>
+    /// <remarks>
+    ///  <para>
+    ///   Each entry must fire on its own frame, which <see cref="MameSchedule.ShouldHaveFiredOnTime"/> checks in
+    ///   every oracle run: an entry at 2.5 seconds that fired at 3, as when the script read only whole seconds, fails.
+    ///  </para>
+    /// </remarks>
+    [TestMethod]
+    [TestCategory("Conformance")]
+    public void LevelTwoBasicAtFractionalTimesMatchesMame()
+    {
+        (double At, string Text)[] script =
+        [
+            (2.5, "\r"),
+            (6.25, "10 FOR I=1 TO 3:PRINT I*I;:NEXT\r"),
+            (10.5, "RUN\r"),
+            (12.75, "PRINT MEM\r")
+        ];
+
+        Compare(script, finish: 15.5, disk: null, comparesProgram: true, landmark: "1  4  9");
+    }
+
+    /// <summary>
     ///  NEWDOS/80 boots from drive 0 and lists its directory.
     /// </summary>
     [TestMethod]
@@ -121,6 +145,7 @@ public class Trs80OracleTests
             }
 
             string output = Path.Join(work, "memory.bin");
+            string fired = Path.Join(work, "fired.txt");
             string lua = Path.GetFullPath(Path.Join(AppContext.BaseDirectory, "..", "..", "..", "..", "tools", "Trs80Oracle.lua"));
             if (!File.Exists(lua)) { lua = FindTool("Trs80Oracle.lua"); }
             arguments.AddRange(["-video", "none", "-sound", "none", "-nothrottle", "-skip_gameinfo"]);
@@ -136,13 +161,18 @@ public class Trs80OracleTests
             };
 
             foreach (string argument in arguments) { start.ArgumentList.Add(argument); }
-            start.Environment["RETRO_SCRIPT"] = string.Join('|', script.Select(ScriptEntry));
-            start.Environment["RETRO_END"] = finish.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            start.Environment["RETRO_SCRIPT"] = MameSchedule.Script(script);
+            start.Environment["RETRO_FIRED"] = fired;
+            start.Environment["RETRO_END"] = MameSchedule.Seconds(finish);
             start.Environment["RETRO_OUT"] = output;
             using Process process = Process.Start(start) ?? throw new InvalidOperationException("MAME did not start.");
-            process.StandardOutput.ReadToEnd();
+            // Both streams drain as MAME runs, so a full pipe can't stall it, and its errors reach the message.
+            Task<string> errors = process.StandardError.ReadToEndAsync();
+            Task<string> standard = process.StandardOutput.ReadToEndAsync();
             process.WaitForExit(120_000).Should().BeTrue("MAME finishes");
-            File.Exists(output).Should().BeTrue("the Lua script dumps memory");
+            Task.WaitAll(errors, standard);
+            File.Exists(output).Should().BeTrue($"the Lua script dumps memory; MAME said: {errors.Result}");
+            MameSchedule.ShouldHaveFiredOnTime(script, File.ReadAllText(fired));
             return File.ReadAllBytes(output);
         }
         finally
@@ -180,12 +210,6 @@ public class Trs80OracleTests
 
         machine.Run((ulong)(finish * Trs80Timing.ClockHertz) - machine.Processor.CycleCount);
         return machine;
-    }
-
-    private static string ScriptEntry((double At, string Text) entry)
-    {
-        string at = entry.At.ToString(System.Globalization.CultureInfo.InvariantCulture);
-        return $"{at}={entry.Text.Replace("\r", "\\r", StringComparison.Ordinal)}";
     }
 
     private static byte Normalize(byte value) => (byte)(value | ((~value & 0x20) << 1));

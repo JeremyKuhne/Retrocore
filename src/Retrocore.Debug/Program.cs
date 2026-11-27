@@ -19,6 +19,12 @@ if (args.Length > 0 && args[0] == "--language-server")
     return;
 }
 
+if (args.Length > 0 && args[0] == "build")
+{
+    Environment.ExitCode = Retrocore.Debug.Project.BuildCommand.Run(args[1..], Console.Out, Console.Error);
+    return;
+}
+
 if (args.Length > 0 && args[0] == "--assemble")
 {
     Environment.ExitCode = AssembleCommand.Run(args[1..]);
@@ -28,6 +34,12 @@ if (args.Length > 0 && args[0] == "--assemble")
 if (args.Length > 0 && args[0] == "--basic")
 {
     Environment.ExitCode = BasicCommand.Run(args[1..]);
+    return;
+}
+
+if (args.Length > 0 && args[0] == "--model100")
+{
+    Environment.ExitCode = Model100Command.Run(args[1..]);
     return;
 }
 

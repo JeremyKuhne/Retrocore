@@ -13,9 +13,10 @@ namespace Retrocore.Machines.Altair;
 /// </summary>
 /// <remarks>
 ///  <para>
-///   The Altair has no ROM: at power-on and RESET the 8080 starts at address 0, in whatever RAM holds, and programs
-///   arrive through the front panel, the serial port or a loader. The 88-2SIO's interrupt requests drive the 8080's
-///   INT line; with no vectored interrupt board, the acknowledge reads $FF, which is <c>RST 7</c>.
+///   The Altair has no ROM of its own: at power-on and RESET the 8080 starts at address 0, in whatever RAM holds, and
+///   programs arrive through the front panel, the serial port, a disk or a loader. Boot PROMs, when fitted
+///   (<see cref="AltairRoms"/>), answer their addresses in place of RAM. The 88-2SIO's interrupt requests drive the
+///   8080's INT line; with no vectored interrupt board, the acknowledge reads $FF, which is <c>RST 7</c>.
 ///  </para>
 /// </remarks>
 public sealed class AltairMachine : IMachine
@@ -26,14 +27,26 @@ public sealed class AltairMachine : IMachine
     ///  Builds a machine.
     /// </summary>
     /// <param name="configuration">Its boards and switches.</param>
-    public AltairMachine(AltairConfiguration configuration)
+    /// <param name="roms">The boot PROMs fitted, or null for none.</param>
+    public AltairMachine(AltairConfiguration configuration, AltairRoms? roms = null)
     {
         ArgumentNullException.ThrowIfNull(configuration);
         configuration.Validate();
         Configuration = configuration;
-        Bus = new(configuration);
+        Roms = roms ?? new();
+        Bus = new(configuration, Roms);
         Processor = new(Bus, I8080Variant.I8080);
+        Bus.InterruptEnable = () => Processor.Registers.InterruptEnable;
+        List<IDevice> devices = [];
+        if (Bus.Disk is { } disk) { devices.AddRange(disk.Drives); }
+        if (Bus.Cassette is { } cassette) { devices.Add(cassette); }
+        Devices = devices;
     }
+
+    /// <summary>
+    ///  Gets the boot PROMs fitted.
+    /// </summary>
+    public AltairRoms Roms { get; }
 
     /// <summary>
     ///  Gets the configuration.
@@ -61,7 +74,7 @@ public sealed class AltairMachine : IMachine
     public AltairFrontPanel FrontPanel => Bus.FrontPanel;
 
     /// <inheritdoc/>
-    public IReadOnlyList<IDevice> Devices => Bus.Cassette is { } cassette ? [cassette] : [];
+    public IReadOnlyList<IDevice> Devices { get; }
 
     /// <inheritdoc/>
     public ProcessorCycle LastCycle => Processor.LastCycle;

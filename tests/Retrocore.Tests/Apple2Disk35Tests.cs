@@ -83,7 +83,7 @@ public sealed class Apple2Disk35Tests
             ours[offset].Should().Be(apple[offset], $"$Cn{offset:X2} identifies the card");
         }
 
-        (Disk35Rom.ProDosEntry & 0xFF).Should().Be(0x1C);
+        (Disk35Rom.Disk35Driver & 0xFF).Should().Be(0x1C);
         (Disk35Rom.SmartPortEntry & 0xFF).Should().Be(0x1F);
         (Disk35Rom.DiagnosticsEntry & 0xFF).Should().Be(0x0D);
     }

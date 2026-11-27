@@ -154,6 +154,25 @@ public sealed class MediaUndoTests
     }
 
     /// <summary>
+    ///  Before the host puts a disk in a drive in place of a changed one, as a project launch does with its built
+    ///  image, the changed one is kept as an ejected one is, with why it went; an unchanged one is its image and is not.
+    /// </summary>
+    [TestMethod]
+    public void ReplacedChangedDisksAreKept()
+    {
+        (Apple2Disk35Drive drive, string image) = Drive("replaced.po");
+        DeviceAction(drive, image);
+        MediaActions.KeepReplaced(drive, "the build's disk took its place");
+        MediaActions.Ejected(drive).Should().BeEmpty("an unchanged disk is its image");
+
+        IMedium changed = drive.Medium ?? throw new InvalidOperationException("The drive is empty.");
+        Write(drive, block: 3, 0x66);
+        MediaActions.KeepReplaced(drive, "the build's disk took its place");
+        KeptDisk kept = MediaActions.Ejected(drive).Single();
+        (kept.Medium, kept.Label, kept.Why).Should().Be((changed, image, "the build's disk took its place"));
+    }
+
+    /// <summary>
     ///  A changed disk the machine ejects is kept under its drive until it is saved, put back or let go; an unchanged
     ///  one is its image and goes.
     /// </summary>

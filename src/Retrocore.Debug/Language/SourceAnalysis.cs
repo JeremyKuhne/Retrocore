@@ -8,6 +8,8 @@ using Retrocore.Isa;
 using System.Collections.Concurrent;
 using System.Text.RegularExpressions;
 
+using Retrocore.Debug.Project;
+
 namespace Retrocore.Debug.Language;
 
 /// <summary>
@@ -24,6 +26,12 @@ internal sealed partial class SourceAnalysis
         [with(StringComparer.OrdinalIgnoreCase)];
     private readonly Dictionary<string, AssemblyDialect> _dialects = [with(StringComparer.OrdinalIgnoreCase)];
     private readonly Dictionary<string, string[]> _lines = [with(StringComparer.OrdinalIgnoreCase)];
+
+    // Full paths by the path as the assembly gave it, filled while the constructor runs.
+    private readonly Dictionary<string, string> _fullPaths = [with(StringComparer.Ordinal)];
+
+    // Full paths upper-cased for the keys of _usingOrder and the assembled lines, filled while the constructor runs.
+    private readonly Dictionary<string, string> _upperPaths = [with(StringComparer.Ordinal)];
     private readonly Func<string, string?> _text;
 
     // Filled lazily, and language requests run in parallel: a cache entry is computed whole and then published.
@@ -39,6 +47,9 @@ internal sealed partial class SourceAnalysis
     // Definitions found only in the text, such as in a branch the assembly skipped.
     private readonly HashSet<SymbolSite> _textOnly = [];
 
+    // The members a project target's analysis reports on, decided once (Owns).
+    private HashSet<string>? _owned;
+
     // Built once under the lock, as requests run in parallel with each other and with the publishing of diagnostics,
     // and the resolver, the lint and a hover's link compare sets by reference: every caller gets the same instance.
     private DocumentationSet? _documentation;
@@ -49,7 +60,8 @@ internal sealed partial class SourceAnalysis
         AssemblyResult result,
         AssemblyProject project,
         IEnumerable<string> members,
-        Func<string, string?> text)
+        Func<string, string?> text,
+        Func<string, string[]?> linesOf)
     {
         Root = root;
         Result = result;
@@ -73,7 +85,7 @@ internal sealed partial class SourceAnalysis
             {
                 if (location is { Path.Length: > 0, ExpandedFrom: { } from, IsMacroExpansion: false })
                 {
-                    string path = Path.GetFullPath(location.Path);
+                    string path = FullPath(location.Path);
                     if (!_includeCpus.TryGetValue(path, out Dictionary<AssemblyLocation, List<(int Line, InstructionSet Cpu)>>? contexts))
                     {
                         _includeCpus[path] = contexts = [];
@@ -95,14 +107,14 @@ internal sealed partial class SourceAnalysis
                 for (AssemblyLocation? location = statement.Location; location is not null; location = location.ExpandedFrom)
                 {
                     if (location is { Path.Length: > 0, ExpandedFrom: null }
-                        && string.Equals(Path.GetFullPath(location.Path), root, StringComparison.OrdinalIgnoreCase))
+                        && string.Equals(FullPath(location.Path), root, StringComparison.OrdinalIgnoreCase))
                     {
                         int line = ReferenceEquals(location, statement.Location) ? location.Line : location.Line + 1;
                         _rootCpus.Add((line, cpu));
                     }
 
                     if (location is { Path.Length: > 0, ExpandedFrom: { } from, IsMacroExpansion: false }
-                        && _includeCpus.TryGetValue(Path.GetFullPath(location.Path), out var contexts)
+                        && _includeCpus.TryGetValue(FullPath(location.Path), out var contexts)
                         && contexts.TryGetValue(from, out var runs))
                     {
                         int line = ReferenceEquals(location, statement.Location) ? location.Line : location.Line + 1;
@@ -114,9 +126,12 @@ internal sealed partial class SourceAnalysis
 
         _text = text;
         Members = new(members, StringComparer.OrdinalIgnoreCase) { root };
+
+        // The members' lines: an open document's split from its text, a file on disk's shared with the assembly through
+        // the file cache. Later lookups of other files read them afresh.
         foreach (string member in Members)
         {
-            if (text(member) is { } content) { _lines[member] = SourceText.Lines(content); }
+            if (linesOf(member) is { } split) { _lines[member] = split; }
         }
 
         List<string> scopes = [];
@@ -126,7 +141,7 @@ internal sealed partial class SourceAnalysis
             AssemblyStatement statement = project.Statements[index];
             RecordScopeOrder(statement, index, opened);
             if (statement.Location is not { Path.Length: > 0 } location) { continue; }
-            string path = Path.GetFullPath(location.Path);
+            string path = FullPath(location.Path);
             if (_lines.ContainsKey(path))
             {
                 _dialects.TryAdd(path, statement.Dialect);
@@ -148,7 +163,7 @@ internal sealed partial class SourceAnalysis
                     _includedFrom[path] = sites = [];
                 }
 
-                (string Path, int Line) site = (Path.GetFullPath(from.Path), from.Line);
+                (string Path, int Line) site = (FullPath(from.Path), from.Line);
                 if (!sites.Contains(site)) { sites.Add(site); }
             }
 
@@ -164,7 +179,7 @@ internal sealed partial class SourceAnalysis
                 if (statement.Kind == AssemblyStatementKind.Using && AssemblyNameResolver.ReadUsingNames(statement, out _) is not null)
                 {
                     usingLines.Add(location.Line);
-                    _usingOrder.TryAdd((path.ToUpperInvariant(), location.Line), index);
+                    _usingOrder.TryAdd((UpperPath(path), location.Line), index);
                 }
             }
             else if (statement.Kind == AssemblyStatementKind.Using && AssemblyNameResolver.ReadUsingNames(statement, out _) is { } names)
@@ -206,11 +221,12 @@ internal sealed partial class SourceAnalysis
         // The assembler knows native names; show the spelling the source used.
         Dictionary<string, string> spelling = [with(StringComparer.Ordinal)];
         foreach (KeyValuePair<string, string> alias in result.SymbolAliases) { spelling[alias.Value] = alias.Key; }
-        HashSet<(string Path, int Line)> assembled = [];
+        // The lines the assembler defined a name on, by the upper-cased path, so each line costs only its number.
+        Dictionary<string, HashSet<int>> assembled = [with(StringComparer.Ordinal)];
         foreach (AssemblySymbol symbol in result.SymbolDefinitions)
         {
             if (symbol.Location is not { } location || location.Path.Length == 0) { continue; }
-            string path = Path.GetFullPath(location.Path);
+            string path = FullPath(location.Path);
             int scopeEnd = symbol.Name.LastIndexOf("::", StringComparison.Ordinal);
             int qualifier = scopeEnd < 0 ? 0 : scopeEnd + 2;
             string suffix = symbol.Name[qualifier..];
@@ -234,13 +250,20 @@ internal sealed partial class SourceAnalysis
             }
 
             Add(new(name, path, location.Line, column, kind, symbol.Value, sourceLength));
-            assembled.Add((path.ToUpperInvariant(), location.Line));
+            string upper = UpperPath(path);
+            if (!assembled.TryGetValue(upper, out HashSet<int>? assembledLines))
+            {
+                assembled[upper] = assembledLines = [];
+            }
+
+            assembledLines.Add(location.Line);
         }
 
         // Macros and .defines are expanded before assembly, so find their definitions in the text; so are the
         // definitions of a source that does not assemble yet, which the assembler reports none of.
         foreach ((string path, string[] lines) in _lines)
         {
+            HashSet<int>? assembledHere = assembled.GetValueOrDefault(UpperPath(path));
             for (int line = 0; line < lines.Length; line++)
             {
                 Match match = MacroDefinition().Match(lines[line]);
@@ -253,11 +276,13 @@ internal sealed partial class SourceAnalysis
                     continue;
                 }
 
+                // A line the assembler defined a name on has it already, qualified by its scope: most lines that
+                // define one, so they are passed over before matching.
+                if (assembledHere?.Contains(line) == true) { continue; }
                 match = TextDefinition().Match(lines[line]);
                 bool bare = match.Success && !match.Groups["colon"].Success && !match.Groups["equate"].Success;
                 bool instruction = bare && InstructionDocs.IsMnemonic(match.Groups["name"].Value);
-                // A line the assembler defined a name on has it already, qualified by its scope.
-                if (!match.Success || instruction || assembled.Contains((path.ToUpperInvariant(), line))) { continue; }
+                if (!match.Success || instruction) { continue; }
 
                 // One it did not assemble (a branch of conditional assembly not taken, or a source with errors) is
                 // qualified by the scopes around it as the assembler would qualify it, so a name in a scope is not
@@ -294,6 +319,62 @@ internal sealed partial class SourceAnalysis
     internal AssemblyResult Result { get; }
 
     /// <summary>
+    ///  Gets whether the analysis is a project target's (<see cref="ProjectSources"/>).
+    /// </summary>
+    internal bool IsTarget => Root.EndsWith(ProjectSources.Extension, StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    ///  Tests whether the analysis reports on a file: shows its diagnostics and owns it for requests.
+    /// </summary>
+    /// <remarks>
+    ///  <para>
+    ///   An analysis that is not a project target's reports on every file. A target reports on the project's sources
+    ///   the project prefers it for (the active target, or the first that lists them), on the project's files those
+    ///   include, and on files outside the project, such as the SDK's headers. So a source two targets assemble shows
+    ///   its preferred target's diagnostics, whichever target finishes last; only a file outside the project, which every
+    ///   target that includes it reports on, shows the last one's. The members are decided once, as the analysis is
+    ///   first asked; a file that is not a member is reported on unless the project prefers another target for it.
+    ///  </para>
+    /// </remarks>
+    /// <param name="path">The file's full path.</param>
+    /// <returns>Whether it reports on it.</returns>
+    internal bool Owns(string path)
+    {
+        if (!IsTarget) { return true; }
+        if (Members.Contains(path))
+        {
+            return LazyInitializer.EnsureInitialized(ref _owned, OwnedMembers).Contains(path);
+        }
+
+        return ProjectSources.RootOf(path) is not { } preferred || string.Equals(preferred, Root, StringComparison.OrdinalIgnoreCase);
+    }
+
+    // The members a target reports on: outside the project's folder, all; a source the project lists, when it prefers
+    // this target; a file a source includes, when this target reports on one of the files that include it.
+    private HashSet<string> OwnedMembers()
+    {
+        string folder = (Path.GetDirectoryName(Root) ?? "") + Path.DirectorySeparatorChar;
+        Dictionary<string, bool> decided = [with(StringComparer.OrdinalIgnoreCase)];
+        bool Owned(string path)
+        {
+            if (decided.TryGetValue(path, out bool known)) { return known; }
+
+            // A file that includes itself, through others, is not its own reason to be reported on.
+            decided[path] = false;
+            bool owned = !path.StartsWith(folder, StringComparison.OrdinalIgnoreCase)
+                || (ProjectSources.RootOf(path) is { } preferred
+                    ? string.Equals(preferred, Root, StringComparison.OrdinalIgnoreCase)
+                    : !_includedFrom.TryGetValue(path, out List<(string Path, int Line)>? sites)
+                        || sites.Count == 0
+                        || sites.Any(site => Owned(site.Path)));
+
+            return decided[path] = owned;
+        }
+
+        return [with(StringComparer.OrdinalIgnoreCase), .. Members.Where(Owned)];
+    }
+
+    /// <summary>
     ///  Gets the root and every file it included.
     /// </summary>
     internal HashSet<string> Members { get; }
@@ -307,7 +388,7 @@ internal sealed partial class SourceAnalysis
     private DocumentationSet CreateDocumentation() => DocumentationSet.Create(
         _lines.Keys
             .OrderBy(path => string.Equals(path, Root, StringComparison.OrdinalIgnoreCase) ? 0 : 1)
-            .Select(path => DocumentationParser.Parse(string.Join("\n", _lines[path]), path, AssembledUsing(path))),
+            .Select(path => DocumentationParser.Parse(SourceText.Rejoined(_lines[path]), path, AssembledUsing(path), style: true)),
         Symbols(),
         ModuleOf(Root),
         ModelOf(Root),
@@ -348,34 +429,118 @@ internal sealed partial class SourceAnalysis
         _definitions.TryGetValue(name, out List<SymbolSite>? sites) && sites.Exists(site => site.Name == name);
 
     /// <summary>
-    ///  Assembles a root file over the whole address space.
+    ///  Assembles a root file over its declared ROM image or the whole address space.
     /// </summary>
     /// <param name="root">The full path of the root.</param>
     /// <param name="openText">Open documents' text by path, or null for files on disk.</param>
+    /// <param name="files">
+    ///  The files read from disk, shared with other analyses made at the same time, such as the SDK index's; null for a
+    ///  cache of this analysis's own.
+    /// </param>
     /// <returns>The analysis.</returns>
-    internal static SourceAnalysis Assemble(string root, Func<string, string?> openText)
+    internal static SourceAnalysis Assemble(string root, Func<string, string?> openText, SourceFileCache? files = null)
     {
-        string text = openText(root) ?? File.ReadAllText(root);
+        files ??= new();
+        if (root.EndsWith(ProjectSources.Extension, StringComparison.OrdinalIgnoreCase))
+        {
+            return AssembleTarget(root, openText, files);
+        }
+
+        string text = openText(root) ?? files.Read(root);
         string configuration = Path.ChangeExtension(root, ".cfg");
         string? configurationText = openText(configuration) ?? (File.Exists(configuration) ? File.ReadAllText(configuration) : null);
-        WorkspaceSourceResolver resolver = new(openText);
-        AssemblyOptions options = new(ProcessorVariant.Mos6502, 0, AddressSpaceSize)
-        {
-            SourceResolver = resolver,
-            SdkPaths = [SdkModules.SdkDirectory],
-            BuildTime = DateTimeOffset.UnixEpoch,
-            LinkerConfiguration = configurationText is null ? null : new(configurationText, configuration)
-        };
+        WorkspaceSourceResolver resolver = new(openText, files);
+        (string assemblyText, RomMetadata? rom, AssemblyDiagnostic? romError) = RomSource(text, root);
+        AssemblySource? linkerConfiguration = configurationText is not null
+            ? new(configurationText, configuration)
+            : null;
 
-        AssemblySource source = new(WithoutRomDeclaration(text), root);
+        AssemblyOptions options = Options(linkerConfiguration);
+        AssemblySource source = new(assemblyText, root);
         AssemblyParseResult parsed = Assembler.Assembler.Parse(source, options);
+        if (romError is not null)
+        {
+            parsed = new(parsed.Project, [romError, .. parsed.Diagnostics]);
+        }
+
+        if (rom is { } metadata
+            && linkerConfiguration is null
+            && parsed.Project.Statements.Any(statement => statement.Dialect == AssemblyDialect.Ca65))
+        {
+            options = Options(AssemblyLinker.ImageConfiguration(metadata.Origin, metadata.ImageSize));
+        }
+
         Assembler.Assembler assembler = new();
         AssemblyResult result = parsed.Success
             ? assembler.Assemble(parsed.Project, options)
             : Assembler.Assembler.Failed(parsed);
 
-        return new(root, result, parsed.Project, resolver.Resolved, path => openText(path) ?? (File.Exists(path) ? File.ReadAllText(path) : null));
+        return new(
+            root,
+            result,
+            parsed.Project,
+            resolver.Resolved,
+            TextOf(openText),
+            path => openText(path) is { } open ? SourceText.Lines(open) : files.ReadLinesIfExists(path));
+
+        AssemblyOptions Options(AssemblySource? linker) => new(ProcessorVariant.Mos6502, rom?.Origin ?? 0, rom?.ImageSize ?? AddressSpaceSize)
+        {
+            SourceResolver = resolver,
+            SdkPaths = [SdkModules.SdkDirectory],
+            BuildTime = DateTimeOffset.UnixEpoch,
+            LinkerConfiguration = linker
+        };
     }
+
+    // A project's target, assembled as retrocore build assembles it: its platform folders' and sources' files as one
+    // stream, with its headers and defines. A target its project no longer has, or whose sources are missing, is an
+    // analysis with that error on the project file, its one member.
+    private static SourceAnalysis AssembleTarget(string root, Func<string, string?> openText, SourceFileCache files)
+    {
+        WorkspaceSourceResolver resolver = new(openText, files);
+        List<TargetSourceFile> sourceFiles;
+        AssemblyOptions options;
+        ProjectTarget? target = ProjectSources.Target(root);
+        try
+        {
+            if (target is null) { throw new ProjectException($"{root}: the project no longer has this target."); }
+            sourceFiles = target.SourceFiles();
+            string? linker = target.LinkerConfiguration;
+            options = ProjectBuild.Options(
+                target,
+                resolver,
+                linker is null ? null : new(openText(linker) ?? files.Read(linker), linker));
+        }
+        catch (Exception exception) when (exception is ProjectException or IOException or UnauthorizedAccessException)
+        {
+            string file = target?.Project.File ?? ProjectSources.FileOf(root) ?? root;
+            string message = target is null && ProjectSources.ErrorOf(root) is { } unreadable ? unreadable : exception.Message;
+            AssemblyDiagnostic error = new(message, new AssemblyLocation(file, line: 0));
+            AssemblyProject empty = new(0);
+            return new(root, Assembler.Assembler.Failed(new(empty, [error])), empty, [file], TextOf(openText), _ => []);
+        }
+
+        List<AssemblySource> sources =
+            [.. sourceFiles.Select(file => new AssemblySource(openText(file.Path) ?? files.Read(file.Path), file.Path, file.Dialect))];
+
+        AssemblyParseResult parsed = Assembler.Assembler.Parse(sources, options);
+        AssemblyResult result = parsed.Success
+            ? new Assembler.Assembler().Assemble(parsed.Project, options)
+            : Assembler.Assembler.Failed(parsed);
+
+        return new(
+            root,
+            result,
+            parsed.Project,
+            [.. sourceFiles.Select(file => file.Path), .. resolver.Resolved],
+            TextOf(openText),
+            path => openText(path) is { } open ? SourceText.Lines(open) : files.ReadLinesIfExists(path));
+    }
+
+    // The analysis keeps this function, so it is made apart from Assemble's lambdas: those share one closure, and
+    // the analysis would keep the build's whole file cache through it.
+    private static Func<string, string?> TextOf(Func<string, string?> openText) =>
+        path => openText(path) ?? (File.Exists(path) ? File.ReadAllText(path) : null);
 
     /// <summary>
     ///  Gets a member file's lines.
@@ -726,7 +891,7 @@ internal sealed partial class SourceAnalysis
         AssemblyLocation invocation = location;
         while (invocation.IsMacroExpansion && invocation.ExpandedFrom is { } from) { invocation = from; }
         if (invocation.IsMacroExpansion || invocation.Path.Length == 0) { return; }
-        string path = Path.GetFullPath(invocation.Path);
+        string path = FullPath(invocation.Path);
         if (!_invokedUsings.TryGetValue(path, out Dictionary<int, List<string[]>>? lines))
         {
             _invokedUsings[path] = lines = [];
@@ -734,7 +899,7 @@ internal sealed partial class SourceAnalysis
 
         if (!lines.TryGetValue(invocation.Line, out List<string[]>? list)) { lines[invocation.Line] = list = []; }
         list.Add(names);
-        _usingOrder.TryAdd((path.ToUpperInvariant(), invocation.Line), index);
+        _usingOrder.TryAdd((UpperPath(path), invocation.Line), index);
     }
 
     // Records where each scope is first opened in the assembled statements, so a .using operand binds, as the
@@ -766,6 +931,22 @@ internal sealed partial class SourceAnalysis
         _usingOrder.TryGetValue((path.ToUpperInvariant(), directive.Line), out int at)
             ? scope => _scopeOpened.TryGetValue(scope, out int open) && open < at
             : null;
+
+    // A statement's, symbol's or include's path made full. The assembly names a few files many times over, so each
+    // path is made full once; only the constructor calls this, so the cache needs no lock.
+    private string FullPath(string path)
+    {
+        if (!_fullPaths.TryGetValue(path, out string? full)) { _fullPaths[path] = full = Path.GetFullPath(path); }
+        return full;
+    }
+
+    // A full path upper-cased, as the keys that compare paths without case hold it, once per path; only the
+    // constructor calls this, so the cache needs no lock.
+    private string UpperPath(string path)
+    {
+        if (!_upperPaths.TryGetValue(path, out string? upper)) { _upperPaths[path] = upper = path.ToUpperInvariant(); }
+        return upper;
+    }
 
     private static string Qualify(string scope, string name) => name.Length == 0 ? scope : $"{scope}::{name}";
 
@@ -912,8 +1093,50 @@ internal sealed partial class SourceAnalysis
         sites.Add(site);
     }
 
-    // The generator's .rom declaration is metadata for the C# source generator, not an instruction.
-    private static string WithoutRomDeclaration(string text) => RomDeclaration().Replace(text, "");
+    // The generator's .rom line supplies image bounds but is not an assembler instruction.
+    private static (string Text, RomMetadata? Metadata, AssemblyDiagnostic? Error) RomSource(string text, string path)
+    {
+        if (!text.Contains(".rom", StringComparison.OrdinalIgnoreCase)) { return (text, null, null); }
+        if (!path.EndsWith(".rom.asm", StringComparison.OrdinalIgnoreCase))
+        {
+            return (RomDeclaration().Replace(text, ""), null, null);
+        }
+
+        char[]? source = null;
+        RomMetadata? metadata = null;
+        AssemblyDiagnostic? error = null;
+        int offset = 0;
+        int line = 0;
+        foreach (ReadOnlyMemory<char> sourceLine in new AssemblyLines(text.AsMemory()))
+        {
+            int start = offset;
+            offset += sourceLine.Length;
+            if (offset < text.Length && text[offset] == '\r') { offset++; }
+            if (offset < text.Length && text[offset] == '\n') { offset++; }
+            int currentLine = line++;
+            ReadOnlyMemory<char> content = sourceLine[..AssemblySyntax.WithoutComment(sourceLine.Span).Length].Trim();
+            if (!RomMetadata.IsDeclaration(content.Span)) { continue; }
+
+            source ??= text.ToCharArray();
+            source.AsSpan(start, sourceLine.Length).Fill(' ');
+            if (error is not null) { continue; }
+            try
+            {
+                if (metadata is not null)
+                {
+                    throw new AssemblyError(currentLine, "Expected one '.rom Namespace.Type, origin, size' declaration.");
+                }
+
+                metadata = RomMetadata.Read(content, currentLine);
+            }
+            catch (AssemblyError failure)
+            {
+                error = new(failure.Message, new(path, failure.Line));
+            }
+        }
+
+        return (source is null ? text : new string(source), metadata, error);
+    }
 
     [GeneratedRegex(@"^[ \t]*\.rom[ \t][^\r\n]*", RegexOptions.Multiline | RegexOptions.IgnoreCase)]
     private static partial Regex RomDeclaration();

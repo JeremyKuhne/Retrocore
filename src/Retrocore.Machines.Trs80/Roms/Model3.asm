@@ -151,8 +151,8 @@ KBTAB:
     .res 5, $00
 .else
 
-;; Tests whether the two shift keys work separately, as SHFEQU says: zero when they are one key, as on early
-;; machines.
+;; Tests whether the two shift keys are one key, as SHFEQU says: Z when they work separately, the right one being
+;; shift lock.
 CHKEQU:
     LD A,[SHFEQU]
     OR A
@@ -1117,8 +1117,9 @@ PRTSC3:
     RST $38                         ; never reached
 .endif
 
-;; The real-time clock's interrupt, 30 times a second through CLOCK_VECTOR: blinks the cursor every seven ticks,
-;; counts the time and date each second, and shows the time at the top right when CLOCKN has turned it on.
+;; The real-time clock's interrupt, 30 times a second through CLOCK_VECTOR (60 on a Model 4 at 4 MHz, where the
+;; count of 30 makes two seconds for each real second): blinks the cursor every seven ticks, counts the time and date
+;; each second, and shows the time at the top right when CLOCKN has turned it on.
 CLOCKZ:
     LD DE,CLKOUT
     PUSH DE
@@ -1486,7 +1487,7 @@ RAM_RS232:
     .word RSOUTZ
     .byte $00, $00, $00
 .if MODEL = 4
-    .byte $08, $00                  ; FKEY3, a backspace, and FKEYS
+    .byte $08, $00                  ; FKEY3 ($08, a backspace) and FKEYS ($00)
 .else
     .byte "RO"
 .endif
@@ -1756,7 +1757,8 @@ SETTIM:
 
 .endif
 
-;; Nonzero when the two shift keys work separately, the right one being shift lock; the Model 4 has CAPS instead.
+;; Nonzero when the two shift keys are one key and shift and 0 is shift lock; zero when they work separately, the
+;; right one being shift lock. The Model 4 has CAPS instead.
 SHFEQU:
 .if MODEL = 4
     .byte $00

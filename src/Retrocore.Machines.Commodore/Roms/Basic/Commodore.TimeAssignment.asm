@@ -2,11 +2,12 @@
 ; COMMODORE BASIC: CLOCK-STRING ASSIGNMENT
 
 .include "../../Microsoft6502Basic/MsBasic.Families.asm"
+.include "Commodore.Switches.asm"
 
 ;; The number of digits a `TI$` assignment takes: hours, minutes and seconds, two digits each.
 CLOCK_STRING_LENGTH = 6
 
-;; Emits the `TI$` assignment, the PET's start of <AssignString>: every string assignment comes here first, and one to
+;; Emits the `TI$` assignment, Commodore's start of <AssignString>: every string assignment comes here first, and one to
 ;; any other variable goes on to <StoreString>.
 ;; Parameters: longLengthError = 1 to reach <IllegalQuantityError> for a wrong length by a jump, which the right length
 ;;   branches over (BASIC 1), 0 to branch to the digit check's jump
@@ -18,7 +19,8 @@ CLOCK_STRING_LENGTH = 6
     ;; The reserved variables' values are in ROM, in <ZeroValue>'s page, so a destination there is `TI$` (the only
     ;; reserved string variable). The string must be six characters, `HHMMSS`; it is converted to 60 Hz ticks
     ;; (sixtieths of a second), and the low three bytes of the integer are stored in <JiffyClock>
-    ;; with interrupts off, so the clock interrupt never sees half of the new value. The value is not checked against
+    ;; with interrupts off, so the clock interrupt never sees half of the new value (with <STANDARD_KERNAL>, the
+    ;; VIC-20's, by the kernal's `KernalSetClock`). The value is not checked against
     ;; 24 hours: `TI$ = "999999"` sets the clock past a day. Nor are the digits checked as digits: <ClassifyCharacter>
     ;; is the reader's entry after its colon test, so it takes every byte from `0` up for a digit, with the value of
     ;; its distance from `0` (`A` counts 17), and rejects only the bytes below `0`. A space it skips by going on to
@@ -51,7 +53,7 @@ Convert:
 
 ;; Adds the next two digits to <Fac>, as (<Fac> + first) * 10 + second, and multiplies it by 6 unless it is zero. With
 ;; the last multiplication by 10, the clock gets HH * 216000 + MM * 3600 + SS * 60, the time in sixtieths of a second.
-;; Also: TIMELP (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: TIMELP (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 NextPair:
     sty NumberBufferPointer
     jsr AddClockDigit
@@ -67,7 +69,7 @@ NextPair:
     jsr Float::AddScaledArgAndDouble
 
 ;; Counts to six digits; then multiplies the whole value by 10 more, converts <Fac> to an integer and stores the clock.
-;; Also: NOML6 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: NOML6 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 SkipScale:
     ldy NumberBufferPointer
     iny
@@ -75,18 +77,25 @@ SkipScale:
     bne NextPair
     jsr Float::MultiplyByTen
     jsr Float::ToLongInteger
-    ldx #$02
-    sei
+    .if STANDARD_KERNAL
+        ldx FacMantissa3
+        ldy FacMantissa2
+        lda FacMantissa4
+        jmp KernalSetClock
+    .else
+        ldx #$02
+        sei
 
 ;; Stores the integer's three low bytes in <JiffyClock>, interrupts off.
 ;; Also: TIMEST (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
 StoreClock:
-    lda FacMantissa2,x
-    sta JiffyClock,x
-    dex
-    bpl StoreClock
-    cli
-    rts
+        lda FacMantissa2,x
+        sta JiffyClock,x
+        dex
+        bpl StoreClock
+        cli
+        rts
+    .endif
 
     ;; Adds the digit at <Pointer1>+Y to <Fac>: any byte from `0` up, counted from `0`
     ;; (see <AssignClockString>).
@@ -95,20 +104,20 @@ StoreClock:
     ;; Entry:
     ;;   ToIllegalQuantity = jumps to <IllegalQuantityError>; the length check branches here where `longLengthError`
     ;;     is 0
-    ;; Also: TIMNUM (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;; Also: TIMNUM (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     .proc AddClockDigit
     lda (Pointer1),y
     jsr ClassifyCharacter
     bcc Digit
 
 ;; Jumps to <IllegalQuantityError>.
-;; Also: FCERR2 (M6502, CBM4S79, HV2, HV4, HV4R)
+;; Also: FCERR2 (M6502, CBM4S79, HV2, HV4, HV4R, BV20)
 ToIllegalQuantity:
     jmp IllegalQuantityError
 
 ;; A digit, or any byte above it: subtracts the character `0` (the operand is one less, since the carry is clear)
 ;; and adds the value with <Float::AddSignedByte>.
-;; Also: GOTNUM (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: GOTNUM (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 Digit:
     sbc #('0'-1)
     jmp Float::AddSignedByte

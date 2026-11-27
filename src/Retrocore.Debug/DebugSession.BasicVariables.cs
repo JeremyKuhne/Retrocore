@@ -232,6 +232,8 @@ internal sealed partial class DebugSession
 
         if (Basic == BasicDialect.BusinessBasic) { return BusinessProgramVariables(line); }
         if (Basic == BasicDialect.BbcBasic) { return BbcProgramVariables(line, Span); }
+        if (Basic is AtariBasicDialect) { return AtariProgramVariables(line, Span); }
+        if (Basic is Level1Dialect) { return Level1ProgramVariables(line, Span); }
         BasicPointers pointers = Basic.Pointers;
         int start = Word(pointers.ProgramStart);
         int variables = Word(pointers.Variables);
@@ -249,6 +251,51 @@ internal sealed partial class DebugSession
             new JsonObject { ["name"] = "Strings", ["value"] = Span(strings, top), ["variablesReference"] = 0 },
             new JsonObject { ["name"] = "Current line", ["value"] = line, ["variablesReference"] = 0 },
             new JsonObject { ["name"] = "Next DATA", ["value"] = data, ["variablesReference"] = 0 }
+        ];
+    }
+
+    // Atari BASIC's memory, in its order above LOMEM's token buffer: the variable name table from VNTP, the value
+    // table, the program from STMTAB, the strings and arrays from STARP, the run-time stack from RUNSTK up to BASIC's
+    // MEMTOP, and free space up to the OS's MEMTOP. DATA_LINE holds the number of the line READ reads.
+    private List<JsonNode?> AtariProgramVariables(string line, Func<int, int, string> span)
+    {
+        int vntp = Word(AtariBasicDialect.Vntp);
+        int vvtp = Word(AtariBasicDialect.Vvtp);
+        int stmtab = Word(AtariBasicDialect.Stmtab);
+        int starp = Word(AtariBasicDialect.Starp);
+        int stack = Word(AtariBasicDialect.Runstk);
+        int memtop = Word(AtariBasicDialect.BasicMemtop);
+        int top = Word(AtariBasicDialect.OsMemtop);
+        string data = Word(AtariBasicDialect.DataLine).ToString(CultureInfo.InvariantCulture);
+        return
+        [
+            new JsonObject { ["name"] = "Variable names", ["value"] = span(vntp, vvtp), ["variablesReference"] = 0 },
+            new JsonObject { ["name"] = "Variable values", ["value"] = span(vvtp, stmtab), ["variablesReference"] = 0 },
+            new JsonObject { ["name"] = "Program", ["value"] = span(stmtab, starp), ["variablesReference"] = 0 },
+            new JsonObject { ["name"] = "Strings, arrays", ["value"] = span(starp, stack), ["variablesReference"] = 0 },
+            new JsonObject { ["name"] = "Run-time stack", ["value"] = span(stack, memtop), ["variablesReference"] = 0 },
+            new JsonObject { ["name"] = "Free", ["value"] = span(memtop, top + 1), ["variablesReference"] = 0 },
+            new JsonObject { ["name"] = "Current line", ["value"] = line, ["variablesReference"] = 0 },
+            new JsonObject { ["name"] = "DATA line", ["value"] = data, ["variablesReference"] = 0 }
+        ];
+    }
+
+    // Level I's memory: the program from $4200 to TXTUNF, then free space, into which A(n) grows down from MEMTOP.
+    // DATAPTR is where READ takes its next item, or 0 before the first READ.
+    private List<JsonNode?> Level1ProgramVariables(string line, Func<int, int, string> span)
+    {
+        int end = Word(Level1Dialect.TextEnd);
+        int top = Word(Level1Dialect.MemoryTop);
+        int data = Word(Basic.Pointers.DataPointer);
+        string next = data == 0 ? "the first" : $"${data:X4}";
+        string program = span(Level1Dialect.ProgramStart, end);
+        string free = span(end, top);
+        return
+        [
+            new JsonObject { ["name"] = "Program", ["value"] = program, ["variablesReference"] = 0 },
+            new JsonObject { ["name"] = "Free, A(n) at its top", ["value"] = free, ["variablesReference"] = 0 },
+            new JsonObject { ["name"] = "Current line", ["value"] = line, ["variablesReference"] = 0 },
+            new JsonObject { ["name"] = "Next DATA", ["value"] = next, ["variablesReference"] = 0 }
         ];
     }
 

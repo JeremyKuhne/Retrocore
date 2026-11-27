@@ -11,8 +11,9 @@ using System.Text.Json.Nodes;
 namespace Retrocore.Debug;
 
 /// <summary>
-///  The Z80 SoftCard's Z80 as the debugger sees it: its own thread, registers and calls, and the Apple's memory
-///  through the card's address translation. Everything that is the machine's, not the CPU's, is the Apple's.
+///  A Z80 card's Z80 as the debugger sees it, the Apple II's Z80 SoftCard's or the Apple III's SoftCard ///'s: its own
+///  thread, registers and calls, and the Apple's memory through the card's address translation. Everything that is
+///  the machine's, not the CPU's, is the Apple's.
 /// </summary>
 /// <remarks>
 ///  <para>
@@ -24,7 +25,7 @@ internal sealed class SoftCardDebugTarget : IDebugTarget
 {
     private static readonly DebugRegisters s_registers = new(Z80Isa.Description);
 
-    private readonly Apple2DebugTarget _host;
+    private readonly IZ80CardHost _host;
     private readonly Z80CallStack _calls;
     private DebugFrame? _before;
     private int _resets;
@@ -34,10 +35,13 @@ internal sealed class SoftCardDebugTarget : IDebugTarget
     /// </summary>
     /// <param name="host">The Apple's target.</param>
     /// <param name="card">The card.</param>
-    internal SoftCardDebugTarget(Apple2DebugTarget host, SoftCard card)
+    /// <param name="threadName">The Z80's thread's name.</param>
+    /// <param name="description">The <c>z80</c> bank's description.</param>
+    internal SoftCardDebugTarget(IZ80CardHost host, Z80Card card, string threadName, string description)
     {
         _host = host;
         Card = card;
+        ThreadName = threadName;
         _calls = new(this);
         card.InstructionBoundary = Boundary;
 
@@ -45,17 +49,17 @@ internal sealed class SoftCardDebugTarget : IDebugTarget
         // with none, it has no bytes.
         Bank = new(
             "z80",
-            "The SoftCard Z80's memory",
+            description,
             [SoftCardMemoryArea.Z80],
             [(0x0000, 0x10000)],
-            address => host.InstalledSoftCard is { } current ? current.Peek(address) : null,
-            (address, value) => host.InstalledSoftCard is { } current && PokeHost(host, current.Translate(address), value),
+            address => host.InstalledZ80Card is { } current ? current.Peek(address) : null,
+            (address, value) => host.InstalledZ80Card is { } current && PokeHost(host, current.Translate(address), value),
             Z80Isa.InstructionSet,
-            address => host.InstalledSoftCard is { } current && host.CanPoke(current.Translate(address)));
+            address => host.InstalledZ80Card is { } current && host.CanPoke(current.Translate(address)));
     }
 
     // Writes a byte the Z80 reaches, or reports that ROM or I/O is there, so a write can roll back or stop part way.
-    private static bool PokeHost(Apple2DebugTarget host, ushort address, byte value)
+    private static bool PokeHost(IZ80CardHost host, ushort address, byte value)
     {
         try
         {
@@ -71,7 +75,7 @@ internal sealed class SoftCardDebugTarget : IDebugTarget
     /// <summary>
     ///  Gets the card.
     /// </summary>
-    internal SoftCard Card { get; }
+    internal Z80Card Card { get; }
 
     /// <summary>
     ///  Gets the Z80's address space as a memory bank, which names it in references such as <c>z80:0x0100</c>.
@@ -109,7 +113,7 @@ internal sealed class SoftCardDebugTarget : IDebugTarget
     }
 
     /// <inheritdoc/>
-    public string ThreadName => "SoftCard Z80";
+    public string ThreadName { get; }
 
     /// <inheritdoc/>
     public string Cpu => "Z80";
@@ -137,6 +141,9 @@ internal sealed class SoftCardDebugTarget : IDebugTarget
     public DebugFrame Frame => Trs80DebugTarget.FrameOf(Card.Processor.Registers);
 
     /// <inheritdoc/>
+    public int StackPointer => Card.Processor.Registers.SP;
+
+    /// <inheritdoc/>
     public ushort ProgramCounter
     {
         get => Card.Processor.Registers.PC;
@@ -156,6 +163,17 @@ internal sealed class SoftCardDebugTarget : IDebugTarget
     ///  </para>
     /// </remarks>
     public bool IsInstructionBoundary => Card.Processor.IsInstructionBoundary || Card.WaitingAtInstruction;
+
+    /// <inheritdoc/>
+    public bool IsTakingInterrupt => Card.Processor.IsTakingInterrupt;
+
+    /// <inheritdoc/>
+    /// <remarks>
+    ///  <para>
+    ///   A halted Z80 runs a refresh fetch every four T-states without leaving the instruction after its HALT.
+    ///  </para>
+    /// </remarks>
+    public bool IsIdle => Card.Processor.IsHalted;
 
     /// <inheritdoc/>
     public bool InInstruction => !IsInstructionBoundary;
@@ -233,7 +251,7 @@ internal sealed class SoftCardDebugTarget : IDebugTarget
     /// <inheritdoc/>
     /// <remarks>
     ///  <para>
-    ///   One T-state, half of the Apple's cycle, so the run can stop at an instruction that starts mid-cycle.
+    ///   One T-state, part of the Apple's cycle, so the run can stop at an instruction that starts mid-cycle.
     ///  </para>
     /// </remarks>
     public bool StepCycle()

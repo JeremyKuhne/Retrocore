@@ -59,7 +59,9 @@ internal static class DebugScreens
     /// <exception cref="ArgumentException">The machine has no such monitor.</exception>
     internal static string Require(string screen, IReadOnlyList<string> screens) => screens.Contains(screen)
         ? screen
-        : throw new ArgumentException($"screen must be {string.Join(", ", screens.SkipLast(1))} or {screens[^1]} on this machine.");
+        : throw new ArgumentException(screens.Count == 1
+            ? $"screen must be {screens[0]} on this machine."
+            : $"screen must be {string.Join(", ", screens.SkipLast(1))} or {screens[^1]} on this machine.");
 
     /// <summary>
     ///  Shows RGBA video on a monochrome monitor: each pixel lit in the phosphor's color by its brightness, so

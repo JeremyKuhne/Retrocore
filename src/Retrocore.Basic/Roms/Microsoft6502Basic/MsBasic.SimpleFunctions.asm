@@ -8,8 +8,10 @@
 ; These entries follow array multiplication and precede the user-defined-function code.
 
 ;; Emits the free-space, position and integer-to-float entries.
-;; Parameters: setCarry = 1 to set carry before the <ReturnByte> branch, 0 to leave it unchanged
-.macro SimpleFunctions setCarry
+;; Parameters: setCarry = 1 to set carry before the <ReturnByte> branch, 0 to leave it unchanged;
+;;   cursorRead = optional, the operating system's routine that returns the cursor's column in Y when called with carry
+;;   set, for `POS` to call instead of reading <TerminalPosition> (the VIC-20's `KernalPlot`)
+.macro SimpleFunctions setCarry, cursorRead
     .assert setCarry = 0 || setCarry = 1, "setCarry must be 0 or 1."
 
     .scope Functions continued
@@ -18,14 +20,14 @@
     ;;
     ;; If the argument is a string, its temporary descriptor is released before collection. The 16-bit
     ;; difference is converted as a signed integer, so free space of 32768 bytes or more appears negative.
-    ;; Also: FRE (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;; Also: FRE (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     .proc Fre
     lda ValueType
     beq Collect
     jsr Strings::ReleaseFac
 
 ;; Collects garbage and subtracts.
-;; Also: NOFREF (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: NOFREF (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 Collect:
     jsr Strings::CollectGarbage
     sec
@@ -40,7 +42,7 @@ Collect:
     ;; Converts the signed 16-bit value in A:Y to floating point in <Fac>.
     ;; In: A = high byte, Y = low byte
     ;; Out: Fac = numeric result, ValueType = numeric
-    ;; Also: GIVAYF (M6502, ASTIL, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;; Also: GIVAYF (M6502, ASTIL, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     .proc ReturnSignedWord
     ldx #$00
     stx ValueType
@@ -53,16 +55,21 @@ Collect:
     .scope Functions continued
 
     ;; Returns the current text output column in <Fac>.
-    ;; Also: POS (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;; Also: POS (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     .proc Pos
-    ldy TerminalPosition
+    .ifnblank cursorRead
+        sec
+        jsr cursorRead
+    .else
+        ldy TerminalPosition
+    .endif
     .endproc
     .endscope
 
     ;; Converts the unsigned byte in Y to floating point in <Fac>.
     ;; In: Y = value
     ;; Out: Fac = numeric result, ValueType = numeric
-    ;; Also: SNGFLT (M6502, ASTIL, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;; Also: SNGFLT (M6502, ASTIL, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     .proc ReturnByte
     lda #$00
     .if setCarry

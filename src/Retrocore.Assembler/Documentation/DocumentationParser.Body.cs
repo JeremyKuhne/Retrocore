@@ -36,7 +36,7 @@ public static partial class DocumentationParser
         {
             string text = raw.TrimEnd();
             string trimmed = text.Trim();
-            bool indented = text.Length - text.TrimStart().Length >= 2;
+            bool indented = LeadingWhiteSpace(text, text.Length) >= 2;
             if (trimmed.Length == 0)
             {
                 if (name is not null && DocumentationSections.IsFreeText(name))
@@ -122,7 +122,7 @@ public static partial class DocumentationParser
 
     private static DocumentationSection Section(string name, int line, List<string> content, bool compact, List<int> depths)
     {
-        while (content.Count != 0 && content[^1].Trim().Length == 0) { content.RemoveAt(content.Count - 1); }
+        while (content.Count != 0 && IsBlank(content[^1])) { content.RemoveAt(content.Count - 1); }
         List<DocumentationEntry> entries = [];
         List<string> items = [];
         if (DocumentationSections.IsEntries(name))

@@ -20,8 +20,8 @@
 ;;   <Load>     load it from the 6502's data bus ($B, also $F)
 ;;
 ;; Apple's tables use only the first code of each, so a name gives back the exact byte. Sather's Understanding the
-;; Apple II (Table 9.3) calls the six commands CLR, NOP, SL0, SL1, SR and LD; they are his names, not Apple's, and
-;; this source used them before it was converted (docs/conversions/DiskII.md). The inputs are:
+;; Apple II (1983, Table 9.3) calls the six commands CLR, NOP, SL0, SL1, SR and LD; they are his names, not Apple's.
+;; The inputs are:
 ;;
 ;;   Q7, Q6  the mode the 6502 selected with the controller's Q6 and Q7 switches:
 ;;           Q7 off, Q6 off   read: shift in bits from the drive

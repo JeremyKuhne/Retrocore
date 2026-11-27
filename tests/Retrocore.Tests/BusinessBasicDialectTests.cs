@@ -26,19 +26,19 @@ public sealed class BusinessBasicDialectTests
     {
         AssemblyResult result = Interpreter();
         byte[] image = result.Sections[0].Bytes.ToArray();
-        int Offset(string name) => (int)result.Symbols[name] - 0x51F2;
+        int Offset(string name) => (int)result.SymbolsWithHistoricalNames[name] - 0x51F2;
 
         Words(image, Offset("RESLST"), Offset("RESL2")).Should().Equal(Dialect.Keywords);
         Words(image, Offset("RESL2"), Offset("OPTAB")).Should().Equal(BusinessBasicDialect.Instance.Functions);
 
         // The tokens the tokenizer and listing depend on.
-        Dialect.Keywords[(int)result.Symbols["REMTK"] - 0x80].Should().Be("REM");
-        Dialect.Keywords[(int)result.Symbols["DATATK"] - 0x80].Should().Be("DATA");
-        Dialect.Keywords[(int)result.Symbols["PRINTK"] - 0x80].Should().Be("PRINT");
-        Dialect.Keywords[(int)result.Symbols["IMAGETK"] - 0x80].Should().Be("IMAGE");
-        Dialect.Keywords[(int)result.Symbols["EXFNSTK"] - 0x80].Should().Be("EXFN%.");
-        BusinessBasicDialect.Instance.Functions[(int)result.Symbols["FNTK"] - 0x80].Should().Be("FN");
-        result.Symbols["SCRATK"].Should().Be(0x80 + Dialect.Keywords.Count - 1);
+        Dialect.Keywords[(int)result.SymbolsWithHistoricalNames["REMTK"] - 0x80].Should().Be("REM");
+        Dialect.Keywords[(int)result.SymbolsWithHistoricalNames["DATATK"] - 0x80].Should().Be("DATA");
+        Dialect.Keywords[(int)result.SymbolsWithHistoricalNames["PRINTK"] - 0x80].Should().Be("PRINT");
+        Dialect.Keywords[(int)result.SymbolsWithHistoricalNames["IMAGETK"] - 0x80].Should().Be("IMAGE");
+        Dialect.Keywords[(int)result.SymbolsWithHistoricalNames["EXFNSTK"] - 0x80].Should().Be("EXFN%.");
+        BusinessBasicDialect.Instance.Functions[(int)result.SymbolsWithHistoricalNames["FNTK"] - 0x80].Should().Be("FN");
+        result.SymbolsWithHistoricalNames["SCRATK"].Should().Be(0x80 + Dialect.Keywords.Count - 1);
     }
 
     /// <summary>
@@ -91,7 +91,7 @@ public sealed class BusinessBasicDialectTests
     }
 
     /// <summary>
-    ///  A program in memory is read through TXTTAB's and ARYTAB's X-bytes, across a bank pair's end.
+    ///  A program in memory is read through ProgramStart's and ArraysStart's X-bytes, across a bank pair's end.
     /// </summary>
     [TestMethod]
     public void ReadsAProgramAcrossBanks()
@@ -109,8 +109,8 @@ public sealed class BusinessBasicDialectTests
     }
 
     /// <summary>
-    ///  A program written into memory goes at TXTTAB, across a bank pair's end, and leaves BASIC as a typed line does:
-    ///  no variables or strings, DATA from the start, and no CONT.
+    ///  A program written into memory goes at ProgramStart, across a bank pair's end, and leaves BASIC as a typed line
+    ///  does: no variables or strings, DATA from the start, and no CONT.
     /// </summary>
     [TestMethod]
     public void WritesAProgramAcrossBanks()
@@ -128,14 +128,14 @@ public sealed class BusinessBasicDialectTests
         int end = start + program.ToImage().Length - 2;
         BasicProgram.Read(Dialect, memory).ToText().Should().Be("10 PRINT\"HELLO\"\n20 GOTO 10\n");
         int Pointer(int at) => BusinessBasicDialect.Pointer(memory, at);
-        (Pointer(0x1A3D), Pointer(0x1A3B), Pointer(0x1A3F)).Should().Be((end, end, end), "ARYTAB, VARTAB and STREND");
-        Pointer(0x1A41).Should().Be(top, "FRETOP is HIMEM");
+        (Pointer(0x1A3D), Pointer(0x1A3B), Pointer(0x1A3F)).Should().Be((end, end, end), "ArraysStart, VariablesStart and VariablesEnd");
+        Pointer(0x1A41).Should().Be(top, "StringsBottom is HIMEM");
         Pointer(0x1A53).Should().Be(start - 1, "DATA reads from the start");
         memory.Read(0x1650).Should().Be(0, "CONT is not allowed");
     }
 
     /// <summary>
-    ///  A name runs to the 64 characters PTRGET takes, a type character among them, and its entry reads back; one
+    ///  A name runs to the 64 characters FindVariable takes, a type character among them, and its entry reads back; one
     ///  longer is refused.
     /// </summary>
     [TestMethod]

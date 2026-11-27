@@ -33,7 +33,9 @@
 ;; BASIC reads the card after `IN#n`: the card writes the line "X,Y,B" into the input buffer and returns a RETURN, so
 ;; INPUT takes three numbers and nothing is echoed. It turns the mouse on or off after `PR#n` as the low bit of each
 ;; character printed says, as CHR$(1) and CHR$(0) do. As on Apple's card, the Pascal 1.1 entries at $Cn0D-$Cn10
-;; answer error 3, and the factory's own entries at $Cn1A-$Cn1F do nothing.
+;; answer error 3. Apple's card has six more entries at $Cn1A-$Cn1F, among them reading a clamping bound's byte
+;; ($Cn1A) and setting the interrupt rate ($Cn1C); this card has none of them, and every one returns carry clear, as
+;; Apple's do, doing nothing else (<UnsupportedEntry>).
 ;;
 ;; HOW A CALL CROSSES INTO C#
 ;;
@@ -55,8 +57,9 @@
 ;;
 ;; NAMES
 ;;
-;; The mouse routines' names follow the calls Apple's AppleMouse II documentation gives programs (SETMOUSE ...).
-;; That documentation is not in hand, so the old names cite UNKN; every other name is the SDK's own.
+;; The routines' old names are the calls Apple's documents give programs: its Mouse Technical Notes (MOUSETN), the
+;; IIc Technical Reference's second edition (IICTRM89) and the IIGS Firmware Reference (IIGSFR87), which give
+;; them as the calls for the mouse on every Apple II, the AppleMouse card included. Every other name is the SDK's own.
 
 .rom Retrocore.Machines.Apple2.MouseRom, $C400, $100
 .cpu Mos6502
@@ -75,8 +78,8 @@ Return = $FF58
 ;; Where <ServeMouse> puts an RTS for a moment, as Apple's firmware does.
 ZeroPageRts = $06
 
-;; The 6502's stack page: <CallCard> finds the bytes it pushed at `Stack+1,x` and up after a TSX.
-Stack = $0100
+;; The 6502's stack page: <CallCard> finds the bytes it pushed at `StackPage+1,x` and up after a TSX.
+StackPage = $0100
 
 ; The card's ports, indexed by Y = $n0.
 
@@ -169,6 +172,7 @@ COMMAND_BASIC_OUTPUT = 11 | FIND_SLOT_FROM_MONITOR
 ;; In:    A = the character to print, or the character under the cursor for input
 ;; Out:   A = the character printed, or RETURN for input, with the line in the input buffer and X = its length
 ;; Keeps: Y
+;; Also: BINITENTRY (IIGSFR87)
 .proc BasicEntry
     EnterCommand COMMAND_BASIC
 .endproc
@@ -180,6 +184,7 @@ COMMAND_BASIC_OUTPUT = 11 | FIND_SLOT_FROM_MONITOR
 ;; In:    A = the character under the cursor
 ;; Out:   A = RETURN, X = the line's length, $11
 ;; Keeps: Y
+;; Also: BASICINPUT (IIGSFR87)
 .proc BasicInput
 .assert * = $C405, "BasicInput must stay at $Cn05."
     sec
@@ -195,6 +200,7 @@ COMMAND_BASIC_OUTPUT = 11 | FIND_SLOT_FROM_MONITOR
 ;; In:    A = the character to print
 ;; Out:   A = the character printed
 ;; Keeps: X, Y
+;; Also: BASICOUTPUT (IIGSFR87)
 BasicOutput = BasicInput + 2
 
     .byte 0                         ; unused
@@ -208,7 +214,9 @@ BasicOutput = BasicInput + 2
 .assert * = $C412, "The mouse routines' offsets must start at $Cn12."
     .byte <SetMouse, <ServeMouse, <ReadMouse, <ClearMouse
     .byte <PositionMouse, <ClampMouse, <HomeMouse, <InitializeMouse
-    .byte <FactoryEntry, <FactoryEntry, <FactoryEntry, <FactoryEntry, <FactoryEntry, <FactoryEntry ; $Cn1A-$Cn1F
+    ; $Cn1A-$Cn1F: none of Apple's card's six.
+    .byte <UnsupportedEntry, <UnsupportedEntry, <UnsupportedEntry
+    .byte <UnsupportedEntry, <UnsupportedEntry, <UnsupportedEntry
 
 ;; Writes BASIC's line from the card, for <BasicInput>.
 ;; In:    A = the character under the cursor
@@ -231,7 +239,7 @@ BasicOutput = BasicInput + 2
 ;; In:    A = the mode, X = $Cn, Y = $n0
 ;; Out:   carry = set if the mode is above $0F
 ;; Keeps: Y
-;; Also: SETMOUSE (UNKN)
+;; Also: SETMOUSE (MOUSETN, IICTRM89, IIGSFR87)
 .proc SetMouse
     EnterCommand COMMAND_SET_MOUSE
 .endproc
@@ -239,7 +247,7 @@ BasicOutput = BasicInput + 2
 ;; Called from an interrupt handler: tells whether the mouse interrupted, and why, in the status hole's bits 1-3.
 ;; Out:   carry = clear if the interrupt was the mouse's
 ;; Keeps: Y
-;; Also: SERVEMOUSE (UNKN)
+;; Also: SERVEMOUSE (MOUSETN, IICTRM89, IIGSFR87)
 .proc ServeMouse
     EnterCommand COMMAND_SERVE_MOUSE
 .endproc
@@ -249,7 +257,7 @@ BasicOutput = BasicInput + 2
 ;; In:    X = $Cn, Y = $n0
 ;; Out:   carry = clear
 ;; Keeps: Y
-;; Also: READMOUSE (UNKN)
+;; Also: READMOUSE (MOUSETN, IICTRM89, IIGSFR87)
 .proc ReadMouse
     EnterCommand COMMAND_READ_MOUSE
 .endproc
@@ -258,7 +266,7 @@ BasicOutput = BasicInput + 2
 ;; In:    X = $Cn, Y = $n0
 ;; Out:   carry = clear
 ;; Keeps: Y
-;; Also: CLEARMOUSE (UNKN)
+;; Also: CLEARMOUSE (MOUSETN, IICTRM89, IIGSFR87)
 .proc ClearMouse
     EnterCommand COMMAND_CLEAR_MOUSE
 .endproc
@@ -267,7 +275,7 @@ BasicOutput = BasicInput + 2
 ;; In:    X = $Cn, Y = $n0
 ;; Out:   carry = clear
 ;; Keeps: Y
-;; Also: POSMOUSE (UNKN)
+;; Also: POSMOUSE (MOUSETN, IICTRM89, IIGSFR87)
 .proc PositionMouse
     EnterCommand COMMAND_POSITION_MOUSE
 .endproc
@@ -276,7 +284,7 @@ BasicOutput = BasicInput + 2
 ;; In:    A = 0 for X, 1 for Y, X = $Cn, Y = $n0
 ;; Out:   carry = clear
 ;; Keeps: Y
-;; Also: CLAMPMOUSE (UNKN)
+;; Also: CLAMPMOUSE (MOUSETN, IICTRM89, IIGSFR87)
 .proc ClampMouse
     EnterCommand COMMAND_CLAMP_MOUSE
 .endproc
@@ -285,7 +293,7 @@ BasicOutput = BasicInput + 2
 ;; In:    X = $Cn, Y = $n0
 ;; Out:   carry = clear
 ;; Keeps: Y
-;; Also: HOMEMOUSE (UNKN)
+;; Also: HOMEMOUSE (IICTRM89, IIGSFR87)
 .proc HomeMouse
     EnterCommand COMMAND_HOME_MOUSE
 .endproc
@@ -294,7 +302,7 @@ BasicOutput = BasicInput + 2
 ;; In:    X = $Cn, Y = $n0
 ;; Out:   carry = clear
 ;; Keeps: Y
-;; Also: INITMOUSE (UNKN)
+;; Also: INITMOUSE (MOUSETN, IICTRM89, IIGSFR87)
 .proc InitializeMouse
     EnterCommand COMMAND_INITIALIZE_MOUSE
 .endproc
@@ -303,14 +311,21 @@ BasicOutput = BasicInput + 2
 ;; Out:   X = 3, carry = set
 .proc PascalEntry
     ldx #PASCAL_ERROR
-    ; Falls into FactoryEntry.
+    sec
+    rts
 .endproc
 
-;; The factory's entries at $Cn1A-$Cn1F, which this card does not have.
-;; Out:   carry = set
-;; Keeps: X, Y
-.proc FactoryEntry
-    sec
+;; The entries at $Cn1A-$Cn1F, which this card does not have.
+;;
+;; Apple's card has six here, which the IIGS Firmware Reference names DIAGMOUSE, COPYRIGHT, TIMEDATA, SETVBLCNTS,
+;; OPTMOUSE and STARTTIMER (MouseInterface.asm's `ReadClampByte` ... `StartTimer`). Every one of them returns carry
+;; clear there: TimeData, as Mouse Technical Note #2 documents, and the others, as the card's EPROM does. Here all
+;; six return carry clear too, so a program that checks the carry sees no error, but they do nothing else: no clamp
+;; byte comes back in $0578, and the interrupts keep following the display's vertical blanking.
+;; Out:   carry = clear
+;; Keeps: A, X, Y
+.proc UnsupportedEntry
+    clc
     rts
 .endproc
 
@@ -329,11 +344,11 @@ BasicOutput = BasicInput + 2
 
     ; The slot's page, $Cn, as the command's upper bits say: from the caller's X, ...
     tsx
-    lda Stack + 3,x
+    lda StackPage + 3,x
     bmi FromZeroPage
     asl a
     bmi FromMonitor
-    lda Stack + 2,x                 ; the caller's X, $Cn
+    lda StackPage + 2,x             ; the caller's X, $Cn
     bne HaveSlot                    ; always: X = $Cn is never 0
 
     ; ... from an RTS at ZeroPageRts, whose JSR leaves its return address's high byte just below the stack, ...
@@ -344,14 +359,14 @@ FromZeroPage:
     jsr ZeroPageRts
     sty ZeroPageRts
     tsx
-    lda Stack,x
+    lda StackPage,x
     bne HaveSlot                    ; always
 
     ; ... or the same, through the Monitor.
 FromMonitor:
     jsr SaveRegisters::Return
     tsx
-    lda Stack,x
+    lda StackPage,x
 
     ; The ports, at $C080 + $n0.
 HaveSlot:
@@ -360,22 +375,22 @@ HaveSlot:
     asl a
     asl a
     tay
-    lda Stack + 5,x
+    lda StackPage + 5,x
     sta ValuePort,y                 ; the caller's A
-    lda Stack + 2,x
+    lda StackPage + 2,x
     sta XPort,y                     ; the caller's X
-    lda Stack + 3,x
+    lda StackPage + 3,x
     sta CommandPort,y               ; runs the command
 
     ; What the command returns, in place of what the caller gave.
     lda ValuePort,y
-    sta Stack + 5,x                 ; the A to return
+    sta StackPage + 5,x             ; the A to return
     lda XPort,y
-    sta Stack + 2,x                 ; the X to return
-    lda Stack + 4,x
+    sta StackPage + 2,x             ; the X to return
+    lda StackPage + 4,x
     and #<~CARRY
     ora CommandPort,y
-    sta Stack + 4,x                 ; the carry to return, with the caller's other flags
+    sta StackPage + 4,x             ; the carry to return, with the caller's other flags
     pla
     tay
     pla

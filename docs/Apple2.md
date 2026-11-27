@@ -127,7 +127,7 @@ the tests pin every build by digest.
 Each of the emulated cards' firmware debugs at its source: a breakpoint in it stops there, and the call stack shows its
 lines. The mouse, ProFile and 3.5 controller cards' firmware reaches nothing inside itself by an absolute address, so
 the same bytes work in any slot, and the debugger maps the source to whichever slot holds the card, its labels (such
-as `SetMouse`, `Driver` or `SmartPortEntry`, and a historical name such as `SETMOUSE`) resolving to that slot's
+as `SetMouse`, `ProFileDriver` or `SmartPortEntry`, and a historical name such as `SETMOUSE`) resolving to that slot's
 page. Apple's 3.5 controller EPROM is a reference; the emulator doesn't run it.
 
 Names follow Apple's listings where Apple published them: the Apple II Reference Manual of 1978
@@ -199,7 +199,7 @@ reference the emulator's firmware follows:
 | BASIC's registers | Keeps A, X and Y for output; input returns X = Y = $11; `ExpansionRomSlot` (MSLOT) is left at $Cn | Keeps Y for input too |
 | `ReadMouse` with the mouse off | Changes nothing | The same |
 | Pascal entries, $Cn0D-$Cn10 | Error 3, with carry set | The same |
-| $Cn1A-$Cn1F | The factory's own commands, and the copyright message at $Cn1B | Nothing, with carry set |
+| $Cn1A-$Cn1F | `ReadClampByte` (GetClamp, $Cn1A) reads a clamping bound's byte and `SetInterruptRate` (TimeData, $Cn1C) sets 50 or 60 Hz interrupts, as Apple's Mouse Technical Notes #7 and #2 document; `ShowCopyright` ($Cn1B) prints the copyright message, and `SetVblCounts`, `SetMouseOptions` and `StartTimer` ($Cn1D-$Cn1F) send commands the documents only name, each returning carry clear | Nothing, with carry clear as on Apple's card, keeping A, X and Y |
 | Mouse routines' registers | X and Y as given; A not kept; `ServeMouse` returns X = $Cn, Y = $n0 | A, X and Y kept |
 | `InitializeMouse` | Waits for vertical blanking; on the II and II Plus clears hi-res page 1 and leaves the display in text, lo-res, page 1 | Returns at once and leaves memory and the display alone |
 | Screen holes $0678+n and $06F8+n, and `MouseMode`'s bits 5-7, the bank to return to (its upper nibble reads as the bank times 2) | Its own scratch space (bit 7 is also BASIC's mode) | Not used, but for bit 7 as BASIC's mode |

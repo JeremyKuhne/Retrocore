@@ -4,7 +4,7 @@ The BASIC sources (plan item B5): the shared Microsoft modules
 `src/Retrocore.Basic/Roms/Microsoft6502Basic/MsBasic.*.asm`, AppleSoft's
 `src/Retrocore.Machines.Apple2/Roms/AppleSoft/AppleSoft*.asm`, and Commodore's
 `src/Retrocore.Machines.Commodore/Roms/Basic/{Basic1,Basic2,Basic4,Commodore.*}.asm`. Together they assemble eight
-ROMs byte for byte:
+ROMs byte for byte, and with the VIC-20's root a ninth, V20 (below):
 
 | Tag | Build | Root and switches |
 | --- | --- | --- |
@@ -16,11 +16,24 @@ ROMs byte for byte:
 | P2 | PET BASIC 2 | `Basic2.asm` |
 | P4 | PET BASIC 4, original | `Basic4.asm`, REVISD = 0 |
 | P4R | PET BASIC 4, revised | `Basic4.asm`, REVISD = 1 |
+| V20 | VIC-20 BASIC 2 | `Vic20/Basic.asm`, PAL = 0 (NTSC kernal chip) or 1 (PAL) |
 
-"AS" is the three AppleSoft builds, "PET" the five PET builds, "all" the eight. The unconverted sources keep
-Microsoft's six-letter names. This log covers steps 1 to 3 of [the method](../ConvertingSources.md): the inventory, the
-sources and citations, and the rename table, [BasicRenames.md](BasicRenames.md), a draft for the owner's review.
-The conversion itself (step 4) is logged below, under "Step 4: the conversion", one step of X8 at a time.
+"AS" is the three AppleSoft builds, "PET" the five PET builds, "all" the eight before the VIC-20 (V20). The unconverted
+sources keep Microsoft's six-letter names. This log covers steps 1 to 3 of [the method](../ConvertingSources.md): the
+inventory, the sources and citations, and the rename table, [BasicRenames.md](BasicRenames.md), a draft for the owner's
+review. The conversion itself (step 4) is logged below, under "Step 4: the conversion", one step of X8 at a time.
+
+V20, the VIC-20's BASIC, came after the conversion: it was written in the converted style over the same modules, so
+the steps logged here cover only the eight. Its root, `src/Retrocore.Machines.Commodore/Roms/Vic20/Basic.asm`, sets
+the switches of [Commodore.Switches.asm](../../src/Retrocore.Machines.Commodore/Roms/Basic/Commodore.Switches.asm),
+which say what each selects, to the VIC-20's (CONVERSION_VECTORS, CURSOR_COLUMN_FROM_PLOT, STANDARD_KERNAL,
+BASIC_RAM_VECTORS and NUMBERED_ERRORS 1, OUTPUT_SUPPRESSION_FLAG 0) and LINE_WIDTH_STORAGE to 0, and passes the shared
+macros the VIC-20's parameters, which the shared folder's
+[README](../../src/Retrocore.Basic/Roms/Microsoft6502Basic/README.md) lists. Its listing, BV20, is in the PET's line
+under S11's lineage rule (the owner's decision on the VIC-20's PR): each definition V20 assembles whose name BV20
+gives at the same address or value cites BV20, in every build that has the definition, and each switch-given value
+of it cites BV20 too; BV20's own names for shared definitions (EPSGN, STRNGI) are further `Also:` names beside
+Microsoft's.
 
 ## Decisions accepted by the owner
 
@@ -570,7 +583,8 @@ code; these were wrong and are changed in the table:
 - DECCNT is `DigitCount`: FIN counts the digits after the point there, FOUT those before it.
 - RNDX is `RandomValue`, because of IIeEquates' `RandomSeed`.
 
-Still open (used as glossary names in the table, with scoped aliases proposed in the parts' notes):
+Still open (used as glossary names in the table, with scoped aliases proposed in the parts' notes). The owner decides
+these at B6 ([the alignment plan](../backlog/ConversionAlignment.md)), as each module that uses them is converted:
 
 - SIZE and OLDOV: the collector's offset and the math package's guard byte, not a jump's operand (D-Q3, A,
   B2).

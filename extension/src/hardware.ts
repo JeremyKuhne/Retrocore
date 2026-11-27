@@ -59,6 +59,10 @@ export const cards: Card[] = [
         args: { action: "addSoftCard" }
     },
     {
+        label: "SoftCard ///", detail: "Microsoft's Z80 card for the Apple III, for its own CP/M disk; one at a time",
+        args: { action: "addSoftCard3" }, slots: ["slot1", "slot2", "slot3", "slot4"], machines: ["apple3"]
+    },
+    {
         label: "Language card", detail: "16 KB of RAM at $D000-$FFFF, for slot 0 of a II or II Plus",
         args: { action: "addLanguageCard" }, slots: ["slot0"]
     },
@@ -99,13 +103,17 @@ export function group<T extends { id: string }>(hardware: HardwareRow[] | undefi
     return { rows, loose: devices.filter(device => !claimed.has(device.id)) };
 }
 
-/** The launch options that decide a machine's hardware and media. A change to any of them starts it afresh. */
+/**
+ * The launch options that decide a machine's hardware and media. A change to any of them starts it afresh. A project
+ * launch's are its project, its target and what the extension read of the target (retrocoreTarget, project.ts).
+ */
 export const hardwareOptions = [
     "machine", "model", "romDirectory", "rom", "revision", "ramKilobytes", "expansionInterface", "diskController",
     "lowercase", "characterGenerator", "doubler", "cassette", "disks", "diskImage", "dos", "dosYear", "diskSectors",
     "diskBootRom", "diskSequencerRom", "sequencerLayout", "mockingboard", "mouse", "proFiles", "disk35", "disk35Images",
-    "sound", "slot0", "monitor", "boardRevision", "firmwareCardRoms", "programmersAid", "softCard", "cassetteInterface",
-    "console", "basicRevision", "cassette1", "cassette2", "diskUnits", "diskModel", "driveRomDirectory"
+    "sound", "slot0", "monitor", "boardRevision", "firmwareCardRoms", "programmersAid", "softCard", "softCard3",
+    "cassetteInterface", "console", "basicRevision", "cassette1", "cassette2", "diskUnits", "diskModel", "driveRomDirectory",
+    "proms", "project", "target", "retrocoreTarget"
 ] as const;
 
 /** A saved machine: the configuration from the debug host, and the hardware options it was saved under. */
@@ -116,7 +124,10 @@ export interface SavedMachine {
 
 /** The hardware options a launch configuration gives, as one string to compare. */
 export function fingerprint(configuration: Record<string, unknown>): string {
-    return JSON.stringify(hardwareOptions.map(option => configuration[option] ?? null));
+    // A project launch's target the extension read names its file and target one way, however the launch gives them.
+    const resolved = configuration.retrocoreTarget !== undefined;
+    return JSON.stringify(hardwareOptions.map(option =>
+        resolved && (option === "project" || option === "target") ? null : configuration[option] ?? null));
 }
 
 /**
@@ -142,4 +153,11 @@ export function changesFrom(saved: unknown, base: unknown): Record<string, Recor
             .filter(([key, value]) => JSON.stringify(value) !== JSON.stringify(theirs[key])));
     }
     return changes;
+}
+
+/** Saved changes with the media of drives a machine lacks left out, given that machine's own configuration. */
+export function fitting(changes: Record<string, Record<string, unknown>>, machine: unknown): Record<string, Record<string, unknown>> {
+    const drives = (machine as { media?: Record<string, unknown> } | undefined)?.media;
+    if (changes.media === undefined || drives === undefined) return changes;
+    return { ...changes, media: Object.fromEntries(Object.entries(changes.media).filter(([id]) => id in drives)) };
 }

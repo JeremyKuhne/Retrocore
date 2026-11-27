@@ -12,7 +12,13 @@ public sealed partial class BasicSource
         List<BasicDiagnostic> diagnostics = [.. Parse.Diagnostics];
         List<BasicSourceLine> numbered = [];
         HashSet<string> foreign = ForeignWords(dialect);
+
+        // BBC BASIC's assembler runs from a [ to a ], over as many lines as it takes.
+        bool assembling = false;
         IReadOnlyDictionary<string, BasicLabel> labels = Parse.Labels;
+
+        // Atari BASIC numbers the variables as the lines are typed, in the file's order.
+        BasicDialect tokenizer = dialect is AtariBasicDialect ? AtariBasicDialect.Fresh() : dialect;
         foreach (BasicLabel label in labels.Values)
         {
             string written = Lines[label.Line][label.Start..label.End];
@@ -45,8 +51,8 @@ public sealed partial class BasicSource
                 });
             }
 
-            ScanLine(dialect, index, line, text.Statements, sites, diagnostics, foreign, skip, out List<BasicStatement> starts);
-            byte[] tokens = Stored(dialect, text, labels, starts);
+            ScanLine(dialect, index, line, text.Statements, sites, diagnostics, foreign, skip, ref assembling, out List<BasicStatement> starts);
+            byte[] tokens = Stored(dialect, tokenizer, text, labels, starts);
             if (number < 0) { continue; }
             BasicSourceLine entry = new(index, number, start, end, tokens, starts);
             numbered.Add(entry);
@@ -81,7 +87,11 @@ public sealed partial class BasicSource
     private static HashSet<string> ForeignWords(BasicDialect dialect)
     {
         HashSet<string> foreign = [with(StringComparer.Ordinal)];
-        if (dialect is IntegerBasicDialect || dialect == BasicDialect.BusinessBasic) { return foreign; }
+        if (dialect is IntegerBasicDialect or AtariBasicDialect || dialect == BasicDialect.BusinessBasic)
+        {
+            return foreign;
+        }
+
         HashSet<string> own = [.. dialect.AllKeywords.Select(Letters)];
         foreach (BasicDialect other in (BasicDialect[])[BasicDialect.AppleSoft, BasicDialect.Level2])
         {
@@ -100,26 +110,33 @@ public sealed partial class BasicSource
     // longer or shorter than its number moves, while their columns stay the text's.
     private static byte[] Stored(
         BasicDialect dialect,
+        BasicDialect tokenizer,
         BasicTextLine text,
         IReadOnlyDictionary<string, BasicLabel> labels,
         List<BasicStatement> starts)
     {
         string resolved = BasicProgram.Resolved(dialect, text, labels);
-        if (dialect is IntegerBasicDialect)
+        if (dialect is IntegerBasicDialect or AtariBasicDialect or Level1Dialect)
         {
-            // Integer BASIC's stored tokens are not the Microsoft form the scanner read, so its offsets are found in
-            // the stored tokens themselves.
+            // Integer BASIC's and Atari BASIC's stored tokens, and Level I's text, are not the Microsoft form the scanner
+            // read, so their offsets are found in the stored bytes themselves.
             byte[] stored;
             try
             {
-                stored = dialect.Tokenize(resolved);
+                stored = tokenizer.Tokenize(resolved);
             }
             catch (FormatException)
             {
                 return [];
             }
 
-            List<int> storedOffsets = IntegerBasicDialect.StatementOffsets(stored);
+            List<int> storedOffsets = dialect switch
+            {
+                AtariBasicDialect => AtariBasicDialect.StatementOffsets(stored),
+                Level1Dialect => Level1Dialect.StatementOffsets(stored),
+                _ => IntegerBasicDialect.StatementOffsets(stored)
+            };
+
             for (int index = 0; index < starts.Count && index < storedOffsets.Count; index++)
             {
                 starts[index] = starts[index] with { Offset = storedOffsets[index] };
@@ -160,6 +177,7 @@ public sealed partial class BasicSource
         List<BasicDiagnostic> diagnostics,
         HashSet<string> foreign,
         List<(int Start, int End)> skip,
+        ref bool assembling,
         out List<BasicStatement> starts)
     {
         int offset = line.Length - statements.Length;
@@ -179,7 +197,9 @@ public sealed partial class BasicSource
         IReadOnlyList<int> positions = output.Positions;
         int[] at = [.. columns.Select(column => column + offset)];
         BasicLineScanner scanner = new(dialect, index, line, bytes, positions, at, foreign, skip);
+        scanner.Assembling = assembling;
         scanner.Run(sites, diagnostics);
+        assembling = scanner.Assembling;
         starts = scanner.Statements();
         return bytes;
     }

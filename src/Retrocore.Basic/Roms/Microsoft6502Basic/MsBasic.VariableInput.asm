@@ -32,8 +32,10 @@ INPUT_MODE_READ = $98
 ;; Parameters: bufferPage = the page containing <InputBuffer>, maskGetBit7 = 1 to clear bit 7 of a `GET` character,
 ;;   getPointerYFirst = 1 to load the `GET` buffer pointer's high byte before its low byte,
 ;;   patchedGetString = 1 to use the early `BeginGetString` patch, channelInput = 1 to honor input channels,
-;;   blankNumericRetry = 1 to retry an empty terminal `INPUT` numeric value
-.macro VariableInput bufferPage, maskGetBit7, getPointerYFirst, patchedGetString, channelInput, blankNumericRetry
+;;   blankNumericRetry = 1 to retry an empty terminal `INPUT` numeric value;
+;;   space = optional, 1 (when given) for `READ`'s search to find a `DATA` after spaces, reading each statement's
+;;   first character through <GetCurrentCharacter> (the VIC-20's)
+.macro VariableInput bufferPage, maskGetBit7, getPointerYFirst, patchedGetString, channelInput, blankNumericRetry, space
     .assert bufferPage >= 0 && bufferPage <= 255, "bufferPage must fit in a byte."
     .assert InputBuffer > 0 && InputBuffer / 256 = bufferPage, "InputBuffer must be in bufferPage, after a byte."
     .assert maskGetBit7 = 0 || maskGetBit7 = 1, "maskGetBit7 must be 0 or 1."
@@ -53,7 +55,7 @@ INPUT_MODE_READ = $98
     ;; Reads values for a variable list from `DATA`, starting at the saved <DataPointer>.
     ;; In: decimal = clear
     ;; See: <AssignVariableList>, <AssignVariableList::SearchData>, <Statements::Restore>
-    ;; Also: READ (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;; Also: READ (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     .proc Read
     ldx DataPointer
     ldy DataPointer+1
@@ -73,7 +75,7 @@ INPUT_MODE_READ = $98
     ;; It sets A to <INPUT_MODE_INPUT>: with `LDA` where the buffer is outside page zero, or from Y where it is in page
     ;; zero.
     ;; In: X = cursor low byte, Y = cursor high byte (zero for a page-zero buffer)
-    ;; Also: INPCON (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;; Also: INPCON (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     .proc AssignInputList
     .if bufferPage
         lda #INPUT_MODE_INPUT
@@ -98,14 +100,14 @@ INPUT_MODE_READ = $98
     ;;   StringAtCursor = clears carry so the string starts at the current character; BASIC 1's `ResumeGetString`
     ;;     patch jumps back here
     ;; See: <FindVariable>, <AssignString>, <StoreNumber>, <AssignVariableList::SearchData>
-    ;; Also: INPCO1 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;; Also: INPCO1 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     .proc AssignVariableList
     sta InputMode
     stx InputPointer
     sty InputPointer+1
 
 ;; Resolves the next variable, then switches from the variable list to the saved input cursor.
-;; Also: INLOOP (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: INLOOP (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 NextVariable:
     jsr FindVariable
     sta AssignedVariable
@@ -142,7 +144,7 @@ NextVariable:
     .endif
 
 ;; Continues `READ` at the next `DATA` statement or obtains another `INPUT` line.
-;; Also: QDATA (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: QDATA (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 SourceEmpty:
     bmi SearchData
     .if channelInput
@@ -151,17 +153,17 @@ SourceEmpty:
     .endif
     jsr PrintQuestionMark
 ;; Reads a line with <PromptAndInputLine>.
-;; Also: GETNTH (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: GETNTH (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 ReadAnotherLine:
     jsr PromptAndInputLine
 ;; Sets <TextPointer> to X/Y.
-;; Also: DATBK (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: DATBK (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 SetCursor:
     stx TextPointer
     sty TextPointer+1
 
 ;; Starts conversion of the next string or numeric value at the input cursor.
-;; Also: DATBK1 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: DATBK1 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 NextValue:
     jsr GetNextCharacter
     bit ValueType
@@ -185,7 +187,7 @@ NextValue:
     .endif
 
 ;; Sets quote delimiters, or colon and comma delimiters for an unquoted string.
-;; Also: SETQUT (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: SETQUT (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 SetDelimiters:
     sta Delimiter
     cmp #'"'
@@ -196,7 +198,7 @@ SetDelimiters:
 
 ;; Uses the current text position as the start of an unquoted or single-character `GET` string.
 ;; In: A = ending delimiter, TextPointer = first character
-;; Also: RESETC (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: RESETC (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 StringAtCursor:
     clc
 
@@ -205,7 +207,7 @@ StringAtCursor:
 ;; Carry set skips an opening quote; carry clear starts at the current character. <Strings::FromTextUntil> makes the
 ;; descriptor, <SetTextPointer> advances the input cursor, and <AssignString> assigns the result.
 ;; In: A = ending delimiter, TextPointer = text position, carry = set to skip a quote, decimal = clear
-;; Also: NOWGET (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: NOWGET (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 MakeString:
     sta EndDelimiter
     lda TextPointer
@@ -214,7 +216,7 @@ MakeString:
     bcc HaveAddress
     iny
 ;; Text address in A/Y: makes and assigns the string.
-;; Also: NOWGE1 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: NOWGE1 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 HaveAddress:
     jsr Strings::FromTextUntil
     jsr SetTextPointer
@@ -233,7 +235,7 @@ RestoreCharacter:
     .endif
 
 ;; Converts and assigns a numeric value, including integer variables.
-;; Also: NUMINS (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: NUMINS (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 ConvertNumber:
     jsr Float::ReadNumber
     lda IntegerType
@@ -243,7 +245,7 @@ ConvertNumber:
 ;;
 ;; A zero or colon is accepted by <GetCurrentCharacter>'s zero flag; a comma is also accepted. Otherwise the
 ;; platform's malformed-input handler decides whether to retry or report an error.
-;; Also: STRDN2 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: STRDN2 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 CheckTerminator:
     jsr GetCurrentCharacter
     beq TerminatorOk
@@ -251,7 +253,7 @@ CheckTerminator:
     beq TerminatorOk
     jmp HandleBadInput
 ;; Saves the input cursor, returns to the variable list and continues after a comma.
-;; Also: TRMOK (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: TRMOK (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 TerminatorOk:
     lda TextPointer
     ldy TextPointer+1
@@ -280,7 +282,7 @@ EmptyNumber:
 ;; <FindStatementEnd> skips statements, including quoted colons. A zero high byte in the next line link reports OUT OF
 ;; DATA.
 ;; See: <AssignVariableList::NextValue>
-;; Also: DATLOP (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: DATLOP (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 SearchData:
     jsr FindStatementEnd
     iny
@@ -298,11 +300,18 @@ SearchData:
     iny
     sta DataLine+1
 ;; Reads the statement's first token and loops until it is `DATA`.
-;; Also: NOWLIN (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: NOWLIN (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 CheckStatement:
-    lda (TextPointer),y
-    tax
-    jsr AdvanceTextPointer
+    .ifnblank space
+        .assert space = 1, "space is 1 when given."
+        jsr AdvanceTextPointer
+        jsr GetCurrentCharacter
+        tax
+    .else
+        lda (TextPointer),y
+        tax
+        jsr AdvanceTextPointer
+    .endif
     cpx #TOKEN_DATA
     bne SearchData
     jmp NextValue
@@ -310,7 +319,7 @@ CheckStatement:
 ;; Saves `READ`'s cursor or warns about extra terminal `INPUT` characters.
 ;;
 ;; Channel input suppresses the warning. A zero at the input cursor needs no warning.
-;; Also: VAREND (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: VAREND (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 ListDone:
     lda InputPointer
     ldy InputPointer+1
@@ -318,7 +327,7 @@ ListDone:
     bpl CheckExtra
     jmp Statements::Restore::SetDataPointer
 ;; Prints EXTRA IGNORED when input remains, except on a PET's input channel.
-;; Also: VARY0 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: VARY0 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 CheckExtra:
     ldy #$00
     lda (InputPointer),y
@@ -331,7 +340,7 @@ CheckExtra:
     ldy #>ExtraIgnoredMessage
     jmp PrintText
 ;; Returns.
-;; Also: INPRTS (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: INPRTS (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 Done:
     rts
     .endproc
@@ -345,7 +354,7 @@ Done:
     .assert lineFeed = 0 || lineFeed = 1, "lineFeed must be 0 or 1."
 
 ;; Zero-terminated warning for extra terminal `INPUT` values.
-;; Also: EXIGNT (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: EXIGNT (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 ExtraIgnoredMessage:
     .byte "?EXTRA IGNORED", $0D
     .if lineFeed
@@ -354,7 +363,7 @@ ExtraIgnoredMessage:
     .byte $00
 
 ;; Zero-terminated prompt for retrying malformed terminal `INPUT`.
-;; Also: TRYAGN (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: TRYAGN (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 RetryMessage:
     .if shortRetry
         .byte "?REENTER", $0D

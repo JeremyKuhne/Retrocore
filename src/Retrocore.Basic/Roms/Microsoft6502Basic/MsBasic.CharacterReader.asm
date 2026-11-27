@@ -14,7 +14,7 @@
     ;; In: A = character, decimal = clear
     ;; Out: carry = set for A through Z, clear otherwise
     ;; Keeps: A, X, Y
-    ;; Also: ISLETC (M6502, ASTIL, AS82, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;; Also: ISLETC (M6502, ASTIL, AS82, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     .proc IsLetter
     cmp #$41
     bcc Done
@@ -22,7 +22,7 @@
     sec
     sbc #$A5
 ;; Returns; a character below `A` branches here.
-;; Also: ISLRTS (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: ISLRTS (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 Done:
     rts
     .endproc
@@ -45,7 +45,7 @@ Done:
     ;; In: decimal = clear
     ;; Out: A = the non-space character, carry = clear for a digit and set otherwise, zero = set for a null or colon
     ;; Keeps: X, Y
-    ;; Also: INITAT (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;; Also: INITAT (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     .proc CharacterReaderTemplate
     inc TextPointer
     bne GetCurrent

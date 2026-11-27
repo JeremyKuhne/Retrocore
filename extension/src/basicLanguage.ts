@@ -2,8 +2,9 @@
 // SPDX-License-Identifier: MIT
 // See LICENSE file in the project root for full license information
 
-// BASIC files in the workspace: which dialect each is, renumbering, and tokenized programs and Model I tapes opened
-// as listings through retrocore-basic-file://, which the language server lists and tokenizes back on save.
+// BASIC files in the workspace: which dialect each is, renumbering, and tokenized programs and Model I tapes, Level II's
+// and Level I's, opened as listings through retrocore-basic-file://, which the language server lists and tokenizes back
+// on save.
 
 import * as vscode from "vscode";
 import { basicLanguages, languageRequest } from "./languageClient";
@@ -15,8 +16,10 @@ const dialects: Record<string, string> = {
     apple1: "retrocore-apple1",
     colorbasic: "retrocore-colorbasic",
     mbasic: "retrocore-mbasic",
+    model100: "retrocore-model100",
     petbasic: "retrocore-petbasic",
-    bbcbasic: "retrocore-bbcbasic"
+    bbcbasic: "retrocore-bbcbasic",
+    atari: "retrocore-atari"
 };
 
 interface Diagnostic { line: number; severity: "error" | "warning"; message: string; start: number; end: number; }
@@ -43,12 +46,15 @@ function sessionDialect(): string | undefined {
 
     if (session.configuration.machine === "apple3") return "business";
     if (session.configuration.machine === "trs80-model1") return session.configuration.rom === "level1" ? "level1" : "level2";
+    if (session.configuration.machine === "trs80-model3" && session.configuration.rom === "level1") return "level1";
     if (session.configuration.machine === "apple1") return "apple1";
     if (session.configuration.machine === "coco" && session.configuration.model !== "coco3") return "colorbasic";
     if (session.configuration.machine === "kaypro2") return "mbasic";
+    if (session.configuration.machine === "trs80-model100") return "model100";
     // One dialect for both PETs: the machine picks BASIC 1 (the 2001) or BASIC 2 (the upgrade ROMs, the default).
     if (session.configuration.machine === "pet") return "petbasic";
     if (session.configuration.machine === "bbc") return "bbcbasic";
+    if (session.configuration.machine === "atari800") return "atari";
     return undefined;
 }
 
@@ -119,10 +125,17 @@ class ListingFileSystem implements vscode.FileSystemProvider {
     rename(uri: vscode.Uri): void { throw vscode.FileSystemError.NoPermissions(uri); }
 }
 
-/** The dialect a tokenized file's name gives: a tape is Level II, a CiderPress2 $FC name AppleSoft, $FA Integer BASIC. */
-function dialectOfFile(file: vscode.Uri): string | undefined {
+/**
+ * The dialect a tokenized file gives: a tape's is the Level that recorded it, as the language server reads it; a
+ * CiderPress2 $FC name is AppleSoft, $FA Integer BASIC.
+ */
+async function dialectOfFile(file: vscode.Uri): Promise<string | undefined> {
     const name = file.path.split("/").pop() ?? "";
-    if (/\.cas$/i.test(name)) return "level2";
+    // A file that is not a tape opens as Level II's, whose reading then says what is wrong.
+    if (/\.cas$/i.test(name)) {
+        return languageRequest<{ dialect: string }>("retrocore/basic/list", { path: file.fsPath }).then(listing => listing.dialect, () => "level2");
+    }
+    if (/\.ba$/i.test(name)) return "model100";
     if (/#fc/i.test(name)) return "applesoft";
     if (/#fa/i.test(name)) return "integer";
     return undefined;
@@ -180,13 +193,14 @@ export function registerBasicLanguage(context: vscode.ExtensionContext): void {
     context.subscriptions.push(vscode.commands.registerCommand("retrocore.basic.openListing", async (target?: vscode.Uri, dialect?: string): Promise<vscode.Uri | undefined> => {
         const file = target ?? (await vscode.window.showOpenDialog({ title: "Open a tokenized BASIC program or tape", canSelectMany: false }))?.[0];
         if (file === undefined) return undefined;
-        dialect ??= dialectOfFile(file) ?? (await vscode.window.showQuickPick(
+        dialect ??= (await dialectOfFile(file)) ?? (await vscode.window.showQuickPick(
             [
                 { label: "AppleSoft", dialect: "applesoft" },
                 { label: "Integer BASIC", dialect: "integer", detail: "Saving tokenizes through the Apple II's ROM (RETROCORE_II_ROMS)" },
                 { label: "Business BASIC", dialect: "business" },
                 { label: "Level II BASIC", dialect: "level2" },
-                { label: "MBASIC (BASIC-80 5.21)", dialect: "mbasic" }
+                { label: "MBASIC (BASIC-80 5.21)", dialect: "mbasic" },
+                { label: "Model 100 BASIC", detail: "The TRS-80 Model 100's and Tandy 102's .BA files", dialect: "model100" }
             ],
             { title: "Which BASIC is this program?" }))?.dialect;
         if (dialect === undefined) return undefined;

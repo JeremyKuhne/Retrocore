@@ -11,6 +11,15 @@ namespace Retrocore.Desktop;
 /// </summary>
 internal static class MachineCatalog
 {
+    // The Model 100's and Tandy 102's RAM: 8 KB modules from $FFFF down.
+    private static readonly MachineChoice s_model100Ram = new("ramKilobytes", "Memory",
+    [
+        new("32 KB", 32),
+        new("24 KB", 24),
+        new("16 KB", 16),
+        new("8 KB", 8, "The smallest RAM size"),
+    ], 32);
+
     private static readonly MachineChoice s_sound = new("sound", "Sound",
     [
         new("Speaker", "speaker"),
@@ -51,6 +60,9 @@ internal static class MachineCatalog
     // The 2001 with BASIC 2 launches without snow, so its choice starts off.
     private static readonly MachineChoice s_petSnowOff = s_petSnow with { Default = false };
 
+    private static readonly MachineChoice s_model100Sound = new("sound", "Sound",
+        [new("On", "speaker", "The piezo buzzer, from port B or the 81C55's timer"), new("Off", "off")], "speaker");
+
     private static readonly MachineChoice s_petSound = new("sound", "Sound",
         [new("On", "speaker", "The VIA's CB2, as a speaker on the user port plays it"), new("Off", "off")], "speaker");
 
@@ -62,6 +74,26 @@ internal static class MachineCatalog
 
     private static readonly MachineChoice s_bbcSound = new("sound", "Sound",
         [new("On", "speaker", "The SN76489 through the internal speaker"), new("Off", "off")], "speaker");
+
+    private static readonly MachineChoice s_atariBasic = new("basicCartridge", "Cartridge",
+    [
+        new("Atari BASIC rev. C", "c", "The last revision"),
+        new("Atari BASIC rev. B", "b", "The 600XL's and 800XL's, with its bugs"),
+        new("Atari BASIC rev. A", "a", "The first"),
+        new("None", "none", "Memo Pad, or a disk's or tape's program"),
+    ], "c");
+
+    private static readonly MachineChoice s_atariVideo = new("video", "Video",
+        [new("NTSC", "ntsc", "60 frames a second, OS rev. B"), new("PAL", "pal", "50 frames a second, the PAL OS")], "ntsc");
+
+    private static readonly MachineChoice s_atariDrives = new("diskDrive", "Disk drives",
+    [
+        new("Atari 810", "atari810", "The drive's own 6507 runs its firmware, at the 810's speed"),
+        new("SIO", "sio", "Commands answered at once, at the bus's speed"),
+    ], "atari810");
+
+    private static readonly MachineChoice s_atariSound = new("sound", "Sound",
+        [new("On", "speaker", "POKEY and the console speaker through the TV"), new("Off", "off")], "speaker");
 
     private static readonly MachineChoice s_model3Ram = new("ramKilobytes", "Memory",
         [new("48 KB", 48), new("32 KB", 32), new("16 KB", 16)], 48);
@@ -141,6 +173,12 @@ internal static class MachineCatalog
             Options(("machine", "trs80-model2"), ("model", "12")), [s_model2Ram]),
         new("trs80-model16", "TRS-80 Model 16 (Z80 side)", "The Model 16, 16B or Tandy 6000 running Model II software; the 68000 board is not emulated",
             Options(("machine", "trs80-model2"), ("model", "16")), [s_model2Ram]),
+        new("trs80-model100", "TRS-80 Model 100", "80C85 at 2.4 MHz, a 240x64 LCD and 32 KB, from your ROM",
+            Options(("machine", "trs80-model100"), ("model", "100")),
+            [s_model100Ram, s_model100Sound]),
+        new("tandy102", "Tandy 102", "The Model 100 with its revised ROM: 80C85, a 240x64 LCD and 32 KB, from your ROM",
+            Options(("machine", "trs80-model100"), ("model", "102")),
+            [s_model100Ram, s_model100Sound]),
         new("apple1", "Apple-1", "6502, the Woz Monitor, 4 KB plus 4 KB at $E000, and the cassette interface",
             Options(("machine", "apple1")),
             [
@@ -223,7 +261,13 @@ internal static class MachineCatalog
         new("bbca", "BBC Micro Model A", "6502 at 2 MHz, MOS 1.20, BASIC II and 16 KB",
             Options(("machine", "bbc"), ("model", "bbca")),
             [s_bbcSound]),
-        new("altair", "MITS Altair 8800", "8080, a terminal on the 88-2SIO or 88-SIO, the 88-ACR cassette and 64 KB",
+        new("atari800", "Atari 800", "6502 at 1.79 MHz, ANTIC, GTIA, POKEY, OS rev. B, Atari BASIC and 48 KB",
+            Options(("machine", "atari800"), ("model", "atari800")),
+            [s_atariBasic, s_atariVideo, s_atariDrives, s_atariSound]),
+        new("atari400", "Atari 400", "6502 at 1.79 MHz, ANTIC, GTIA, POKEY, OS rev. B, Atari BASIC and 16 KB",
+            Options(("machine", "atari800"), ("model", "atari400")),
+            [s_atariBasic, s_atariVideo, s_atariDrives, s_atariSound]),
+        new("altair", "MITS Altair 8800", "8080, a terminal on the 88-2SIO or 88-SIO, the 88-ACR cassette, 88-DCDD 8-inch disks and 64 KB",
             Options(("machine", "altair")),
             [
                 new("ramKilobytes", "Memory",
@@ -240,6 +284,11 @@ internal static class MachineCatalog
                     new("On the 88-SIO", "sio", "Ports $00 and $01; 4K BASIC 3.2 with the switches down"),
                 ], "2sio"),
                 new("upperCase", "Caps lock", [new("Off", Value: false), new("On", Value: true, "Letters type as capitals, as Altair BASIC needs")], Default: false),
+                new("diskController", "Disk controller",
+                [
+                    new("None", Value: false),
+                    new("88-DCDD", Value: true, "Four 8-inch drives, with DBL at $FF00 to boot drive 0"),
+                ], Default: false),
             ]),
         new("kaypro2", "Kaypro II", "Z80 at 2.5 MHz, 64 KB, 80x24 and two drives, running CP/M 2.2",
             Options(("machine", "kaypro2")), []),
@@ -252,6 +301,7 @@ internal static class MachineCatalog
         ["coco"] = new() { [""] = "coco2" },
         ["pet"] = new() { [""] = "pet2001-basic2" },
         ["bbc"] = new() { [""] = "bbcb" },
+        ["atari800"] = new() { [""] = "atari800" },
         ["trs80-model3"] = new()
         {
             [""] = "3",
@@ -260,6 +310,14 @@ internal static class MachineCatalog
             ["model4"] = "4",
             ["4P"] = "4p",
             ["model4p"] = "4p"
+        },
+        ["trs80-model100"] = new()
+        {
+            [""] = "100",
+            ["m100"] = "100",
+            ["model100"] = "100",
+            ["t102"] = "102",
+            ["tandy102"] = "102"
         },
         ["trs80-model2"] = new()
         {

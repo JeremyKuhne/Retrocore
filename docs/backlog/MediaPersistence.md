@@ -139,8 +139,8 @@ as a format that holds it, save anyway, or cancel.
 | **JV1** | guest-equivalent for one side, single density, sectors 0-9 of 256 bytes on every track, `$FA` marks on track 17 and `$FB` elsewhere, no CRC errors, IDs matching the track | the writer lists each of these it finds otherwise, and does not keep a track's sector order |
 | **JV3** | physical for what `FloppyDisk` holds, but for a sector whose ID names another track or side than where it lies, which an entry cannot say, and double-density marks other than `$FB` and `$F8` | the writer puts each sector where it lies and lists those, and sectors past two tables; it packs the tables, so a changed save is guest-equivalent, not byte-exact |
 | **JVC** | guest-equivalent for uniform geometry | the writer keeps the header it was read with, its sides grown to the disk's, takes a new disk's geometry from its first track, and lists what does not fit it, single density and marks other than `$FB` |
-| **DMK** | physical, with gaps and CRCs | the floppies' snapshot, and their recovery format ([below](#the-recovery-journal)); the writer lays out IBM gaps, or none for a track too full for them. The CoCo loads it |
-| **IMD** | reads, dropping some details | a writer comes later; a changed IMD disk saves as DMK or JV3 until then |
+| **DMK** | physical, with gaps and CRCs | the floppies' snapshot, and their recovery format ([below](#the-recovery-journal)); the writer lays out IBM gaps, or none for a track too full for them, except that a disk read from DMK keeps its image's layout (`DmkFormat.Layout`): each sector is written where it was, and a track whose sectors differ from the layout's is laid out again (a track formatted again with the same sectors in the same order keeps its gaps and any ID fields with no data). The CoCo loads it |
+| **IMD** | physical for a track of one density and sector size; marks `$FB` and deleted | the writer keeps the comment, modes, maps, compression and sectors with no data of the image it was read from (`ImdFormat.Layout`), and lists a sector of another density or size than its track's first and `$F9` and `$FA` marks, which it writes as deleted |
 | **CAS** | the decoded bytes the machine wrote | timing and the analog signal. Generating a waveform from a CAS needs the machine and baud rate: the supported ones are the Model I's 500, the Model III's 500 and 1500, Level I's 250, and the CoCo's 1500 |
 | **TAP** | exact: the Altair's tape is the bytes in order, as the 88-ACR sends and receives them | none; its writer is today's eject |
 | **WAV** | the Apple-1's tape format | written at 44.1 kHz, a recording is guest-equivalent, not cycle-exact; the recovery journal keeps the half-cycles themselves |
@@ -220,7 +220,7 @@ defaults, including the Disk II's loading every disk locked, once the recovery j
 | Disk II | `.woz`, `.dsk`, `.do`, `.po` | the same; `.d13` needs a writer first |
 | 3.5 drive | its own format, 2MG rewrapped | `.po`, `.2mg`, `.hdv`, `.img` |
 | ProFile, slot 7 | `.po`, `.hdv` | the same, and `.2mg` |
-| TRS-80 floppies | JV1 when the disk fits, JV3, DMK | DMK always; JV3 and JV1 when the disk fits (the Model II: DMK and JV3) |
+| TRS-80 floppies | JV1 when the disk fits, JV3, DMK, IMD | DMK always; JV3, IMD and JV1 when the disk fits (the Model II: DMK, IMD and JV3) |
 | CoCo floppies | JVC when the disk fits, DMK | DMK always; JVC when the disk fits |
 | Cassettes | the recording | `.cas` (TRS-80, CoCo), `.tap` (Altair) or `.wav` (Apple-1, and generated for the CAS machines' supported baud rates) |
 | CoCo ROM pack | never | never |
@@ -863,13 +863,18 @@ After the reviews:
      another track; JV3 writes each sector where it lies and lists IDs naming another track or side, double-density
      marks other than `$FB` and `$F8` and sectors past two tables; JVC keeps the header it was read with (its sides
      grown to the disk's), takes a new disk's geometry from its first track, and lists what does not fit it.
-     `FloppyImageCodec` writes them from the snapshot, `.dsk` as JVC on the Color Computer and JV1 on a TRS-80; IMD
-     has no writer, so such a disk saves as another format. The drives are `IMediumSlot`s that save (the Model I,
-     III and 4 as `.jv3`, `.dmk`, `.dsk` and `.jv1`, the Model II as `.dmk` and `.jv3`, the Color Computer as `.dsk`,
+     `FloppyImageCodec` writes them from the snapshot, `.dsk` as JVC on the Color Computer and JV1 on a TRS-80. IMD
+     has a writer too, and a codec for a DMK or IMD image keeps its layout, which the recovery journal keeps
+     compressed, so a disk saves back to the same tracks, gaps and ID offsets, or comment, modes and compression. The
+     drives are `IMediumSlot`s that save (the Model I, III and 4 as `.jv3`, `.dmk`, `.imd`, `.dsk` and `.jv1`, the
+     Model II as `.imd`, `.dmk` and `.jv3`, the Kaypro as `.img`, `.imd` and `.dmk`, the Color Computer as `.dsk`,
      `.jvc` and `.dmk`), and the Color Computer reads DMK. The legacy `retro/media` eject holds back a changed disk,
      as `retro/device`'s does. Tests: `FloppyMediaSaveTests`, where Disk BASIC's SAVE is saved as JVC and as DMK,
      pinned by digest, and loads and runs again in a new machine, and `Test-CocoDap.mjs`, which saves a disk through
-     the protocol.
+     the protocol; `Trs80DiskSaveTests`, where each format round-trips, a Model I's write sector reaches each saved
+     image, and the DMK and IMD DOS images save back byte for byte and the JV3 ones to the same sectors; and
+     `Trs80Model3RomTests.DosSavesAFile`, where the Model III's and 4's DOSes write a file that the saved image boots
+     with and lists.
 3. **The UI.** The badged icons, the states, the prompts, Revert with Undo, the eject prompt, host-side watching, and
    the off machine's saves. Done when every row of [saving in each state](#saving-in-each-state) works in the
    self-hosted extension. It lands in two parts:
@@ -951,17 +956,29 @@ After the reviews:
      session the language server offers, its disk shows changed on the machine while off and saves there, a second
      crash's disk is discarded, and of two hosts launching one machine only the first keeps its journal.
      `RETROCORE_CHECKPOINT_SECONDS` shortens the checkpoint for such tests.
-   - **Left for the next parts.** Checkpoints are taken at a request's boundary, not yet at each controller's idle
-     moment, and the machine's own eject is kept at the next checkpoint rather than as it happens. A kept disk whose launch image is gone cannot yet be shown or saved while off, as the machine is not built without it. Injected write
-     failures (a full disk, access denied) are not yet tested. Then built disks (kept in the history once it is
-     built, with a notice), recordings as changed tapes, slot 7's device (which cannot be mounted again in a running
-     machine), Retrocore Desktop's journal, and the source-aware default lock.
+   - **Idle moments, the machine's eject and falling behind (built).** A checkpoint waits for a drive that is
+     writing, by the drive's own activity (the Disk II in its write mode, a floppy controller in a write command, a
+     recorder recording, a block device just after a block), for up to five seconds while the machine runs, and then
+     takes the disk as it is, marked `midWrite`; the disks that can be kept meanwhile are committed without waiting.
+     The 3.5 drive says when the machine ejected a disk (`IEjectingSlot.HasEjected`), and the debug host checkpoints
+     at once, after the slice or stop that saw it. The journal keeps, per disk, when its last commit kept it and
+     whether mid-write, and why the last commit failed; `retro/devices` gives each changed disk's
+     `media.recovery`, behind when its changes are not kept and commits fail or are two intervals late, and the
+     Drives view marks it with a warning and says what is kept. Tests: `RecoveryJournalTests` (a Disk II in its write
+     mode waits and is then taken mid-write; a commit whose journal cannot be written leaves the last one standing
+     and is behind until one goes through; a disk put back keeps when it was kept; the 3.5 drive's ejected disk),
+     the extension's recovery lines and mark, and `Test-RecoveryDap.mjs` reading a running drive's `recovery`.
+   - **Left for the next parts.** The machine's own eject is not yet tested through a running machine, as no test
+     program ejects a 3.5 disk. A kept disk whose launch image is gone cannot yet be shown or saved while off, as the
+     machine is not built without it. Then built disks (kept in the history once it is built, with a notice),
+     recordings as changed tapes with the recorder's buffered bits, slot 7's device (which cannot be mounted again in
+     a running machine), Retrocore Desktop's journal, and the source-aware default lock.
 5. **The history.** The chunk store with its lock and grace window, thinning to a target, the History rows, Compare,
    the clocks and gears. Done when the *History* tests pass and a disk restores to any version, running or off.
 6. **Machine files.** The `Unsaved\` mirror and machine ids, with [machine files](MachineFiles.md#phases)' fourth
    phase.
 7. **New media.** `new` for blank disks and tapes. Done when a blank 800K disk formatted under ProDOS saves as `.po`.
-8. **Later.** Write-through, under [its conditions](#write-through); IMD and `.d13` writers; WAV to CAS; the Altair's
+8. **Later.** Write-through, under [its conditions](#write-through); a `.d13` writer; WAV to CAS; the Altair's
    disks, which follow this model from the start.
 
 Each phase updates [Devices.md](../Devices.md) and the machines' docs as it lands.

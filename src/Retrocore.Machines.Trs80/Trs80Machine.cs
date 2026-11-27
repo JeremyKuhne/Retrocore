@@ -45,7 +45,8 @@ public sealed class Trs80Machine : IMachine
         Configuration = configuration;
         Bus = new(configuration, roms);
         Processor = new(Bus);
-        Cassette = new(Bus.Cassette, configuration.Rom == Trs80Rom.Level1 ? 250 : 500);
+        bool level1 = configuration.Rom == Trs80Rom.Level1;
+        Cassette = new(Bus.Cassette, level1 ? 250 : 500, "$FF", level1 ? "Level I" : "Level II", romSwitches: true);
         List<FloppyDrive> drives = [];
         for (int drive = 0; Bus.HasDiskController && drive < WesternDigitalFloppyDiskController.DriveCount; drive++)
         {
@@ -70,7 +71,7 @@ public sealed class Trs80Machine : IMachine
             _ => "FD1771 in the Expansion Interface"
         },
         Formats = ["dsk", "jv1", "jv3", "dmk", "imd"],
-        SaveFormats = ["jv3", "dmk", "dsk", "jv1"],
+        SaveFormats = ["jv3", "dmk", "imd", "dsk", "jv1"],
         Operations = MediaOperations.Insert | MediaOperations.Eject | MediaOperations.WriteProtect | MediaOperations.Save,
         Tracks = 40,
 

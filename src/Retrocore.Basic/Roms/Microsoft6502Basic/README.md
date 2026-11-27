@@ -51,8 +51,8 @@ The interpreter modules also retain each variant's original bytes:
 | `MsBasic.ArrayMultiplication.asm` | Shared unsigned array multiplication, with no switches. |
 | `MsBasic.Arrays.asm` | Array lookup and allocation, selecting existing-array support, allocation-counter initialization and the early offset bug independently. |
 | `MsBasic.Assignment.asm` | `AssignmentStart` supplies LET and the `INPCOM` entry. `StringAssignment` selects optional platform hooks for a disk-status source and linked-string collection. |
-| `MsBasic.CharacterReader.asm` | The uppercase-letter test and `CharacterReader` template. The latter takes seed byte `$59` for BASIC 1, `$58` for AppleSoft and BASIC 2/4; startup copies only the first four seed bytes. |
-| `MsBasic.ExpressionCore.asm` | `ExpressionCore 1` carries a `PushSignedFac` return address across a page, as BASIC 4 does; AppleSoft and BASIC 1/2 use `0`. |
+| `MsBasic.CharacterReader.asm` | The uppercase-letter test and `CharacterReader` template. The latter takes seed byte `$59` for BASIC 1, `$58` for AppleSoft, BASIC 2/4 and the VIC-20; startup copies only the first four seed bytes. |
+| `MsBasic.ExpressionCore.asm` | `ExpressionCore 1` carries a `PushSignedFac` return address across a page, as BASIC 4 does; AppleSoft, BASIC 1/2 and the VIC-20 use `0`. |
 | `MsBasic.OperandEvaluation.asm` | Shared operand and function dispatch, with independent choices for the PI token and Boolean or signed 16-bit logical operators. |
 | `MsBasic.VariableInput.asm` | Shared READ and GET/INPUT variable processing, with independent buffer, channel, character-mask and retry choices. |
 | `MsBasic.VariableLookup.asm` | Variable-name parsing and scalar lookup, with independent choices for reserved names, zero storage, caller checks and linked-array fixups. |
@@ -66,12 +66,12 @@ The interpreter modules also retain each variant's original bytes:
 | `MsBasic.StringStorage.asm` | Shared literal scanning and temporary descriptors, with independent buffer-page and FAC-overflow choices. |
 | `MsBasic.StringStorage.Classic.asm`, `MsBasic.StringStorage.Linked.asm` | Select the classic allocator or BASIC 4's linked-string allocator; the collectors remain platform-specific. |
 | `MsBasic.For.asm` | Shared FOR frame setup falls through to the platform's next-statement entry. |
-| `MsBasic.IntegerConversion.asm` | Shared subscript and signed-integer conversion independently selects the evaluator and type check. The boundary prefix must immediately precede the routine: its fifth comparison byte is the next instruction's opcode. |
+| `MsBasic.IntegerConversion.asm` | Shared subscript and signed-integer conversion independently selects the evaluator and type check. The boundary prefix must immediately precede the routine: its fifth comparison byte is the next instruction's opcode, except where `fifthByte` gives the constant a zero fifth byte of its own (the VIC-20). |
 | `MsBasic.LineNumber.asm` | Shared decimal line-number parsing accepts values below 64000. |
 | `MsBasic.LineSearch.asm` | Shared linked-program search returns the matching line or insertion point. |
 | `MsBasic.MemoryAccess.asm` | `AddressConversion` selects negative-address rejection; `PeekFunction` independently selects address preservation, save order, ROM guarding and padding; `WaitStatement` takes the omitted-mask branch target. |
-| `MsBasic.MemoryManagement.asm` | `MemoryManagement` takes the stack reserve: `$36` for AppleSoft and BASIC 1 at its default of 19 levels, `$3E` for BASIC 2/4. BASIC 1 calculates it as `2*STACK_LEVELS+3*ADDITIONAL_PRECISION+13`; the macro asserts the required contiguous page-zero scratch layout. |
-| `MsBasic.Next.asm` | AppleSoft and BASIC 1 count through the FOR frame; BASIC 2/4 calculate its offsets. The caller also supplies the platform's next-statement entry. |
+| `MsBasic.MemoryManagement.asm` | `MemoryManagement` takes the stack reserve: `$36` for AppleSoft and BASIC 1 at its default of 19 levels, `$3E` for BASIC 2/4 and the VIC-20. BASIC 1 calculates it as `2*STACK_LEVELS+3*ADDITIONAL_PRECISION+13`; the macro asserts the required contiguous page-zero scratch layout. |
+| `MsBasic.Next.asm` | AppleSoft and BASIC 1 count through the FOR frame; BASIC 2/4 and the VIC-20 calculate its offsets. The caller also supplies the platform's next-statement entry. |
 | `MsBasic.OperatorTable.asm` | AppleSoft uses `OperatorEntries 1, 1, OROP1`; PET uses `OperatorEntries 0, 0, ANDOP`. Power/negation and NOT precedences are independent. |
 | `MsBasic.ProgramTransfers.asm` | Shared RESTORE, STOP, CONT, RUN, GOSUB, GOTO and RETURN entries. The caller selects direct-mode detection, output suppression, the next-statement target, RETURN's FOR-pointer byte and optional POP handling independently. |
 | `MsBasic.ProgramReset.asm` | Shared NEW, CLEAR, NULL, stack reset and text-pointer setup; independent choices preserve platform side effects and BASIC 1's original or revised stack reset. |
@@ -79,7 +79,7 @@ The interpreter modules also retain each variant's original bytes:
 | `MsBasic.SimpleFunctions.asm` | Shared FRE, POS and integer-to-floating-point entries; `SimpleFunctions 1` retains AppleSoft's extra carry set, PET uses `0`. |
 | `MsBasic.StatementFlow.asm` | Shared DATA/REM scanning and IF/ON dispatch; the scanner independently selects BASIC 1's quote-branch order and AppleSoft's POP unwind entry. |
 | `MsBasic.StringFunctions.asm` | Shared CHR$, slicing, LEN, ASC, byte conversion and VAL, with independent choices for slice errors, preamble return, LEN/ASC dispatch and VAL's terminator. |
-| `MsBasic.UserFunctions.asm` | `UserFunctions 1` retains BASIC 1's low-byte undefined-function check; AppleSoft and BASIC 2/4 use the corrected high-byte check (`0`). |
+| `MsBasic.UserFunctions.asm` | `UserFunctions 1` retains BASIC 1's low-byte undefined-function check; AppleSoft, BASIC 2/4 and the VIC-20 use the corrected high-byte check (`0`). |
 
 The memory-access macros use these settings (PEEK's arguments are address preservation, high-byte-first save,
 ROM guard and padding):
@@ -90,14 +90,15 @@ ROM guard and padding):
 | PET BASIC 1 | `1` | `0, 1, 1, 0` | `STORDO` |
 | PET BASIC 2 | `1` | `1, 1, 0, 1` | `WaitHiddenMessage`, its hidden-message extension (Microsoft's ZSTORD) |
 | PET BASIC 4 | `1` | `1, 1, 0, 0` | `STORDO` |
+| VIC-20 | `1` | `1, 1, 0, 0` | `STORDO` |
 
 `StringFunctions` takes the zero-slice check, indirect preamble return, shared LEN/ASC jump and VAL terminator
 choices in that order. AppleSoft uses `1, 0, 0, 0`; PET BASIC 1 uses `1, 1, 1, 0`, BASIC 2 uses `0, 0, 0, 0`,
-and BASIC 4 uses `0, 0, 0, 1`.
+and BASIC 4 and the VIC-20 use `0, 0, 0, 1`.
 
 `StringStorage` takes the input-buffer page and whether to clear `FACOV`: AppleSoft uses `2, 0`, PET BASIC 1
-uses `0, 0`, and BASIC 2/4 use `2, 1`. Follow it with `StringAllocation 1` for BASIC 4's linked allocator,
-or `0` for the other variants.
+uses `0, 0`, and BASIC 2/4 and the VIC-20 use `2, 1`. Follow it with `StringAllocation 1` for BASIC 4's linked
+allocator, or `0` for the other variants.
 
 After the matching collector, `StringConcatenation 0` emits `CAT` through `FRETMS` for AppleSoft and PET
 BASIC 1/2; BASIC 4 uses `StringConcatenation 1` and supplies its `FindStringLink` (STRADJ) link helper. Follow either with
@@ -108,7 +109,8 @@ error and evaluator entries the other shared modules define.
 
 `PrintItems` takes the TAB handler and independent choices for clearing carry before SPC and comma, and for
 printing a separate trailing space after numbers. AppleSoft uses `PrintTabOrSpace`,
-then `1, 1, 0`; PET BASIC 1 uses `PrintTabOrSpace, 0, 0, 1`, and BASIC 2/4 use `PrintTabOrSpace, 1, 0, 1`.
+then `1, 1, 0`; PET BASIC 1 uses `PrintTabOrSpace, 0, 0, 1`, and BASIC 2/4 and the VIC-20 use
+`PrintTabOrSpace, 1, 0, 1`.
 
 The program-reset macros take the independent side effects documented in the source:
 
@@ -119,9 +121,33 @@ The program-reset macros take the independent side effects documented in the sou
 | PET BASIC 1 revised | `0, 0, 0, 0` | `1, 0` | `0, 1, $FE` | `0, 1` |
 | PET BASIC 2 | `0, 0, 1, 1` | `1, 0` | `0, 0, $FA` | `1, 1` |
 | PET BASIC 4 | `0, 0, 1, 1` | `1, 1` | `0, 0, $FA` | `1, 0` |
+| VIC-20 | `0, 0, 1, 1` | `2, 0` | `0, 0, $FA` | `1, 0, KernalTestStopKey` |
 
 PET BASIC 1 also retains `NullStatement 10` even though its reserved-word table has no NULL token. Its
 increment-before-comparison accepts values 0 through 8 and, through byte wraparound, 255.
+
+### The VIC-20's choices
+
+The [VIC-20's root](../../../Retrocore.Machines.Commodore/Roms/Vic20/Basic.asm) passes these optional parameters,
+which the PET and AppleSoft builds leave out (or give their earlier values), so that their code is unchanged:
+
+| Macro | Parameter | VIC-20 | Effect |
+| --- | --- | --- | --- |
+| `IntegerConversionBoundary` | `fifthByte` | 1 | Give the packed -32768 a zero fifth byte of its own, so exact -32768 compares equal. |
+| `IntegerConversion` | `wordResult` | 1 | Begin with `FacToSignedWord`, the float-to-integer routine for machine code, after the five-byte boundary. |
+| `ListTokens` | `vector` | `ListTokenVector` | The RAM vector `LIST`'s token check jumps through first. |
+| `NextEntries` | `jumpToError` | 1 | Report NEXT WITHOUT FOR by a jump to `ReportError`, since its error number is not 0. |
+| `OperandEvaluation` | `vector` | `OperandVector` | The RAM vector the operand evaluator jumps through first. |
+| `OperandEvaluation` | `farVariable` | 1 | Reach `EvaluateVariable` with a JMP rather than a branch. |
+| `IntegerVariableValue` | `keepX` | 1 | Test the integer flag with `BIT`, keeping X. |
+| `DecimalOutput` | `keepY` | 1 | Format a line number from the caller's Y of 0, without the space for its sign. |
+| `ClearStorage` | `closeFiles` | 2 | Close the files before resetting the strings, with an entry after the call. |
+| `StopAndContinue` | `stopTest` | `KernalTestStopKey` | BASIC's own `CheckStop`, which calls the kernal's test and falls into `STOP`. |
+| `RunStatement` | `setMessages` | `KernalSetMessages` | Turn the kernal's messages off while the program runs. |
+| `GosubAndGoto` | `wholeLineCompare` | 1 | Compare whole line numbers to decide whether `GOTO` searches on from the current line. |
+| `RandomRoutine` | `useTimers` | 2 | Seed `RND(0)` from the VIA the kernal's `KernalIoBase` names, with five-byte constants. |
+| `SimpleFunctions` | `cursorRead` | `KernalPlot` | `POS` reads the cursor's column through the kernal's `KernalPlot`. |
+| `VariableInput` | `space` | 1 | `READ`'s search finds a `DATA` after spaces. |
 
 ### BASIC 1's independent choices
 
@@ -212,39 +238,39 @@ composes these macros in PET ROM order, including BASIC 2's WAIT message and BAS
 caller supplies the external symbols. Tests compare the complete
 `FADDH`-to-`INITAT` region, including its editor-ROM spill, against all five PET overlay builds.
 
-The [Commodore platform definitions](../../../Retrocore.Machines.Commodore/Roms/Basic/Commodore.Platform.asm)
-include the workspace, dispatch, assignment and channel I/O macros without emitting bytes. The
-[workspace](../../../Retrocore.Machines.Commodore/Roms/Basic/Commodore.Equates.asm) defines PET RAM and system
-entry addresses and documents the independent switches for BASIC 1, 2 and 4; its default is BASIC 2. The shared
-math package also assembles against these equates for every PET revision. Where a shared module's comment names a
-build (AppleSoft, PET BASIC 1, 2 or 4), it describes that build with its root's default switches; the macro's
-parameters say what each switch changes, and some comments also say "by default".
-The [dispatch tables](../../../Retrocore.Machines.Commodore/Roms/Basic/Commodore.DispatchTables.asm) emit the
-statement and function vectors, the shared operator table, reserved words and messages. Their independent choices
-select GO, disk commands, the early file-data message and single-CR messages; the workspace's `ERROR_PADDING5`
-selects the early error-table padding. Tests compare the tables and error offsets against every PET overlay.
-The [clock-string assignment](../../../Retrocore.Machines.Commodore/Roms/Basic/Commodore.TimeAssignment.asm)
-goes between `AssignmentStart` and `StringAssignment`. BASIC 4's
-[string-assignment hooks](../../../Retrocore.Machines.Commodore/Roms/Basic/Commodore.StringAssignment.asm)
-handle the mutable disk-status string and linked collector. Tests compose these with the shared assignment code
-and compare its complete `LET`-to-`PRINTN` region against all five PET overlay builds.
-[Channel output](../../../Retrocore.Machines.Commodore/Roms/Basic/Commodore.ChannelPrint.asm) supplies PRINT#,
-CMD, input-line completion, newlines, print spacing and character output. Its options preserve BASIC 1's
-NULL padding and SPC(0) behavior and BASIC 4's channel-dependent line feed and unsuppressed output.
-[Channel input](../../../Retrocore.Machines.Commodore/Roms/Basic/Commodore.ChannelInput.asm) supplies malformed-input
-handling, GET, INPUT, INPUT# and channel release, selecting the page-zero or page-two input buffer independently.
-[BASIC 4's operand split](../../../Retrocore.Machines.Commodore/Roms/Basic/Commodore.Basic4Patches.asm) preserves
-the checksum, reserved patch space and revised-ROM fixes before variable-value handling.
-[BASIC 1's editor patches](../../../Retrocore.Machines.Commodore/Roms/Basic/Commodore.Basic1Patches.asm) retain
-its input, clock, terminal-position and array-descriptor fixes in the editor ROM.
-[Variable evaluation](../../../Retrocore.Machines.Commodore/Roms/Basic/Commodore.VariableEvaluation.asm) handles
-the PET clock and status variables, including BASIC 1's clock patches and BASIC 4's disk status.
+The [Commodore platform definitions](../../../Retrocore.Machines.Commodore/Roms/Basic/Commodore.Platform.asm) include
+the workspace, dispatch, assignment and channel I/O macros without emitting bytes. The
+[workspace](../../../Retrocore.Machines.Commodore/Roms/Basic/Commodore.Equates.asm) defines PET and VIC-20 RAM and
+system entry addresses and documents the independent switches for BASIC 1, 2 and 4 and the VIC-20; its default is BASIC
+2. The shared math package also assembles against these equates for every PET revision and the VIC-20. Where a shared
+module's comment names a build (AppleSoft, PET BASIC 1, 2 or 4, or the VIC-20), it describes that build with its root's
+default switches; the macro's parameters say what each switch changes, and some comments also say "by default". The
+[dispatch tables](../../../Retrocore.Machines.Commodore/Roms/Basic/Commodore.DispatchTables.asm) emit the statement and
+function vectors, the shared operator table, reserved words and messages. Their independent choices select GO, disk
+commands, the early file-data message and single-CR messages; the workspace's `ERROR_PADDING5` selects the early
+error-table padding. Tests compare the tables and error offsets against every PET overlay. The [clock-string
+assignment](../../../Retrocore.Machines.Commodore/Roms/Basic/Commodore.TimeAssignment.asm) goes between
+`AssignmentStart` and `StringAssignment`. BASIC 4's [string-assignment
+hooks](../../../Retrocore.Machines.Commodore/Roms/Basic/Commodore.StringAssignment.asm) handle the mutable disk-status
+string and linked collector. Tests compose these with the shared assignment code and compare its complete
+`LET`-to-`PRINTN` region against all five PET overlay builds. [Channel
+output](../../../Retrocore.Machines.Commodore/Roms/Basic/Commodore.ChannelPrint.asm) supplies PRINT#, CMD, input-line
+completion, newlines, print spacing and character output. Its options preserve BASIC 1's NULL padding and SPC(0)
+behavior and BASIC 4's channel-dependent line feed and unsuppressed output. [Channel
+input](../../../Retrocore.Machines.Commodore/Roms/Basic/Commodore.ChannelInput.asm) supplies malformed-input handling,
+GET, INPUT, INPUT# and channel release, selecting the page-zero or page-two input buffer independently. [BASIC 4's
+operand split](../../../Retrocore.Machines.Commodore/Roms/Basic/Commodore.Basic4Patches.asm) preserves the checksum,
+reserved patch space and revised-ROM fixes before variable-value handling. [BASIC 1's editor
+patches](../../../Retrocore.Machines.Commodore/Roms/Basic/Commodore.Basic1Patches.asm) retain its input, clock,
+terminal-position and array-descriptor fixes in the editor ROM. [Variable
+evaluation](../../../Retrocore.Machines.Commodore/Roms/Basic/Commodore.VariableEvaluation.asm) handles the PET clock and
+status variables, including BASIC 1's clock patches and BASIC 4's disk status.
 [Initialization](../../../Retrocore.Machines.Commodore/Roms/Basic/Commodore.Initialization.asm) sets the workspace,
-probes RAM and prints the variant's sign-on before entering BASIC.
-[Statement dispatch](../../../Retrocore.Machines.Commodore/Roms/Basic/Commodore.StatementDispatch.asm) preserves
-the early separator checks, GO handling, BASIC 4 disk-token gap and revised PI-token fix.
-[Linked string collection](../../../Retrocore.Machines.Commodore/Roms/Basic/Commodore.StringGarbageCollection.asm)
-provides BASIC 4's single-pass collector; AppleSoft and BASIC 1/2 use the shared classic collector.
+probes RAM and prints the variant's sign-on before entering BASIC. [Statement
+dispatch](../../../Retrocore.Machines.Commodore/Roms/Basic/Commodore.StatementDispatch.asm) preserves the early
+separator checks, GO handling, BASIC 4 disk-token gap and revised PI-token fix. [Linked string
+collection](../../../Retrocore.Machines.Commodore/Roms/Basic/Commodore.StringGarbageCollection.asm) provides BASIC 4's
+single-pass collector; AppleSoft, BASIC 1/2 and the VIC-20 use the shared classic collector.
 
 The [BASIC 1](../../../Retrocore.Machines.Commodore/Roms/Basic/Basic1.asm),
 [BASIC 2](../../../Retrocore.Machines.Commodore/Roms/Basic/Basic2.asm) and

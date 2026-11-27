@@ -23,7 +23,7 @@ const text = (hover: vscode.Hover): string =>
 
 /** Drives the retrocore language server through VS Code's own provider commands. */
 export async function testLanguageServer(root: string): Promise<void> {
-    for (const languageId of ["retrocore-asm", "retrocore-macro10", ...basicLanguages]) {
+    for (const languageId of ["retrocore-asm", "retrocore-macro10", "retrocore-pascal", ...basicLanguages]) {
         for (const scheme of ["file", "chat-editing-text-model", "chat-editing-snapshot-text-model", "retrocore-basic", "retrocore-basic-file", "untitled"]) {
             const document = { uri: vscode.Uri.from({ scheme, path: "/main.asm" }), languageId } as vscode.TextDocument;
             assert.equal(vscode.languages.match(documentSelector, document) > 0,
@@ -252,6 +252,26 @@ export async function testLanguageServer(root: string): Promise<void> {
         fs.rmSync(configured, { recursive: true, force: true });
         fs.rmSync(broken, { recursive: true, force: true });
         fs.rmSync(diskFolder, { recursive: true, force: true });
+    }
+
+    // The card ROMs' declared origins put their entries at the same addresses as the generated firmware.
+    for (const [file, routine, address] of [
+        ["Mouse.rom.asm", "BasicInput", "$C405"],
+        ["Disk35.rom.asm", "Disk35Driver", "$C51C"]
+    ] as const) {
+        const romPath = path.join(root, "src", "Retrocore.Machines.Apple2", "Roms", file);
+        const rom = await vscode.workspace.openTextDocument(vscode.Uri.file(romPath));
+        await vscode.window.showTextDocument(rom);
+        const line = rom.getText().split(/\r?\n/).findIndex(text => text.trim() === `.proc ${routine}`);
+        assert.ok(line >= 0, `${routine} is in ${file}`);
+        const position = new vscode.Position(line, rom.lineAt(line).text.indexOf(routine) + 1);
+        await until(`${routine} ROM address`, async () => {
+            const found = await vscode.commands.executeCommand<vscode.Hover[]>("vscode.executeHoverProvider", rom.uri, position);
+            return found.find(item => text(item).includes(`${routine} = ${address}`));
+        });
+        const errors = vscode.languages.getDiagnostics(rom.uri).filter(diagnostic => diagnostic.severity === vscode.DiagnosticSeverity.Error);
+        assert.deepEqual(errors.map(diagnostic => diagnostic.message), [], `${file} has no assembly errors`);
+        await vscode.commands.executeCommand("workbench.action.closeActiveEditor");
     }
 
     // MACRO-10 sources are a language of their own, for their own icon, and the server serves them as assembly.

@@ -35,8 +35,10 @@ namespace Retrocore.Tests;
 [TestClass]
 public class Pet4040OracleTests
 {
-    // Marks a row whose registers do not count, in the B flag's place, which rows leave clear.
-    private const byte Loose = 0x10;
+    /// <summary>
+    ///  Marks a row whose registers do not count, in the B flag's place, which rows leave clear.
+    /// </summary>
+    internal const byte Loose = 0x10;
 
     /// <summary>
     ///  From power-on, the DOS's RAM test, its start-up and the controller's, to the wait for the PET, with no disk.
@@ -144,11 +146,22 @@ public class Pet4040OracleTests
         }
     }
 
-    // The two sequences agree as far as the shorter goes, less the pass of the wait it ends in: the addresses, and
-    // when asked the registers, but in a row either side marks as loose. The two run their waits for different times,
-    // so a long run's lengths differ by a few percent; one under nine tenths of the other stopped early and fails,
-    // rather than comparing next to nothing. A short handler's waits make up most of it, so only its addresses count.
-    private static void Match(string what, List<Row> expected, List<Row> actual, bool registers)
+    /// <summary>
+    ///  Checks that two sequences agree as far as the shorter goes, less the pass of the wait it ends in: the
+    ///  addresses, and when asked the registers, but in a row either side marks as loose.
+    /// </summary>
+    /// <remarks>
+    ///  <para>
+    ///   The two run their waits for different times, so a long run's lengths differ by a few percent; one under nine
+    ///   tenths of the other stopped early and fails, rather than comparing next to nothing. A short handler's waits
+    ///   make up most of it, so only its addresses count.
+    ///  </para>
+    /// </remarks>
+    /// <param name="what">The piece, for the failure.</param>
+    /// <param name="expected">MAME's rows.</param>
+    /// <param name="actual">Ours.</param>
+    /// <param name="registers">Whether the registers count as well as the addresses.</param>
+    internal static void Match(string what, List<Row> expected, List<Row> actual, bool registers)
     {
         const int Tail = 16;
         int longer = Math.Max(expected.Count, actual.Count);
@@ -176,9 +189,14 @@ public class Pet4040OracleTests
         }
     }
 
-    // Cuts the rows where each interrupt starts, each piece with its loops collapsed. Our processor takes the
-    // interrupt and the handler's first instruction together, so that row is left out.
-    private static List<List<Row>> Split(IEnumerable<Row> rows, ushort irq)
+    /// <summary>
+    ///  Cuts the rows where each interrupt starts, each piece with its loops collapsed. Our processor takes the
+    ///  interrupt and the handler's first instruction together, so that row is left out.
+    /// </summary>
+    /// <param name="rows">The rows.</param>
+    /// <param name="irq">The IRQ vector's target.</param>
+    /// <returns>The pieces.</returns>
+    internal static List<List<Row>> Split(IEnumerable<Row> rows, ushort irq)
     {
         List<List<Row>> pieces = [];
         List<Row> piece = [];
@@ -198,11 +216,20 @@ public class Pet4040OracleTests
         return pieces;
     }
 
-    // Keeps only the last pass of each loop of up to 8 instructions: a run whose addresses repeat the run before it
-    // replaces it. The PETs hand bytes over at their own pace, so a wait runs as many times as each takes, and the
-    // registers it polls change on its last pass. The kept pass's first row holds the flags of whatever ran before it,
-    // a pass the other side may not have run, so it is marked loose: only its address counts.
-    private static List<Row> Collapse(List<Row> rows)
+    /// <summary>
+    ///  Keeps only the last pass of each loop of up to 8 instructions: a run whose addresses repeat the run before it
+    ///  replaces it.
+    /// </summary>
+    /// <remarks>
+    ///  <para>
+    ///   The PETs hand bytes over at their own pace, so a wait runs as many times as each takes, and the registers it
+    ///   polls change on its last pass. The kept pass's first row holds the flags of whatever ran before it, a pass the
+    ///   other side may not have run, so it is marked loose: only its address counts.
+    ///  </para>
+    /// </remarks>
+    /// <param name="rows">The rows.</param>
+    /// <returns>The rows kept.</returns>
+    internal static List<Row> Collapse(List<Row> rows)
     {
         List<Row> collapsed = [];
         foreach (Row row in rows)

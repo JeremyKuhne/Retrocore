@@ -11,16 +11,21 @@
     <Using Include="Retrocore.Cpu" />
     <Using Include="Retrocore.Cpu.M6502" />
     <PackageReference Include="BenchmarkDotNet" Version="0.16.0-preview.2" />
+    <!-- BenchmarkDotNet's ETW profiler (-p ETW), for traces of where time and allocations go. -->
+    <PackageReference Include="BenchmarkDotNet.Diagnostics.Windows" Version="0.16.0-preview.2" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\Retrocore.Assembler\Retrocore.Assembler.csproj" />
+    <!-- The language server's SDK index, with the SDK's ROM sources it copies to its output. -->
+    <ProjectReference Include="..\..\src\Retrocore.Debug\Retrocore.Debug.csproj" />
     <ProjectReference Include="..\..\src\Retrocore.Cpu.M6809\Retrocore.Cpu.M6809.csproj" />
     <ProjectReference Include="..\..\src\Retrocore.Media\Retrocore.Media.csproj" />
     <ProjectReference Include="..\..\src\Retrocore.Machines.Apple2\Retrocore.Machines.Apple2.csproj" />
     <ProjectReference Include="..\..\src\Retrocore.Generators\Retrocore.Generators.csproj"
                       Aliases="Generator" PrivateAssets="all" />
     <None Include="..\..\src\Retrocore.Machines.Apple2\Roms\Slot7.rom.asm" Link="Inputs\Slot7.rom.asm" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\src\Retrocore.Machines.Apple2\Roms\ProDosBlockDevice.asm" Link="Inputs\ProDosBlockDevice.asm" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>

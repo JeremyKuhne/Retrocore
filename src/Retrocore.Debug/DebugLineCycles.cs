@@ -9,16 +9,41 @@ namespace Retrocore.Debug;
 /// <summary>
 ///  Records source-line cycle counts and their changes since the last event.
 /// </summary>
-internal sealed class DebugLineCycles
+internal sealed partial class DebugLineCycles
 {
-    private readonly Dictionary<(string Path, int Line), ulong> _last = [];
+    private readonly Dictionary<(string Path, int Line), ulong> _last;
     // Null means the line was absent from the last event, rather than present with a zero count.
-    private readonly Dictionary<(string Path, int Line), ulong?> _before = [];
+    private readonly Dictionary<(string Path, int Line), ulong?> _before;
+
+    // The lines in event order, until a line is added or the counts are forgotten.
+    private (string Path, int Line)[]? _ordered;
+
+    /// <summary>
+    ///  Creates an empty record.
+    /// </summary>
+    internal DebugLineCycles()
+    {
+        LineComparer lines = new();
+        _last = [with(lines)];
+        _before = [with(lines)];
+    }
 
     /// <summary>
     ///  Gets each line's latest count.
     /// </summary>
     internal IReadOnlyDictionary<(string Path, int Line), ulong> Last => _last;
+
+    /// <summary>
+    ///  Gets the lines by path, ignoring case, then line number; lines whose paths differ only in case keep the order
+    ///  they were first counted in.
+    /// </summary>
+    /// <remarks>
+    ///  <para>
+    ///   The order is kept until a line is added or the counts are forgotten, since each event lists every line.
+    ///  </para>
+    /// </remarks>
+    internal IReadOnlyList<(string Path, int Line)> Ordered =>
+        _ordered ??= [.. _last.Keys.OrderBy(line => line.Path, StringComparer.OrdinalIgnoreCase).ThenBy(line => line.Line)];
 
     /// <summary>
     ///  Gets whether any tracked line differs from its value at the last event.
@@ -35,6 +60,7 @@ internal sealed class DebugLineCycles
     internal void Update((string Path, int Line) source, ulong cycles, bool entered, bool track)
     {
         ref ulong count = ref CollectionsMarshal.GetValueRefOrAddDefault(_last, source, out bool exists);
+        if (!exists) { _ordered = null; }
         ulong updated = entered ? cycles : count + cycles;
         if (!exists || count != updated)
         {
@@ -66,5 +92,6 @@ internal sealed class DebugLineCycles
     {
         _last.Clear();
         _before.Clear();
+        _ordered = null;
     }
 }

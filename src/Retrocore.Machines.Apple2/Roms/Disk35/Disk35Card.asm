@@ -39,9 +39,9 @@
 ;; Where in the slot page the boot's wait, <Boot::WaitForCard>, keeps its branch offset.
 BOOT_WAIT_OFFSET = <(Boot::WaitForCard + 1)
 
-;; The offset that sends the boot's wait on to the host's <Call>, which the card writes once it is ready.
-BOOT_WAIT_TO_CALL = <(Call - Boot::WaitForCard - 2)
-.assert BOOT_WAIT_TO_CALL = $16, "The boot's wait branches $16 bytes on, to Call."
+;; The offset that sends the boot's wait on to the host's <CallCard>, which the card writes once it is ready.
+BOOT_WAIT_TO_CALL = <(CallCard - Boot::WaitForCard - 2)
+.assert BOOT_WAIT_TO_CALL = $16, "The boot's wait branches $16 bytes on, to CallCard."
 
 ;; Where in the slot page the calls' wait, <SmartPortEntry::Wait>, keeps its branch offset; 0 there releases the calls.
 CALL_WAIT_OFFSET = <(SmartPortEntry::Wait + 1)
@@ -166,7 +166,7 @@ CardVectors:
 .endproc
 
 ;; The 65C02's reset (and NMI) entry, at $D11D: clears the state byte, so the host waits, and runs the power-on test
-;; (<SelfTest::StartUp>), which comes back to <Startup>.
+;; (<SelfTest::StartUp>), which comes back to <CardStartup>.
 ;; In: EjectDrive = a drive whose eject a reset cut short, or bit 7 set
 .proc CardReset
 .assert * = $D11D, "The self-test names the card's reset as $D11D."
@@ -183,7 +183,7 @@ CardVectors:
 ;; cold (finds the drives and the bus devices) or, if page zero still holds <WarmSignature>, warm (keeps them, and
 ;; reads each drive's disk again). Then finishes an eject a reset cut short, and falls into <MainLoop>.
 ;; In: EjectDrive = a drive whose eject a reset cut short, or bit 7 set
-.proc Startup
+.proc CardStartup
 .assert * = $D129, "The self-test names the card's start-up as $D129."
     lda EjectDrive
     jsr CopyHostCode
@@ -542,7 +542,7 @@ Loop:
 .endproc
 
 ;; Copies the host's slot page to $7B00, its $C800 code to <HostCode> ($0200-$03FF) and its $CC00 code to
-;; <SharedExpansion> ($7C00-$7FFF), then points the boot's wait at the host's <Call> and releases the calls' wait,
+;; <SharedExpansion> ($7C00-$7FFF), then points the boot's wait at the host's <CallCard> and releases the calls' wait,
 ;; and puts an RTS at each unit's hook (<UnitHook1> to <UnitHook4>).
 ;; Out: Y = 0
 .proc CopyHostCode

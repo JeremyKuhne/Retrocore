@@ -46,7 +46,7 @@ public sealed class Apple2MouseTests
     /// </summary>
     [TestMethod]
     public void FirmwareBytesArePinned() =>
-        Convert.ToHexString(SHA256.HashData(MouseRom.Bytes)).Should().Be("D018CD4DB652C33D1BC97A314B6C0AA90B00899733EF5FC39E8DB2587E83489B");
+        Convert.ToHexString(SHA256.HashData(MouseRom.Bytes)).Should().Be("6C2B0B3517E91AADE501800CC576C80FD573ECEEC22865634F4EA21ED4941025");
 
     /// <summary>
     ///  INITMOUSE, SETMOUSE and READMOUSE: the mouse follows the host only once on, and READMOUSE puts the position,
@@ -341,8 +341,8 @@ public sealed class Apple2MouseTests
     }
 
     /// <summary>
-    ///  The Pascal entries answer error 3 with carry set, and the factory's entries at $Cn1A-$Cn1F do nothing, as on
-    ///  Apple's card.
+    ///  The Pascal entries answer error 3 with carry set, as on Apple's card. The entries at $Cn1A-$Cn1F do nothing here,
+    ///  keeping A, X and Y, but return carry clear, as Apple's GetClamp, TimeData and the others do.
     /// </summary>
     [TestMethod]
     public void PascalAndFactoryEntries()
@@ -357,8 +357,12 @@ public sealed class Apple2MouseTests
 
         for (int entry = 0x1A; entry <= 0x1F; entry++)
         {
-            Call(machine, (ushort)(0xC400 | machine.Bus.Peek((ushort)(0xC400 + entry)))).Status.HasFlag(StatusRegister.Carry)
-                .Should().BeTrue();
+            ushort routine = (ushort)(0xC400 | machine.Bus.Peek((ushort)(0xC400 + entry)));
+            ProcessorRegisters registers = Call(machine, routine, a: 0x5A, x: 0xC4, y: 0x40, carry: true);
+            registers.Status.HasFlag(StatusRegister.Carry).Should().BeFalse($"$Cn{entry:X2} answers carry clear, as Apple's card does");
+            registers.Accumulator.Should().Be(0x5A);
+            registers.X.Should().Be(0xC4);
+            registers.Y.Should().Be(0x40);
         }
     }
 
@@ -399,13 +403,14 @@ public sealed class Apple2MouseTests
 
     // Calls a routine as its documentation asks, with X = $Cn and Y = $n0 unless a test gives others, and returns the
     // registers it comes back with.
-    private static ProcessorRegisters Call(Apple2Machine machine, ushort routine, byte a = 0, byte? x = null, byte? y = null)
+    private static ProcessorRegisters Call(Apple2Machine machine, ushort routine, byte a = 0, byte? x = null, byte? y = null, bool carry = false)
     {
         int slot = machine.Bus.MouseSlot;
         if (routine >> 8 == 0xC4) { routine = (ushort)((routine & 0xFF) | ((0xC0 | slot) << 8)); }
         machine.Bus.SetRam(auxiliary: false, Caller, 0x20);
         machine.Bus.SetRam(auxiliary: false, Caller + 1, (byte)routine);
         machine.Bus.SetRam(auxiliary: false, Caller + 2, (byte)(routine >> 8));
+        StatusRegister carried = carry ? StatusRegister.Carry : 0;
         machine.Processor.Registers = new()
         {
             ProgramCounter = Caller,
@@ -414,7 +419,7 @@ public sealed class Apple2MouseTests
             X = x ?? (byte)(0xC0 | slot),
             Y = y ?? (byte)(slot << 4),
             // SERVEMOUSE is called from the interrupt handler, with interrupts off.
-            Status = StatusRegister.Unused | (routine == MouseServe(slot) ? StatusRegister.IRQBDisable : 0)
+            Status = StatusRegister.Unused | (routine == MouseServe(slot) ? StatusRegister.IRQBDisable : 0) | carried
         };
 
         for (int i = 0; i < 200; i++)

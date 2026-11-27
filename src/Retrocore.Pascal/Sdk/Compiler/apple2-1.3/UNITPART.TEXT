@@ -1,0 +1,412 @@
+(** UNITPART.TEXT: UNITPART, segment 17: units.
+
+    Included by COMPILER.TEXT after WRITELIN.TEXT and before COMPOPTI.TEXT.
+
+    Procedures here, nested ones indented:
+        UNITPART (segment)
+          OpenReferenceFile
+          UnitHeading
+          CompileImplementation *)
+
+  (** Compiles the units in a source: each one's interface, which goes into
+      the code file as text, and its implementation, which is a segment of
+      its own. *)
+  SEGMENT PROCEDURE UNITPART(Followers: TokenSet);
+    VAR
+      (** The heap mark released after the unit.
+
+          UCSD Pascal II.0 calls it UMARKP (UCSD20). *)
+      SavedMark: UnitMark;
+      (** An intrinsic unit with a data segment. *)
+      HasDataSegment: BOOLEAN;
+      (** An intrinsic unit with its code segment given. *)
+      HasCodeSegment: BOOLEAN;
+      (** The interface text's last block. *)
+      LastTextBlock: INTEGER;
+      (** And its last byte in it. *)
+      TextEndOffset: INTEGER;
+
+    (** Opens SYSTEM.INFO for the linker's references.
+        Also: OPENREFFILE (UCSD20) *)
+    PROCEDURE OpenReferenceFile;
+    BEGIN
+      REWRITE(ReferenceFile, '%SYSTEM.INFO[*]');
+      IF IORESULT <> 0 THEN
+        Error(404)
+    END;
+
+    (** Compiles UNIT name; with INTRINSIC CODE n and DATA n, its segments.
+        Also: UNITDECLARATION (UCSD20) *)
+    PROCEDURE UnitHeading(Followers: TokenSet; VAR SavedMark: UnitMark);
+      VAR
+        (** The unit's identifier. *)
+        UnitEntry: SymbolLink;
+        (** A constant's type. *)
+        NumberType: Structure;
+        (** The unit is already declared. *)
+        Declared: BOOLEAN;
+        (** DATA's segment. *)
+        DataNumber: WordValue;
+        (** CODE's segment. *)
+        CodeNumber: WordValue;
+        (** The lexical stack's record.
+
+            UCSD Pascal II.0 calls it LEXSTKREC (UCSD20). *)
+        SavedState: LexicalEntry;
+    BEGIN
+      IF InUnit THEN
+        Error(182);
+      IF SegmentHasCode THEN
+      BEGIN
+        Error(399);
+        SegmentOffset := 0;
+        BlockByte := 0
+      END;
+      SavedState.SavedTop := DisplayTop;
+      SavedState.SavedLevel := Level;
+      SavedState.SavedRoutine := CurrentRoutine;
+      SavedState.SavedNextRoutine := NextRoutine;
+      SavedState.SavedSegment := CurrentSegment;
+      SavedState.SavedDataCounter := DataCounter;
+      SavedState.OuterLevel := LexicalStack;
+      CurrentRoutine := 1;
+      NextRoutine := 2;
+      DataCounter := 1;
+      PublicRoutines := FALSE;
+      InUnit := TRUE;
+      InInterface := FALSE;
+      NextToken;
+      IF Token <> NameToken THEN
+      BEGIN
+        Error(2);
+        SkipTokens(Followers + [SemicolonToken])
+      END
+      ELSE
+      BEGIN
+        Declared := FALSE;
+        UnitEntry.Entry := CompiledUnits.Entry;
+        WHILE (UnitEntry.Entry <> NIL) AND NOT Declared DO
+          IF UnitEntry.Entry^.Name <> TokenName THEN
+            UnitEntry.Entry := UnitEntry.Entry^.Next.Entry
+          ELSE
+          BEGIN
+            Declared := TRUE;
+            Error(101)
+          END;
+        IF NOT Declared THEN
+        BEGIN
+          NEW(UnitEntry.Entry, UnitIdentifierSize);
+          WITH UnitEntry.Entry^ DO
+          BEGIN
+            Name := TokenName;
+            DataType := NIL;
+            Next.Entry := CompiledUnits.Entry;
+            Class := ModuleClass;
+            Offset := 1;
+            CodeSegment := 0;
+            RoutineNumber := 1
+          END;
+          CompiledUnits.Entry := UnitEntry.Entry
+        END;
+        NextToken;
+        IF Token = SemicolonToken THEN
+          NextToken
+        ELSE
+          Error(14);
+        IF Token = NameToken THEN
+          IF TokenName = 'INTRINSI' THEN
+          BEGIN
+            InIntrinsicUnit := TRUE;
+            HasCodeSegment := FALSE;
+            HasDataSegment := FALSE;
+            DataSegment := 1;
+            NextToken;
+            IF Token = NameToken THEN
+            BEGIN
+              IF TokenName = 'CODE    ' THEN
+              BEGIN
+                NextToken;
+                ReadConstant(Followers + [NameToken, SemicolonToken],
+                    NumberType, CodeNumber);
+                IF NumberType = IntegerStructure THEN
+                BEGIN
+                  CurrentSegment := CodeNumber.Ordinal;
+                  IF NOT (CurrentSegment IN [0..63]) THEN
+                  BEGIN
+                    Error(203);
+                    CurrentSegment := 1
+                  END;
+                  TakeSegmentSlot(FALSE);
+                  WITH SegmentDictionary[LastSegmentSlot] DO
+                  BEGIN
+                    Kind := LinkedIntrinsicSegment;
+                    Number := CurrentSegment
+                  END;
+                  HasCodeSegment := TRUE
+                END
+                ELSE
+                  Error(15)
+              END;
+              IF (Token = NameToken) AND (TokenName = 'DATA    ') THEN
+              BEGIN
+                NextToken;
+                ReadConstant(Followers + [SemicolonToken], NumberType,
+                    DataNumber);
+                IF NumberType = IntegerStructure THEN
+                BEGIN
+                  DataSegment := DataNumber.Ordinal;
+                  IF (DataSegment < 0) OR (DataSegment > 63) OR (DataSegment =
+                      CurrentSegment) THEN
+                  BEGIN
+                    IF DataSegment = CurrentSegment THEN
+                      Error(350)
+                    ELSE
+                      Error(203);
+                    DataSegment := CurrentSegment + 1
+                  END;
+                  IncrementChecked(LastSegmentSlot, 15, 354);
+                  SlotOfSegment[DataSegment] := LastSegmentSlot;
+                  WITH SegmentDictionary[LastSegmentSlot] DO
+                  BEGIN
+                    NameOfSegment := UnitEntry.Entry^.Name;
+                    Kind := UnitDataSegment;
+                    Number := DataSegment
+                  END;
+                  HasDataSegment := TRUE;
+                  UnitEntry.Entry^.CodeSegment := 1
+                END
+                ELSE
+                  Error(15)
+              END
+            END;
+            IF NOT HasCodeSegment THEN
+            BEGIN
+              Error(352);
+              UnitEntry.Entry^.Offset := 0
+            END;
+            IF Token = SemicolonToken THEN
+              NextToken
+            ELSE
+              Error(14)
+          END
+          ELSE
+            Error(22)
+        ELSE
+        BEGIN
+          CurrentSegment := NextSegment;
+          TakeSegmentSlot(TRUE);
+          WITH SegmentDictionary[LastSegmentSlot] DO
+          BEGIN
+            Number := CurrentSegment;
+            Kind := UnitSegment
+          END
+        END;
+        WITH UnitEntry.Entry^ DO
+          IF ODD(Offset) THEN
+          BEGIN
+            WITH SegmentDictionary[SlotOfSegment[CurrentSegment]] DO
+            BEGIN
+              NameOfSegment := Name;
+              TextBlock := CodeFileBlock
+            END;
+            StaticLevel := CurrentSegment
+          END
+      END;
+      MARK(SavedMark);
+      NEW(PendingReferences);
+      NEW(LexicalStack);
+      LexicalStack^ := SavedState;
+      Level := 1;
+      IF DisplayTop < 12 THEN
+      BEGIN
+        DisplayTop := DisplayTop + 1;
+        WITH Display[DisplayTop] DO
+        BEGIN
+          Tree.Entry := NIL;
+          Files.Entry := NIL;
+          Labels.Entry := NIL;
+          Kind := BlockScope
+        END;
+        IF UnitEntry.Entry <> NIL THEN
+          EnterIdentifier(UnitEntry.Entry)
+      END
+      ELSE
+        Error(250)
+    END;
+
+    (** Compiles the implementation as a procedure, the unit's initialization
+        its body. *)
+    PROCEDURE CompileImplementation;
+      VAR
+        (** LexicalStack before. *)
+        UnitLevel: LexicalLevel;
+    BEGIN
+      UnitLevel := LexicalStack;
+      NEW(LexicalStack);
+      WITH LexicalStack^ DO
+      BEGIN
+        NEW(RoutineEntry.Entry);
+        WITH RoutineEntry.Entry^ DO
+        BEGIN
+          Name := CompiledUnits.Entry^.Name;
+          DataType := NIL;
+          Next.Entry := NIL;
+          Class := ProperProcedureClass;
+          StaticLevel := 1;
+          Offset := 1;
+          RoutineNumber := 1;
+          CodeSegment := CurrentSegment;
+          RoutineKind := 0;
+          LocalsStart := 1;
+          IsForward := FALSE;
+          IsExternal := FALSE;
+          IsOpen := TRUE;
+          IsImported := FALSE
+        END;
+        SavedDataCounter := DataCounter;
+        OuterLevel := UnitLevel
+      END;
+      DataCounter := 1;
+      Level := 2;
+      SegmentsMadeResident.Entry := NIL;
+      IF Token = BeginToken THEN
+        NextToken;
+      BODYPART(Followers + [CaseToken] - [EndToken],
+          LexicalStack^.RoutineEntry.Entry);
+      DataCounter := LexicalStack^.SavedDataCounter;
+      LexicalStack := LexicalStack^.OuterLevel
+    END;
+
+  BEGIN
+    IF CodeBuffer = NIL THEN
+      NEW(CodeBuffer);
+    OpenReferenceFile;
+    REPEAT
+      RESET(ReferenceFile);
+      PendingCount := 1;
+      NextReferenceBlock := 0;
+      UnitHeading(Followers, SavedMark);
+      StartOfInterface := SourceCursor;
+      CodeCounter := 1024;
+      InInterface := TRUE;
+      IF Including THEN
+        Error(406);
+      IF Token = UnitInterfaceToken THEN
+        NextToken
+      ELSE
+        Error(22);
+      DECLARAT(Followers);
+      IF InIntrinsicUnit THEN
+        IF NOT HasDataSegment AND (DataCounter > 1) THEN
+          Error(350);
+      CodeCounter := SourceCursor - StartOfInterface + 10;
+      IF CodeCounter > 1024 THEN
+        CodeCounter := 1034;
+      TextEndOffset := CodeCounter - 10;
+      LastTextBlock := CodeFileBlock;
+      WHILE TextEndOffset >= 512 DO
+      BEGIN
+        TextEndOffset := TextEndOffset - 512;
+        LastTextBlock := LastTextBlock + 1
+      END;
+      MOVELEFT(SourceBuffer^[StartOfInterface], CodeBuffer^, CodeCounter);
+      FILLCHAR(CodeBuffer^[CodeCounter - 10], 10, ' ');
+      CodeBuffer^[CodeCounter - 2] := 'E';
+      IF CodeCounter > 1024 THEN
+      BEGIN
+        CodeBuffer^[SourceCursor - StartOfInterface] := CHR(13);
+        CodeBuffer^[SourceCursor - StartOfInterface + 1] := CHR(0)
+      END;
+      WriteCode(TRUE);
+      IF PublicRoutines OR NOT PublicRoutines AND (Token = BeginToken) THEN
+      BEGIN
+        InInterface := FALSE;
+        IF InIntrinsicUnit AND NOT HasCodeSegment THEN
+          Error(352);
+        IF PublicRoutines THEN
+          IF Token <> UnitImplementationToken THEN
+          BEGIN
+            Error(23);
+            SkipTokens(Followers - StartersOfStatement)
+          END
+          ELSE
+            NextToken;
+        CompileBlock(Followers - [UnitToken..UnitImplementationToken]);
+        CompileImplementation;
+        FinishSegment;
+        IF [30, 31] * LibrarySegments <> [] THEN
+        BEGIN
+          IF BLOCKREAD(WorkCodeFile^, BlockBuffer, 1, LastTextBlock) <> 1 THEN
+            Error(402);
+          IF 31 IN LibrarySegments THEN
+            BlockBuffer[TextEndOffset + 1] := 'P';
+          IF 30 IN LibrarySegments THEN
+            BlockBuffer[TextEndOffset + 3] := 'L';
+          IF BLOCKWRITE(WorkCodeFile^, BlockBuffer, 1, LastTextBlock) <> 1 THEN
+            Error(402);
+          LibrarySegments := LibrarySegments - [30, 31]
+        END;
+        IF NOT InIntrinsicUnit THEN
+          NeedsLinker := TRUE;
+        IF NeedsLinker THEN
+        BEGIN
+          IF InIntrinsicUnit THEN
+            SegmentDictionary[SlotOfSegment[CurrentSegment]].Kind :=
+                UnlinkedIntrinsicSegment;
+          IF NextReferenceBlock > 0 THEN
+            IF BLOCKWRITE(ReferenceFile, PendingReferences^, 1,
+                NextReferenceBlock) <> 1 THEN
+              Error(404);
+          WRITELIN
+        END
+      END
+      ELSE
+      BEGIN
+        IF Token = EndToken THEN
+          NextToken
+        ELSE
+        BEGIN
+          Error(13);
+          SkipTokens(Followers)
+        END;
+        IF ODD(CompiledUnits.Entry^.Offset) THEN
+          WITH SegmentDictionary[SlotOfSegment[CurrentSegment]] DO
+          BEGIN
+            CodeLength := 0;
+            FirstBlock := CodeFileBlock;
+            Kind := LinkedSegment
+          END
+      END;
+      IF InIntrinsicUnit THEN
+        IF HasDataSegment THEN
+          WITH SegmentDictionary[SlotOfSegment[DataSegment]] DO
+          BEGIN
+            FirstBlock := 0;
+            CodeLength := (DataCounter - 1) * 2;
+            IF CodeLength = 0 THEN
+              Error(355)
+          END
+        ELSE
+          IF DataCounter > 1 THEN
+            Error(350);
+      InIntrinsicUnit := FALSE;
+      InUnit := FALSE;
+      IF Token <> PeriodToken THEN
+        IF Token = SemicolonToken THEN
+          NextToken
+        ELSE
+          Error(14);
+      WITH LexicalStack^ DO
+      BEGIN
+        DisplayTop := SavedTop;
+        Level := SavedLevel;
+        CurrentRoutine := SavedRoutine;
+        NextRoutine := SavedNextRoutine;
+        CurrentSegment := SavedSegment;
+        DataCounter := SavedDataCounter
+      END;
+      LexicalStack := LexicalStack^.OuterLevel;
+      RELEASE(SavedMark)
+    UNTIL Token <> UnitToken;
+    CLOSE(ReferenceFile)
+  END;

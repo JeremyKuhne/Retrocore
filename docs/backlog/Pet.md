@@ -179,7 +179,7 @@ MAME 0.289 is already in the cache. Its `pet` driver is the trace oracle, and VI
     keeps the record tab.
   - `CommodoreTapeBuilder` makes a `.prg` file into the tape SAVE would write.
 - **MAME's PET tapes are WAV recordings**, not TAP images, so the Datasette reads both.
-- **`PetDatasette`**, one on each port, is an `ITapeDrive` and an `IMediumSlot` that saves as `tap` or `wav`. It has
+- **`CommodoreDatasette`** (`PetDatasette` until it was renamed so the VIC-20 can share it), one on each port, is an `ITapeDrive` and an `IMediumSlot` that saves as `tap` or `wav`. It has
   PLAY, RECORD, STOP, rewind and wind. The sense line is low while a key is down, and the motor runs while its line is
   low (cassette 1: PIA 1's CB2; cassette 2: the VIA's PB4), as MAME's C2N has them. The read line goes to PIA 1's CA1
   or the VIA's CB1. It falls at each pulse's start and rises halfway. Recording measures from each rise of the VIA's

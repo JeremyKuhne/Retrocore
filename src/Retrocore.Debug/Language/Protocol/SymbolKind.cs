@@ -10,6 +10,11 @@ namespace Retrocore.Debug.Language;
 internal enum SymbolKind
 {
     /// <summary>
+    ///  A Pascal program or unit.
+    /// </summary>
+    Module = 2,
+
+    /// <summary>
     ///  A section of a BASIC program.
     /// </summary>
     Namespace = 3,
@@ -18,6 +23,11 @@ internal enum SymbolKind
     ///  A macro.
     /// </summary>
     Method = 6,
+
+    /// <summary>
+    ///  A field of a Pascal record.
+    /// </summary>
+    Field = 8,
 
     /// <summary>
     ///  A label or subroutine.
@@ -32,5 +42,15 @@ internal enum SymbolKind
     /// <summary>
     ///  A constant.
     /// </summary>
-    Constant = 14
+    Constant = 14,
+
+    /// <summary>
+    ///  A value of a Pascal enumeration.
+    /// </summary>
+    EnumMember = 22,
+
+    /// <summary>
+    ///  A Pascal type.
+    /// </summary>
+    Struct = 23
 }

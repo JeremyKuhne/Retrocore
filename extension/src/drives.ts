@@ -39,6 +39,24 @@ export interface Media {
     source?: MediaSource;
     /** Whether the disk is one the recovery journal kept from the machine's last run, still changed. */
     kept?: boolean;
+    /** How the running machine's recovery journal keeps the changed disk, when it keeps one. */
+    recovery?: MediaRecovery;
+    /** What the media holds, where the drive can tell, such as Level I tape (250 baud). */
+    contents?: string;
+    /** Why the machine cannot read the media, such as a tape for the other Level's ROM. */
+    warning?: string;
+}
+
+/** How the recovery journal keeps a changed disk, as retro/devices gives it. */
+export interface MediaRecovery {
+    /** When the journal last kept the disk, or null when it holds none of it yet. */
+    lastCheckpoint: string | null;
+    /** Whether the journal does not hold the disk's changes and its checkpoints are failing or late. */
+    behind: boolean;
+    /** Whether the snapshot kept was caught while the drive was writing. */
+    midWrite?: boolean;
+    /** Why the journal could not be written, while it is behind for that. */
+    problem?: string;
 }
 
 /** A device as the debug host's retro/devices describes it. */
@@ -133,13 +151,16 @@ export function isReadOnlyImage(device: Device): boolean {
 
 /**
  * The mark at the row's end, as Git marks a file: changed, a disk with changes not saved; stale, its image changed on
- * disk; conflict, both.
+ * disk; conflict, both; unreadable, media the machine cannot read, such as a tape for the other Level's ROM.
  */
-export function mark(device: Device): "changed" | "stale" | "conflict" | undefined {
+export function mark(device: Device): "changed" | "stale" | "conflict" | "behind" | "unreadable" | undefined {
+    if (device.media?.warning !== undefined) return "unreadable";
     if (!saves(device)) return undefined;
     const changed = device.media?.changed === true;
     const stale = isStale(device);
-    return changed && stale ? "conflict" : changed ? "changed" : stale ? "stale" : undefined;
+    // A changed disk the recovery journal cannot keep warns, as its changes would not survive a crash.
+    const behind = changed && device.media?.recovery?.behind === true;
+    return changed && stale ? "conflict" : behind ? "behind" : changed ? "changed" : stale ? "stale" : undefined;
 }
 
 /** What the image's state says in a summary, if anything: read-only, changed on disk or deleted. */
@@ -159,14 +180,30 @@ export function summary(device: Device): string {
         parts.push(`track ${track}` + (device.sides > 1 ? ` side ${device.head.side}` : "")
             + (device.head.sector !== null ? ` sector ${device.head.sector}` : ""));
     }
+    if (device.media?.contents !== undefined) parts.push(device.media.warning === undefined ? device.media.contents : `${device.media.contents}, which this ROM can't read`);
     if (device.transport && device.media) parts.push(`${device.transport.position.toLocaleString()} of ${device.transport.length.toLocaleString()} bytes`);
     if (device.blocks?.last !== null && device.blocks?.last !== undefined) parts.push(`block ${device.blocks.last}`);
     if (device.media?.kept) parts.push("kept from the last run");
+    if (device.media?.changed && device.media.recovery?.behind) parts.push("recovery behind");
     const state = imageState(device);
     if (state !== undefined) parts.push(state);
     if (device.activity !== "idle") parts.push(device.activity);
     else if (device.head?.motor || device.transport?.motor) parts.push("motor on");
     return parts.join(" · ");
+}
+
+/** What the tooltip says of how the recovery journal keeps a changed disk, if it keeps one. */
+function recoveryLine(media: Media, now: Date): string | undefined {
+    const recovery = media.recovery;
+    if (!media.changed || recovery === undefined) return undefined;
+    const kept = recovery.lastCheckpoint === null ? undefined : when(recovery.lastCheckpoint, now);
+    const midWrite = recovery.midWrite ? ", caught while the drive was writing" : "";
+    if (recovery.behind) {
+        const why = recovery.problem === undefined ? "checkpoints are late" : `the journal could not be written: ${recovery.problem.replace(/\.$/, "")}`;
+        const lost = "would be lost if Retrocore stopped unexpectedly";
+        return `Recovery behind: ${why}. ${kept === undefined ? `The changes ${lost}` : `Changes up to ${kept} are kept${midWrite}; later ones ${lost}`}`;
+    }
+    return kept === undefined ? undefined : `Kept for recovery at ${kept}${midWrite}`;
 }
 
 /** A time a file was written, as a person reads it: 10:52 today, or the date and time. */
@@ -207,6 +244,8 @@ export function tooltipLines(device: Device, now: Date = new Date(), changes?: s
     if (media === null) return ["Empty"];
     const source = media.source;
     const lines = [source?.path !== undefined ? `${path.basename(media.label)} (${media.format}), ${source.path}` : `${media.label} (${media.format})`];
+    if (media.contents !== undefined) lines.push(media.contents);
+    if (media.warning !== undefined) lines.push(`⚠ ${media.warning}`);
     if (saves(device)) {
         lines.push(source?.kind === "built" ? (media.changed ? "Changed: built by the launch, and not saved anywhere" : "Built by the launch")
             : media.changed ? `Changed${media.kept ? " in the last run" : ""}: ${changes === undefined ? "" : `${changes}, `}not saved to the image`
@@ -220,6 +259,8 @@ export function tooltipLines(device: Device, now: Date = new Date(), changes?: s
         }
         if (source?.readOnly === "file") lines.push("Read-only file: Save As saves the disk under another name");
         else if (source?.readOnly === "format" || (source?.kind === "image" && !source.saves)) lines.push(`${media.format} can only be read: Save As saves the disk as another image`);
+        const recovery = recoveryLine(media, now);
+        if (recovery !== undefined) lines.push(recovery);
     }
     if (device.operations.includes("writeProtect") || form(device) !== "tape") lines.push(lockState(media));
     const where = position(device);

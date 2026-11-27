@@ -169,6 +169,44 @@ public class ProcessorSignalTests
         cpu.Status.Should().Be(ProcessorExecutionStatus.Running);
     }
 
+    /// <summary>
+    ///  The debugger tells an IRQ's or NMI's response from the instruction at PC, which it replaces: through its
+    ///  seven cycles, until the handler's first instruction.
+    /// </summary>
+    /// <param name="nmi">Whether the interrupt is NMI rather than IRQ.</param>
+    [TestMethod]
+    [DataRow(data: false)]
+    [DataRow(data: true)]
+    public void TakingInterruptMarksTheResponse(bool nmi)
+    {
+        RecordingBus bus = Memory();
+        bus.Memory[0xFFFA] = 0;
+        bus.Memory[0xFFFB] = 0x30;
+        Processor<RecordingBus> cpu = Create(bus, ProcessorVariant.Mos6502);
+        ProcessorRegisters registers = cpu.Registers;
+        registers.Status = StatusRegister.Unused;
+        cpu.Registers = registers;
+        cpu.StepCycle();
+        cpu.IsTakingInterrupt.Should().BeFalse("NOP is an instruction");
+        while (!cpu.IsInstructionBoundary) { cpu.StepCycle(); }
+
+        // Setting the registers forgets the NOP's IRQ poll, so the IRQ is taken at this boundary.
+        cpu.Registers = cpu.Registers;
+        cpu.Signals = nmi ? ProcessorSignals.NonMaskableInterrupt : ProcessorSignals.InterruptRequest;
+        int cycles = 0;
+        do
+        {
+            cpu.StepCycle();
+            cycles++;
+            if (!cpu.IsInstructionBoundary) { cpu.IsTakingInterrupt.Should().BeTrue(); }
+        }
+        while (!cpu.IsInstructionBoundary);
+
+        cpu.IsTakingInterrupt.Should().BeFalse();
+        cycles.Should().Be(7);
+        cpu.Registers.ProgramCounter.Should().Be(0x3000);
+    }
+
     private static RecordingBus Memory()
     {
         RecordingBus bus = new();

@@ -81,9 +81,26 @@ internal interface IDebugTarget : IDebugMemory
     ushort ProgramCounter { get; set; }
 
     /// <summary>
+    ///  Gets the stack pointer, as <see cref="Frame"/> has it, without reading the other registers.
+    /// </summary>
+    int StackPointer => Frame.StackPointer;
+
+    /// <summary>
     ///  Gets whether the CPU is between instructions.
     /// </summary>
     bool IsInstructionBoundary { get; }
+
+    /// <summary>
+    ///  Gets whether the CPU has left an instruction boundary for an interrupt's response rather than the
+    ///  instruction there, which runs once the handler returns. Read on the first cycle after the boundary.
+    /// </summary>
+    bool IsTakingInterrupt => false;
+
+    /// <summary>
+    ///  Gets the bits of <see cref="DebugFrame.StackPointer"/> the stack wraps within: $FFFF for a 16-bit stack
+    ///  pointer.
+    /// </summary>
+    int StackMask => 0xFFFF;
 
     /// <summary>
     ///  Gets whether an instruction has started and not finished, as opposed to an interrupt's response.
@@ -92,7 +109,8 @@ internal interface IDebugTarget : IDebugMemory
 
     /// <summary>
     ///  Gets whether the CPU idles between instructions for as long as something outside it decides, such as a 6809
-    ///  held by HALT or waiting in <c>SYNC</c>; it is then not at an instruction boundary until it goes on.
+    ///  held by HALT or waiting in <c>SYNC</c>; it is then not at an instruction boundary until it goes on. A halted
+    ///  Z80 is at one, the instruction after its <c>HALT</c>, between the refresh fetches it runs as it waits.
     /// </summary>
     bool IsIdle => false;
 
@@ -230,6 +248,23 @@ internal interface IDebugTarget : IDebugMemory
     bool BasicRomInMemory => false;
 
     /// <summary>
+    ///  Gets whether BASIC is in direct mode, running no line of the program, as its dialect reads it, or with no BASIC.
+    /// </summary>
+    /// <remarks>
+    ///  <para>
+    ///   A target whose BASIC runs a line that its dialect cannot see in memory alone says so here, as Level I's
+    ///   READ, which keeps its line on the stack while it stores a DATA item.
+    ///  </para>
+    /// </remarks>
+    bool BasicInDirectMode => Basic is not { } dialect || dialect.InDirectMode(new TargetBasicMemory(this));
+
+    /// <summary>
+    ///  Gets what to do when BASIC is not in direct mode and the debugger cannot bring it there, for a target where
+    ///  that can mean more than a program running; null for the session's own message.
+    /// </summary>
+    string? BasicAwayMessage => null;
+
+    /// <summary>
     ///  Gets the number of the BASIC line running, or last run.
     /// </summary>
     int BasicCurrentLine => Basic is { } dialect
@@ -340,8 +375,8 @@ internal interface IDebugTarget : IDebugMemory
     /// <remarks>
     ///  <para>
     ///   The calls and statements <see cref="StepCycle"/> tracks are not followed, and the call stack is cleared
-    ///   after, so a debug session never runs this way: it is a third or more faster than stepping, at the cost
-    ///   of what only a debugger shows.
+    ///   after, so a debug session runs this way only before it starts, as a project launch boots the Apple II's
+    ///   ROM: it is a third or more faster than stepping, at the cost of what only a debugger shows.
     ///  </para>
     /// </remarks>
     /// <param name="cycles">The cycles to run.</param>
@@ -531,7 +566,7 @@ internal interface IDebugTarget : IDebugMemory
     /// </summary>
     /// <param name="code">
     ///  The ASCII code, 0-127, or above it a machine's own code for a key that types no character, as the BBC Micro's
-    ///  cursor, COPY and function keys.
+    ///  cursor, COPY and function keys, or the Atari's console keys.
     /// </param>
     /// <returns>Whether the keyboard has a key for it; a character it has none for is left out.</returns>
     bool Key(int code);

@@ -80,7 +80,7 @@ BAD_GROUPS = $8A
 ; SmartPort's error for a bus that failed.
 
 ;; The bus did not work: the device did not answer.
-;; Also: BUSERR (UNKN)
+;; Also: BUSERR (IIGSFR87)
 ERROR_BUS = $06
 
 ;; The most host data a command other than WRITEBLOCK may send, in pages.

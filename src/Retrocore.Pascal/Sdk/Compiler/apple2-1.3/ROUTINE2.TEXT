@@ -1,0 +1,245 @@
+(** ROUTINE2.TEXT: part 2 of 2 of ROUTINE, segment 10: the special standard
+    procedures.
+
+    Included by COMPILER.TEXT after ROUTINE1.TEXT and before STATEMEN1.TEXT.
+
+    Procedures here, nested ones indented:
+            OtherCall *)
+
+      (** The other special procedures and functions: EOF, EOLN, PRED, SUCC,
+          ORD, SQR, ABS, LENGTH, INSERT, POS, TIME, RESET, REWRITE, TRUNC,
+          UNITSTATUS and the rest (II.0: ROUTINE's CASE). *)
+      PROCEDURE OtherCall;
+      BEGIN
+        CASE Key OF
+          FileEndKey, LineEndKey:
+          BEGIN
+            IF HasParentheses THEN
+            BEGIN
+              CompileVariable(LastFollowers);
+              PushAddress;
+              IF Operand.DataType <> NIL THEN
+                IF Operand.DataType^.Form <> FileForm THEN
+                  Error(125)
+                ELSE
+                  IF (Operand.DataType^.BaseType <> CharStructure) AND (Key =
+                      LineEndKey) THEN
+                    Error(399)
+            END
+            ELSE
+              PushVariableAddress(InputIdentifier.Entry);
+            EmitConstant(0);
+            EmitConstant(0);
+            IF Key = FileEndKey THEN
+              EmitTwoOperands(CallExternalCode, 0, 10)
+            ELSE
+              EmitTwoOperands(CallExternalCode, 0, 11);
+            Operand.DataType := BooleanStructure
+          END;
+          PredecessorKey, SuccessorKey:
+          BEGIN
+            EmitConstant(1);
+            IF Operand.DataType <> NIL THEN
+              IF Operand.DataType^.Form = ScalarForm THEN
+                IF Key = SuccessorKey THEN
+                  EmitOpcode(AddIntegersCode)
+                ELSE
+                  EmitOpcode(SubtractIntegersCode)
+              ELSE
+                Error(115)
+          END;
+          OrdinalKey:
+          BEGIN
+            IF Operand.DataType <> NIL THEN
+              IF (Operand.DataType^.Form >= SetForm) OR (Operand.DataType^.Size
+                  <> 1) THEN
+                Error(125);
+            Operand.DataType := IntegerStructure
+          END;
+          SquareKey:
+            IF Operand.DataType <> NIL THEN
+              IF Operand.DataType = IntegerStructure THEN
+                EmitOpcode(SquareIntegerCode)
+              ELSE
+                IF Operand.DataType = RealStructure THEN
+                  EmitOpcode(SquareRealCode)
+                ELSE
+                BEGIN
+                  Error(125);
+                  Operand.DataType := IntegerStructure
+                END;
+          AbsoluteKey:
+            IF Operand.DataType <> NIL THEN
+              IF Operand.DataType = IntegerStructure THEN
+                EmitOpcode(IntegerAbsoluteCode)
+              ELSE
+                IF Operand.DataType = RealStructure THEN
+                  EmitOpcode(RealAbsoluteCode)
+                ELSE
+                BEGIN
+                  Error(125);
+                  Operand.DataType := IntegerStructure
+                END;
+          LengthKey:
+          BEGIN
+            StringArgument(LastFollowers, FALSE);
+            EmitConstant(0);
+            EmitOpcode(LoadByteCode);
+            Operand.DataType := IntegerStructure
+          END;
+          InsertKey:
+          BEGIN
+            StringArgument(NextFollowers, FALSE);
+            SkipComma;
+            StringArgument(NextFollowers, TRUE);
+            EmitConstant(Operand.DataType^.Capacity);
+            SkipComma;
+            CompileExpression(LastFollowers);
+            PushOperand;
+            IF Operand.DataType <> NIL THEN
+              CheckInteger;
+            EmitTwoOperands(CallExternalCode, 0, 24)
+          END;
+          StringPositionKey:
+          BEGIN
+            StringArgument(NextFollowers, FALSE);
+            SkipComma;
+            StringArgument(LastFollowers, FALSE);
+            EmitConstant(0);
+            EmitConstant(0);
+            EmitTwoOperands(CallExternalCode, 0, 27);
+            Operand.DataType := IntegerStructure
+          END;
+          NameSearchKey:
+          BEGIN
+            CompileVariable(NextFollowers);
+            PushAddress;
+            SkipComma;
+            CompileVariable(LastFollowers);
+            PushAddress;
+            Error(124)
+          END;
+          TreeLookupKey:
+          BEGIN
+            SkipComma;
+            CompileVariable(NextFollowers);
+            PushAddress;
+            SkipComma;
+            CompileVariable(LastFollowers);
+            PushAddress;
+            Operand.DataType := NIL;
+            Error(124)
+          END;
+          TimeKey:
+          BEGIN
+            CompileVariable(NextFollowers);
+            PushAddress;
+            IF Operand.DataType <> NIL THEN
+              CheckInteger;
+            SkipComma;
+            CompileVariable(LastFollowers);
+            PushAddress;
+            IF Operand.DataType <> NIL THEN
+              CheckInteger;
+            EmitOneOperand(CallStandardCode, 9)
+          END;
+          OpenNewKey, OpenOldKey, RewriteKey, ResetKey:
+          BEGIN
+            CompileVariable(ArgumentFollowers);
+            PushAddress;
+            IF Operand.DataType <> NIL THEN
+              IF Operand.DataType^.Form <> FileForm THEN
+                Error(125);
+            IF Token <> CommaToken THEN
+              IF Key = ResetKey THEN
+                EmitTwoOperands(CallExternalCode, 0, 4)
+              ELSE
+                Error(20)
+            ELSE
+            BEGIN
+              NextToken;
+              StringArgument(LastFollowers, FALSE);
+              IF (Key = OpenNewKey) OR (Key = RewriteKey) THEN
+                EmitConstant(0)
+              ELSE
+                EmitConstant(1);
+              EmitConstant(0);
+              EmitTwoOperands(CallExternalCode, 0, 5)
+            END;
+            IF CheckInputOutput THEN
+              EmitOneOperand(CallStandardCode, 0)
+          END;
+          TruncateKey:
+          BEGIN
+            IF Operand.DataType = IntegerStructure THEN
+            BEGIN
+              EmitOpcode(FloatTopCode);
+              Operand.DataType := RealStructure
+            END;
+            IF Operand.DataType <> NIL THEN
+              IF Operand.DataType = RealStructure THEN
+                EmitOneOperand(CallStandardCode, 23)
+              ELSE
+                IF Operand.DataType^.Form = LongIntegerForm THEN
+                BEGIN
+                  EmitConstant(20);
+                  EmitExternalCall(30, 4)
+                END
+                ELSE
+                  Error(125);
+            Operand.DataType := IntegerStructure
+          END;
+          StatusOfUnitKey:
+          BEGIN
+            CompileExpression(NextFollowers);
+            PushOperand;
+            IF Operand.DataType <> NIL THEN
+              CheckInteger;
+            SkipComma;
+            CompileVariable(NextFollowers);
+            PushByteAddress;
+            SkipComma;
+            CompileExpression(ArgumentFollowers);
+            PushOperand;
+            EmitOneOperand(CallStandardCode, 12)
+          END
+        END
+      END;
+
+    BEGIN
+      LastFollowers := Followers + [RightParenthesisToken];
+      NextFollowers := Followers + [CommaToken];
+      ArgumentFollowers := LastFollowers + NextFollowers;
+      IF NOT (Key IN [NewKey..ConcatenateKey, DeleteKey, CopyKey,
+          LeftMoveKey..ExitKey, FillBytesKey, CloseKey, SeekKey,
+          GetKey..WriteBlocksKey,
+          PageKey..GotoXYKey]) THEN
+        OtherCall
+      ELSE
+        CASE Key OF
+          NewKey:
+            NewCall;
+          ReadUnitKey, WriteUnitKey:
+            UnitTransferCall;
+          ConcatenateKey:
+            ConcatCall;
+          DeleteKey, CopyKey, GotoXYKey:
+            StringRoutineCall;
+          LeftMoveKey, RightMoveKey, FillBytesKey:
+            MoveCall;
+          ExitKey:
+            ExitCall;
+          CloseKey:
+            CloseCall;
+          SeekKey, GetKey, PutKey, PageKey:
+            FileRoutineCall;
+          ScanKey:
+            ScanCall;
+          ReadBlocksKey, WriteBlocksKey:
+            BlockTransferCall;
+          SizeOfKey:
+            SizeOfCall;
+          StrKey:
+            StrCall
+        END
+    END;

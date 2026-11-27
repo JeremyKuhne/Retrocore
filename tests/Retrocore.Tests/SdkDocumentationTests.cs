@@ -130,6 +130,7 @@ public class SdkDocumentationTests
             }
 
             File.Copy(Path.Join(s_inputs, "Slot7.rom.asm"), Path.Join(repository, "Slot7.rom.asm"));
+            File.Copy(Path.Join(s_inputs, "ProDosBlockDevice.asm"), Path.Join(repository, "ProDosBlockDevice.asm"));
             foreach (string root in SdkRoots(repository))
             {
                 problems.UnionWith(Problems(SourceAnalysis.Assemble(root, _ => null), sdk, "repository"));
@@ -199,9 +200,12 @@ public class SdkDocumentationTests
     // Each sample folder's machine project, whose sources its links reach.
     private static readonly Dictionary<string, string> s_sampleMachines = new()
     {
+        ["adventure"] = "Retrocore.Machines.Apple2",
+        ["atari"] = "Retrocore.Machines.Atari",
         ["bbc"] = "Retrocore.Machines.Acorn",
         ["coco"] = "Retrocore.Machines.Coco",
         ["iie"] = "Retrocore.Machines.Apple2",
+        ["project"] = "Retrocore.Machines.Apple2",
         ["softcard"] = "Retrocore.Machines.Apple2",
         ["trs80"] = "Retrocore.Machines.Trs80"
     };
@@ -391,9 +395,13 @@ public class SdkDocumentationTests
     private static readonly string[] s_sdkFolders =
         ["AppleSoft", "DiskII", "Dos", "IntegerBasic", "Microsoft6502Basic", "ProgrammersAid", "System"];
 
-    // The SDK's modules as the editor indexes them: the roots among the IIe's ROM sources. AppleSoft.asm is the
-    // default module; the overlay is a mutually exclusive MACRO-10 source.
-    private static IEnumerable<string> SdkRoots(string roms) =>
+    /// <summary>
+    ///  The SDK's modules as the editor indexes them: the roots among the IIe's ROM sources. AppleSoft.asm is the
+    ///  default module; the overlay is a mutually exclusive MACRO-10 source.
+    /// </summary>
+    /// <param name="roms">The folder holding the IIe's ROM sources.</param>
+    /// <returns>Each module's root.</returns>
+    internal static IEnumerable<string> SdkRoots(string roms) =>
         s_sdkFolders
             .SelectMany(folder => SourceIncludes.Roots(Path.Join(roms, folder)))
             .Where(root => !Path.GetFileName(root).Equals("applesoft.mac", StringComparison.OrdinalIgnoreCase))
@@ -572,15 +580,23 @@ public class SdkDocumentationTests
             sets.Add(Set(result, module, modelName));
         }
 
-        // Slot 7's ROM, without the source generator's .rom declaration; its exports are the C# card's API.
+        // Slot 7's ROM, without the source generator's .rom declaration; its exports are the C# card's API. It includes
+        // the ProDOS block-device names, beside it.
         string slot7 = Path.GetFullPath(Path.Join(s_inputs, "Slot7.rom.asm"));
+        string proDos = Path.GetFullPath(Path.Join(s_inputs, "ProDosBlockDevice.asm"));
         string slot7Text = string.Join("\n", File.ReadAllLines(slot7).Where(line => !line.StartsWith(".rom", StringComparison.Ordinal)));
         AssemblyResult card = new Retrocore.Assembler.Assembler().Assemble(
             new AssemblySource(slot7Text, slot7),
-            new AssemblyOptions(ProcessorVariant.Mos6502, 0xC700, 0x100));
+            new AssemblyOptions(ProcessorVariant.Mos6502, 0xC700, 0x100)
+            {
+                SourceResolver = new FileAssemblySourceResolver()
+            });
 
         card.Success.Should().BeTrue();
-        sets.Add(DocumentationSet.Create([DocumentationParser.Parse(slot7Text, slot7)], card, "Slot7"));
+        sets.Add(DocumentationSet.Create(
+            [DocumentationParser.Parse(slot7Text, slot7), DocumentationParser.Parse(File.ReadAllText(proDos), proDos)],
+            card,
+            "Slot7"));
 
         string appleSoft = SdkModules.AppleSoftPath(s_inputs);
         AssemblyResult basic = SdkModules.AssembleAppleSoft(appleSoft, Apple2Model.IIeEnhanced);

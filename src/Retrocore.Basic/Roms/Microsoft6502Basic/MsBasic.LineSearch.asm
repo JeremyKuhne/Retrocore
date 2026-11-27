@@ -11,13 +11,13 @@
 ;; Entry:
 ;;   FromAddress = searches from the line at A (low) and X (high)
 ;;   Done = returns; <Statements::New> and List's range parsing branch here for a syntax error return
-;; Also: FNDLIN (M6502, ASTIL, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: FNDLIN (M6502, ASTIL, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 .proc FindLine
     lda ProgramStart
     ldx ProgramStart+1
 
 ;; Searches from the line at A (low) and X (high).
-;; Also: FNDLNC (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: FNDLNC (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 FromAddress:
     ldy #$01
     sta SourceStart
@@ -34,7 +34,7 @@ FromAddress:
     bne NextLine
 
 ;; High bytes equal: compares the low bytes.
-;; Also: FNDLO1 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: FNDLO1 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 CompareLow:
     lda LineNumber
     dey
@@ -43,7 +43,7 @@ CompareLow:
     beq Done
 
 ;; Loads the link into A/X and loops.
-;; Also: AFFRTS (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: AFFRTS (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 NextLine:
     dey
     lda (SourceStart),y
@@ -53,12 +53,12 @@ NextLine:
     bcs FromAddress
 
 ;; Zero link (end of program): clears carry.
-;; Also: FLINRT (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: FLINRT (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 NotFound:
     clc
 
 ;; Returns; <Statements::New> and List's range parsing branch here for a syntax error return.
-;; Also: FLNRTS (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: FLNRTS (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 Done:
     rts
 .endproc

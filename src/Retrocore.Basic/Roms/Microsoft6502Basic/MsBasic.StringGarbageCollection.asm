@@ -42,14 +42,14 @@
     ;;   leaves it (the temporaries' scan reads it before the pass sets it), decimal = clear
     ;; Out: StringsBottom = lower boundary after collection
     ;; See: <Strings::CollectGarbage::ConsiderDescriptor>, <Strings::CollectGarbage::MoveBest>, <MoveRangeUp::Unchecked>
-    ;; Also: GARBA2 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;; Also: GARBA2 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     .proc CollectGarbage
     ldx MemoryTop
     lda MemoryTop+1
 
 ;; Sets <StringsBottom> to the top of the collected strings, clears the best candidate and starts at the
 ;; temporaries.
-;; Also: FNDVAR (M6502, HV1, HV1R, HV2)
+;; Also: FNDVAR (M6502, HV1, HV1R, HV2, BV20)
 NextPass:
     stx StringsBottom
     sta StringsBottom+1
@@ -68,7 +68,7 @@ NextPass:
     stx Pointer1+1
 
 ;; Considers each temporary descriptor up to <NextTemporary>.
-;; Also: TVAR (M6502, HV1, HV1R, HV2)
+;; Also: TVAR (M6502, HV1, HV1R, HV2, BV20)
 ScanTemporaries:
     cmp NextTemporary
     beq StartScalars
@@ -76,7 +76,7 @@ ScanTemporaries:
     beq ScanTemporaries
 
 ;; Sets the step to a scalar entry's size and starts at <VariablesStart>.
-;; Also: SVARS (M6502, HV1, HV1R, HV2)
+;; Also: SVARS (M6502, HV1, HV1R, HV2, BV20)
 StartScalars:
     lda #.sizeof(Variable)
     sta CollectorStep
@@ -86,7 +86,7 @@ StartScalars:
     stx Pointer1+1
 
 ;; Stops at <ArraysStart>.
-;; Also: SVAR (M6502, HV1, HV1R, HV2)
+;; Also: SVAR (M6502, HV1, HV1R, HV2, BV20)
 ScanScalars:
     cpx ArraysStart+1
     bne CheckScalar
@@ -94,13 +94,13 @@ ScanScalars:
     beq StartArrays
 
 ;; Considers one scalar if it is a string variable.
-;; Also: SVARGO (M6502, HV1, HV1R, HV2)
+;; Also: SVARGO (M6502, HV1, HV1R, HV2, BV20)
 CheckScalar:
     jsr ConsiderScalar
     beq ScanScalars
 
 ;; Sets <ArrayPointer> to the arrays and the step to a descriptor's size.
-;; Also: ARYVAR (M6502, HV1, HV1R, HV2)
+;; Also: ARYVAR (M6502, HV1, HV1R, HV2, BV20)
 StartArrays:
     sta ArrayPointer
     stx ArrayPointer+1
@@ -161,7 +161,7 @@ ElementsReady:
     ldx Pointer1+1
 
 ;; Stops at the array's end (<ArrayPointer>).
-;; Also: ARYSTR (M6502, HV1, HV1R, HV2)
+;; Also: ARYSTR (M6502, HV1, HV1R, HV2, BV20)
 ScanElements:
     cpx ArrayPointer+1
     bne CheckElement
@@ -174,7 +174,7 @@ CheckElement:
     beq ScanElements
 
 ;; Considers a scalar string descriptor during garbage collection, skipping other scalar types.
-;; Also: DVARS (M6502, HV1, HV1R, HV2)
+;; Also: DVARS (M6502, HV1, HV1R, HV2, BV20)
 ConsiderScalar:
     lda (Pointer1),y
     bmi Advance
@@ -187,7 +187,7 @@ ConsiderScalar:
 ;;
 ;; <CollectorStep> is the descriptor stride, either three bytes for a temporary or array element or seven for
 ;; a scalar variable. Empty strings need no storage moved.
-;; Also: DVAR (M6502, HV1, HV1R, HV2)
+;; Also: DVAR (M6502, HV1, HV1R, HV2, BV20)
 ConsiderDescriptor:
     lda (Pointer1),y
     beq Advance
@@ -203,7 +203,7 @@ ConsiderDescriptor:
     bcs Advance
 
 ;; Compares the string's address with <CollectorTop> (the best so far).
-;; Also: DVAR2 (M6502, HV1, HV1R, HV2)
+;; Also: DVAR2 (M6502, HV1, HV1R, HV2, BV20)
 CheckBest:
     cmp CollectorTop+1
     bcc Advance
@@ -213,7 +213,7 @@ CheckBest:
 
 ;; Records the string's address in <CollectorTop>, the descriptor in <CollectorPointer> and the step in
 ;; <CollectorOffset>.
-;; Also: DVAR3 (M6502, HV1, HV1R, HV2)
+;; Also: DVAR3 (M6502, HV1, HV1R, HV2, BV20)
 NewBest:
     stx CollectorTop
     sta CollectorTop+1
@@ -234,14 +234,14 @@ Advance:
     inc Pointer1+1
 
 ;; Returns with X = <Pointer1>'s high byte and Y = 0 (also the collector's exit when nothing is left to move).
-;; Also: GRBRTS (M6502, HV1, HV1R, HV2)
+;; Also: GRBRTS (M6502, HV1, HV1R, HV2, BV20)
 Return:
     ldx Pointer1+1
     ldy #$00
     rts
 
 ;; Moves the string chosen by the completed scan and rewrites its descriptor.
-;; Also: GRBPAS (M6502, HV1, HV1R, HV2)
+;; Also: GRBPAS (M6502, HV1, HV1R, HV2, BV20)
 MoveBest:
     .if fullDescriptorPointer
         lda CollectorPointer+1

@@ -1,0 +1,499 @@
+(** STATEMEN2.TEXT: STATEMEN's statements and body.
+
+    Included by COMPILER.TEXT after FORSTATE.TEXT and before BODYPART2.TEXT.
+
+    Procedures here, nested ones indented:
+            Assignment
+            GotoStatement
+            CompoundStatement
+            IfStatement
+            RepeatStatement
+            WhileStatement
+            WithStatement *)
+
+      (** Compiles an assignment. *)
+      PROCEDURE Assignment(Assigned: Identifier);
+        VAR
+          (** UCSD Pascal II.0 calls it LATTR (UCSD20). *)
+          TargetOperand: OperandEntry;
+          (** The target is a packed array of characters. *)
+          TargetIsPackedChars: BOOLEAN;
+          (** The value is a character or string constant. *)
+          ValueIsString: BOOLEAN;
+          (** The target's length. *)
+          TargetLength: INTEGER;
+          (** Its index's lowest value. *)
+          TargetLowIndex: INTEGER;
+      BEGIN
+        ApplySelectors(Followers + [BecomesToken], Assigned);
+        IF Token = BecomesToken THEN
+        BEGIN
+          TargetLength := 0;
+          ValueIsString := FALSE;
+          IF Operand.DataType <> NIL THEN
+            IF (Operand.Literal.Ordinal = IndirectAccess) OR
+                (Operand.DataType^.Form > SetForm) THEN
+              PushAddress;
+          TargetIsPackedChars := IsPackedChars(Operand.DataType);
+          TargetOperand := Operand;
+          NextToken;
+          CompileExpression(Followers);
+          IF Operand.Kind = KnownValueOperand THEN
+            ValueIsString := (Operand.DataType = CharStructure) OR
+                IsString(Operand.DataType);
+          IF Operand.DataType <> NIL THEN
+            IF Operand.DataType^.Form <= SetForm THEN
+              PushOperand
+            ELSE
+              PushAddress;
+          IF (TargetOperand.DataType <> NIL) AND (Operand.DataType <> NIL) THEN
+          BEGIN
+            IF Operand.DataType = IntegerStructure THEN
+              IF CompatibleTypes(RealStructure, TargetOperand.DataType) THEN
+              BEGIN
+                EmitOpcode(FloatTopCode);
+                Operand.DataType := RealStructure
+              END;
+            IF CompatibleTypes(LongStructure, TargetOperand.DataType) THEN
+            BEGIN
+              IF Operand.DataType = IntegerStructure THEN
+              BEGIN
+                EmitConstant(18);
+                EmitExternalCall(30, 4);
+                Operand.DataType := LongStructure
+              END;
+              IF Operand.DataType^.Form <> LongIntegerForm THEN
+              BEGIN
+                Error(129);
+                Operand.DataType := LongStructure
+              END
+            END;
+            IF TargetIsPackedChars THEN
+              IF TargetOperand.DataType^.ArrayIsString THEN
+                IF ValueIsString AND (Operand.DataType = CharStructure) THEN
+                  Operand.DataType := StringStructure
+                ELSE
+                BEGIN
+                END
+              ELSE
+              BEGIN
+                IF TargetOperand.DataType = ByteStreamStructure THEN
+                  IF CompatibleTypes(TargetOperand.DataType, Operand.DataType)
+                      THEN
+                    IF Operand.DataType = ByteStreamStructure THEN
+                      Error(129)
+                    ELSE
+                      TargetOperand.DataType := Operand.DataType
+                  ELSE
+                    IF ValueIsString AND (Operand.DataType <> CharStructure)
+                        THEN
+                    BEGIN
+                      PackStringConstant(LastStringOffset);
+                      EmitOneOperand(MoveWordsCode, (Operand.DataType^.Capacity
+                          + 1) DIV 2);
+                      EXIT(Assignment)
+                    END;
+                IF TargetOperand.DataType^.BaseType <> NIL THEN
+                BEGIN
+                  GetBounds(TargetOperand.DataType^.BaseType, TargetLowIndex,
+                      TargetLength);
+                  TargetLength := TargetLength - TargetLowIndex + 1;
+                  IF ValueIsString AND (Operand.DataType <> CharStructure) THEN
+                  BEGIN
+                    PackStringConstant(LastStringOffset);
+                    IF TargetLength <> Operand.DataType^.Capacity THEN
+                      Error(129);
+                    Operand.DataType := TargetOperand.DataType
+                  END
+                END
+                ELSE
+                  Operand.DataType := TargetOperand.DataType
+              END;
+            IF CompatibleTypes(TargetOperand.DataType, Operand.DataType) THEN
+              CASE TargetOperand.DataType^.Form OF
+                SubrangeForm:
+                BEGIN
+                  IF CheckRanges THEN
+                  BEGIN
+                    EmitConstant(ORD(TargetOperand.DataType^.ArrayIsPacked));
+                    EmitConstant(TargetOperand.DataType^.MaximumValue);
+                    EmitOpcode(RangeCheckCode)
+                  END;
+                  StoreOperand(TargetOperand)
+                END;
+                SetForm:
+                BEGIN
+                  EmitOneOperand(AdjustSetCode, TargetOperand.DataType^.Size);
+                  StoreOperand(TargetOperand)
+                END;
+                ScalarForm, PointerForm:
+                  StoreOperand(TargetOperand);
+                LongIntegerForm:
+                BEGIN
+                  EmitConstant(TargetOperand.DataType^.Size);
+                  EmitConstant(0);
+                  EmitExternalCall(30, 4);
+                  StoreOperand(TargetOperand)
+                END;
+                ArrayForm:
+                  IF TargetIsPackedChars THEN
+                    IF TargetOperand.DataType^.ArrayIsString THEN
+                      EmitOneOperand(AssignStringCode,
+                          TargetOperand.DataType^.Capacity)
+                    ELSE
+                      EmitOneOperand(MoveWordsCode, (TargetLength + 1) DIV 2)
+                  ELSE
+                  BEGIN
+                    IF TargetOperand.DataType = WordStreamStructure THEN
+                      IF Operand.DataType = WordStreamStructure THEN
+                        Error(129)
+                      ELSE
+                        TargetOperand.DataType := Operand.DataType;
+                    EmitOneOperand(MoveWordsCode, TargetOperand.DataType^.Size)
+                  END;
+                RecordForm:
+                  EmitOneOperand(MoveWordsCode, TargetOperand.DataType^.Size);
+                FileForm:
+                  Error(146)
+              END
+            ELSE
+              Error(129)
+          END
+        END
+        ELSE
+          Error(51)
+      END;
+
+      (** Compiles GOTO. *)
+      PROCEDURE GotoStatement;
+        VAR
+          (** UCSD Pascal II.0 calls it LLP (UCSD20). *)
+          ThisLabel: LabelLink;
+          (** The label is declared. *)
+          LabelFound: BOOLEAN;
+          (** The scope. *)
+          LabelScope: INTEGER;
+      BEGIN
+        IF NOT GotoAllowed THEN
+          Error(6);
+        IF Token = IntegerToken THEN
+        BEGIN
+          LabelFound := FALSE;
+          LabelScope := DisplayTop;
+          WHILE Display[LabelScope].Kind <> BlockScope DO
+            LabelScope := LabelScope - 1;
+          ThisLabel.Entry := Display[LabelScope].Labels.Entry;
+          WHILE (ThisLabel.Entry <> NIL) AND NOT LabelFound DO
+            WITH ThisLabel.Entry^ DO
+              IF Number.Entry = TokenValue.Entry THEN
+              BEGIN
+                LabelFound := TRUE;
+                EmitJump(JumpCode, Target)
+              END
+              ELSE
+                ThisLabel.Entry := Next.Entry;
+          IF NOT LabelFound THEN
+            Error(167);
+          NextToken
+        END
+        ELSE
+          Error(15)
+      END;
+
+      (** Compiles BEGIN ... END. *)
+      PROCEDURE CompoundStatement;
+      BEGIN
+        REPEAT
+          REPEAT
+            STATEMEN(Followers + [SemicolonToken, EndToken])
+          UNTIL NOT (Token IN StartersOfStatement);
+          LoopDone := Token <> SemicolonToken;
+          IF NOT LoopDone THEN
+            NextToken
+        UNTIL LoopDone;
+        IF Token = EndToken THEN
+          NextToken
+        ELSE
+          Error(13)
+      END;
+
+      (** Compiles IF. *)
+      PROCEDURE IfStatement;
+        VAR
+          (** Also: LCIX1 (UCSD20) *)
+          EndJump: Jump;
+          (** Also: LCIX2 (UCSD20) *)
+          ElseJump: Jump;
+          (** CodeCounter where a constant condition's code is dropped. *)
+          SavedCodeCounter: INTEGER;
+          (** The condition is the constant FALSE. *)
+          KnownFalse: BOOLEAN;
+          (** The condition is a constant. It is never set TRUE, so the code
+              that reads KnownFalse and SavedCodeCounter never runs. *)
+          KnownCondition: BOOLEAN;
+      BEGIN
+        KnownCondition := FALSE;
+        CompileExpression(Followers + [ThenToken]);
+        IF NOT KnownCondition THEN
+        BEGIN
+          NewJump(ElseJump);
+          EmitFalseJump(ElseJump)
+        END;
+        IF Token = ThenToken THEN
+          NextToken
+        ELSE
+          Error(52);
+        STATEMEN(Followers + [ElseToken]);
+        IF KnownCondition THEN
+          IF KnownFalse THEN
+            CodeCounter := SavedCodeCounter
+          ELSE
+            SavedCodeCounter := CodeCounter;
+        IF Token = ElseToken THEN
+        BEGIN
+          IF NOT KnownCondition THEN
+          BEGIN
+            NewJump(EndJump);
+            EmitJump(JumpCode, EndJump);
+            PlaceJump(ElseJump)
+          END;
+          NextToken;
+          STATEMEN(Followers);
+          IF KnownCondition THEN
+          BEGIN
+            IF NOT KnownFalse THEN
+              CodeCounter := SavedCodeCounter
+          END
+          ELSE
+            PlaceJump(EndJump)
+        END
+        ELSE
+          IF NOT KnownCondition THEN
+            PlaceJump(ElseJump)
+      END;
+
+      (** Compiles REPEAT. *)
+      PROCEDURE RepeatStatement;
+        VAR
+          (** UCSD Pascal II.0 calls it LADDR (UCSD20). *)
+          LoopJump: Jump;
+      BEGIN
+        NewJump(LoopJump);
+        PlaceJump(LoopJump);
+        REPEAT
+          REPEAT
+            STATEMEN(Followers + [SemicolonToken, UntilToken])
+          UNTIL NOT (Token IN StartersOfStatement);
+          LoopDone := Token <> SemicolonToken;
+          IF NOT LoopDone THEN
+            NextToken
+        UNTIL LoopDone;
+        IF Token = UntilToken THEN
+        BEGIN
+          NextToken;
+          CompileExpression(Followers);
+          EmitFalseJump(LoopJump)
+        END
+        ELSE
+          Error(53)
+      END;
+
+      (** Compiles WHILE. *)
+      PROCEDURE WhileStatement;
+        VAR
+          (** UCSD Pascal II.0 calls it LCIX (UCSD20). *)
+          ExitJump: Jump;
+          (** UCSD Pascal II.0 calls it LADDR (UCSD20). *)
+          LoopJump: Jump;
+      BEGIN
+        NewJump(LoopJump);
+        PlaceJump(LoopJump);
+        CompileExpression(Followers + [DoToken]);
+        NewJump(ExitJump);
+        EmitFalseJump(ExitJump);
+        IF Token = DoToken THEN
+          NextToken
+        ELSE
+          Error(54);
+        STATEMEN(Followers);
+        EmitJump(JumpCode, LoopJump);
+        PlaceJump(ExitJump)
+      END;
+
+      (** Compiles WITH, a scope for each record. *)
+      PROCEDURE WithStatement;
+        VAR
+          (** UCSD Pascal II.0 calls it LCP (UCSD20). *)
+          RecordVariable: SymbolLink;
+          Unused: INTEGER;
+          (** The records. *)
+          RecordCount: INTEGER;
+      BEGIN
+        RecordCount := 0;
+        REPEAT
+          IF Token = NameToken THEN
+          BEGIN
+            FindIdentifier(ClassesOfVariable + [FieldClass], RecordVariable);
+            NextToken
+          END
+          ELSE
+          BEGIN
+            Error(2);
+            RecordVariable.Entry := DummyVariable.Entry
+          END;
+          ApplySelectors(Followers + [CommaToken, DoToken],
+              RecordVariable.Entry);
+          IF Operand.DataType <> NIL THEN
+            IF Operand.DataType^.Form = RecordForm THEN
+              IF DisplayTop < 12 THEN
+              BEGIN
+                DisplayTop := DisplayTop + 1;
+                RecordCount := RecordCount + 1;
+                WITH Display[DisplayTop] DO
+                  Tree.Entry := Operand.DataType^.FirstField.Entry;
+                IF Operand.Literal.Ordinal = DirectAccess THEN
+                  WITH Display[DisplayTop] DO
+                  BEGIN
+                    Kind := WithDirectScope;
+                    Files.Word := Operand.StaticLevel;
+                    Labels.Word := Operand.Offset
+                  END
+                ELSE
+                BEGIN
+                  PushAddress;
+                  EmitTwoOperands(StoreOuterCode, Level, DataCounter);
+                  WITH Display[DisplayTop] DO
+                  BEGIN
+                    Kind := WithIndirectScope;
+                    Files.Word := DataCounter
+                  END;
+                  DataCounter := DataCounter + 1
+                END
+              END
+              ELSE
+                Error(250)
+            ELSE
+              Error(140);
+          LoopDone := Token <> CommaToken;
+          IF NOT LoopDone THEN
+            NextToken
+        UNTIL LoopDone;
+        IF Token = DoToken THEN
+          NextToken
+        ELSE
+          Error(54);
+        STATEMEN(Followers);
+        DisplayTop := DisplayTop - RecordCount
+      END;
+
+    BEGIN
+      NestingDepth := NestingDepth + 1;
+      IF Token = IntegerToken THEN
+      BEGIN
+        LabelScope := DisplayTop;
+        WHILE Display[LabelScope].Kind <> BlockScope DO
+          LabelScope := LabelScope - 1;
+        ThisLabel.Entry := Display[LabelScope].Labels.Entry;
+        WHILE ThisLabel.Entry <> NIL DO
+          WITH ThisLabel.Entry^ DO
+            IF Number.Entry = TokenValue.Entry THEN
+            BEGIN
+              IF Target^.IsDefined THEN
+                Error(165);
+              PlaceJump(Target);
+              GOTO 1
+            END
+            ELSE
+              ThisLabel.Entry := Next.Entry;
+        Error(167);
+        1:
+        NextToken;
+        IF Token = ColonToken THEN
+          NextToken
+        ELSE
+          Error(5)
+      END;
+      IF Debugging THEN
+      BEGIN
+        EmitOneOperand(DebugBreakCode, LinesRead + 1);
+        BreakpointOnLine := TRUE
+      END;
+      IF NOT (Token IN Followers + [NameToken]) THEN
+      BEGIN
+        Error(6);
+        SkipTokens(Followers)
+      END;
+      IF Token IN StartersOfStatement + [NameToken] THEN
+      BEGIN
+        MARK(SavedMark);
+        TemporariesStart := DataCounter;
+        CASE Token OF
+          NameToken:
+          BEGIN
+            FindIdentifier(ClassesOfVariable +
+                [FieldClass..ValueFunctionClass], NameFound);
+            NextToken;
+            IF NameFound.Entry^.Class = ProperProcedureClass THEN
+              CompileCall(Followers, NameFound.Entry)
+            ELSE
+              Assignment(NameFound.Entry)
+          END;
+          BeginToken:
+          BEGIN
+            NextToken;
+            CompoundStatement
+          END;
+          GotoToken:
+          BEGIN
+            NextToken;
+            GotoStatement
+          END;
+          IfToken:
+          BEGIN
+            NextToken;
+            IfStatement
+          END;
+          CaseToken:
+          BEGIN
+            NextToken;
+            CASESTAT
+          END;
+          WhileToken:
+          BEGIN
+            NextToken;
+            WhileStatement
+          END;
+          RepeatToken:
+          BEGIN
+            NextToken;
+            RepeatStatement
+          END;
+          ForToken:
+          BEGIN
+            NextToken;
+            FORSTATE
+          END;
+          WithToken:
+          BEGIN
+            NextToken;
+            WithStatement
+          END
+        END;
+        IF DataCounter > HighestDataCounter THEN
+          HighestDataCounter := DataCounter;
+        DataCounter := TemporariesStart;
+        RELEASE(SavedMark);
+        IF CodeCounter + 100 > 1999 THEN
+        BEGIN
+          Error(253);
+          CodeCounter := 0
+        END;
+        IF NOT (Token IN [SemicolonToken, EndToken, UntilToken, ElseToken,
+            CaseElseToken]) THEN
+        BEGIN
+          Error(6);
+          SkipTokens(Followers)
+        END
+      END;
+      NestingDepth := NestingDepth - 1
+    END;

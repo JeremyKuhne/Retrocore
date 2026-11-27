@@ -143,7 +143,8 @@ Conditions, hit counts and log messages work as on any breakpoint, with the CPU'
   `(*$L APPLE1:NAME.TEXT*)`; a Pascal file's name is at most 15 letters, so `HIL.LST.TEXT`, not `HILBERT.LST.TEXT`.
   Each `--unit` code file goes beside the source, for its `USES (*$U NAME.CODE*) NAME` to find. With
   `--includes folder`, the source is a main file that includes the folder's files by name, `(*$I NAME.TEXT*)`, each
-  put on SOURCE:, the boot disk or CODE:, whichever has room, and its directive given that volume (below);
+  put on SOURCE:, the boot disk or CODE:, whichever has room, and its directive given that volume (below); give
+  `--includes` again for each more folder, the first that has a name giving its file;
 - `--pascal assembly code output.text` writes each segment's assembled procedures as source for Apple's Assembler, as
   `output.SEGMENT.text`, a library's units naming their procedures from their interface text;
 - `--pascal assemble-native source.text APPLE1.dsk APPLE2.dsk output.code` assembles a 6502 source with Apple's own
@@ -465,9 +466,41 @@ Every code file on Apple Pascal's and Apple III Pascal's disks, the system's own
 and assembles back byte-identically, named or not. Hovers in the editor show a p-code's macro on a p-code line and the 6502's
 instruction on a 6502 line.
 
+## The interpreter's source
+
+The SDK has Apple Pascal 1.1's interpreter, `SYSTEM.APPLE`, as native 6502 source:
+[`Sdk/Interpreter/1.1`](../src/Retrocore.Pascal/Sdk/Interpreter/1.1), shipped beside `Pcode.asm` as
+`Pascal/Interpreter/1.1/`. It assembles byte for byte to the file on 1.1's APPLE1 with its linker configuration:
+
+```text
+Retrocore.Debug --assemble SYSTEM.APPLE.asm SYSTEM.APPLE --config SYSTEM.APPLE.cfg
+```
+
+Its p-code handlers are named for what they do, in the `Pcodes` scope, and its standard procedures in
+`StandardProcedures`; each keeps the names UCSD's and Apple's documents give it in `Also:`, so `ADI` reaches
+`Pcodes::AddIntegers` and `IORSLT` reaches `Syscom::IoResult`. The p-machine's registers in zero page are named for
+what they point to (`LocalFrame` for MP, `InstructionPointer` for IPC). Its conversion log,
+[PascalInterpreter.md](conversions/PascalInterpreter.md), says where each name came from.
+
+## The SDK's Pascal sources
+
+The SDK's Pascal sources, Apple's system programs decompiled and named, follow [PascalStyle.md](PascalStyle.md):
+each compiles with its own Compiler back to the same segments, every file opens in every version's Editor, names
+say what things are, and `(** *)` comments document declarations, with the names Apple's and UCSD's documents gave
+them kept in `Also:`. In VS Code, a Pascal file gets the style's lint as you type, hover for its doc comments, and go
+to definition and the outline, by current or historical name, across the files its program includes.
+
+The SDK has Apple Pascal 1.3's Compiler, `SYSTEM.COMPILER`, as such a source:
+[`Sdk/Compiler/apple2-1.3`](../src/Retrocore.Pascal/Sdk/Compiler/apple2-1.3), with the system's globals it uses in
+[`Sdk/System/apple2-1.3`](../src/Retrocore.Pascal/Sdk/System/apple2-1.3), shipped as `Pascal/Compiler/apple2-1.3/`
+and `Pascal/System/apple2-1.3/`. It compiles, assembles and links back to the same segments as APPLE2's file; its
+folder's README has the commands, and [PascalCompiler13.md](conversions/PascalCompiler13.md) its conversion.
+
 ## Testing
 
 - `PcodeTests`, `PascalListingTests` and `PascalMediaTests` need no files for most of their tests.
+- `PascalInterpreterSourceTests` pins the interpreter's source by digest and lint; with Apple Pascal 1.1's APPLE1, it
+  compares it byte for byte with `SYSTEM.APPLE`.
 - With the disks, `PascalMediaTests` and `PcodeTests` read and disassemble every code file on them;
   `Apple3PascalTests` and `Apple2PascalTests` boot Pascal, compile and run a program, and read its frames: Apple III
   Pascal 1.0, 1.1 and 1.2 (on disks built as above), and Apple Pascal 1.0, 1.1 and 1.2 on the II Plus, 1.1 and 1.2

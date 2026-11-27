@@ -1,7 +1,7 @@
 # Retrocore Assembly and Debugger
 
 Native Retrocore assembly highlighting, language features and source debugging on
-the Apple II family, the Apple-1, the TRS-80 Model I, III, 4, II, 12 and 16, the TRS-80 Color Computer, the Commodore PET 2001 and 4032, the BBC Micro and the MITS Altair 8800 in one extension. Highlighting is declarative and needs no C# process,
+the Apple II family, the Apple-1, the TRS-80 Model I, III, 4, II, 12 and 16, the TRS-80 Color Computer, the Commodore PET 2001 and 4032, the BBC Micro, the Atari 400 and 800, the TRS-80 Model 100 and Tandy 102, and the MITS Altair 8800 in one extension. Highlighting is declarative and needs no C# process,
 ROMs or debug session. Language features (errors as you type, go to definition,
 hover, completion and symbols) come from a language server in the .NET debug host,
 which starts when a `retrocore-asm` document opens; see
@@ -11,7 +11,13 @@ which starts when a `retrocore-asm` document opens; see
 
 `*.asm` files open as **Retrocore Assembly** (`retrocore-asm`), and `*.mac` files as
 **MACRO-10 Assembly**. `*.s` and `*.inc` are not claimed, as ca65 and the GNU
-assembler use them; select the language with the status-bar language selector or
+assembler use them, except in a Retrocore project: a `*.s` or `*.inc` in the folder of
+a project's `retrocore.json` (one with targets), or below it, opens as Retrocore
+Assembly whenever it is plain text: as it opens, and as the projects are read again
+(a project file changes, or a target is picked). To use
+another language for one, map it to that language (not plain text) in
+`files.associations`.
+Elsewhere, select the language with the status-bar language selector or
 **Change Language Mode**, or add a workspace setting:
 
 ```json
@@ -99,13 +105,14 @@ No launch.json is needed to start a machine. Without dumps, the Apple II family 
 TRS-80s run ROMs assembled from the SDK's sources, so there is nothing else to set up; the
 Color Computer 1, 2 and 3 run Color, Extended and Disk BASIC and the CoCo 3's ROM from
 their sources, the PET its BASIC, screen editor and kernal from theirs, the BBC Micro its MOS, BASIC, DFS and
-character ROM, and the Kaypro II its monitor ROM from its source.
+character ROM, the Atari 400 and 800 their OS, floating point package, Atari BASIC and the
+810's firmware, and the Kaypro II its monitor ROM from its source.
 
 The quickest way is the **Run and Debug** dropdown. Under Retrocore it lists each
 machine: Apple IIe (enhanced), Apple IIe, Apple II Plus, Apple II, Apple III, TRS-80
 Model I (Level II), TRS-80 Model I (Level I), TRS-80 Model III, Model III (Level I), Model 4, Model 4P,
-Model II, Model 12 and Model 16 (Z80 side), Apple-1, the TRS-80 Color Computer,
-Color Computer 2 and Color Computer 3, the Commodore PET 2001 (BASIC 2), PET 2001, PET 4032 and PET 4032 (business keyboard), the BBC Micro Model B and Model A, the MITS Altair 8800, and the Kaypro II. Pick one and press F5, and it boots as it is. **Debug: Select and Start Debugging** lists them too.
+Model II, Model 12 and Model 16 (Z80 side), the TRS-80 Model 100 and Tandy 102 (from your ROM), Apple-1, the TRS-80 Color Computer,
+Color Computer 2 and Color Computer 3, the Commodore PET 2001 (BASIC 2), PET 2001, PET 4032 and PET 4032 (business keyboard), the BBC Micro Model B and Model A, the Atari 800 and Atari 400, the MITS Altair 8800, and the Kaypro II. Pick one and press F5, and it boots as it is. **Debug: Select and Start Debugging** lists them too.
 
 To start a machine with something in it, run **Retrocore: Start Machine…**. It is in
 the Command Palette and on the **Machine** view's **...** menu. It asks three things:
@@ -118,8 +125,10 @@ the Command Palette and on the **Machine** view's **...** menu. It asks three th
      too, which loads where its first two bytes say);
    - a BASIC file, for the machine's own BASIC;
    - a disk image, booted from the first drive (on the BBC Micro with SHIFT-BREAK; on the PET, inserted in it);
-   - a tape, on the Model I, the Apple-1, the Color Computer, the BBC Micro and the PET (in
-     its built-in Datasette, with PLAY down);
+   - a tape, on the Model I, the Apple-1, the Color Computer, the BBC Micro, the Atari and
+     the PET (in its built-in Datasette, with PLAY down);
+   - on the Atari, an executable (`.xex`), booted from the first drive on a disk built
+     for it, or a cartridge (`.rom` or `.car`), in the left slot in place of BASIC;
    - on the Apple II family, a source file on a fresh DOS 3.3 disk, which boots and
      runs it.
 
@@ -128,8 +137,12 @@ the Command Palette and on the **Machine** view's **...** menu. It asks three th
    - **Start** boots it with the machine's defaults. Cards and disks the machine
      last ran with come back, as [Machine and Drives](#machine-and-drives) describes.
    - **Options…** lists that machine's own choices, such as the II's Monitor, the II
-     and II Plus's memory and slot 0 card, the Mockingboard, the Model I's
-     Expansion Interface and lowercase, the Apple-1's memory and cassette interface, and the PET's memory, sound and snow. Each shows its current value; Esc goes back.
+     and II Plus's memory and slot 0 card, the Mockingboard, the Model I's ROM, memory,
+     Expansion Interface and lowercase, the Model III's ROM and memory, the Apple-1's memory and cassette interface, the PET's memory, sound and snow, and the Atari's BASIC revision, video standard, disk drives and sound. Each shows its current value; Esc goes back.
+     The ROM picks Level I or Level II BASIC (and on the Model I, Level II 1.3 or 1.2), so
+     the Level I and Level II entries are the same machine with a different ROM. Level I
+     cannot start from a disk, so it is refused for one, and a BASIC file that names its
+     dialect, by its name or first line, keeps the ROM whose BASIC that is.
    - **Save as Launch Configuration** adds the setup to the workspace's launch.json,
      under a name you confirm, replacing one of the same name.
 
@@ -139,6 +152,42 @@ the Command Palette and on the **Machine** view's **...** menu. It asks three th
 A launch configuration is still the way to use options the picks don't offer, such
 as `breakpoints`, `speed` or your own ROM dumps. Saving a setup is a good start for
 one. The sections below describe each machine's launch options.
+
+## Projects
+
+A folder with a `retrocore.json` is a Retrocore project: its sources, defines and the
+machine targets it builds for (`retrocore build` builds them from a terminal). The
+status bar shows the **active target**, such as `hello · apple2-iie`; click it to pick
+another of the workspace's targets, grouped by project when there are several. The
+choice is kept for the workspace.
+
+**F5 with no launch.json** builds the active target and debugs it on its machine,
+stopping at the program's entry. VS Code chooses the debugger from the open editor, so
+press it from one of the project's sources; elsewhere VS Code may first ask which
+debugger to use. To keep breakpoints or other launch options, or to
+debug one launch configuration on whichever target is active:
+
+```jsonc
+{
+  "type": "retrocore",
+  "request": "launch",
+  "name": "Debug project",
+  "project": "${workspaceFolder}",
+  "target": "${command:retrocore.activeTarget}"
+}
+```
+
+`project` is a `retrocore.json` or its folder, and `target` a target's name, or
+`project/target` where a root file's projects share one. Each target keeps its own
+saved machine and recovery journal. `retrocore.json` is checked against the project
+schema as you edit it; leave out a `$schema` line, which would make VS Code fetch the
+schema from the web instead.
+
+**Lines the active target leaves out**, such as the other branch of an `.if RC_MODEL_...`
+block, are faded by the language server and shaded across the whole line, with a mark
+in the overview ruler; both move when you pick another target. The colors are
+`retrocore.inactiveCodeBackground` and `retrocore.inactiveCodeOverviewRuler`, and
+`retrocore.inactiveCode.shade` turns the shading off.
 
 ## What is highlighted
 
@@ -224,6 +273,9 @@ are found from the machine ROM roots across projects, as they are from the SDK's
 sibling folders. If the root has a same-named `.cfg` beside it, the server
 uses that linker configuration when assembling and reanalyzes on open-document
 edits and watched workspace file changes (subject to `files.watcherExclude`).
+In a `.rom.asm` source, `.rom` metadata supplies the image's origin and size, as
+it does for the source generator; a companion ca65 configuration takes precedence
+for linking. The metadata is read before conditional assembly.
 This is an editor-only convenience: CLI builds and debug launches require an
 explicit `--config` or `linkerConfiguration` respectively. Files the extension does
 not recognize as `retrocore-asm` (such
@@ -920,13 +972,22 @@ byte-identical to it and debugs as a ROM module. Memory references can name a ba
 `system`, `bank0` and up, `rom`, or an X-byte such as `x81` for SOS's extended
 addresses. See [the Apple III guide](../docs/Apple3.md).
 
+`softCard3` puts Microsoft's SoftCard /// in a slot, 1 to 4 (its boot disk looks from
+slot 4 down), so its own CP/M disk boots from `disks`. The Z80 shows as its own thread,
+**SoftCard /// Z80**, and `z80:` names memory as it sees it, through the card's mapping
+PROM: Z80 `$0000` is the Apple's `$2000`, the I/O page is at `$A000` and zero page at
+`$F000`. A `.cpu Z80` source loads at `z80:$0100` and starts there with the Z80 holding
+the bus, until its `OUT ($00),A` gives it back.
+
 ## Debugging on the TRS-80 Model I
 
 `"machine": "trs80-model1"` debugs a Model I with the same source debugging, call
 stack, cycle counts and `Keeps:` checks; a Z80 `CALL` or `RST` line shows its latest
 call's cycles as a `JSR` line does. The machine is configured by:
 
-- `rom`: `level2` (the default) or `level1`;
+- `rom`: `level2` (the default) or `level1`, the **ROM** setting in the Machine view
+  and Start Machine's options; a `basic` launch takes that Level's files, `.level2.bas`
+  or `.level1.bas`;
 - `revision`: Level II `1.3` (the default) or `1.2`;
 - `ramKilobytes`, `expansionInterface`, `diskController`, `lowercase` and `doubler`
   (`percom` for NEWDOS/80's double density, `tandy` for Radio Shack's, or `both`);
@@ -997,6 +1058,29 @@ Screen**. Letters arrive as capitals. Tapes go in and out from the cassette's ro
 the [Drives](#machine-and-drives) view; a recording is saved as a WAV file when it is
 ejected.
 
+## Debugging on the Model 100
+
+`"machine": "trs80-model100"` debugs a TRS-80 Model 100, or with `"model": "102"` a Tandy 102, from the ROM you
+supply: `rom` names its file, or it is found in `romDirectory` (or `RETROCORE_TRS80M100_ROMS`) as `m100rom.m12` or
+`m102rom.m12`. Its options:
+
+- `ramKilobytes`: 8, 16, 24 or 32 (the default);
+- `optionRom`: an option ROM's file;
+- `ramImage`: a file that keeps the RAM between sessions, loaded before the power comes on and saved as the session
+  ends; `coldStart` starts from empty RAM anyway;
+- `time`: the clock's start, the host's time by default;
+- `files`: host files to put in RAM's directory, so the menu lists them: `.ba`, `.do` and `.co` files, BASIC text
+  as `.bas` and text as `.txt`;
+- `cassette`: a `.wav` tape, which plays when the ROM runs the motor (`CLOAD`); Record in Retro Devices makes one;
+- `fastCassette`: run as fast as possible while the motor moves a tape, true by default;
+- `sound`: `speaker` (the buzzer) or `off`.
+
+Model 100 BASIC has `.model100.bas` source files, and `.ba` files open as listings. While BASIC is at its prompt,
+**Retrocore: Open BASIC Program** edits the program it has open. A program (`source` or `program`, loaded at `$E000` by
+default) runs once the ROM has set up its RAM, and can print with `RST 4`. The display is the 240x64 LCD; its buttons
+are F1-F8, LABEL, PRINT, PASTE, PAUSE and BREAK, and Reset turns the machine back on after `POWER OFF`. [The Model 100
+guide](../docs/Trs80Model100.md) has the rest.
+
 ## Debugging on the Altair 8800
 
 `"machine": "altair"` debugs a MITS Altair 8800 with the same source debugging, cycle
@@ -1012,9 +1096,13 @@ conditional calls, `RST` and interrupts. The machine is configured by:
 - `upperCase`: caps lock, so letters type as capitals, as Altair BASIC needs;
 - `cassetteInterface`: the 88-ACR at ports `$06` and `$07` (on by default), and
   `cassette`, a `.tap` tape that plays at 300 baud from the start;
-- `fastCassette`: run as fast as possible while a tape plays or records (on by default).
+- `fastCassette`: run as fast as possible while a tape plays or records (on by default);
+- `disks`: up to four SIMH `.dsk` 8-inch disk images, for drives 0 to 3 on the 88-DCDD;
+- `diskController`: the 88-DCDD at ports `$08` to `$0A` (on when `disks` are given);
+- `proms`: the boot PROMs, `dbl` (MITS's disk boot loader at `$FF00`, fitted with the
+  controller) and `mbl` (the multi-boot loader at `$FE00`).
 
-The Altair has no ROM. A program (`source` or `program`, loaded at `$0100` by default)
+The Altair has no ROM of its own. A program (`source` or `program`, loaded at `$0100` by default)
 starts there; on the 88-2SIO it sets up the first ACIA (`$03`, then `$15`, to port
 `$10`) and talks to the terminal through ports `$10` and `$11`. The panel shows the
 80x24 terminal, which follows the ADM-3A's controls. **Ctrl** with a letter types its
@@ -1027,6 +1115,10 @@ Altair BASIC runs from an image you supply: launch it as a `program` with
 `"loadAddress": 0`, `"entryAddress": 0` and `"upperCase": true`, and set the sense
 switches for the terminal's board. [The Altair guide](../docs/Altair8800.md) has the
 settings for each version, and covers the hardware.
+
+A launch with `disks` starts at DBL's `$FF00`, which boots the disk in drive 0, such as
+CP/M 2.2 (with `"upperCase": true`). The drives are in Retro Devices, where disks go in
+and out and a disk CP/M has changed is saved back to its image.
 
 ## Debugging on the TRS-80 Color Computer
 
@@ -1155,22 +1247,56 @@ take disks: `OPEN 15,8,15,"N0:NAME,ID"` formats one, and `SAVE "0:NAME",8` and
 initializes it. A disk the drive wrote is a changed disk, which saves back to its D64,
 D67 or G64 image. See the [PET guide](../docs/Pet.md) for what is emulated.
 
+## Debugging on the Atari 400 and 800
+
+`"machine": "atari800"` debugs an Atari 800 or 400, chosen by `model` (`atari800`, the
+default, or `atari400`), with the same source debugging, call stack, cycle counts and
+`Keeps:` checks. The machine is configured by:
+
+- `video` (`ntsc` or `pal`, which runs the PAL OS), `os` (`b` or `a`) and `chip`
+  (`gtia` or `ctia`);
+- `ramKilobytes`: 8 to 48 in steps of 8, 48 on the 800 and 16 on the 400 by default;
+- `basicCartridge`: Atari BASIC's revision in the left slot, `c`, `b`, `a` or `none`;
+- `cartridge`, a left cartridge (`.rom` or `.car`), which then holds no BASIC, and
+  `rightCartridge`, the 800's right slot (an 8 KB `.rom` or a right-slot `.car`);
+- `diskDrives` (0 to 4), `diskDrive` (`atari810`, the 810 at the hardware level, or
+  `sio`, at the command level) and `disks` (ATR or XFD images for D1:-D4:);
+- `executable`, an `.xex` that boots from drive 1 on a disk built for it;
+- `cassette`, a `.cas` tape or an `.xex` on a boot tape; `fastCassette` (on by
+  default) and `sound` (`speaker` or `off`).
+
+The OS, the floating point package, Atari BASIC and the 810's firmware are built from the
+SDK's sources, so both models need nothing else, and debugging steps into the sources.
+The OS, the floating point package and each cartridge slot are memory areas of their own,
+so a breakpoint in BASIC stops only while its cartridge is in. Dumps from `romDirectory`
+or `RETROCORE_ATARI_ROMS`, under MAME's names (such as `co12399b.rom`), replace the
+sources' ROMs when given; the 810's go in an `atari810` folder beside them, and BASIC's
+are `basic-revc.rom` (or `-revb` or `-reva`). A program (`source` or `program`) runs
+after the OS and BASIC have started for `bootSeconds` (2 by default);
+[the sample](../sample/atari/hello.asm) prints through CIO.
+
+The panel shows the screen and takes ATASCII: **Backspace** for BACK S, **Home** for
+CLEAR, **Tab** for TAB, arrows for the cursor keys and **Pause** for BREAK. VS Code keeps
+the function keys, so START, SELECT, OPTION, BREAK and SYSTEM RESET are on the key bar;
+each is held for a tenth of a second. **Ctrl+F12** or **Ctrl+Break** turns the machine
+off and on. See the [Atari guide](../docs/Atari800.md) for what is emulated.
+
 ## Debugging on the TRS-80 Model III, 4 and II
 
 `"machine": "trs80-model3"` debugs a Model III, 4 or 4P (`model` `3`, `4` or `4p`;
 `"trs80-model4"` is the Model 4), and `"machine": "trs80-model2"` a Model II, 12 or the
 Z80 side of a Model 16 (`model` `2`, `12` or `16`). Without dumps they run the SDK's
 builds of their ROMs (`Model3.asm`, `Model4PBoot.asm`, `Model2Boot.asm` and the character
-generators), which are byte-identical to MAME's; `romDirectory` or `RETROCORE_TRS80_ROMS`
-can hold MAME's dumps instead. When the running ROM is one the sources build, its source
-debugs as a ROM module, and Model III and Model 4 BASIC has the BASIC thread, as Level II
-does. A Model III with `rom` `level1` runs Level I BASIC from `Level1.asm`'s Model III
-build. The options are `rom`, `ramKilobytes`, `disks` (JV1, JV3, DMK or IMD),
-`diskController`, `cassette` and `fastCassette` (Model III and 4), `fastDisk` and
-`bootRom` (Model II), `bootSeconds`, `screen` and `speed`. On the Model III family the
-panel takes the Model I's keys; on the Model II it types ASCII, with **Escape** for
-BREAK and buttons for HOLD, F1 and F2. See the
-[Model III, 4 and II guide](../docs/Trs80Model3And2.md) for what is emulated.
+generators), which are byte-identical to MAME's dumps of the ROMs they cover;
+`romDirectory` or `RETROCORE_TRS80_ROMS` can hold MAME's dumps instead. When the running
+ROM is one the sources build, its source debugs as a ROM module, and Model III and Model
+4 BASIC has the BASIC thread, as Level II does. A Model III with `rom` `level1` runs
+Level I BASIC from `Level1.asm`'s Model III build, with the BASIC thread too. The options
+are `rom`, `ramKilobytes`, `disks` (JV1, JV3, DMK or IMD), `diskController`, `cassette`
+and `fastCassette` (Model III and 4), `fastDisk` and `bootRom` (Model II), `bootSeconds`,
+`screen` and `speed`. On the Model III family the panel takes the Model I's keys; on the
+Model II it types ASCII, with **Escape** for BREAK and buttons for HOLD, F1 and F2. See
+the [Model III, 4 and II guide](../docs/Trs80Model3And2.md) for what is emulated.
 
 ## Debugging on the Kaypro II
 
@@ -1262,9 +1388,9 @@ protocol.
 
 **Retrocore: Open BASIC Program** opens the BASIC program in the running machine as
 text: AppleSoft on the Apple II Plus and IIe, Integer BASIC on the II, Level II on the
-Model I, Color BASIC on the Color Computer 1 and 2, with Extended and Disk
-Extended Color BASIC's words when their ROMs are fitted, and BBC BASIC II on the BBC Micro. Level I and the CoCo 3's
-BASIC are not supported yet. It is in three places besides the Command Palette:
+Model I, Level I on the Model I and the Model III with `rom` `level1`, Color BASIC on the Color Computer 1 and 2, with
+Extended and Disk Extended Color BASIC's words when their ROMs are fitted, BBC BASIC II on the BBC Micro, and Atari BASIC
+on the Atari. The CoCo 3's BASIC is not supported yet. It is in three places besides the Command Palette:
 
 - the **BASIC program** button on the machine panel's key bar;
 - the **BASIC program** row under the machine in the Machine view, which shows the
@@ -1281,8 +1407,9 @@ BASIC are not supported yet. It is in three places besides the Command Palette:
   has unsaved edits, you choose **Keep Mine**, **Take the Machine's** or
   **Compare**.
 - **Import** and **Export** are in the editor's title bar. They cover text listings
-  (`.bas`), tokenized programs as BASIC stores them, and on the Model I, CSAVE tapes
-  (`.cas`). An exported AppleSoft program is named in CiderPress2's form, such as
+  (`.bas`), tokenized programs as BASIC stores them, and CSAVE tapes (`.cas`) for Level
+  II and Level I. A Level I tape that loads memory other than a program from `$4200`, as
+  a machine-code program that starts itself does, is refused. An exported AppleSoft program is named in CiderPress2's form, such as
   `PROGRAM#fc0801`.
 
 When the session ends, an editor with no unsaved edits closes. One with edits
@@ -1293,7 +1420,7 @@ character, `{$84}` for any byte, and `{{` for a brace.
 
 ### The BASIC thread
 
-A session running AppleSoft, Integer BASIC, Level II, Color BASIC or BBC BASIC has a
+A session running AppleSoft, Integer BASIC, Level II, Level I, Color BASIC, BBC BASIC or Atari BASIC has a
 **BASIC** thread beside the CPU's.
 Its call stack is the statement running, then each GOSUB in progress at the
 statement that called it; it shows **BASIC: ready** at the prompt.
@@ -1318,7 +1445,9 @@ statement that called it; it shows **BASIC: ready** at the prompt.
   **Handled BASIC errors** at those they will; and **BASIC program end** at STOP,
   END, the end of the program and Ctrl-C or BREAK. Integer BASIC and Color BASIC
   have no error handler, so their errors, such as `*** BAD BRANCH ERR` or `?UL ERROR`,
-  always stop.
+  always stop. Level I has none either: its HOW?, WHAT? and SORRY stop as BASIC errors,
+  except a mistyped answer to INPUT, which INPUT asks for again, so it counts as handled. An
+  error in a DATA item READ takes stops in the READ's line, though Level I reports it with no line.
 - **Variables:** a BASIC frame has **Variables**, **Arrays** (each expanding to its
   elements), **Functions** (AppleSoft's DEF FN), **Loops** (the FOR loops in
   progress) and **Program** (where the program, variables, arrays and strings are).
@@ -1340,20 +1469,27 @@ statement that called it; it shows **BASIC: ready** at the prompt.
   typed. Its call stack shows each PROC and FN beside the GOSUBs, and Step Over and Step
   Out step over them; its Variables are the resident integers A%-Z% that are not zero,
   then the variables in the order BASIC made them, and its Program scope is PAGE to TOP,
-  the heap and BASIC's stack. STOP is an error, and there is no CONT.
+  the heap and BASIC's stack. STOP is an error, and there is no CONT. Watches read memory
+  with `?`, `!` and `$` as BASIC does. Between `[` and `]`, the assembler's mnemonics,
+  registers, comments and the text it skips are highlighted and are not variables, while its
+  labels are, and an unknown mnemonic is warned of; another BASIC's word, such as `HOME`, is
+  warned of only as a statement of its own.
+- **Atari BASIC** tokenizes a line as its syntax tables steer it: a statement's name
+  is found only where a statement starts, so `PRINTER=1` is PRINT ER=1, and a name may
+  hold other words, as `TOTAL` and `NOTE1` do. A name cut short by a dot is the first it
+  starts (`PR.` is PRINT). Its variables are numbered in the order the program names
+  them, and its errors stop unless TRAP takes them, which counts as handled.
 
 ### BASIC files
 
-`.applesoft.bas`, `.integer.bas`, `.apple1.bas`, `.business.bas`, `.level2.bas`,
-`.colorbasic.bas`, `.mbasic.bas` and `.bbcbasic.bas` files are AppleSoft, Integer BASIC, Apple-1 BASIC,
-Business BASIC, Level II BASIC, Color BASIC, MBASIC (BASIC-80 5.21, the Kaypro II's
-CP/M BASIC) and BBC BASIC. Business BASIC and MBASIC take a reserved word only between separators,
-so their highlighting leaves `PRINTER` a name, and their names count in full, dots
-included (MBASIC's to 40 characters). A Color BASIC file may use every word of Disk Extended Color BASIC; a
-machine without those ROMs stores the words they add as letters. A plain `.bas` file
-takes its dialect from a first line such as `REM retrocore applesoft` or
-`' retrocore level2`, else the `retrocore.basic.dialect` setting, else the BASIC of
-the machine being debugged.
+`.applesoft.bas`, `.integer.bas`, `.apple1.bas`, `.business.bas`, `.level2.bas`, `.level1.bas`, `.colorbasic.bas`,
+`.mbasic.bas`, `.model100.bas`, `.bbcbasic.bas` and `.atari.bas` files are AppleSoft, Integer BASIC, Apple-1 BASIC,
+Business BASIC, Level II BASIC, Level I BASIC, Color BASIC, MBASIC (BASIC-80 5.21, the Kaypro II's CP/M BASIC), Model
+100 BASIC, BBC BASIC and Atari BASIC. Business BASIC and MBASIC take a reserved word only between separators, so their
+highlighting leaves `PRINTER` a name, and their names count in full, dots included (MBASIC's to 40 characters). A Color
+BASIC file may use every word of Disk Extended Color BASIC; a machine without those ROMs stores the words they add as
+letters. A plain `.bas` file takes its dialect from a first line such as `REM retrocore applesoft` or
+`' retrocore level2`, else the `retrocore.basic.dialect` setting, else the BASIC of the machine being debugged.
 
 A file may leave out line numbers and use labels: a line of its own, `name:` or
 `@name`, names the line after it, and `GOTO name`, `GOSUB @name`, `THEN name` and
@@ -1400,7 +1536,7 @@ get:
 **Retrocore: Renumber BASIC Program...** renumbers the lines and every reference to
 them. **Retrocore: Open as BASIC Listing** (also on the Explorer's context menu for
 `.cas` and CiderPress2 `#fc` and `#fa` files) opens a tokenized program or a Model I
-tape as text; saving writes it back in the same form.
+tape as text, a Level I tape as Level I BASIC; saving writes it back in the same form.
 
 Integer BASIC checks a line's grammar as it is typed and gives one word a different token
 for each place in its grammar, so Retrocore tokenizes Integer BASIC by running the
@@ -1425,8 +1561,14 @@ add and remove cards, insert and eject disks and tapes, and write-protect them. 
 **Settings** are the choices **Start Machine → Options…** offers, such as memory, slot
 0, the II's Monitor or the Model I's Expansion Interface: click one to change it. The
 cards and disks you added stay, where they still fit. A machine from launch.json gets
-the setting written into its configuration. While it runs, the settings show what it
-was built with. Its ▶
+the setting written into its configuration. A TRS-80 Model I's or Model III's **ROM**
+keeps the tape; Level I, which has no disks, takes out the disks and disk controller,
+and the memory becomes the new ROM's own unless you chose a size. The Model I's
+**Memory** offers 4, 16, 32 or 48 KB: 32 and 48 KB bring the Expansion Interface, and
+taking the interface out brings memory down to 16 KB. While it runs, the settings show
+what it was built with, except the ROM: its setting, and the **Change ROM** button on
+the ROM row, start the machine again with the other ROM, after asking, since whatever
+is only in its memory is lost; its tape stays in. Its ▶
 starts it with those changes, and when the session ends the views show it off again,
 with what changed while it ran. The **...** menu has **Start Machine**
 ([Starting a machine](#starting-a-machine)) and **Start Last Machine**. Before any
@@ -1447,7 +1589,10 @@ and Debug's icon still has the call stack and variables.
 
 The Drives view lists each part that has drives, with its drives under it: slot 6's
 two Disk II drives, the Model I's cassette and its disk drives. Its badge counts the
-disks changed in the machine and not yet saved to their images.
+disks changed in the machine and not yet saved to their images. A TRS-80 cassette's row
+says what its tape holds, a Level I tape, a Level II BASIC program or a Level II SYSTEM
+tape, and a tape the machine's ROM cannot read, such as a Level I tape in Level II, is
+marked ⚠ with the reason in its tooltip, and in the debug console as it goes in.
 
 The machine's row has a heart, running or off. Empty, the machine is not in your
 favorites, and clicking it saves it at once, named for the machine (such as **Apple II
@@ -1475,7 +1620,8 @@ takes the mouse card (one per machine), as the `mouse` launch option does: click
 display to move it with your mouse, and press Escape to let go. Any free slot also takes
 a ProFile card, as the `proFiles` launch option does, with Apple's ProFile hard disk:
 insert a `.po` or `.hdv` image in its drive, and ProDOS boots it and lists it. On the
-Apple III, slots 1 to 4 take ProFile cards, which SOS reaches through `.PROFILE`.
+Apple III, slots 1 to 4 take ProFile cards, which SOS reaches through `.PROFILE`, and the
+SoftCard ///, one at a time, as the `softCard3` launch option does.
 Any free Apple II slot also takes the 3.5 disk controller (one per machine), as the
 `disk35` launch option does: a SmartPort with two SuperDrives that answers as Apple's
 Apple II 3.5 Disk Controller Card, for 400K and 800K Apple disks and 720K and 1.44 MB
@@ -1491,7 +1637,7 @@ Each launch configuration remembers its machine. The cards you add or remove and
 the disks and tapes you insert, eject or write-protect come back the next time you
 launch the same configuration, by its `name`. launch.json stays as written: it sets
 up the first launch, and changing one of its hardware or media options (such as
-`diskImage`, `dos`, `model`, `mockingboard` or `softCard`) starts that configuration afresh.
+`diskImage`, `dos`, `model`, `mockingboard`, `softCard` or `softCard3`) starts that configuration afresh.
 **Retrocore: Reset Saved Machine** (also on the Machine view's **...** menu) does the same by
 hand. A disk a `dos` launch builds, and a tape being recorded, are not remembered;
 the launch makes them again. Each drive shows its media, its

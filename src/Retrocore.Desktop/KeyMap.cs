@@ -124,6 +124,25 @@ internal static class KeyMap
             // The business keyboard's TAB; the graphics keyboard has none and ignores it.
             [Key.Tab] = 9
         },
+        // The Atari types ATASCII: BACK S is $7E, TAB $7F, CLEAR $7D and the cursor keys $1C-$1F; the keys that type
+        // nothing are the debug host's codes from $F0, F2-F4 for START, SELECT and OPTION, and Pause for BREAK.
+        ["atari800"] = new()
+        {
+            [Key.Enter] = 13,
+            [Key.Back] = 0x7E,
+            [Key.Delete] = 0x7E,
+            [Key.Tab] = 0x7F,
+            [Key.Escape] = 27,
+            [Key.Home] = 0x7D,
+            [Key.Up] = 0x1C,
+            [Key.Down] = 0x1D,
+            [Key.Left] = 0x1E,
+            [Key.Right] = 0x1F,
+            [Key.F2] = 0xF0,
+            [Key.F3] = 0xF1,
+            [Key.F4] = 0xF2,
+            [Key.Pause] = 0xF3
+        },
         ["altair"] = new()
         {
             [Key.Enter] = 13,
@@ -135,6 +154,29 @@ internal static class KeyMap
             [Key.Right] = 12,
             [Key.Up] = 11,
             [Key.Down] = 10
+        },
+
+        // The Model 100's keys are ASCII, with its arrows as the codes its ROM gives them, $1C-$1F (right, left, up,
+        // down), PAUSE as 139 and F1-F8 as 128-135, the debug host's codes for the keys that type nothing.
+        ["trs80-model100"] = new()
+        {
+            [Key.Enter] = 13,
+            [Key.Back] = 8,
+            [Key.Tab] = 9,
+            [Key.Escape] = 27,
+            [Key.Right] = 0x1C,
+            [Key.Left] = 0x1D,
+            [Key.Up] = 0x1E,
+            [Key.Down] = 0x1F,
+            [Key.Pause] = 139,
+            [Key.F1] = 128,
+            [Key.F2] = 129,
+            [Key.F3] = 130,
+            [Key.F4] = 131,
+            [Key.F5] = 132,
+            [Key.F6] = 133,
+            [Key.F7] = 134,
+            [Key.F8] = 135
         },
 
         // The Kaypro II's keyboard sends ASCII, with its arrows as $F1-$F4; it has no BREAK.

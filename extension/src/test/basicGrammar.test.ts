@@ -18,12 +18,15 @@ before(async () => {
     const files: Record<string, string> = {
         "source.retrocore-applesoft": "applesoft.tmLanguage.json",
         "source.retrocore-level2": "level2.tmLanguage.json",
+        "source.retrocore-level1": "level1.tmLanguage.json",
         "source.retrocore-integer": "integer.tmLanguage.json",
         "source.retrocore-business": "business.tmLanguage.json",
         "source.retrocore-colorbasic": "colorbasic.tmLanguage.json",
         "source.retrocore-mbasic": "mbasic.tmLanguage.json",
+        "source.retrocore-model100": "model100.tmLanguage.json",
         "source.retrocore-petbasic": "petbasic.tmLanguage.json",
-        "source.retrocore-bbcbasic": "bbcbasic.tmLanguage.json"
+        "source.retrocore-bbcbasic": "bbcbasic.tmLanguage.json",
+        "source.retrocore-atari": "atari.tmLanguage.json"
     };
     registry = new Registry({
         onigLib: Promise.resolve({
@@ -65,6 +68,23 @@ test("BASIC finds reserved words where the ROM does, inside names too", () => {
     assert.ok(has(scopes("level2", "10 INPUT A", "INPUT"), "keyword.other"), "INPUT, not INP then UT");
     assert.ok(has(scopes("level2", "10 GO TO 20", "GO"), "keyword.control"));
     assert.ok(has(scopes("applesoft", "10 X = ATN(1) + A TO B", "ATN"), "support.function"));
+});
+
+test("Model 100 BASIC has its own words, as its ROM's table does", () => {
+    assert.ok(has(scopes("model100", "10 CALL 63012", "CALL"), "keyword"), "CALL, a Model 100 statement");
+    assert.ok(has(scopes("model100", "10 PRINT TIME$;DATE$", "DATE$"), "support.function"), "DATE$, as Level II's TIME$");
+    assert.ok(has(scopes("model100", "10 GO TO 20", "GO"), "keyword.control"));
+    assert.ok(has(scopes("model100", "10 A=1 'note", "'note"), "comment"));
+    assert.ok(!has(scopes("level2", "10 CALL 63012", "CALL"), "keyword"), "Level II has no CALL");
+});
+
+test("Level I finds its words cut short with a period, and runs REM and DATA to the line's end", () => {
+    assert.ok(has(scopes("level1", "10 P. \"HI\"", "P."), "keyword.other"), "P. is PRINT");
+    assert.ok(has(scopes("level1", "20 GOS. 100", "GOS."), "keyword.control"), "GOS. is GOSUB");
+    assert.ok(has(scopes("level1", "30 A=RND(6)", "RND"), "support.function"));
+    assert.ok(has(scopes("level1", "40 A$=\"X\"", "A$"), "variable.other"));
+    assert.ok(has(scopes("level1", "50 D. 1:PRINT", "PRINT"), "string.unquoted.data"), "D. is DATA, to the line's end");
+    assert.ok(has(scopes("level1", "60 REM A:PRINT", "PRINT"), "comment.line"));
 });
 
 test("Integer BASIC's names run to any length, and MOD and # are operators", () => {
@@ -144,6 +164,80 @@ test("BBC BASIC finds words only in capitals, keeps small letters in names, and 
     assert.ok(has(scopes("bbcbasic", "210 @%=&90A", "@%"), "variable.other"));
 });
 
+// The scopes of the first character of the nth occurrence of value on one of several lines, tokenized in turn so a
+// rule such as the assembler's carries from line to line.
+function linesScopes(dialect: string, lines: string[], line: number, value: string, occurrence = 0): string[] {
+    const grammar = grammars.get(dialect);
+    if (grammar === undefined) throw new Error(dialect);
+    let stack = INITIAL;
+    for (let index = 0; index < line; index++) stack = grammar.tokenizeLine(lines[index], stack).ruleStack;
+    const text = lines[line];
+    let start = -1;
+    for (let count = 0; count <= occurrence; count++) start = text.indexOf(value, start + 1);
+    assert.notEqual(start, -1, `Missing ${value} in ${text}`);
+    const token = grammar.tokenizeLine(text, stack).tokens.find(item => item.startIndex <= start && item.endIndex > start);
+    return token?.scopes ?? [];
+}
+
+test("BBC BASIC's assembler, from [ to ], highlights its mnemonics, registers, labels and comments", () => {
+    const program = [
+        "30 [OPT pass",
+        "40 .loop LDA dest,X:STA &71,Y \\ copy X: INX",
+        "50 lda (dest),Y:ASL A:ROR count:ORA #1 ; set A",
+        "60 EQUB 1:BNE loop",
+        "65 ASL ADDR:LDA &70,XX:INY",
+        "66 . done RTS back:LDY &70,x junk:STX &71,y:EQUb 1",
+        "67 LDAdest:RTSfoo:.restart:.install LDX &70,y",
+        "70 ]:NEXT:X=LDA+1"
+    ];
+    const at = (line: number, value: string, occurrence = 0) => linesScopes("bbcbasic", program, line, value, occurrence);
+    assert.ok(has(at(0, "OPT"), "keyword.other.mnemonic"));
+    assert.ok(has(at(0, "pass"), "variable.other"), "an operand's names are BASIC's");
+    assert.ok(has(at(1, "40"), "entity.name.label.line-number"), "the assembler goes on to the next line");
+    assert.ok(has(at(1, "loop"), "entity.name.label"));
+    assert.ok(has(at(1, "LDA"), "keyword.other.mnemonic"), "after a label");
+    assert.ok(has(at(1, "X"), "variable.language.register"));
+    assert.ok(has(at(1, "Y"), "variable.language.register"));
+    assert.ok(has(at(1, "copy"), "comment.line.assembler"));
+    assert.ok(has(at(1, "INX"), "keyword.other.mnemonic"), "a colon ends a comment");
+    assert.ok(has(at(2, "lda"), "keyword.other.mnemonic"), "in small letters too");
+    assert.ok(has(at(2, "A", 1), "variable.language.register"), "ASL A is the accumulator");
+    assert.ok(has(at(2, "count"), "variable.other"));
+    assert.ok(has(at(2, "ORA"), "keyword.other.mnemonic"), "ORA, not OR then A");
+    assert.ok(has(at(2, "set"), "comment.line.assembler"), "; after an operand");
+    assert.ok(has(at(3, "EQUB"), "keyword.other.mnemonic"));
+    assert.ok(has(at(3, "loop"), "variable.other"));
+    assert.ok(has(at(4, "A", 1), "variable.language.register"), "ASL ADDR is ASL A");
+    assert.ok(has(at(4, "DDR"), "comment.line.assembler"), "the rest of the statement is skipped");
+    assert.ok(has(at(4, "XX"), "variable.language.register"));
+    assert.ok(has(at(4, "X:"), "comment.line.assembler"), "after the register too");
+    assert.ok(has(at(4, "INY"), "keyword.other.mnemonic"), "a colon ends what is skipped");
+    assert.ok(has(at(5, "done"), "entity.name.label"));
+    assert.ok(has(at(5, "RTS"), "keyword.other.mnemonic"), "after a label");
+    assert.ok(has(at(5, "back"), "comment.line.assembler"), "an implied instruction reads nothing after it");
+    assert.ok(has(at(5, "LDY"), "keyword.other.mnemonic"));
+    assert.ok(has(at(5, "x"), "variable.language.register"), "LDY takes its register in either case");
+    assert.ok(has(at(5, "junk"), "comment.line.assembler"));
+    assert.ok(has(at(5, "y"), "variable.language.register"), "so does STX");
+    assert.ok(!has(at(5, "EQUb"), "keyword.other.mnemonic"), "EQU takes a capital letter");
+    assert.ok(has(at(6, "LDA"), "keyword.other.mnemonic"), "the first three letters, whatever follows them");
+    assert.ok(has(at(6, "dest"), "variable.other"), "LDAdest is LDA dest");
+    assert.ok(has(at(6, "RTS"), "keyword.other.mnemonic"));
+    assert.ok(has(at(6, "foo"), "comment.line.assembler"));
+    assert.ok(has(at(6, "start"), "entity.name.label"), "a label is read whole, STA inside it or not");
+    assert.ok(has(at(6, "stall"), "entity.name.label"));
+    assert.ok(has(at(6, "LDX"), "keyword.other.mnemonic"), "after a label read whole");
+    assert.ok(has(at(6, "y"), "variable.language.register"));
+    assert.ok(!has(scopes("bbcbasic", "10 [ASL ABS(x)", "ABS"), "variable.language.register"), "ABS is a keyword, not the accumulator");
+    assert.ok(!has(scopes("bbcbasic", "10 [ROL AB.(x)", "AB."), "variable.language.register"), "nor its abbreviation");
+    assert.ok(has(scopes("bbcbasic", "10 [ROL A", "A"), "variable.language.register"), "A alone is");
+    assert.ok(has(at(7, "]"), "punctuation.section.assembler.end"));
+    assert.ok(has(at(7, "NEXT"), "keyword.control"), "BASIC again after ]");
+    assert.ok(has(at(7, "LDA"), "variable.other"), "outside the assembler LDA is a name");
+    assert.ok(!has(at(7, "NEXT"), "meta") && !has(at(7, "LDA"), "keyword.other.mnemonic"));
+    assert.ok(has(scopes("bbcbasic", "10 PRINT LDA", "LDA"), "variable.other"), "no [, no assembler");
+});
+
 test("MBASIC finds reserved words only set apart from names", () => {
     const line = "20 WHILE PRINTER.COUNT% MOD 2 = 0 XOR A \\ 3: PRINT FNA(2);USR1(0);MID$(B$,1,1): WEND";
     assert.ok(has(scopes("mbasic", line, "WHILE"), "keyword.control"));
@@ -172,6 +266,37 @@ test("PET BASIC highlights its own words, BASIC 4's disk commands too, but not i
     assert.ok(has(scopes("petbasic", "50 DATA DOPEN, 2: END", "DOPEN"), "string.unquoted.data"));
     assert.ok(has(scopes("petbasic", "50 DATA DOPEN, 2: END", "END"), "keyword.control"), "a colon ends DATA");
     assert.ok(has(scopes("petbasic", "60 REM DIRECTORY", "DIRECTORY"), "comment.line"));
+});
+
+test("Atari BASIC finds statement names where statements start, and operator and function words outside names", () => {
+    const line = "10 IF X=1 THEN PRINT TOTAL:NOTE 1,A,B";
+    assert.ok(has(scopes("atari", line, "10"), "entity.name.label.line-number"));
+    assert.ok(has(scopes("atari", line, "IF"), "keyword.control"));
+    assert.ok(has(scopes("atari", line, "THEN"), "keyword.control"));
+    assert.ok(has(scopes("atari", line, "PRINT"), "keyword.other"), "a statement after THEN");
+    assert.ok(has(scopes("atari", line, "TOTAL"), "variable.other"), "TO inside TOTAL");
+    assert.ok(has(scopes("atari", line, "NOTE"), "keyword.other"), "a statement after a colon");
+    assert.ok(has(scopes("atari", "20 X=NOTE1+1", "NOTE1"), "variable.other"), "NOT inside NOTE1, and NOTE is no statement here");
+    assert.ok(has(scopes("atari", "30 PRINTER=1", "PRINT"), "keyword.other"), "PRINTER=1 is PRINT ER=1");
+    assert.ok(has(scopes("atari", "30 PRINTER=1", "ER"), "variable.other"));
+    assert.ok(has(scopes("atari", "40 PR.\"HI\":G.10", "PR."), "keyword.other"), "an abbreviated statement");
+    assert.ok(has(scopes("atari", "40 PR.\"HI\":G.10", "G."), "keyword.control"), "G. is GOTO");
+    assert.ok(has(scopes("atari", "50 FOR I=1 TO 10 STEP 2", "FOR"), "keyword.control"));
+    assert.ok(has(scopes("atari", "50 FOR I=1 TO 10 STEP 2", "TO"), "keyword.control"));
+    assert.ok(has(scopes("atari", "50 FOR I=1 TO 10 STEP 2", "STEP"), "keyword.control"));
+    assert.ok(has(scopes("atari", "60 FOR I=1TO10", "TO"), "keyword.control"), "after a number BASIC wants an operator");
+    assert.ok(has(scopes("atari", "70 X=PEEK(712) AND NOT Y", "PEEK"), "support.function"));
+    assert.ok(has(scopes("atari", "70 X=PEEK(712) AND NOT Y", "AND"), "keyword.operator"));
+    assert.ok(has(scopes("atari", "70 X=PEEK(712) AND NOT Y", "NOT"), "keyword.operator"));
+    assert.ok(has(scopes("atari", "80 A$=STR$(5)", "STR$"), "support.function"));
+    assert.ok(has(scopes("atari", "90 ON X GOTO 100,200", "GOTO"), "keyword.control"), "GOTO in ON");
+    assert.ok(has(scopes("atari", "100 GO TO 10", "GO TO"), "keyword.control"));
+    assert.ok(has(scopes("atari", "110 ? \"HI\"", "?"), "keyword.other"), "? is PRINT");
+    assert.ok(has(scopes("atari", "120 X=1:REM A:PRINT", "PRINT"), "comment.line"), "REM runs to the end of the line");
+    assert.ok(has(scopes("atari", "130 . A NOTE", "NOTE"), "comment.line"), "a dot alone is REM");
+    assert.ok(has(scopes("atari", "140 DATA 1,2:PRINT", "PRINT"), "string.unquoted.data"), "DATA runs to the end of the line");
+    assert.ok(has(scopes("atari", "150 COLOR 1:PLOT 5,5:DRAWTO 10,10", "DRAWTO"), "keyword.other"));
+    assert.ok(has(scopes("atari", "    PRINT \"NO NUMBER\"", "PRINT"), "keyword.other"), "a line with no number");
 });
 
 test("BASIC labels have label scopes", () => {

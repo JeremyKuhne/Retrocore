@@ -92,21 +92,149 @@ public class Trs80Model3Tests
     }
 
     /// <summary>
-    ///  The clock interrupt does not reach the Z80 while port <c>$E0</c> masks it.
+    ///  Level II on the Model III and 4, and the DOSes of the Model III, 4 and 4P, read shift and a letter as
+    ///  uppercase and the letter alone as lowercase while caps lock is off, so an uppercase letter is typed with shift
+    ///  and a lowercase one without, and ` as shift and @.
+    /// </summary>
+    /// <param name="variant">The model.</param>
+    [TestMethod]
+    [DataRow(Trs80Model3Variant.Model3)]
+    [DataRow(Trs80Model3Variant.Model4)]
+    [DataRow(Trs80Model3Variant.Model4P)]
+    public void TypingLettersShiftsUppercase(Trs80Model3Variant variant)
+    {
+        Trs80Model3Bus bus = new(
+            new Trs80Model3Configuration { Variant = variant },
+            new Trs80Model3Roms(new byte[Trs80Model3Roms.SystemSize], new byte[Trs80Model3Roms.CharacterGeneratorSize]));
+
+        Trs80Keyboard keyboard = bus.Keyboard;
+
+        Trs80MachineTests.TypedKeys(keyboard, 'A').Should().Be((true, true));
+        Trs80MachineTests.TypedKeys(keyboard, 'z').Should().Be((true, false));
+        Trs80MachineTests.TypedKeys(keyboard, '`').Should().Be((true, true));
+        Trs80MachineTests.TypedKeys(keyboard, '@').Should().Be((true, false));
+    }
+
+    /// <summary>
+    ///  Level I reads shift and a letter as its control code, so on a Model III running Level I every letter is typed
+    ///  as its key alone.
+    /// </summary>
+    [TestMethod]
+    public void TypingLettersOnLevelIIsUnshifted()
+    {
+        Trs80Model3Bus bus = new(
+            new Trs80Model3Configuration { Rom = Trs80Rom.Level1 },
+            new Trs80Model3Roms(new byte[Trs80Model3Roms.BootSize], new byte[Trs80Model3Roms.CharacterGeneratorSize]));
+
+        Trs80Keyboard keyboard = bus.Keyboard;
+
+        Trs80MachineTests.TypedKeys(keyboard, 'A').Should().Be((true, false));
+        Trs80MachineTests.TypedKeys(keyboard, 'z').Should().Be((true, false));
+        keyboard.Type((byte)'`').Should().BeFalse();
+    }
+
+    /// <summary>
+    ///  The clock interrupt does not latch while port <c>$E0</c> masks it, as the Model 4P's technical reference says
+    ///  ("If the real time clock is enabled (ENRTC ...), the interrupt is latched"); once enabled it holds until a
+    ///  read of <c>$EC</c>-<c>$EF</c> (the Model III's reference names <c>$EC</c>, RTCIN*, and the Model 4's any read
+    ///  of the four, as clearing it), and reading the status does not clear it.
     /// </summary>
     [TestMethod]
     public void ClockInterruptFollowsTheMask()
     {
         Trs80Model3Bus bus = Create(new()).Bus;
         bus.Out(0xE0, 0x00);
-        for (int index = 0; index < Trs80Model3Timing.CyclesPerTick; index++) { bus.Tick(); }
+        Tick(bus, Trs80Model3Timing.CyclesPerTick);
         bus.InterruptRequested.Should().BeFalse();
         bus.In(0xE0).Should().Be(0xFF, "nothing enabled interrupts");
         bus.Out(0xE0, 0x04);
-        bus.InterruptRequested.Should().BeTrue("the clock latched while masked");
+        bus.InterruptRequested.Should().BeFalse("the tick came while the clock was masked");
+        Tick(bus, Trs80Model3Timing.CyclesPerTick);
+        bus.InterruptRequested.Should().BeTrue();
         bus.In(0xE0).Should().Be(0xFB, "bit 2, active low, is the clock");
-        bus.In(0xEC);
-        bus.InterruptRequested.Should().BeFalse("reading $EC acknowledges it");
+        bus.In(0xE0).Should().Be(0xFB, "reading the status leaves it latched");
+        bus.In(0xEF);
+        bus.InterruptRequested.Should().BeFalse("reading $EC-$EF acknowledges it");
+        bus.In(0xE0).Should().Be(0xFF);
+    }
+
+    /// <summary>
+    ///  The clock divides the 60 Hz vertical sync by two: 30 interrupts a second on a Model III and on a Model 4 at
+    ///  2 MHz, and 60 on a Model 4 at 4 MHz, whose FAST signal stops the divider (the Model 4's and 4P's technical
+    ///  references, "Real Time Clock"). A Model III ignores port <c>$EC</c> bit 6.
+    /// </summary>
+    /// <param name="variant">The model.</param>
+    /// <param name="fast">Whether port <c>$EC</c> bit 6 is set.</param>
+    /// <param name="perSecond">The interrupts a second.</param>
+    [TestMethod]
+    [DataRow(Trs80Model3Variant.Model3, false, 30)]
+    [DataRow(Trs80Model3Variant.Model3, true, 30)]
+    [DataRow(Trs80Model3Variant.Model4, false, 30)]
+    [DataRow(Trs80Model3Variant.Model4, true, 60)]
+    [DataRow(Trs80Model3Variant.Model4P, false, 30)]
+    [DataRow(Trs80Model3Variant.Model4P, true, 60)]
+    public void ClockInterruptRate(Trs80Model3Variant variant, bool fast, int perSecond)
+    {
+        Trs80Model3Configuration configuration = new()
+        {
+            Variant = variant,
+            RamKilobytes = Trs80Model3Configuration.DefaultRam(variant)
+        };
+
+        // The 4P's ROM is its 4K boot loader; the bus does not run it here.
+        byte[]? rom = variant == Trs80Model3Variant.Model4P ? new byte[Trs80Model3Roms.BootSize] : null;
+        Trs80Model3Bus bus = Create(configuration, rom).Bus;
+        bus.Out(0xE0, 0x04);
+        bus.Out(0xEC, fast ? (byte)0x40 : (byte)0x00);
+        int count = 0;
+        int sinceLast = 0;
+        int shortest = int.MaxValue;
+        bool first = true;
+
+        // A second of device time, which counts 2 MHz T-states at either speed.
+        for (int cycle = 0; cycle < Trs80Model3Timing.ClockHertz; cycle++)
+        {
+            bus.Tick();
+            sinceLast++;
+            if (!bus.InterruptRequested) { continue; }
+            count++;
+            if (!first) { shortest = Math.Min(shortest, sinceLast); }
+            first = false;
+            sinceLast = 0;
+            bus.In(0xEC);
+        }
+
+        count.Should().Be(perSecond);
+        shortest.Should().Be(Trs80Model3Timing.ClockHertz / perSecond, "the ticks are evenly spaced");
+    }
+
+    /// <summary>
+    ///  Switching a Model 4 between 2 and 4 MHz changes the clock's rate from the next frame.
+    /// </summary>
+    [TestMethod]
+    public void Model4ClockFollowsTheSpeed()
+    {
+        Trs80Model3Bus bus = Create(new() { Variant = Trs80Model3Variant.Model4, RamKilobytes = 64 }).Bus;
+        bus.Out(0xE0, 0x04);
+        int Count(int frames)
+        {
+            int count = 0;
+            for (int cycle = 0; cycle < frames * Trs80Model3Timing.CyclesPerFrame; cycle++)
+            {
+                bus.Tick();
+                if (!bus.InterruptRequested) { continue; }
+                count++;
+                bus.In(0xEC);
+            }
+
+            return count;
+        }
+
+        Count(60).Should().Be(30);
+        bus.Out(0xEC, 0x40);
+        Count(60).Should().Be(60);
+        bus.Out(0xEC, 0x00);
+        Count(60).Should().Be(30);
     }
 
     /// <summary>
@@ -397,6 +525,11 @@ public class Trs80Model3Tests
         byte[] font = new byte[Trs80Model3Roms.CharacterGeneratorSize];
         for (int index = 0; index < font.Length; index++) { font[index] = (byte)(index >> 3); }
         return new(configuration, new Trs80Model3Roms(rom ?? AssembleRom(TestRom), font));
+    }
+
+    private static void Tick(Trs80Model3Bus bus, int cycles)
+    {
+        for (int index = 0; index < cycles; index++) { bus.Tick(); }
     }
 
     private static string Text(Trs80Model3Machine machine, int offset, int length) =>

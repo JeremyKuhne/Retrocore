@@ -1,946 +1,1222 @@
-; STRNGSTUF: making strings and the string functions. STR$, string literals and the temporary descriptors that hold a
-; result, PREFIX$, TIME$ and DATE$ from SOS, INSTR, SUB$, CHR$, LEFT$, RIGHT$, MID$, LEN, ASC and VAL, and the helpers
-; that read a byte or an address argument.
+; retrocore: style=strict
+; StrngStuf.asm: making strings and the string functions. `STR$`, string literals and the temporary descriptors that
+; hold a result, `PREFIX$`, `TIME$` and `DATE$` from SOS, `INSTR`, `SUB$`, `CHR$`, `LEFT$`, `RIGHT$`, `MID$`, `LEN`,
+; `ASC` and `VAL`, and the helpers that read a byte or an address argument.
 ;
-; A string's descriptor is three bytes: its length, then its distance below HIMEM, low byte first, counted in bytes
+; A string's descriptor is three bytes: its length, then its distance below MemoryTop, low byte first, counted in bytes
 ; through the banks as if they were one run of memory. The characters live in string space, which grows down from
-; FRETOP; three bytes follow each string there: a type byte (TEMPTYP, SIMTYP or ARYTYP: whose descriptor holds it) and
-; where that descriptor is (zero for a temporary), for the garbage collector. A string's result is held in one of
-; NUMTMP temporary descriptors in zero page, at TEMPST; FACMO points to the descriptor, with a page and bank of zero
-; for a temporary.
+; StringsBottom; three bytes follow each string there: a type byte (STRING_TYPE_TEMPORARY, STRING_TYPE_SIMPLE_VARIABLE
+; or STRING_TYPE_ARRAY_ELEMENT: whose descriptor holds it) and where that descriptor is (zero for a temporary), for the
+; garbage collector. A string's result is held in one of TEMPORARY_COUNT temporary descriptors in zero page, at
+; TemporaryDescriptors; FacMantissa3 points to the descriptor, with a page and bank of zero for a temporary.
 ;
-; Names follow Apple's Business BASIC 1.3 listing.
+; Apple's listing calls this file STRNGSTUF; its names are kept in each definition's Also: section.
 
-; ---------------------------------------------------------------------------------------------------------------------
-; Making strings
-; ---------------------------------------------------------------------------------------------------------------------
+; Functions: `STR$`.
+.scope Functions continued
 
-;; The STR$ function: the characters PRINT would give for the number in the FAC, as a string.
-;; See: <FOUTC>, <STRLIT>
-STRS:
+;; The `STR$` function: the characters `PRINT` would give for the number in the <Fac>, as a string.
+;; Out: FacMantissa3 = the temporary descriptor of the result
+;; See: <Float::FormatFacAtOffset>, <Strings::FromText>
+;; Also: STRS (BB13)
+.proc Str
     ldy #0
-    jsr FOUTC                               ; the text at LOFBUF, ending in a zero
-    lda #<(LOFBUF)
-    ldy #>(LOFBUF)
+    jsr Float::FormatFacAtOffset            ; the text at NumberBufferPrefix, ending in a zero
+    lda #<(NumberBufferPrefix)
+    ldy #>(NumberBufferPrefix)
     ldx #0
-    beq STRLIT                              ; always
+    beq Strings::FromText                   ; always
+.endproc
 
-;; Takes space for a string of A characters, with FACMO's descriptor as the one it is made from.
-;; In: A = the length, FACMO = a descriptor's address (FACMOB its bank)
-;; Out: DSCTMP = the new string's length and address (DSCTMPB its bank), A = the length, DSCPNT = FACMO
-;; See: <STRSPA>, <GETSPA>
-STRINI:
-    ldx FACMOB
-    stx DSCPNTB
-    ldx FACMO
-    ldy FACMO+1
+.endscope
 
-;; Inherit: <STRINI>
-;; In: A = the length, X = a descriptor's low byte, Y = its page, DSCPNTB = its bank
-STRIN2:
-    stx DSCPNT
-    sty DSCPNT+1
+; Strings: making a string and its temporary descriptor.
+.scope Strings continued
 
-;; Takes space for a string of A characters in string space and builds its descriptor in DSCTMP.
+;; Takes space for a string of A characters, with <FacMantissa3>'s descriptor as the one it is made from.
 ;;
-;; The three bytes after the string mark it a temporary's. An empty string takes no space, and DSCTMP's address is
-;; then whatever X and Y held.
+;; The descriptor's address goes in <DescriptorPointer>, for the routines that copy from it.
+;; In: A = the length, FacMantissa3 = a descriptor's address (<FacMantissa3XByte> its bank)
+;; Out: NewDescriptor = the new string's length and address (<NewDescriptorXByte> its bank), A = the length, X = the
+;;   length,
+;;   DescriptorPointer = the descriptor's address
+;; Errors: <ERROR_OUT_OF_MEMORY> = no room, even after collecting the garbage
+;; Entry:
+;;   ForDescriptor = takes the descriptor's address from X (low byte) and Y (page), its bank already in
+;;   <DescriptorPointerXByte>
+;; See: <Strings::Allocate>, <ReserveSpace>
+;; Also: STRINI (BB13)
+.proc AllocateForFac
+    ldx FacMantissa3XByte
+    stx DescriptorPointerXByte
+    ldx FacMantissa3
+    ldy FacMantissa3+1
+
+;; Takes the descriptor's address from X and Y, its bank already in <DescriptorPointerXByte>.
+;; In: A = the length, X = a descriptor's low byte, Y = its page, DescriptorPointerXByte = its bank
+;; Also: STRIN2 (BB13)
+ForDescriptor:
+    stx DescriptorPointer
+    sty DescriptorPointer+1
+    ; Falls into Allocate.
+.endproc
+
+;; Takes space for a string of A characters in string space and builds its descriptor in <NewDescriptor>.
+;;
+;; The three bytes after the string mark it a temporary's. An empty string takes no space, and <NewDescriptor>'s address
+;; is then whatever X and Y held.
 ;; In: A = the length
-;; Out: DSCTMP = the length and address (DSCTMPB its bank), FRESPC = the address, A = the length, zero = set for an
-;;   empty string
-;; Errors: ERROM = no room, even after collecting the garbage
-;; See: <GETSPA>, <PUTNEW>
-STRSPA:
-    jsr GETSPA
-    stx DSCTMP+1
-    ldx FRESPCB
-    stx DSCTMPB
-    sty DSCTMP+1+1
-    sta DSCTMP
+;; Out: NewDescriptor = the length and address (<NewDescriptorXByte> its bank), NewString = the address, A = the length,
+;;   X = the length,
+;;   zero = set for an empty string
+;; Errors: <ERROR_OUT_OF_MEMORY> = no room, even after collecting the garbage
+;; See: <ReserveSpace>, <Strings::PushTemporary>
+;; Also: STRSPA (BB13)
+.proc Allocate
+    jsr ReserveSpace
+    stx NewDescriptor+1
+    ldx NewStringXByte
+    stx NewDescriptorXByte
+    sty NewDescriptor+1+1
+    sta NewDescriptor
     tax
-    beq STRRT3
+    beq Done
     ldy #2
     lda #0
 
-;; Zeroes the descriptor's address in the bytes after the string, then gives them TEMPTYP's type.
-STRMVLP:
-    sta (HIGHDS),Y
+;; Zeroes the descriptor's address in the bytes after the string, then gives them <STRING_TYPE_TEMPORARY>'s type.
+;; Also: STRMVLP (BB13)
+MarkTemporary:
+    sta (DestinationEnd),Y
     dey
-    bne STRMVLP
-    lda #TEMPTYP
-    sta (HIGHDS),Y
+    bne MarkTemporary
+    lda #STRING_TYPE_TEMPORARY
+    sta (DestinationEnd),Y
     txa                                     ; the length again
 
-;; An RTS for <STRSPA>'s branch.
-STRRT3:
+;; Returns.
+;; Also: STRRT3 (BB13)
+Done:
     rts
+.endproc
 
 ;; Makes a string of the literal at Y,A (bank X), which ends at a quote or a zero, and gives it as the result.
+;;
+;; A leading quote should be skipped first; a closing quote is skipped too.
 ;; In: A = the literal's low byte, Y = its page, X = its bank
-;; See: <STRLT2>
-STRLIT:
+;; Out: FacMantissa3 = the temporary descriptor, ValueType = $FF, SecondStringPointer = past the closing quote, or at
+;;   the zero
+;; See: <Strings::FromTextUntil>
+;; Also: STRLIT (BB13)
+.proc FromText
     pha
-    lda #34                                 ; ends at a quote
-    sta CHARAC
-    sta ENDCHR
+    lda #'"'                                ; ends at a quote
+    sta Delimiter
+    sta EndDelimiter
     pla
+    ; Falls into FromTextUntil.
+.endproc
 
-;; Makes a string of the characters at Y,A (bank X), up to a zero or the character in CHARAC or ENDCHR, and gives it as
-;; the result.
+;; Makes a string of the characters at Y,A (bank X), up to a zero or the character in <Delimiter> or <EndDelimiter>, and
+;; gives it as the result.
 ;;
 ;; The characters are copied into string space and a temporary descriptor made for them. A leading quote should be
 ;; skipped first.
-;; In: A = the characters' low byte, Y = their page, X = their bank, CHARAC and ENDCHR = the characters that end them
-;; Out: FACMO = the temporary descriptor, VALTYP = $FF, STRNG2 = the character that ended them, or past it for a quote
-;; See: <STRCP>, <PUTNEW>
-STRLT2:
-    sta STRNG1
-    sty STRNG1+1
-    stx STRNG1B
-    stx DSCTMPB
-    sta DSCTMP+1
-    sty DSCTMP+1+1                          ; overwritten: STRCP always copies
+;; In: A = the characters' low byte, Y = their page, X = their bank, Delimiter = a character that ends them,
+;;   EndDelimiter = another
+;; Out: FacMantissa3 = the temporary descriptor, ValueType = $FF, SecondStringPointer = the character that ended them,
+;;   or past it for a quote
+;; Entry:
+;;   AtZero = takes Y as the count of characters at <StringPointer> (<StringPointerXByte> their bank); `READ#` enters
+;;   here for a string item
+;; See: <Strings::CopyText>, <Strings::PushTemporary>
+;; Also: STRLT2 (BB13)
+.proc FromTextUntil
+    sta StringPointer
+    sty StringPointer+1
+    stx StringPointerXByte
+    stx NewDescriptorXByte
+    sta NewDescriptor+1
+    sty NewDescriptor+1+1                   ; overwritten: CopyText always copies
     ldy #$FF                                ; the count, less 1
 
 ;; Counts the characters up to the end.
-STRGET:
+;; Also: STRGET (BB13)
+Scan:
     iny
-    lda (STRNG1),Y
-    beq STRFI1
-    cmp CHARAC
-    beq STRFIN
-    cmp ENDCHR
-    bne STRGET
+    lda (StringPointer),Y
+    beq AtZero
+    cmp Delimiter
+    beq AtDelimiter
+    cmp EndDelimiter
+    bne Scan
 
-;; Ended by CHARAC or ENDCHR: a quote leaves carry set, so STRNG2 goes past it.
-STRFIN:
-    cmp #34
-    beq STRFI2
+;; Ended by <Delimiter> or <EndDelimiter>: a quote leaves carry set, so <SecondStringPointer> goes past it.
+;; Also: STRFIN (BB13)
+AtDelimiter:
+    cmp #'"'
+    beq SetLength
 
-;; Ended otherwise: STRNG2 stays at the ending character.
-STRFI1:
+;; Ended otherwise: <SecondStringPointer> stays at the ending character.
+;; In: Y = the count of characters at <StringPointer>
+;; Also: STRFI1 (BB13)
+AtZero:
     clc
 
-;; Keeps the count and sets STRNG2 at the end, plus carry.
-STRFI2:
-    sty DSCTMP
+;; Keeps the count and sets <SecondStringPointer> at the end, plus carry.
+;; Also: STRFI2 (BB13)
+SetLength:
+    sty NewDescriptor
     tya
-    adc STRNG1
-    sta STRNG2
-    ldx STRNG1B
-    stx STRNG2B
-    ldx STRNG1+1
-    bcc STRST2
+    adc StringPointer
+    sta SecondStringPointer
+    ldx StringPointerXByte
+    stx SecondStringPointerXByte
+    ldx StringPointer+1
+    bcc StoreEnd
     inx
-    cpx #MAXPG
-    bcc STRST2
-    ldx #MINPG
-    inc STRNG2B
+    cpx #POINTER_PAGE_LIMIT
+    bcc StoreEnd
+    ldx #POINTER_PAGE_FIRST
+    inc SecondStringPointerXByte
 
-;; Inherit: <STRFI2>
-STRST2:
-    stx STRNG2+1
+;; Stores the end's page.
+;; Also: STRST2 (BB13)
+StoreEnd:
+    stx SecondStringPointer+1
+    ; Falls into CopyText.
+.endproc
 
-;; Copies Y characters at STRNG1 into string space and gives them as the result.
-;; In: Y = the length, STRNG1 = the characters (STRNG1B their bank)
-;; See: <STRLT2>, <PUTNEW>
-STRCP:
+;; Copies Y characters at <StringPointer> into string space and gives them as the result.
+;; In: Y = the length, StringPointer = the characters (<StringPointerXByte> their bank)
+;; Out: FacMantissa3 = the temporary descriptor, ValueType = $FF
+;; Errors: <ERROR_OUT_OF_MEMORY> = no room, <ERROR_FORMULA_TOO_COMPLEX> = all the temporaries in use
+;; See: <Strings::FromTextUntil>, <Strings::PushTemporary>
+;; Also: STRCP (BB13)
+.proc CopyText
     tya
-    jsr STRINI
-    ldx STRNG1
-    ldy STRNG1+1
-    stx INDEX1
-    sty INDEX1+1
-    ldx STRNG1B
-    stx INDEX1B
-    jsr MOVDO
+    jsr AllocateForFac
+    ldx StringPointer
+    ldy StringPointer+1
+    stx Pointer1
+    sty Pointer1+1
+    ldx StringPointerXByte
+    stx Pointer1XByte
+    jsr CopyBytes
+    ; Falls into PushTemporary.
+.endproc
 
-;; Copies DSCTMP into the next free temporary descriptor and points FACMO to it: the result is a string.
+;; Copies <NewDescriptor> into the next free temporary descriptor and points <FacMantissa3> to it: the result is a
+;; string.
 ;;
-;; The temporary holds the length and the distance of the string below HIMEM, which <FIXAYX> works out across banks.
-;; Out: FACMO = the temporary (FACMO+1 and FACMOB zero), VALTYP = $FF, LASTPT = the temporary, TEMPPT = the next one
-;; Errors: ERRST = all NUMTMP temporaries in use
-PUTNEW:
-    ldx TEMPPT
-    cpx #STRSIZ*NUMTMP+TEMPST
-    bne PUTNW1
-    ldx #ERRST
-    jmp ERROR
+;; The temporary holds the length and the distance of the string below <MemoryTop>, which <Memory::PageDifference> works
+;; out across banks.
+;; Out: FacMantissa3 = the temporary (<FacMantissa3>+1 and <FacMantissa3XByte> zero), ValueType = $FF, LastTemporary =
+;;   the temporary, NextTemporary = the next one
+;; Errors: <ERROR_FORMULA_TOO_COMPLEX> = all <TEMPORARY_COUNT> temporaries in use
+;; Also: PUTNEW (BB13)
+.proc PushTemporary
+    ldx NextTemporary
+    cpx #DESCRIPTOR_SIZE*TEMPORARY_COUNT+TemporaryDescriptors
+    bne Store
+    ldx #ERROR_FORMULA_TOO_COMPLEX
+    jmp ReportError
 
-;; Inherit: <PUTNEW>
-PUTNW1:
-    lda DSCTMP
+;; Stores the descriptor and moves <NextTemporary> on.
+;; Also: PUTNW1 (BB13)
+Store:
+    lda NewDescriptor
     sta 0,X                                 ; the length
     sec
-    lda HIMEM
-    sbc DSCTMP+1
-    sta 1,X                                 ; HIMEM less the address
-    lda HIMEM+1
-    sbc DSCTMP+2
-    ldy HIMEMB
-    stx KIMY
-    ldx DSCTMPB
-    jsr FIXAYX
-    ldx KIMY
+    lda MemoryTop
+    sbc NewDescriptor+1
+    sta 1,X                                 ; MemoryTop less the address
+    lda MemoryTop+1
+    sbc NewDescriptor+2
+    ldy MemoryTopXByte
+    stx KeptY
+    ldx NewDescriptorXByte
+    jsr Memory::PageDifference
+    ldx KeptY
     sta 2,X
     ldy #0
-    stx FACMO
-    sty FACMO+1
-    sty FACMOB
+    stx FacMantissa3
+    sty FacMantissa3+1
+    sty FacMantissa3XByte
     dey
-    sty VALTYP                              ; a string
-    stx LASTPT
+    sty ValueType                           ; a string
+    stx LastTemporary
     inx
     inx
     inx
-    stx TEMPPT
+    stx NextTemporary
     rts
+.endproc
+
+.endscope
 
 ; ---------------------------------------------------------------------------------------------------------------------
 ; Strings from SOS
 ; ---------------------------------------------------------------------------------------------------------------------
 
-;; The PREFIX$ function: SOS's prefix, as a string.
-;; See: <PREFIXSET>
-PREFIXS:
+; Functions: `PREFIX$`, `TIME$` and `DATE$`.
+.scope Functions continued
+
+;; The `PREFIX$` function: SOS's prefix, as a string.
+;; Out: FacMantissa3 = the temporary descriptor of the result
+;; Errors: SOS's error from GET_PREFIX
+;; Entry:
+;;   MakeString = makes a string of the A characters at <CatalogBuffer>+2; <Functions::Date> branches here
+;; See: <Statements::Prefix>, <Functions::PrefixList>
+;; Also: PREFIXS (BB13)
+.proc Prefix
     brk
-    .byte GETPREF
-    .word PREFTAB
-    bne JSERROR
-    lda CATBUF+1                            ; the prefix's length, then the prefix
+    .byte SOS_GET_PREFIX
+    .word PrefixList
+    bne Statements::Prefix::ToSosError
+    lda CatalogBuffer+1                     ; the prefix's length, then the prefix
 
-;; Makes a string of the A characters at CATBUF+2 and gives it as the result.
+;; Makes a string of the A characters at <CatalogBuffer>+2 and gives it as the result.
 ;; In: A = the length
-GOTITNOW:
+;; Also: GOTITNOW (BB13)
+MakeString:
     tay
-    lda #<(CATBUF+2)
-    sta STRNG1
-    lda #>(CATBUF+2)
-    sta STRNG1+1
+    lda #<(CatalogBuffer+2)
+    sta StringPointer
+    lda #>(CatalogBuffer+2)
+    sta StringPointer+1
     lda #0
-    sta STRNG1B
-    jmp STRCP
+    sta StringPointerXByte
+    jmp Strings::CopyText
+.endproc
 
-;; The TIME$ function: the time from SOS's clock, as `HH:MM:SS`.
+;; The `TIME$` function: the time from SOS's clock, as `HH:MM:SS`.
 ;;
-;; SOS gives the date and time as `YYYYMMDDWHHMMSSmmm`; TIME$ takes three pairs from the hour on, DATE$ three pairs
-;; from the year's last two digits on, putting the separator after each in place, in CATBUF.
-;; See: <DATES>
-TIMES:
+;; SOS gives the date and time as `YYYYMMDDWHHMMSSmmm`; `TIME$` takes three pairs from the hour on, `DATE$` three pairs
+;; from the year's last two digits on, putting the separator after each in place, in <CatalogBuffer>.
+;; Out: FacMantissa3 = the temporary descriptor of the result
+;; See: <Functions::Date>
+;; Also: TIMES (BB13)
+.proc Time
     lda #':'
-    ldy #9                                  ; the hour's offset
-    bne DATE01                              ; always
+    ldy #CLOCK_HOUR                         ; the hour's offset
+    bne Date::ReadClock                     ; always
+.endproc
 
-;; The DATE$ function: the date from SOS's clock, as `YY/MM/DD`.
-;; See: <TIMES>
-DATES:
+;; The offset of the year's last two digits in SOS's date and time, `YYYYMMDDWHHMMSSmmm`.
+CLOCK_YEAR = 2
+
+;; The offset of the hour in SOS's date and time.
+CLOCK_HOUR = 9
+
+;; The length of `TIME$`'s and `DATE$`'s result: three pairs and the two separators between them.
+CLOCK_LENGTH = 8
+
+;; The `DATE$` function: the date from SOS's clock, as `YY/MM/DD`.
+;; Out: FacMantissa3 = the temporary descriptor of the result
+;; Entry:
+;;   ReadClock = makes the string from offset Y with the separator in A; <Functions::Time> branches here
+;; See: <Functions::Time>
+;; Also: DATES (BB13)
+.proc Date
     lda #'/'
-    ldy #2                                  ; the year's last two digits
+    ldy #CLOCK_YEAR                         ; the year's last two digits
 
 ;; Reads SOS's clock and makes a string of three pairs of digits from offset Y, each followed by the separator in A,
 ;; keeping the first eight characters.
 ;; In: A = the separator, Y = the first pair's offset
-DATE01:
-    sta YSAVE
+;; Also: DATE01 (BB13)
+ReadClock:
+    sta SavedY
     brk
-    .byte GETCLOK
-    .word DATETAB
+    .byte SOS_GET_TIME
+    .word TimeList
     lda #3
-    sta KIMY                                ; three pairs
+    sta KeptY                               ; three pairs
     ldx #0
 
 ;; Copies a pair down to X and adds the separator; X never passes Y, so the copy is safe in place.
-DATE02:
-    lda CATBUF+2,Y
-    sta CATBUF+2,X
+;; Also: DATE02 (BB13)
+CopyPair:
+    lda CatalogBuffer+2,Y
+    sta CatalogBuffer+2,X
     inx
     iny
-    lda CATBUF+2,Y
-    sta CATBUF+2,X
+    lda CatalogBuffer+2,Y
+    sta CatalogBuffer+2,X
     inx
     iny
-    lda YSAVE
-    sta CATBUF+2,X
+    lda SavedY
+    sta CatalogBuffer+2,X
     inx
-    dec KIMY
-    bne DATE02
-    lda #8                                  ; the last separator dropped
-    bne GOTITNOW                            ; always
+    dec KeptY
+    bne CopyPair
+    lda #CLOCK_LENGTH                       ; the last separator dropped
+    bne Prefix::MakeString                  ; always
+.endproc
 
-;; The PREFIX$ statement, `PREFIX$ = pathname`: sets SOS's prefix.
+.endscope
+
+; Statements: `PREFIX$ =`.
+.scope Statements continued
+
+;; The `PREFIX$` statement, `PREFIX$ = pathname`: sets SOS's prefix.
 ;;
-;; In 1.3 it then copies the new prefix into SOSPATH.
-;; See: <PREFIXS>
-PREFIXSET:
-    jsr CHKEQL
-    jsr GETNAME
+;; In 1.3 it then copies the new prefix into `SosPrefix`, through `ProgramPrefix::SaveSos`.
+;; Errors: SOS's error from SET_PREFIX
+;; Entry:
+;;   ToSosError = ends the statement with the SOS error in A; <Functions::Prefix> branches here
+;; See: <Functions::Prefix>, <Statements::SetPrefixList>
+;; Also: PREFIXSET (BB13)
+.proc Prefix
+    jsr CheckEquals
+    jsr Files::TakeName
     brk
-    .byte SETPREF
-    .word PREFTB2
+    .byte SOS_SET_PREFIX
+    .word SetPrefixList
+    bne ToSosError
 .if VERSION >= 130
-    bne *+6
-    jsr FILSOS
-.else
-    bne JSERROR
+    jsr ProgramPrefix::SaveSos
 .endif
     rts
 
 ;; Ends the statement with the SOS error.
-JSERROR:
-    jmp SERROR
+;; Also: JSERROR (BB13)
+ToSosError:
+    jmp ReportSosError
+.endproc
+
+.endscope
 .if VERSION >= 130
 
-; 1.3's PROGRAM$: PROGPFXS gives the program's prefix, PROGPATH, as a string; PROGPFX sets it from `PROGRAM$ =
-; pathname`, adding a slash at the end when it has none, and naming the volume rather than the device.
+; Functions: 1.3's `PROGPREFIX$`.
+.scope Functions continued
 
-PROGPFXS:
-    ldy PROGPATH                            ; the length, then the prefix
-    lda #<(PROGPATH+1)
-    sta STRNG1
-    lda #>(PROGPATH+1)
-    sta STRNG1+1
+;; 1.3's `PROGPREFIX$` function: the program's prefix, <ProgramPath>, as a string.
+;; Out: FacMantissa3 = the temporary descriptor of the result
+;; See: <Statements::ProgPrefix>
+;; Also: PROGPFXS (BB13)
+.proc ProgPrefix
+    ldy ProgramPath                         ; the length, then the prefix
+    lda #<(ProgramPath+1)
+    sta StringPointer
+    lda #>(ProgramPath+1)
+    sta StringPointer+1
     lda #0
-    sta STRNG1B
-    jmp STRCP
-PROGPFX:
-    jsr CHKEQL
-    jsr GETNAME
-    ldy NAMBUF
-    lda NAMBUF,Y
+    sta StringPointerXByte
+    jmp Strings::CopyText
+.endproc
+
+.endscope
+
+; Statements: 1.3's `PROGPREFIX$ =`.
+.scope Statements continued
+
+;; 1.3's `PROGPREFIX$` statement, `PROGPREFIX$ = pathname`: sets the program's prefix to a full pathname (one starting
+;; with `.` or `/`); a partial pathname leaves the program's prefix as it was.
+;;
+;; A slash is added at the end when the name has none, and the prefix names the volume rather than the device. SOS's
+;; prefix is then set back to BASIC's.
+;; See: <Functions::ProgPrefix>, <ProgramPrefix::TakeFromName>, <ProgramPrefix::ToVolumeName>, <ProgramPrefix::UseSos>
+;; Also: PROGPFX (BB13)
+.proc ProgPrefix
+    jsr CheckEquals
+    jsr Files::TakeName
+    ldy NameBuffer
+    lda NameBuffer,Y
     cmp #'/'
-    beq PROGPFX1
+    beq EndsInSlash
     iny
     lda #'/'
-    sta NAMBUF,Y
-    sty NAMBUF
-PROGPFX1:
-    jsr FILPROG
-    jsr CNVTPFX1
-    jsr SETSOS                              ; SOS's prefix back to BASIC's
+    sta NameBuffer,Y
+    sty NameBuffer
+
+;; Keeps the name as the program's prefix, when it is a full pathname.
+;; Also: PROGPFX1 (BB13)
+EndsInSlash:
+    jsr ProgramPrefix::TakeFromName
+    jsr ProgramPrefix::ToVolumeName
+    jsr ProgramPrefix::UseSos               ; SOS's prefix back to BASIC's
     rts
+.endproc
+
+.endscope
 .endif
 
 ; ---------------------------------------------------------------------------------------------------------------------
-; INSTR and SUB$
+; `INSTR` and `SUB$`
 ; ---------------------------------------------------------------------------------------------------------------------
 
-;; The INSTR function, `INSTR(source, target, start)`: the position of target in source, from start on, or 0.
+; Functions: `INSTR`.
+.scope Functions continued
+
+;; The `INSTR` function, `INSTR(source, target, start)`: the position of target in source, from start on, or 0.
 ;;
 ;; The arguments are on the stack, from the top: start, then target's descriptor and source's, each low byte, page and
-;; bank. An empty target still compares one byte, at wherever its descriptor points.
-;; See: <GOODFUN>
-INSTR:
+;; bank. An empty target still compares one byte, at wherever its descriptor points. A start of 0 counts as 256, which
+;; finds nothing unless the source is 255 characters long and the target empty.
+;; Out: Fac = the position, counted from 1, or 0
+;; See: <CallFunction::Builtin>
+;; Also: INSTR (BB13)
+.proc InStr
     pla
-    sta TEMP                                ; start
-    jsr CHKCLS
+    sta Temporary                           ; start
+    jsr CheckCloseParenthesis
     pla
-    sta INDEX                               ; target's descriptor
-    sta FACMO
+    sta Pointer1                            ; target's descriptor
+    sta FacMantissa3
     pla
-    sta INDEX+1
-    sta FACMO+1
+    sta Pointer1+1
+    sta FacMantissa3+1
     pla
-    sta INDEXB
-    sta FACMOB
+    sta Pointer1XByte
+    sta FacMantissa3XByte
     pla
-    sta ARGMO                               ; source's descriptor
+    sta ArgMantissa3                        ; source's descriptor
     pla
-    sta ARGMO+1
+    sta ArgMantissa3+1
     pla
-    sta ARGMOB
-    jsr NOTNOW                              ; INDEX: target's characters
-    sta YSAVE                               ; target's length
+    sta ArgMantissa3XByte
+    jsr Strings::FindFromDescriptor         ; Pointer1: target's characters
+    sta SavedY                              ; target's length
     ldy #0
-    lda (ARGMO),Y
-    cmp YSAVE
-    bcc GIVMZERO                            ; source shorter: 0
-    sta KIMY
+    lda (ArgMantissa3),Y
+    cmp SavedY
+    bcc NotFound                            ; source shorter: 0
+    sta KeptY
     iny
-    lda (ARGMO),Y
-    sta INDEX2
+    lda (ArgMantissa3),Y
+    sta Pointer2
     tax
     iny
-    lda (ARGMO),Y
-    sta INDEX2+1
-    lda KIMY
+    lda (ArgMantissa3),Y
+    sta Pointer2+1
+    lda KeptY
     sec
-    sbc YSAVE
-    sta KIMY                                ; the last position to try, from 0
-    dec TEMP                                ; start, from 0
-    jsr RELINX                              ; INDEX2: source's characters
-    lda INDEX2
+    sbc SavedY
+    sta KeptY                               ; the last position to try, from 0
+    dec Temporary                           ; start, from 0
+    jsr Strings::DistanceToAddress          ; Pointer2: source's characters
+    lda Pointer2
     clc
-    adc TEMP
-    sta INDEX2
-    bcc TRYAGM
-    ldx INDEX2+1
+    adc Temporary
+    sta Pointer2
+    bcc TryPosition
+    ldx Pointer2+1
     inx
-    cpx #MAXPG
+    cpx #POINTER_PAGE_LIMIT
     bcc *+7
-    ldx #MINPG
-    inc INDEX2B
-    stx INDEX2+1
+    ldx #POINTER_PAGE_FIRST
+    inc Pointer2XByte
+    stx Pointer2+1
 
-;; Tries target at each position from TEMP to KIMY.
+;; Tries target at each position from <Temporary> to <KeptY>.
 ;;
-;; INDEX2's page is not wrapped to the next bank here; a page past $81 still reaches the same memory through the
+;; <Pointer2>'s page is not wrapped to the next bank here; a page past $81 still reaches the same memory through the
 ;; X-byte.
-TRYAGM:
-    lda KIMY
-    cmp TEMP
-    bcc NMTCH2
+;; Also: TRYAGM (BB13)
+TryPosition:
+    lda KeptY
+    cmp Temporary
+    bcc NotFound
     ldy #0
 
-;; Inherit: <TRYAGM>
-INMAT2:
-    lda (INDEX2),Y
-    cmp (INDEX),Y
-    bne INNOTIT
+;; Compares the next character.
+;; Also: INMAT2 (BB13)
+CompareNext:
+    lda (Pointer2),Y
+    cmp (Pointer1),Y
+    bne NextPosition
     iny
-    cpy YSAVE
-    bcc INMAT2
-    ldy TEMP                                ; found: the position, from 0
-    bcs GIVMIT                              ; always
+    cpy SavedY
+    bcc CompareNext
+    ldy Temporary                           ; found: the position, from 0
+    bcs ReturnPosition                      ; always
 
-;; Inherit: <TRYAGM>
-INNOTIT:
-    inc TEMP
-    inc INDEX2
-    bne TRYAGM
-    inc INDEX2+1
-    bne TRYAGM                              ; always
+;; Moves on to the next position.
+;; Also: INNOTIT (BB13)
+NextPosition:
+    inc Temporary
+    inc Pointer2
+    bne TryPosition
+    inc Pointer2+1
+    bne TryPosition                         ; always
 
 ;; Not found: gives 0.
-NMTCH2:
-GIVMZERO:
+;; Also: NMTCH2 (BB13), GIVMZERO (BB13)
+NotFound:
     ldy #$FF
 
 ;; Gives Y+1 as a number, after freeing both strings if they are temporaries.
-GIVMIT:
+;; Also: GIVMIT (BB13)
+ReturnPosition:
     iny
     tya
     pha
-    jsr FRECNOW                             ; target
-    ldx ARGMOB
-    lda ARGMO
-    ldy ARGMO+1
-    jsr FRETNOW                             ; source
+    jsr Strings::FreeFacTemporary           ; target
+    ldx ArgMantissa3XByte
+    lda ArgMantissa3
+    ldy ArgMantissa3+1
+    jsr Strings::FreeTemporary              ; source
     pla
     tay
-    jmp SNGFLT
+    jmp ReturnByte
+.endproc
 
-;; The SUB$ statement, `SUB$(var, start, length) = string`: writes string's characters over var's from start on, up
+.endscope
+
+; Statements: `SUB$`.
+.scope Statements continued
+
+;; The `SUB$` statement, `SUB$(var, start, length) = string`: writes string's characters over var's from start on, up
 ;; to length of them (all of them when length is left out).
 ;;
 ;; When the result is longer than var, var gets a new string, first filled with spaces, so a start past its end
 ;; leaves spaces between. A result past 255 characters, or a start of 0, is an ILLEGAL QUANTITY error.
 ;;
 ;; A one-character result made from an empty var fills not one but 256 bytes with spaces, writing over the string
-;; space above the new string: <SUBLNK1>'s loop counts Y down from 0.
-;; Errors: ERRFC = a start of 0 or a result past 255 characters
-;; See: <COPY_M>, <RELINX>
-SUBLEFT:
-    jsr PTRGET
-    jsr CHKSTR
-    lda VARPNT                              ; var's descriptor
+;; space above the new string: the loop at FillSpaces counts Y down from 0.
+;; Errors: <ERROR_ILLEGAL_QUANTITY> = a start of 0 or a result past 255 characters
+;; See: <AssignString::MoveCharacters>, <Strings::DistanceToAddress>
+;; Also: SUBLEFT (BB13)
+.proc Sub
+    jsr FindVariable
+    jsr RequireString
+    lda VariablePointer                     ; var's descriptor
     pha
-    lda VARPNT+1
+    lda VariablePointer+1
     pha
-    lda VARPNTB
+    lda VariablePointerXByte
     pha
-    lda ISARA
+    lda ArrayElementFound
     pha
-    jsr CHKCOM
-    jsr GETBYT
+    jsr CheckComma
+    jsr EvaluateByte
     txa
     pha                                     ; start
-    jsr CHRGOT
+    jsr GetCurrentCharacter
     cmp #','
-    bne FAKEIT
-    jsr CHRGET
-    jsr GETBYT
-    .byte 44                                ; BIT abs, which skips FAKEIT's LDX
+    bne NoLength
+    jsr GetNextCharacter
+    jsr EvaluateByte
+    .byte $2C                               ; BIT absolute, which skips NoLength's LDX
 
 ;; No length: 255, all of the string.
-FAKEIT:
+;; Also: FAKEIT (BB13)
+NoLength:
     ldx #$FF
     txa
     pha                                     ; the length
-    jsr CHKCLS
-    jsr CHKEQL
+    jsr CheckCloseParenthesis
+    jsr CheckEquals
     lda #$FF
-    sta VALTYP
-    jsr FRMEVL
+    sta ValueType
+    jsr EvaluateExpression
     pla
-    sta DELTA                               ; the length
+    sta MoveDistance                        ; the length
     pla
-    sta YSAVE                               ; start
-    beq SUBFUC
-    dec YSAVE                               ; from 0
+    sta SavedY                              ; start
+    beq ToIllegalQuantityError
+    dec SavedY                              ; from 0
     ldy #0
-    lda (FACMO),Y
-    cmp DELTA
+    lda (FacMantissa3),Y
+    cmp MoveDistance
     bcs *+4
-    sta DELTA                               ; no more than the string has
+    sta MoveDistance                        ; no more than the string has
     ldy #0
     pla
-    sta ISARA
+    sta ArrayElementFound
     pla
-    sta FORPNTB
+    sta AssignedVariableXByte
     pla
-    sta FORPNT+1
+    sta AssignedVariable+1
     pla
-    sta FORPNT
-    lda (FORPNT),Y
-    sta DELTA+1                             ; var's length
+    sta AssignedVariable
+    lda (AssignedVariable),Y
+    sta MoveDistance+1                      ; var's length
     iny
-    lda (FORPNT),Y
-    sta INDEX2
+    lda (AssignedVariable),Y
+    sta Pointer2
     iny
-    lda (FORPNT),Y
-    sta INDEX2+1
-    lda YSAVE
+    lda (AssignedVariable),Y
+    sta Pointer2+1
+    lda SavedY
     clc
-    adc DELTA
+    adc MoveDistance
     bcc *+5
 
 ;; Ends the statement with ILLEGAL QUANTITY.
-SUBFUC:
-    jmp FCERR
-    cmp DELTA+1
-    bcc GOTITTY                             ; fits in var
-    beq GOTITTY
-    ldx FORPNTB                             ; longer: var gets a new string
-    stx DSCPNTB
-    ldx FORPNT
-    ldy FORPNT+1
-    jsr STRIN2
+;; Also: SUBFUC (BB13)
+ToIllegalQuantityError:
+    jmp IllegalQuantityError
+    cmp MoveDistance+1
+    bcc Fits                                ; fits in var
+    beq Fits
+    ldx AssignedVariableXByte               ; longer: var gets a new string
+    stx DescriptorPointerXByte
+    ldx AssignedVariable
+    ldy AssignedVariable+1
+    jsr Strings::AllocateForFac::ForDescriptor
     tay
     dey
     lda #' '
 
 ;; Fills the new string with spaces, from Y down to 1, then the first.
-SUBLNK1:
-    sta (FRESPC),Y
+;; Also: SUBLNK1 (BB13)
+FillSpaces:
+    sta (NewString),Y
     dey
-    bne SUBLNK1
-    sta (FRESPC),Y
-    lda DELTA                               ; kept from the copy
+    bne FillSpaces
+    sta (NewString),Y
+    lda MoveDistance                        ; kept from the copy
     pha
-    lda YSAVE
+    lda SavedY
     pha
-    lda FACMO
+    lda FacMantissa3
     pha
-    lda FACMO+1
+    lda FacMantissa3+1
     pha
-    lda FACMOB
+    lda FacMantissa3XByte
     pha
-    jsr COPY_M                              ; var's old characters in, and var gets the new string
+    jsr AssignString::MoveCharacters        ; var's old characters in, and var gets the new string
     pla
-    sta FACMOB
+    sta FacMantissa3XByte
     pla
-    sta FACMO+1
+    sta FacMantissa3+1
     pla
-    sta FACMO
+    sta FacMantissa3
     pla
-    sta YSAVE
+    sta SavedY
     pla
-    sta DELTA
-    lda DSCTMP+2
-    sta INDEX2+1
-    lda DSCTMP+1
-    sta INDEX2
-    lda DSCTMPB
-    sta INDEX2B
-    jmp GOTABS                              ; already an address
+    sta MoveDistance
+    lda NewDescriptor+2
+    sta Pointer2+1
+    lda NewDescriptor+1
+    sta Pointer2
+    lda NewDescriptorXByte
+    sta Pointer2XByte
+    jmp AtAddress                           ; already an address
 
-;; Fits: INDEX2, var's distance below HIMEM, becomes the address.
-GOTITTY:
-    jsr RELINX
+;; Fits: <Pointer2>, var's distance below <MemoryTop>, becomes the address.
+;; Also: GOTITTY (BB13)
+Fits:
+    jsr Strings::DistanceToAddress
 
-;; Points INDEX2 at the first character to replace.
-GOTABS:
-    lda YSAVE
+;; Points <Pointer2> at the first character to replace.
+;; Also: GOTABS (BB13)
+AtAddress:
+    lda SavedY
     clc
-    adc INDEX2
-    sta INDEX2
-    bcc GOTABS1
-    ldx INDEX2+1
+    adc Pointer2
+    sta Pointer2
+    bcc CopyCharacters
+    ldx Pointer2+1
     inx
-    cpx #MAXPG
+    cpx #POINTER_PAGE_LIMIT
     bcc *+7
-    ldx #MINPG
-    inc INDEX2B
-    stx INDEX2+1
+    ldx #POINTER_PAGE_FIRST
+    inc Pointer2XByte
+    stx Pointer2+1
 
-;; Copies DELTA characters of the string over var's.
-GOTABS1:
-    jsr NOTFAC                              ; INDEX: the string's characters
+;; Copies <MoveDistance> characters of the string over var's.
+;; Also: GOTABS1 (BB13)
+CopyCharacters:
+    jsr Strings::FindFacString              ; Pointer1: the string's characters
     ldy #0
-    beq SBMV2
+    beq CheckCount
 
-;; Inherit: <GOTABS1>
-SUBMOV:
-    lda (INDEX),Y
-    sta (INDEX2),Y
+;; Copies the next character.
+;; Also: SUBMOV (BB13)
+CopyNext:
+    lda (Pointer1),Y
+    sta (Pointer2),Y
     iny
 
-;; Inherit: <GOTABS1>
-SBMV2:
-    cpy DELTA
-    bcc SUBMOV
+;; Copies another while Y is below <MoveDistance>.
+;; Also: SBMV2 (BB13)
+CheckCount:
+    cpy MoveDistance
+    bcc CopyNext
+    ; Falls into Strings::FreeFacTemporary.
+.endproc
 
-;; Frees the string in FACMO if it is a temporary.
-;; See: <FREFAC>, <FRENOW>
-FRECNOW:
-    jsr FREFAC
-    jmp FRENOW
+.endscope
 
-;; Turns INDEX2 from a distance below HIMEM into an address: HIMEM less it, across banks.
+; Strings: freeing a result, and from a distance to an address.
+.scope Strings continued
+
+;; Frees the string in <FacMantissa3> if it is a temporary.
+;; See: <ReleaseFac>, <FreeSpaceIfReleased>
+;; Also: FRECNOW (BB13)
+.proc FreeFacTemporary
+    jsr ReleaseFac
+    jmp FreeSpaceIfReleased
+.endproc
+
+;; Turns <Pointer2> from a distance below <MemoryTop> into an address: <MemoryTop> less it, across banks.
 ;;
 ;; The same subtraction turns an address into a distance.
-;; In: INDEX2 = the distance, low byte first
-;; Out: INDEX2 = the address (INDEX2B its bank)
-;; See: <FIXYAX>, <MAKREL>
-RELINX:
+;; In: Pointer2 = the distance, low byte first
+;; Out: Pointer2 = the address (<Pointer2XByte> its bank)
+;; See: <Memory::SubtractPageCount>, <SubtractFromHighMemory>
+;; Also: RELINX (BB13)
+.proc DistanceToAddress
     sec
-    lda HIMEM
-    sbc INDEX2
-    sta INDEX2
-    lda HIMEM+1
-    ldy HIMEMB
-    ldx INDEX2+1
-    jsr FIXYAX
-    sta INDEX2+1
+    lda MemoryTop
+    sbc Pointer2
+    sta Pointer2
+    lda MemoryTop+1
+    ldy MemoryTopXByte
+    ldx Pointer2+1
+    jsr Memory::SubtractPageCount
+    sta Pointer2+1
     tya
     sbc #0
-    sta INDEX2B
+    sta Pointer2XByte
     rts
+.endproc
+
+.endscope
 
 ; ---------------------------------------------------------------------------------------------------------------------
-; CHR$, LEFT$, RIGHT$, MID$, LEN and ASC
+; `CHR$`, `LEFT$`, `RIGHT$`, `MID$`, `LEN` and `ASC`
 ; ---------------------------------------------------------------------------------------------------------------------
 
-;; The CHR$ function: a string of one character, the argument's (0-255).
-;; Errors: ERRFC = an argument out of range
-CHRS:
-    jsr CONINT
+; Functions: `CHR$`, `LEFT$`, `RIGHT$`, `MID$` and `LEN`.
+.scope Functions continued
+
+;; The `CHR$` function: a string of one character, the argument's (0-255).
+;; Out: FacMantissa3 = the temporary descriptor of the result
+;; Errors: <ERROR_ILLEGAL_QUANTITY> = an argument out of range
+;; Also: CHRS (BB13)
+.proc Chr
+    jsr ConvertToByte
     txa
     pha
     lda #1
-    jsr STRSPA
+    jsr Strings::Allocate
     pla
     ldy #0
-    sta (DSCTMP+1),Y
-    jmp PUTNEW
+    sta (NewDescriptor+1),Y
+    jmp Strings::PushTemporary
+.endproc
 
-;; The LEFT$ function: the string's first n characters, or all of it when it is shorter.
+;; The `LEFT$` function: the string's first n characters, or all of it when it is shorter.
 ;;
-;; The arguments are on the stack, as <PREAM> takes them: n, then the string's descriptor.
-;; See: <RLEFT>
-LEFTS:
-    jsr PREAM
-    cmp (DSCPNT),Y
+;; The arguments are on the stack, as <Functions::SliceArguments> takes them: n, then the string's descriptor.
+;; Errors: <ERROR_ILLEGAL_QUANTITY> = an n of 0
+;; See: <Functions::Slice>
+;; Also: LEFTS (BB13)
+.proc Left
+    jsr SliceArguments
+    cmp (DescriptorPointer),Y
     tya                                     ; from the first character
+    ; Falls into Slice.
+.endproc
 
-;; Makes the result: X characters from offset A, or all of the string when carry is set.
-;; In: A = the offset, X = the length, carry = set for all of the string, DSCPNT = the string's descriptor
-RLEFT:
-    bcc RLEFT1
-    lda (DSCPNT),Y
+;; Makes the result of `LEFT$`, `RIGHT$` and `MID$`: X characters from offset A, or all of the string when carry is
+;; set.
+;; In: A = the offset, X = the length, carry = set for all of the string, DescriptorPointer = the string's descriptor, Y
+;;   = 0
+;; Out: FacMantissa3 = the temporary descriptor of the result
+;; Entry:
+;;   CountInX = takes the length from X, the offset already pushed; <Functions::Mid> branches here
+;;   CountInA = takes the length from A, the offset already pushed; <Functions::Mid> branches here
+;; Also: RLEFT (BB13)
+.proc Slice
+    bcc PushStart
+    lda (DescriptorPointer),Y
     tax                                     ; all of it
     tya                                     ; from the first character
 
-;; Inherit: <RLEFT>
-RLEFT1:
+;; Pushes the offset.
+;; Also: RLEFT1 (BB13)
+PushStart:
     pha                                     ; the offset
 
-;; Inherit: <RLEFT>
-RLEFT2:
+;; Takes the length from X.
+;; Also: RLEFT2 (BB13)
+CountInX:
     txa
 
 ;; Copies A characters from the string, from the offset on the stack, into a new string, frees the old one if it is a
 ;; temporary, and gives the new one as the result.
-;; In: A = the length, the offset on the stack, DSCPNT = the string's descriptor
-RLEFT3:
+;; In: A = the length, the offset on the stack, DescriptorPointer = the string's descriptor
+;; Also: RLEFT3 (BB13)
+CountInA:
     pha                                     ; the length
-    jsr STRSPA
-    lda DSCPNT
-    ldx DSCPNTB
-    ldy DSCPNT+1
-    jsr NOTNW2                              ; INDEX: the old characters
+    jsr Strings::Allocate
+    lda DescriptorPointer
+    ldx DescriptorPointerXByte
+    ldy DescriptorPointer+1
+    jsr Strings::FindFromDescriptorAt       ; Pointer1: the old characters
     pla
     tay
     pla
     clc
-    adc INDEX
-    sta INDEX
-    bcc PULMOR
-    inc INDEX+1
-    lda INDEX+1
-    cmp #MAXPG
-    bcc PULMOR
-    sbc #MAXPG-MINPG
-    sta INDEX+1
-    inc INDEXB
+    adc Pointer1
+    sta Pointer1
+    bcc Copy
+    inc Pointer1+1
+    lda Pointer1+1
+    cmp #POINTER_PAGE_LIMIT
+    bcc Copy
+    sbc #POINTER_PAGE_LIMIT-POINTER_PAGE_FIRST
+    sta Pointer1+1
+    inc Pointer1XByte
 
-;; Inherit: <RLEFT3>
-PULMOR:
+;; Copies the characters, frees the old string and gives the new one.
+;; Also: PULMOR (BB13)
+Copy:
     tya
-    jsr MOVDO
-    ldy DSCPNT+1
-    ldx DSCPNTB
-    lda DSCPNT
-    jsr FRETNOW
-    jmp PUTNEW
+    jsr Strings::CopyBytes
+    ldy DescriptorPointer+1
+    ldx DescriptorPointerXByte
+    lda DescriptorPointer
+    jsr Strings::FreeTemporary
+    jmp Strings::PushTemporary
+.endproc
 
-;; The RIGHT$ function: the string's last n characters, or all of it when it is shorter.
+;; The `RIGHT$` function: the string's last n characters, or all of it when it is shorter.
 ;;
-;; The arguments are on the stack, as <PREAM> takes them: n, then the string's descriptor.
-RIGHTS:
-    jsr PREAM
+;; The arguments are on the stack, as <Functions::SliceArguments> takes them: n, then the string's descriptor.
+;; Errors: <ERROR_ILLEGAL_QUANTITY> = an n of 0
+;; Also: RIGHTS (BB13)
+.proc Right
+    jsr SliceArguments
     clc
-    sbc (DSCPNT),Y                          ; n less the length, less 1
-    eor #255                                ; the length less n: the offset
-    jmp RLEFT
+    sbc (DescriptorPointer),Y               ; n less the length, less 1
+    eor #$FF                                ; the length less n: the offset
+    jmp Slice
+.endproc
 
-;; The MID$ function, `MID$(string, start, length)`: length characters from start on (all the rest when length is left
-;; out), or an empty string when start is past the end.
+;; The `MID$` function, `MID$(string, start, length)`: length characters from start on (all the rest when length is
+;; left out), or an empty string when start is past the end.
 ;;
-;; Start and the string's descriptor are on the stack, as <PREAM> takes them; MID$ reads the length itself.
-;; In: TXTPTR = the comma before the length, or the closing parenthesis
-MIDS:
-    lda #255                                ; no length: all the rest
-    sta FACLO
-    jsr CHRGOT
-    cmp #41                                 ; a closing parenthesis: no length
-    beq MID2
-    jsr CHKCOM
-    jsr GETBYT                              ; the length, in FACLO
+;; Start and the string's descriptor are on the stack, as <Functions::SliceArguments> takes them; `MID$` reads the
+;; length itself.
+;; In: TextPointer = the comma before the length, or the closing parenthesis
+;; Errors: <ERROR_ILLEGAL_QUANTITY> = a start of 0
+;; Also: MIDS (BB13)
+.proc Mid
+    lda #$FF                                ; no length: all the rest
+    sta FacMantissa4
+    jsr GetCurrentCharacter
+    cmp #')'                                ; a closing parenthesis: no length
+    beq HaveLength
+    jsr CheckComma
+    jsr EvaluateByte                        ; the length, in FacMantissa4
 
 ;; Works out the offset and the length to copy.
-MID2:
-    jsr PREAM
+;; Also: MID2 (BB13)
+HaveLength:
+    jsr SliceArguments
     dex                                     ; the offset, from 0
     txa
     pha
     clc
     ldx #0
-    sbc (DSCPNT),Y                          ; the offset less the length, less 1
-    bcs RLEFT2                              ; past the end: empty
-    eor #255                                ; the characters left
-    cmp FACLO
-    bcc RLEFT3                              ; fewer than asked: all of them
-    lda FACLO
-    bcs RLEFT3                              ; always
+    sbc (DescriptorPointer),Y               ; the offset less the length, less 1
+    bcs Slice::CountInX                     ; past the end: empty
+    eor #$FF                                ; the characters left
+    cmp FacMantissa4
+    bcc Slice::CountInA                     ; fewer than asked: all of them
+    lda FacMantissa4
+    bcs Slice::CountInA                     ; always
+.endproc
 
-;; Checks the closing parenthesis and takes the arguments of LEFT$, RIGHT$ and MID$ off the stack, from under the
-;; return address.
+;; Checks the closing parenthesis and takes the arguments of `LEFT$`, `RIGHT$` and `MID$` off the stack, from under
+;; the return address.
 ;;
 ;; Under the return address are the byte argument, then the string's descriptor: low byte, page and bank.
-;; Out: A = the byte argument, X = the same, DSCPNT = the descriptor (DSCPNTB its bank), Y = 0, VALTYP = $FF
-;; Errors: ERRFC = a byte argument of 0
-;; See: <GOODFUN>
-PREAM:
-    jsr CHKCLS
+;; Out: A = the byte argument, X = the same, DescriptorPointer = the descriptor (<DescriptorPointerXByte> its bank), Y =
+;;   0, ValueType = $FF
+;; Errors: <ERROR_ILLEGAL_QUANTITY> = a byte argument of 0
+;; See: <CallFunction::Builtin>
+;; Also: PREAM (BB13)
+.proc SliceArguments
+    jsr CheckCloseParenthesis
     lda #$FF
-    sta VALTYP
-    pla                                     ; the return address, kept in Y and JMPER+1
+    sta ValueType
+    pla                                     ; the return address, kept in Y and FunctionJump+1
     tay
     pla
-    sta JMPER+1
+    sta FunctionJump+1
     pla
     tax                                     ; the byte argument
     pla
-    sta DSCPNT
+    sta DescriptorPointer
     pla
-    sta DSCPNT+1
+    sta DescriptorPointer+1
     pla
-    sta DSCPNTB
-    lda JMPER+1
+    sta DescriptorPointerXByte
+    lda FunctionJump+1
     pha
     tya
     pha
     ldy #0
     txa
-    beq GOFUC
+    beq ToIllegalQuantityError
     rts
+.endproc
 
-;; The LEN function: the string's length, freeing it if it is a temporary.
-;; Out: zero = set when a temporary was empty
-;; See: <LEN1>
-LEN:
-    jsr LEN1
-    jsr SNGFLT
+;; The `LEN` function: the string's length, freeing it if it is a temporary.
+;; Out: Fac = the length, zero = set only for an empty string whose temporary was freed
+;; Entry:
+;;   FreeArgument = frees the string at <DescriptorPointer> if it is a temporary
+;; See: <Functions::FindArgument>
+;; Also: LEN (BB13)
+.proc Len
+    jsr FindArgument
+    jsr ReturnByte
 
-;; Frees the string at DSCPNT if it is a temporary.
-LEN0:
-    lda DSCPNT
-    ldx DSCPNTB
-    ldy DSCPNT+1
+;; Frees the string at <DescriptorPointer> if it is a temporary.
+;; In: DescriptorPointer = the string's descriptor (<DescriptorPointerXByte> its bank)
+;; Also: LEN0 (BB13)
+FreeArgument:
+    lda DescriptorPointer
+    ldx DescriptorPointerXByte
+    ldy DescriptorPointer+1
+    ; Falls into Strings::FreeTemporary.
+.endproc
+
+.endscope
+
+; Strings: freeing a temporary by its descriptor.
+.scope Strings continued
 
 ;; Frees the string whose descriptor is at Y,A (bank X), if it is a temporary.
 ;; In: A = the descriptor's low byte, Y = its page, X = its bank
-;; See: <FRETMP>, <FRENOW>
-FRETNOW:
-    jsr FRETMP
-    jmp FRENOW
+;; Out: zero = set only for an empty string whose temporary was freed
+;; See: <ReleaseDescriptor>, <FreeSpaceIfReleased>
+;; Also: FRETNOW (BB13)
+.proc FreeTemporary
+    jsr ReleaseDescriptor
+    jmp FreeSpaceIfReleased
+.endproc
 
-;; Gets the length and address of the string in FACMO, and makes the result a number.
-;; Out: A = the length, Y = the same, zero = set for an empty string, INDEX = the characters (INDEXB their bank),
-;;   DSCPNT = FACMO, VALTYP = 0
-;; See: <NOTNOW>
-LEN1:
-    lda FACMO
-    sta INDEX
-    sta DSCPNT
-    lda FACMO+1
-    sta INDEX+1
-    sta DSCPNT+1
-    lda FACMOB
-    sta INDEXB
-    sta DSCPNTB
-    jsr NOTNOW
+.endscope
+
+; Functions: the string argument, `ASC`.
+.scope Functions continued
+
+;; Gets the length and address of the string in <FacMantissa3>, and makes the result a number.
+;;
+;; It frees nothing: <Functions::Len::FreeArgument> does that after.
+;; Out: A = the length, Y = the same, X = 0, zero = set for an empty string, Pointer1 = the characters (<Pointer1XByte>
+;;   their bank), DescriptorPointer = <FacMantissa3>, ValueType = 0
+;; See: <Strings::FindFromDescriptor>
+;; Also: LEN1 (BB13)
+.proc FindArgument
+    lda FacMantissa3
+    sta Pointer1
+    sta DescriptorPointer
+    lda FacMantissa3+1
+    sta Pointer1+1
+    sta DescriptorPointer+1
+    lda FacMantissa3XByte
+    sta Pointer1XByte
+    sta DescriptorPointerXByte
+    jsr Strings::FindFromDescriptor
     ldx #0
-    stx VALTYP
+    stx ValueType
     tay
     rts
+.endproc
 
-;; The ASC function: the code of the string's first character, or -1 for an empty string.
+;; The `ASC` function: the code of the string's first character, or -1 for an empty string.
 ;;
 ;; The empty string is not freed when it is a temporary.
-;; See: <GIVM1>
-ASC:
-    jsr LEN1
+;; Out: Fac = the code, or -1
+;; See: <Functions::ReturnMinusOne>
+;; Also: ASC (BB13)
+.proc Asc
+    jsr FindArgument
     bne *+5
-    jmp GIVM1
+    jmp ReturnMinusOne
     ldy #0
-    lda (INDEX1),Y
+    lda (Pointer1),Y
     tay
-    jsr SNGFLT
-    jmp LEN0
+    jsr ReturnByte
+    jmp Len::FreeArgument
+.endproc
 
-;; Ends the statement with ILLEGAL QUANTITY.
-GOFUC:
-    jmp FCERR
+;; Ends the statement with ILLEGAL QUANTITY, for the string functions and the byte conversions.
+;; Also: GOFUC (BB13)
+.proc ToIllegalQuantityError
+    jmp IllegalQuantityError
+.endproc
+
+.endscope
 
 ; ---------------------------------------------------------------------------------------------------------------------
-; Byte arguments, VAL and addresses
+; Byte arguments, `VAL` and addresses
 ; ---------------------------------------------------------------------------------------------------------------------
 
 ;; Moves past the current character, then reads a formula as a byte, 0-255.
-;; Out: X = the byte, A = the character after the formula, with the flags <CHRGOT> gives
-;; Errors: ERRFC = a negative number or one past 255
-;; See: <GETBYT>
-GTBYTC:
-    jsr CHRGET
+;; Out: X = the byte, A = the character after the formula, with the flags <GetCurrentCharacter> gives
+;; Errors: <ERROR_ILLEGAL_QUANTITY> = a negative number or one past 255
+;; See: <EvaluateByte>
+;; Also: GTBYTC (BB13)
+.proc SkipAndEvaluateByte
+    jsr GetNextCharacter
+    ; Falls into EvaluateByte.
+.endproc
 
 ;; Reads a formula as a byte, 0-255.
-;; Out: X = the byte, A = the character after the formula, with the flags <CHRGOT> gives
-;; Errors: ERRFC = a negative number or one past 255
-;; See: <CONINT>
-GETBYT:
-    jsr FRMNUM
+;; Out: X = the byte, A = the character after the formula, with the flags <GetCurrentCharacter> gives
+;; Errors: <ERROR_ILLEGAL_QUANTITY> = a negative number or one past 255
+;; See: <ConvertToByte>
+;; Also: GETBYT (BB13)
+.proc EvaluateByte
+    jsr EvaluateNumber
+    ; Falls into ConvertToByte.
+.endproc
 
-;; Makes the FAC a byte, 0-255.
-;; Out: X = the byte, A = the current character, with the flags <CHRGOT> gives
-;; Errors: ERRFC = a negative number or one past 255
-CONINT:
-    jsr POSINT
-    ldx FACMO
-    bne GOFUC
-    ldx FACLO
-    jmp CHRGOT
+;; Makes the <Fac> a byte, 0-255.
+;; Out: X = the byte, A = the current character, with the flags <GetCurrentCharacter> gives
+;; Errors: <ERROR_ILLEGAL_QUANTITY> = a negative number or one past 255
+;; Also: CONINT (BB13)
+.proc ConvertToByte
+    jsr FacToNonnegativeInteger
+    ldx FacMantissa3
+    bne Functions::ToIllegalQuantityError
+    ldx FacMantissa4
+    jmp GetCurrentCharacter
+.endproc
 
-;; The VAL function: the number the string's characters spell, as INPUT would read it.
+; Functions: `VAL`.
+.scope Functions continued
+
+;; The `VAL` function: the number the string's characters spell, as `INPUT` would read it.
 ;;
-;; The characters are read where they are, through TXTPTR. Nothing is put after them to stop the reading: the type byte
-;; that follows every string in string space is not a digit, so it does. <LEN> leaves the FAC 0 and zero set only for
-;; an empty string it frees, a temporary; an empty string held in a variable is not caught, and <FIN> reads wherever
-;; its descriptor points.
-;; See: <FIN>, <VALSTR>
-VAL:
-    lda #<(FIN)
-    ldy #>(FIN)
+;; The characters are read where they are, through <TextPointer>. Nothing is put after them to stop the reading: the
+;; byte after every string in string space is its type byte, or 0 once a temporary is freed, and neither is a digit, so
+;; the reading stops there. <Functions::Len> leaves the <Fac> 0 and zero set only for an empty string it frees, a
+;; temporary; an empty string held in a variable is not caught, and <Float::ReadNumber> reads wherever its descriptor
+;; points.
+;; Out: Fac = the number
+;; See: <Float::ReadNumber>, <Functions::ParseStringWith>
+;; Also: VAL (BB13)
+.proc Val
+    lda #<(Float::ReadNumber)
+    ldy #>(Float::ReadNumber)
+    ; Falls into ParseStringWith.
+.endproc
 
-;; Calls the routine at Y,A with TXTPTR at the string's characters, then puts TXTPTR back.
-;; In: A = the routine's low byte, Y = its high byte, FACMO = the string's descriptor
-VALSTR:
-    sta JMPER+1
-    sty JMPER+2
-    jsr LEN                                 ; the FAC is the length: 0 for an empty string
-    beq VALRTS
-    ldx TXTPTR
-    ldy TXTPTR+1
-    stx STRNG2
-    sty STRNG2+1
-    ldx TXTPTRB
-    stx STRNG2B
-    ldx INDEX1
-    stx TXTPTR
-    ldx INDEX1B
-    stx TXTPTRB
-    ldy INDEX1+1
-    sty TXTPTR+1
-    jsr CHRGOT
-    jsr JMPER
+;; Calls the routine at Y,A with <TextPointer> at the string's characters, then puts <TextPointer> back.
+;;
+;; For an empty temporary the routine is not called, and the <Fac> is left 0.
+;; In: A = the routine's low byte, Y = its high byte, FacMantissa3 = the string's descriptor
+;; See: <SetTextPointer>
+;; Also: VALSTR (BB13)
+.proc ParseStringWith
+    sta FunctionJump+1
+    sty FunctionJump+2
+    jsr Len                                 ; the Fac is the length: 0 for an empty string
+    beq SetTextPointer::Done
+    ldx TextPointer
+    ldy TextPointer+1
+    stx SecondStringPointer
+    sty SecondStringPointer+1
+    ldx TextPointerXByte
+    stx SecondStringPointerXByte
+    ldx Pointer1
+    stx TextPointer
+    ldx Pointer1XByte
+    stx TextPointerXByte
+    ldy Pointer1+1
+    sty TextPointer+1
+    jsr GetCurrentCharacter
+    jsr FunctionJump
+    ; Falls into SetTextPointer.
+.endproc
 
-;; Puts TXTPTR back from STRNG2.
-ST2TXT:
-    ldx STRNG2
-    ldy STRNG2+1
-    stx TXTPTR
-    sty TXTPTR+1
-    ldx STRNG2B
-    stx TXTPTRB
+.endscope
 
-;; An RTS for <VALSTR>'s branch.
-VALRTS:
+;; Puts <TextPointer> back from <SecondStringPointer>.
+;;
+;; After <Strings::FromTextUntil> that moves past the text read; after <Functions::ParseStringWith> it puts the
+;; caller's place back.
+;; In: SecondStringPointer = the place (<SecondStringPointerXByte> its bank)
+;; Out: TextPointer = <SecondStringPointer>
+;; Keeps: A
+;; Entry:
+;;   Done = returns; <Functions::ParseStringWith> branches here
+;; Also: ST2TXT (BB13)
+.proc SetTextPointer
+    ldx SecondStringPointer
+    ldy SecondStringPointer+1
+    stx TextPointer
+    sty TextPointer+1
+    ldx SecondStringPointerXByte
+    stx TextPointerXByte
+
+;; Returns.
+;; Also: VALRTS (BB13)
+Done:
     rts
+.endproc
 
-;; Puts -1 in the FAC: ASC's answer for an empty string.
-GIVM1:
-    lda #<(CON1M)
-    ldy #>(CON1M)
-    ldx #CON1MB
-    jmp MOVFM
+; Functions: `ASC`'s -1.
+.scope Functions continued
 
-;; -1 as a real.
-CON1M:
+;; Puts -1 in the <Fac>: `ASC`'s answer for an empty string.
+;; Out: Fac = -1
+;; Also: GIVM1 (BB13)
+.proc ReturnMinusOne
+    lda #<(MinusOne)
+    ldy #>(MinusOne)
+    ldx #MINUS_ONE_X_BYTE
+    jmp Float::LoadFac
+.endproc
+
+;; -1 as a packed real: the exponent, then the sign over the mantissa.
+;; Also: CON1M (BB13)
+MinusOne:
     .byte $81
     .byte $80
     .byte 00
     .byte 00
     .byte 00
 
+.endscope
+
 ;; Reads a formula as a signed byte, -128 to 127.
-;; Out: X = the byte, A = the character after the formula, with the flags <CHRGOT> gives
-;; Errors: ERRFC = a number out of range
-GETABYT:
-    jsr FRMNUM
-    jsr AYINT
-    lda FACLO
+;; Out: X = the byte, A = the character after the formula, with the flags <GetCurrentCharacter> gives
+;; Errors: <ERROR_ILLEGAL_QUANTITY> = a number out of range
+;; Also: GETABYT (BB13)
+.proc EvaluateSignedByte
+    jsr EvaluateNumber
+    jsr FacToInteger
+    lda FacMantissa4
     rol                                     ; carry: the low byte's sign
     lda #0
-    adc FACMO                               ; zero only when the high byte matches it
+    adc FacMantissa3                        ; zero only when the high byte matches it
     beq *+5
-    jmp GOFUC
-    ldx FACLO
-    jmp CHRGOT
+    jmp Functions::ToIllegalQuantityError
+    ldx FacMantissa4
+    jmp GetCurrentCharacter
+.endproc
 
-;; Makes the FAC a 16-bit address in POKER, for PEEK, POKE and the like.
+;; The exponent of 65536, the smallest size <ConvertToAddress> refuses.
+ADDRESS_EXPONENT = 145
+
+;; Makes the <Fac> a 16-bit address in <PokeAddress>, for `PEEK`, `POKE` and the like.
 ;;
 ;; Any number of size below 65536 is taken; a negative one gives its two's complement.
-;; Out: POKER = the address, low byte first
-;; Errors: ERRFC = a number of 65536 or more in size
-GETADR:
-    lda FACEXP
-    cmp #145
+;; Out: PokeAddress = the address, low byte first, A = its high byte, Y = its low byte
+;; Errors: <ERROR_ILLEGAL_QUANTITY> = a number of 65536 or more in size
+;; Also: GETADR (BB13)
+.proc ConvertToAddress
+    lda FacExponent
+    cmp #ADDRESS_EXPONENT
     bcc *+5
-    jmp FCERR
-    jsr QINT
-    lda FACMO
-    ldy FACMO+1
-    sty POKER
-    sta POKER+1
+    jmp IllegalQuantityError
+    jsr Float::ToLongInteger
+    lda FacMantissa3
+    ldy FacMantissa3+1
+    sty PokeAddress
+    sta PokeAddress+1
     rts
+.endproc

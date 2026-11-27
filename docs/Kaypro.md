@@ -33,7 +33,7 @@ the ROM moves each byte: `HALT`, then `INI` or `OUTI` when the NMI wakes it. The
 the ROM, and the ROM puts one in RAM there before it banks the ROM out to transfer. A disk is 40 tracks of ten
 512-byte sectors numbered 0-9: a raw image is 204,800 bytes (`.img` or `.dsk`); IMD and DMK images hold single
 density too. A Kaypro 4's double-sided images (409,600 bytes, side 1's sectors numbered 10-19) read as well. Disks
-save back as raw images or DMK.
+save back as raw images, IMD or DMK, an IMD or DMK image in its own layout.
 
 **Screen.** Each character cell is 7 dots wide and 10 scanlines high, the character generator giving the middle
 five dots of its top eight. The display inverts a code's bit 7 before it addresses the character generator, whose
@@ -51,7 +51,7 @@ its bell.
 | --- | --- |
 | [`Kaypro2.asm`](../src/Retrocore.Machines.Kaypro/Roms/Kaypro2.asm) | The 81-149C monitor ROM: its CP/M-style entry points, the SIO and PIO set-up, the boot, the disk routines (blocking and deblocking with Digital Research's Appendix G algorithm and names), the transfer routines it copies to `$FECD`, the keyboard, serial and printer drivers and the screen driver with its escape sequences. |
 | [`Kaypro2CharacterGenerator.asm`](../src/Retrocore.Machines.Kaypro/Roms/Kaypro2CharacterGenerator.asm) | The 81-146A character generator, a glyph a row of dots at a time. |
-| [`Mbasic/Mbasic.asm`](../src/Retrocore.Machines.Kaypro/Roms/Mbasic/Mbasic.asm) | MBASIC 5.21 for CP/M, `$0100`-`$5FFF`, assembling to a program compatible byte for byte with MBASIC.COM. The root includes 19 modules in address order, following the modules of [GW-BASIC's MIT-licensed source](https://github.com/microsoft/GW-BASIC): the tables and variables, the interpreter, statements, evaluator, LIST, the math package, PTRGET, the console and PRINT USING, strings, the line editor, the disk files and the CP/M file layer, and start-up. Its names are Microsoft's, from GW-BASIC's source and Level2.asm, and every routine is documented. |
+| [`Mbasic/Mbasic.asm`](../src/Retrocore.Machines.Kaypro/Roms/Mbasic/Mbasic.asm) | MBASIC 5.21 for CP/M, `$0100`-`$5FFF`, assembling to a program compatible byte for byte with MBASIC.COM. The root includes 19 modules in address order, following the modules of [GW-BASIC's MIT-licensed source](https://github.com/microsoft/GW-BASIC): the tables and variables, the interpreter, statements, evaluator, LIST, the math package, PTRGET, the console and PRINT USING, strings, the line editor, the disk files and the CP/M file layer, and start-up. Its names are Microsoft's, from GW-BASIC's source and Level2.asm, and every routine is documented; [its naming log](conversions/Mbasic.md) says which names are the SDK's own and which Microsoft names are in doubt. |
 
 `KayproTests` pin each source by SHA-256, so the tests need no dumps, and compare them byte for byte with the dumps
 in `RETROCORE_KAYPRO` (`81-149c.rom`, `81-146a.bin`, and MBASIC.COM on `MBasic.img`) when they are there.

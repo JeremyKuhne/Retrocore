@@ -15,18 +15,18 @@
     ;; Entry:
     ;;   FromSignByte = Takes the sign from <FacSign> without testing the exponent
     ;;   FromBit7 = Returns $FF if bit 7 of A is set, else 1
-    ;; Also: SIGN (M6502, ASTIL, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;; Also: SIGN (M6502, ASTIL, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     .proc GetSign
     lda FacExponent
     beq Done
 
 ;; Takes the sign from <FacSign> without testing the exponent.
-;; Also: FCSIGN (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: FCSIGN (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 FromSignByte:
     lda FacSign
 
 ;; Returns $FF if bit 7 of A is set, else 1.
-;; Also: FCOMPS (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: FCOMPS (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 FromBit7:
     rol a
     lda #$FF
@@ -34,7 +34,7 @@ FromBit7:
     lda #$01
 
 ;; The shared rts.
-;; Also: SIGNRT (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: SIGNRT (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 Done:
     rts
     .endproc
@@ -44,7 +44,7 @@ Done:
 
     ;; Replaces <Fac> with its sign as a floating-point number.
     ;; See: <Float::GetSign>, <Float::ConvertSignedByte>
-    ;; Also: SGN (M6502, ASTIL, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;; Also: SGN (M6502, ASTIL, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     .proc Sgn
     jsr Float::GetSign
     ; Falls into ConvertSignedByte.
@@ -56,7 +56,7 @@ Done:
     ;; Converts the signed byte in A to floating point in <Fac>.
     ;; In: A = signed byte
     ;; See: <Float::ConvertSignedWord>
-    ;; Also: FLOAT (M6502, ASTIL, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;; Also: FLOAT (M6502, ASTIL, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     .proc ConvertSignedByte
     sta FacMantissa1
     lda #$00
@@ -68,7 +68,7 @@ Done:
     ;;
     ;; The lower two mantissa bytes are cleared and the signed value is normalized using X as the initial exponent.
     ;; In: FacMantissa1 = high byte of integer, FacMantissa2 = low byte of integer, X = initial biased exponent
-    ;; Also: FLOATS (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;; Also: FLOATS (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     .proc ConvertSignedWord
     lda FacMantissa1
     eor #$FF
@@ -76,7 +76,7 @@ Done:
     .endproc
 
     ;; Takes the sign complement in carry.
-    ;; Also: FLOATC (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;; Also: FLOATC (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     .proc ConvertWord
     lda #$00
     sta FacMantissa4
@@ -84,7 +84,7 @@ Done:
     .endproc
 
     ;; Uses A for the sign and rounding byte.
-    ;; Also: FLOATB (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;; Also: FLOATB (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     .proc ConvertMantissa
     stx FacExponent
     sta FacExtension
@@ -96,7 +96,7 @@ Done:
     .scope Functions continued
 
     ;; Makes <Fac> nonnegative by clearing the high bit of its sign byte.
-    ;; Also: ABS (M6502, ASTIL, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;; Also: ABS (M6502, ASTIL, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     .proc Abs
     lsr FacSign
     rts
@@ -115,14 +115,14 @@ Done:
     ;; reports equality.
     ;; In: A = low byte of packed operand address, Y = high byte of packed operand address
     ;; Out: A = normally 1 if <Fac> is greater, 0 if equal, $FF if less
-    ;; Also: FCOMP (M6502, ASTIL, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;; Also: FCOMP (M6502, ASTIL, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     .proc Compare
     sta Pointer2
     .endproc
 
     ;; As <Float::Compare>, with the low byte of the packed operand's address already in <Pointer2> and its high byte
     ;; in Y.
-    ;; Also: FCOMPN (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;; Also: FCOMPN (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     .proc CompareAtPointer2
     sty Pointer2+1
     ldy #$00
@@ -160,14 +160,14 @@ SameSign:
 
 ;; Turns the carry of the unequal byte and <FacSign> into the order: inverts <FacSign> when the operand's magnitude
 ;; is the larger, so a positive <Fac> is the lesser.
-;; Also: FCOMPC (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: FCOMPC (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 Unequal:
     lda FacSign
     bcc ToSignFromBit7
     eor #$FF
 
 ;; Jumps on to <Float::GetSign::FromBit7>.
-;; Also: FCOMPD (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: FCOMPD (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 ToSignFromBit7:
     jmp GetSign::FromBit7
     .endproc
@@ -181,7 +181,7 @@ ToSignFromBit7:
     ;; Entry:
     ;;   Done = The shared rts
     ;; See: <Functions::Int>, <Float::ShiftRight>
-    ;; Also: QINT (M6502, ASTIL, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;; Also: QINT (M6502, ASTIL, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     .proc ToLongInteger
     lda FacExponent
     beq ClearMantissa
@@ -196,7 +196,7 @@ ToSignFromBit7:
     txa
 
 ;; A long shift goes through <Float::ShiftRight>, then clears <ShiftFill> with the zero it returns in Y.
-;; Also: QISHFT (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: QISHFT (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 Shift:
     ldx #Fac
     cmp #$F9
@@ -205,13 +205,13 @@ Shift:
     sty ShiftFill
 
 ;; The shared rts.
-;; Also: QINTRT (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: QINTRT (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 Done:
     rts
 
 ;; Fewer than eight bits: shifts the top byte right one place, filling bit 7 from <FacSign> (sign extension), then
 ;; rotates the displaced bit through the lower bytes with <Float::ShiftRight::ShiftLow>.
-;; Also: QINT1 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: QINT1 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 ShortShift:
     tay
     lda FacSign
@@ -233,7 +233,7 @@ ShortShift:
     ;; floating point; the integer's low byte is also saved in <SmallInteger>. Values with an exponent at least $A0
     ;; already have no fractional bits at <Fac> precision.
     ;; See: <Float::ToLongInteger>
-    ;; Also: INT (M6502, ASTIL, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;; Also: INT (M6502, ASTIL, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     .proc Int
     lda FacExponent
     cmp #$A0
@@ -257,7 +257,7 @@ ShortShift:
     ;; Clears the <Fac> mantissa and Y when the exponent is zero.
     ;; Entry:
     ;;   Done = The shared rts
-    ;; Also: CLRFAC (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;; Also: CLRFAC (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     .proc ClearMantissa
     sta FacMantissa1
     sta FacMantissa2
@@ -266,7 +266,7 @@ ShortShift:
     tay
 
 ;; The shared rts.
-;; Also: INTRTS (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: INTRTS (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 Done:
     rts
     .endproc

@@ -1,0 +1,51 @@
+(** TYPES3.TEXT: part 3 of 3 of TYPES: a library's information words, spare
+    words, a set of segment kinds, MEMAVAIL's result, case labels, marks and a
+    string constant's characters.
+
+    Included by COMPILER.TEXT after TYPES2.TEXT and before SYSGLOBALS.TEXT. *)
+
+  (** A library's segments' information words, by slot. *)
+  AttributeTable = ARRAY[0..127] OF PackedAttributes;
+
+  (** Two words. *)
+  TwoSpareWords = ARRAY[1..2] OF INTEGER;
+
+  (** Five words. *)
+  FiveSpareWords = ARRAY[1..5] OF INTEGER;
+
+  (** A set of segment kinds. *)
+  KindSet = SET OF 0..63;
+
+  (** MEMAVAIL's result. *)
+  AvailableWords = ARRAY[0..0] OF INTEGER;
+
+  (** Two words. *)
+  TwoMoreWords = ARRAY[1..2] OF INTEGER;
+
+  (** A heap mark (II.0: ^INTEGER). *)
+  MarkOfStatement = ^INTEGER;
+
+  (** A pointer to a case label (II.0: CASESTATEMENT's CIP). *)
+  CaseLabel = ^CaseEntry;
+
+  (** A case label and where its code starts.
+      Also: CASEINFO (UCSD20) *)
+  CaseEntry = RECORD
+      (** The next label, in order. *)
+      Next: CaseLabel;
+      (** Where its code starts.
+          Also: CSSTART (UCSD20) *)
+      CodeStart: INTEGER;
+      CASE INTEGER OF
+        (** Its value.
+            Also: CSLAB (UCSD20) *)
+        0: (Ordinal: INTEGER);
+        (** Its value as a constant. *)
+        1: (Literal: WordValue)
+    END;
+
+  (** A heap mark. *)
+  UnitMark = ^INTEGER;
+
+  (** A string constant's characters. *)
+  StringCharacters = PACKED ARRAY[0..83] OF CHAR;

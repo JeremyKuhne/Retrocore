@@ -7,7 +7,8 @@
 
 /**
  * The key code in a message from the display panel, or undefined for another message: a whole number from 0 to 255,
- * since the BBC Micro's COPY, cursor and function keys have codes above 127.
+ * since the BBC Micro's COPY, cursor and function keys and the Atari's START, SELECT, OPTION, BREAK and SYSTEM RESET
+ * have codes above 127.
  */
 export function panelKeyCode(input: unknown): number | undefined {
     return typeof input === "object" && input !== null && "code" in input && typeof input.code === "number"
@@ -79,6 +80,15 @@ select{font-family:inherit;font-size:12px;padding:1px 4px;border-radius:2px;back
 <button data-code="2" title="F2">F2</button>
 <button id="model2-reset" title="The reset switch (or Ctrl+F12 or Ctrl+Break): the boot ROM starts again">Reset</button>
 </span>
+<span class="keys" data-machine="trs80-model100">
+<button data-code="128" title="F1">F1</button><button data-code="129" title="F2">F2</button><button data-code="130" title="F3">F3</button><button data-code="131" title="F4">F4</button><button data-code="132" title="F5">F5</button><button data-code="133" title="F6">F6</button><button data-code="134" title="F7">F7</button><button data-code="135" title="F8">F8</button>
+<button data-code="136" title="LABEL: shows the function keys' labels">Label</button>
+<button data-code="137" title="PRINT: prints the screen">Print</button>
+<button data-code="138" title="PASTE: types the paste buffer">Paste</button>
+<button data-code="139" title="PAUSE (or Pause): the PAUSE/BREAK key, which pauses a listing or program">Pause</button>
+<button data-code="140" title="BREAK: PAUSE/BREAK with SHIFT, which stops a BASIC program">Break</button>
+<button id="model100-reset" title="The RESET button (or Ctrl+F12 or Ctrl+Break): the 80C85 starts again, keeping RAM, and turns the machine on after POWER OFF">Reset</button>
+</span>
 <span class="keys" data-machine="kaypro2">
 <button data-code="27" title="ESC (or Esc)">Esc</button>
 <button id="kaypro-reset" title="The reset button (or Ctrl+F12 or Ctrl+Break): the monitor ROM boots CP/M from drive A again">Reset</button>
@@ -100,6 +110,13 @@ select{font-family:inherit;font-size:12px;padding:1px 4px;border-radius:2px;back
 <button data-code="240" title="f0">f0</button><button data-code="241" title="f1">f1</button><button data-code="242" title="f2">f2</button><button data-code="243" title="f3">f3</button><button data-code="244" title="f4">f4</button><button data-code="245" title="f5">f5</button><button data-code="246" title="f6">f6</button><button data-code="247" title="f7">f7</button><button data-code="248" title="f8">f8</button><button data-code="249" title="f9">f9</button>
 <button id="bbc-reset" title="BREAK (or Ctrl+F12 or Ctrl+Break): the MOS starts again, keeping the program; OLD brings it back. With Shift, SHIFT-BREAK boots the disk in drive 0">Break</button>
 </span>
+<span class="keys" data-machine="atari800">
+<button data-code="240" title="START: held for a tenth of a second">Start</button>
+<button data-code="241" title="SELECT: held for a tenth of a second">Select</button>
+<button data-code="242" title="OPTION: held for a tenth of a second">Option</button>
+<button data-code="243" title="BREAK (or Pause)">Break</button>
+<button data-code="244" title="SYSTEM RESET: the OS starts again warm, keeping the program; Ctrl+F12 or Ctrl+Break turns the machine off and on">System Reset</button>
+</span>
 <span class="keys" data-machine="coco">
 <button data-code="1" title="BREAK (or Esc)">Break</button>
 <button data-code="31" title="CLEAR (or Home)">Clear</button>
@@ -116,7 +133,7 @@ select{font-family:inherit;font-size:12px;padding:1px 4px;border-radius:2px;back
 <option value="1">1×</option><option value="2">2×</option><option value="4">4×</option><option value="8">8×</option><option value="max">Max</option>
 </select></label>
 </span>
-<span class="keys" data-machine="apple2 apple3 coco pet bbc">
+<span class="keys" data-machine="apple2 apple3 coco pet bbc atari800">
 <button id="sound" title="What you hear while the machine runs at its real speed: off, the speaker, or, with the Mockingboard in slot 4, the speaker and the Mockingboard (which slows emulation by about a quarter)">Sound: speaker</button>
 <label class="volume" title="The sound's volume">Volume <input id="volume" type="range" min="0" max="100" step="1" value="50" aria-label="Volume"></label>
 </span>
@@ -138,8 +155,9 @@ window.addEventListener('error',event=>api.postMessage({error:event.message}));
 const screen=document.getElementById('screen');
 let lastFrame;
 // The IIe's 560 dots span its 280-dot-wide picture; the Model I's 384x192 and the Color Computer's picture, with its
-// border, fill a 4:3 screen. The PET's 320x200 dots are square.
-const aspect={'apple2':'280/192','apple3':'280/192','trs80-model1':'4/3','trs80-model3':'4/3','trs80-model2':'4/3','kaypro2':'4/3','apple1':'280/192','coco':'4/3','altair':'4/3','pet':'320/200','bbc':'704/576'};
+// border, fill a 4:3 screen. The PET's 320x200 dots are square, and the Atari's 376 dots by 240
+// lines fill 4:3.
+const aspect={'apple2':'280/192','apple3':'280/192','trs80-model1':'4/3','trs80-model3':'4/3','trs80-model2':'4/3','kaypro2':'4/3','trs80-model100':'240/64','apple1':'280/192','coco':'4/3','altair':'4/3','pet':'320/200','bbc':'704/576','atari800':'4/3'};
 // The picture is kept between frames: a running frame whose picture has not changed carries no pixels. The pixels
 // decode straight into the kept ImageData, and the canvas is resized only when the picture's size changes.
 let image;
@@ -154,9 +172,9 @@ speedSelect.addEventListener('change',()=>{
 function speedText(frame){
     const speed=frame.speed;
     if(!speed||typeof speed.actual!=='number')return [];
-    // Accelerated is the Model I's, Apple-1's, Color Computer's or PET's fast cassette or the IIe's fast disk, running
-    // flat out while the media moves.
-    const tapes=['trs80-model1','trs80-model3','apple1','coco','pet','bbc'];
+    // Accelerated is the Model I's, Apple-1's, Color Computer's, PET's or Atari's fast cassette or the IIe's
+    // fast disk, running flat out while the media moves.
+    const tapes=['trs80-model1','trs80-model3','apple1','coco','pet','bbc','atari800'];
     const fast=speed.accelerated===true?[tapes.includes(frame.machine)?'Fast tape':'Fast disk']:[];
     return [...(speed.setting==='max'?['Max']:[]),...fast,speed.actual.toFixed(2)+'×',(speed.hertz/1e6).toFixed(2)+' MHz'];
 }
@@ -208,10 +226,12 @@ function draw(frame){
             if(!deck?.path)continue;
             tape.push('Tape '+port+' '+(deck.recording?'recording':deck.mode==='playing'?'playing':'stopped')+(deck.motor?' · motor on':''));
         }
+        // The Atari's drives are D1: to D4:, numbered from 0 like the others'.
+        const drive=disk=>frame.machine==='atari800'?'D'+(disk.drive+1)+':':'D'+disk.drive;
         // The TRS-80s name a drive and its cylinder; the PET's 4040 and 2040 name a unit's drive, as disk8-0, and a track.
         const diskLabel=disk=>typeof disk.device==='string'
             ?disk.device.replace(/^disk(\\d+)-(\\d)$/,'Unit $1 drive $2')+' track '+(Number.isInteger(disk.track)?disk.track:disk.track.toFixed(1))+(disk.motor?' · motor on':'')
-            :'D'+disk.drive+' cylinder '+disk.cylinder+(disk.selected?' · selected':'');
+            :drive(disk)+' cylinder '+disk.cylinder+(disk.selected?' · selected':'');
         const disks=media?.disks?media.disks.filter(disk=>disk.mounted).map(diskLabel):[];
         document.getElementById('status').textContent=[running?'Running':frame.cycles+' cycles'].concat(running?speedText(frame):[],tape).join(' · ');
         document.getElementById('disk').textContent=disks.join(' | ');
@@ -392,6 +412,10 @@ const keys={
     'trs80-model3':{Enter:13,Backspace:8,ArrowLeft:8,ArrowRight:9,ArrowUp:11,ArrowDown:10,Home:31,Escape:1},
     // The Model II's keyboard sends ASCII, with its arrows as $1C-$1F and BREAK as $03.
     'trs80-model2':{Enter:13,Backspace:8,Tab:9,ArrowLeft:28,ArrowRight:29,ArrowUp:30,ArrowDown:31,Escape:3},
+    // The Model 100's keys are ASCII, with its arrows as the codes its ROM gives them, $1C-$1F (right, left, up,
+    // down), and PAUSE/BREAK as 139 (with SHIFT, BREAK, 140); its function keys are the buttons, as F1-F11 stay
+    // with VS Code.
+    'trs80-model100':{Enter:13,Backspace:8,Tab:9,Escape:27,ArrowRight:28,ArrowLeft:29,ArrowUp:30,ArrowDown:31,Pause:139},
     // The Kaypro II's keyboard sends ASCII, with its arrows as $F1-$F4; it has no BREAK.
     'kaypro2':{Enter:13,Backspace:8,Tab:9,Escape:27,Delete:127,ArrowUp:0xF1,ArrowDown:0xF2,ArrowLeft:0xF3,ArrowRight:0xF4},
     // The Apple-1's back arrow is the underscore, which the Monitor takes as a backspace.
@@ -400,6 +424,9 @@ const keys={
     // The BBC Micro's DELETE is 127, and its cursor keys and COPY are the MOS's codes &88-&8B and &87.
     // SHIFT LOCK is the keyboard's &8C, and £ its own key, SHIFT with _, whose code &60 the BBC shows as £.
     'bbc':{Enter:13,Backspace:127,Delete:127,Tab:9,Escape:27,End:135,ArrowLeft:136,ArrowRight:137,ArrowDown:138,ArrowUp:139,ScrollLock:140,'£':96},
+    // The Atari types ATASCII: BACK S is $7E, TAB $7F, CLEAR $7D and the cursor keys $1C-$1F; BREAK, above 127, is
+    // held rather than typed.
+    'atari800':{Enter:13,Escape:27,Backspace:126,Tab:127,Home:125,ArrowUp:28,ArrowDown:29,ArrowLeft:30,ArrowRight:31,Pause:243},
     // The Altair's ADM-3A sends ASCII, with its arrows as ^H, ^L, ^K and ^J.
     'altair':{Enter:13,Backspace:8,Tab:9,Escape:27,Delete:127,ArrowLeft:8,ArrowRight:12,ArrowUp:11,ArrowDown:10},
     // The PET's keys are PETSCII: DEL 20, INST 148, the cursor keys 157, 29, 145 and 17, HOME 19 and STOP 3; Tab is
@@ -412,12 +439,14 @@ const hints={
     'trs80-model3':'Esc: BREAK · Home: CLEAR · arrows: the arrow keys · Ctrl+F12: reset',
     'trs80-model2':'Esc: BREAK · Ctrl+letter: control character · arrows: the arrow keys · Ctrl+F12: reset',
     'kaypro2':'Ctrl+letter: control character · Esc: ESC · arrows: the arrow keys · Ctrl+F12: reset',
+    'trs80-model100':'Ctrl+letter: CTRL (but Ctrl+H, I and M: DEL, TAB, ENTER) · Esc: ESC · arrows: the arrow keys · Pause: PAUSE · the buttons: F1-F8, LABEL, PRINT, PASTE, PAUSE, BREAK · Ctrl+F12: RESET',
     'apple3':'Ctrl+letter: control character · arrows and Esc: the arrow and ESCAPE keys · Ctrl+F12: CONTROL-RESET · left/right Alt: Open/Solid Apple',
     'apple1':'Backspace: the back arrow (_) · Esc: ESC · Ctrl+F12: RESET · letters arrive as capitals',
     'coco':'Esc: BREAK · Home: CLEAR · arrows: the arrow keys · Ctrl+F12: RESET',
     'bbc':'Esc: ESCAPE · End: COPY · Scroll Lock: SHIFT LOCK · arrows: the cursor keys · the buttons: f0-f9 · Ctrl+F12: BREAK · Ctrl+Shift+F12: SHIFT-BREAK',
     'altair':'Ctrl+letter: control character · arrows: ^H ^J ^K ^L, as the ADM-3A sends them · Ctrl+F12: RESET',
-    'pet':'Esc: STOP · Home: HOME · arrows: the cursor keys · Backspace: DEL · Insert: INST · Tab: TAB (business keyboard) · Ctrl+F12: reset'
+    'pet':'Esc: STOP · Home: HOME · arrows: the cursor keys · Backspace: DEL · Insert: INST · Tab: TAB (business keyboard) · Ctrl+F12: reset',
+    'atari800':'Esc: ESC · Backspace: BACK S · Home: CLEAR · arrows: the cursor keys · Pause: BREAK · the buttons: START, SELECT, OPTION and SYSTEM RESET · Ctrl+F12: off and on',
 };
 // The II and II Plus have no Apple keys: the same buttons are the game port's push buttons 0 and 1, and the keyboard
 // types only capitals.
@@ -428,9 +457,10 @@ const ctrl=document.getElementById('ctrl');
 // Sharp scaling: each dot a whole number of physical pixels across and down, keeping the screen's shape. The IIe's
 // rows are twice as tall as its dots are wide (560x384 at 1x); the Model I's dots are 2 wide by 3 tall on its 4:3
 // screen (768x576); the CoCo 1 and 2's 320x240 frame doubles to 640x480, and the CoCo 3's 704 dots by 249 lines
-// show its lines twice over, about 4:3; the PET's 320x200 doubles to 640x400. Sizes are in CSS pixels for the
+// show its lines twice over, about 4:3; the PET's 320x200 doubles to 640x400, and the
+// Atari's 376 dots by 240 lines to 752x480, a little wider than 4:3. Sizes are in CSS pixels for the
 // display's scaling, ratio physical pixels to each.
-const sharpBase={'apple2':[560,384],'apple3':[560,384],'trs80-model1':[768,576],'trs80-model3':[640,480],'trs80-model2':[640,576],'kaypro2':[560,480],'apple1':[560,384],'coco':[640,480],'coco3':[704,498],'altair':[640,480],'pet':[640,400],'bbc':[704,576]};
+const sharpBase={'apple2':[560,384],'apple3':[560,384],'trs80-model1':[768,576],'trs80-model3':[640,480],'trs80-model2':[640,576],'kaypro2':[560,480],'trs80-model100':[720,192],'apple1':[560,384],'coco':[640,480],'coco3':[704,498],'altair':[640,480],'pet':[640,400],'bbc':[704,576],'atari800':[752,480]};
 function sharpSize(machine,width,height,ratio){
     const key=machine==='coco'&&typeof lastFrame?.model==='string'&&lastFrame.model.endsWith('3')?'coco3':machine;
     const [w,h]=sharpBase[key]??sharpBase['apple2'];
@@ -564,7 +594,7 @@ for(const button of document.querySelectorAll('[data-code]')){
     button.addEventListener('click',()=>{api.postMessage({code:Number(button.dataset.code)});screen.focus();});
 }
 ctrl.addEventListener('click',()=>{ctrl.setAttribute('aria-pressed',String(ctrl.getAttribute('aria-pressed')!=='true'));screen.focus();});
-for(const id of ['reset','trs80-reset','model3-reset','model2-reset','kaypro-reset','apple1-reset','coco-reset','pet-reset','altair-reset','bbc-reset']){
+for(const id of ['reset','trs80-reset','model3-reset','model2-reset','model100-reset','kaypro-reset','apple1-reset','coco-reset','pet-reset','altair-reset','bbc-reset']){
     document.getElementById(id).addEventListener('click',event=>{api.postMessage(event.shiftKey?{command:'reset',shift:true}:{command:'reset'});screen.focus();});
 }
 for(const id of ['apple1-clear','altair-clear']){

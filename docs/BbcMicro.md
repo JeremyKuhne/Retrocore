@@ -101,7 +101,9 @@ image the same way, with the launch's `boot`. In Retrocore Desktop, F1-F9 and F1
 SHIFT LOCK, and Ctrl+Shift+F12 is SHIFT-BREAK.
 **Machine reset** stops at the MOS's first instruction after BREAK. The **BRK instructions** filter stops at each
 error the MOS, BASIC or the DFS raises, and names it. The Drives view shows the cassette and the drives, and
-inserts, records, ejects and saves media; `retro/media` takes the same requests.
+inserts, records, ejects and saves media, and presses the recorder's PLAY, RECORD, STOP and REWIND (RECORD with no
+tape puts in a blank one, saved with Save As; a tape put in to play is write-protected, so RECORD will not go down on
+it); `retro/media` takes the same requests.
 
 **What the debugger knows about the BBC Micro.**
 
@@ -128,8 +130,16 @@ and Color BASIC do; the [extension's README](../extension/README.md#basic-progra
   Over and Step Out step over them.
 - The Variables view lists the resident integers A%-Z% that are not zero, then each variable list's variables in the
   order BASIC made them, the arrays (the last subscript varying fastest), the FOR loops and BASIC's memory: PAGE to
-  TOP, the heap from LOMEM, and BASIC's stack below HIMEM. Watch expressions take BASIC's operators and string
-  functions, and setting a variable or a string writes it as BASIC would.
+  TOP, the heap from LOMEM, and BASIC's stack below HIMEM. Watch expressions and conditions take BASIC's operators,
+  string functions and indirections (`?&70`, `!addr`, `$addr` and `A%?1`), reading memory as BASIC does, and setting
+  a variable or a string writes it as BASIC would.
+- In a `.bbcbasic.bas` file, the assembler between `[` and `]` highlights its mnemonics, registers, labels and `\`
+  comments, and what it skips: everything after an implied instruction, a register or the shifts' `A`, and a `;` or `\`
+  after an operand. Its mnemonics, registers and skipped text are not variables to rename or find; its labels and the
+  names in its operands are. A mnemonic is its first three letters, whatever follows them (`LDAdest` is `LDA dest`),
+  and one that is not in the assembler's table, or an `EQU` without a capital `B`, `W`, `D` or `S`, is warned of,
+  as BASIC stops there with Syntax error. Another BASIC's word, such as `HOME`, is a variable like any other, as BBC
+  BASIC keeps names whole; it is warned of only as a statement of its own, where BASIC stops with Mistake.
 - STOP is error 0, and a program that runs off its last line returns to the prompt; BBC BASIC has no CONT.
 
 ## Testing

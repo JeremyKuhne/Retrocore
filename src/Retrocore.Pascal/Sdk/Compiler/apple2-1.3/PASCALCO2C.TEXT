@@ -1,0 +1,43 @@
+(** PASCALCO2C.TEXT: part 3 of 3 of PASCALCO2: PASCALCO's procedures and body.
+
+    Included by COMPILER.TEXT after PASCALCO2B.TEXT, last.
+
+    Procedures here, nested ones indented:
+        CompileProgram
+        KeepPartsResident
+          KeepRoutineResident *)
+
+  (** Takes the time, and compiles the program: CompileBlock(BlockStarters +
+      StartersOfStatement - [CaseToken]) (II.0: PASCALCOMPILER's body). *)
+  PROCEDURE CompileProgram;
+  BEGIN
+    TIME(TokenLength, StartTime);
+    CompileBlock(BlockStarters + StartersOfStatement - [CaseToken])
+  END;
+
+  (** Compiles with DECLARAT, BODYPART, NUMSTRIN and others resident, for
+      speed without $S+. *)
+  PROCEDURE KeepPartsResident;
+
+    (** And ROUTINE too, without $S++. *)
+    PROCEDURE KeepRoutineResident;
+    BEGIN (*$R 10*)
+      CompileProgram
+    END;
+
+  BEGIN (*$R DECLARAT*)(*$R BODYPART*)(*$R NUMSTRIN*)(*$R 11*)(*$R 12*)(*$R
+      13*)(*$R 14*)(*$R 15*)
+    IF SwapMore THEN
+      CompileProgram
+    ELSE
+      KeepRoutineResident
+  END;
+
+BEGIN
+  COMPINIT;
+  IF NOT Swapping THEN
+    KeepPartsResident
+  ELSE
+    CompileProgram;
+  FINISHUP
+END;

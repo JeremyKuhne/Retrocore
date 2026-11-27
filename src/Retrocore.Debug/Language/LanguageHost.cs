@@ -5,6 +5,8 @@
 using System.Globalization;
 using System.Text.Json.Nodes;
 
+using Retrocore.Assembler;
+
 namespace Retrocore.Debug.Language;
 
 /// <summary>
@@ -69,14 +71,29 @@ internal static partial class LanguageHost
     internal const string MbasicId = "retrocore-mbasic";
 
     /// <summary>
+    ///  The VS Code language of TRS-80 Model 100 BASIC documents.
+    /// </summary>
+    internal const string Model100Id = "retrocore-model100";
+
+    /// <summary>
     ///  The VS Code language of Commodore PET BASIC documents, BASIC 2's words.
     /// </summary>
     internal const string PetBasicId = "retrocore-petbasic";
 
     /// <summary>
+    ///  The VS Code language of Atari BASIC documents.
+    /// </summary>
+    internal const string AtariBasicId = "retrocore-atari";
+
+    /// <summary>
     ///  The VS Code language of a BASIC document whose pragma or file name gives its dialect.
     /// </summary>
     internal const string BasicId = "retrocore-basic";
+
+    /// <summary>
+    ///  The VS Code language of Apple Pascal documents.
+    /// </summary>
+    internal const string PascalId = "retrocore-pascal";
 
     private const int ByteMaximum = 0xFF;
     private const int WordMaximum = 0xFFFF;
@@ -95,7 +112,9 @@ internal static partial class LanguageHost
         or ColorBasicId
         or BbcBasicId
         or MbasicId
+        or Model100Id
         or PetBasicId
+        or AtariBasicId
         or BasicId;
 
     // Serves the requests about a machine that is off (LanguageHost.Machine.cs).
@@ -110,14 +129,15 @@ internal static partial class LanguageHost
         JsonRpcServer server = new(Console.OpenStandardInput(), Console.OpenStandardOutput());
         LanguageWorkspace workspace = new(server);
         BasicDocuments basic = new(server);
-        DocumentSyncHandler sync = new(workspace, basic);
-        DefinitionHandler definition = new(workspace, basic);
-        ReferencesHandler references = new(workspace, basic);
-        HoverHandler hover = new(workspace, basic);
-        CompletionHandler completion = new(workspace, basic);
-        DocumentSymbolHandler documentSymbols = new(workspace, basic);
+        PascalDocuments pascal = new(server);
+        DocumentSyncHandler sync = new(workspace, basic, pascal);
+        DefinitionHandler definition = new(workspace, basic, pascal);
+        ReferencesHandler references = new(workspace, basic, pascal);
+        HoverHandler hover = new(workspace, basic, pascal);
+        CompletionHandler completion = new(workspace, basic, pascal);
+        DocumentSymbolHandler documentSymbols = new(workspace, basic, pascal);
         WorkspaceSymbolHandler workspaceSymbols = new(workspace);
-        CodeActionHandler codeActions = new(workspace, basic);
+        CodeActionHandler codeActions = new(workspace, basic, pascal);
 
         server.OnRequest("initialize", _ => Capabilities());
         server.OnRequest("shutdown", (JsonObject? _) => (JsonNode?)null);
@@ -125,8 +145,15 @@ internal static partial class LanguageHost
         server.OnNotification("textDocument/didOpen", parameters => sync.Open(LspParams.From(parameters)));
         server.OnNotification("textDocument/didChange", parameters => sync.Change(LspParams.From(parameters)));
         server.OnNotification("textDocument/didClose", parameters => sync.Close(LspParams.From(parameters)));
-        server.OnNotification("workspace/didChangeWatchedFiles", parameters => WatchedFilesChanged(workspace, parameters));
+        server.OnNotification("workspace/didChangeWatchedFiles", parameters =>
+        {
+            WatchedFilesChanged(workspace, parameters);
+            pascal.FilesChanged();
+        });
+
         server.OnNotification("retrocore/unlinkedNameWords", parameters => UnlinkedNameWordsChanged(workspace, parameters));
+        server.OnNotification("retrocore/activeTarget", parameters => ActiveTargetChanged(workspace, parameters));
+        server.OnRequest("retrocore/inactiveRanges", parameters => InactiveRanges(workspace, parameters));
         server.OnRequest("textDocument/definition", parameters => Answer(definition.Handle, parameters, Locations));
         server.OnRequest("textDocument/references", parameters => Answer(references.Handle, parameters, Locations));
         server.OnRequest("textDocument/hover", parameters => Answer(hover.Handle, parameters, found => found?.ToJson()));
@@ -170,6 +197,57 @@ internal static partial class LanguageHost
                 workspace.ConfigurationChanged(PathOf(new DocumentUri(uri)));
             }
         }
+    }
+
+    /// <summary>
+    ///  Takes the target the client made active: its project's sources are analyzed through it from now on, with its
+    ///  headers, defines and CPU.
+    /// </summary>
+    /// <param name="workspace">The workspace to reanalyze.</param>
+    /// <param name="parameters">
+    ///  <c>project</c>, a <c>retrocore.json</c> or its folder, as a path or a file URI, and <c>target</c>, the target's
+    ///  name, or <c>project/target</c> for one of a root file's projects; null for either clears it.
+    /// </param>
+    internal static void ActiveTargetChanged(LanguageWorkspace workspace, JsonObject? parameters)
+    {
+        string? project = parameters.String("project") is { } given ? ProjectPath(given) : null;
+        (string File, string Target)? previous = ProjectSources.Active;
+        ProjectSources.SetActive(project, parameters.String("target"));
+        string?[] changed = [previous?.File, ProjectSources.Active?.File];
+        foreach (string file in changed.OfType<string>().Distinct(StringComparer.OrdinalIgnoreCase))
+        {
+            workspace.ProjectChanged(file);
+        }
+    }
+
+    // A project given as a file URI or a path.
+    private static string ProjectPath(string project) =>
+        Uri.TryCreate(project, UriKind.Absolute, out Uri? uri) && uri.IsFile ? PathOf(new DocumentUri(project)) : Path.GetFullPath(project);
+
+    /// <summary>
+    ///  Answers which lines of a document its conditional assembly left out, for the editor to dim.
+    /// </summary>
+    /// <param name="workspace">The workspace.</param>
+    /// <param name="parameters"><c>textDocument</c>, with the document's <c>uri</c>.</param>
+    /// <returns>
+    ///  <c>ranges</c>: each run of lines left out, from the start of its first line to the start of the line after
+    ///  its last; null when no analysis opened the document, so nothing says which lines are.
+    /// </returns>
+    internal static async Task<JsonNode?> InactiveRanges(LanguageWorkspace workspace, JsonObject? parameters)
+    {
+        string uri = parameters?["textDocument"].String("uri") ?? throw new InvalidOperationException("Missing textDocument.uri.");
+        IReadOnlyList<AssemblyLineRange>? lines = await workspace
+            .InactiveLinesAsync(PathOf(new DocumentUri(uri)), CancellationToken.None)
+            .ConfigureAwait(continueOnCapturedContext: false);
+
+        return new JsonObject
+        {
+            ["ranges"] = lines?.Select(range => (JsonNode?)new JsonObject
+            {
+                ["start"] = new JsonObject { ["line"] = range.Start, ["character"] = 0 },
+                ["end"] = new JsonObject { ["line"] = range.End, ["character"] = 0 }
+            }).ToJsonArray()
+        };
     }
 
     /// <summary>

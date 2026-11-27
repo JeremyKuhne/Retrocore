@@ -41,7 +41,7 @@
     ;; The text ends at a quote or zero. Unlike <Functions::Str>, this entry does not discard a return address.
     ;; Out: FacMantissa3 = temporary descriptor pointer (low byte), FacMantissa4 = 0, ValueType = string
     ;; Errors: OUT OF MEMORY or FORMULA TOO COMPLEX while making the result
-    ;; Also: TIMSTR (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;; Also: TIMSTR (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     .proc FromNumberBuffer
     lda #<NumberBufferPrefix
     ldy #>NumberBufferPrefix

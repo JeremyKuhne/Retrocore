@@ -23,14 +23,20 @@ public static class BasicKeywordHelp
         char code = dialect.Name switch
         {
             "level2" => '2',
+            "level1" => '1',
             "integer" or "apple1" => 'i',
             "business" => 'b',
             "colorbasic" => 'c',
             "mbasic" => 'm',
             "bbcbasic" => 'o',
             "petbasic" => 'p',
+
+            // The Model 100's words have no help of their own yet, and AppleSoft's would mislead.
+            "model100" => '\0',
             _ => 'a'
         };
+
+        if (code == '\0') { return null; }
 
         foreach ((string word, string dialects, string syntax, string summary) in s_entries.Value)
         {

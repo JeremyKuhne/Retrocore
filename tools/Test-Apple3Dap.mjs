@@ -27,10 +27,10 @@ let last = "";
 const timeout = setTimeout(() => fail(new Error(`Apple III DAP integration timed out; the screen was:
 ${last}`)), Number(process.env.RETROCORE_DAP_TIMEOUT ?? 240000));
 
-// The line after a label: its first instruction.
+// The line after a label or a .proc: its first instruction.
 function lineOf(label, file = bootRom) {
     const lines = readFileSync(file, "utf8").split(/\r?\n/);
-    const index = lines.findIndex(line => line === `${label}:`);
+    const index = lines.findIndex(line => line === `${label}:` || line === `.proc ${label}`);
     assert.ok(index >= 0, `${label} is in ${file}`);
     let next = index + 1;
     while (/^\s*(;.*)?$/.test(lines[next])) next++;
@@ -200,19 +200,19 @@ try {
         console.log(`Skipped the SOS boot: ${utilities} is missing.`);
     }
 
-    // Business BASIC debugs at its source where SOS loaded it: HELLO's first statement passes through GONE.
+    // Business BASIC debugs at its source where SOS loaded it: HELLO's first statement passes through ExecuteStatement (Apple's GONE).
     if (existsSync(businessBasic)) {
         events.length = 0;
         await request("launch", { machine: "apple3", sdkRoms, stopOnEntry: false, speed: "max", disks: [businessBasic] });
         await request("setExceptionBreakpoints", { filters: [] });
         const listd = join(sdkRoms, "BusinessBasic", "B3ListD.asm");
-        const basicSet = await request("setBreakpoints", { source: { path: listd }, breakpoints: [{ line: lineOf("GONE", listd) }] });
+        const basicSet = await request("setBreakpoints", { source: { path: listd }, breakpoints: [{ line: lineOf("ExecuteStatement", listd) }] });
         assert.equal(basicSet.breakpoints[0].verified, true, "Business BASIC's source maps where SOS loads it");
         await request("configurationDone");
         assert.equal((await event("stopped")).reason, "breakpoint");
         const basicFrame = (await request("stackTrace", { threadId: 1 })).stackFrames[0];
         assert.equal(basicFrame.source.path.toLowerCase(), listd.toLowerCase());
-        assert.equal(basicFrame.line, lineOf("GONE", listd));
+        assert.equal(basicFrame.line, lineOf("ExecuteStatement", listd));
         assert.equal((await request("evaluate", { expression: "PC" })).result, "$683E (26686)");
     } else {
         console.log(`Skipped Business BASIC: ${businessBasic} is missing.`);

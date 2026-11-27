@@ -71,8 +71,10 @@ public sealed partial class BasicVariables
     public IReadOnlyList<BasicVariable> Simple()
     {
         if (IntegerBasic) { return IntegerSimple(); }
+        if (AtariBasic) { return AtariSimple(); }
         if (BusinessBasic) { return BusinessSimple(); }
         if (Bbc) { return BbcSimple(); }
+        if (Level1Basic) { return Level1Simple(); }
         List<BasicVariable> variables = [];
         int at = Word(Pointers.Variables);
         int end = Word(Pointers.Arrays);
@@ -118,8 +120,10 @@ public sealed partial class BasicVariables
     public IReadOnlyList<BasicArray> Arrays()
     {
         if (IntegerBasic) { return IntegerArrays(); }
+        if (AtariBasic) { return AtariArrays(); }
         if (BusinessBasic) { return BusinessArrays(); }
         if (Bbc) { return BbcArrays(); }
+        if (Level1Basic) { return Level1Arrays(); }
         List<BasicArray> arrays = [];
         int at = Word(Pointers.Arrays);
         int end = Word(Pointers.FreeStart);
@@ -181,8 +185,10 @@ public sealed partial class BasicVariables
     public BasicValue Read(BasicVariableKind kind, int address)
     {
         if (IntegerBasic) { return IntegerRead(kind, address); }
+        if (AtariBasic) { return AtariRead(kind, address); }
         if (BusinessBasic) { return BusinessRead(kind, address); }
         if (Bbc) { return BbcRead(kind, address); }
+        if (Level1Basic) { return Level1Read(kind, address); }
         switch (kind)
         {
             case BasicVariableKind.String:
@@ -226,6 +232,12 @@ public sealed partial class BasicVariables
             return;
         }
 
+        if (AtariBasic)
+        {
+            AtariWrite(kind, address, value);
+            return;
+        }
+
         if (BusinessBasic)
         {
             BusinessWrite(kind, address, value);
@@ -235,6 +247,12 @@ public sealed partial class BasicVariables
         if (Bbc)
         {
             BbcWrite(kind, address, value);
+            return;
+        }
+
+        if (Level1Basic)
+        {
+            Level1Write(kind, address, value);
             return;
         }
 
@@ -278,6 +296,8 @@ public sealed partial class BasicVariables
             return Simple().FirstOrDefault(variable => variable.Name == name.ToUpperInvariant());
         }
 
+        if (AtariBasic) { return Simple().FirstOrDefault(variable => AtariNamed(variable.Name, name)); }
+
         if (BusinessBasic)
         {
             (string letters, BasicVariableKind type) = BusinessParse(name);
@@ -286,6 +306,7 @@ public sealed partial class BasicVariables
         }
 
         if (Bbc) { return BbcFind(name); }
+        if (Level1Basic) { return Level1Find(name); }
 
         (char first, char second, BasicVariableKind kind) = Parse(name);
         string stored = Mbasic ? MbasicStored(name, kind) : Name(first, second, kind);
@@ -305,6 +326,8 @@ public sealed partial class BasicVariables
             return Arrays().FirstOrDefault(array => array.Name == name.ToUpperInvariant());
         }
 
+        if (AtariBasic) { return Arrays().FirstOrDefault(array => AtariNamed(array.Name, name.TrimEnd('('))); }
+
         if (BusinessBasic)
         {
             (string letters, BasicVariableKind type) = BusinessParse(name);
@@ -313,6 +336,7 @@ public sealed partial class BasicVariables
         }
 
         if (Bbc) { return Arrays().FirstOrDefault(array => array.Name == name); }
+        if (Level1Basic) { return Arrays().FirstOrDefault(array => array.Name == name.ToUpperInvariant()); }
 
         (char first, char second, BasicVariableKind kind) = Parse(name);
         string stored = Mbasic ? MbasicStored(name, kind) : Name(first, second, kind);
@@ -330,8 +354,14 @@ public sealed partial class BasicVariables
     {
         if (Find(name) is { } existing) { return existing; }
         if (IntegerBasic) { return IntegerCreate(name); }
+        if (AtariBasic)
+        {
+            throw new InvalidOperationException("Atari BASIC adds a variable only when a line that names it is typed.");
+        }
+
         if (BusinessBasic) { return BusinessCreate(name); }
         if (Bbc) { return BbcCreate(name); }
+        if (Level1Basic) { throw new ArgumentException($"'{name}' {BadName} Level I's are A to Z, A$ and B$."); }
         (char first, char second, BasicVariableKind kind) = Parse(name);
         byte[] rest = Mbasic ? MbasicRest(name) : [];
         int header = Mbasic ? 4 + rest.Length : LevelTwo ? 3 : 2;
@@ -379,8 +409,10 @@ public sealed partial class BasicVariables
     public IReadOnlyList<BasicLoop> Loops(int stack, int forSize, int gosubSize)
     {
         if (IntegerBasic) { return IntegerLoops(); }
+        if (AtariBasic) { return AtariLoops(); }
         if (BusinessBasic) { return BusinessLoops(stack, forSize, gosubSize); }
         if (Bbc) { return BbcLoops(); }
+        if (Level1Basic) { return Level1Loops(stack); }
         List<BasicLoop> loops = [];
         int forToken = _dialect.StackForToken;
         int gosubToken = _dialect.StackGosubToken;
@@ -416,6 +448,9 @@ public sealed partial class BasicVariables
     public int ValueSize(BasicVariableKind kind) => kind switch
     {
         BasicVariableKind.Integer or BasicVariableKind.String when Bbc => 4,
+        BasicVariableKind.Real or BasicVariableKind.String when AtariBasic => AtariNumbers.Size,
+        BasicVariableKind.Real when Level1Basic => Level1Dialect.NumberSize,
+        BasicVariableKind.String when Level1Basic => Level1Dialect.StringSize,
         BasicVariableKind.Integer => 2,
         BasicVariableKind.String => ColorBasic ? 5 : 3,
         BasicVariableKind.Single => 4,

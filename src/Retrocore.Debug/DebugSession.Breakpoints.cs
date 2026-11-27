@@ -136,11 +136,17 @@ internal sealed partial class DebugSession
             // A BRK on BASIC 2 enters its machine-language monitor.
             DebugMachines.Pet => [reset, brk, .. checks, .. BasicFilters],
 
+            // The Model 100's BASIC is not a dialect here yet, and the 8085 has no break instruction.
+            DebugMachines.Trs80Model100 => [reset, .. checks],
+
             // The Altair has no ROM, BASIC or break instruction to stop in.
             DebugMachines.Altair => [reset, .. checks],
 
             // BASIC and the MOS raise their errors with BRK.
             DebugMachines.Bbc => [reset, bbcBrk, .. checks, .. BasicFilters],
+
+            // The Atari has no beam position to stop at yet.
+            DebugMachines.Atari => [reset, brk, .. checks, .. BasicFilters],
             _ => [reset, brk, scanline, .. checks, .. BasicFilters]
         };
     }
@@ -926,8 +932,10 @@ internal sealed partial class DebugSession
         if (sites.Count == 0 && _systemCallBreakpoints.Count == 0) { return null; }
 
         // Breakpoints apply to the CPU running: an address with no bank or module is the machine CPU's, and a
-        // coprocessor's are in its bank, such as z80:0x0100, or in its modules.
+        // coprocessor's are in its bank, such as z80:0x0100, or in its modules. Each is met once at a boundary, so
+        // not again where an interrupt taken there returns, or while the CPU idles there.
         IDebugTarget cpu = Cpu;
+        long here = BoundaryToken(cpu, pc);
         bool machineCpu = IsMachineCpu(cpu);
         List<BreakpointState> stops = [];
         HashSet<BreakpointState> seen = [];
@@ -953,7 +961,9 @@ internal sealed partial class DebugSession
                 }
             }
 
-            if (!seen.Add(site.Breakpoint) || !Triggers(site.Breakpoint, access: null, out string? error)) { continue; }
+            if (!seen.Add(site.Breakpoint) || site.Breakpoint.MetToken == here) { continue; }
+            site.Breakpoint.MetToken = here;
+            if (!Triggers(site.Breakpoint, access: null, out string? error)) { continue; }
             stops.Add(site.Breakpoint);
             hidden ??= levels;
             description ??= error;
@@ -963,12 +973,13 @@ internal sealed partial class DebugSession
         {
             foreach ((byte? number, BreakpointState state) in _systemCallBreakpoints)
             {
-                if ((number is { } only && only != call.Number)
-                    || !seen.Add(state)
-                    || !Triggers(state, access: null, out string? error))
+                if ((number is { } only && only != call.Number) || !seen.Add(state) || state.MetToken == here)
                 {
                     continue;
                 }
+
+                state.MetToken = here;
+                if (!Triggers(state, access: null, out string? error)) { continue; }
 
                 stops.Add(state);
                 description ??= error ?? $"SOS call {call.Name} (${call.Number:X2}) at ${pc:X4}.";
@@ -994,7 +1005,7 @@ internal sealed partial class DebugSession
                 cycle = z80;
             }
 
-            if (!watch.Matches(cycle, out bool write) || hits.Exists(hit => hit.Breakpoint == watch.Breakpoint))
+            if (!watch.Matches(cycle, out bool write) || Noted(hits, watch.Breakpoint))
             {
                 continue;
             }
@@ -1013,6 +1024,18 @@ internal sealed partial class DebugSession
             string description = write ? $"Wrote ${cycle.Value:X2} to {place}." : $"Read ${cycle.Value:X2} from {place}.";
             hits.Add((watch.Breakpoint, description));
         }
+    }
+
+    // Whether an instruction's cycles have already hit a breakpoint. A loop rather than a lambda, as the lambda's
+    // capture would be allocated for every watch at every cycle.
+    private static bool Noted(List<(BreakpointState Breakpoint, string Description)> hits, BreakpointState breakpoint)
+    {
+        foreach ((BreakpointState noted, _) in hits)
+        {
+            if (noted == breakpoint) { return true; }
+        }
+
+        return false;
     }
 
     // Stops for the data breakpoints the instruction that just finished hit, if their conditions and hit counts say
@@ -1064,7 +1087,9 @@ internal sealed partial class DebugSession
         {
             try
             {
-                if (new ExpressionEvaluator(TriggeringCpu, _debug, condition).Evaluate() == 0) { return false; }
+                state.ConditionTokens ??= ExpressionEvaluator.Tokenize(condition);
+                ExpressionEvaluator evaluator = new(TriggeringCpu, _debug, state.ConditionTokens);
+                if (evaluator.Evaluate() == 0) { return false; }
             }
             catch (Exception exception) when (IsEvaluationError(exception))
             {

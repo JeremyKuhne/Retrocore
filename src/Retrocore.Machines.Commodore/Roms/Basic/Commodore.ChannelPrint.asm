@@ -2,6 +2,7 @@
 ; COMMODORE BASIC: OUTPUT CHANNEL SELECTION, CHARACTER OUTPUT AND PRINT SPACING
 
 .include "../../Microsoft6502Basic/MsBasic.Families.asm"
+.include "Commodore.Switches.asm"
 
 ;; The carriage return, which ends a line on every channel.
 ;; Also: CR (K4S79, HVK4)
@@ -25,16 +26,18 @@ DELETE_CHARACTER = $14
     .scope Statements continued
 
     ;; `PRINT#`: prints to a logical channel through <Statements::Cmd>, then restores the default channels.
-    ;; Also: PRINTN (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;; Also: PRINTN (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     .proc PrintNumber
     jsr Statements::Cmd
     jmp RestoreChannels
     .endproc
 
-    ;; `CMD`: selects an output channel and prints any following items; the channel stays selected.
+    ;; `CMD`: selects an output channel and prints any following items; the channel stays selected. With
+    ;; <STANDARD_KERNAL> (the VIC-20), it records the channel first and selects it through `CheckedSelectOutput`, which
+    ;; reports the kernal's error.
     ;; Out: CurrentChannel = the selected logical channel
     ;; See: <KernalSelectOutput>
-    ;; Also: CMD (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;; Also: CMD (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     .proc Cmd
     jsr EvaluateByte
     beq SelectChannel
@@ -42,11 +45,16 @@ DELETE_CHARACTER = $14
     jsr CheckCharacter
 
 ;; Selects the channel for output, records it in <CurrentChannel> and enters PRINT.
-;; Also: SAVEIT (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: SAVEIT (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 SelectChannel:
     php
-    jsr KernalSelectOutput
-    stx CurrentChannel
+    .if STANDARD_KERNAL
+        stx CurrentChannel
+        jsr CheckedSelectOutput
+    .else
+        jsr KernalSelectOutput
+        stx CurrentChannel
+    .endif
     plp
     jmp Statements::Print
     .endproc
@@ -69,7 +77,7 @@ SelectChannel:
     ;; Advances one space on the selected output channel: loads a space for a file, or <CURSOR_RIGHT> for the screen,
     ;; and skips <PrintQuestionMark>'s load, into <PrintCharacter>. Where `alwaysSkip` is 1 (BASIC 1), every channel
     ;; gets <CURSOR_RIGHT>.
-    ;; Also: OUTSPC (M6502, CBM4S79, HV2, HV4, HV4R)
+    ;; Also: OUTSPC (M6502, CBM4S79, HV2, HV4, HV4R, BV20)
     .proc PrintSpace
     .if alwaysSkip
 
@@ -83,7 +91,7 @@ CursorRight:
         .byte $2C                   ; BIT absolute skips the next LDA
 
 ;; Loads the cursor-right code.
-;; Also: CRTSKP (M6502, CBM4S79, HV2, HV4, HV4R)
+;; Also: CRTSKP (M6502, CBM4S79, HV2, HV4, HV4R, BV20)
 CursorRight:
     .endif
     lda #CURSOR_RIGHT
@@ -92,7 +100,7 @@ CursorRight:
     .endproc
 
     ;; Prints a question mark.
-    ;; Also: OUTQST (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;; Also: OUTQST (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     .proc PrintQuestionMark
     lda #'?'
     ; Falls into PrintCharacter.
@@ -101,12 +109,13 @@ CursorRight:
     ;; Sends A to the selected output channel unless output is suppressed.
     ;;
     ;; Where `localPosition` is 1 (BASIC 1), it tracks the screen column itself and calls its editor-ROM patch on an
-    ;; advance. Where `honorSuppression` is 0 (BASIC 4), output is never suppressed. Every build sets zero from A before
-    ;; returning.
+    ;; advance. Where `honorSuppression` is 0 (BASIC 4 and the VIC-20), output is never suppressed. With
+    ;; <STANDARD_KERNAL>, it sends through `CheckedCharacterOut`, which reports the kernal's error. Every build sets
+    ;; zero from A before returning.
     ;; In: A = character
     ;; Out: A = the character if output is suppressed, else the output routine's result, zero = set when A is zero
     ;; See: <KernalCharacterOut>
-    ;; Also: OUTDO (M6502, HV1, HV1R, HV2, HV4, HV4R, CBM4S79)
+    ;; Also: OUTDO (M6502, HV1, HV1R, HV2, HV4, HV4R, CBM4S79, BV20)
     .proc PrintCharacter
     .if honorSuppression
         bit OutputSuppressed
@@ -150,13 +159,18 @@ RestoreCharacter:
         pla
     .endif
 
-;; Sends the character through <KernalCharacterOut>; nothing branches here, and the label is kept for its old name.
+;; Sends the character through <KernalCharacterOut>, or `CheckedCharacterOut`; nothing branches here, and the label is
+;; kept for its old name.
 ;; Also: OUTLOC (M6502)
 Send:
-    jsr KernalCharacterOut
+    .if STANDARD_KERNAL
+        jsr CheckedCharacterOut
+    .else
+        jsr KernalCharacterOut
+    .endif
 
 ;; Sets zero from A and returns; where output can be suppressed, suppressed output branches here.
-;; Also: OUTRTS (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: OUTRTS (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 SetFlags:
     and #$FF
     .if returnAlias
@@ -172,18 +186,19 @@ Return:
 ;; Emits input-line completion and the newline entries: <FinishInputLine> and <PrintNewline>.
 ;; Parameters: bufferPage = zero for a page-zero input buffer, or the nonzero buffer page;
 ;;   localPosition = 1 to maintain <TerminalPosition> in BASIC rather than the editor;
-;;   channelLineFeed = 1 to emit a line feed only for channels with bit 7 set;
+;;   channelLineFeed = 1 to emit a line feed only for channels with bit 7 set, 2 to test the bit with `BIT`, keeping A
+;;   the carriage return;
 ;;   nullPadding = 1 to emit the configured NULL characters after a newline
 .macro CommodoreLineEnd bufferPage, localPosition, channelLineFeed, nullPadding
     .assert bufferPage >= 0 && bufferPage <= 255, "bufferPage must fit in a byte."
     .assert localPosition = 0 || localPosition = 1, "localPosition is 0 or 1."
-    .assert channelLineFeed = 0 || channelLineFeed = 1, "channelLineFeed is 0 or 1."
+    .assert channelLineFeed >= 0 && channelLineFeed <= 2, "channelLineFeed is 0, 1 or 2."
     .assert nullPadding = 0 || nullPadding = 1, "nullPadding is 0 or 1."
 
     ;; Terminates an input line, and prints a newline only for terminal input.
     ;; In: X = number of input bytes
     ;; Out: X = the low byte of the address before <InputBuffer>, Y = its high byte
-    ;; Also: FININL (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;; Also: FININL (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     .proc FinishInputLine
     .if bufferPage
         lda #$00
@@ -203,12 +218,14 @@ Return:
     ;; Prints a carriage return and the line feed and padding this build needs.
     ;;
     ;; Where `localPosition` is 1 (BASIC 1), the screen's return also resets the column; where `channelLineFeed` is 1
-    ;; (BASIC 4), only a channel with bit 7 set gets the line feed; where `nullPadding` is 1 (BASIC 1), it sends
-    ;; as many zero bytes as its null-padding count holds, and the other builds complement A instead.
+    ;; (BASIC 4) or 2 (the VIC-20, testing with `BIT`), only a channel with bit 7 set gets the line feed, so the
+    ;; complement at the end is of the line feed for such a channel, and for another of the channel number where it is
+    ;; 1 or of the return where it is 2; where `nullPadding` is 1 (BASIC 1), it sends as many zero bytes as its
+    ;; null-padding count holds, and the other builds complement A instead.
     ;; Entry:
     ;;   Finish = finishes the newline (padding, column, or A complemented); the shared <PrintString> enters here
     ;;   Return = returns; <FinishInputLine>, the shared PRINT and <PrintString> branch here
-    ;; Also: CRDO (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;; Also: CRDO (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     .proc PrintNewline
     .if localPosition
         lda CurrentChannel
@@ -221,7 +238,10 @@ Return:
 SendReturn:
     lda #CARRIAGE_RETURN
     jsr PrintCharacter
-    .if channelLineFeed
+    .if channelLineFeed = 2
+        bit CurrentChannel
+        bpl Finish
+    .elseif channelLineFeed
         lda CurrentChannel
         bpl Finish
     .endif
@@ -229,7 +249,7 @@ SendReturn:
     jsr PrintCharacter
 
 ;; Finishes the newline after a string's return or the newline itself.
-;; Also: CRFIN (M6502, HV1, HV1R, HV2, HV4, HV4R, CBM4S79)
+;; Also: CRFIN (M6502, HV1, HV1R, HV2, HV4, HV4R, CBM4S79, BV20)
 Finish:
     .if localPosition
         lda CurrentChannel
@@ -260,7 +280,7 @@ ResetColumn:
     .endif
 
 ;; Returns.
-;; Also: PRTRTS (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: PRTRTS (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 Return:
     rts
     .endproc
@@ -271,10 +291,17 @@ Return:
 .macro CommodorePrintSpacing tokenDispatch
     .assert tokenDispatch = 0 || tokenDispatch = 1, "tokenDispatch is 0 or 1."
 
-    ;; PRINT's comma: prints spaces to the next <ZONE_WIDTH> zone from <TerminalPosition>.
-    ;; Also: COMPRT (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;; PRINT's comma: prints spaces to the next <ZONE_WIDTH> zone from <TerminalPosition>, or with
+    ;; <CURSOR_COLUMN_FROM_PLOT> (the VIC-20) from the cursor's column, which it reads through `KernalPlot`.
+    ;; Also: COMPRT (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     .proc PrintComma
-    lda TerminalPosition
+    .if CURSOR_COLUMN_FROM_PLOT
+        sec
+        jsr KernalPlot
+        tya
+    .else
+        lda TerminalPosition
+    .endif
 
 ;; Starts the zone's modulus; nothing branches here, and the label is kept for its old name.
 ;; Also: MORCOM (M6502)
@@ -282,7 +309,7 @@ Modulus:
     sec
 
 ;; Subtracts <ZONE_WIDTH> until the column goes negative, then negates it to the spaces needed.
-;; Also: MORCO1 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: MORCO1 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 SubtractZone:
     sbc #ZONE_WIDTH
     bcs SubtractZone
@@ -295,10 +322,12 @@ SubtractZone:
     ;; (`SPC`), and falls into <PrintSpaces>.
     ;;
     ;; Where `tokenDispatch` is 1 (BASIC 1), it tells them apart by the token it saved, and `SPC(0)` prints 256 spaces;
-    ;; the later builds tell them apart by carry, and print none.
+    ;; the later builds tell them apart by carry, and print none. Where `tokenDispatch` is 0 and
+    ;; <CURSOR_COLUMN_FROM_PLOT> is 1 (the VIC-20), it first reads the cursor's column through `KernalPlot` into
+    ;; <TerminalPosition>.
     ;; In: A = the token where `tokenDispatch` is 1; carry = set for `TAB`, clear for `SPC`, where it is 0
     ;; Errors: SYNTAX if the closing parenthesis is missing
-    ;; Also: TABER (M6502, HV1, HV1R, HV2, HV4, HV4R, CBM4S79)
+    ;; Also: TABER (M6502, HV1, HV1R, HV2, HV4, HV4R, CBM4S79, BV20)
     .proc PrintTabOrSpace
     .if tokenDispatch
         pha
@@ -314,6 +343,11 @@ SubtractZone:
         beq PrintSpaces::ContinuePrint
     .else
         php
+        .if CURSOR_COLUMN_FROM_PLOT
+            sec
+            jsr KernalPlot
+            sty TerminalPosition
+        .endif
         jsr SkipAndEvaluateByte
         cmp #')'
         bne HandleBadInput::ToSyntaxError
@@ -332,7 +366,7 @@ SubtractZone:
         ;;   CountInX = prints X spaces, 256 for zero; <PrintTabOrSpace>'s `SPC` enters here
         ;;   ContinuePrint = reads the next character and continues PRINT at <Statements::Print::Item> without
         ;;     a newline; the shared PRINT and <PrintTabOrSpace> branch here
-        ;; Also: ASPAC (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+        ;; Also: ASPAC (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
         .proc PrintSpaces
         tax
 
@@ -359,29 +393,29 @@ ContinuePrint:
         ;;   CountInX = prints X spaces (zero prints none); <PrintTabOrSpace>'s `SPC` enters here
         ;;   ContinuePrint = reads the next character and continues PRINT at <Statements::Print::Item> without
         ;;     a newline; the shared PRINT and <PrintTabOrSpace> branch here
-        ;; Also: ASPAC (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+        ;; Also: ASPAC (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
         .proc PrintSpaces
         tax
 
 ;; Prints X spaces; zero prints none.
-;; Also: XSPAC (M6502, CBM4S79, HV2, HV4, HV4R)
+;; Also: XSPAC (M6502, CBM4S79, HV2, HV4, HV4R, BV20)
 CountInX:
         inx
 
 ;; Counts down; zero goes on to `ContinuePrint`.
-;; Also: XSPAC2 (M6502, CBM4S79, HV2, HV4, HV4R)
+;; Also: XSPAC2 (M6502, CBM4S79, HV2, HV4, HV4R, BV20)
 Next:
         dex
         bne One
 
 ;; Reads the next character and continues PRINT without a newline.
-;; Also: NOTABR (M6502, CBM4S79, HV2, HV4, HV4R)
+;; Also: NOTABR (M6502, CBM4S79, HV2, HV4, HV4R, BV20)
 ContinuePrint:
         jsr GetNextCharacter
         jmp Statements::Print::Item
 
 ;; Prints one space and loops.
-;; Also: XSPAC1 (M6502, CBM4S79, HV2, HV4, HV4R)
+;; Also: XSPAC1 (M6502, CBM4S79, HV2, HV4, HV4R, BV20)
 One:
         jsr PrintSpace
         bne Next

@@ -1,0 +1,85 @@
+(** COMPILER.TEXT: Apple Pascal 1.3's Compiler, SYSTEM.COMPILER.
+
+    The Compiler is UCSD Pascal II.0's, grown by Apple: more segments, units,
+    long integers, a 6502 host. It is a segment procedure of the system,
+    PASCALCO, segment 1, which the system calls with its source's and code's
+    buffers; its own segment procedures, numbered 7 to 20 by the option NS 7,
+    are swapped in as they are called. It compiles in one pass: COMPINIT
+    starts it, CompileBlock compiles the program a block at a time with
+    DECLARAT (the declarations) and BODYPART (the statements, to p-code), and
+    FINISHUP writes the code file's segment dictionary.
+
+    This main file has the program's heading and options, then includes the
+    rest in order, one level deep as the Compiler allows: the constants
+    (CONSTANTS), the types (TYPES), the system's globals (SYSGLOBALS, from
+    System/apple2-1.3), and a file or more for each segment. A segment whose
+    text holds the segments nested in it is in parts: BODYPART1 to BODYPART4.
+    ScanIdentifier and SearchTree are assembled, from ASSEMBLED.TEXT.
+
+    Building: put the files on Pascal volumes with room, name each file's
+    volume in its directive here (SOURCE:DECLARAT1.TEXT), and compile this
+    file on a 128K Apple II with 1.3's 128K system; assemble ASSEMBLED.TEXT
+    with the 1.3 Assembler and link the two with the Linker. README.md, beside
+    this file, has the round trip that checks the result's segments are
+    SYSTEM.COMPILER's, which Retrocore's --pascal compile, assemble-native and
+    link do with the files where they are.
+
+    The names say what each thing is; a doc comment's Also: gives the name
+    UCSD Pascal II.0's listing (UCSD20) or Apple's manual (A2POSRM) has for
+    it. *)
+
+(* Swap the Compiler's segments all it can, for room for this source's
+   symbols. *)
+(*$S++*)
+(* No string length checks: a string goes to a VAR string of another length. *)
+(*$V-*)
+(* GOTO allowed: the code jumps to labels. *)
+(*$G+*)
+(* Compiled as part of the system: its globals are the system's, I/O and range
+   checks off. *)
+(*$U-*)
+PROGRAM PASCALSYSTEM;
+
+(*$I CONSTANTS1.TEXT*)
+(*$I CONSTANTS2.TEXT*)
+(*$I TYPES1.TEXT*)
+(*$I TYPES2.TEXT*)
+(*$I TYPES3.TEXT*)
+(*$I SYSGLOBALS.TEXT*)
+(*$I PASCALCO1A.TEXT*)
+(*$I PASCALCO1B.TEXT*)
+(*$I COMPINIT1.TEXT*)
+(*$I COMPINIT2.TEXT*)
+(*$I DECLARAT1.TEXT*)
+(*$I DECLARAT2.TEXT*)
+(*$I DECLARAT3.TEXT*)
+(*$I DECLARAT4.TEXT*)
+(*$I BODYPART1.TEXT*)
+(*$I ROUTINE1.TEXT*)
+(*$I ROUTINE2.TEXT*)
+(*$I STATEMEN1.TEXT*)
+(*$I CASESTAT.TEXT*)
+(*$I FORSTATE.TEXT*)
+(*$I STATEMEN2.TEXT*)
+(*$I BODYPART2.TEXT*)
+(*$I BODY1.TEXT*)
+(*$I BODY3.TEXT*)
+(*$I BODYPART3A.TEXT*)
+(*$I BODYPART3B.TEXT*)
+(*$I BODYPART3C.TEXT*)
+(*$I BODYPART4A.TEXT*)
+(*$I BODYPART4B.TEXT*)
+(*$I WRITELIN.TEXT*)
+(*$I UNITPART.TEXT*)
+(*$I COMPOPTI.TEXT*)
+(*$I NUMSTRIN.TEXT*)
+(*$I FINISHUP.TEXT*)
+(*$I PASCALCO2A.TEXT*)
+(*$I PASCALCO2B.TEXT*)
+(*$I PASCALCO2C.TEXT*)
+
+
+(* The system's body, which a system program's source has empty. *)
+BEGIN
+END.
+

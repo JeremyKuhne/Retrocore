@@ -36,7 +36,7 @@ InterpreterChecksum:
     ;; ISVAR is here because the overlay puts it here, and it cites, by the lineage rule, every bibliography document
     ;; naming Microsoft's ISVAR; BASIC 4's own documents (CBM4S79, HV4, HV4R) put the label on the lookup itself,
     ;; which in HV4 and HV4R is the code the trampoline jumps to.
-    ;; Also: ISVAR (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;; Also: ISVAR (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     .proc EvaluateVariable
     jmp EvaluateVariableBody
     .endproc

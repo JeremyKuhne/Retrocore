@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 // See LICENSE file in the project root for full license information
 
+using System.Runtime.InteropServices;
 using System.Text;
 
 namespace Retrocore.Assembler;
@@ -102,46 +103,67 @@ internal sealed partial class AssemblyPreprocessor
     /// <param name="names">Macro parameters and repeat counters visible to this line.</param>
     /// <param name="frame">The enclosing macro invocation, supplying locals and .paramcount.</param>
     /// <returns>The substituted line, or the original instance when nothing changed.</returns>
-    private static ReadOnlyMemory<char> Substitute(ReadOnlyMemory<char> text, Dictionary<string, string>? names, MacroFrame? frame) =>
-        names is null && frame is null ? text : Substitute(AssemblySyntax.AsString(text), names, frame).AsMemory();
+    private static string Substitute(string text, Dictionary<string, string>? names, MacroFrame? frame) =>
+        names is null && frame is null ? text : AssemblySyntax.AsString(Substitute(text.AsMemory(), names, frame));
 
-    private static string Substitute(string text, Dictionary<string, string>? names, MacroFrame? frame)
+    // Reads the line in place: a name is looked up by its text, and the line is copied only when one is replaced.
+    private static ReadOnlyMemory<char> Substitute(ReadOnlyMemory<char> text, Dictionary<string, string>? names, MacroFrame? frame)
     {
         if (names is null && frame is null) { return text; }
+
+        // StringBuilder takes a part of a string on every runtime, so a line that is a slice of one is read from it.
+        if (!MemoryMarshal.TryGetString(text, out string? owner, out int offset, out _) || owner is null)
+        {
+            owner = text.ToString();
+            offset = 0;
+        }
+
         StringBuilder? result = null;
         int copied = 0;
-        AssemblyNameReferences references = new(text.AsMemory(), qualified: false);
+        AssemblyNameReferences references = new(text, qualified: false);
         while (references.MoveNext())
         {
             int index = references.Start;
-            int length = references.Current.Length;
+            ReadOnlySpan<char> token = references.Current.Span;
             string? replacement = null;
-            if (references.Current.Span[0] == '.')
+            if (token[0] == '.')
             {
-                if (frame is not null
-                    && references.Current.Span.Equals(".paramcount", StringComparison.OrdinalIgnoreCase))
+                if (frame is not null && token.Equals(".paramcount", StringComparison.OrdinalIgnoreCase))
                 {
                     replacement = frame.ParameterCount.ToString();
                 }
             }
-            else
+            else if (names is null || !TryGetByText(names, token, out replacement))
             {
-                string token = references.Current.ToString();
-                if (names?.TryGetValue(token, out replacement) != true)
-                {
-                    frame?.Locals.TryGetValue(token, out replacement);
-                }
+                if (frame is not null) { TryGetByText(frame.Locals, token, out replacement); }
             }
 
             if (replacement is not null)
             {
                 result ??= new(text.Length);
-                result.Append(text, copied, index - copied).Append(replacement);
-                copied = index + length;
+                result.Append(owner, offset + copied, index - copied).Append(replacement);
+                copied = index + token.Length;
             }
         }
 
-        return result is null ? text : result.Append(text, copied, text.Length - copied).ToString();
+        return result is null ? text : result.Append(owner, offset + copied, text.Length - copied).ToString().AsMemory();
+    }
+
+    /// <summary>
+    ///  Looks a name up by its text, without copying it where the runtime allows; the source generator's copies it.
+    /// </summary>
+    /// <typeparam name="T">The values' type.</typeparam>
+    /// <param name="dictionary">A dictionary keyed with <see cref="StringComparer.Ordinal"/>.</param>
+    /// <param name="name">The name.</param>
+    /// <param name="value">The value, when found.</param>
+    /// <returns>Whether the name is a key.</returns>
+    private static bool TryGetByText<T>(Dictionary<string, T> dictionary, ReadOnlySpan<char> name, [MaybeNullWhen(returnValue: false)] out T value)
+    {
+#if NET
+        return dictionary.GetAlternateLookup<ReadOnlySpan<char>>().TryGetValue(name, out value);
+#else
+        return dictionary.TryGetValue(name.ToString(), out value);
+#endif
     }
 
     private List<Line>? Capture(

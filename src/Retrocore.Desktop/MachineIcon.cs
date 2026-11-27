@@ -33,9 +33,13 @@ internal static class MachineIcon
         ["coco"] = ("#3FB23F", "#0B2A0B", false),
         ["bbc"] = ("#3FB23F", "#0B2A0B", false),
         ["pet"] = ("#2C2C2A", "#E6F1FB", false),
+        ["atari800"] = ("#3FB23F", "#0B2A0B", false),
         ["trs80-model1"] = ("#2C2C2A", "#E6F1FB", false),
         ["trs80-model3"] = ("#2C2C2A", "#E6F1FB", false),
         ["altair"] = ("#2C2C2A", "#E6F1FB", false),
+
+        // The Model 100's LCD: dark dots on a gray-green panel.
+        ["trs80-model100"] = ("#A8B498", "#283028", false),
     };
 
     /// <summary>

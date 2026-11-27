@@ -1,0 +1,577 @@
+(** ROUTINE1.TEXT: part 1 of 2 of ROUTINE, segment 10: the special standard
+    procedures.
+
+    Included by COMPILER.TEXT after BODYPART1.TEXT and before ROUTINE2.TEXT.
+
+    Procedures here, nested ones indented:
+          ROUTINE (segment)
+            SkipComma
+            CheckInteger
+            StringArgument
+            NewCall
+            MoveCall
+            ExitCall
+            UnitTransferCall
+            ConcatCall
+            StringRoutineCall
+            StrCall
+            CloseCall
+            FileRoutineCall
+            ScanCall
+            BlockTransferCall
+            SizeOfCall *)
+
+    (** Compiles a call of a special procedure, which the Compiler compiles
+        itself, by its Key. *)
+    SEGMENT PROCEDURE ROUTINE(Followers: TokenSet; HasParentheses: BOOLEAN;
+        Key: INTEGER);
+      VAR
+        (** Followers, comma and right parenthesis. *)
+        ArgumentFollowers: TokenSet;
+        (** Followers and right parenthesis. *)
+        LastFollowers: TokenSet;
+        (** Followers and comma. *)
+        NextFollowers: TokenSet;
+
+      (** Skips the comma between arguments, or reports error 20. *)
+      PROCEDURE SkipComma;
+      BEGIN
+        IF Token = CommaToken THEN
+          NextToken
+        ELSE
+          Error(20)
+      END;
+
+      (** Reports error 125 for an argument not an integer. *)
+      PROCEDURE CheckInteger;
+      BEGIN
+        IF Operand.DataType <> IntegerStructure THEN
+          Error(125)
+      END;
+
+      (** Compiles a string argument: a variable, or a constant made a
+          string.
+          Also: STRGVAR (UCSD20) *)
+      PROCEDURE StringArgument(Followers: TokenSet; MustBeVariable: BOOLEAN);
+      BEGIN
+        CompileExpression(Followers);
+        IF (Operand.Kind = KnownValueOperand) AND (Operand.DataType =
+            CharStructure) OR IsString(Operand.DataType) THEN
+          IF Operand.Kind = MemoryOperand THEN
+            PushAddress
+          ELSE
+          BEGIN
+            IF MustBeVariable THEN
+              Error(154);
+            IF Operand.Kind = KnownValueOperand THEN
+            BEGIN
+              IF Operand.DataType = CharStructure THEN
+              BEGIN
+                WITH TokenConstant^ DO
+                BEGIN
+                  Kind := StringKind;
+                  StringLength := 1;
+                  Contents[1 - 1] := CHR(Operand.Literal.Ordinal)
+                END;
+                Operand.Literal.Entry := TokenConstant;
+                NEW(Operand.DataType, StringTypeSize);
+                Operand.DataType^.AllWords := StringStructure^.AllWords;
+                Operand.DataType^.Capacity := 1
+              END;
+              PushAddress
+            END
+          END
+        ELSE
+        BEGIN
+          IF Operand.DataType <> NIL THEN
+            Error(125);
+          Operand.DataType := StringStructure
+        END
+      END;
+
+      (** NEW: allocates a variable's words, fewer for a variant given by its
+          tags.
+          Also: NEWSTMT (UCSD20) *)
+      PROCEDURE NewCall;
+        LABEL 1;
+        VAR
+          Variant: Structure;
+          TagPart: TagStructure;
+          (** Two words NewCall never uses. *)
+          UnusedPair: TwoMoreWords;
+          (** The tags given. *)
+          TagCount: INTEGER;
+          (** A word NewCall never uses. *)
+          UnusedWord: INTEGER;
+          (** The words. *)
+          WordsNeeded: INTEGER;
+          (** A tag's value. *)
+          TagValue: WordValue;
+      BEGIN
+        CompileVariable(ArgumentFollowers);
+        PushAddress;
+        TagPart := NIL;
+        TagCount := 0;
+        WordsNeeded := 0;
+        IF Operand.DataType <> NIL THEN
+          WITH Operand.DataType^ DO
+            IF Form = PointerForm THEN
+            BEGIN
+              IF BaseType <> NIL THEN
+                WITH BaseType^ DO
+                BEGIN
+                  WordsNeeded := Size;
+                  IF Form = RecordForm THEN
+                    TagPart := VariantPart
+                END
+            END
+            ELSE
+              Error(125);
+        WHILE Token = CommaToken DO
+        BEGIN
+          NextToken;
+          ReadConstant(ArgumentFollowers, Variant, TagValue);
+          TagCount := TagCount + 1;
+          IF TagPart = NIL THEN
+            Error(158)
+          ELSE
+            IF TagPart^.Form <> TagFieldForm THEN
+              Error(162)
+            ELSE
+              IF TagPart^.Tag <> NIL THEN
+                IF IsString(Variant) OR (Variant = RealStructure) THEN
+                  Error(159)
+                ELSE
+                  IF CompatibleTypes(TagPart^.Tag^.DataType, Variant) THEN
+                  BEGIN
+                    Variant := TagPart^.FirstVariant;
+                    WHILE Variant <> NIL DO
+                      WITH Variant^ DO
+                        IF Minimum.Entry = TagValue.Entry THEN
+                        BEGIN
+                          WordsNeeded := Size;
+                          TagPart := NestedVariant;
+                          GOTO 1
+                        END
+                        ELSE
+                          Variant := ElementType;
+                    WordsNeeded := TagPart^.Size;
+                    TagPart := NIL
+                  END
+                  ELSE
+                    Error(125);
+          1:
+        END;
+        EmitConstant(WordsNeeded);
+        EmitOneOperand(CallStandardCode, 1)
+      END;
+
+      (** MOVELEFT, MOVERIGHT and FILLCHAR.
+          Also: MOVES (UCSD20) *)
+      PROCEDURE MoveCall;
+      BEGIN
+        CompileVariable(NextFollowers);
+        PushByteAddress;
+        SkipComma;
+        IF Key = FillBytesKey THEN
+        BEGIN
+          CompileExpression(NextFollowers);
+          PushOperand
+        END
+        ELSE
+        BEGIN
+          CompileVariable(NextFollowers);
+          PushByteAddress
+        END;
+        SkipComma;
+        CompileExpression(LastFollowers);
+        PushOperand;
+        IF Key = FillBytesKey THEN
+          EmitOneOperand(CallStandardCode, 10)
+        ELSE
+          IF Key = LeftMoveKey THEN
+            EmitOneOperand(CallStandardCode, 2)
+          ELSE
+            EmitOneOperand(CallStandardCode, 3)
+      END;
+
+      (** EXIT: from a procedure, or the program.
+
+          UCSD Pascal II.0 calls it EXIT (UCSD20). *)
+      PROCEDURE ExitCall;
+        VAR
+          (** The procedure. *)
+          Exited: SymbolLink;
+      BEGIN
+        IF Token = NameToken THEN
+        BEGIN
+          FindIdentifier([ProperProcedureClass, ValueFunctionClass], Exited);
+          NextToken
+        END
+        ELSE
+          IF Token = ProgramToken THEN
+          BEGIN
+            Exited.Entry := ProgramIdentifier.Entry;
+            NextToken
+          END
+          ELSE
+            Exited.Entry := NIL;
+        IF Exited.Entry <> NIL THEN
+          WITH Exited.Entry^ DO
+            IF StaticLevel = 1 THEN
+            BEGIN
+              IF RoutineNumber = 0 THEN
+                NumberExternalRoutine(Exited.Entry);
+              EmitConstant(CodeSegment);
+              IF InUnit THEN
+                IF NOT InIntrinsicUnit THEN
+                  AddLinkerReference(5, CodeSegment, CodeCounter - 1);
+              EmitConstant(RoutineNumber)
+            END
+            ELSE
+              Error(125)
+        ELSE
+          Error(125);
+        EmitOneOperand(CallStandardCode, 4)
+      END;
+
+      (** UNITREAD and UNITWRITE.
+          Also: UNITIO (UCSD20) *)
+      PROCEDURE UnitTransferCall;
+      BEGIN
+        CheckInteger;
+        SkipComma;
+        CompileVariable(NextFollowers);
+        PushByteAddress;
+        SkipComma;
+        CompileExpression(ArgumentFollowers);
+        PushOperand;
+        CheckInteger;
+        IF Token = CommaToken THEN
+        BEGIN
+          NextToken;
+          IF Token = CommaToken THEN
+            EmitConstant(0)
+          ELSE
+          BEGIN
+            CompileExpression(ArgumentFollowers);
+            PushOperand;
+            CheckInteger
+          END
+        END
+        ELSE
+          EmitConstant(0);
+        IF Token = CommaToken THEN
+        BEGIN
+          NextToken;
+          CompileExpression(LastFollowers);
+          PushOperand;
+          CheckInteger
+        END
+        ELSE
+          EmitConstant(0);
+        IF Key = ReadUnitKey THEN
+          EmitOneOperand(CallStandardCode, 5)
+        ELSE
+          EmitOneOperand(CallStandardCode, 6)
+      END;
+
+      (** CONCAT: the strings put together in a temporary.
+
+          UCSD Pascal II.0 calls it CONCAT (UCSD20). *)
+      PROCEDURE ConcatCall;
+        VAR
+          (** The temporary. *)
+          Temporary: INTEGER;
+          (** The longest result. *)
+          TotalLength: INTEGER;
+      BEGIN
+        TotalLength := 0;
+        Temporary := DataCounter;
+        DataCounter := DataCounter + 255 DIV 2 + 1;
+        EmitConstant(0);
+        EmitTwoOperands(StoreOuterCode, Level, Temporary);
+        EmitTwoOperands(OuterAddressCode, Level, Temporary);
+        REPEAT
+          StringArgument(ArgumentFollowers, FALSE);
+          TotalLength := TotalLength + Operand.DataType^.Capacity;
+          IF TotalLength < 255 THEN
+            EmitConstant(TotalLength)
+          ELSE
+            EmitConstant(255);
+          EmitTwoOperands(CallExternalCode, 0, 23);
+          EmitTwoOperands(OuterAddressCode, Level, Temporary);
+          LoopDone := Token <> CommaToken;
+          IF NOT LoopDone THEN
+            NextToken
+        UNTIL LoopDone;
+        IF TotalLength < 255 THEN
+          DataCounter := Temporary + TotalLength DIV 2 + 1
+        ELSE
+          TotalLength := 255;
+        IF DataCounter > HighestDataCounter THEN
+          HighestDataCounter := DataCounter;
+        NEW(Operand.DataType, StringTypeSize);
+        Operand.DataType^.AllWords := StringStructure^.AllWords;
+        Operand.DataType^.Capacity := TotalLength
+      END;
+
+      (** Compiles a call of DELETE, COPY or GOTOXY; DELETE's and COPY's first
+          argument is a string. *)
+      PROCEDURE StringRoutineCall;
+        VAR
+          (** A temporary. *)
+          Temporary: INTEGER;
+          (** A type. *)
+          CopiedType: Structure;
+      BEGIN
+        IF Key = CopyKey THEN
+        BEGIN
+          Temporary := DataCounter;
+          DataCounter := DataCounter + 255 DIV 2 + 1
+        END;
+        IF Key <> GotoXYKey THEN
+        BEGIN
+          StringArgument(NextFollowers, Key = DeleteKey);
+          IF Key = CopyKey THEN
+          BEGIN
+            CopiedType := Operand.DataType;
+            EmitTwoOperands(OuterAddressCode, Level, Temporary)
+          END;
+          SkipComma
+        END;
+        CompileExpression(NextFollowers);
+        PushOperand;
+        IF Operand.DataType <> NIL THEN
+          CheckInteger;
+        SkipComma;
+        CompileExpression(LastFollowers);
+        PushOperand;
+        IF Operand.DataType <> NIL THEN
+          CheckInteger;
+        IF Key = CopyKey THEN
+        BEGIN
+          EmitTwoOperands(CallExternalCode, 0, 25);
+          EmitTwoOperands(OuterAddressCode, Level, Temporary);
+          IF CopiedType^.Capacity < 255 THEN
+            DataCounter := Temporary + CopiedType^.Capacity DIV 2 + 1;
+          IF DataCounter > HighestDataCounter THEN
+            HighestDataCounter := DataCounter;
+          Operand.DataType := CopiedType
+        END
+        ELSE
+          IF Key = GotoXYKey THEN
+            EmitTwoOperands(CallExternalCode, 0, 29)
+          ELSE
+            EmitTwoOperands(CallExternalCode, 0, 26)
+      END;
+
+      (** STR: a long integer to a string.
+
+          UCSD Pascal II.0 calls it STR (UCSD20). *)
+      PROCEDURE StrCall;
+      BEGIN
+        IF CompatibleTypes(LongStructure, Operand.DataType) THEN
+        BEGIN
+        END
+        ELSE
+          IF Operand.DataType = IntegerStructure THEN
+          BEGIN
+            EmitConstant(18);
+            EmitExternalCall(30, 4);
+            Operand.DataType := LongStructure
+          END
+          ELSE
+            Error(125);
+        SkipComma;
+        StringArgument(LastFollowers, TRUE);
+        IF IsString(Operand.DataType) THEN
+        BEGIN
+          EmitConstant(Operand.DataType^.Capacity);
+          EmitConstant(12);
+          EmitExternalCall(30, 4)
+        END
+        ELSE
+          Error(125)
+      END;
+
+      (** CLOSE, with NORMAL, LOCK, PURGE or CRUNCH. *)
+      PROCEDURE CloseCall;
+      BEGIN
+        CompileVariable(ArgumentFollowers);
+        PushAddress;
+        IF Operand.DataType <> NIL THEN
+          IF Operand.DataType^.Form <> FileForm THEN
+            Error(125);
+        IF Token = CommaToken THEN
+        BEGIN
+          NextToken;
+          IF Token = NameToken THEN
+          BEGIN
+            IF TokenName = 'NORMAL  ' THEN
+              EmitConstant(0)
+            ELSE
+              IF TokenName = 'LOCK    ' THEN
+                EmitConstant(1)
+              ELSE
+                IF TokenName = 'PURGE   ' THEN
+                  EmitConstant(2)
+                ELSE
+                  IF TokenName = 'CRUNCH  ' THEN
+                    EmitConstant(3)
+                  ELSE
+                    Error(2);
+            NextToken
+          END
+          ELSE
+            Error(2)
+        END
+        ELSE
+          EmitConstant(0);
+        EmitTwoOperands(CallExternalCode, 0, 6);
+        IF CheckInputOutput THEN
+          EmitOneOperand(CallStandardCode, 0)
+      END;
+
+      (** GET, PUT, SEEK and PAGE.
+          Also: GETPUTETC (UCSD20) *)
+      PROCEDURE FileRoutineCall;
+      BEGIN
+        CompileVariable(ArgumentFollowers);
+        PushAddress;
+        IF Operand.DataType <> NIL THEN
+          IF Operand.DataType^.Form <> FileForm THEN
+            Error(125)
+          ELSE
+            IF Operand.DataType^.BaseType = NIL THEN
+              Error(399);
+        CASE Key OF
+          SeekKey:
+          BEGIN
+            IF Token = CommaToken THEN
+            BEGIN
+              NextToken;
+              CompileExpression(LastFollowers);
+              PushOperand;
+              CheckInteger
+            END
+            ELSE
+              Error(20);
+            EmitExternalCall(31, 2)
+          END;
+          GetKey:
+            EmitTwoOperands(CallExternalCode, 0, 7);
+          PutKey:
+            EmitTwoOperands(CallExternalCode, 0, 8);
+          PageKey:
+          BEGIN
+            IF Operand.DataType <> NIL THEN
+              IF Operand.DataType^.BaseType <> CharStructure THEN
+                Error(399);
+            EmitConstant(12);
+            EmitConstant(0);
+            EmitTwoOperands(CallExternalCode, 0, 17)
+          END
+        END;
+        IF CheckInputOutput THEN
+          EmitOneOperand(CallStandardCode, 0)
+      END;
+
+      (** SCAN.
+
+          UCSD Pascal II.0 calls it SCAN (UCSD20). *)
+      PROCEDURE ScanCall;
+      BEGIN
+        IF Operand.DataType <> NIL THEN
+          CheckInteger;
+        SkipComma;
+        IF Token = RelationalToken THEN
+        BEGIN
+          IF Operator = EqualOperator THEN
+            EmitConstant(0)
+          ELSE
+            IF Operator = UnequalOperator THEN
+              EmitConstant(1)
+            ELSE
+              Error(125);
+          NextToken
+        END
+        ELSE
+          Error(125);
+        CompileExpression(NextFollowers);
+        PushOperand;
+        IF Operand.DataType <> NIL THEN
+          IF Operand.DataType <> CharStructure THEN
+            Error(125);
+        SkipComma;
+        CompileVariable(ArgumentFollowers);
+        PushByteAddress;
+        IF Token = CommaToken THEN
+        BEGIN
+          NextToken;
+          CompileExpression(LastFollowers);
+          PushOperand
+        END
+        ELSE
+          EmitConstant(0);
+        EmitOneOperand(CallStandardCode, 11);
+        Operand.DataType := IntegerStructure
+      END;
+
+      (** BLOCKREAD and BLOCKWRITE.
+          Also: BLOCKIO (UCSD20) *)
+      PROCEDURE BlockTransferCall;
+      BEGIN
+        CompileVariable(NextFollowers);
+        PushAddress;
+        IF Operand.DataType <> NIL THEN
+          IF Operand.DataType^.Form <> FileForm THEN
+            Error(125)
+          ELSE
+            IF Operand.DataType^.BaseType <> NIL THEN
+              Error(399);
+        SkipComma;
+        CompileVariable(NextFollowers);
+        PushByteAddress;
+        SkipComma;
+        CompileExpression(ArgumentFollowers);
+        PushOperand;
+        CheckInteger;
+        IF Token = CommaToken THEN
+        BEGIN
+          NextToken;
+          CompileExpression(LastFollowers);
+          PushOperand;
+          CheckInteger
+        END
+        ELSE
+          EmitConstant(-1);
+        IF Key = ReadBlocksKey THEN
+          EmitConstant(1)
+        ELSE
+          EmitConstant(0);
+        EmitConstant(0);
+        EmitConstant(0);
+        EmitTwoOperands(CallExternalCode, 0, 28);
+        IF CheckInputOutput THEN
+          EmitOneOperand(CallStandardCode, 0);
+        Operand.DataType := IntegerStructure
+      END;
+
+      (** SIZEOF: a type's or variable's bytes.
+
+          UCSD Pascal II.0 calls it SIZEOF (UCSD20). *)
+      PROCEDURE SizeOfCall;
+        VAR
+          (** Its identifier. *)
+          Measured: SymbolLink;
+      BEGIN
+        IF Token = NameToken THEN
+        BEGIN
+          FindIdentifier(ClassesOfVariable + [TypeClass, FieldClass], Measured);
+          NextToken;
+          IF Measured.Entry^.DataType <> NIL THEN
+            EmitConstant(Measured.Entry^.TypeAsFile^.Size * 2)
+        END;
+        Operand.DataType := IntegerStructure
+      END;

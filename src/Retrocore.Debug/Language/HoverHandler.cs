@@ -19,16 +19,19 @@ internal sealed class HoverHandler
 
     private readonly LanguageWorkspace _workspace;
     private readonly BasicDocuments _basic;
+    private readonly PascalDocuments? _pascal;
 
     /// <summary>
     ///  Creates the handler.
     /// </summary>
     /// <param name="workspace">The workspace.</param>
     /// <param name="basic">The open BASIC documents.</param>
-    public HoverHandler(LanguageWorkspace workspace, BasicDocuments basic)
+    /// <param name="pascal">The open Pascal documents, or null for none.</param>
+    public HoverHandler(LanguageWorkspace workspace, BasicDocuments basic, PascalDocuments? pascal = null)
     {
         _workspace = workspace;
         _basic = basic;
+        _pascal = pascal;
     }
 
     /// <summary>
@@ -41,6 +44,11 @@ internal sealed class HoverHandler
         if (_basic.Get(request.TextDocument.Uri) is { } basic)
         {
             return Task.FromResult(BasicFeatures.Hover(basic, request.Position));
+        }
+
+        if (_pascal?.Get(request.TextDocument.Uri) is { } pascal)
+        {
+            return Task.FromResult(PascalFeatures.Hover(pascal.Program, pascal.Path, request.Position));
         }
 
         string path = LanguageHost.PathOf(request.TextDocument.Uri);

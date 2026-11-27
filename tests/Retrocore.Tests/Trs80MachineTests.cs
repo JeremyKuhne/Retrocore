@@ -222,6 +222,59 @@ public class Trs80MachineTests
     }
 
     /// <summary>
+    ///  Level II on the Model I reads a letter alone as uppercase and with SHIFT as lowercase, so an uppercase letter
+    ///  is typed as its key alone, a lowercase one with SHIFT, and ` as SHIFT and @.
+    /// </summary>
+    [TestMethod]
+    public void TypingLettersFollowsLevelII()
+    {
+        Trs80Keyboard keyboard = Create(new()).Bus.Keyboard;
+        TypedKeys(keyboard, 'A').Should().Be((true, false));
+        TypedKeys(keyboard, 'z').Should().Be((true, true));
+        TypedKeys(keyboard, '`').Should().Be((true, true));
+        TypedKeys(keyboard, '@').Should().Be((true, false));
+    }
+
+    /// <summary>
+    ///  Level I reads SHIFT and a letter as its control code, so every letter is typed as its key alone, and ` has no
+    ///  key.
+    /// </summary>
+    [TestMethod]
+    public void TypingLettersOnLevelIIsUnshifted()
+    {
+        Trs80Keyboard keyboard = new Trs80Bus(
+            new Trs80Configuration { Rom = Trs80Rom.Level1 },
+            new Trs80Roms(new byte[0x1000], new byte[Trs80Roms.CharacterGeneratorSize])).Keyboard;
+
+        TypedKeys(keyboard, 'A').Should().Be((true, false));
+        TypedKeys(keyboard, 'z').Should().Be((true, false));
+        keyboard.Type((byte)'`').Should().BeFalse();
+    }
+
+    /// <summary>
+    ///  Types a character, reports whether its key and SHIFT are pressed, then lets the keyboard release them.
+    /// </summary>
+    /// <param name="keyboard">The keyboard.</param>
+    /// <param name="character">A letter, <c>@</c> or <c>`</c>.</param>
+    /// <returns>Whether the letter's key, or <c>@</c>'s, and SHIFT are down.</returns>
+    internal static (bool Key, bool Shift) TypedKeys(Trs80Keyboard keyboard, char character)
+    {
+        Trs80Key key = character switch
+        {
+            >= 'A' and <= 'Z' => (Trs80Key)((int)Trs80Key.A + character - 'A'),
+            >= 'a' and <= 'z' => (Trs80Key)((int)Trs80Key.A + character - 'a'),
+            _ => Trs80Key.At
+        };
+
+        // A key typed while the last is being released waits until the release ends.
+        keyboard.Type((byte)character).Should().BeTrue();
+        for (int ticks = 0; !keyboard.IsPressed(key) && ticks < 1_000_000; ticks++) { keyboard.Tick(); }
+        (bool, bool) pressed = (keyboard.IsPressed(key), keyboard.IsPressed(Trs80Key.Shift));
+        while (keyboard.IsTyping) { keyboard.Tick(); }
+        return pressed;
+    }
+
+    /// <summary>
     ///  The reset button raises one non-maskable interrupt, taken even with interrupts disabled, which runs the
     ///  handler at <c>$0066</c> once.
     /// </summary>

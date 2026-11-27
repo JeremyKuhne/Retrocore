@@ -18,12 +18,18 @@ import { registerBreakpoints } from "./breakpoints";
 import { registerMemory } from "./memory";
 import { registerBasic } from "./basic";
 import { registerBasicLanguage } from "./basicLanguage";
+import { registerActiveTarget } from "./activeTarget";
+import { registerProjectLanguage } from "./projectLanguage";
+import { registerInactiveRanges } from "./inactiveRanges";
 import { panelKeyCode, webviewHtml } from "./display";
 import { PictureCache } from "./pictures";
 import { groupCycleLines, type CycleLine } from "./cycles";
 
 export function activate(context: vscode.ExtensionContext): void {
-    void startLanguageClient(context);
+    const targets = registerActiveTarget(context);
+    registerProjectLanguage(context, targets);
+    void startLanguageClient(context, targets);
+    registerInactiveRanges(context, targets);
     registerLaunchBreakpoints(context);
     const basic = registerBasic(context);
     const saved = registerSavedMachines(context);
@@ -239,12 +245,13 @@ export function activate(context: vscode.ExtensionContext): void {
                             : machine === "apple1" ? "Apple-1"
                                 : machine === "pet" ? petTitle(model)
                                     : machine === "bbc" ? `BBC Micro ${model ?? "Model B"}`
-                                        : machine === "altair" ? "Altair 8800" : model ?? "Apple IIe";
+                                        : machine === "atari800" ? model ?? "Atari 800"
+                                            : machine === "altair" ? "Altair 8800" : model ?? "Apple IIe";
                     // The Model III and 4 have white phosphor like the Model I, as the Altair's ADM-3A terminal and the
                     // PET 2001's screen do; the Model II's and the Kaypro II's are green, like the IIe's. The Kaypro II's model is
                     // its title.
                     const phosphor = machine === "trs80-model1" || machine === "trs80-model3" || machine === "altair" || machine === "pet" ? "trs80-model1"
-                        : machine === "apple1" || machine === "coco" ? machine : machine === "bbc" ? "coco" : "apple2";
+                        : machine === "apple1" || machine === "coco" ? machine : machine === "bbc" || machine === "atari800" ? "coco" : "apple2";
                     // The screen glows in the machine's phosphor while it runs, and goes dark when it stops.
                     const running = typeof message.body === "object" && message.body !== null && "running" in message.body && message.body.running === true;
                     const screen = running ? phosphor : "off";

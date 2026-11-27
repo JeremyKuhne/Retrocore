@@ -1,0 +1,14 @@
+// A Retrocore project: one 6502 program built for two Apple II targets. Build it with
+// `retrocore build --all` here, or debug a target with a launch configuration that gives
+// "project": "${workspaceFolder}/sample/project" and "target": "apple2-iiplus".
+{
+  "sdk": "1",
+  "name": "hello",
+  "cpu": "6502",
+  "sources": ["src/*.s"],
+  "entry": "START",
+  "targets": {
+    "apple2-iiplus": { "machine": "apple2-iiplus", "environment": "bare" },
+    "apple2-iie": { "machine": "apple2-iie-enhanced", "environment": "bare", "defines": { "LOWERCASE": 1 } }
+  }
+}

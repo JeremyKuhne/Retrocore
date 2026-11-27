@@ -7,10 +7,23 @@ import * as path from "node:path";
 import * as vscode from "vscode";
 import { LanguageClient, LanguageClientOptions, ServerOptions, TransportKind } from "vscode-languageclient/node";
 import { defaultHost, isBundled } from "./host";
+import type { ActiveTargets } from "./activeTarget";
+import { activeTargetParams } from "./project";
 
 let client: LanguageClient | undefined;
 // The current client's start, which requests wait for.
 let starting: Promise<void> | undefined;
+const stopped = new vscode.EventEmitter<void>();
+const startedEvent = new vscode.EventEmitter<void>();
+
+/** Fires when the language server is stopped, as it is before a restart, so what it reported can be cleared. */
+export const onDidStopLanguageClient = stopped.event;
+
+/**
+ * Fires when a language server has started and been sent the active target, after a restart as well as the first
+ * time, so it can be asked again.
+ */
+export const onDidStartLanguageClient = startedEvent.event;
 
 /** The Retrocore.Debug host: the setting, or the packaged host or the workspace's build (see host.ts). */
 export function hostPath(context: vscode.ExtensionContext): string | undefined {
@@ -55,10 +68,14 @@ export function shadowCopy(host: string, storage: string, folder = "language-ser
     return path.join(target, path.basename(host));
 }
 
-/** Starts the retrocore language server for retrocore-asm documents: diagnostics, definition, hover, completion and symbols. */
-export async function startLanguageClient(context: vscode.ExtensionContext): Promise<void> {
+/**
+ * Starts the retrocore language server for retrocore-asm documents: diagnostics, definition, hover, completion and
+ * symbols. It tells the server the active target, for assembling a project's sources with it.
+ */
+export async function startLanguageClient(context: vscode.ExtensionContext, targets?: ActiveTargets): Promise<void> {
     const settings = vscode.workspace.getConfiguration("retrocore");
     if (!settings.get<boolean>("languageServer.enabled", true)) return;
+    context.subscriptions.push(stopped, startedEvent);
     const host = hostPath(context);
     if (host === undefined || !fs.existsSync(host)) {
         void vscode.window.showWarningMessage(
@@ -67,6 +84,10 @@ export async function startLanguageClient(context: vscode.ExtensionContext): Pro
     }
 
     const configurations = vscode.workspace.createFileSystemWatcher("**/*.cfg");
+    // A project file's changes reach the server too, for its project support (phase 2) to analyze the sources again.
+    const projects = vscode.workspace.createFileSystemWatcher("**/retrocore.json");
+    // A Pascal file changed on disk, such as an include no editor has open, changes the programs that read it.
+    const pascal = vscode.workspace.createFileSystemWatcher("**/*.{text,TEXT,Text,pas,PAS,Pas,pascal,PASCAL,Pascal}");
     const isConfiguration = (document: vscode.TextDocument): boolean =>
         document.uri.scheme === "file" && path.extname(document.uri.fsPath).toLowerCase() === ".cfg";
     const notify = (method: string, params: object): void => {
@@ -93,7 +114,9 @@ export async function startLanguageClient(context: vscode.ExtensionContext): Pro
             uri: folder.uri.toString(), words: wordsFor(folder.uri)
         }))
     });
-    context.subscriptions.push(configurations, vscode.workspace.onDidOpenTextDocument(opened),
+    const updateTarget = (): void => notify("retrocore/activeTarget", activeTargetParams(targets?.active));
+    if (targets !== undefined) context.subscriptions.push(targets.onDidChange(updateTarget));
+    context.subscriptions.push(configurations, projects, pascal, vscode.workspace.onDidOpenTextDocument(opened),
         vscode.workspace.onDidChangeTextDocument(event => {
             if (isConfiguration(event.document)) notify("textDocument/didChange", {
                 textDocument: { uri: event.document.uri.toString(), version: event.document.version },
@@ -110,9 +133,12 @@ export async function startLanguageClient(context: vscode.ExtensionContext): Pro
         vscode.commands.registerCommand("retrocore.lint.addUnlinkedNameWord", addUnlinkedNameWord));
 
     const start = async (): Promise<void> => {
-        await startFrom(context, host, configurations);
+        await startFrom(context, host, [configurations, projects, pascal]);
         updateWords();
+        updateTarget();
         for (const document of vscode.workspace.textDocuments) opened(document);
+        // After the target, so what is asked now is answered for it.
+        startedEvent.fire();
     };
     await start();
 
@@ -150,7 +176,7 @@ async function addUnlinkedNameWord(word?: unknown, scope?: unknown): Promise<boo
     return true;
 }
 
-async function startFrom(context: vscode.ExtensionContext, host: string, configurations: vscode.FileSystemWatcher): Promise<void> {
+async function startFrom(context: vscode.ExtensionContext, host: string, watchers: vscode.FileSystemWatcher[]): Promise<void> {
     let server = host;
     try {
         // The packaged host never changes while it runs; a build can, so it runs from a copy.
@@ -168,7 +194,7 @@ async function startFrom(context: vscode.ExtensionContext, host: string, configu
     };
     const clientOptions: LanguageClientOptions = {
         documentSelector,
-        synchronize: { fileEvents: configurations }
+        synchronize: { fileEvents: watchers }
     };
     const started = new LanguageClient("retrocore", "Retrocore Assembly", serverOptions, clientOptions);
     client = started;
@@ -179,12 +205,12 @@ async function startFrom(context: vscode.ExtensionContext, host: string, configu
 
 /** The BASIC languages: one per dialect, and one whose pragma, file name or session decides. */
 export const basicLanguages = ["retrocore-applesoft", "retrocore-level2", "retrocore-integer", "retrocore-apple1", "retrocore-business",
-    "retrocore-level1", "retrocore-colorbasic", "retrocore-mbasic",
-    "retrocore-petbasic", "retrocore-bbcbasic", "retrocore-basic"];
+    "retrocore-level1", "retrocore-colorbasic", "retrocore-mbasic", "retrocore-model100",
+    "retrocore-petbasic", "retrocore-bbcbasic", "retrocore-atari", "retrocore-basic"];
 
-/** Assembly documents must be files; BASIC also supports virtual documents. */
+/** Assembly and Pascal documents must be files, read with the files they include; BASIC also supports virtual documents. */
 export const documentSelector = [
-    ...["retrocore-asm", "retrocore-macro10"].map(language => ({ language, scheme: "file" })),
+    ...["retrocore-asm", "retrocore-macro10", "retrocore-pascal"].map(language => ({ language, scheme: "file" })),
     ...basicLanguages.map(language => ({ language }))
 ];
 
@@ -200,5 +226,6 @@ export async function languageRequest<T>(method: string, params: unknown): Promi
 export async function stopLanguageClient(): Promise<void> {
     const running = client;
     client = undefined;
+    if (running !== undefined) stopped.fire();
     await running?.stop();
 }

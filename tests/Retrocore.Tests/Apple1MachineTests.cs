@@ -181,10 +181,49 @@ public sealed class Apple1MachineTests
         bare.Devices.Should().BeEmpty();
         machine.Devices.Should().ContainSingle().Which.Kind.Should().Be(DeviceKind.TapeDrive);
 
-        Action badRam = () => _ = new Apple1Machine(new() { RamKilobytes = 16 }, Roms);
-        badRam.Should().Throw<ArgumentException>();
+        foreach (int kilobytes in (int[])[0, 2, 12, 24, 48, 64])
+        {
+            Action badRam = () => _ = new Apple1Machine(new() { RamKilobytes = kilobytes }, Roms);
+            badRam.Should().Throw<ArgumentException>($"{kilobytes}K is not a size the board or its expansion RAM gives");
+        }
+
         Action noProm = () => _ = new Apple1Machine(new(), new(Roms.Monitor.Span, Roms.CharacterGenerator.Span));
         noProm.Should().Throw<ArgumentException>();
+    }
+
+    /// <summary>
+    ///  Expansion RAM of 16K or 32K runs on from <c>$0000</c>: the Monitor boots, stores a program above
+    ///  <c>$1FFF</c> and runs it there, and the <c>$E000</c> bank and the cards keep their places.
+    /// </summary>
+    /// <param name="kilobytes">The RAM from <c>$0000</c>.</param>
+    /// <param name="origin">Where the program goes, in the top 4K of that RAM.</param>
+    [TestMethod]
+    [DataRow(16, 0x3000)]
+    [DataRow(32, 0x7000)]
+    public void ExpansionRamRunsAProgramAboveTheBoard(int kilobytes, int origin)
+    {
+        Apple1Machine machine = new(new() { RamKilobytes = kilobytes }, Roms);
+        machine.Run(Apple1Timing.CyclesPerFrame * 4);
+        machine.Terminal.Line(0).TrimEnd().Should().Be("\\");
+
+        Apple1Bus bus = machine.Bus;
+        int top = (kilobytes * 1024) - 1;
+        bus.Area(0x2000).Should().Be(Apple1MemoryArea.Ram);
+        bus.Area((ushort)top).Should().Be(Apple1MemoryArea.Ram);
+        bus.Area((ushort)(top + 1)).Should().Be(Apple1MemoryArea.Unmapped);
+        bus.Read((ushort)(top + 1)).Should().Be((byte)((top + 1) >> 8));
+        bus.Area(0xE000).Should().Be(Apple1MemoryArea.Ram);
+        bus.Area(0xC100).Should().Be(Apple1MemoryArea.CassetteRom);
+
+        // LDA #'H' | $80, JSR ECHO, LDA #'I' | $80, JSR ECHO, JMP GETLINE
+        TypeLine(machine, $"{origin:X4}: A9 C8 20 EF FF A9 C9 20 EF FF 4C 1F FF");
+        Bytes(machine, (ushort)origin, 3).Should().Equal(0xA9, 0xC8, 0x20);
+        TypeLine(machine, $"{origin:X4}R");
+        Screen(machine).Should().Contain($"{origin:X4}: A9HI");
+
+        // The top byte holds what is stored there.
+        TypeLine(machine, $"{top:X4}: 5A");
+        bus.Peek((ushort)top).Should().Be(0x5A);
     }
 
     /// <summary>

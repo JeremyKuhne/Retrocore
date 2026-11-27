@@ -4,11 +4,18 @@
 
 using Retrocore.Debug;
 using Retrocore.Machines.Acorn;
+using Retrocore.Machines.Altair;
 using Retrocore.Machines.Apple2;
+using Retrocore.Machines.Commodore;
 using Retrocore.Machines.Devices;
+using Retrocore.Machines.Trs80;
 using Retrocore.Media;
 using Retrocore.Media.Acorn;
+using Retrocore.Media.Altair;
+using Retrocore.Media.Commodore;
 using Retrocore.Media.Floppy;
+using Retrocore.Media.Trs80;
+using System.Globalization;
 using System.Text.Json.Nodes;
 
 namespace Retrocore.Tests;
@@ -454,6 +461,173 @@ public sealed class RecoveryJournalTests
     }
 
     /// <summary>
+    ///  A checkpoint waits for a drive that is writing: the Disk II in its write mode is not snapshotted while the
+    ///  checkpoint can wait, and the journal keeps the version it held; once it cannot wait, the disk is taken as it is
+    ///  and marked as caught mid-write, in the journal and in the drive's row; once the drive stops, it is kept whole.
+    /// </summary>
+    [TestMethod]
+    public void ACheckpointWaitsForADriveThatIsWriting()
+    {
+        string id = Id();
+        string dsk = Path.Join(s_root, $"writing-{Guid.NewGuid():N}.dsk");
+        File.WriteAllBytes(dsk, new byte[35 * 4096]);
+        DiskIIController controller = new();
+        Apple2FloppyDrive floppy = Floppy(dsk, controller);
+        WozDisk disk = floppy.Disk ?? throw new InvalidOperationException("The drive is empty.");
+        Guid medium = MediaActions.Source(disk)?.Id ?? throw new InvalidOperationException("The disk has no source.");
+        RecoveryJournal journal = Open(id);
+        Change(disk);
+        journal.Commit(MediaActions.Journal([floppy], journal, idle: true));
+        long first = journal.KeptOf(medium)?.Version ?? throw new InvalidOperationException("Not kept.");
+
+        // The motor on and the card in its write mode: the drive is writing.
+        controller.Read(0x9, 0);
+        controller.Read(0xF, 0);
+        floppy.Activity.Should().Be(DeviceActivity.Writing);
+        Change(disk);
+        List<JournalDisk> waiting = MediaActions.Journal([floppy], journal, idle: true);
+        waiting.Single().Waiting.Should().BeTrue();
+        waiting.Single().Snapshot.Should().BeNull();
+        journal.Commit(waiting);
+        journal.KeptOf(medium)?.Version.Should().Be(first, "the journal keeps the version it held");
+        Disks(id).Single()?["midWrite"].Should().BeNull();
+
+        // It can wait no longer: taken as it is, and said so.
+        journal.Commit(MediaActions.Journal([floppy], journal, idle: false));
+        JournalKept caught = journal.KeptOf(medium) ?? throw new InvalidOperationException("Not kept.");
+        caught.Version.Should().Be(disk.Version);
+        caught.MidWrite.Should().BeTrue();
+        Disks(id).Single()?["midWrite"]?.GetValue<bool>().Should().BeTrue();
+        JsonObject body = DeviceJson.Write([floppy]);
+        MediaActions.Recovery(body, [floppy], journal, TimeSpan.FromSeconds(30));
+        JsonNode? recovery = body["devices"]?[0]?["media"]?["recovery"];
+        recovery?["midWrite"]?.GetValue<bool>().Should().BeTrue();
+        recovery?["behind"]?.GetValue<bool>().Should().BeFalse();
+
+        // The card out of its write mode: the next change is kept whole.
+        controller.Read(0xE, 0);
+        floppy.Activity.Should().NotBe(DeviceActivity.Writing);
+        Change(disk);
+        journal.Commit(MediaActions.Journal([floppy], journal, idle: true));
+        journal.KeptOf(medium)?.MidWrite.Should().BeFalse();
+        Disks(id).Single()?["midWrite"].Should().BeNull();
+        Stop(journal, floppy);
+    }
+
+    /// <summary>
+    ///  A commit that cannot be written leaves the previous one standing, says why, and the drive's row says recovery
+    ///  is behind, until a commit goes through again.
+    /// </summary>
+    [TestMethod]
+    public void AJournalThatCannotBeWrittenIsBehindUntilItCanAgain()
+    {
+        string id = Id();
+        (Apple2Disk35Drive drive, _) = Drive("failing.po");
+        Write(drive, block: 1, 0x61);
+        RecoveryJournal journal = Open(id);
+        journal.Commit(MediaActions.Journal([drive], journal));
+        string before = File.ReadAllText(Path.Join(RecoveryJournal.Root, id, "journal.json"));
+        Recovery(drive, journal)?["behind"]?.GetValue<bool>().Should().BeFalse();
+
+        // The journal's next version cannot be written, as when the disk is full or access is denied.
+        Write(drive, block: 2, 0x62);
+        using (new FileStream(Path.Join(RecoveryJournal.Root, id, "journal.json.tmp"), FileMode.Create, FileAccess.ReadWrite, FileShare.None))
+        {
+            Action commit = () => journal.Commit(MediaActions.Journal([drive], journal));
+            commit.Should().Throw<IOException>();
+        }
+
+        journal.Failure.Should().NotBeNull();
+        File.ReadAllText(Path.Join(RecoveryJournal.Root, id, "journal.json")).Should().Be(before, "the previous commit stands");
+        JsonNode? behind = Recovery(drive, journal);
+        behind?["behind"]?.GetValue<bool>().Should().BeTrue();
+        behind?["problem"]?.GetValue<string>().Should().Be(journal.Failure);
+        behind?["lastCheckpoint"].Should().NotBeNull("the changes up to the last commit are kept");
+
+        // Written again: the journal keeps the disk as it is now.
+        journal.Commit(MediaActions.Journal([drive], journal));
+        journal.Failure.Should().BeNull();
+        Recovery(drive, journal)?["behind"]?.GetValue<bool>().Should().BeFalse();
+        Stop(journal, drive);
+        Disks(id).Single().Should().NotBeNull();
+    }
+
+    /// <summary>
+    ///  A disk the journal held keeps when it was kept, and whether mid-write, as it goes back in its drive.
+    /// </summary>
+    [TestMethod]
+    public void ADiskPutBackKeepsWhenItWasKept()
+    {
+        string id = Id();
+        (Apple2Disk35Drive drive, string image) = Drive("when.po");
+        Write(drive, block: 3, 0x71);
+        Stop(Open(id), drive);
+        string kept = Disks(id).Single()?["kept"]?.GetValue<string>() ?? throw new InvalidOperationException("Not kept.");
+
+        Apple2Disk35Drive next = Again(image);
+        RecoveryJournal journal = Open(id);
+        MediaActions.Recover([next], journal).Should().BeEmpty();
+        Guid medium = MediaActions.Source(next.Disk ?? throw new InvalidOperationException("The drive is empty."))?.Id
+            ?? throw new InvalidOperationException("The disk has no source.");
+
+        journal.KeptOf(medium)?.When.Should().Be(DateTime.Parse(kept, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind).ToUniversalTime());
+        Recovery(next, journal)?["lastCheckpoint"]?.GetValue<string>().Should().Be(kept);
+        Stop(journal, next);
+    }
+
+    /// <summary>
+    ///  The 3.5 drive says it has a disk the machine ejected until the host takes it, so the host can keep it at once.
+    /// </summary>
+    [TestMethod]
+    public void TheDriveSaysItHasAnEjectedDiskUntilItIsTaken()
+    {
+        (Apple2Disk35Drive drive, _) = Drive("taken.po");
+        drive.HasEjected.Should().BeFalse();
+        Write(drive, block: 4, 0x81);
+        drive.EjectByProgram();
+        drive.HasEjected.Should().BeTrue();
+        MediaActions.Ejected(drive).Should().ContainSingle();
+        drive.HasEjected.Should().BeFalse();
+    }
+
+    // Changes a Disk II disk, as a write does: a new version, changed against its image.
+    private static void Change(WozDisk disk)
+    {
+        disk.IsWriteProtected = !disk.IsWriteProtected;
+        disk.IsWriteProtected = !disk.IsWriteProtected;
+        disk.MarkChanged();
+    }
+
+    /// <summary>
+    ///  Slot 7's disk, which only a launch can put in its drive, is not kept, so its row says nothing of recovery
+    ///  rather than that the journal keeps it.
+    /// </summary>
+    [TestMethod]
+    public void ADiskOnlyTheLaunchPutsInItsDriveSaysNothingOfRecovery()
+    {
+        byte[] bytes = new byte[280 * 512];
+        string path = Path.Join(s_root, $"slot7-{Guid.NewGuid():N}.po");
+        File.WriteAllBytes(path, bytes);
+        Apple2Machine machine = Apple2Loader.Load(Apple2Model.IIeEnhanced, s_roms.Value, path);
+        Apple2BlockStorage storage = machine.BlockStorage ?? throw new InvalidOperationException("Slot 7 is empty.");
+        IMedium disk = storage.Medium ?? throw new InvalidOperationException("Slot 7 is empty.");
+        MediaActions.Register(disk, path, BlockImageCodec.For(".po"), bytes);
+        disk.MarkChanged();
+        RecoveryJournal journal = Open(Id());
+        journal.Commit(MediaActions.Journal([storage], journal));
+        Recovery(storage, journal).Should().BeNull();
+        Stop(journal, storage);
+    }
+
+    // How the journal keeps a drive's disk, as its row in retro/devices says.
+    private static JsonNode? Recovery(IDevice drive, RecoveryJournal journal)
+    {
+        JsonObject body = DeviceJson.Write([drive]);
+        MediaActions.Recovery(body, [drive], journal, TimeSpan.FromSeconds(30));
+        return body["devices"]?[0]?["media"]?["recovery"];
+    }
+
+    /// <summary>
     ///  A recovery id is letters, digits, dashes and underscores, so it cannot name a folder elsewhere.
     /// </summary>
     [TestMethod]
@@ -505,6 +679,118 @@ public sealed class RecoveryJournalTests
         Disks(id).Should().BeEmpty();
     }
 
+    /// <summary>
+    ///  A TRS-80 disk read from IMD and from DMK is kept and comes back with its image's layout, so a disk written
+    ///  while it was kept saves to its image in its own format, with the sector it wrote.
+    /// </summary>
+    /// <param name="extension">The image's extension.</param>
+    [TestMethod]
+    [DataRow(".imd")]
+    [DataRow(".dmk")]
+    public void ATrs80DiskComesBackWithItsImagesLayout(string extension)
+    {
+        string id = Id();
+        string path = Path.Join(s_root, $"kept-{Guid.NewGuid():N}{extension}");
+        FloppyDisk blank = new();
+        foreach (int number in Enumerable.Range(1, 18))
+        {
+            blank.Add(0, 0, new FloppySector(0, 0, (byte)number, new byte[256], doubleDensity: true));
+        }
+
+        byte[] image = extension == ".imd" ? ImdFormat.Encode(blank).Bytes : DmkFormat.Write(blank);
+        File.WriteAllBytes(path, image);
+        Trs80Machine machine = Trs80MachineTests.Create(new());
+        FloppyMedia.Insert(machine.Drives[0], path, FloppyFamily.Trs80);
+        FloppyDisk disk = machine.Drives[0].Disk ?? throw new InvalidOperationException("The drive is empty.");
+        disk.Write(disk.Track(0, 0)[4], [.. Enumerable.Repeat((byte)0x42, 256)], 0xFB);
+        Stop(Open(id), machine.Drives[0]);
+
+        Trs80Machine next = Trs80MachineTests.Create(new());
+        FloppyMedia.Insert(next.Drives[0], path, FloppyFamily.Trs80);
+        RecoveryJournal journal = Open(id);
+        MediaActions.Recover([next.Drives[0]], journal).Should().BeEmpty();
+        FloppyDisk back = next.Drives[0].Disk ?? throw new InvalidOperationException("The drive is empty.");
+        MediaActions.Source(back)?.Codec.Should().BeOfType<FloppyImageCodec>().Which.Layout.Should().NotBeNull();
+
+        MediaActions.Device(next.Drives[0], "save", Speaking())?.String("outcome").Should().Be("saved");
+        byte[] saved = File.ReadAllBytes(path);
+        saved.Length.Should().Be(image.Length, "each sector is stored as it was");
+        Trs80DiskImage.Read(saved, extension).Disk.Track(0, 0)[4].Data.ToArray().Should().AllBeEquivalentTo((byte)0x42);
+        Stop(journal, next.Drives[0]);
+    }
+
+    /// <summary>
+    ///  An Altair 8-inch disk changed by a write is kept, comes back into a new machine's drive with its image's codec,
+    ///  and saves to its image with the write and the image's trailer.
+    /// </summary>
+    [TestMethod]
+    public void AltairDiskComesBackWithItsCodec()
+    {
+        string id = Id();
+        string dsk = Path.Join(s_root, $"kept-{Guid.NewGuid():N}.dsk");
+        byte[] image = new byte[AltairDisk.ImageBytes + AltairDisk.TrailerBytes];
+        image[0] = 0x80;
+        image[^AltairDisk.TrailerBytes] = 0xAA;
+        File.WriteAllBytes(dsk, image);
+
+        AltairDiskDrive drive = AltairDrive(dsk);
+        byte[] sector = new byte[AltairDisk.SectorBytes];
+        sector[0] = 0x85;
+        sector[1] = 0x42;
+        (drive.Disk ?? throw new InvalidOperationException("The drive is empty.")).WriteSector(5, 9, sector);
+        Stop(Open(id), drive);
+        Disks(id).Select(entry => entry?["kind"]?.GetValue<string>()).Should().Equal(AltairDisk.SnapshotKind);
+
+        AltairDiskDrive next = AltairDrive(dsk);
+        RecoveryJournal journal = Open(id);
+        MediaActions.Recover([next], journal).Should().BeEmpty();
+        next.Media?.Changed.Should().BeTrue();
+        AltairDisk back = next.Disk ?? throw new InvalidOperationException("The drive is empty.");
+        MediaActions.Source(back)?.Codec.Should().BeOfType<AltairDiskCodec>();
+        MediaActions.Device(next, "save", Speaking())?.String("outcome").Should().Be("saved");
+
+        byte[] saved = File.ReadAllBytes(dsk);
+        saved.Length.Should().Be(image.Length);
+        saved[^AltairDisk.TrailerBytes].Should().Be(0xAA, "the trailer is kept");
+        int offset = ((5 * AltairDisk.SectorsPerTrack) + 9) * AltairDisk.SectorBytes;
+        saved.AsSpan(offset, 2).ToArray().Should().Equal(0x85, 0x42);
+        Stop(journal, next);
+        Disks(id).Should().BeEmpty();
+    }
+
+    /// <summary>
+    ///  A VIC-20's TAP image is kept and comes back with its codec's machine and video, so it saves as the VIC-20's
+    ///  image it was, even into a Datasette whose own images are the PET's.
+    /// </summary>
+    [TestMethod]
+    public void ACommodoreTapeComesBackForItsMachine()
+    {
+        string id = Id();
+        string tap = Path.Join(s_root, $"kept-{Guid.NewGuid():N}.tap");
+        byte[] image = TapFormat.Write([352, 512, 672, 3000], TapFormat.Vic20Machine, TapFormat.Ntsc);
+        File.WriteAllBytes(tap, image);
+
+        CommodoreDatasette deck = Datasette(tap);
+        deck.Tape?.MarkChanged();
+        Stop(Open(id), deck);
+        Disks(id).Single()?["source"]?["codec"]?["machine"]?.GetValue<int>().Should().Be(TapFormat.Vic20Machine);
+
+        CommodoreDatasette next = Datasette(tap);
+        RecoveryJournal journal = Open(id);
+        MediaActions.Recover([next], journal).Should().BeEmpty();
+        CommodoreTape back = next.Tape ?? throw new InvalidOperationException("The Datasette is empty.");
+        CommodoreTapeCodec codec = MediaActions.Source(back)?.Codec as CommodoreTapeCodec
+            ?? throw new InvalidOperationException("The tape came back without its TAP codec.");
+
+        codec.Machine.Should().Be(TapFormat.Vic20Machine);
+        codec.Video.Should().Be(TapFormat.Ntsc);
+
+        MediaActions.Device(next, "save", Speaking())?.String("outcome").Should().Be("saved");
+        File.ReadAllBytes(tap).Should().Equal(image);
+        Stop(journal, next);
+        Disks(id).Should().BeEmpty();
+    }
+
     private static string Id() => $"test-{Guid.NewGuid():N}";
 
     private static RecoveryJournal Open(string id) => RecoveryJournal.Open(id, []) ?? throw new InvalidOperationException("The journal is taken.");
@@ -542,9 +828,9 @@ public sealed class RecoveryJournalTests
     }
 
     // A Disk II drive with a sector image in it, read and registered as the debug host does.
-    private static Apple2FloppyDrive Floppy(string path)
+    private static Apple2FloppyDrive Floppy(string path, DiskIIController? card = null)
     {
-        DiskIIController controller = new();
+        DiskIIController controller = card ?? new();
         controller.SetFirmware(new DiskIIFirmware(new byte[256], new byte[256]));
         Apple2FloppyDrive floppy = new(controller, drive: 1, "disk1", "Drive 1", "drive", "controller");
         byte[] bytes = File.ReadAllBytes(path);
@@ -552,6 +838,17 @@ public sealed class RecoveryJournalTests
         MediaActions.Register(loaded.Disk, path, loaded.Codec, bytes);
         floppy.Insert(loaded.Disk, path, "DSK");
         return floppy;
+    }
+
+    // A PET's Datasette with a TAP image in it, read and registered as the debug host does.
+    private static CommodoreDatasette Datasette(string tap)
+    {
+        CommodoreDatasette deck = new("cassette1", "Cassette #1", "A PET's port 1", cpuHertz: 1_000_000);
+        byte[] bytes = File.ReadAllBytes(tap);
+        (CommodoreTape tape, CommodoreTapeCodec codec) = CommodoreTapeCodec.Load(bytes);
+        MediaActions.Register(tape, tap, codec, bytes);
+        deck.Insert(tape, tap, "TAP");
+        return deck;
     }
 
     // A BBC Micro's first disk drive and cassette with images in them, read and registered as the debug host does.
@@ -569,6 +866,18 @@ public sealed class RecoveryJournalTests
         MediaActions.Register(loaded, uef, new AcornTapeCodec(), tape);
         cassette.Insert(loaded, uef);
         return (floppy, cassette);
+    }
+
+    // Drive 0 of a new Altair's 88-DCDD with an image in it, registered with the host as a launch registers it.
+    private static AltairDiskDrive AltairDrive(string dsk)
+    {
+        AltairMachine machine = new(new AltairConfiguration { DiskDrives = 1 });
+        AltairDiskDrive drive = (machine.Bus.Disk ?? throw new InvalidOperationException("The 88-DCDD is missing.")).Drives[0];
+        byte[] bytes = File.ReadAllBytes(dsk);
+        (AltairDisk disk, AltairDiskCodec codec) = AltairDiskCodec.Load(bytes);
+        drive.Insert(disk, dsk, codec.Format);
+        MediaActions.Register(disk, dsk, codec, bytes);
+        return drive;
     }
 
     // Writes a block of one byte, as the machine would, unlocking the disk first.

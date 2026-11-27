@@ -47,7 +47,7 @@ public class CommodoreFloppyDriveTests
     [TestMethod]
     public void BreakingTheTabStopsARecording()
     {
-        PetDatasette deck = new(1);
+        CommodoreDatasette deck = new("cassette1", "Cassette #1", "A PET's port 1", cpuHertz: 1_000_000);
         CommodoreTape tape = new();
         deck.Insert(tape, "blank", "TAP", changed: true);
         deck.Record();
@@ -64,7 +64,7 @@ public class CommodoreFloppyDriveTests
         deck.Position.Should().Be(position);
 
         // A rise after the given cycles, the motor running.
-        static void Pulse(PetDatasette deck, int cycles)
+        static void Pulse(CommodoreDatasette deck, int cycles)
         {
             for (int cycle = 1; cycle < cycles; cycle++) { deck.Tick(motor: true, write: false); }
             deck.Tick(motor: true, write: true);

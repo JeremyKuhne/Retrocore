@@ -15,15 +15,17 @@
   "main": "./out/extension.js",
   "activationEvents": [
     "onDebugResolve:retrocore",
+    "workspaceContains:retrocore.json",
+    "workspaceContains:**/retrocore.json",
     "onDebugDynamicConfigurations:retrocore",
     "onFileSystem:retrocore-basic",
     "onFileSystem:retrocore-basic-file"
   ],
   "scripts": {
     "generate:grammar": "node scripts/generate-grammar.mjs && node scripts/generate-basic-grammar.mjs",
-    "compile": "npm run generate:grammar && tsc -p .",
+    "compile": "npm run generate:grammar && node scripts/copy-schema.mjs && tsc -p .",
     "check:grammar": "node scripts/generate-grammar.mjs --check && node scripts/generate-basic-grammar.mjs --check",
-    "test:grammar": "npm run check:grammar && node --test out/test/grammar.test.js out/test/basicGrammar.test.js out/test/pascalGrammar.test.js out/test/display.test.js out/test/pictures.test.js out/test/hardware.test.js out/test/machines.test.js out/test/startFlow.test.js out/test/favorite.test.js out/test/memory.test.js out/test/drives.test.js out/test/cycles.test.js",
+    "test:grammar": "npm run check:grammar && node --test out/test/grammar.test.js out/test/basicGrammar.test.js out/test/pascalGrammar.test.js out/test/display.test.js out/test/pictures.test.js out/test/hardware.test.js out/test/machines.test.js out/test/startFlow.test.js out/test/favorite.test.js out/test/memory.test.js out/test/drives.test.js out/test/cycles.test.js out/test/project.test.js",
     "test:language": "node out/test/runTest.js --language-only",
     "test:memory-integration": "node out/test/runTest.js --memory-only",
     "test:editor": "node out/test/runTest.js",
@@ -43,7 +45,31 @@
     "vscode-textmate": "9.2.0"
   },
   "contributes": {
+    "colors": [
+      {
+        "id": "retrocore.inactiveCodeBackground",
+        "description": "The background of the lines a Retrocore assembly source's .if blocks leave out for the active target.",
+        "defaults": { "dark": "#8080801A", "light": "#8080801A", "highContrast": null, "highContrastLight": null }
+      },
+      {
+        "id": "retrocore.inactiveCodeOverviewRuler",
+        "description": "The overview ruler's mark for the lines a Retrocore assembly source's .if blocks leave out for the active target.",
+        "defaults": { "dark": "#808080B3", "light": "#808080B3", "highContrast": "#808080", "highContrastLight": "#808080" }
+      }
+    ],
+    "jsonValidation": [
+      {
+        "fileMatch": "retrocore.json",
+        "url": "./out/schemas/project-1.schema.json"
+      }
+    ],
     "languages": [
+      {
+        "id": "jsonc",
+        "filenames": [
+          "retrocore.json"
+        ]
+      },
       {
         "id": "retrocore-asm",
         "aliases": [
@@ -178,6 +204,21 @@
         }
       },
       {
+        "id": "retrocore-model100",
+        "aliases": [
+          "Model 100 BASIC",
+          "model100"
+        ],
+        "extensions": [
+          ".model100.bas"
+        ],
+        "configuration": "./basic-language-configuration.json",
+        "icon": {
+          "light": "./media/basic.svg",
+          "dark": "./media/basic.svg"
+        }
+      },
+      {
         "id": "retrocore-mbasic",
         "aliases": [
           "MBASIC",
@@ -217,6 +258,21 @@
           ".bbcbasic.bas"
         ],
         "configuration": "./bbcbasic-language-configuration.json",
+        "icon": {
+          "light": "./media/basic.svg",
+          "dark": "./media/basic.svg"
+        }
+      },
+      {
+        "id": "retrocore-atari",
+        "aliases": [
+          "Atari BASIC",
+          "atari"
+        ],
+        "extensions": [
+          ".atari.bas"
+        ],
+        "configuration": "./basic-language-configuration.json",
         "icon": {
           "light": "./media/basic.svg",
           "dark": "./media/basic.svg"
@@ -292,6 +348,11 @@
         "path": "./syntaxes/colorbasic.tmLanguage.json"
       },
       {
+        "language": "retrocore-model100",
+        "scopeName": "source.retrocore-model100",
+        "path": "./syntaxes/model100.tmLanguage.json"
+      },
+      {
         "language": "retrocore-mbasic",
         "scopeName": "source.retrocore-mbasic",
         "path": "./syntaxes/mbasic.tmLanguage.json"
@@ -307,9 +368,14 @@
         "path": "./syntaxes/bbcbasic.tmLanguage.json"
       },
       {
+        "language": "retrocore-atari",
+        "scopeName": "source.retrocore-atari",
+        "path": "./syntaxes/atari.tmLanguage.json"
+      },
+      {
         "language": "retrocore-level1",
-        "scopeName": "source.retrocore-basic",
-        "path": "./syntaxes/basic.tmLanguage.json"
+        "scopeName": "source.retrocore-level1",
+        "path": "./syntaxes/level1.tmLanguage.json"
       },
       {
         "language": "retrocore-basic",
@@ -343,6 +409,11 @@
           "default": "",
           "description": "Path to Retrocore.Debug.dll. Empty uses the workspace build under artifacts/AnyCPU/Release/Retrocore.Debug/net11.0."
         },
+        "retrocore.inactiveCode.shade": {
+          "type": "boolean",
+          "default": true,
+          "description": "Shade the lines of a Retrocore assembly source that the active target's .if blocks leave out, across the whole line and in the overview ruler, as the language server reports them. The server fades their text as well; the colors are retrocore.inactiveCodeBackground and retrocore.inactiveCodeOverviewRuler."
+        },
         "retrocore.lint.unlinkedNameWords": {
           "type": "array",
           "items": { "type": "string" },
@@ -361,8 +432,10 @@
             "level2",
             "colorbasic",
             "mbasic",
+            "model100",
             "petbasic",
-            "bbcbasic"
+            "bbcbasic",
+            "atari"
           ],
           "default": "",
           "markdownDescription": "The BASIC of a `.bas` file with no `REM retrocore` pragma and no dialect extension (such as `.applesoft.bas`). Empty uses the BASIC of the machine being debugged."
@@ -416,6 +489,8 @@
                   "trs80-model2",
                   "trs80-model12",
                   "trs80-model16",
+                  "trs80-model100",
+                  "tandy102",
                   "apple1",
                   "coco1",
                   "coco2",
@@ -426,6 +501,8 @@
                   "pet4032-business",
                   "bbcb",
                   "bbca",
+                  "atari800",
+                  "atari400",
                   "altair",
                   "kaypro2"
                 ],
@@ -447,7 +524,9 @@
                       "basic",
                       "disk",
                       "tape",
-                      "dosSource"
+                      "dosSource",
+                      "executable",
+                      "cartridge"
                     ]
                   },
                   "path": {
@@ -491,6 +570,9 @@
         "language": "retrocore-level2"
       },
       {
+        "language": "retrocore-level1"
+      },
+      {
         "language": "retrocore-integer"
       },
       {
@@ -506,10 +588,16 @@
         "language": "retrocore-mbasic"
       },
       {
+        "language": "retrocore-model100"
+      },
+      {
         "language": "retrocore-petbasic"
       },
       {
         "language": "retrocore-bbcbasic"
+      },
+      {
+        "language": "retrocore-atari"
       },
       {
         "language": "retrocore-basic"
@@ -671,6 +759,11 @@
         {
           "command": "retrocore.hardware.addCard",
           "when": "view == retrocore.machine && viewItem =~ /\\baddCard\\b/",
+          "group": "inline@1"
+        },
+        {
+          "command": "retrocore.machine.changeRom",
+          "when": "view == retrocore.machine && viewItem =~ /\\bchangeRom\\b/",
           "group": "inline@1"
         },
         {
@@ -878,6 +971,10 @@
       ],
       "commandPalette": [
         {
+          "command": "retrocore.activeTarget",
+          "when": "false"
+        },
+        {
           "command": "retrocore.display.paste",
           "when": "false"
         },
@@ -990,6 +1087,10 @@
           "when": "false"
         },
         {
+          "command": "retrocore.machine.changeRom",
+          "when": "false"
+        },
+        {
           "command": "retrocore.breakpoints.list",
           "when": "false"
         },
@@ -1043,7 +1144,7 @@
         },
         {
           "command": "retrocore.basic.renumber",
-          "when": "editorLangId =~ /^retrocore-(applesoft|level2|level1|colorbasic|mbasic|petbasic|bbcbasic|basic)$/"
+          "when": "editorLangId =~ /^retrocore-(applesoft|level2|level1|colorbasic|mbasic|model100|petbasic|bbcbasic|atari|basic)$/"
         },
         {
           "command": "retrocore.basic.openListing",
@@ -1113,7 +1214,7 @@
       "explorer/context": [
         {
           "command": "retrocore.basic.openListing",
-          "when": "resourceExtname == .cas || resourceFilename =~ /#f[ac]/i || resourceExtname == .bin",
+          "when": "resourceExtname =~ /^\\.(cas|ba)$/i || resourceFilename =~ /#f[ac]/i || resourceExtname == .bin",
           "group": "navigation@9"
         }
       ],
@@ -1126,6 +1227,15 @@
       ]
     },
     "commands": [
+      {
+        "command": "retrocore.pickTarget",
+        "title": "Retrocore: Pick Target...",
+        "icon": "$(target)"
+      },
+      {
+        "command": "retrocore.activeTarget",
+        "title": "Retrocore: Active Target"
+      },
       {
         "command": "retrocore.clearCycles",
         "title": "Retrocore: Clear Source Cycle Counts"
@@ -1316,6 +1426,11 @@
         "title": "Change Setting..."
       },
       {
+        "command": "retrocore.machine.changeRom",
+        "title": "Change ROM...",
+        "icon": "$(chip)"
+      },
+      {
         "command": "retrocore.resetSavedMachine",
         "title": "Retrocore: Reset Saved Machine..."
       },
@@ -1460,10 +1575,28 @@
         ],
         "configurationAttributes": {
           "launch": {
-            "required": [
-              "machine"
+            "anyOf": [
+              {
+                "required": [
+                  "machine"
+                ]
+              },
+              {
+                "required": [
+                  "project",
+                  "target"
+                ]
+              }
             ],
             "properties": {
+              "project": {
+                "type": "string",
+                "description": "A Retrocore project to build and debug: its retrocore.json, or the folder that holds it. The target supplies machine, model, rom, its options and its cards; project replaces source, program, debugFile, basic, executable and basicSource, and decides dialect, linkerConfiguration, loadAddress, entryAddress and dos."
+              },
+              "target": {
+                "type": "string",
+                "description": "With project: the target to build and debug, by name, or as project/target where a root retrocore.json's projects share one."
+              },
               "machine": {
                 "enum": [
                   "apple2",
@@ -1472,12 +1605,14 @@
                   "trs80-model3",
                   "trs80-model4",
                   "trs80-model2",
+                  "trs80-model100",
                   "apple1",
                   "coco",
                   "pet",
                   "altair",
                   "kaypro2",
                   "bbc",
+                  "atari800",
                   "apple2e"
                 ],
                 "enumDescriptions": [
@@ -1487,25 +1622,39 @@
                   "The TRS-80 Model III, 4 or 4P; model says which (3 by default).",
                   "The TRS-80 Model 4: trs80-model3 with model 4 by default.",
                   "The TRS-80 Model II, 12 or 16 (its Z80 side); model says which (2 by default).",
+                  "The TRS-80 Model 100 or Tandy 102: an 80C85, the 240x64 LCD and 8-32 KB, from your ROM; model says which (100 by default).",
                   "The Apple-1, with the Woz Monitor and the Apple Cassette Interface.",
                   "The TRS-80 Color Computer 1, 2 or 3; model says which.",
                   "The Commodore PET: the 2001 with BASIC 1 or the BASIC 2 upgrade ROMs, or the 4032 with BASIC 4; model says which (pet2001-basic2 by default).",
                   "The MITS Altair 8800: an 8080 with RAM and a terminal on the 88-2SIO; it has no ROM.",
                   "The Kaypro II: a 2.5 MHz Z80, 64 KB, 80x24 and two drives, running CP/M 2.2.",
                   "The BBC Micro, Model B or A; model says which (bbcb by default).",
+                  "The Atari 800 or 400; model says which (atari800 by default).",
                   "The older name for apple2, from when only the IIe was emulated."
                 ],
                 "default": "apple2",
-                "description": "The machine to emulate: apple2 is the Apple II family (model picks the IIe or enhanced IIe), apple3 an Apple III, trs80-model1 a TRS-80 Model I, trs80-model3 a Model III, 4 or 4P, trs80-model2 a Model II, 12 or 16, apple1 an Apple-1, coco a TRS-80 Color Computer (model picks 1, 2 or 3), pet a Commodore PET (model picks the 2001 with BASIC 1 or 2, or the 4032), altair a MITS Altair 8800, kaypro2 a Kaypro II, and bbc a BBC Micro (model picks the Model B or A)."
+                "description": "The machine to emulate: apple2 is the Apple II family (model picks the IIe or enhanced IIe), apple3 an Apple III, trs80-model1 a TRS-80 Model I, trs80-model3 a Model III, 4 or 4P, trs80-model2 a Model II, 12 or 16, trs80-model100 a Model 100 or Tandy 102, apple1 an Apple-1, coco a TRS-80 Color Computer (model picks 1, 2 or 3), pet a Commodore PET (model picks the 2001 with BASIC 1 or 2, or the 4032), altair a MITS Altair 8800, kaypro2 a Kaypro II, bbc a BBC Micro (model picks the Model B or A), and atari800 an Atari 800 or 400 (model picks which)."
               },
               "romDirectory": {
                 "type": "string",
-                "description": "Directory of externally supplied ROM dumps; defaults to RETROCORE_IIE_ROMS for the IIe, RETROCORE_IIPLUS_ROMS for the II Plus, RETROCORE_II_ROMS for the II, RETROCORE_APPLE3_ROMS for the Apple III (MAME's apple3 set), RETROCORE_TRS80_ROMS for the Model I, III, 4, 4P, II, 12 and 16 (the Model III, 4 and II families' dumps are under MAME's names, in the directory or its trs80m3, trs80m4, trs80m4p, trs80m2 or trs80m16 folder), RETROCORE_APPLE1_ROMS for the Apple-1 (wozmon.bin and aci.bin), RETROCORE_COCO_ROMS for the Color Computer, RETROCORE_PET_ROMS for the PET (MAME's pet2001, pet2001n, pet4016 and pet4032b chips, in the directory or its folder for the set) and RETROCORE_KAYPRO_ROMS for the Kaypro II (81-149c.u47 or 81-149c.rom, and 81-146.u43 or 81-146a.bin, in the directory or its kayproii folder) and RETROCORE_BBC_ROMS for the BBC Micro. Without dumps the ROMs are assembled from the SDK's sources, which are byte-identical to them; the Color Computer's dumps are under MAME's names (such as bas12.rom, extbas11.rom, coco3.rom and disk11.rom), in the directory or its coco, coco2b, coco3 and coco_fdc folders, and the BBC Micro's too (os12.rom, basic2.rom, dnfs120.rom and saa5050), in the directory or its bbcb, bbc_acorn8271 and saa5050 folders."
+                "description": "Directory of externally supplied ROM dumps; defaults to RETROCORE_IIE_ROMS for the IIe, RETROCORE_IIPLUS_ROMS for the II Plus, RETROCORE_II_ROMS for the II, RETROCORE_APPLE3_ROMS for the Apple III (MAME's apple3 set), RETROCORE_TRS80_ROMS for the Model I, III, 4, 4P, II, 12 and 16 (the Model III, 4 and II families' dumps are under MAME's names, in the directory or its trs80m3, trs80m4, trs80m4p, trs80m2 or trs80m16 folder), RETROCORE_APPLE1_ROMS for the Apple-1 (wozmon.bin and aci.bin), RETROCORE_COCO_ROMS for the Color Computer, RETROCORE_PET_ROMS for the PET (MAME's pet2001, pet2001n, pet4016 and pet4032b chips, in the directory or its folder for the set) and RETROCORE_KAYPRO_ROMS for the Kaypro II (81-149c.u47 or 81-149c.rom, and 81-146.u43 or 81-146a.bin, in the directory or its kayproii folder), RETROCORE_BBC_ROMS for the BBC Micro and RETROCORE_ATARI_ROMS for the Atari 400 and 800. Without dumps the ROMs are assembled from the SDK's sources, which are byte-identical to them; the Color Computer's dumps are under MAME's names (such as bas12.rom, extbas11.rom, coco3.rom and disk11.rom), in the directory or its coco, coco2b, coco3 and coco_fdc folders, and the BBC Micro's too (os12.rom, basic2.rom, dnfs120.rom and saa5050), in the directory or its bbcb, bbc_acorn8271 and saa5050 folders, and the Atari's too (MAME's a800 and a800pal chips, such as co12399b.rom, co12499b.rom and co14599b.rom), with the 810's firmware in an atari810 folder beside them and Atari BASIC as basic-revc.rom (or -reva or -revb) in the directory or its basic folder. The Model 100 and Tandy 102 default to RETROCORE_TRS80M100_ROMS, and need m100rom.m12 or m102rom.m12 (or m100.bin, m100rom.bin, t102.bin, t102_rom.bin or m102rom.bin) there or in its trs80m100, tandy102 or trs80m100-roms folder."
               },
               "highRam": {
                 "type": "boolean",
                 "default": true,
                 "description": "Apple-1: a 4 KB bank of RAM at $E000-$EFFF, where BASIC loads and runs."
+              },
+              "proms": {
+                "type": "array",
+                "items": {
+                  "enum": ["dbl", "mbl"],
+                  "enumDescriptions": [
+                    "Altair 8800: MITS's disk boot loader at $FF00, which boots the 88-DCDD's drive 0.",
+                    "Altair 8800: MITS's multi-boot loader at $FE00, which loads a MITS tape from the device the sense switches A11-A8 name."
+                  ]
+                },
+                "uniqueItems": true,
+                "description": "Altair 8800: the boot PROMs fitted, assembled from the SDK's sources or sdkRoms; DBL by default with the 88-DCDD, none without it."
               },
               "cassetteInterface": {
                 "type": "boolean",
@@ -1530,11 +1679,35 @@
                   }
                 ],
                 "default": "level2",
-                "description": "Model I and Model III: level2 or level1, Level II or Level I BASIC. Kaypro II: the monitor ROM dump's file name in romDirectory; by default 81-149c.u47 or 81-149c.rom."
+                "description": "Model I and Model III: level2 or level1, Level II or Level I BASIC. Kaypro II: the monitor ROM dump's file name in romDirectory; by default 81-149c.u47 or 81-149c.rom. Model 100 and Tandy 102: the 32 KB ROM's file, a path or a name in romDirectory."
               },
               "bootRom": {
                 "type": "string",
                 "description": "Model II, 12 and 16: the boot ROM dump's file name in romDirectory; by default the newest of u54.u11, cpu_fc86.u11, cpu_2119.u11, cpu_11be.u11, 8047316.u11 and 8043216.u11 found."
+              },
+              "optionRom": {
+                "type": "string",
+                "description": "Model 100 and Tandy 102: an option ROM's file, up to 32 KB, which port $E0 bit 0 puts over $0000-$7FFF."
+              },
+              "ramImage": {
+                "type": "string",
+                "description": "Model 100 and Tandy 102: a file that keeps the RAM between sessions, as the battery does. When it exists it loads before the power comes on and the ROM carries on; when it does not, the machine starts cold. The RAM is saved to it as the session ends."
+              },
+              "files": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "Model 100 and Tandy 102: host files to put in RAM's directory, so the menu lists them: .ba, .do and .co files as the Model 100 holds them, BASIC text as .bas (tokenized as Model 100 BASIC) and text as .txt. Each is named after its file, up to six letters and digits; one of a name already in RAM replaces it."
+              },
+              "coldStart": {
+                "type": "boolean",
+                "default": false,
+                "description": "Model 100 and Tandy 102: start from empty RAM even when ramImage exists, and replace it as the session ends."
+              },
+              "time": {
+                "type": "string",
+                "description": "Model 100 and Tandy 102: the clock's time to start at, as an ISO 8601 date and time; the host's by default. A cold start clears the date, as the ROM does."
               },
               "revision": {
                 "enum": [
@@ -1546,7 +1719,7 @@
               },
               "ramKilobytes": {
                 "type": "number",
-                "description": "Model I: RAM in kilobytes, 4-48; defaults to 48 with the Expansion Interface, else 16 (4 for Level I). Apple II and II Plus: 16, 32 or 48 (the default) on the board. Apple III: 128, 256 (the default) or 512. Apple-1: 4 (the default) or 8 from $0000. Color Computer 1 and 2: 4, 16, 32 or 64 (16 on a CoCo 1, 64 on a CoCo 2); CoCo 3: 128 (the default) or 512. Model III: 16, 32 or 48 (the default). Model 4 and 4P: 64 or 128 (the default). Model II, 12 and 16: 32 to 512 in 32K banks, 64 by default. Altair 8800: 1 to 64 from $0000, 64 by default. PET: 4, 8, 16 or 32; 8 by default, or 32 on a 4032 (16 is the 4016)."
+                "description": "Model I: RAM in kilobytes, 4-48; defaults to 48 with the Expansion Interface, else 16 (4 for Level I). Apple II and II Plus: 16, 32 or 48 (the default) on the board. Apple III: 128, 256 (the default) or 512. Apple-1: 4 (the default), 8, 16 or 32 from $0000. Color Computer 1 and 2: 4, 16, 32 or 64 (16 on a CoCo 1, 64 on a CoCo 2); CoCo 3: 128 (the default) or 512. Model III: 16, 32 or 48 (the default). Model 4 and 4P: 64 or 128 (the default). Model II, 12 and 16: 32 to 512 in 32K banks, 64 by default. Altair 8800: 1 to 64 from $0000, 64 by default. PET: 4, 8, 16 or 32; 8 by default, or 32 on a 4032 (16 is the 4016). Atari 800 and 400: 8 to 48 in steps of 8; 48 on the 800 and 16 on the 400 by default. Model 100 and Tandy 102: 8, 16, 24 or 32 (the default), filled down from $FFFF."
               },
               "switches": {
                 "type": "number",
@@ -1597,7 +1770,7 @@
                 "anyOf": [
                   {
                     "type": "boolean",
-                    "description": "Model I: the Expansion Interface's disk controller; defaults on when disks are given, since with a controller and no disk the ROM waits for one. Model III, 4 and 4P: the FD1793, likewise on when disks are given. Color Computer: the disk controller cartridge with Disk Extended Color BASIC; defaults on when disks are given."
+                    "description": "Model I: the Expansion Interface's disk controller; defaults on when disks are given, since with a controller and no disk the ROM waits for one. Model III, 4 and 4P: the FD1793, likewise on when disks are given. Color Computer: the disk controller cartridge with Disk Extended Color BASIC; defaults on when disks are given. Altair 8800: the 88-DCDD floppy controller with four 8-inch drives; defaults on when disks are given."
                   },
                   {
                     "enum": [
@@ -1640,7 +1813,7 @@
               },
               "cassette": {
                 "type": "string",
-                "description": "Model I, Model III and 4, and Color Computer: a .cas tape to play (500 baud on a Model III or 4). Apple-1: a .wav tape, which plays from the start of the session. Altair 8800: a .tap tape of bytes for the 88-ACR, which plays at 300 baud from the start of the session. BBC Micro: a .uef tape, or any file with a .inf file beside it, which goes on a tape as the MOS saves files. The PET's are cassette1 and cassette2."
+                "description": "Model I, Model III and 4, and Color Computer: a .cas tape to play (500 baud on a Model III or 4). Apple-1: a .wav tape, which plays from the start of the session. Altair 8800: a .tap tape of bytes for the 88-ACR, which plays at 300 baud from the start of the session. BBC Micro: a .uef tape, or any file with a .inf file beside it, which goes on a tape as the MOS saves files. Atari 800 and 400: a .cas tape for the 410, or an .xex, which goes on a boot tape. Model 100 and Tandy 102: a .wav tape, which plays when the ROM runs the motor (CLOAD). The PET's are cassette1 and cassette2."
               },
               "cassette1": {
                 "type": "string",
@@ -1658,7 +1831,7 @@
               "fastCassette": {
                 "type": "boolean",
                 "default": true,
-                "description": "Model I, Color Computer, PET and BBC Micro: run as fast as possible while the cassette motor runs, so tapes load and save quickly. Apple-1 and Altair 8800: the same while a tape plays or records. The machine's own timing is unchanged."
+                "description": "Model I, Color Computer, PET, BBC Micro and Atari 800 and 400: run as fast as possible while the cassette motor runs, so tapes load and save quickly. Apple-1 and Altair 8800: the same while a tape plays or records; Model 100: while the motor moves a tape that plays or records. The machine's own timing is unchanged."
               },
               "disks": {
                 "type": "array",
@@ -1666,7 +1839,7 @@
                   "type": "string"
                 },
                 "maxItems": 16,
-                "description": "Model I, III, 4 and 4P: JV1, JV3, DMK or IMD images for drives 0-3, chosen by extension or, for .dsk, by contents. Model II, 12 and 16: IMD, DMK or JV3 images of 8-inch disks. Apple III: DOS- or ProDOS-order (.po) or WOZ images for .D1, the built-in drive, then .D2-.D4. Color Computer: JVC (.dsk) images for drives 0-3, which put the disk controller in the slot. PET: .d64, .d67 or .g64 images for the first disk unit's drive 0, its drive 1, then the next unit's; without diskUnits, as many units as they need, from device 8. Kaypro II: IMG, DSK, IMD or DMK images of single-sided double-density 5.25-inch disks for drive A, then B. BBC Micro: SSD or DSD images for drives 0 and 1; a DSD's second side is drive 2 or 3."
+                "description": "Model I, III, 4 and 4P: JV1, JV3, DMK or IMD images for drives 0-3, chosen by extension or, for .dsk, by contents. Model II, 12 and 16: IMD, DMK or JV3 images of 8-inch disks. Apple III: DOS- or ProDOS-order (.po) or WOZ images for .D1, the built-in drive, then .D2-.D4. Color Computer: JVC (.dsk) images for drives 0-3, which put the disk controller in the slot. PET: .d64, .d67 or .g64 images for the first disk unit's drive 0, its drive 1, then the next unit's; without diskUnits, as many units as they need, from device 8. Kaypro II: IMG, DSK, IMD or DMK images of single-sided double-density 5.25-inch disks for drive A, then B. BBC Micro: SSD or DSD images for drives 0 and 1; a DSD's second side is drive 2 or 3. Atari 800 and 400: ATR or XFD images for D1:-D4:; an .xex boots from a disk built for it. Altair 8800: SIMH .dsk images of 8-inch disks (77 tracks of 32 137-byte sectors) for the 88-DCDD's drives 0-3, which fit the controller and the DBL PROM and boot drive 0."
               },
               "diskUnits": {
                 "type": "array",
@@ -1694,7 +1867,7 @@
               },
               "bootSeconds": {
                 "type": "number",
-                "description": "Model I, III, 4 and Color Computer: emulated seconds the ROM runs before a program loads, to set up its RAM; defaults to 1 on a Model I, III or 4 and 2 on a Color Computer when loading a program. Model II and Kaypro II: 0 by default."
+                "description": "Model I, III, 4 and Color Computer: emulated seconds the ROM runs before a program loads, to set up its RAM; defaults to 1 on a Model I, III or 4 and 2 on a Color Computer or an Atari when loading a program. Model 100 and Tandy 102: 3 when loading a program, else 0. Model II and Kaypro II: 0 by default. Apple II project launches: 0.25 by default, so the Monitor is set up for a bare program."
               },
               "command": {
                 "type": "string",
@@ -1741,15 +1914,21 @@
                 ],
                 "enumDescriptions": [
                   "No sound, and no cost.",
-                  "The IIe's speaker, in mono. Costs about 2% of emulation speed. On a Color Computer, its sound through the TV: the DAC, cassette and single-bit sound. On a PET, the VIA's CB2, as a speaker on the user port plays it. On a BBC Micro, the SN76489, in stereo.",
+                  "The IIe's speaker, in mono. Costs about 2% of emulation speed. On a Color Computer, its sound through the TV: the DAC, cassette and single-bit sound. On a PET, the VIA's CB2, as a speaker on the user port plays it. On a BBC Micro, the SN76489, in stereo. On an Atari, POKEY through the TV, in mono. On a Model 100, its piezo buzzer.",
                   "The speaker and the Mockingboard's two sound chips, in stereo, and the Mockingboard in slot 4 unless mockingboard is false. Slows emulation by about a quarter, because the chips' output is worked out every cycle."
                 ],
                 "default": "speaker",
-                "description": "IIe, Color Computer, PET and BBC Micro: what the display panel plays while the machine runs. Sound plays in time only at the machine's real speed (speed 1); the panel's Sound button changes it while debugging."
+                "description": "IIe, Color Computer, PET, BBC Micro, Atari and Model 100: what the display panel plays while the machine runs. Sound plays in time only at the machine's real speed (speed 1); the panel's Sound button changes it while debugging."
               },
               "mockingboard": {
                 "type": "boolean",
                 "description": "IIe: whether the Mockingboard is in slot 4. Off unless sound is mockingboard; the Retro Devices view's Add Card puts it in while debugging."
+              },
+              "softCard3": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 4,
+                "description": "Apple III: puts Microsoft's SoftCard /// in this slot (1-4; its boot disk looks from slot 4 down), so its CP/M disk boots. The Z80 shows as its own thread, SoftCard /// Z80. The slot must be free, not one of proFiles' slots. None unless given; the Retro Devices view's Add Card puts it in while debugging."
               },
               "softCard": {
                 "type": "integer",
@@ -1767,13 +1946,13 @@
                   "amber"
                 ],
                 "enumDescriptions": [
-                  "A color monitor or television (the default on the Apple II family, the Apple III and the Color Computer).",
+                  "A color monitor or television (the default on the Apple II family, the Apple III, the Color Computer and the Atari).",
                   "Apple IIe: an RGB card and color monitor, without the composite signal's fringing: white runs stay white to their edges, colored areas are solid, and text is white.",
                   "A black and white monochrome monitor: on an Apple II, every dot sharp, as double hi-res desktops need.",
                   "A green-phosphor monochrome monitor.",
                   "An amber-phosphor monochrome monitor."
                 ],
-                "description": "The monitor the video is shown on: color on the Apple II family, the Apple III and the Color Computer, or a white, green or amber monochrome one on any machine (green is the default on the Apple-1, the Model I and the Kaypro II, which have no color; the PET 2001 is white, and with BASIC 2 green). The display panel's Screen menu changes it, and its choice is kept for later launches on machines that have it."
+                "description": "The monitor the video is shown on: color on the Apple II family, the Apple III, the Color Computer and the Atari, or a white, green or amber monochrome one on any machine (green is the default on the Apple-1, the Model I and the Kaypro II, which have no color; the PET 2001 is white, and with BASIC 2 green). The display panel's Screen menu changes it, and its choice is kept for later launches on machines that have it."
               },
               "mouse": {
                 "type": "integer",
@@ -1892,12 +2071,16 @@
                   "pet4032-business",
                   "bbcb",
                   "bbca",
+                  "atari800",
+                  "atari400",
                   "3",
                   "4",
                   "4p",
                   "2",
                   "12",
-                  "16"
+                  "16",
+                  "100",
+                  "102"
                 ],
                 "enumDescriptions": [
                   "The enhanced Apple IIe: a 65C02, MouseText and the enhanced firmware.",
@@ -1915,15 +2098,19 @@
                   "The PET 4032 with the business keyboard and its editor.",
                   "The BBC Micro Model B: MOS 1.20, BASIC II, 32 KB and, unless diskInterface is false, the 8271 with DNFS 1.20.",
                   "The BBC Micro Model A: MOS 1.20, BASIC II and 16 KB, with no disk interface.",
+                  "The Atari 800: OS rev. B, Atari BASIC rev. C in the left slot, a right slot and 48 KB.",
+                  "The Atari 400: the 800 with one cartridge slot and 16 KB.",
                   "TRS-80 Model III: a 2 MHz Z80, the Model III ROM, 48 KB and 64x16.",
                   "TRS-80 Model 4: 4 MHz, the Model III ROM, 128 KB, the memory maps and 80x24.",
                   "TRS-80 Model 4P: a Model 4 whose only ROM is a boot loader, with no cassette.",
                   "TRS-80 Model II: a 4 MHz Z80, 64 KB, 80x24 and 8-inch disks.",
                   "TRS-80 Model 12: the Model II's successor.",
-                  "TRS-80 Model 16, 16B or Tandy 6000, its Z80 side only: the 68000 board is not emulated."
+                  "TRS-80 Model 16, 16B or Tandy 6000, its Z80 side only: the 68000 board is not emulated.",
+                  "TRS-80 Model 100: the 1983 laptop's ROM, m100rom.m12.",
+                  "Tandy 102: the Model 100 with its revised ROM, m102rom.m12."
                 ],
                 "default": "iie-enhanced",
-                "description": "Apple II: which model of the family. Color Computer: coco1, coco2 or coco3. PET: pet2001-basic2 (the default), pet2001, pet4032 or pet4032-business. BBC Micro: bbcb or bbca. trs80-model3: 3, 4 or 4p. trs80-model2: 2, 12 or 16."
+                "description": "Apple II: which model of the family. Color Computer: coco1, coco2 or coco3. PET: pet2001-basic2 (the default), pet2001, pet4032 or pet4032-business. BBC Micro: bbcb or bbca. Atari: atari800 or atari400. trs80-model3: 3, 4 or 4p. trs80-model2: 2, 12 or 16. trs80-model100: 100 or 102."
               },
               "basicRevision": {
                 "enum": [
@@ -2009,7 +2196,85 @@
               },
               "cartridge": {
                 "type": "string",
-                "description": "Color Computer: a ROM pack image (.ccc or .rom, up to 16 KB) in the cartridge slot."
+                "description": "Color Computer: a ROM pack image (.ccc or .rom, up to 16 KB) in the cartridge slot. Atari 800 and 400: a left cartridge (.rom or .car), in BASIC's place: basicCartridge is none by default with one."
+              },
+              "rightCartridge": {
+                "type": "string",
+                "description": "Atari 800: a cartridge for the right slot, which the 400 does not have: an 8 KB .rom, or a .car of the right-slot type."
+              },
+              "basicCartridge": {
+                "enum": [
+                  "c",
+                  "b",
+                  "a",
+                  "none"
+                ],
+                "enumDescriptions": [
+                  "Atari BASIC rev. C.",
+                  "Atari BASIC rev. B.",
+                  "Atari BASIC rev. A, as the first 400s and 800s had.",
+                  "No BASIC: the left slot is empty, or holds the cartridge given."
+                ],
+                "default": "c",
+                "description": "Atari 800 and 400: the revision of Atari BASIC in the left slot, from basic-revc.rom (or -revb or -reva) in romDirectory or its basic folder, or built from the SDK's source. none by default when cartridge is given."
+              },
+              "video": {
+                "enum": [
+                  "ntsc",
+                  "pal"
+                ],
+                "enumDescriptions": [
+                  "NTSC: 60 Hz and a 1.79 MHz 6502.",
+                  "PAL: 50 Hz and a 1.77 MHz 6502, with the PAL OS."
+                ],
+                "default": "ntsc",
+                "description": "Atari 800 and 400: the video standard, which picks the OS: os on NTSC, the PAL OS on PAL."
+              },
+              "os": {
+                "enum": [
+                  "b",
+                  "a"
+                ],
+                "enumDescriptions": [
+                  "OS rev. B.",
+                  "OS rev. A, the first."
+                ],
+                "default": "b",
+                "description": "Atari 800 and 400 on NTSC: the OS ROM's revision. A PAL machine has the PAL OS."
+              },
+              "chip": {
+                "enum": [
+                  "gtia",
+                  "ctia"
+                ],
+                "enumDescriptions": [
+                  "The GTIA, with its three extra graphics modes (GRAPHICS 9-11).",
+                  "The CTIA of the first machines, without them."
+                ],
+                "default": "gtia",
+                "description": "Atari 800 and 400: the graphics chip ANTIC works with."
+              },
+              "diskDrives": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 4,
+                "description": "Atari 800 and 400: how many disk drives are on the serial bus, D1: to D4:. By default as many as disks names, or 1 for an executable."
+              },
+              "diskDrive": {
+                "enum": [
+                  "atari810",
+                  "sio"
+                ],
+                "enumDescriptions": [
+                  "The Atari 810, at the hardware level: its 6507 runs its firmware (rev. C), from an atari810 folder beside romDirectory's dumps or built from the SDK's source.",
+                  "Drives that answer the serial bus's commands at the command level, without the 810's firmware."
+                ],
+                "default": "atari810",
+                "description": "Atari 800 and 400: how the disk drives are emulated."
+              },
+              "executable": {
+                "type": "string",
+                "description": "Atari 800 and 400: a binary load file (.xex), which boots from drive 1 on a disk built for it. disks then names no disk for drive 1."
               },
               "autostart": {
                 "type": "boolean",
@@ -2054,11 +2319,11 @@
               },
               "hints": {
                 "type": "string",
-                "description": "The hints file Retrocore Memory keeps marks, names and comments in, which --disassemble reads too. Defaults to <name>.hints.json beside the source, program or debug file."
+                "description": "The hints file Retrocore Memory keeps marks, names and comments in, which --disassemble reads too. Defaults to <name>.hints.json beside the source, program or debug file, or for a project launch <project name>.<target>.hints.json beside its retrocore.json."
               },
               "basic": {
                 "type": "string",
-                "description": "A BASIC file to load and RUN: .applesoft.bas, .integer.bas, .apple1.bas, .level2.bas, .colorbasic.bas, .petbasic.bas, .bbcbasic.bas, or a .bas whose first line names its dialect. Numbered lines, or lines with labels; the machine boots to BASIC's prompt first. Replaces source and program."
+                "description": "A BASIC file to load and RUN: .applesoft.bas, .integer.bas, .apple1.bas, .level2.bas, .level1.bas, .colorbasic.bas, .petbasic.bas, .bbcbasic.bas, .atari.bas, or a .bas whose first line names its dialect. Numbered lines, or lines with labels; the machine boots to BASIC's prompt first. Replaces source and program."
               },
               "run": {
                 "type": "boolean",
@@ -2075,7 +2340,7 @@
               },
               "loadAddress": {
                 "type": "number",
-                "description": "Load address of program, or origin of source when no linker configuration places it; defaults to $6000 on the IIe, $7000 on the Model I and $0800 on the PET."
+                "description": "Load address of program, or origin of source when no linker configuration places it; defaults to $6000 on the IIe, $7000 on the Model I, $0800 on the PET and $E000 on the Model 100."
               },
               "entryAddress": {
                 "type": "number",
@@ -2102,7 +2367,7 @@
               },
               "sdkRoms": {
                 "type": "string",
-                "description": "Directory of the SDK's ROM sources to debug instead of the copy beside the debug host, so breakpoints set in those files bind: the Apple II's Roms directory (Slot7.rom.asm, AppleSoft, Microsoft6502Basic, System, IntegerBasic, DiskII, Dos), the TRS-80's (Level2.asm, Level1.asm, CharacterGenerator.asm, Model3.asm, Model4PBoot.asm, Model2Boot.asm and their character generators), the Color Computer's (ColorBasic.asm, ExtendedBasic.asm, DiskBasic.asm and Coco3.asm), the PET's (Basic/Basic1.asm, Basic2.asm and Basic4.asm, Basic1/Editor1.asm and Kernal1.asm, Basic2/Editor2.asm and Kernal2.asm, Basic4/Editor4.asm and Kernal4.asm, CharacterGenerator.asm and PetEquates.asm, with Microsoft6502Basic beside it as in the SDK), the Kaypro II's (Kaypro2.asm, Kaypro2CharacterGenerator.asm and MBASIC's modules in Mbasic), or the BBC Micro's (Mos.asm, BbcBasic.asm, Dnfs.asm and Saa5050.asm, with their Mos, Basic and Dnfs folders)."
+                "description": "Directory of the SDK's ROM sources to debug instead of the copy beside the debug host, so breakpoints set in those files bind: the Apple II's Roms directory (Slot7.rom.asm, AppleSoft, Microsoft6502Basic, System, IntegerBasic, DiskII, Dos), the TRS-80's (Level2.asm, Level1.asm, CharacterGenerator.asm, Model3.asm, Model4PBoot.asm, Model2Boot.asm and their character generators), the Color Computer's (ColorBasic.asm, ExtendedBasic.asm, DiskBasic.asm and Coco3.asm), the PET's (Basic/Basic1.asm, Basic2.asm and Basic4.asm, Basic1/Editor1.asm and Kernal1.asm, Basic2/Editor2.asm and Kernal2.asm, Basic4/Editor4.asm and Kernal4.asm, CharacterGenerator.asm and PetEquates.asm, with Microsoft6502Basic beside it as in the SDK), the Kaypro II's (Kaypro2.asm, Kaypro2CharacterGenerator.asm and MBASIC's modules in Mbasic), the Altair 8800's (Dbl.asm and Mbl.asm, which the PROMs are also built from), the BBC Micro's (Mos.asm, BbcBasic.asm, Dnfs.asm and Saa5050.asm, with their Mos, Basic and Dnfs folders), or the Atari's (its OS, floating point package, Atari BASIC and the 810's firmware)."
               },
               "breakpoints": {
                 "type": "array",
@@ -2239,6 +2504,25 @@
             "debugHost": "${workspaceFolder}/artifacts/AnyCPU/Release/Retrocore.Debug/net11.0/Retrocore.Debug.dll",
             "source": "${file}",
             "stopOnEntry": true
+          },
+          {
+            "type": "retrocore",
+            "request": "launch",
+            "machine": "atari800",
+            "model": "atari800",
+            "name": "Boot Atari 800",
+            "debugHost": "${workspaceFolder}/artifacts/AnyCPU/Release/Retrocore.Debug/net11.0/Retrocore.Debug.dll",
+            "stopOnEntry": false
+          },
+          {
+            "type": "retrocore",
+            "request": "launch",
+            "machine": "atari800",
+            "model": "atari800",
+            "name": "Debug Atari 800 6502 source",
+            "debugHost": "${workspaceFolder}/artifacts/AnyCPU/Release/Retrocore.Debug/net11.0/Retrocore.Debug.dll",
+            "source": "${file}",
+            "stopOnEntry": true
           }
         ],
         "configurationSnippets": [
@@ -2265,6 +2549,58 @@
               "disks": [
                 "^\"\\${workspaceFolder}/cpm.img\""
               ],
+              "stopOnEntry": false
+            }
+          },
+          {
+            "label": "Retrocore: Atari 800: Atari BASIC file",
+            "description": "Load an Atari BASIC file into Atari BASIC rev. C and RUN it, stopping on its first statement.",
+            "body": {
+              "type": "retrocore",
+              "request": "launch",
+              "name": "Atari 800: Atari BASIC file",
+              "machine": "atari800",
+              "basic": "^\"\\${file}\"",
+              "stopOnEntry": true
+            }
+          },
+          {
+            "label": "Retrocore: Atari 800: 6502 sample",
+            "description": "Assemble sample/atari/hello.asm and run it once the OS and BASIC have started for two seconds.",
+            "body": {
+              "type": "retrocore",
+              "request": "launch",
+              "name": "Atari 800: 6502 sample",
+              "machine": "atari800",
+              "source": "^\"\\${workspaceFolder}/sample/atari/hello.asm\"",
+              "bootSeconds": 2,
+              "stopOnEntry": true
+            }
+          },
+          {
+            "label": "Retrocore: Atari 800: boot a disk",
+            "description": "Boot an ATR or XFD disk image from D1:.",
+            "body": {
+              "type": "retrocore",
+              "request": "launch",
+              "name": "Atari 800: disk",
+              "machine": "atari800",
+              "disks": [
+                "^\"\\${workspaceFolder}/disk.atr\""
+              ],
+              "stopOnEntry": false
+            }
+          },
+          {
+            "label": "Retrocore: Atari 800: run an executable",
+            "description": "Boot a binary load file (.xex) from D1:, on a disk built for it, with BASIC out of the left slot.",
+            "body": {
+              "type": "retrocore",
+              "request": "launch",
+              "name": "Atari 800: executable",
+              "machine": "atari800",
+              "basicCartridge": "none",
+              "executable": "^\"\\${workspaceFolder}/program.xex\"",
               "stopOnEntry": false
             }
           }

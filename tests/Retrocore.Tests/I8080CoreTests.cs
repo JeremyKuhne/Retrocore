@@ -483,6 +483,40 @@ public class I8080CoreTests
         cpu.Invoking(processor => processor.Signals = I8080Signals.Trap).Should().Throw<ArgumentOutOfRangeException>();
     }
 
+    /// <summary>
+    ///  The debugger tells an interrupt's response from the instruction at PC, which it replaces, on the first state
+    ///  after the boundary: an acknowledged INT, or the 8085's TRAP, but not an RST instruction.
+    /// </summary>
+    /// <param name="variant">The CPU.</param>
+    /// <param name="signal">The interrupt.</param>
+    /// <param name="handler">Where the response goes.</param>
+    [TestMethod]
+    [DataRow(I8080Variant.I8080, I8080Signals.InterruptRequest, 0x0038)]
+    [DataRow(I8080Variant.I8085, I8080Signals.Trap, 0x0024)]
+    public void TakingInterruptMarksTheResponse(I8080Variant variant, I8080Signals signal, int handler)
+    {
+        // RST 0 / EI / NOP / NOP.
+        (I8080Processor<Z80TestBus> cpu, Z80TestBus bus) = Create(variant, 0xC7, 0xFB, 0x00, 0x00);
+        cpu.Registers = cpu.Registers with { SP = 0x8000 };
+        cpu.StepCycle();
+        cpu.IsTakingInterrupt.Should().BeFalse("RST 0 is an instruction");
+        while (!cpu.IsInstructionBoundary) { cpu.StepCycle(); }
+
+        cpu.Registers = cpu.Registers with { PC = Origin + 1 };
+        cpu.StepInstruction();
+        cpu.InterruptData = 0xFF;
+        cpu.Signals = signal;
+
+        // INT waits for the instruction after EI; TRAP is taken at once.
+        bool held = signal == I8080Signals.InterruptRequest;
+        if (held) { cpu.StepInstruction(); }
+        cpu.StepCycle();
+        cpu.IsTakingInterrupt.Should().BeTrue();
+        while (!cpu.IsInstructionBoundary) { cpu.StepCycle(); }
+        cpu.Registers.PC.Should().Be((ushort)handler);
+        (bus.Memory[0x7FFC] | (bus.Memory[0x7FFD] << 8)).Should().Be(Origin + (held ? 3 : 2), "the NOP after it runs on return");
+    }
+
     private static (I8080Processor<Z80TestBus> Cpu, Z80TestBus Bus) Create(I8080Variant variant, params byte[] code)
     {
         Z80TestBus bus = new();

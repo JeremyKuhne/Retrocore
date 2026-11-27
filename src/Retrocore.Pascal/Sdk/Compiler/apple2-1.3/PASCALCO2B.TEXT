@@ -1,0 +1,557 @@
+(** PASCALCO2B.TEXT: part 2 of 3 of PASCALCO2: PASCALCO's procedures and body.
+
+    Included by COMPILER.TEXT after PASCALCO2A.TEXT and before PASCALCO2C.TEXT.
+
+    Procedures here, nested ones indented:
+        SkipTokens
+        IsPackedChars
+        IsString
+        DecimalSize
+        ReadConstant
+        CompatibleTypes
+        SegmentInformation
+        EmitByte
+        EmitWord
+        WriteCode
+        FinishSegment
+        CompileBlock
+          ForwardUndefined *)
+
+  (** Skips symbols to one in Followers, after an error.
+      Also: SKIP (UCSD20) *)
+  PROCEDURE SkipTokens;
+  BEGIN
+    WHILE NOT (Token IN Followers) DO
+      NextToken
+  END;
+
+  (** Whether a type is a packed array of characters.
+      Also: PAOFCHAR (UCSD20) *)
+  FUNCTION IsPackedChars;
+  BEGIN
+    IsPackedChars := FALSE;
+    IF Tested <> NIL THEN
+      IF Tested^.Form = ArrayForm THEN
+        IsPackedChars := Tested^.ArrayIsPacked AND (Tested^.ElementType =
+            CharStructure)
+  END;
+
+  (** Whether a type is a STRING.
+      Also: STRGTYPE (UCSD20) *)
+  FUNCTION IsString;
+  BEGIN
+    IsString := FALSE;
+    IF IsPackedChars(Tested) THEN
+      IsString := Tested^.ArrayIsString
+  END;
+
+  (** The words a long integer with Digits digits takes.
+      Also: DECSIZE (UCSD20) *)
+  FUNCTION DecimalSize;
+  BEGIN
+    DecimalSize := (Digits + 3) DIV 4 + 1
+  END;
+
+  (** Reads a constant: its type and value.
+
+      UCSD Pascal II.0 calls it CONSTANT (UCSD20). *)
+  PROCEDURE ReadConstant;
+    VAR
+      (** UCSD Pascal II.0 calls it LSP (UCSD20). *)
+      FoundType: Structure;
+      (** UCSD Pascal II.0 calls it LCP (UCSD20). *)
+      NamedConstant: SymbolLink;
+      (** 0 none, 1 +, 2 -. *)
+      Sign: INTEGER;
+      (** UCSD Pascal II.0 calls it LVP (UCSD20). *)
+      ValueCopy: CopiedValue;
+      (** A long integer's word. *)
+      WordIndex: INTEGER;
+  BEGIN
+    FoundType := NIL;
+    Value.Ordinal := 0;
+    IF NOT (Token IN SignedConstantStarters) THEN
+    BEGIN
+      Error(50);
+      SkipTokens(Followers + SignedConstantStarters)
+    END;
+    IF Token IN SignedConstantStarters THEN
+    BEGIN
+      IF Token = StringToken THEN
+      BEGIN
+        IF TokenLength = 1 THEN
+          FoundType := CharStructure
+        ELSE
+        BEGIN
+          NEW(FoundType, StringTypeSize);
+          FoundType^.AllWords := StringStructure^.AllWords;
+          FoundType^.Capacity := TokenLength;
+          FoundType^.BaseType := NIL;
+          NEW(ValueCopy);
+          ValueCopy^ := TokenValue.Entry^;
+          TokenValue.Entry := ValueCopy
+        END;
+        Value := TokenValue;
+        NextToken
+      END
+      ELSE
+      BEGIN
+        Sign := 0;
+        IF (Token = AdditiveToken) AND (Operator IN [PlusOperator,
+            MinusOperator]) THEN
+        BEGIN
+          IF Operator = PlusOperator THEN
+            Sign := 1
+          ELSE
+            Sign := 2;
+          NextToken
+        END;
+        IF Token = NameToken THEN
+        BEGIN
+          FindIdentifier([ConstantClass], NamedConstant);
+          WITH NamedConstant.Entry^ DO
+          BEGIN
+            FoundType := DataType;
+            Value := Literal
+          END;
+          IF Sign <> 0 THEN
+            IF FoundType = IntegerStructure THEN
+            BEGIN
+              IF Sign = 2 THEN
+                Value.Ordinal := -Value.Ordinal
+            END
+            ELSE
+              IF FoundType = RealStructure THEN
+              BEGIN
+                IF Sign = 2 THEN
+                BEGIN
+                  NEW(ValueCopy, RealRecordSize);
+                  ValueCopy^.Kind := RealKind;
+                  ValueCopy^.RealNumber := -Value.Entry^.RealNumber;
+                  Value.Entry := ValueCopy
+                END
+              END
+              ELSE
+                IF CompatibleTypes(FoundType, LongStructure) THEN
+                BEGIN
+                  IF Sign = 2 THEN
+                  BEGIN
+                    NEW(ValueCopy, LongRecordSize);
+                    ValueCopy^ := Value.Entry^;
+                    FOR WordIndex := 1 TO ValueCopy^.WordCount DO
+                      ValueCopy^.DigitGroups[WordIndex] :=
+                          -ValueCopy^.DigitGroups[WordIndex];
+                    Value.Entry := ValueCopy
+                  END
+                END
+                ELSE
+                  Error(105);
+          NextToken
+        END
+        ELSE
+          IF Token = IntegerToken THEN
+          BEGIN
+            IF Sign = 2 THEN
+              TokenValue.Ordinal := -TokenValue.Ordinal;
+            FoundType := IntegerStructure;
+            Value := TokenValue;
+            NextToken
+          END
+          ELSE
+            IF Token = RealToken THEN
+            BEGIN
+              IF Sign = 2 THEN
+                TokenValue.Entry^.RealNumber := -TokenValue.Entry^.RealNumber;
+              FoundType := RealStructure;
+              Value := TokenValue;
+              NextToken
+            END
+            ELSE
+              IF Token = LongNumberToken THEN
+              BEGIN
+                IF Sign = 2 THEN
+                  FOR WordIndex := 1 TO TokenValue.Entry^.WordCount DO
+                    TokenValue.Entry^.DigitGroups[WordIndex] :=
+                        -TokenValue.Entry^.DigitGroups[WordIndex];
+                NEW(FoundType, LongTypeSize);
+                FoundType^.Size := DecimalSize(TokenLength);
+                FoundType^.Form := LongIntegerForm;
+                Value := TokenValue;
+                NextToken
+              END
+              ELSE
+              BEGIN
+                Error(106);
+                SkipTokens(Followers)
+              END
+      END;
+      IF NOT (Token IN Followers) THEN
+      BEGIN
+        Error(6);
+        SkipTokens(Followers)
+      END
+    END;
+    ValueType := FoundType
+  END;
+
+  (** Whether two types are compatible.
+      Also: COMPTYPES (UCSD20) *)
+  FUNCTION CompatibleTypes;
+    VAR
+      (** UCSD Pascal II.0 calls it LSP2 (UCSD20). *)
+      SecondField: Structure;
+      (** UCSD Pascal II.0 calls it LSP1 (UCSD20). *)
+      LeftField: Structure;
+      (** Also: COMP (UCSD20) *)
+      Agrees: BOOLEAN;
+      (** The pairs before.
+          Also: LTESTP1 (UCSD20) *)
+      SavedPairs: TypePair;
+      (** A pair.
+          Also: LTESTP2 (UCSD20) *)
+      Pair: TypePair;
+  BEGIN
+    IF First = Second THEN
+      CompatibleTypes := TRUE
+    ELSE
+      IF (First = NIL) OR (Second = NIL) THEN
+        CompatibleTypes := TRUE
+      ELSE
+        IF First^.Form = Second^.Form THEN
+          CASE First^.Form OF
+            ScalarForm:
+              CompatibleTypes := FALSE;
+            SubrangeForm:
+              CompatibleTypes := CompatibleTypes(First^.BaseType,
+                  Second^.BaseType);
+            PointerForm:
+            BEGIN
+              Agrees := FALSE;
+              Pair := ComparedPairs;
+              SavedPairs := ComparedPairs;
+              WHILE Pair <> NIL DO
+                WITH Pair^ DO
+                BEGIN
+                  IF (FirstElement = First^.ScalarKind) AND (SecondElement =
+                      Second^.ScalarKind) THEN
+                    Agrees := TRUE;
+                  Pair := Outer
+                END;
+              IF NOT Agrees THEN
+              BEGIN
+                NEW(Pair);
+                WITH Pair^ DO
+                BEGIN
+                  FirstElement := First^.ScalarKind;
+                  SecondElement := Second^.ScalarKind;
+                  Outer := ComparedPairs
+                END;
+                ComparedPairs := Pair;
+                Agrees := CompatibleTypes(First^.BaseType, Second^.BaseType)
+              END;
+              CompatibleTypes := Agrees;
+              ComparedPairs := SavedPairs
+            END;
+            LongIntegerForm:
+              CompatibleTypes := TRUE;
+            SetForm:
+              CompatibleTypes := CompatibleTypes(First^.BaseType,
+                  Second^.BaseType);
+            ArrayForm:
+            BEGIN
+              Agrees := CompatibleTypes(First^.ElementType,
+                  Second^.ElementType) AND (First^.ArrayIsPacked =
+                  Second^.ArrayIsPacked);
+              IF Agrees AND First^.ArrayIsPacked THEN
+                Agrees := (First^.ElementsPerWord = Second^.ElementsPerWord)
+                    AND (First^.ElementBits = Second^.ElementBits)
+                    AND (First^.ArrayIsString = Second^.ArrayIsString);
+              IF Agrees THEN
+                IF NOT IsString(First) AND (First <> ByteStreamStructure) AND
+                    (Second <> ByteStreamStructure) AND (First <>
+                    WordStreamStructure)
+                    AND (Second <> WordStreamStructure) THEN
+                  Agrees := First^.Size = Second^.Size;
+              CompatibleTypes := Agrees
+            END;
+            RecordForm:
+            BEGIN
+              LeftField := First^.BaseType;
+              SecondField := Second^.BaseType;
+              Agrees := TRUE;
+              WHILE (LeftField <> NIL) AND (SecondField <> NIL) AND Agrees DO
+              BEGIN
+                Agrees := CompatibleTypes(LeftField^.FieldDataType,
+                    SecondField^.FieldDataType);
+                LeftField := LeftField^.FieldNext;
+                SecondField := SecondField^.FieldNext
+              END;
+              CompatibleTypes := Agrees AND (LeftField = NIL) AND (SecondField
+                  = NIL) AND (First^.ElementType = NIL) AND
+                  (Second^.ElementType = NIL)
+            END;
+            FileForm:
+              CompatibleTypes := CompatibleTypes(First^.BaseType,
+                  Second^.BaseType)
+          END
+        ELSE
+          IF First^.Form = SubrangeForm THEN
+            CompatibleTypes := CompatibleTypes(First^.BaseType, Second)
+          ELSE
+            IF Second^.Form = SubrangeForm THEN
+              CompatibleTypes := CompatibleTypes(First, Second^.BaseType)
+            ELSE
+              CompatibleTypes := FALSE
+  END;
+
+  (** The information word of slot Slot: its segment's number, the machine
+      type and the version, 6. *)
+  FUNCTION SegmentInformation;
+    VAR
+      (** Whether words are high byte first. *)
+      HighByteFirst: BOOLEAN;
+      (** The word. *)
+      Information: SegmentAttributes;
+  BEGIN
+    Information.Word.Word := 0;
+    Information.MachineType := 2;
+    HighByteFirst := Information.Word.Bytes[0] <> CHR(0);
+    IF FlipBytes THEN
+      HighByteFirst := HighByteFirst = FALSE;
+    IF HighByteFirst THEN
+      Information.MachineType := 1;
+    Information.Number := SegmentDictionary[Slot].Number;
+    Information.Unused := 0;
+    Information.Version := 6;
+    SegmentInformation := Information.Word.Word
+  END;
+
+  (** Puts a byte in the code.
+      Also: GENBYTE (UCSD20) *)
+  PROCEDURE EmitByte;
+  BEGIN
+    CodeBuffer^[CodeCounter] := CHR(Byte);
+    CodeCounter := CodeCounter + 1
+  END;
+
+  (** Puts a word in the code, on a word boundary, its bytes swapped by $F+.
+      Also: GENWORD (UCSD20) *)
+  PROCEDURE EmitWord;
+    VAR
+      Swapped: INTEGER;
+  BEGIN
+    IF ODD(CodeCounter) THEN
+      EmitByte(0);
+    MOVELEFT(Word, CodeBuffer^[CodeCounter], 2);
+    IF FlipBytes THEN
+    BEGIN
+      Swapped := ORD(CodeBuffer^[CodeCounter]);
+      CodeBuffer^[CodeCounter] := CodeBuffer^[CodeCounter + 1];
+      CodeBuffer^[CodeCounter + 1] := CHR(Swapped)
+    END;
+    CodeCounter := CodeCounter + 2
+  END;
+
+  (** Copies the code buffer to the code file through BlockBuffer; Flush
+      writes the last block too. *)
+  PROCEDURE WriteCode;
+    VAR
+      (** Bytes to copy. *)
+      Chunk: INTEGER;
+      (** Bytes left. *)
+      Remaining: INTEGER;
+      (** Where in the code buffer. *)
+      Position: INTEGER;
+  BEGIN
+    Position := 0;
+    Remaining := CodeCounter;
+    REPEAT
+      Chunk := 512 - BlockByte;
+      IF Chunk > Remaining THEN
+        Chunk := Remaining;
+      MOVELEFT(CodeBuffer^[Position], BlockBuffer[BlockByte], Chunk);
+      Position := Position + Chunk;
+      BlockByte := BlockByte + Chunk;
+      IF (BlockByte = 512) OR Flush THEN
+      BEGIN
+        IF ErrorNumber = 0 THEN
+          IF BLOCKWRITE(WorkCodeFile^, BlockBuffer, 1, CodeFileBlock) <> 1 THEN
+            Error(402);
+        CodeFileBlock := CodeFileBlock + 1;
+        BlockByte := 0
+      END;
+      Remaining := Remaining - Chunk
+    UNTIL Remaining = 0
+  END;
+
+  (** Ends a segment: writes its procedure dictionary, its number and
+      procedures' count, and its length to SegmentDictionary (II.0: BLOCK's
+      end). *)
+  PROCEDURE FinishSegment;
+    VAR
+      (** A procedure. *)
+      ThisRoutine: INTEGER;
+  BEGIN
+    CodeCounter := 0;
+    FOR ThisRoutine := NextRoutine - 1 DOWNTO 1 DO
+      IF RoutineDictionary[ThisRoutine] = 0 THEN
+        EmitWord(0)
+      ELSE
+        EmitWord(SegmentOffset + CodeCounter - RoutineDictionary[ThisRoutine]);
+    EmitByte(CurrentSegment);
+    EmitByte(NextRoutine - 1);
+    SegmentDictionary[SlotOfSegment[CurrentSegment]].CodeLength :=
+        SegmentOffset + CodeCounter;
+    WriteCode(TRUE);
+    SegmentOffset := 0;
+    SegmentHasCode := FALSE
+  END;
+
+  (** Compiles a block and those in it: declarations with DECLARAT, each body
+      with BODYPART, units with UNITPART, pushing the lexical stack as a
+      procedure opens and popping it as it closes.
+      Also: BLOCK (UCSD20) *)
+  PROCEDURE CompileBlock;
+    LABEL 1;
+    VAR
+      (** The block ended with its symbol. *)
+      BlockDone: BOOLEAN;
+
+    (** Whether a scope's tree has a procedure declared FORWARD and never
+        defined, writing its name (II.0: BLOCK's check). *)
+    FUNCTION ForwardUndefined(Root: Identifier): BOOLEAN;
+    BEGIN
+      ForwardUndefined := FALSE;
+      IF Root <> NIL THEN
+        WITH Root^ DO
+        BEGIN
+          IF Class IN [ProperProcedureClass, ValueFunctionClass] THEN
+            IF StaticLevel = 1 THEN
+              IF RoutineKind = 0 THEN
+                IF IsForward THEN
+                BEGIN
+                  ForwardUndefined := TRUE;
+                  WRITELN(OUTPUT);
+                  WRITE(Name, ' undefined')
+                END;
+          IF ForwardUndefined(Right.Entry) OR ForwardUndefined(Left.Entry) THEN
+            ForwardUndefined := TRUE
+        END
+    END;
+
+  BEGIN
+    IF (Token = UnitToken) AND NOT InUnit THEN
+      IF Swapping OR UnitsWithoutSwapping THEN
+      BEGIN
+        UNITPART(Followers + [EndToken, UnitToken..UnitImplementationToken]);
+        IF Token = PeriodToken THEN
+          EXIT(CompileBlock)
+      END
+      ELSE
+        Error(408);
+    IsProgram := NOT InUnit;
+    NewBlock := TRUE;
+    REPEAT
+      IF NOT NewBlock THEN
+      BEGIN
+        InDeclarations := FALSE;
+        NestingDepth := 0;
+        CodeCounter := 0;
+        ListedCounter := 0;
+        IF NOT CompilingSystem OR (Level > 1) THEN
+          IF ForwardUndefined(Display[DisplayTop].Tree.Entry) THEN
+            Error(117);
+        IF InUnit THEN
+          IF LexicalStack^.OuterLevel^.RoutineEntry.Entry =
+              ProgramIdentifier.Entry THEN
+            IF Token IN [EndToken, BeginToken] THEN
+              EXIT(CompileBlock);
+        SegmentsMadeResident.Entry := NIL;
+        IF Token = BeginToken THEN
+          NextToken
+        ELSE
+          Error(17);
+        REPEAT
+          BODYPART(Followers + [CaseToken], LexicalStack^.RoutineEntry.Entry);
+          BlockDone := (Token = LexicalStack^.EndingToken) OR InUnit AND (Token
+              = EndToken);
+          IF NOT BlockDone THEN
+          BEGIN
+            IF LexicalStack^.EndingToken = SemicolonToken THEN
+              Error(14)
+            ELSE
+              Error(6);
+            SkipTokens(Followers + [LexicalStack^.EndingToken]);
+            BlockDone := (Token = LexicalStack^.EndingToken) OR InUnit AND
+                (Token = EndToken)
+          END
+        UNTIL BlockDone OR (Token IN BlockStarters);
+        IF NOT BlockDone THEN
+        BEGIN
+          IF LexicalStack^.EndingToken = SemicolonToken THEN
+            Error(14)
+          ELSE
+            Error(6);
+          DECLARAT(Followers)
+        END
+        ELSE
+        BEGIN
+          IF Token = SemicolonToken THEN
+            NextToken;
+          IF NOT (Token IN [BeginToken, KeywordProcedureToken..ProgramToken])
+              AND (LexicalStack^.EndingToken = SemicolonToken) THEN
+            IF NOT (InUnit AND (Token = EndToken)) THEN
+            BEGIN
+              Error(6);
+              SkipTokens(Followers);
+              DECLARAT(Followers)
+            END
+            ELSE
+              GOTO 1
+          ELSE
+          BEGIN
+            1:
+            WITH LexicalStack^ DO
+            BEGIN
+              IF RoutineEntry.Entry <> NIL THEN
+                RoutineEntry.Entry^.IsOpen := FALSE;
+              IF IsSegment THEN
+              BEGIN
+                IF SegmentHasCode THEN
+                  FinishSegment;
+                IF NeedsLinker AND (Level = 1) THEN
+                BEGIN
+                  SegmentDictionary[SlotOfSegment[CurrentSegment]].Kind :=
+                      HostSegment;
+                  WRITELIN
+                END;
+                NextRoutine := SavedNextRoutine;
+                CurrentSegment := SavedSegment
+              END;
+              Level := SavedLevel;
+              DisplayTop := SavedTop;
+              DataCounter := SavedDataCounter;
+              CurrentRoutine := SavedRoutine
+            END;
+            IF LexicalStack^.RoutineEntry.Entry <> ProgramIdentifier.Entry THEN
+              RELEASE(LexicalStack^.ReleaseMark);
+            LexicalStack := LexicalStack^.OuterLevel;
+            NewBlock := Token IN [KeywordProcedureToken..ProgramToken]
+          END
+        END
+      END
+      ELSE
+      BEGIN
+        DECLARAT(Followers);
+        IF Level = 0 THEN
+          IF Token = UnitToken THEN
+          BEGIN
+            UNITPART(Followers + [EndToken,
+                UnitToken..UnitImplementationToken]);
+            IF Token IN [KeywordProcedureToken..ProgramToken] THEN
+              DECLARAT(Followers)
+          END
+      END
+    UNTIL LexicalStack = NIL;
+    FinishSegment
+  END;

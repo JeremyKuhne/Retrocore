@@ -3,9 +3,13 @@
 // See LICENSE file in the project root for full license information
 
 using Retrocore.Machines.Acorn;
+using Retrocore.Machines.Atari;
+using Retrocore.Machines.Commodore;
 using Retrocore.Machines.Devices;
 using Retrocore.Media;
 using Retrocore.Media.Acorn;
+using Retrocore.Media.Altair;
+using Retrocore.Media.Atari;
 using Retrocore.Media.Commodore;
 using Retrocore.Media.Floppy;
 using Retrocore.Media.Trs80;
@@ -172,8 +176,10 @@ internal static partial class MediaActions
             case "eject":
             case "insert" when device.Media is not null:
 
-            // The BBC's RECORD puts a new tape in, so the one there leaves; the PET's records onto the tape in place.
-            case "record" when device is BbcCassette && device.Media is not null:
+            // The BBC's and the Atari's RECORD to a file put a new tape in, so the one there leaves; the PET's, and
+            // theirs with no file, record onto the tape in place, when it is not write-protected.
+            case "record" when device is BbcCassette && device.Media is not null && args.String("path") is not null:
+            case "record" when device is Atari410 && device.Media is not null && args.String("path") is not null:
                 string what = action switch
                 {
                     "eject" => "eject it",
@@ -379,8 +385,9 @@ internal static partial class MediaActions
     }
 
     // The codec that writes a drive's medium as an extension says, among the formats the drive saves: a Disk II disk
-    // as WOZ or sectors, a TRS-80 or Color Computer floppy as JV1, JV3, JVC or DMK, a Commodore tape as TAP or WAV, a
-    // block device as bare blocks or 2MG, a Commodore disk as G64, D64 or D67.
+    // as WOZ or sectors, a TRS-80, Color Computer or Kaypro floppy as JV1, JV3, JVC, DMK, IMD or a raw Kaypro image, a
+    // Commodore tape as TAP or WAV, a block device as bare blocks or 2MG, a Commodore disk as G64, D64 or D67, an Atari
+    // disk as ATR or XFD and its tape as CAS.
     private static IImageCodec? CodecFor(IDevice device, IMedium medium, string extension)
     {
         bool saves = device.Info.SaveFormats.Contains(extension.TrimStart('.'), StringComparer.OrdinalIgnoreCase);
@@ -392,8 +399,13 @@ internal static partial class MediaActions
             FloppyDisk when extension.TrimStart('.').ToUpperInvariant() is "SSD" or "DSD" =>
                 new AcornDiskCodec(extension.TrimStart('.').ToUpperInvariant()),
             FloppyDisk => FloppyImageCodec.For(extension, device.Info.SaveFormats),
+            CommodoreTape when device is CommodoreDatasette deck =>
+                new CommodoreTapeCodec(extension.TrimStart('.').ToUpperInvariant(), deck.TapMachine, deck.TapVideo),
             CommodoreTape => new CommodoreTapeCodec(extension.TrimStart('.').ToUpperInvariant()),
             CommodoreDisk => new CommodoreDiskCodec(extension.TrimStart('.').ToUpperInvariant()),
+            AltairDisk => new AltairDiskCodec(),
+            AtariDisk => AtariDiskCodec.For(extension),
+            AtariTape => new AtariTapeCodec(),
             _ => BlockImageCodec.For(extension),
         };
     }

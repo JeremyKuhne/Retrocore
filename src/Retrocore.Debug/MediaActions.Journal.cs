@@ -5,10 +5,13 @@
 using Retrocore.Machines.Devices;
 using Retrocore.Media;
 using Retrocore.Media.Acorn;
+using Retrocore.Media.Altair;
+using Retrocore.Media.Atari;
 using Retrocore.Media.Commodore;
 using Retrocore.Media.Floppy;
 using Retrocore.Media.Trs80;
 using System.Globalization;
+using System.IO.Compression;
 using System.Runtime.CompilerServices;
 using System.Text.Json.Nodes;
 
@@ -36,15 +39,29 @@ internal static partial class MediaActions
     /// <param name="whole">
     ///  Whether to take every changed disk's snapshot, as the last checkpoint does, whatever the journal holds already.
     /// </param>
+    /// <param name="idle">
+    ///  Whether a disk whose drive is writing waits for it to stop: its snapshot is not taken now, and the journal keeps
+    ///  the version it holds already. Otherwise such a disk is taken as it is, marked as caught mid-write.
+    /// </param>
     /// <returns>
-    ///  Each changed disk that came from an image, with its snapshot when the journal lacks this version.
+    ///  Each changed disk that came from an image, with its snapshot when the journal lacks this version and the disk
+    ///  does not wait for its drive.
     /// </returns>
     /// <remarks>
     ///  <para>
     ///   A disk the launch built, with no image, is not kept: the next launch builds it again.
     ///  </para>
+    ///  <para>
+    ///   A drive is writing while its controller is part way through a write: the Disk II in its write mode, a floppy
+    ///   controller in a write command, a recorder recording, a block device just after it wrote a block. A disk the
+    ///   machine ejected is never being written.
+    ///  </para>
     /// </remarks>
-    internal static List<JournalDisk> Journal(IReadOnlyList<IDevice> devices, RecoveryJournal journal, bool whole = false)
+    internal static List<JournalDisk> Journal(
+        IReadOnlyList<IDevice> devices,
+        RecoveryJournal journal,
+        bool whole = false,
+        bool idle = false)
     {
         List<JournalDisk> disks = [];
         foreach (IDevice device in devices)
@@ -55,18 +72,18 @@ internal static partial class MediaActions
                 && device.Media is { } media
                 && device.Info.Operations.HasFlag(MediaOperations.Insert))
             {
-                Add(device, disk, media.Label, media.Format, ejected: null);
+                Add(device, disk, media.Label, media.Format, ejected: null, device.Activity == DeviceActivity.Writing);
             }
 
             foreach (KeptDisk kept in Ejected(device).Where(kept => kept.Medium.IsDirty))
             {
-                Add(device, kept.Medium, kept.Label, kept.Format, kept);
+                Add(device, kept.Medium, kept.Label, kept.Format, kept, writing: false);
             }
         }
 
         return disks;
 
-        void Add(IDevice device, IMedium medium, string label, string format, KeptDisk? ejected)
+        void Add(IDevice device, IMedium medium, string label, string format, KeptDisk? ejected, bool writing)
         {
             if (Source(medium) is not { } source) { return; }
             JsonObject entry = new()
@@ -93,7 +110,59 @@ internal static partial class MediaActions
             }
 
             long version = medium.Version;
-            disks.Add(new(source.Id, medium.GetType().Name, version, !whole && journal.Holds(source.Id, version) ? null : medium.Snapshot(), entry));
+            if (!whole && journal.Holds(source.Id, version))
+            {
+                disks.Add(new(source.Id, medium.GetType().Name, version, Snapshot: null, entry));
+            }
+            else if (writing && idle)
+            {
+                disks.Add(new(source.Id, medium.GetType().Name, version, Snapshot: null, entry, Waiting: true));
+            }
+            else
+            {
+                disks.Add(new(source.Id, medium.GetType().Name, version, medium.Snapshot(), entry, MidWrite: writing));
+            }
+        }
+    }
+
+    /// <summary>
+    ///  Says in the <c>media</c> of each changed disk a checkpoint keeps how the recovery journal keeps it: <c>recovery</c>, with
+    ///  <c>lastCheckpoint</c>, when the journal last kept it (null when it holds none of it yet), <c>midWrite</c> when
+    ///  that snapshot was caught while its drive was writing, and <c>behind</c>, with the <c>problem</c> when there is
+    ///  one, when the journal does not hold its changes and checkpoints are failing or late.
+    /// </summary>
+    /// <param name="body">The <c>retro/devices</c> body, whose devices' media it adds to.</param>
+    /// <param name="devices">The machine's devices, as the body describes them.</param>
+    /// <param name="journal">The machine's journal.</param>
+    /// <param name="interval">How often checkpoints are taken; one twice as late as that is behind.</param>
+    internal static void Recovery(JsonObject body, IReadOnlyList<IDevice> devices, RecoveryJournal journal, TimeSpan interval)
+    {
+        if (body["devices"] is not JsonArray written) { return; }
+        bool late = DateTime.UtcNow - journal.LastCommitted > interval * 2;
+        foreach (JsonObject row in written.OfType<JsonObject>())
+        {
+            // Only the disks a checkpoint keeps: not one only the launch can put in its drive, as slot 7's.
+            IDevice? device = devices.FirstOrDefault(candidate => candidate.Id == row.String("id"));
+            IMedium? disk = (device as IMediumSlot)?.Medium;
+            if (row["media"] is not JsonObject media
+                || disk is not { IsDirty: true }
+                || device?.Info.Operations.HasFlag(MediaOperations.Insert) != true
+                || Source(disk) is not { } source)
+            {
+                continue;
+            }
+
+            JournalKept? kept = journal.KeptOf(source.Id);
+            bool behind = kept?.Version != disk.Version && (journal.Failure is not null || late);
+            JsonObject recovery = new()
+            {
+                ["lastCheckpoint"] = kept?.When.ToString("O", CultureInfo.InvariantCulture),
+                ["behind"] = behind,
+            };
+
+            if (kept is { MidWrite: true }) { recovery["midWrite"] = true; }
+            if (behind && journal.Failure is { } failure) { recovery["problem"] = failure; }
+            media["recovery"] = recovery;
         }
     }
 
@@ -194,6 +263,9 @@ internal static partial class MediaActions
             (nameof(AcornTape), AcornTape.SnapshotKind) => UefFormat.Read(image),
             (nameof(CommodoreDisk), CommodoreDisk.SnapshotKind) => G64Format.Read(image),
             (nameof(CommodoreTape), CommodoreTape.SnapshotKind) => CommodoreTape.FromSnapshot(image),
+            (nameof(AltairDisk), AltairDisk.SnapshotKind) => AltairDisk.Load(image),
+            (nameof(AtariDisk), AtariDisk.SnapshotKind) => AtariDisk.Load(image),
+            (nameof(AtariTape), AtariTape.SnapshotKind) => AtariTape.Load(image),
             _ => throw new InvalidDataException($"A {type} kept as {kind} cannot be read back."),
         };
 
@@ -223,11 +295,21 @@ internal static partial class MediaActions
             ["kind"] = "floppy",
             ["format"] = floppy.Format,
             ["jvcHeader"] = floppy.JvcHeader is { } header ? Convert.ToBase64String(header) : null,
+            ["layout"] = floppy.Layout is { } layout ? Convert.ToBase64String(Compress(layout)) : null,
         },
         AcornTapeCodec => new() { ["kind"] = "acornTape" },
         AcornDiskCodec acorn => new() { ["kind"] = "acornDisk", ["format"] = acorn.Format },
         CommodoreDiskCodec disk => new() { ["kind"] = "commodoreDisk", ["format"] = disk.Format },
-        CommodoreTapeCodec tape => new() { ["kind"] = "commodoreTape", ["format"] = tape.Format },
+        CommodoreTapeCodec tape => new()
+        {
+            ["kind"] = "commodoreTape",
+            ["format"] = tape.Format,
+            ["machine"] = tape.Machine,
+            ["video"] = tape.Video,
+        },
+        AltairDiskCodec => new() { ["kind"] = "altairDisk" },
+        AtariDiskCodec atari => new() { ["kind"] = "atariDisk", ["format"] = atari.Format },
+        AtariTapeCodec => new() { ["kind"] = "atariTape" },
         _ => null,
     };
 
@@ -240,12 +322,31 @@ internal static partial class MediaActions
             "woz" => new WozCodec(codec.Int("version") ?? 2),
             "block" => BlockImageCodec.For(codec.Bool("twoImg") == true ? "2MG" : format),
             "floppy" when codec.String("jvcHeader") is { } header => FloppyImageCodec.ForImage("JVC", Convert.FromBase64String(header)),
+            "floppy" when codec.String("layout") is { } layout => FloppyImageCodec.ForLayout(format, Decompress(Convert.FromBase64String(layout))),
             "floppy" => FloppyImageCodec.For(format, [format]),
             "acornTape" => new AcornTapeCodec(),
             "acornDisk" => new AcornDiskCodec(format),
             "commodoreDisk" => new CommodoreDiskCodec(format),
-            "commodoreTape" => new CommodoreTapeCodec(format),
+            "commodoreTape" => new CommodoreTapeCodec(format, (byte)(codec.Int("machine") ?? TapFormat.PetMachine), (byte)(codec.Int("video") ?? TapFormat.Pal)),
+            "altairDisk" => new AltairDiskCodec(),
+            "atariDisk" => AtariDiskCodec.For(format),
+            "atariTape" => new AtariTapeCodec(),
             _ => null,
         };
+    }
+
+    // A DMK or IMD layout, which is mostly zeros and gaps, kept compressed in the journal.
+    private static byte[] Compress(byte[] bytes)
+    {
+        using MemoryStream output = new();
+        using (GZipStream zip = new(output, CompressionLevel.Optimal, leaveOpen: true)) { zip.Write(bytes); }
+        return output.ToArray();
+    }
+
+    private static byte[] Decompress(byte[] bytes)
+    {
+        using MemoryStream output = new();
+        using (GZipStream zip = new(new MemoryStream(bytes), CompressionMode.Decompress)) { zip.CopyTo(output); }
+        return output.ToArray();
     }
 }

@@ -29,7 +29,7 @@ Inserting media belongs to the concrete devices, since the image formats are the
 | Machine | Device | Id | Notes |
 | --- | --- | --- | --- |
 | Model I | Cassette | `cassette` | Plays and records CAS images. A playing tape shows as write-protected, and a recording as changed once it holds a byte. |
-| Model I | Drive 0-3 | `disk0`-`disk3` | Present with the Expansion Interface's disk controller. JV1, JV3, DMK and IMD images; write protection can be changed, and a changed disk saves to its image or as `.jv3`, `.dmk`, `.dsk` or `.jv1` (the Model III, 4 and II's drives too, the Model II's as `.dmk` or `.jv3`, and the Color Computer's as `.dsk`, `.jvc` or `.dmk`). Drive 3 is single-sided, since its select line is the other drives' side select. The activity follows the FD1771's command: stepping and verifying seek, write sector and write track write, and the others read. |
+| Model I | Drive 0-3 | `disk0`-`disk3` | Present with the Expansion Interface's disk controller. JV1, JV3, DMK and IMD images; write protection can be changed, and a changed disk saves to its image or as `.jv3`, `.dmk`, `.imd`, `.dsk` or `.jv1` (the Model III, 4 and II's drives too, the Model II's as `.imd`, `.dmk` or `.jv3`, and the Color Computer's as `.dsk`, `.jvc` or `.dmk`). Drive 3 is single-sided, since its select line is the other drives' side select. The activity follows the FD1771's command: stepping and verifying seek, write sector and write track write, and the others read. |
 | Apple II | Drive 1-2 | `disk1`, `disk2` (slot 6); `slotNdisk1`, `slotNdisk2` (other slots) | Present for each installed Disk II card: slot 6 from a floppy `diskImage`, `dos` or `diskController: "diskII"`, and any free slot via **Add Card**. Its ROMs are the SDK's 16- or 13-sector builds ([DiskII.md](DiskII.md)), or dumps given for slot 6 as `diskBootRom` and `diskSequencerRom`. Takes WOZ images, and DOS-order (`.dsk`, `.do`), ProDOS-order (`.po`) or 13-sector (`.d13`) sector images converted to WOZ. A disk loads write-protected; taking the protection off lets the machine write it, in memory. The head reads while the motor turns and writes in the card's write mode; the track counts quarter tracks. |
 | Apple II | 3.5 drive 1-2 | `disk35d1`, `disk35d2` | Present while the 3.5 disk controller is in a slot (`disk35`, or **Add Card**). SuperDrives: 400K and 800K Apple disks and 720K and 1440K MFM disks, from `.po`, `.2mg`, `.hdv`, `.img` and 3.5-inch `.dsk` images; write protection can be changed, and a changed disk saves to its image (a 2MG keeps its header, comment and creator data, and its locked flag is the lock) or as `.po`, `.2mg`, `.hdv` or `.img`. The head is where the last block was, its track, side and sector by the disk's layout; a block shows as reading or writing for a thirtieth of a second. A program's CONTROL eject takes the disk out. |
 | Apple II, Apple III | ProFile (slot N) | `slotNprofile` | Apple's ProFile hard disk on a ProFile card (`proFiles`, or **Add Card**). Takes ProDOS-order images (`.po`, `.hdv`, or a `.2mg` of them) of up to 65535 blocks, which the machine can write unless locked; inserting, ejecting, locking and saving (to its image, or as `.po`, `.hdv` or `.2mg`) are allowed. A ProFile has no write-protect tab, so a write to a locked image fails as a failed write does: an I/O error to ProDOS and SOS, which cannot be told why. A block it reads or writes shows as reading or writing for a thirtieth of a second. |
@@ -55,6 +55,16 @@ Inserting media belongs to the concrete devices, since the image formats are the
 A tape drive has `transport` (`motor`, `mode`, `position`, `length`) instead of `head`, and block storage has
 `blocks` (`count`, `last`).
 
+Where a drive can tell, its `media` also has `contents`, what the media holds, and `warning`, why the machine
+cannot read it. The TRS-80 cassettes give both, for a tape recorded for the other Level's ROM; the Drives view marks
+the row ⚠ and shows them, and the session says the warning in the debug console as such a tape goes in, once while that tape stays in:
+
+```json
+"media": { "label": "C:\\tapes\\eliza.cas", "format": "CAS", "writeProtected": true, "changed": false,
+  "contents": "Level I tape (250 baud)",
+  "warning": "This tape was recorded by Level I BASIC (250 baud); Level II can't read it. Switch the ROM to Level I." }
+```
+
 The body also has `hardware`, the machine's installed hardware in order: built-in parts, then each slot or
 option, empty ones included. Each row names the devices on it, by id:
 
@@ -68,14 +78,15 @@ option, empty ones included. Each row names the devices on it, by id:
 | --- | --- |
 | IIe | `model`, `memory`, `builtIn`, `gamePort` (the game controllers driving it), `auxiliary` (the extended 80-column card, always installed), `slot1` to `slot7` (4 the Mockingboard, 6 the Disk II and 7 block storage when the launch or Add Card installs them, and any of them the mouse card, a ProFile card, the 3.5 disk controller or the Z80 SoftCard) |
 | II, II Plus | `model`, `memory`, `builtIn`, `gamePort`, `d0Socket` (the II only: Programmer's Aid #1 or empty, as the launch's `programmersAid` says), `slot0` (the language card, a firmware card with the other BASIC, or empty, as the launch's `slot0` says), `slot1` to `slot7` (as the IIe's, and slot 3 takes a card too) |
-| Apple III | `model`, `memory`, `rom`, `disk` (the built-in controller with its four drives), `environment`, `slot1` to `slot4` (a ProFile card or empty) |
+| Apple III | `model`, `memory`, `rom`, `disk` (the built-in controller with its four drives), `environment`, `slot1` to `slot4` (a ProFile card, the SoftCard ///, or empty) |
 | Model I | `model`, `rom`, `memory`, `cassette`, `expansion`, `disk` (the controller and its doubler, with its drives), `lowercase` |
 
 An empty slot's `value` is `empty`, and its `description` says what installs something there. A row's `actions`
 say what `retro/hardware` can do to it: `addCard` on a free IIe slot (1, 2, 4 and 5, 6 without a Disk II, and 7
 without block storage) or II and II Plus slot (those, 3, and an empty 0) or Apple III slot (1 to 4), `removeCard` on a Disk II card, the
-Mockingboard, the mouse card, a ProFile card, the 3.5 disk controller, the Z80 SoftCard, or the language or firmware card in slot 0. A
-ProFile card goes in any of them; the Apple III takes no other card yet.
+Mockingboard, the mouse card, a ProFile card, the 3.5 disk controller, the Z80 SoftCard, the SoftCard ///, or the language or firmware card in slot 0. A
+ProFile card goes in any of them; the Apple III's slots also take the SoftCard ///, one at a time (`addSoftCard3`), and no
+other card yet.
 
 ```json
 { "id": "slot5", "action": "addDiskII", "sectors": 16 }
@@ -84,6 +95,7 @@ ProFile card goes in any of them; the Apple III takes no other card yet.
 { "id": "slot5", "action": "addDisk35" }
 { "id": "slot4", "action": "addProFile" }
 { "id": "slot5", "action": "addSoftCard" }
+{ "id": "slot4", "action": "addSoftCard3" }
 { "id": "slot0", "action": "addLanguageCard" }
 { "id": "slot0", "action": "addFirmwareCard" }
 { "id": "slot5", "action": "removeCard" }
@@ -92,7 +104,8 @@ ProFile card goes in any of them; the Apple III takes no other card yet.
 
 A row may have `settings`, switches on its hardware, each with an `id`, a `label`, its `value` (on or off) and a
 `description`. `setSetting` changes one. The Z80 SoftCard has two: `translation`, its address translation (DIP switch
-S1-1 off, on by default), and `refresh`, the waiting 6502's read in each Z80 opcode fetch (on by default).
+S1-1 off, on by default), and `refresh`, the waiting 6502's read in each Z80 opcode fetch (on by default). The
+SoftCard /// has none.
 
 `retro/hardware` changes the machine at once, running or stopped, and returns the new `retro/devices` body. A Disk
 II added to a slot answers at $C080 plus 16 times the slot and at its ROM page, $Cn00, with firmware built from the
@@ -104,7 +117,7 @@ for the session; the launch configuration is unchanged. The session sends the sa
 state changes: on each stop, and with the running frames while the machine runs.
 
 The body's `configuration` is what a later launch can restore: each slot's card (`languageCard` or `firmwareCard` in
-slot 0 of a II or II Plus, `mockingboard`, `softCard`, `mouse`, `proFile`, `disk35`, `diskII16` or `diskII13`; `diskII` for one with the launch's ROM dumps, `blockStorage`, or
+slot 0 of a II or II Plus, `mockingboard`, `softCard`, `softCard3` (the Apple III's), `mouse`, `proFile`, `disk35`, `diskII16` or `diskII13`; `diskII` for one with the launch's ROM dumps, `blockStorage`, or
 `empty`), and the media in each drive
 that takes media, null when it is empty. Media the host cannot insert again, such as a disk a `dos` launch built or a
 tape being recorded, is left out. Rows with switches add `settings`, each row's by its id, such as
@@ -146,13 +159,18 @@ sector image cannot hold a track that no longer reads as 16 sectors, data on a q
 another track's sector, or a volume other than 254. The Apple II's block drives (a 3.5 drive, a ProFile and slot 7)
 save the same way: their blocks to bare `.po`, `.hdv` or `.img` images, which keep no lock, or to a 2MG, which keeps
 the header, comment and creator data of the 2MG the disk was read from (a save to bare blocks says it drops them) and
-writes the lock as its locked flag. The TRS-80's and the Color Computer's floppies save to JV1, JV3, JVC or DMK:
-DMK holds everything, every ID, mark, density, CRC error and sector order; JV1 holds single-density tracks of
-sectors 0-9 on one side, with `$FA` on track 17 and `$FB` elsewhere; JV3 cannot hold a sector whose ID names another
-track or side, or a double-density mark other than `$FB` and `$F8`; JVC keeps the header it was read with, and holds
-tracks of that geometry in double density with `$FB`. On a TRS-80 `.dsk` saves as JV1, and on the Color Computer as
-JVC. A disk read from IMD saves as another format, as IMD has no writer yet. The disk then comes from that image. A
-drive's `saveFormats` lists what it saves as. Other drives don't save yet.
+writes the lock as its locked flag. The TRS-80's and the Color Computer's floppies save to JV1, JV3, JVC, DMK or IMD:
+DMK holds everything, every ID, mark, density, CRC error and sector order, and a disk read from DMK saves back in its
+image's layout: a track whose sectors are still the image's keeps its gaps, ID offsets and fields it could not read,
+each sector written where it was, and any other track, or one that no longer reads back as the disk has it once written
+in place or grown to a longer track length, is laid out afresh (all of them, for a single-density-only image given a
+double-density sector); IMD holds a track of one density and sector size, writes `$F9` and `$FA` as deleted, and a disk
+read from IMD keeps its comment, each track's mode and maps, which sectors were compressed and the sectors with no data,
+so an unchanged disk saves byte for byte; JV1 holds single-density tracks of sectors 0-9 on one side, with `$FA` on
+track 17 and `$FB` elsewhere; JV3 cannot hold a sector whose ID names another track or side, or a double-density mark
+other than `$FB` and `$F8`; JVC keeps the header it was read with, and holds tracks of that geometry in double density
+with `$FB`. On a TRS-80 `.dsk` saves as JV1, and on the Color Computer as JVC. A disk saved as another format then comes
+from that image. A drive's `saveFormats` lists what it saves as. Other drives don't save yet.
 
 A save is safe ([the media persistence plan](backlog/MediaPersistence.md#saving)): it writes a temporary file beside
 the image and replaces the image with it, follows a link to its target, retries a file another program holds for a
@@ -209,6 +227,17 @@ A second session that launches under a `recoveryId` a running one has keeps no j
 launch configuration a `recoveryId` of its own, and `retro/devices` says `recovery: true` for a session that keeps
 one. A disk a launch built, such as a `dos` launch's, is not kept: the next launch builds it again. A disk put back
 from the journal says `kept: true` in its `media` while it is still changed.
+
+A checkpoint waits for a drive that is writing (the Disk II in its write mode, a floppy controller in a write command,
+a recorder recording, a block device just after it wrote a block), letting the machine run, for up to five seconds;
+then, or at once when the machine is stopped, it takes the disk as it is and marks it `midWrite` in the journal. The
+disks that can be kept meanwhile are committed without waiting. A disk the machine ejects, as a program ejects a 3.5
+disk, is kept at once rather than at the next checkpoint. While a session keeps a journal, the `media` of each changed
+disk a checkpoint keeps (not slot 7's, which only a launch can put in its drive) has `recovery`: `{ lastCheckpoint, behind, midWrite, problem }`, when the journal last kept it (null before it
+has), whether that snapshot was caught mid-write, and `behind` when the journal does not hold its changes and its
+checkpoints are failing (with the `problem`, such as a full disk) or more than two intervals late. The Drives view
+marks such a disk with a warning and says in its tooltip what is kept. A journal that cannot be written leaves its last
+commit standing, and the Debug Console says when it cannot be written and when it can again.
 
 A session that did not stop cleanly, as when its host was killed, leaves its journal marked so, and its process's
 lock on it gone. The language server's `retrocore/recovery/list` answers `{ journals: [{ id, name, started, kept,

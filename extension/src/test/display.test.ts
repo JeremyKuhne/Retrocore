@@ -95,7 +95,7 @@ function loadPanel(state?: unknown, audioContext?: unknown): {
     document: PanelDocument; frames: (() => void)[];
 } {
     const posted: unknown[] = [];
-    const ids = ["screen", "display", "text", "status", "disk", "details", "overlay", "ctrl", "reset", "trs80-reset", "model3-reset", "model2-reset", "kaypro-reset", "apple1-reset", "apple1-clear", "coco-reset", "pet-reset", "altair-reset", "altair-clear", "bbc-reset", "hint", "sound", "volume", "bezel", "scale", "speed", "fastDisk", "off", "offName", "restart", "startMachine", "close", "basic", "screenType", "screenChoice", "mouseState"];
+    const ids = ["screen", "display", "text", "status", "disk", "details", "overlay", "ctrl", "reset", "trs80-reset", "model3-reset", "model2-reset", "model100-reset", "kaypro-reset", "apple1-reset", "apple1-clear", "coco-reset", "pet-reset", "altair-reset", "altair-clear", "bbc-reset", "hint", "sound", "volume", "bezel", "scale", "speed", "fastDisk", "off", "offName", "restart", "startMachine", "close", "basic", "screenType", "screenChoice", "mouseState"];
     const byId = new Map(ids.map(id => [id, new Element()]));
     byId.get("ctrl")?.setAttribute("aria-pressed", "false");
     const buttons = [new Element({ button: "0" }), new Element({ button: "1" })];
@@ -351,7 +351,7 @@ test("the PET's key bar has Stop and Clr, the shifted HOME", () => {
     assert.match(bar, /data-code="3"[^>]*>Stop</);
     assert.match(bar, /data-code="147"[^>]*>Clr</);
     assert.match(bar, /id="pet-reset"[^>]*>Reset</);
-    assert.match(html, /data-machine="apple2 apple3 coco pet bbc"/, "the PET, and the BBC Micro, have the Sound button");
+    assert.match(html, /data-machine="apple2 apple3 coco pet bbc atari800"/, "the PET, and the BBC Micro, have the Sound button");
 });
 
 test("the Model I's Reset button, Ctrl+Break and Ctrl+F12 press its reset", () => {
@@ -763,8 +763,37 @@ test("the BBC Micro types £ and SHIFT LOCK, and Shift with BREAK is SHIFT-BREAK
     assert.deepEqual(posted.splice(0), [{ command: "reset", shift: true }, { command: "reset", shift: true }, { command: "reset" }]);
 });
 
-test("the panel's keys reach the machine up to code 255, for the BBC Micro's COPY, cursor and function keys", () => {
-    for (const code of [0, 13, 127, 0x8B, 0x8F, 0x80, 0x89, 255]) {
+test("the Atari's keys are ATASCII, its BREAK and console keys are above 127, and Ctrl+F12 turns it off and on", () => {
+    const { posted, screen, byId, window, sharpSize } = loadPanel();
+    window.dispatch("message", { data: {
+        machine: "atari800", model: "Atari 800", rows: [""], cycles: 1, running: false, sound: "speaker",
+        media: { disks: [{ drive: 0, mounted: true, cylinder: 3, selected: true }] },
+        video: { width: 2, height: 1, pixelFormat: "rgba", pixels: "AAAAAAAAAAA=" }
+    } });
+    posted.splice(0);
+    for (const key of ["Enter", "Escape", "Backspace", "Tab", "Home", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Pause", "a"]) {
+        screen.dispatch("keydown", { key, code: "", ctrlKey: false, altKey: false });
+    }
+    screen.dispatch("keydown", { key: "F12", code: "F12", ctrlKey: true, altKey: false });
+    assert.deepEqual(posted.splice(0), [
+        { code: 13 }, { code: 27 }, { code: 126 }, { code: 127 }, { code: 125 }, { code: 28 }, { code: 29 }, { code: 30 },
+        { code: 31 }, { code: 243 }, { code: 97 }, { command: "reset" }
+    ]);
+    assert.match((byId.get("hint") as Element).textContent, /START, SELECT, OPTION and SYSTEM RESET/);
+    assert.equal((byId.get("disk") as Element).textContent, "D1: cylinder 3 · selected", "the Atari's drives are D1: to D4:");
+    assert.deepEqual(JSON.parse(JSON.stringify(sharpSize("atari800", 1600, 1000, 1))), { width: 1504, height: 960, scale: 2 },
+        "376 dots by 240 lines, each two by two at 1x");
+
+    const html = webviewHtml("NONCE");
+    const bar = html.slice(html.indexOf('<span class="keys" data-machine="atari800">'));
+    for (const [code, name] of [[240, "Start"], [241, "Select"], [242, "Option"], [243, "Break"], [244, "System Reset"]] as const) {
+        assert.match(bar.slice(0, bar.indexOf("</span>")), new RegExp(`data-code="${code}"[^>]*>${name}<`), name);
+    }
+    assert.match(html, /data-machine="apple2 apple3 coco pet bbc atari800"/, "the Atari has the Sound button");
+});
+
+test("the panel's keys reach the machine up to code 255, for the BBC Micro's COPY, cursor and function keys and the Atari's console keys", () => {
+    for (const code of [0, 13, 127, 0x8B, 0x8F, 0x80, 0x89, 240, 244, 255]) {
         assert.equal(panelKeyCode({ code }), code);
     }
 

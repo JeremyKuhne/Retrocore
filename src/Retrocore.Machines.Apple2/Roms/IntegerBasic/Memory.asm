@@ -423,13 +423,18 @@ Length:
 
 .endscope
 
+; Messages: the bell after an error message.
+.scope Messages continued
+
 ;; Prints the message at offset Y, then sounds the bell.
 ;; In: Y = the message's offset from <Messages::GreaterThan32767>
 ;; Also: PRTERR (IBSM)
-.proc PrintMessageThenBeep
+.proc PrintThenBeep
     jsr PrintMessage
     jmp Beep
 .endproc
+
+.endscope
 
 ; POP, TRACE and NOTRACE.
 .scope Statements continued

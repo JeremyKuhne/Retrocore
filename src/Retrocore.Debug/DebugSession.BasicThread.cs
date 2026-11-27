@@ -91,7 +91,7 @@ internal sealed partial class DebugSession
     private BasicRom? ActiveBasic => Target.BasicRom is { } rom
         && (Target.BasicRomInMemory || _debug.Position(Target, rom.Gone) is not null) ? rom : null;
 
-    private bool BasicDirect => Target.Basic is not { } dialect || dialect.InDirectMode(new TargetBasicMemory(Target));
+    private bool BasicDirect => Target.BasicInDirectMode;
 
     private int CurrentLine => Target.BasicCurrentLine;
 
@@ -417,11 +417,61 @@ internal sealed partial class DebugSession
     {
         if (_basicStatement is not { } statement || Target.Basic is not { } dialect) { return null; }
         IBasicMemory text = TextMemory;
+        if (dialect is Level1Dialect) { return Level1Dialect.StatementWord(text, statement.Address); }
+        if (dialect is AtariBasicDialect)
+        {
+            // An Atari BASIC statement is its offset byte, then the statement's token, which numbers its word up to the
+            // implied LET's and ERROR-'s tokens, which have none.
+            int code = text.Read(statement.Address + 1);
+            return code < AtariBasicSyntax.ImpliedLet ? dialect.Keywords[code] : null;
+        }
+
         int at = statement.Address;
         while (text.Read(at) == ' ' && at < statement.Address + 8) { at++; }
         ReadOnlySpan<byte> token = [text.Read(at), text.Read(at + 1)];
         return dialect.KeywordAt(token, 0, out _);
     }
+
+    // Whether an Atari BASIC statement calls USR: its tokens after its offset byte and token, passing over constants
+    // and strings, to the ":" or the line's end. REM and DATA keep text, and an ERROR- line its text as typed.
+    private static bool AtariCallsMachine(IBasicMemory text, int address)
+    {
+        if (text.Read(address + 1) is AtariBasicDialect.RemStatement or AtariBasicDialect.DataStatement or AtariBasicSyntax.ErrorToken)
+        {
+            return false;
+        }
+
+        for (int at = address + 2, count = 0; count < 256; count++)
+        {
+            byte value = text.Read(at);
+            if (value == AtariBasicDialect.NumberToken)
+            {
+                at += 1 + AtariNumbers.Size;
+            }
+            else if (value == AtariBasicDialect.StringToken)
+            {
+                at += 2 + text.Read(at + 1);
+            }
+            else if (value is AtariUsr)
+            {
+                return true;
+            }
+            else if (value is AtariStatementEnd or AtariBasicDialect.LineEnd)
+            {
+                return false;
+            }
+            else
+            {
+                at++;
+            }
+        }
+
+        return false;
+    }
+
+    // Atari BASIC's USR token, and the ":" that ends a statement.
+    private const byte AtariUsr = 0x3F;
+    private const byte AtariStatementEnd = 0x14;
 
     // Whether the statement that started last calls machine code: CALL, &, USR or SYSTEM, Business BASIC's PERFORM
     // and EXFN., or Color BASIC's EXEC.
@@ -437,6 +487,12 @@ internal sealed partial class DebugSession
             }
 
             return IntegerBasic.CallsMachine(tokens);
+        }
+
+        // Atari BASIC's machine code is USR's: its token, past the statement's offset and token.
+        if (dialect is AtariBasicDialect)
+        {
+            return AtariCallsMachine(TextMemory, statement.Address);
         }
 
         bool inString = false;

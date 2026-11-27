@@ -46,7 +46,7 @@ internal static class BasicFiles
         BasicDialect dialect = DialectOf(path, args.String("dialect"));
         byte[] bytes = File.ReadAllBytes(path);
         BasicProgram program = IsTape(path) ? BasicTape.Read(bytes, out _) : BasicProgram.FromImage(dialect, bytes);
-        return new JsonObject { ["text"] = program.ToText(), ["dialect"] = dialect.Name };
+        return new JsonObject { ["text"] = program.ToText(), ["dialect"] = program.Dialect.Name };
     }
 
     /// <summary>
@@ -86,8 +86,8 @@ internal static class BasicFiles
     }
 
     /// <summary>
-    ///  Gets the dialect of a tokenized file: the one given, Level II for a tape, AppleSoft or Integer BASIC for a
-    ///  CiderPress2 name with its $FC or $FA file type (such as <c>HELLO#fc0801</c>).
+    ///  Gets the dialect of a tokenized file: the one given, Level II for a tape, Model 100 BASIC for a <c>.ba</c> file,
+    ///  AppleSoft or Integer BASIC for a CiderPress2 name with its $FC or $FA file type (such as <c>HELLO#fc0801</c>).
     /// </summary>
     /// <param name="path">The file.</param>
     /// <param name="name">The dialect given, or null.</param>
@@ -97,11 +97,16 @@ internal static class BasicFiles
     {
         if (BasicDialect.FromName(name) is { } named) { return named; }
         if (IsTape(path)) { return BasicDialect.Level2; }
+        if (System.IO.Path.GetExtension(path).Equals(".ba", StringComparison.OrdinalIgnoreCase))
+        {
+            return BasicDialect.Model100;
+        }
+
         string file = System.IO.Path.GetFileName(path);
         if (file.Contains("#fa", StringComparison.OrdinalIgnoreCase)) { return BasicDialect.Integer; }
         return file.Contains("#fc", StringComparison.OrdinalIgnoreCase)
             ? BasicDialect.AppleSoft
-            : throw new ArgumentException($"Say which BASIC {file} is: applesoft, integer, apple1, level2, business, colorbasic, mbasic, petbasic or bbcbasic.");
+            : throw new ArgumentException($"Say which BASIC {file} is: applesoft, integer, apple1, level2, level1, business, colorbasic, mbasic, model100, petbasic, bbcbasic or atari.");
     }
 
     private static bool IsTape(string path) => path.EndsWith(".cas", StringComparison.OrdinalIgnoreCase);

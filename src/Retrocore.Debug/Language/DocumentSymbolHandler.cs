@@ -11,16 +11,19 @@ internal sealed class DocumentSymbolHandler
 {
     private readonly LanguageWorkspace _workspace;
     private readonly BasicDocuments _basic;
+    private readonly PascalDocuments? _pascal;
 
     /// <summary>
     ///  Creates the handler.
     /// </summary>
     /// <param name="workspace">The workspace.</param>
     /// <param name="basic">The open BASIC documents.</param>
-    public DocumentSymbolHandler(LanguageWorkspace workspace, BasicDocuments basic)
+    /// <param name="pascal">The open Pascal documents, or null for none.</param>
+    public DocumentSymbolHandler(LanguageWorkspace workspace, BasicDocuments basic, PascalDocuments? pascal = null)
     {
         _workspace = workspace;
         _basic = basic;
+        _pascal = pascal;
     }
 
     /// <summary>
@@ -39,6 +42,11 @@ internal sealed class DocumentSymbolHandler
         if (_basic.Get(request.TextDocument.Uri) is { } basic)
         {
             return BasicFeatures.Symbols(basic);
+        }
+
+        if (_pascal?.Get(request.TextDocument.Uri) is { } pascal)
+        {
+            return PascalFeatures.Symbols(pascal.Program, pascal.Path);
         }
 
         string path = LanguageHost.PathOf(request.TextDocument.Uri);

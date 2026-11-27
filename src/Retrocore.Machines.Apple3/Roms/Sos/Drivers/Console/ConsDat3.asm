@@ -108,9 +108,9 @@ DFLTVAL:
 KYBDBUFS = $1500                    ;; the type-ahead buffers: KABUF, then KBBUF
 KABUF = KYBDBUFS                    ;; the buffered keys' characters
 KBBUF = KYBDBUFS+BUFMAX             ;; the buffered keys' modifier bytes
-;; The keyboard layout table, which SOS.DRIVER supplies. Its last 64 bytes turn the keyboard's character into a key
-;; number, a multiple of 4; the entry at that number plus 1 for Shift and 2 for Control is the character typed. An
-;; entry with bit 7 set is one that Alpha Lock replaces with the shifted entry.
+;; The keyboard layout table, which SOS.DRIVER supplies. Its last 66 bytes, from $BE, turn the keyboard's character
+;; into a key number, a multiple of 4; the entry at that number plus 1 for Shift and 2 for Control is the character
+;; typed. An entry with bit 7 set is one that Alpha Lock replaces with the shifted entry.
 ;; See: <KIHXFORM>
 XFORMTBL = $1700
 KADATA:

@@ -40,7 +40,7 @@ public class PetTapeTests
     {
         PetMachine machine = PetMachineTests.Machine(model);
         PetMachineTests.RunToReady(machine);
-        PetDatasette deck = port == 1 ? machine.Bus.Cassette1 : machine.Bus.Cassette2;
+        CommodoreDatasette deck = port == 1 ? machine.Bus.Cassette1 : machine.Bus.Cassette2;
         CommodoreTape tape = Save(machine, deck);
 
         PetMachineTests.Type(machine, "NEW\r");
@@ -188,7 +188,7 @@ public class PetTapeTests
     public void DatasetteSavesItsTape()
     {
         PetMachine machine = PetMachineTests.Machine();
-        PetDatasette deck = machine.Bus.Cassette1;
+        CommodoreDatasette deck = machine.Bus.Cassette1;
         IMediumSlot slot = deck;
         deck.Media.Should().BeNull();
         deck.Info.SaveFormats.Should().Equal("tap", "wav");
@@ -289,13 +289,13 @@ public class PetTapeTests
     }
 
     // Types the program and saves it as PROG onto a blank tape in the deck.
-    private static CommodoreTape Save(PetMachine machine, PetDatasette deck)
+    private static CommodoreTape Save(PetMachine machine, CommodoreDatasette deck)
     {
         CommodoreTape tape = new();
         deck.Insert(tape, "blank", "TAP", changed: true);
         PetMachineTests.Type(machine, Program);
         deck.Record();
-        PetMachineTests.Type(machine, $"SAVE \"PROG\",{deck.Port}\r");
+        PetMachineTests.Type(machine, $"SAVE \"PROG\",{(deck == machine.Bus.Cassette1 ? 1 : 2)}\r");
         WaitForReady(machine);
         deck.Stop();
         return tape;

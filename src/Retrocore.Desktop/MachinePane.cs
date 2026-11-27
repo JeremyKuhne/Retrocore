@@ -765,12 +765,15 @@ internal sealed class MachinePane : ScrollViewer
         _ = Send(args => _session.Hardware(row.Id, args), new JsonObject { ["action"] = "removeCard" });
     }
 
-    // The files Insert offers: the drive's formats, and for a Datasette, a tape deck that saves, a .prg too, which
-    // goes in as the tape SAVE writes.
-    private static IReadOnlyList<string> InsertFormats(DeviceState device) =>
-        device.Kind == DeviceKind.TapeDrive && device.Can(MediaOperations.Save) && !device.Info.Formats.Contains("prg")
-            ? [.. device.Info.Formats, "prg"]
-            : device.Info.Formats;
+    // The files Insert offers: the drive's formats, and for a Datasette, a .prg too, which goes in as the tape SAVE
+    // writes.
+    private static IReadOnlyList<string> InsertFormats(DeviceState device)
+    {
+        // A Datasette is a tape deck that saves, and takes TAP images.
+        bool deck = device.Kind == DeviceKind.TapeDrive && device.Can(MediaOperations.Save);
+        bool datasette = deck && device.Info.Formats.Contains("tap") && !device.Info.Formats.Contains("prg");
+        return datasette ? [.. device.Info.Formats, "prg"] : device.Info.Formats;
+    }
 
     private async Task Insert(DeviceState device)
     {
@@ -787,12 +790,17 @@ internal sealed class MachinePane : ScrollViewer
         }
     }
 
+    // The files Record offers: those the deck saves its tapes as, or, on a deck that writes the recording itself, the
+    // ones it takes. An Atari's .xex goes in but is not written.
+    private static IReadOnlyList<string> RecordFormats(DeviceState device) =>
+        device.Info.SaveFormats.Count > 0 ? device.Info.SaveFormats : device.Info.Formats;
+
     private async Task Record(DeviceState device)
     {
         IStorageFile? file = await _window.StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
         {
             Title = $"Record from {device.Info.Name} to",
-            FileTypeChoices = Filters($"{device.Info.Name} images", device.Info.Formats),
+            FileTypeChoices = Filters($"{device.Info.Name} images", RecordFormats(device)),
         });
 
         if (file?.TryGetLocalPath() is { } path) { Act(device, "record", new JsonObject { ["path"] = path }); }

@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 // See LICENSE file in the project root for full license information
 
+using System.Runtime.InteropServices;
 using Retrocore.Machines.Apple2;
 
 namespace Retrocore.Debug;
@@ -210,16 +211,21 @@ internal sealed class DebugCallStack : IDebugCallStack
     {
         for (int i = _calls.Count - 1; i >= 0; i--)
         {
-            var call = _calls[i];
-            int offset = call.Interrupt ? 2 : 1;
-            ushort stored = (ushort)(_readStack(call.Page, (byte)(call.Stack + offset))
-                    | (_readStack(call.Page, (byte)(call.Stack + offset + 1)) << 8));
+            ref readonly var call = ref CollectionsMarshal.AsSpan(_calls)[i];
 
-            ushort expected = call.Interrupt ? call.Return : (ushort)(call.Return - 1);
-            if (call.Depth > _depth || _depth - call.Depth >= 256 || stored != expected)
+            // A call deeper than the stack has returned; reading the stack, which has no side effects, waits for one
+            // that may still be there.
+            bool returned = call.Depth > _depth || _depth - call.Depth >= 256;
+            if (!returned)
             {
-                _calls.RemoveAt(i);
+                int offset = call.Interrupt ? 2 : 1;
+                ushort stored = (ushort)(_readStack(call.Page, (byte)(call.Stack + offset))
+                        | (_readStack(call.Page, (byte)(call.Stack + offset + 1)) << 8));
+
+                returned = stored != (call.Interrupt ? call.Return : (ushort)(call.Return - 1));
             }
+
+            if (returned) { _calls.RemoveAt(i); }
         }
     }
 }

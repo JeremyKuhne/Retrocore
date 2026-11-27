@@ -23,12 +23,12 @@
 ;;
 ;; HOW A CALL CROSSES INTO C#
 ;;
-;; Each entry goes to <Call> with carry set for SmartPort and overflow set to boot. <Call> keeps the caller's status on
-;; the stack, finds the slot with an RTS it writes at $06 for a moment, as Apple's mouse firmware does, and writes the
-;; stack pointer to the card's command port at $C080 plus 16 times the slot. That write runs the call in C#, which reads
-;; the caller's status and return address from the stack, the command and parameter list after a SmartPort JSR, and
-;; moves the return address past them. <Call> reads back A, X and Y, gives the caller back its interrupt flag, and
-;; returns with carry set when A is not 0.
+;; Each entry goes to <CallCard> with carry set for SmartPort and overflow set to boot. <CallCard> keeps the caller's
+;; status on the stack, finds the slot with an RTS it writes at $06 for a moment, as Apple's mouse firmware does, and
+;; writes the stack pointer to the card's command port at $C080 plus 16 times the slot. That write runs the call in C#,
+;; which reads the caller's status and return address from the stack, the command and parameter list after a SmartPort
+;; JSR, and moves the return address past them. <CallCard> reads back A, X and Y, gives the caller back its interrupt
+;; flag, and returns with carry set when A is not 0.
 ;;
 ;; A boot reads block 0 of the first drive into $0800 and sets up ProDOS's page zero ($42-$47) as for that read; a
 ;; block that starts with $01 and a nonzero byte runs at $0801 with X = the slot times 16. Otherwise the boot goes on to
@@ -40,10 +40,12 @@
 
 .rom Retrocore.Machines.Apple2.Disk35Rom, $C500, $100
 .cpu Mos6502
-.export ProDosEntry, SmartPortEntry, DiagnosticsEntry, Signature
+.export Disk35Driver, SmartPortEntry, DiagnosticsEntry, Signature
 
-; The Monitor's and the IIe's names this ROM uses. The source generator assembles this file alone, so it defines
-; them here rather than including IIeEquates.asm and MonitorEntries.asm.
+.include "ProDosBlockDevice.asm"
+
+; The Monitor's and the IIe's names this ROM uses. The source generator assembles this file with no other file but
+; ProDosBlockDevice.asm, so it defines them here rather than including IIeEquates.asm and MonitorEntries.asm.
 
 ;; Inherit: <Monitor:SlotPointer>
 ;; Also: LOC0 (A2RM78, A2RM79, IIEROM82, IIETRM85)
@@ -60,9 +62,19 @@ LanguageCardRomOnly = $C082
 ;; Also: BASIC (A2RM78, A2RM79, IIEROM82, IIETRM85)
 BasicColdStart = $E000
 
+;; The Autostart and IIe Monitors' power-up, whose scan for a disk controller the boot goes back to when it fails.
+.scope Startup
+
+;; The power-up routine that holds the scan.
+.scope PowerUp
+
 ;; Inherit: <Monitor:Startup::PowerUp::NextSlot>
 ;; Also: SLOOP (A2RM79, IIEROM82, IIETRM85)
 NextSlot = $FABA
+
+.endscope
+
+.endscope
 
 ;; Inherit: <Monitor:SetText>
 ;; Also: SETTXT (A2RM78, A2RM79, IIEROM82, IIETRM85)
@@ -82,14 +94,14 @@ SetScreen = $FE93
 
 ; Memory.
 
-;; Where <Call> puts an RTS for a moment, to find its own page.
+;; Where <CallCard> puts an RTS for a moment, to find its own page.
 ZeroPageRts = $06
 
 ;; The 6502's stack.
 StackPage = $0100
 
 ;; Where a ProDOS boot block starts running, one byte into the block read at $0800.
-BootBlock = $0801
+BootEntry = $0801
 
 ; The card's ports, at $C080 + $n0. Reading any of them changes nothing but <MessagePort>.
 
@@ -107,7 +119,7 @@ MessagePort = $C083
 
 ; Values.
 
-;; The RTS opcode, which <Call> writes at <ZeroPageRts>.
+;; The RTS opcode, which <CallCard> writes at <ZeroPageRts>.
 OPCODE_RTS = $60
 
 ;; Boots the first drive. The four loads are the SmartPort identification at $Cn01-$Cn07; overflow, set by the
@@ -119,7 +131,7 @@ OPCODE_RTS = $60
     lda #$00
     sec
     adc #$7F
-    bvs Call                        ; always
+    bvs CallCard                    ; always
 .endproc
 
 ;; Apple's card's diagnostics entry, $Cn0D: this card has none, so it returns.
@@ -131,12 +143,13 @@ OPCODE_RTS = $60
     .res $C51C - *
 
 ;; The ProDOS block-device entry, $Cn1C.
-;; In: $42 = the command (0 status, 1 read, 2 write, 3 format), $43 = the unit, $44/$45 = the buffer, $46/$47 = the
-;;   block
+;; In: ProDos::Command = the command (<ProDos::COMMAND_STATUS> to <ProDos::COMMAND_FORMAT>),
+;;   ProDos::UnitNumber = the unit, ProDos::Buffer/ProDos::BufferHigh = the buffer, ProDos::Block/ProDos::BlockHigh =
+;;   the block
 ;; Out: A = 0 or the error, carry = set on an error, X and Y = the block count after a status call
 ;; Keeps: interrupt
-.proc ProDosEntry
-.assert * = $C51C, "ProDosEntry must stay at $Cn1C."
+.proc Disk35Driver
+.assert * = $C51C, "Disk35Driver must stay at $Cn1C."
     clc
     bcc SmartPortEntry::Plain       ; always
 .endproc
@@ -152,14 +165,14 @@ OPCODE_RTS = $60
     sec
 Plain:
     clv
-    ; Falls into Call.
+    ; Falls into CallCard.
 .endproc
 
 ;; Carries a call to the card and returns what it gives back. A boot that succeeds runs the boot block instead.
 ;; In: carry = set for SmartPort, overflow = set to boot
 ;; Out: A, X and Y = as the card returns them, carry = set when A is not 0, zero and negative = from A
 ;; Keeps: interrupt
-.proc Call
+.proc CallCard
     php                             ; the caller's interrupt flag, and how it came
     sei
 
@@ -197,7 +210,7 @@ Plain:
 Booting:
     ora #0
     bne NoBoot
-    jmp BootBlock
+    jmp BootEntry
 
     ; No boot: on to the next slot when the Monitor's scan came here, else UNABLE TO BOOT and BASIC.
 NoBoot:
@@ -206,7 +219,7 @@ NoBoot:
     bne Unable
     cpy LOC1                        ; Y = $Cn
     bne Unable
-    jmp NextSlot
+    jmp Startup::PowerUp::NextSlot
 Unable:
     txa
     pha
@@ -227,6 +240,7 @@ Unable:
 Signature:
     .byte $C0                       ; $CnFB: extended SmartPort calls
     .word 0                         ; $CnFC: ask STATUS for the block count
-    .byte $BF                       ; $CnFE: removable, not interruptible, four volumes, format, write, read, status
-    .byte <ProDosEntry              ; $CnFF: the ProDOS entry
+    ; $CnFE: removable, not interruptible, four volumes, format, write, read and status ($BF).
+    .byte ProDos::CAPABILITY_REMOVABLE | ProDos::FOUR_VOLUMES | ProDos::CAPABILITY_EVERY_COMMAND
+    .byte <Disk35Driver             ; $CnFF: the ProDOS entry
 .assert * = $C600, "The ROM must fill its page."

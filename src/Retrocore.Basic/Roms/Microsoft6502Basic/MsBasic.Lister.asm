@@ -25,7 +25,7 @@
     ;; set, so `LIST 10-X` lists from line 10 to the end and the text after the minus is ignored.
     ;; In: A = current character, carry = clear for a digit, zero = set for a null or colon
     ;; See: <ReadLineNumber>, <FindLine>, <Statements::List::NextLine>
-    ;; Also: LIST (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;; Also: LIST (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     .proc List
     bcc ReadFirstBound
     beq ReadFirstBound
@@ -36,7 +36,7 @@
     .endif
     bne ResetStack::Done
 ;; <ReadLineNumber>, <FindLine>, then checks for the end, minus (or comma).
-;; Also: GOLST (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: GOLST (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 ReadFirstBound:
     jsr ReadLineNumber
     jsr FindLine
@@ -56,7 +56,7 @@ ReadSecondBound:
     jsr ReadLineNumber
     bne secondBoundReturn
 ;; Drops the statement loop's return; a zero upper bound becomes $FFFF; falls into <Statements::List::NextLine>.
-;; Also: LSTEND (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: LSTEND (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 StartListing:
     pla
     pla
@@ -87,7 +87,7 @@ StartListing:
 ;; ends the listing. With `trackQuotes`, each line starts with <TokenizeState> = 1, complemented for each quote.
 ;; In: SourceStart = link field of the first line, LineNumber = inclusive upper bound
 ;; See: <CheckStop>, <Statements::List::CheckToken>
-;; Also: LIST4 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: LIST4 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 NextLine:
     ldy #$01
     .if trackQuotes
@@ -107,22 +107,22 @@ NextLine:
     cpx LineNumber
     beq ListLine
 ;; Carry set (line above the bound) finishes.
-;; Also: TSTDUN (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: TSTDUN (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 CheckPastEnd:
     bcs Finish
 ;; Saves the offset in <ListOffset>, prints the line number, then a space.
-;; Also: TYPLIN (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: TYPLIN (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 ListLine:
     sty ListOffset
     jsr linePrinter
     lda #' '
 ;; Reloads the line offset, clears bit 7 of A, falls into <Statements::List::ListCharacter>.
-;; Also: PRIT4 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: PRIT4 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 ResumeLine:
     ldy ListOffset
     and #$7F
 ;; Outputs A; with columnMode wraps at the column and indents to 5.
-;; Also: PLOOP (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: PLOOP (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 ListCharacter:
     jsr PrintCharacter
     .if columnMode
@@ -158,7 +158,7 @@ CheckQuote:
         sta TokenizeState
     .endif
 ;; Next byte: nonzero to <Statements::List::CheckToken>; zero follows the link to the next line.
-;; Also: PLOOP1 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: PLOOP1 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 NextByte:
     iny
     .if guardOffset
@@ -175,7 +175,7 @@ NextByte:
     sta SourceStart+1
     bne NextLine
 ;; Optional carriage return, then jmp to the resume entry.
-;; Also: GRODY (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: GRODY (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 Finish:
     .if finalCr
         lda #$0D
@@ -211,8 +211,9 @@ ReadTableByte:
 ;; Parameters: tableMode = 0 for direct indexed, 1 for <Pointer1> indirect, 2 for <Fac> indirect with page carry;
 ;;   trackQuotes = 1 to print high-bit characters inside quotes literally;
 ;;   literalPi = 1 to print the PI character literally;
-;;   spaceWords = 1 to output spaces before and after each expanded word
-.macro ListTokens tableMode, trackQuotes, literalPi, spaceWords
+;;   spaceWords = 1 to output spaces before and after each expanded word;
+;;   vector = optional, the RAM vector <Statements::List::CheckToken> jumps through first (the VIC-20's)
+.macro ListTokens tableMode, trackQuotes, literalPi, spaceWords, vector
     .assert tableMode >= 0 && tableMode <= 2, "tableMode must be 0, 1 or 2."
     .assert trackQuotes = 0 || trackQuotes = 1, "trackQuotes must be 0 or 1."
     .assert literalPi = 0 || literalPi = 1, "literalPi must be 0 or 1."
@@ -221,11 +222,18 @@ ReadTableByte:
 ;; Prints a stored character or expands a token using <ReservedWords>.
 ;;
 ;; The high bit marks the last byte of each reserved word. In table mode 0 Y wraps after 256 table bytes;
-;; the two indirect modes can walk farther. Tokens are not checked against the end of the table.
+;; the two indirect modes can walk farther. Tokens are not checked against the end of the table. Where the build
+;; passes `vector` (the VIC-20), it jumps through it first, to `CheckTokenDefault` unless a program has changed it.
 ;; In: A = nonzero stored byte, Y = offset in the current line, negative = bit 7 of A
 ;; See: <Statements::List::NextLine>, <PrintCharacter>
-;; Also: QPLOP (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: QPLOP (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 CheckToken:
+    .ifnblank vector
+        jmp (vector)
+
+;; The ROM's <Statements::List::CheckToken>, where the RAM vector points unless a program changes it.
+CheckTokenDefault:
+    .endif
     bpl ListCharacter
     .if literalPi
         cmp #PI
@@ -259,7 +267,7 @@ CheckToken:
         ldy #$FF
     .endif
 ;; Dex per keyword; reaching the token's count prints that word.
-;; Also: RESRCH (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: RESRCH (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 FindWord:
     dex
     .if tableMode = 1
@@ -268,7 +276,7 @@ FindWord:
         beq ListWord
     .endif
 ;; Reads table bytes until one with bit 7 set (a word's last byte).
-;; Also: RESCR1 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: RESCR1 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 SkipWord:
     .if tableMode = 1
         inc Pointer1
@@ -286,7 +294,7 @@ ReadWordByte:
     bpl SkipWord
     bmi FindWord
 ;; Prints the keyword's bytes up to the one with bit 7 set.
-;; Also: PRIT3 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: PRIT3 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 ListWord:
     .if tableMode = 1
         iny

@@ -16,14 +16,14 @@
 ;; Out: LineNumber = line number, TextPointer = terminating character, A = terminating character, carry = set,
 ;;   zero = set when no digit was read or the terminator is a null or colon
 ;; Errors: SYNTAX for a value of 64000 or more, except the values above that go on into <Statements::On>'s loop
-;; Also: LINGET (M6502, ASTIL, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: LINGET (M6502, ASTIL, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 .proc ReadLineNumber
     ldx #$00
     stx LineNumber
     stx LineNumber+1
 
 ;; A non-digit exits through <Statements::On::Done>; otherwise multiplies by 10 and adds the digit.
-;; Also: MORLIN (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: MORLIN (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 NextDigit:
     bcs Statements::On::Done
     sbc #('0'-1)
@@ -51,7 +51,7 @@ NextDigit:
     inc LineNumber+1
 
 ;; <GetNextCharacter> and loop.
-;; Also: NXTLGC (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: NXTLGC (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 NextCharacter:
     jsr GetNextCharacter
     jmp NextDigit

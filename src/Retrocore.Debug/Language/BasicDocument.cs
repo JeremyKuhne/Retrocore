@@ -13,5 +13,4 @@ namespace Retrocore.Debug.Language;
 /// <param name="LanguageId">Its VS Code language.</param>
 /// <param name="Text">Its text.</param>
 /// <param name="Source">Its analysis.</param>
-/// <param name="Note">Why the document is not analyzed, such as an unsupported dialect; null when it is.</param>
-internal sealed record BasicDocument(DocumentUri Uri, string LanguageId, string Text, BasicSource Source, string? Note);
+internal sealed record BasicDocument(DocumentUri Uri, string LanguageId, string Text, BasicSource Source);

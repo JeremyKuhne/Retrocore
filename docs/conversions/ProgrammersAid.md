@@ -88,10 +88,14 @@ jumps to $02CB. The root asserts it is 0 or 1.
 - The RAM test's gallop writes outside the block unless the block's length is a power of 2 and it starts on a
   multiple of it; the chip's gallop error jumps to $02CB, into stale input-buffer bytes, and may not come back to beep.
 
-## Open questions for the owner
+## The open questions, settled by the owner
 
-- Q2. P3: SWEET16's macros keep Apple's upper-case mnemonics. The alternative is lower case, like the 6502's, which
-  would read as instructions but differs from every SWEET16 listing.
+- P10 (was Q2). SWEET16's macros keep Apple's upper-case mnemonics (P3), as every SWEET16 listing writes them, rather
+  than lower case like the 6502's.
+- P11. Found in this conversion: the Monitor's `Cassette::WriteHeader` (HEADR) with carry set waits A + 1 rounds of
+  256 half cycles, where the Monitor's and the Enhanced IIe firmware's comments said about A. They now say A + 1
+  rounds with carry set, A rounds with carry clear but one for A = 0 or 1, the first round as many half cycles as X
+  counts down from.
 
 ## Renames
 

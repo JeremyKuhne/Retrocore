@@ -1,0 +1,225 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "Level I BASIC",
+  "scopeName": "source.retrocore-level1",
+  "patterns": [
+    {
+      "include": "#pragma"
+    },
+    {
+      "match": "^\\s*(?:@[A-Za-z_][A-Za-z0-9_]*|[A-Za-z_][A-Za-z0-9_]*:)\\s*$",
+      "name": "entity.name.label.retrocore-level1"
+    },
+    {
+      "match": "^\\s*(\\d+)",
+      "captures": {
+        "1": {
+          "name": "entity.name.label.line-number.retrocore-level1"
+        }
+      }
+    },
+    {
+      "include": "#statements"
+    }
+  ],
+  "repository": {
+    "pragma": {
+      "match": "^\\s*(?:REM|')\\s*retrocore\\s+\\S+.*$",
+      "name": "comment.line.pragma.retrocore-level1"
+    },
+    "statements": {
+      "patterns": [
+        {
+          "include": "#remark"
+        },
+        {
+          "include": "#data"
+        },
+        {
+          "include": "#string"
+        },
+        {
+          "include": "#escape"
+        },
+        {
+          "match": "@[A-Za-z_][A-Za-z0-9_]*",
+          "name": "entity.name.label.retrocore-level1"
+        },
+        {
+          "match": "(?i:((?:NEXT|(?:N|NE|NEX)\\.))|((?:LET|(?:L|LE)\\.))|((?:INPUT|(?:I|IN|INP|INPU)\\.))|(IF)|((?:ON|(?:O)\\.))|((?:G\\s*O\\s*T\\s*O|(?:G|GO|GOT)\\.))|((?:GOSUB|(?:GOS|GOSU)\\.))|((?:RESET|(?:R|RE|RES|RESE)\\.))|((?:RETURN|(?:RET|RETU|RETUR)\\.))|((?:READ|(?:REA)\\.))|((?:RESTORE|(?:REST|RESTO|RESTOR)\\.))|((?:FOR|(?:F|FO)\\.))|((?:PRINT|(?:P|PR|PRI|PRIN)\\.))|((?:SET|(?:S|SE)\\.))|((?:STOP|(?:ST|STO)\\.))|((?:END|(?:E|EN)\\.))|((?:CLS|(?:C|CL)\\.))|((?:LPRINT|(?:LP|LPR|LPRI|LPRIN)\\.))|((?:LIST|(?:LI|LIS)\\.))|((?:LLIST|(?:LL|LLI|LLIS)\\.))|((?:RUN|(?:RU)\\.))|(NEW)|((?:CONT|(?:CO|CON)\\.))|((?:CLOAD|(?:CLO|CLOA)\\.))|((?:CSAVE|(?:CS|CSA|CSAV)\\.))|((?:THEN|(?:T|TH|THE)\\.))|(TO)|((?:STEP|(?:STE)\\.))|((?:TAB|(?:TA)\\.))|((?:AT(?![NnOo])|(?:A)\\.))|((?:RND|(?:RN)\\.))|((?:ABS|(?:AB)\\.))|((?:MEM|(?:M|ME)\\.))|(INT)|((?:POINT|(?:PO|POI|POIN)\\.)))",
+          "captures": {
+            "1": {
+              "name": "keyword.control.retrocore-level1"
+            },
+            "2": {
+              "name": "keyword.other.retrocore-level1"
+            },
+            "3": {
+              "name": "keyword.other.retrocore-level1"
+            },
+            "4": {
+              "name": "keyword.control.retrocore-level1"
+            },
+            "5": {
+              "name": "keyword.control.retrocore-level1"
+            },
+            "6": {
+              "name": "keyword.control.retrocore-level1"
+            },
+            "7": {
+              "name": "keyword.control.retrocore-level1"
+            },
+            "8": {
+              "name": "keyword.other.retrocore-level1"
+            },
+            "9": {
+              "name": "keyword.control.retrocore-level1"
+            },
+            "10": {
+              "name": "keyword.other.retrocore-level1"
+            },
+            "11": {
+              "name": "keyword.other.retrocore-level1"
+            },
+            "12": {
+              "name": "keyword.control.retrocore-level1"
+            },
+            "13": {
+              "name": "keyword.other.retrocore-level1"
+            },
+            "14": {
+              "name": "keyword.other.retrocore-level1"
+            },
+            "15": {
+              "name": "keyword.control.retrocore-level1"
+            },
+            "16": {
+              "name": "keyword.control.retrocore-level1"
+            },
+            "17": {
+              "name": "keyword.other.retrocore-level1"
+            },
+            "18": {
+              "name": "keyword.other.retrocore-level1"
+            },
+            "19": {
+              "name": "keyword.other.retrocore-level1"
+            },
+            "20": {
+              "name": "keyword.other.retrocore-level1"
+            },
+            "21": {
+              "name": "keyword.control.retrocore-level1"
+            },
+            "22": {
+              "name": "keyword.other.retrocore-level1"
+            },
+            "23": {
+              "name": "keyword.control.retrocore-level1"
+            },
+            "24": {
+              "name": "keyword.other.retrocore-level1"
+            },
+            "25": {
+              "name": "keyword.other.retrocore-level1"
+            },
+            "26": {
+              "name": "keyword.control.retrocore-level1"
+            },
+            "27": {
+              "name": "keyword.control.retrocore-level1"
+            },
+            "28": {
+              "name": "keyword.control.retrocore-level1"
+            },
+            "29": {
+              "name": "keyword.other.retrocore-level1"
+            },
+            "30": {
+              "name": "keyword.other.retrocore-level1"
+            },
+            "31": {
+              "name": "support.function.retrocore-level1"
+            },
+            "32": {
+              "name": "support.function.retrocore-level1"
+            },
+            "33": {
+              "name": "support.function.retrocore-level1"
+            },
+            "34": {
+              "name": "support.function.retrocore-level1"
+            },
+            "35": {
+              "name": "support.function.retrocore-level1"
+            }
+          }
+        },
+        {
+          "match": "\\?",
+          "name": "keyword.other.retrocore-level1"
+        },
+        {
+          "match": "(?:\\d+\\.?\\d*|\\.\\d+)(?:[EeDd][+-]?\\d+)?",
+          "name": "constant.numeric.retrocore-level1"
+        },
+        {
+          "match": "[A-Za-z]\\$?",
+          "name": "variable.other.retrocore-level1"
+        },
+        {
+          "match": ":",
+          "name": "punctuation.separator.statement.retrocore-level1"
+        },
+        {
+          "match": "[;,]",
+          "name": "punctuation.separator.retrocore-level1"
+        }
+      ]
+    },
+    "remark": {
+      "match": "(?i:(REM)).*$",
+      "name": "comment.line.retrocore-level1",
+      "captures": {
+        "1": {
+          "name": "keyword.other.remark.retrocore-level1"
+        },
+        "2": {
+          "name": "keyword.other.remark.retrocore-level1"
+        }
+      }
+    },
+    "data": {
+      "begin": "(?i:((?:DATA|(?:D|DA|DAT)\\.)))",
+      "beginCaptures": {
+        "1": {
+          "name": "keyword.other.retrocore-level1"
+        }
+      },
+      "end": "(?=$)",
+      "contentName": "string.unquoted.data.retrocore-level1",
+      "patterns": [
+        {
+          "include": "#string"
+        },
+        {
+          "include": "#escape"
+        }
+      ]
+    },
+    "string": {
+      "begin": "\"",
+      "end": "\"|$",
+      "name": "string.quoted.double.retrocore-level1",
+      "patterns": [
+        {
+          "include": "#escape"
+        }
+      ]
+    },
+    "escape": {
+      "match": "\\{(?:\\{|\\$[0-9A-Fa-f]{2}|CTRL-.)\\}",
+      "name": "constant.character.escape.retrocore-level1"
+    }
+  }
+}

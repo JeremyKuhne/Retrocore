@@ -56,7 +56,7 @@ public sealed class KayproMachine : IMachine
         Description = "5¼-inch single-sided double-density floppy drive, built in",
         Controller = "FD1793, selected by the system port's bits 0 and 1",
         Formats = ["img", "dsk", "imd", "dmk"],
-        SaveFormats = ["img", "dmk"],
+        SaveFormats = ["img", "imd", "dmk"],
         Operations = MediaOperations.Insert | MediaOperations.Eject | MediaOperations.WriteProtect | MediaOperations.Save,
         Tracks = 40,
         Sides = 1

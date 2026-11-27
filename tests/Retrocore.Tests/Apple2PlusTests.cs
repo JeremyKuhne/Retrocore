@@ -158,6 +158,30 @@ public class Apple2PlusTests
     }
 
     /// <summary>
+    ///  With the alternate character set on, $40-$5F reach the character generator's own $40-$5F: on the original
+    ///  IIe these are inverse uppercase again, so they read as uppercase, while the Enhanced IIe's are MouseText,
+    ///  which has no character. Its $C0-$DF are normal uppercase on both.
+    /// </summary>
+    /// <param name="model">The model.</param>
+    /// <param name="mouseText">Whether its alternate set's $40-$5F are MouseText.</param>
+    [TestMethod]
+    [DataRow(Apple2Model.IIe, false)]
+    [DataRow(Apple2Model.IIeEnhanced, true)]
+    public void AlternateSetsUppercaseCodesReadAsTheirGlyphs(Apple2Model model, bool mouseText)
+    {
+        const string Uppercase = "@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_";
+        Apple2Machine machine = new(model, SdkModules.BuildRoms(model, s_inputs));
+
+        // ALTCHARSET on.
+        machine.Bus.Write(0xC00F, value: 0);
+        Read(0x40).Should().Be(mouseText ? new string('\0', 32) : Uppercase);
+        Read(0xC0).Should().Be(Uppercase);
+
+        string Read(int first) =>
+            new([.. Enumerable.Range(first, 32).Select(code => machine.Bus.Video.Character((byte)code))]);
+    }
+
+    /// <summary>
     ///  From its chip dumps, the II Plus powers on to AppleSoft's prompt, and a line typed in lowercase runs.
     /// </summary>
     [TestMethod]

@@ -74,4 +74,45 @@ public class DebugLineCyclesTests
         lines.Update(second, 4, entered: true, track: true);
         lines.Changed.Should().BeFalse();
     }
+
+    /// <summary>
+    ///  A line is one line whichever string names its file, among more files than paths' hashes are kept for.
+    /// </summary>
+    [TestMethod]
+    public void EqualPathsAreOneLine()
+    {
+        DebugLineCycles lines = new();
+        for (int file = 0; file < 40; file++)
+        {
+            string path = $"file{file}";
+            lines.Update((path, 1), 8, entered: true, track: true);
+            lines.Update((new string(path.AsSpan()), 1), (ulong)file, entered: false, track: true);
+        }
+
+        lines.Last.Should().HaveCount(40);
+        lines.Last[("file39", 1)].Should().Be(47UL);
+    }
+
+    /// <summary>
+    ///  The lines' order follows lines added after it was read, and starts over when the counts are forgotten;
+    ///  paths that differ only in case stay in the order they were first counted.
+    /// </summary>
+    [TestMethod]
+    public void OrderFollowsAddedLines()
+    {
+        DebugLineCycles lines = new();
+        lines.Update(("b", 2), 1, entered: true, track: false);
+        lines.Update(("a", 1), 1, entered: true, track: false);
+        lines.Ordered.Should().Equal(("a", 1), ("b", 2));
+
+        lines.Update(("a", 1), 5, entered: false, track: false);
+        lines.Update(("B", 1), 1, entered: true, track: false);
+        lines.Update(("b", 1), 1, entered: true, track: false);
+        lines.Ordered.Should().Equal(("a", 1), ("B", 1), ("b", 1), ("b", 2));
+
+        lines.Clear();
+        lines.Ordered.Should().BeEmpty();
+        lines.Update(("c", 3), 1, entered: true, track: false);
+        lines.Ordered.Should().Equal(("c", 3));
+    }
 }

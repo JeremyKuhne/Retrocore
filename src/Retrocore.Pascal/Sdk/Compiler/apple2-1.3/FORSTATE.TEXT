@@ -1,0 +1,149 @@
+(** FORSTATE.TEXT: FORSTATE, segment 13: FOR.
+
+    Included by COMPILER.TEXT after CASESTAT.TEXT and before STATEMEN2.TEXT.
+
+    Procedures here, nested ones indented:
+            FORSTATE (segment) *)
+
+      (** Compiles FOR: the control variable, its limit kept in a temporary,
+          and the loop.
+          Also: FORSTATEMENT (UCSD20) *)
+      SEGMENT PROCEDURE FORSTATE;
+        VAR
+          (** UCSD Pascal II.0 calls it LATTR (UCSD20). *)
+          ControlVariable: OperandEntry;
+          (** Not used. *)
+          LimitWord: INTEGER;
+          (** ToToken or DowntoToken.
+
+              UCSD Pascal II.0 calls it LSY (UCSD20). *)
+          Direction: INTEGER;
+          (** UCSD Pascal II.0 calls it LADDR (UCSD20). *)
+          LoopJump: Jump;
+          (** UCSD Pascal II.0 calls it LCIX (UCSD20). *)
+          ExitJump: Jump;
+      BEGIN
+        IF Token = NameToken THEN
+        BEGIN
+          FindIdentifier(ClassesOfVariable, NameFound);
+          WITH NameFound.Entry^ DO
+          BEGIN
+            ControlVariable.DataType := DataType;
+            ControlVariable.Kind := MemoryOperand;
+            IF Class = ActualClass THEN
+            BEGIN
+              ControlVariable.Access := DirectAccess;
+              ControlVariable.StaticLevel := StaticLevel;
+              ControlVariable.Offset := Offset
+            END
+            ELSE
+            BEGIN
+              Error(155);
+              ControlVariable.DataType := NIL
+            END
+          END;
+          IF ControlVariable.DataType <> NIL THEN
+            IF (ControlVariable.DataType^.Form > SubrangeForm) OR
+                CompatibleTypes(RealStructure, ControlVariable.DataType) THEN
+            BEGIN
+              Error(143);
+              ControlVariable.DataType := NIL
+            END;
+          NextToken
+        END
+        ELSE
+        BEGIN
+          Error(2);
+          SkipTokens(Followers + [DoToken..DowntoToken, BecomesToken])
+        END;
+        IF Token = BecomesToken THEN
+        BEGIN
+          NextToken;
+          CompileExpression(Followers + [DoToken..DowntoToken]);
+          IF Operand.DataType <> NIL THEN
+            IF Operand.DataType^.Form <> ScalarForm THEN
+              Error(144)
+            ELSE
+              IF CompatibleTypes(ControlVariable.DataType, Operand.DataType)
+                  THEN
+              BEGIN
+                PushOperand;
+                MaskBoolean;
+                IF ControlVariable.DataType <> NIL THEN
+                  IF (ControlVariable.DataType^.Form = SubrangeForm) AND
+                      CheckRanges THEN
+                  BEGIN
+                    EmitConstant(ORD(ControlVariable.DataType^.ArrayIsPacked));
+                    EmitConstant(ControlVariable.DataType^.MaximumValue);
+                    EmitOpcode(RangeCheckCode)
+                  END;
+                StoreOperand(ControlVariable)
+              END
+              ELSE
+                Error(145)
+        END
+        ELSE
+        BEGIN
+          Error(51);
+          SkipTokens(Followers + [DoToken..DowntoToken])
+        END;
+        NewJump(LoopJump);
+        IF Token IN [ToToken, DowntoToken] THEN
+        BEGIN
+          Direction := Token;
+          NextToken;
+          CompileExpression(Followers + [DoToken]);
+          IF Operand.DataType <> NIL THEN
+            IF Operand.DataType^.Form <> ScalarForm THEN
+              Error(144)
+            ELSE
+              IF CompatibleTypes(ControlVariable.DataType, Operand.DataType)
+                  THEN
+              BEGIN
+                PushOperand;
+                MaskBoolean;
+                IF ControlVariable.DataType <> NIL THEN
+                  IF (ControlVariable.DataType^.Form = SubrangeForm) AND
+                      CheckRanges THEN
+                  BEGIN
+                    EmitConstant(ORD(ControlVariable.DataType^.ArrayIsPacked));
+                    EmitConstant(ControlVariable.DataType^.MaximumValue);
+                    EmitOpcode(RangeCheckCode)
+                  END;
+                EmitTwoOperands(StoreOuterCode, Level, DataCounter);
+                PlaceJump(LoopJump);
+                Operand := ControlVariable;
+                PushOperand;
+                EmitTwoOperands(LoadOuterCode, Level, DataCounter);
+                DataCounter := DataCounter + 1;
+                IF Direction = ToToken THEN
+                  EmitTwoOperands(AtMostCode, 0, 1)
+                ELSE
+                  EmitTwoOperands(AtLeastCode, 0, 1)
+              END
+              ELSE
+                Error(145)
+        END
+        ELSE
+        BEGIN
+          Error(55);
+          SkipTokens(Followers + [DoToken])
+        END;
+        NewJump(ExitJump);
+        EmitJump(JumpFalseCode, ExitJump);
+        IF Token = DoToken THEN
+          NextToken
+        ELSE
+          Error(54);
+        STATEMEN(Followers);
+        Operand := ControlVariable;
+        PushOperand;
+        EmitConstant(1);
+        IF Direction = ToToken THEN
+          EmitOpcode(AddIntegersCode)
+        ELSE
+          EmitOpcode(SubtractIntegersCode);
+        StoreOperand(ControlVariable);
+        EmitJump(JumpCode, LoopJump);
+        PlaceJump(ExitJump)
+      END;

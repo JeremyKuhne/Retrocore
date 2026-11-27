@@ -1,0 +1,439 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "Atari BASIC",
+  "scopeName": "source.retrocore-atari",
+  "patterns": [
+    {
+      "include": "#pragma"
+    },
+    {
+      "match": "^\\s*(?:@[A-Za-z_][A-Za-z0-9_]*|[A-Za-z_][A-Za-z0-9_]*:)\\s*$",
+      "name": "entity.name.label.retrocore-atari"
+    },
+    {
+      "include": "#statements"
+    }
+  ],
+  "repository": {
+    "pragma": {
+      "match": "^\\s*(?:REM|')\\s*retrocore\\s+\\S+.*$",
+      "name": "comment.line.pragma.retrocore-atari"
+    },
+    "statements": {
+      "patterns": [
+        {
+          "include": "#remark"
+        },
+        {
+          "include": "#data"
+        },
+        {
+          "include": "#statement"
+        },
+        {
+          "match": "^\\s*(\\d+)",
+          "captures": {
+            "1": {
+              "name": "entity.name.label.line-number.retrocore-atari"
+            }
+          }
+        },
+        {
+          "include": "#string"
+        },
+        {
+          "include": "#escape"
+        },
+        {
+          "match": "@[A-Za-z_][A-Za-z0-9_]*",
+          "name": "entity.name.label.retrocore-atari"
+        },
+        {
+          "match": "(?i:((?<![A-Za-z0-9])TO(?![A-Za-z0-9])|(?<=[0-9)\"])TO)|((?<![A-Za-z0-9])STEP(?![A-Za-z0-9])|(?<=[0-9)\"])STEP)|((?<![A-Za-z0-9])THEN(?![A-Za-z0-9])|(?<=[0-9)\"])THEN)|((?<![A-Za-z0-9])NOT(?![A-Za-z0-9])|(?<=[0-9)\"])NOT)|((?<![A-Za-z0-9])OR(?![A-Za-z0-9])|(?<=[0-9)\"])OR)|((?<![A-Za-z0-9])AND(?![A-Za-z0-9])|(?<=[0-9)\"])AND)|(<=)|(<>)|(>=)|(<)|(>)|(=)|(\\^)|(\\*)|(\\+)|(-)|(/)|((?<![A-Za-z0-9])STR\\$(?![A-Za-z0-9])|(?<=[0-9)\"])STR\\$)|((?<![A-Za-z0-9])CHR\\$(?![A-Za-z0-9])|(?<=[0-9)\"])CHR\\$)|((?<![A-Za-z0-9])USR(?![A-Za-z0-9])|(?<=[0-9)\"])USR)|((?<![A-Za-z0-9])ASC(?![A-Za-z0-9])|(?<=[0-9)\"])ASC)|((?<![A-Za-z0-9])VAL(?![A-Za-z0-9])|(?<=[0-9)\"])VAL)|((?<![A-Za-z0-9])LEN(?![A-Za-z0-9])|(?<=[0-9)\"])LEN)|((?<![A-Za-z0-9])ADR(?![A-Za-z0-9])|(?<=[0-9)\"])ADR)|((?<![A-Za-z0-9])ATN(?![A-Za-z0-9])|(?<=[0-9)\"])ATN)|((?<![A-Za-z0-9])COS(?![A-Za-z0-9])|(?<=[0-9)\"])COS)|((?<![A-Za-z0-9])PEEK(?![A-Za-z0-9])|(?<=[0-9)\"])PEEK)|((?<![A-Za-z0-9])SIN(?![A-Za-z0-9])|(?<=[0-9)\"])SIN)|((?<![A-Za-z0-9])RND(?![A-Za-z0-9])|(?<=[0-9)\"])RND)|((?<![A-Za-z0-9])FRE(?![A-Za-z0-9])|(?<=[0-9)\"])FRE)|((?<![A-Za-z0-9])EXP(?![A-Za-z0-9])|(?<=[0-9)\"])EXP)|((?<![A-Za-z0-9])LOG(?![A-Za-z0-9])|(?<=[0-9)\"])LOG)|((?<![A-Za-z0-9])CLOG(?![A-Za-z0-9])|(?<=[0-9)\"])CLOG)|((?<![A-Za-z0-9])SQR(?![A-Za-z0-9])|(?<=[0-9)\"])SQR)|((?<![A-Za-z0-9])SGN(?![A-Za-z0-9])|(?<=[0-9)\"])SGN)|((?<![A-Za-z0-9])ABS(?![A-Za-z0-9])|(?<=[0-9)\"])ABS)|((?<![A-Za-z0-9])INT(?![A-Za-z0-9])|(?<=[0-9)\"])INT)|((?<![A-Za-z0-9])PADDLE(?![A-Za-z0-9])|(?<=[0-9)\"])PADDLE)|((?<![A-Za-z0-9])STICK(?![A-Za-z0-9])|(?<=[0-9)\"])STICK)|((?<![A-Za-z0-9])PTRIG(?![A-Za-z0-9])|(?<=[0-9)\"])PTRIG)|((?<![A-Za-z0-9])STRIG(?![A-Za-z0-9])|(?<=[0-9)\"])STRIG)|((?<![A-Za-z0-9])GOTO(?![A-Za-z0-9])|(?<=[0-9)\"])GOTO)|((?<![A-Za-z0-9])GOSUB(?![A-Za-z0-9])|(?<=[0-9)\"])GOSUB))",
+          "captures": {
+            "1": {
+              "name": "keyword.control.retrocore-atari"
+            },
+            "2": {
+              "name": "keyword.control.retrocore-atari"
+            },
+            "3": {
+              "name": "keyword.control.retrocore-atari"
+            },
+            "4": {
+              "name": "keyword.operator.retrocore-atari"
+            },
+            "5": {
+              "name": "keyword.operator.retrocore-atari"
+            },
+            "6": {
+              "name": "keyword.operator.retrocore-atari"
+            },
+            "7": {
+              "name": "keyword.operator.retrocore-atari"
+            },
+            "8": {
+              "name": "keyword.operator.retrocore-atari"
+            },
+            "9": {
+              "name": "keyword.operator.retrocore-atari"
+            },
+            "10": {
+              "name": "keyword.operator.retrocore-atari"
+            },
+            "11": {
+              "name": "keyword.operator.retrocore-atari"
+            },
+            "12": {
+              "name": "keyword.operator.retrocore-atari"
+            },
+            "13": {
+              "name": "keyword.operator.retrocore-atari"
+            },
+            "14": {
+              "name": "keyword.operator.retrocore-atari"
+            },
+            "15": {
+              "name": "keyword.operator.retrocore-atari"
+            },
+            "16": {
+              "name": "keyword.operator.retrocore-atari"
+            },
+            "17": {
+              "name": "keyword.operator.retrocore-atari"
+            },
+            "18": {
+              "name": "support.function.retrocore-atari"
+            },
+            "19": {
+              "name": "support.function.retrocore-atari"
+            },
+            "20": {
+              "name": "support.function.retrocore-atari"
+            },
+            "21": {
+              "name": "support.function.retrocore-atari"
+            },
+            "22": {
+              "name": "support.function.retrocore-atari"
+            },
+            "23": {
+              "name": "support.function.retrocore-atari"
+            },
+            "24": {
+              "name": "support.function.retrocore-atari"
+            },
+            "25": {
+              "name": "support.function.retrocore-atari"
+            },
+            "26": {
+              "name": "support.function.retrocore-atari"
+            },
+            "27": {
+              "name": "support.function.retrocore-atari"
+            },
+            "28": {
+              "name": "support.function.retrocore-atari"
+            },
+            "29": {
+              "name": "support.function.retrocore-atari"
+            },
+            "30": {
+              "name": "support.function.retrocore-atari"
+            },
+            "31": {
+              "name": "support.function.retrocore-atari"
+            },
+            "32": {
+              "name": "support.function.retrocore-atari"
+            },
+            "33": {
+              "name": "support.function.retrocore-atari"
+            },
+            "34": {
+              "name": "support.function.retrocore-atari"
+            },
+            "35": {
+              "name": "support.function.retrocore-atari"
+            },
+            "36": {
+              "name": "support.function.retrocore-atari"
+            },
+            "37": {
+              "name": "support.function.retrocore-atari"
+            },
+            "38": {
+              "name": "support.function.retrocore-atari"
+            },
+            "39": {
+              "name": "support.function.retrocore-atari"
+            },
+            "40": {
+              "name": "support.function.retrocore-atari"
+            },
+            "41": {
+              "name": "support.function.retrocore-atari"
+            },
+            "42": {
+              "name": "keyword.control.retrocore-atari"
+            },
+            "43": {
+              "name": "keyword.control.retrocore-atari"
+            }
+          }
+        },
+        {
+          "match": "\\?",
+          "name": "keyword.other.retrocore-atari"
+        },
+        {
+          "match": "(?:\\d+\\.?\\d*|\\.\\d+)(?:[Ee][+-]?\\d+)?",
+          "name": "constant.numeric.retrocore-atari"
+        },
+        {
+          "match": "[A-Za-z][A-Za-z0-9]*\\$?",
+          "name": "variable.other.retrocore-atari"
+        },
+        {
+          "match": ":",
+          "name": "punctuation.separator.statement.retrocore-atari"
+        },
+        {
+          "match": "[;,]",
+          "name": "punctuation.separator.retrocore-atari"
+        }
+      ]
+    },
+    "statement": {
+      "match": "(?i:(?:^\\s*(?:(\\d+)\\s*)?|(:)\\s*|(THEN)\\s*)(?:(INPUT|I(?:N(?:P(?:U)?)?)?\\.)|(COLOR|C(?:O(?:L(?:O)?)?)?\\.)|(LIST|L(?:I(?:S)?)?\\.)|(ENTER|E(?:N(?:T(?:E)?)?)?\\.)|(LET|L(?:E)?\\.)|(IF|I\\.)|(FOR|F(?:O)?\\.)|(NEXT|N(?:E(?:X)?)?\\.)|(GOTO|G(?:O(?:T)?)?\\.)|(GO TO|G(?:O(?: (?:T)?)?)?\\.)|(GOSUB|G(?:O(?:S(?:U)?)?)?\\.)|(TRAP|T(?:R(?:A)?)?\\.)|(BYE|B(?:Y)?\\.)|(CONT|C(?:O(?:N)?)?\\.)|(COM|C(?:O)?\\.)|(CLOSE|C(?:L(?:O(?:S)?)?)?\\.)|(CLR|C(?:L)?\\.)|(DEG|D(?:E)?\\.)|(DIM|D(?:I)?\\.)|(END|E(?:N)?\\.)|(NEW|N(?:E)?\\.)|(OPEN|O(?:P(?:E)?)?\\.)|(LOAD|L(?:O(?:A)?)?\\.)|(SAVE|S(?:A(?:V)?)?\\.)|(STATUS|S(?:T(?:A(?:T(?:U)?)?)?)?\\.)|(NOTE|N(?:O(?:T)?)?\\.)|(POINT|P(?:O(?:I(?:N)?)?)?\\.)|(XIO|X(?:I)?\\.)|(ON|O\\.)|(POKE|P(?:O(?:K)?)?\\.)|(PRINT|P(?:R(?:I(?:N)?)?)?\\.)|(RAD|R(?:A)?\\.)|(READ|R(?:E(?:A)?)?\\.)|(RESTORE|R(?:E(?:S(?:T(?:O(?:R)?)?)?)?)?\\.)|(RETURN|R(?:E(?:T(?:U(?:R)?)?)?)?\\.)|(RUN|R(?:U)?\\.)|(STOP|S(?:T(?:O)?)?\\.)|(POP|P(?:O)?\\.)|(\\?)|(GET|G(?:E)?\\.)|(PUT|P(?:U)?\\.)|(GRAPHICS|G(?:R(?:A(?:P(?:H(?:I(?:C)?)?)?)?)?)?\\.)|(PLOT|P(?:L(?:O)?)?\\.)|(POSITION|P(?:O(?:S(?:I(?:T(?:I(?:O)?)?)?)?)?)?\\.)|(DOS|D(?:O)?\\.)|(DRAWTO|D(?:R(?:A(?:W(?:T)?)?)?)?\\.)|(SETCOLOR|S(?:E(?:T(?:C(?:O(?:L(?:O)?)?)?)?)?)?\\.)|(LOCATE|L(?:O(?:C(?:A(?:T)?)?)?)?\\.)|(SOUND|S(?:O(?:U(?:N)?)?)?\\.)|(LPRINT|L(?:P(?:R(?:I(?:N)?)?)?)?\\.)|(CSAVE|C(?:S(?:A(?:V)?)?)?\\.)|(CLOAD|C(?:L(?:O(?:A)?)?)?\\.)))",
+      "captures": {
+        "1": {
+          "name": "entity.name.label.line-number.retrocore-atari"
+        },
+        "2": {
+          "name": "punctuation.separator.statement.retrocore-atari"
+        },
+        "3": {
+          "name": "keyword.control.retrocore-atari"
+        },
+        "4": {
+          "name": "keyword.other.retrocore-atari"
+        },
+        "5": {
+          "name": "keyword.other.retrocore-atari"
+        },
+        "6": {
+          "name": "keyword.other.retrocore-atari"
+        },
+        "7": {
+          "name": "keyword.other.retrocore-atari"
+        },
+        "8": {
+          "name": "keyword.other.retrocore-atari"
+        },
+        "9": {
+          "name": "keyword.control.retrocore-atari"
+        },
+        "10": {
+          "name": "keyword.control.retrocore-atari"
+        },
+        "11": {
+          "name": "keyword.control.retrocore-atari"
+        },
+        "12": {
+          "name": "keyword.control.retrocore-atari"
+        },
+        "13": {
+          "name": "keyword.control.retrocore-atari"
+        },
+        "14": {
+          "name": "keyword.control.retrocore-atari"
+        },
+        "15": {
+          "name": "keyword.control.retrocore-atari"
+        },
+        "16": {
+          "name": "keyword.other.retrocore-atari"
+        },
+        "17": {
+          "name": "keyword.control.retrocore-atari"
+        },
+        "18": {
+          "name": "keyword.other.retrocore-atari"
+        },
+        "19": {
+          "name": "keyword.other.retrocore-atari"
+        },
+        "20": {
+          "name": "keyword.other.retrocore-atari"
+        },
+        "21": {
+          "name": "keyword.other.retrocore-atari"
+        },
+        "22": {
+          "name": "keyword.other.retrocore-atari"
+        },
+        "23": {
+          "name": "keyword.control.retrocore-atari"
+        },
+        "24": {
+          "name": "keyword.other.retrocore-atari"
+        },
+        "25": {
+          "name": "keyword.other.retrocore-atari"
+        },
+        "26": {
+          "name": "keyword.other.retrocore-atari"
+        },
+        "27": {
+          "name": "keyword.other.retrocore-atari"
+        },
+        "28": {
+          "name": "keyword.other.retrocore-atari"
+        },
+        "29": {
+          "name": "keyword.other.retrocore-atari"
+        },
+        "30": {
+          "name": "keyword.other.retrocore-atari"
+        },
+        "31": {
+          "name": "keyword.other.retrocore-atari"
+        },
+        "32": {
+          "name": "keyword.control.retrocore-atari"
+        },
+        "33": {
+          "name": "keyword.other.retrocore-atari"
+        },
+        "34": {
+          "name": "keyword.other.retrocore-atari"
+        },
+        "35": {
+          "name": "keyword.other.retrocore-atari"
+        },
+        "36": {
+          "name": "keyword.other.retrocore-atari"
+        },
+        "37": {
+          "name": "keyword.other.retrocore-atari"
+        },
+        "38": {
+          "name": "keyword.control.retrocore-atari"
+        },
+        "39": {
+          "name": "keyword.control.retrocore-atari"
+        },
+        "40": {
+          "name": "keyword.control.retrocore-atari"
+        },
+        "41": {
+          "name": "keyword.control.retrocore-atari"
+        },
+        "42": {
+          "name": "keyword.other.retrocore-atari"
+        },
+        "43": {
+          "name": "keyword.other.retrocore-atari"
+        },
+        "44": {
+          "name": "keyword.other.retrocore-atari"
+        },
+        "45": {
+          "name": "keyword.other.retrocore-atari"
+        },
+        "46": {
+          "name": "keyword.other.retrocore-atari"
+        },
+        "47": {
+          "name": "keyword.other.retrocore-atari"
+        },
+        "48": {
+          "name": "keyword.other.retrocore-atari"
+        },
+        "49": {
+          "name": "keyword.other.retrocore-atari"
+        },
+        "50": {
+          "name": "keyword.other.retrocore-atari"
+        },
+        "51": {
+          "name": "keyword.other.retrocore-atari"
+        },
+        "52": {
+          "name": "keyword.other.retrocore-atari"
+        },
+        "53": {
+          "name": "keyword.other.retrocore-atari"
+        },
+        "54": {
+          "name": "keyword.other.retrocore-atari"
+        },
+        "55": {
+          "name": "keyword.other.retrocore-atari"
+        }
+      }
+    },
+    "remark": {
+      "match": "(?i:(?:^\\s*(?:(\\d+)\\s*)?|(:)\\s*|(THEN)\\s*)((REM|R(?:E)?\\.|\\.)(.*)$))",
+      "captures": {
+        "1": {
+          "name": "entity.name.label.line-number.retrocore-atari"
+        },
+        "2": {
+          "name": "punctuation.separator.statement.retrocore-atari"
+        },
+        "3": {
+          "name": "keyword.control.retrocore-atari"
+        },
+        "4": {
+          "name": "comment.line.retrocore-atari"
+        },
+        "5": {
+          "name": "keyword.other.remark.retrocore-atari"
+        }
+      }
+    },
+    "data": {
+      "begin": "(?i:(?:^\\s*(?:(\\d+)\\s*)?|(:)\\s*|(THEN)\\s*)(DATA|D(?:A(?:T)?)?\\.))",
+      "beginCaptures": {
+        "1": {
+          "name": "entity.name.label.line-number.retrocore-atari"
+        },
+        "2": {
+          "name": "punctuation.separator.statement.retrocore-atari"
+        },
+        "3": {
+          "name": "keyword.control.retrocore-atari"
+        },
+        "4": {
+          "name": "keyword.other.retrocore-atari"
+        }
+      },
+      "end": "(?=$)",
+      "contentName": "string.unquoted.data.retrocore-atari",
+      "patterns": [
+        {
+          "include": "#string"
+        },
+        {
+          "include": "#escape"
+        }
+      ]
+    },
+    "string": {
+      "begin": "\"",
+      "end": "\"|$",
+      "name": "string.quoted.double.retrocore-atari",
+      "patterns": [
+        {
+          "include": "#escape"
+        }
+      ]
+    },
+    "escape": {
+      "match": "\\{(?:\\{|\\$[0-9A-Fa-f]{2}|CTRL-.)\\}",
+      "name": "constant.character.escape.retrocore-atari"
+    }
+  }
+}

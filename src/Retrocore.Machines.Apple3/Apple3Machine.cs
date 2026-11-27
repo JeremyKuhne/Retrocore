@@ -54,6 +54,14 @@ public sealed class Apple3Machine : IMachine
     // Whether the SoftCard /// held the 6502 in the last cycle.
     private bool _held;
 
+    // The cycle under way: its length, its speed, and whether the 6502 stepped in it with an NMI pending, so took it.
+    // While it has Z80 T-states left, the card that runs them and the address the 6502 is at.
+    private int _cycleUnits;
+    private bool _cycleSlow;
+    private bool _nmiTaken;
+    private SoftCard3? _tStateCard;
+    private ushort _heldAddress;
+
     /// <summary>
     ///  Constructs a machine at power-on.
     /// </summary>
@@ -101,6 +109,11 @@ public sealed class Apple3Machine : IMachine
     ///  Gets the time since power-on, in thousandths of a 14.318 MHz dot.
     /// </summary>
     public long Time { get; private set; }
+
+    /// <summary>
+    ///  Gets the cycles since power-on, which go on while the SoftCard /// holds the 6502.
+    /// </summary>
+    public ulong Cycles { get; private set; }
 
     /// <summary>
     ///  Gets the line the beam is on: 0-191 visible, 192-261 vertical blanking.
@@ -169,18 +182,56 @@ public sealed class Apple3Machine : IMachine
     }
 
     /// <summary>
-    ///  Resets the processor and the devices a reset reaches, keeping RAM and the VIAs, as CONTROL-RESET does.
+    ///  Resets the processor and the devices a reset reaches, keeping RAM and the VIAs, as CONTROL-RESET does. A cycle
+    ///  <see cref="StepTState"/> stopped in the middle of finishes first, as a reset comes between cycles.
     /// </summary>
     public void Reset()
     {
+        while (_tStateCard is { } card) { RunTState(card); }
         Bus.ResetDevices();
         Processor.Reset();
     }
 
     /// <summary>
-    ///  Advances the CPU and the devices by one CPU cycle.
+    ///  Advances the CPU and the devices by one CPU cycle, or finishes the cycle <see cref="StepTState"/> started.
     /// </summary>
     public void StepCycle()
+    {
+        if (_tStateCard is null) { StartCycle(); }
+        while (_tStateCard is { } card) { RunTState(card); }
+    }
+
+    /// <summary>
+    ///  Advances by one of the SoftCard ///'s Z80 T-states while it runs, so a debugger can stop at a Z80 instruction
+    ///  that starts mid-cycle; otherwise by a whole cycle, as <see cref="StepCycle"/> does.
+    /// </summary>
+    /// <remarks>
+    ///  <para>
+    ///   The Z80 keeps its own clock, so a cycle holds as many of its T-states as fit in the cycle's time, carried
+    ///   over from one cycle to the next: at 1 MHz two, now and then three, and at 2 MHz one, now and then two. The
+    ///   step that starts a cycle runs the 6502's part of it, or holds the 6502, and the cycle's first T-state; each
+    ///   step after runs one more, and the cycle's last also runs the devices' part of it.
+    ///  </para>
+    /// </remarks>
+    public void StepTState()
+    {
+        if (_tStateCard is null)
+        {
+            StartCycle();
+            if (_tStateCard is null) { return; }
+        }
+
+        RunTState(_tStateCard);
+    }
+
+    /// <summary>
+    ///  Gets whether <see cref="StepTState"/> has started a cycle that it has T-states left of.
+    /// </summary>
+    public bool MidCycle => _tStateCard is not null;
+
+    // Starts a cycle: the 6502's part of it, and the time it gives the SoftCard ///'s Z80. With no T-state owed, the
+    // cycle is done.
+    private void StartCycle()
     {
         bool irq = Bus.InterruptRequested;
         if (irq != _irq)
@@ -194,15 +245,41 @@ public sealed class Apple3Machine : IMachine
 
         bool slow = Bus.IsSlow || (_drawing && (Bus.Environment & Apple3Bus.VideoEnable) != 0);
         int units = slow ? SlowCycle : FastCycle;
-        bool stepped = Bus.SoftCard is { } card ? StepWithSoftCard(card, units) : StepProcessor();
-        Bus.TickDisk(slow);
-        if (_nmi && stepped)
+        _cycleUnits = units;
+        _cycleSlow = slow;
+        bool stepped = Bus.SoftCard is { } card ? StartWithSoftCard(card, units) : StepProcessor();
+
+        // An NMI raised after the 6502's step, while a debugger stops mid-cycle, waits for its next one.
+        _nmiTaken = _nmi && stepped;
+        if (_tStateCard is null) { FinishCycle(); }
+    }
+
+    // Runs one of the cycle's T-states on the Z80, and finishes the cycle after its last. A Z80 that stops running,
+    // waiting at its next access after giving the bus back, has no more T-states in the cycle: the time left over is
+    // what the cycle's T-states would have left. A card taken out mid-cycle runs no more.
+    private void RunTState(SoftCard3 card)
+    {
+        if (ReferenceEquals(Bus.SoftCard, card)) { card.StepTState(_heldAddress); }
+        _z80Time -= SoftCard3.TState;
+        if (_z80Time >= SoftCard3.TState && card.Running && ReferenceEquals(Bus.SoftCard, card)) { return; }
+        _z80Time %= SoftCard3.TState;
+        _tStateCard = null;
+        FinishCycle();
+    }
+
+    // The devices' part of the cycle, after the 6502's and the Z80's.
+    private void FinishCycle()
+    {
+        int units = _cycleUnits;
+        Bus.TickDisk(_cycleSlow);
+        if (_nmiTaken)
         {
             Processor.Signals &= ~ProcessorSignals.NonMaskableInterrupt;
             _nmi = false;
         }
 
         Time += units;
+        Cycles++;
         Bus.Advance(units);
         _lineTime += units;
         if (_lineTime >= LineLength)
@@ -353,8 +430,8 @@ public sealed class Apple3Machine : IMachine
     // The SoftCard ///'s Z80 has the bus, or is finishing its last instruction after giving it back. The card holds
     // the 6502 at its next read, which is its next opcode fetch; until the 6502 gets there, the Z80 waits. After the
     // Z80 gives the bus back, both run until the Z80's next access, which WAIT holds. The Z80 keeps its own clock,
-    // so it runs the T-states that fit in the cycle's time. Returns whether the 6502 stepped.
-    private bool StepWithSoftCard(SoftCard3 card, int units)
+    // so the cycle owes it the T-states that fit in the cycle's time. Returns whether the 6502 stepped.
+    private bool StartWithSoftCard(SoftCard3 card, int units)
     {
         card.Advance(units);
         bool held = card.OwnsBus && Processor.IsInstructionBoundary;
@@ -366,12 +443,9 @@ public sealed class Apple3Machine : IMachine
             return !held;
         }
 
-        ushort next = Processor.Registers.ProgramCounter;
-        for (_z80Time += units; _z80Time >= SoftCard3.TState; _z80Time -= SoftCard3.TState)
-        {
-            card.StepTState(next);
-        }
-
+        _heldAddress = Processor.Registers.ProgramCounter;
+        _z80Time += units;
+        if (_z80Time >= SoftCard3.TState) { _tStateCard = card; }
         return !held;
     }
 

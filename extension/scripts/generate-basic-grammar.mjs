@@ -5,7 +5,8 @@
 // Generates the BASIC grammars from the reserved word tables in Retrocore.Basic, which a test checks against the
 // ROMs. Each dialect's words are tried in token order at every position, as the ROM's tokenizer tries them, so a
 // word inside a name (OR in SCORE) is highlighted where BASIC finds it. Business BASIC takes a word only between
-// separators, so its words are highlighted only there, as are MBASIC's, which must be set apart from names.
+// separators, so its words are highlighted only there, as are MBASIC's, which must be set apart from names. Atari
+// BASIC takes a statement's name only where a statement starts (atariGrammar says how).
 
 import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
@@ -69,6 +70,14 @@ function bbcKeywords() {
     };
 }
 
+// BBC BASIC II's assembler mnemonics, from the table in the SDK's source of the ROM, OPT and EQU among them.
+function bbcMnemonics() {
+    const source = readFileSync(resolve(extension, "..", "src", "Retrocore.Machines.Acorn", "Roms", "Basic", "Assembler.asm"), "utf8");
+    const mnemonics = [...source.matchAll(/^\s*MNEMONIC part, "([A-Z]{3})"/gm)].map(match => match[1]);
+    if (mnemonics.length !== 58) throw new Error(`Assembler.asm has ${mnemonics.length} mnemonics, not 58.`);
+    return mnemonics;
+}
+
 // BBC BASIC's abbreviations, as its tokeniser finds them: letters then a full stop stand for the first word in the
 // table's order that starts with those letters, so P. is PRINT's only if no word before it starts with P. Each word
 // gets the prefixes shorter than itself that no word before it took.
@@ -96,8 +105,12 @@ function abbreviations(words) {
 // capital through letters and digits. BBC BASIC also finds words only in capitals; its names are whole, with _
 // and small letters, and its DATA, like its REM, runs to the end of the line. Its & starts a hexadecimal number,
 // whose capital digits are never searched for words, so &DEF is a number. A * where a statement starts is a command
-// for the MOS, which the tokeniser leaves as it is to the end of the line.
-function grammar(dialect, name, words, { names = "[A-Za-z][0-9]*[$%!#]?", ignoreCase = true, business = false, wholeLineData = false, conditional = new Set(), nameFollows = new Set(), abbreviated = new Map(), hex = null, starCommands = false } = {}) {
+// for the MOS, which the tokeniser leaves as it is to the end of the line. Its [ starts the assembler, up to a ] where
+// one of the assembler's statements starts, which may be lines later: a statement there starts with a . label, a
+// mnemonic in either case, or a \ comment. An implied instruction reads nothing after it. X and Y after a comma are
+// registers, in either case for LDX, LDY, STX and STY, and A is the accumulator for ASL, LSR, ROL and ROR. The
+// assembler skips anything after an operand, so a ; after one starts a comment.
+function grammar(dialect, name, words, { names = "[A-Za-z][0-9]*[$%!#]?", ignoreCase = true, business = false, wholeLineData = false, conditional = new Set(), nameFollows = new Set(), abbreviated = new Map(), hex = null, starCommands = false, mnemonics = null } = {}) {
     const matching = text => ignoreCase ? `(?i:${text})` : `(?:${text})`;
     const scope = `retrocore-${dialect}`;
     // One alternation in token order, as the tokenizer tries the words, with a group per word for its scope.
@@ -121,6 +134,77 @@ function grammar(dialect, name, words, { names = "[A-Za-z][0-9]*[$%!#]?", ignore
         [word, ...(abbreviated.get(word) ?? []).map(prefix => `${prefix}.`)]);
     const statementStart = `(?:(?<=:)|${starters.map(form => `(?<=${escape(form)})(?<![A-Za-z0-9_\`]${escape(form)})`).join("|")})`;
     const captures = Object.fromEntries(reserved.map((word, index) => [String(index + 1), { name: `${kind(word)}.${scope}` }]));
+    const statements = [
+        { include: "#remark" },
+        { include: "#data" },
+        { include: "#string" },
+        { include: "#escape" },
+        ...(starCommands ? [{ match: `${statementStart}\\s*\\*.*$`, name: `string.unquoted.command.${scope}` }] : []),
+        ...(hex ? [{ match: hex, name: `constant.numeric.hex.${scope}` }] : []),
+        { match: "@[A-Za-z_][A-Za-z0-9_]*", name: `entity.name.label.${scope}` },
+        ...[...nameFollows].map(word => ({
+            match: matching(`(${written(word, pattern(word))})([A-Za-z0-9_\`]*)`),
+            captures: { "1": { name: `${kind(word)}.${scope}` }, "2": { name: `entity.name.function.${scope}` } }
+        })),
+        { match: matching(reserved.map(word => `(${business ? separated(word) : (conditional.has(word) ? `${written(word, pattern(word))}(?![A-Za-z0-9_\`])` : written(word, pattern(word)))})`).join("|")), captures },
+        { match: "\\?", name: `keyword.other.${scope}` },
+        { match: "(?:\\d+\\.?\\d*|\\.\\d+)(?:[EeDd][+-]?\\d+)?", name: `constant.numeric.${scope}` },
+        { match: names, name: `variable.other.${scope}` },
+        { match: ":", name: `punctuation.separator.statement.${scope}` },
+        { match: "[;,]", name: `punctuation.separator.${scope}` }
+    ];
+    // Where one of the assembler's statements starts: after a line number, at the start of a line, or after [ or :.
+    const assemblyStart = "(?:^\\s*(\\d+)\\s*|^\\s*|(?<=[\\[:])\\s*)";
+    // A statement's start, then a label if it has one: captures 1 to 3 are the line number, the label's . and its name.
+    // FIND_VARIABLE_A skips spaces before the name, so . loop is a label too.
+    // The name is read whole, as FIND_VARIABLE reads it, so .restart is no label re before STA.
+    const labelled = `${assemblyStart}(?:(\\.)\\s*(?>(${names}))\\s*)?`;
+    // A keyword that starts with A, such as ABS or its AB., is a token, which the shifts do not take for the accumulator.
+    const notKeyword = `(?!${reserved.filter(word => word.startsWith("A"))
+        .flatMap(word => [word, ...(abbreviated.get(word) ?? []).map(prefix => `${prefix}.`)]).map(escape).join("|") || "$^"})`;
+    // The assembler packs a mnemonic's first three letters by their low five bits, whatever follows them, so
+    // LDAdest is LDA dest; the letter after EQU is compared in capitals only.
+    const mnemonic = mnemonics === null ? null
+        : `(?:(?i:EQU)[BWDS]|(?i:${mnemonics.filter(word => word !== "EQU").join("|")}))`;
+    // The implied instructions, which come before BCC in the table.
+    const implied = mnemonics === null ? null : `(?i:${mnemonics.slice(0, mnemonics.indexOf("BCC")).join("|")})`;
+    const lineNumber = { name: `entity.name.label.line-number.${scope}` };
+    const mnemonicName = { name: `keyword.other.mnemonic.${scope}` };
+    const register = { name: `variable.language.register.${scope}` };
+    const skipped = { name: `comment.line.assembler.${scope}` };
+    const label = { "1": lineNumber, "2": { name: `punctuation.definition.label.${scope}` }, "3": { name: `entity.name.label.${scope}` } };
+    const operand = [
+        { include: "#string" },
+        { match: "[\\\\;][^:]*", name: `comment.line.assembler.${scope}` },
+        ...statements.filter(pattern => pattern.include !== "#remark" && pattern.include !== "#data" && !(pattern.name ?? "").startsWith("string.unquoted.command"))
+    ];
+    const assembler = mnemonic === null ? null : {
+        begin: "\\[",
+        beginCaptures: { "0": { name: `punctuation.section.assembler.begin.${scope}` } },
+        end: `${assemblyStart}(\\])`,
+        endCaptures: { "1": lineNumber, "2": { name: `punctuation.section.assembler.end.${scope}` } },
+        patterns: [
+            // LDX, LDY, STX and STY compare their index register by its low five bits, so x and y are registers too;
+            // after a register, as after any operand, the assembler skips the rest of the statement.
+            {
+                begin: `${labelled}((?i:LDX|LDY|STX|STY))`,
+                beginCaptures: { ...label, "4": mnemonicName },
+                end: "(?=:|$)",
+                patterns: [{ match: "(?<=,)\\s*([XYxy])([^:]*)", captures: { "1": register, "2": skipped } }, { include: "#assemblerOperand" }]
+            },
+            // An implied instruction reads nothing after it.
+            { match: `${labelled}(${implied})([^:]*)`, captures: { ...label, "4": mnemonicName, "5": skipped } },
+            // The shifts take an operand starting with A as the accumulator: ASL ADDR is ASL A.
+            {
+                match: `${labelled}(?:(?i:(ASL|LSR|ROL|ROR))\\s*${notKeyword}(A)([^:]*)|(${mnemonic}))`,
+                captures: { ...label, "4": mnemonicName, "5": register, "6": skipped, "7": mnemonicName }
+            },
+            { match: `${assemblyStart}(\\.)\\s*(${names})`, captures: label },
+            { match: "^\\s*(\\d+)", captures: { "1": lineNumber } },
+            { match: "(?<=,)\\s*([XY])(\\)?)([^:]*)", captures: { "1": register, "3": skipped } },
+            { include: "#assemblerOperand" }
+        ]
+    };
     return {
         $schema: "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
         name,
@@ -137,27 +221,8 @@ function grammar(dialect, name, words, { names = "[A-Za-z][0-9]*[$%!#]?", ignore
         ],
         repository: {
             pragma: { match: "^\\s*(?:REM|')\\s*retrocore\\s+\\S+.*$", name: `comment.line.pragma.${scope}` },
-            statements: {
-                patterns: [
-                    { include: "#remark" },
-                    { include: "#data" },
-                    { include: "#string" },
-                    { include: "#escape" },
-                    ...(starCommands ? [{ match: `${statementStart}\\s*\\*.*$`, name: `string.unquoted.command.${scope}` }] : []),
-                    ...(hex ? [{ match: hex, name: `constant.numeric.hex.${scope}` }] : []),
-                    { match: "@[A-Za-z_][A-Za-z0-9_]*", name: `entity.name.label.${scope}` },
-                    ...[...nameFollows].map(word => ({
-                        match: matching(`(${written(word, pattern(word))})([A-Za-z0-9_\`]*)`),
-                        captures: { "1": { name: `${kind(word)}.${scope}` }, "2": { name: `entity.name.function.${scope}` } }
-                    })),
-                    { match: matching(reserved.map(word => `(${business ? separated(word) : (conditional.has(word) ? `${written(word, pattern(word))}(?![A-Za-z0-9_\`])` : written(word, pattern(word)))})`).join("|")), captures },
-                    { match: "\\?", name: `keyword.other.${scope}` },
-                    { match: "(?:\\d+\\.?\\d*|\\.\\d+)(?:[EeDd][+-]?\\d+)?", name: `constant.numeric.${scope}` },
-                    { match: names, name: `variable.other.${scope}` },
-                    { match: ":", name: `punctuation.separator.statement.${scope}` },
-                    { match: "[;,]", name: `punctuation.separator.${scope}` }
-                ]
-            },
+            statements: { patterns: assembler === null ? statements : [{ include: "#assembler" }, ...statements] },
+            ...(assembler === null ? {} : { assembler, assemblerOperand: { patterns: operand } }),
             remark: {
                 match: remark,
                 name: `comment.line.${scope}`,
@@ -181,29 +246,142 @@ function grammar(dialect, name, words, { names = "[A-Za-z][0-9]*[$%!#]?", ignore
     };
 }
 
+// Atari BASIC reserves its words only as its tokenizer finds them, which its syntax tables steer. A statement's name is
+// looked for only where a statement starts: at the start of a line or after its number, after a colon, and after
+// THEN. There the first name in the table's order that the text starts with is the statement, so PRINTER=1 is PRINT
+// ER=1 and NOTE1=5 is NOTE 1=5, and a name cut short by a dot is the first it starts (PR. is PRINT, and . alone is
+// REM). Everywhere else only the operator and function names are looked for, and a name runs from its letter through
+// the letters and digits after it, so the words inside it (TO in TOTAL, NOT in NOTE1) are not found. A name that
+// starts with an operator's or a function's word is that word when no letter or digit follows it, as in NOT A or
+// PEEK(; right after a number, a closing parenthesis or a string BASIC wants an operator and takes the word whatever
+// follows, as in 1TO10. Two cases are left out: after a name and a space BASIC also wants an operator, so A AND1 is A
+// AND 1, which the highlighting shows as A and the name AND1; and BASIC takes the word only when the character after
+// it is below '0', so LEN=5 assigns the variable LEN, which the highlighting shows as the function. REM and DATA keep
+// the rest of the line as typed.
+function atariGrammar(words) {
+    const scope = "retrocore-atari";
+    const statements = words.slice(0, words.indexOf("TO"));
+    // The operator name table also has GOTO and GOSUB, for ON.
+    const operators = [...words.slice(words.indexOf("TO")), "GOTO", "GOSUB"];
+    const functionStart = operators.indexOf("STR$");
+    const control = new Set(["IF", "FOR", "NEXT", "GOTO", "GO TO", "GOSUB", "TRAP", "END", "RUN", "STOP", "RETURN", "POP",
+        "ON", "CONT", "TO", "STEP", "THEN"]);
+    // A statement's name, or any start of it cut short by a dot; none, when cut short with nothing before the dot,
+    // which only REM is.
+    const statementName = (word, bare) => {
+        let cut = "";
+        for (const character of [...word.slice(1, -1)].reverse()) cut = `(?:${escape(character)}${cut})?`;
+        const abbreviation = word.length > 1 ? `${escape(word[0])}${cut}\\.` : undefined;
+        const forms = [escape(word), ...abbreviation === undefined ? [] : [abbreviation], ...bare ? ["\\."] : []];
+        return forms.join("|");
+    };
+    // Where a statement starts: the line's start and its number, a colon, or THEN; each its own group.
+    const start = "(?:^\\s*(?:(\\d+)\\s*)?|(:)\\s*|(THEN)\\s*)";
+    const startCaptures = {
+        "1": { name: `entity.name.label.line-number.${scope}` },
+        "2": { name: `punctuation.separator.statement.${scope}` },
+        "3": { name: `keyword.control.${scope}` }
+    };
+    const named = statements.filter(word => word !== "REM" && word !== "DATA");
+    const statementCaptures = { ...startCaptures };
+    named.forEach((word, index) => {
+        statementCaptures[String(index + 4)] = { name: `${control.has(word) ? "keyword.control" : "keyword.other"}.${scope}` };
+    });
+    const operatorKind = (word, index) => control.has(word) ? "keyword.control"
+        : index >= functionStart ? "support.function" : "keyword.operator";
+    const operatorPattern = word => /^[A-Z]/.test(word)
+        ? `(?<![A-Za-z0-9])${escape(word)}(?![A-Za-z0-9])|(?<=[0-9)"])${escape(word)}`
+        : escape(word);
+    return {
+        $schema: "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+        name: "Atari BASIC",
+        scopeName: `source.${scope}`,
+        patterns: [
+            { include: "#pragma" },
+            { match: "^\\s*(?:@[A-Za-z_][A-Za-z0-9_]*|[A-Za-z_][A-Za-z0-9_]*:)\\s*$", name: `entity.name.label.${scope}` },
+            { include: "#statements" }
+        ],
+        repository: {
+            pragma: { match: "^\\s*(?:REM|')\\s*retrocore\\s+\\S+.*$", name: `comment.line.pragma.${scope}` },
+            statements: {
+                patterns: [
+                    { include: "#remark" },
+                    { include: "#data" },
+                    { include: "#statement" },
+                    { match: "^\\s*(\\d+)", captures: { "1": { name: `entity.name.label.line-number.${scope}` } } },
+                    { include: "#string" },
+                    { include: "#escape" },
+                    { match: "@[A-Za-z_][A-Za-z0-9_]*", name: `entity.name.label.${scope}` },
+                    {
+                        match: `(?i:${operators.map(word => `(${operatorPattern(word)})`).join("|")})`,
+                        captures: Object.fromEntries(operators.map((word, index) => [String(index + 1), { name: `${operatorKind(word, index)}.${scope}` }]))
+                    },
+                    { match: "\\?", name: `keyword.other.${scope}` },
+                    { match: "(?:\\d+\\.?\\d*|\\.\\d+)(?:[Ee][+-]?\\d+)?", name: `constant.numeric.${scope}` },
+                    { match: "[A-Za-z][A-Za-z0-9]*\\$?", name: `variable.other.${scope}` },
+                    { match: ":", name: `punctuation.separator.statement.${scope}` },
+                    { match: "[;,]", name: `punctuation.separator.${scope}` }
+                ]
+            },
+            statement: {
+                match: `(?i:${start}(?:${named.map(word => `(${statementName(word, false)})`).join("|")}))`,
+                captures: statementCaptures
+            },
+            remark: {
+                match: `(?i:${start}((${statementName("REM", true)})(.*)$))`,
+                captures: { ...startCaptures, "4": { name: `comment.line.${scope}` }, "5": { name: `keyword.other.remark.${scope}` } }
+            },
+            data: {
+                begin: `(?i:${start}(${statementName("DATA", false)}))`,
+                beginCaptures: { ...startCaptures, "4": { name: `keyword.other.${scope}` } },
+                end: "(?=$)",
+                contentName: `string.unquoted.data.${scope}`,
+                patterns: [{ include: "#string" }, { include: "#escape" }]
+            },
+            string: {
+                begin: "\"",
+                end: "\"|$",
+                name: `string.quoted.double.${scope}`,
+                patterns: [{ include: "#escape" }]
+            },
+            escape: { match: "\\{(?:\\{|\\$[0-9A-Fa-f]{2}|CTRL-.)\\}", name: `constant.character.escape.${scope}` }
+        }
+    };
+}
+
 const appleSoft = keywords("AppleSoftDialect.cs");
 const level2 = keywords("Level2Dialect.cs");
 const integer = keywords("IntegerBasicDialect.cs");
 const business = [...keywords("BusinessBasicDialect.cs", "s_statements"), ...keywords("BusinessBasicDialect.cs", "s_functions")];
 const mbasic = [...keywords("MbasicDialect.cs"), ...keywords("MbasicDialect.cs", "s_functions")];
+const model100 = keywords("Model100Dialect.cs");
 const colorBasic = [...keywords("ColorBasicDialect.cs", "s_commands"), ...keywords("ColorBasicDialect.cs", "s_functions")];
 const bbcBasic = bbcKeywords();
 const petBasic = keywords("PetBasicDialect.cs");
+const atari = keywords("AtariBasicDialect.cs");
+// Level I's words in a program's order: the statements EXEC tries in a program (TABLE1_PROGRAM), then the commands,
+// which only a typed line tries, first (TABLE1), then the words inside statements and the functions. An abbreviation,
+// as P. for PRINT, is the first word with those letters, as in a program: L. is LET, though typed it is LIST.
+const level1 = ["s_statements", "s_commands", "s_ifWords", "s_forWords", "s_printWords", "s_functions"]
+    .flatMap(table => keywords("Level1Dialect.cs", table));
 const union = [...appleSoft, ...level2.filter(word => !appleSoft.includes(word))];
 const outputs = [
     ["applesoft.tmLanguage.json", grammar("applesoft", "AppleSoft BASIC", appleSoft)],
     ["level2.tmLanguage.json", grammar("level2", "Level II BASIC", level2)],
+    ["level1.tmLanguage.json", grammar("level1", "Level I BASIC", level1, { names: "[A-Za-z]\\$?", wholeLineData: true, abbreviated: abbreviations(level1) })],
     ["integer.tmLanguage.json", grammar("integer", "Integer BASIC", integer, { names: "[A-Za-z][A-Za-z0-9]*\\$?" })],
     ["business.tmLanguage.json", grammar("business", "Business BASIC", business, { names: "[A-Za-z][A-Za-z0-9.]*[$%&]?", business: true })],
     ["colorbasic.tmLanguage.json", grammar("colorbasic", "Color BASIC", colorBasic, { names: "[A-Z][A-Z0-9]*\\$?", ignoreCase: false })],
+    ["model100.tmLanguage.json", grammar("model100", "Model 100 BASIC", model100)],
     ["mbasic.tmLanguage.json", grammar("mbasic", "MBASIC", mbasic, { names: "[A-Za-z][A-Za-z0-9.]*[$%!#]?", business: true })],
-    ["bbcbasic.tmLanguage.json", grammar("bbcbasic", "BBC BASIC", bbcBasic.words, { names: "@%|[A-Za-z_`][A-Za-z0-9_`]*[$%]?", starCommands: true, ignoreCase: false, wholeLineData: true, conditional: bbcBasic.conditional, nameFollows: bbcBasic.nameFollows, abbreviated: bbcBasic.abbreviations, hex: "&[0-9A-F]+" })],
+    ["bbcbasic.tmLanguage.json", grammar("bbcbasic", "BBC BASIC", bbcBasic.words, { names: "@%|[A-Za-z_`][A-Za-z0-9_`]*[$%]?", starCommands: true, ignoreCase: false, wholeLineData: true, conditional: bbcBasic.conditional, nameFollows: bbcBasic.nameFollows, abbreviated: bbcBasic.abbreviations, hex: "&[0-9A-F]+", mnemonics: bbcMnemonics() })],
     ["petbasic.tmLanguage.json", grammar("petbasic", "Commodore BASIC (PET)", petBasic)],
+    ["atari.tmLanguage.json", atariGrammar(atari)],
     ["basic.tmLanguage.json", grammar("basic", "Retrocore BASIC", union)]
 ];
 for (const [file, content] of outputs) {
     const output = resolve(extension, "syntaxes", file);
     writeGenerated(output, JSON.stringify(content, null, 2) + "\n", `${file} is stale. Run npm run generate:grammar.`);
 }
-console.log(`BASIC grammars: ${appleSoft.length} AppleSoft, ${level2.length} Level II, ${integer.length} Integer BASIC, `
-    + `${business.length} Business BASIC, ${colorBasic.length} Color BASIC, ${mbasic.length} MBASIC, ${petBasic.length} PET BASIC and ${bbcBasic.words.length} BBC BASIC reserved words.`);
+console.log(`BASIC grammars: ${appleSoft.length} AppleSoft, ${level2.length} Level II, ${level1.length} Level I, ${integer.length} Integer BASIC, `
+    + `${business.length} Business BASIC, ${colorBasic.length} Color BASIC, ${mbasic.length} MBASIC, ${model100.length} Model 100 BASIC, ${petBasic.length} PET BASIC, ${bbcBasic.words.length} BBC BASIC and ${atari.length} Atari BASIC reserved words.`);

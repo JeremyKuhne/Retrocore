@@ -8,8 +8,10 @@
 ;; Emits <Statements::Next>, which steps the <ForFrame> that `FOR` pushed (a five-byte step, its sign and a five-byte
 ;; packed limit), and the expression and type checks that follow it.
 ;; Parameters: countedStack = 1 to advance X through the frame, 0 to calculate the offsets in A;
-;;   nextStatement = the platform's continuation after <Statements::Next>
-.macro NextEntries countedStack, nextStatement
+;;   nextStatement = the platform's continuation after <Statements::Next>;
+;;   jumpToError = optional, 1 (when given) to report NEXT WITHOUT FOR by a jump to <ReportError>, for error numbers in
+;;   which it is not 0 (the VIC-20's)
+.macro NextEntries countedStack, nextStatement, jumpToError
     .assert countedStack = 0 || countedStack = 1, "countedStack must be 0 or 1."
 
     .scope Statements continued
@@ -22,20 +24,20 @@
     ;; Entry:
     ;;   ToError = with zero set, relays to <RequireType::ToError>, as for NEXT WITHOUT FOR (offset 0) and for
     ;;     `READ`'s input path (<AssignVariableList>), which branches here with `beq`; with zero clear, falls into
-    ;;     <Statements::Next::AddStep>
-    ;; Also: NEXT (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;;     <Statements::Next::AddStep>; where the build passes `jumpToError` (the VIC-20), jumps to <ReportError>
+    ;; Also: NEXT (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     .proc Next
     bne WithVariable
     ldy #$00
     beq SearchFrame
 
 ;; NEXT names a variable: <FindVariable>; the comma path jsr's here for the next variable.
-;; Also: GETFOR (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: GETFOR (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 WithVariable:
     jsr FindVariable
 
 ;; <AssignedVariable> = A/Y (Y = 0: any), <FindForFrame>; no frame: NEXT WITHOUT FOR.
-;; Also: STXFOR (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: STXFOR (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 SearchFrame:
     sta AssignedVariable
     sty AssignedVariable+1
@@ -44,14 +46,20 @@ SearchFrame:
     ldx #<ERROR_NEXT_WITHOUT_FOR
 
 ;; With zero set, relays to <RequireType::ToError>, as for NEXT WITHOUT FOR (offset 0) and for `READ`'s input path
-;; (<AssignVariableList>), which branches here with `beq`; with zero clear, falls into <AddStep>.
-;; Also: ERRGO5 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; (<AssignVariableList>), which branches here with `beq`; with zero clear, falls into <AddStep>. Where the build
+;; passes `jumpToError` (the VIC-20), only those paths come here, and it jumps to <ReportError>.
+;; Also: ERRGO5 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 ToError:
-    beq RequireType::ToError
+    .ifnblank jumpToError
+        .assert jumpToError = 1, "jumpToError is 1 when given."
+        jmp ReportError
+    .else
+        beq RequireType::ToError
+    .endif
 
 ;; Sets the stack to the frame, adds <ForFrame::STEP> to the variable, stores, compares with <ForFrame::LIMIT> signed by
 ;; STEP_SIGN.
-;; Also: HAVFOR (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: HAVFOR (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 AddStep:
     txs
     .if countedStack
@@ -101,12 +109,12 @@ AddStep:
     sta TextPointer+1
 
 ;; Jumps to the continuation.
-;; Also: NEWSGO (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: NEWSGO (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 ToNextStatement:
     jmp nextStatement
 
 ;; Removes the frame (adds <FOR_FRAME_SIZE>); a comma continues with the next variable.
-;; Also: LOOPDN (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: LOOPDN (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 EndLoop:
     txa
     adc #(FOR_FRAME_SIZE - 1)           ; carry is set
@@ -124,7 +132,7 @@ EndLoop:
     ;; In: TextPointer = first character of the expression
     ;; Out: Fac = numeric result, TextPointer = terminating character
     ;; Errors: TYPE MISMATCH for a string
-    ;; Also: FRMNUM (M6502, ASTIL, CBM4S79, K4S79, HV1, HV1R, HV2, HV4, HV4R, HVK4)
+    ;; Also: FRMNUM (M6502, ASTIL, CBM4S79, K4S79, HV1, HV1R, HV2, HV4, HV4R, HVK4, BV20)
     .proc EvaluateNumber
     jsr EvaluateExpression
     .endproc
@@ -132,7 +140,7 @@ EndLoop:
     ;; Requires the current expression result to be numeric.
     ;; In: ValueType = result type
     ;; Errors: TYPE MISMATCH for a string
-    ;; Also: CHKNUM (M6502, ASTIL, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;; Also: CHKNUM (M6502, ASTIL, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     .proc RequireNumber
     clc
     .byte $24                   ; BIT zero-page skips the next byte
@@ -141,7 +149,7 @@ EndLoop:
     ;; Requires the current expression result to be a string.
     ;; In: ValueType = result type
     ;; Errors: TYPE MISMATCH for a number
-    ;; Also: CHKSTR (M6502, ASTIL, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;; Also: CHKSTR (M6502, ASTIL, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     .proc RequireString
     sec
     .endproc
@@ -151,30 +159,32 @@ EndLoop:
     ;; Out: carry = selected type on success
     ;; Errors: TYPE MISMATCH if the types differ
     ;; Entry:
-    ;;   ToError = jumps to <ReportError>; <Statements::Next::ToError> relays here
-    ;; Also: CHKVAL (M6502, ASTIL, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+    ;;   ToError = jumps to <ReportError>; <Statements::Next::ToError> relays here unless the build passes its
+    ;;     `jumpToError` (the VIC-20)
+    ;; Also: CHKVAL (M6502, ASTIL, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
     .proc RequireType
     bit ValueType
     bmi IsString
     bcs Mismatch
 
 ;; Returns.
-;; Also: CHKOK (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: CHKOK (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 Done:
     rts
 
 ;; A string result: succeeds only with carry set.
-;; Also: DOCSTR (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: DOCSTR (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 IsString:
     bcs Done
 
 ;; Reports TYPE MISMATCH: loads its error offset into X and jumps on to the error handler.
-;; Also: CHKERR (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Also: CHKERR (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 Mismatch:
     ldx #<ERROR_TYPE_MISMATCH
 
-;; Jumps to <ReportError>; <Statements::Next::ToError> relays here.
-;; Also: ERRGO4 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R)
+;; Jumps to <ReportError>; <Statements::Next::ToError> relays here unless the build passes its `jumpToError` (the
+;; VIC-20).
+;; Also: ERRGO4 (M6502, CBM4S79, HV1, HV1R, HV2, HV4, HV4R, BV20)
 ToError:
     jmp ReportError
     .endproc

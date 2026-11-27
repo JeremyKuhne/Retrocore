@@ -26,6 +26,14 @@ internal interface IDebugModule
     DebugPosition? Position(IDebugMemory memory, ushort address);
 
     /// <summary>
+    ///  Gets whether the module may have a position at an address: when false, <see cref="Position"/> is null there
+    ///  whatever memory holds. What a module covers must not change once it is added to a session.
+    /// </summary>
+    /// <param name="address">The CPU address.</param>
+    /// <returns>False when the module never describes the address.</returns>
+    bool Covers(ushort address) => true;
+
+    /// <summary>
     ///  Gets the addresses where a breakpoint on a source line stops: each start of that line's code.
     /// </summary>
     /// <param name="path">The full source path.</param>

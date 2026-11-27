@@ -4,6 +4,7 @@
 
 using Retrocore.Machines.Devices;
 using Retrocore.Media;
+using Retrocore.Media.Altair;
 using Retrocore.Media.Trs80;
 using System.Text.Json.Nodes;
 
@@ -62,6 +63,7 @@ internal static partial class MediaActions
     {
         if (codec is SectorImageCodec) { return ("sector", 256, 16, 0, 0); }
         if (codec is BlockImageCodec) { return ("block", 512, 0, 0, 0); }
+        if (codec is AltairDiskCodec) { return ("sector", AltairDisk.SectorBytes, AltairDisk.SectorsPerTrack, 0, 0); }
 
         if (codec.Format == "JV1") { return ("sector", Jv1Format.SectorSize, Jv1Format.SectorsPerTrack, 0, 0); }
         if (codec.Format != "JVC" || codec is not FloppyImageCodec) { return null; }

@@ -28,13 +28,16 @@ public abstract partial class BasicDialect
     [
         AppleSoftDialect.Enhanced,
         Level2Dialect.Instance,
+        Level1Dialect.Instance,
+        Model100Dialect.Instance,
         IntegerBasicDialect.Instance,
         IntegerBasicDialect.Apple1Basic,
         BusinessBasicDialect.Instance,
         ColorBasicDialect.Disk,
         MbasicDialect.Instance,
         PetBasicDialect.Basic4,
-        BbcBasicDialect.Instance
+        BbcBasicDialect.Instance,
+        AtariBasicDialect.Instance
     ];
 
     /// <summary>
@@ -52,6 +55,16 @@ public abstract partial class BasicDialect
     ///  Gets the TRS-80 Model I's Level II BASIC.
     /// </summary>
     public static BasicDialect Level2 => Level2Dialect.Instance;
+
+    /// <summary>
+    ///  Gets the TRS-80 Model 100's BASIC, the Tandy 102's too.
+    /// </summary>
+    public static BasicDialect Model100 => Model100Dialect.Instance;
+
+    /// <summary>
+    ///  Gets the TRS-80's Level I BASIC, the Model I's first BASIC and the Model III's other ROM.
+    /// </summary>
+    public static BasicDialect Level1 => Level1Dialect.Instance;
 
     /// <summary>
     ///  Gets the Apple II's Integer BASIC.
@@ -83,6 +96,11 @@ public abstract partial class BasicDialect
     ///  Gets MBASIC, Microsoft's BASIC-80 5.21 for CP/M.
     /// </summary>
     public static BasicDialect Mbasic => MbasicDialect.Instance;
+
+    /// <summary>
+    ///  Gets Atari BASIC, as rev. C tokenizes it.
+    /// </summary>
+    public static BasicDialect AtariBasic => AtariBasicDialect.Instance;
 
     /// <summary>
     ///  Gets the Color Computer's BASIC as the ROMs fitted know it, which crunch only their own words.

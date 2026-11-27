@@ -1,0 +1,569 @@
+(** BODYPART4A.TEXT: part 1 of 2 of BODYPART4: BODYPART's expressions and body.
+
+    Included by COMPILER.TEXT after BODYPART3C.TEXT and before BODYPART4B.TEXT.
+
+    Procedures here, nested ones indented:
+          CompileExpression
+            FloatOperands
+            WidenOperands
+            CompileSimpleExpression
+              CompileTerm
+                CompileFactor *)
+
+    (** Compiles an expression: a simple expression, or two compared.
+        Also: EXPRESSION (UCSD20) *)
+    PROCEDURE CompileExpression;
+      LABEL 1;
+      VAR
+        (** UCSD Pascal II.0 calls it LATTR (UCSD20). *)
+        LeftOperand: OperandEntry;
+        (** UCSD Pascal II.0 calls it LOP (UCSD20). *)
+        Comparison: INTEGER;
+        (** What a comparison compares, for its p-code: 0 words (scalars and
+            pointers), 1 reals, 2 strings, 3 booleans, 4 sets, 5 packed
+            characters, 6 other arrays and records, 7 long integers. *)
+        CompareKind: INTEGER;
+        (** Their words, or bytes. *)
+        CompareSize: INTEGER;
+        (** Where the string constant is. *)
+        LeftStringOffset: INTEGER;
+        (** The right operand is a string constant. *)
+        RightIsString: BOOLEAN;
+        (** The left operand is. *)
+        LeftIsString: BOOLEAN;
+        (** An index's highest value. *)
+        Highest: INTEGER;
+        (** Its lowest. *)
+        Lowest: INTEGER;
+
+      (** Converts an integer operand to REAL where the other is, or
+          ForceReal.
+          Also: FLOATIT (UCSD20) *)
+      PROCEDURE FloatOperands(VAR Other: OperandEntry; ForceReal: BOOLEAN);
+      BEGIN
+        IF (Operand.DataType = RealStructure) OR (Other.DataType =
+            RealStructure) OR ForceReal THEN
+        BEGIN
+          IF Operand.DataType = IntegerStructure THEN
+          BEGIN
+            EmitOpcode(FloatTopCode);
+            Operand.DataType := RealStructure
+          END;
+          IF Other.DataType = IntegerStructure THEN
+          BEGIN
+            EmitOpcode(FloatSecondCode);
+            Other.DataType := RealStructure
+          END
+        END
+      END;
+
+      (** Converts an integer operand to a long integer where the other is
+          one.
+          Also: STRETCHIT (UCSD20) *)
+      PROCEDURE WidenOperands(VAR OtherType: Structure);
+      BEGIN
+        IF (OtherType^.Form = LongIntegerForm) OR (Operand.DataType^.Form =
+            LongIntegerForm) THEN
+          IF Operand.DataType = IntegerStructure THEN
+          BEGIN
+            EmitConstant(18);
+            EmitExternalCall(30, 4);
+            Operand.DataType := LongStructure
+          END
+          ELSE
+            IF OtherType = IntegerStructure THEN
+            BEGIN
+              EmitConstant(14);
+              EmitExternalCall(30, 4);
+              OtherType := LongStructure
+            END
+      END;
+
+      (** Compiles terms joined by +, - and OR.
+          Also: SIMPLEEXPRESSION (UCSD20) *)
+      PROCEDURE CompileSimpleExpression(Followers: TokenSet);
+        VAR
+          (** UCSD Pascal II.0 calls it LATTR (UCSD20). *)
+          LeftOperand: OperandEntry;
+          (** UCSD Pascal II.0 calls it LOP (UCSD20). *)
+          SumOperator: INTEGER;
+          (** It starts with a minus sign.
+              Also: SIGNED (UCSD20) *)
+          Negated: BOOLEAN;
+
+        (** Compiles factors joined by *, /, DIV, MOD and AND.
+            Also: TERM (UCSD20) *)
+        PROCEDURE CompileTerm(Followers: TokenSet);
+          VAR
+            (** UCSD Pascal II.0 calls it LATTR (UCSD20). *)
+            LeftOperand: OperandEntry;
+            (** UCSD Pascal II.0 calls it LOP (UCSD20). *)
+            UnusedOperator: INTEGER;
+            (** The operator. *)
+            ProductOperator: INTEGER;
+
+          (** Compiles a factor: a constant, variable, function call,
+              (expression), NOT, or set.
+              Also: FACTOR (UCSD20) *)
+          PROCEDURE CompileFactor(Followers: TokenSet);
+            VAR
+              (** UCSD Pascal II.0 calls it LCP (UCSD20). *)
+              Found: SymbolLink;
+              (** A word CompileFactor never uses (II.0's FACTOR has its LVP
+                  here). *)
+              UnusedWord: INTEGER;
+              (** The current element is a constant. *)
+              ElementIsConstant: BOOLEAN;
+              (** A set value is on the stack, which the next element joins. *)
+              SetOnStack: BOOLEAN;
+              (** A string constant's type. *)
+              NewType: Structure;
+              (** SGS or SRS. *)
+              ElementOpcode: INTEGER;
+              (** CodeCounter where a constant element's code is dropped. *)
+              DroppedCodeStart: INTEGER;
+              (** The element's lowest value. *)
+              Lowest: INTEGER;
+              (** Its highest. *)
+              Highest: INTEGER;
+              (** The set's constant elements. *)
+              KnownMembers: SetValue;
+          BEGIN
+            IF NOT (Token IN FactorStarters) THEN
+            BEGIN
+              Error(58);
+              SkipTokens(Followers + FactorStarters);
+              Operand.DataType := NIL
+            END;
+            WHILE Token IN FactorStarters DO
+            BEGIN
+              CASE Token OF
+                NameToken:
+                BEGIN
+                  FindIdentifier([ConstantClass..FieldClass,
+                      ValueFunctionClass], Found);
+                  NextToken;
+                  IF Found.Entry^.Class = ValueFunctionClass THEN
+                  BEGIN
+                    CompileCall(Followers, Found.Entry);
+                    Operand.Kind := StackOperand
+                  END
+                  ELSE
+                    IF Found.Entry^.Class = ConstantClass THEN
+                      WITH Found.Entry^ DO
+                      BEGIN
+                        Operand.DataType := DataType;
+                        Operand.Kind := KnownValueOperand;
+                        Operand.Literal := Literal
+                      END
+                    ELSE
+                      ApplySelectors(Followers, Found.Entry);
+                  IF Operand.DataType <> NIL THEN
+                    WITH Operand.DataType^ DO
+                      IF Form = SubrangeForm THEN
+                        Operand.DataType := BaseType
+                END;
+                IntegerToken:
+                BEGIN
+                  Operand.DataType := IntegerStructure;
+                  Operand.Kind := KnownValueOperand;
+                  Operand.Literal := TokenValue;
+                  NextToken
+                END;
+                RealToken:
+                BEGIN
+                  Operand.DataType := RealStructure;
+                  Operand.Kind := KnownValueOperand;
+                  Operand.Literal := TokenValue;
+                  NextToken
+                END;
+                StringToken:
+                BEGIN
+                  IF TokenLength = 1 THEN
+                    Operand.DataType := CharStructure
+                  ELSE
+                  BEGIN
+                    NEW(NewType, StringTypeSize);
+                    NewType^.AllWords := StringStructure^.AllWords;
+                    NewType^.Capacity := TokenLength;
+                    Operand.DataType := NewType
+                  END;
+                  Operand.Kind := KnownValueOperand;
+                  Operand.Literal := TokenValue;
+                  NextToken
+                END;
+                LongNumberToken:
+                BEGIN
+                  NEW(NewType, LongTypeSize);
+                  NewType^.AllWords := LongStructure^.AllWords;
+                  NewType^.Size := DecimalSize(TokenLength);
+                  Operand.DataType := NewType;
+                  Operand.Kind := KnownValueOperand;
+                  Operand.Literal := TokenValue;
+                  NextToken
+                END;
+                LeftParenthesisToken:
+                BEGIN
+                  NextToken;
+                  CompileExpression(Followers + [RightParenthesisToken]);
+                  IF Token = RightParenthesisToken THEN
+                    NextToken
+                  ELSE
+                    Error(4)
+                END;
+                NotToken:
+                BEGIN
+                  NextToken;
+                  CompileFactor(Followers);
+                  IF (Operand.Kind = KnownValueOperand) AND (Operand.DataType =
+                      BooleanStructure) THEN
+                    Operand.Literal.Ordinal := ORD(NOT
+                        ODD(Operand.Literal.Ordinal))
+                  ELSE
+                  BEGIN
+                    PushOperand;
+                    EmitOpcode(LogicalNotCode);
+                    IF Operand.DataType <> NIL THEN
+                      IF Operand.DataType <> BooleanStructure THEN
+                      BEGIN
+                        Error(135);
+                        Operand.DataType := NIL
+                      END
+                  END
+                END;
+                LeftBracketToken:
+                BEGIN
+                  NextToken;
+                  KnownMembers := [];
+                  SetOnStack := FALSE;
+                  NEW(NewType, PointerTypeSize);
+                  WITH NewType^ DO
+                  BEGIN
+                    BaseType := NIL;
+                    Size := 0;
+                    Form := SetForm
+                  END;
+                  IF Token = RightBracketToken THEN
+                  BEGIN
+                    Operand.DataType := NewType;
+                    Operand.Kind := KnownValueOperand;
+                    NextToken
+                  END
+                  ELSE
+                  BEGIN
+                    REPEAT
+                      CompileExpression(Followers + [CommaToken, ColonToken,
+                          RightBracketToken]);
+                      IF Operand.DataType <> NIL THEN
+                        IF Operand.DataType^.Form <> ScalarForm THEN
+                        BEGIN
+                          Error(136);
+                          Operand.DataType := NIL
+                        END
+                        ELSE
+                          IF CompatibleTypes(NewType^.BaseType,
+                              Operand.DataType) THEN
+                          BEGIN
+                            ElementIsConstant := FALSE;
+                            ElementOpcode := 23;
+                            IF (Operand.Kind = KnownValueOperand) AND
+                                (Operand.Literal.Ordinal <= 127) THEN
+                            BEGIN
+                              ElementIsConstant := TRUE;
+                              Lowest := Operand.Literal.Ordinal;
+                              Highest := Lowest
+                            END;
+                            DroppedCodeStart := CodeCounter;
+                            PushOperand;
+                            MaskBoolean;
+                            IF Token = ColonToken THEN
+                            BEGIN
+                              NextToken;
+                              ElementOpcode := 20;
+                              CompileExpression(Followers + [CommaToken,
+                                  RightBracketToken]);
+                              IF CompatibleTypes(NewType^.BaseType,
+                                  Operand.DataType) THEN
+                              BEGIN
+                              END
+                              ELSE
+                              BEGIN
+                                Error(137);
+                                Operand.DataType := NIL
+                              END;
+                              IF ElementIsConstant THEN
+                                IF (Operand.Kind = KnownValueOperand) AND
+                                    (Operand.Literal.Ordinal <= 127) THEN
+                                  Highest := Operand.Literal.Ordinal
+                                ELSE
+                                BEGIN
+                                  PushOperand;
+                                  ElementIsConstant := FALSE
+                                END
+                              ELSE
+                                PushOperand
+                            END;
+                            IF ElementIsConstant THEN
+                            BEGIN
+                              CodeCounter := DroppedCodeStart;
+                              KnownMembers := KnownMembers + [Lowest..Highest]
+                            END
+                            ELSE
+                            BEGIN
+                              EmitOpcode(ElementOpcode);
+                              IF SetOnStack THEN
+                                EmitOpcode(SetUnionCode)
+                              ELSE
+                                SetOnStack := TRUE
+                            END;
+                            NewType^.BaseType := Operand.DataType;
+                            Operand.DataType := NewType
+                          END
+                          ELSE
+                            Error(137);
+                      LoopDone := Token <> CommaToken;
+                      IF NOT LoopDone THEN
+                        NextToken
+                    UNTIL LoopDone;
+                    IF Token = RightBracketToken THEN
+                      NextToken
+                    ELSE
+                      Error(12)
+                  END;
+                  IF SetOnStack THEN
+                  BEGIN
+                    IF KnownMembers <> [] THEN
+                    BEGIN
+                      TokenConstant^.Members := KnownMembers;
+                      TokenConstant^.Kind := SetKind;
+                      Operand.Literal.Entry := TokenConstant;
+                      Operand.Kind := KnownValueOperand;
+                      PushOperand;
+                      EmitOpcode(SetUnionCode)
+                    END;
+                    Operand.Kind := StackOperand
+                  END
+                  ELSE
+                  BEGIN
+                    TokenConstant^.Members := KnownMembers;
+                    TokenConstant^.Kind := SetKind;
+                    Operand.Literal.Entry := TokenConstant;
+                    Operand.Kind := KnownValueOperand
+                  END
+                END
+              END;
+              IF NOT (Token IN Followers) THEN
+              BEGIN
+                Error(6);
+                SkipTokens(Followers + FactorStarters)
+              END
+            END
+          END;
+
+        BEGIN
+          CompileFactor(Followers + [MultiplicativeToken]);
+          WHILE Token = MultiplicativeToken DO
+          BEGIN
+            PushOperand;
+            LeftOperand := Operand;
+            ProductOperator := Operator;
+            NextToken;
+            CompileFactor(Followers + [MultiplicativeToken]);
+            PushOperand;
+            IF (LeftOperand.DataType <> NIL) AND (Operand.DataType <> NIL) THEN
+              CASE ProductOperator OF
+                MultiplyOperator:
+                BEGIN
+                  FloatOperands(LeftOperand, FALSE);
+                  WidenOperands(LeftOperand.DataType);
+                  IF (LeftOperand.DataType = IntegerStructure) AND
+                      (Operand.DataType = IntegerStructure) THEN
+                    EmitOpcode(IntegerMultiplyCode)
+                  ELSE
+                    IF (LeftOperand.DataType = RealStructure) AND
+                        (Operand.DataType = RealStructure) THEN
+                      EmitOpcode(RealMultiplyCode)
+                    ELSE
+                      IF (Operand.DataType^.Form = LongIntegerForm) AND
+                          (LeftOperand.DataType^.Form = LongIntegerForm) THEN
+                      BEGIN
+                        EmitConstant(8);
+                        EmitExternalCall(30, 4)
+                      END
+                      ELSE
+                        IF (LeftOperand.DataType^.Form = SetForm) AND
+                            CompatibleTypes(LeftOperand.DataType,
+                            Operand.DataType) THEN
+                          EmitOpcode(SetIntersectionCode)
+                        ELSE
+                        BEGIN
+                          Error(134);
+                          Operand.DataType := NIL
+                        END
+                END;
+                DivideOperator:
+                BEGIN
+                  FloatOperands(LeftOperand, TRUE);
+                  IF (LeftOperand.DataType = RealStructure) AND
+                      (Operand.DataType = RealStructure) THEN
+                    EmitOpcode(DivideRealsCode)
+                  ELSE
+                  BEGIN
+                    Error(134);
+                    Operand.DataType := NIL
+                  END
+                END;
+                IntegerDivideOperator:
+                BEGIN
+                  WidenOperands(LeftOperand.DataType);
+                  IF (LeftOperand.DataType = IntegerStructure) AND
+                      (Operand.DataType = IntegerStructure) THEN
+                    EmitOpcode(DivideIntegersCode)
+                  ELSE
+                    IF (LeftOperand.DataType^.Form = LongIntegerForm) AND
+                        (Operand.DataType^.Form = LongIntegerForm) THEN
+                    BEGIN
+                      EmitConstant(10);
+                      EmitExternalCall(30, 4)
+                    END
+                    ELSE
+                    BEGIN
+                      Error(134);
+                      Operand.DataType := NIL
+                    END
+                END;
+                ModuloOperator:
+                  IF (LeftOperand.DataType = IntegerStructure) AND
+                      (Operand.DataType = IntegerStructure) THEN
+                    EmitOpcode(IntegerRemainderCode)
+                  ELSE
+                  BEGIN
+                    Error(134);
+                    Operand.DataType := NIL
+                  END;
+                AndOperator:
+                  IF (LeftOperand.DataType = BooleanStructure) AND
+                      (Operand.DataType = BooleanStructure) THEN
+                    EmitOpcode(LogicalAndCode)
+                  ELSE
+                  BEGIN
+                    Error(134);
+                    Operand.DataType := NIL
+                  END
+              END
+            ELSE
+              Operand.DataType := NIL
+          END
+        END;
+
+      BEGIN
+        Negated := FALSE;
+        IF (Token = AdditiveToken) AND (Operator IN [PlusOperator,
+            MinusOperator]) THEN
+        BEGIN
+          Negated := Operator = MinusOperator;
+          NextToken
+        END;
+        CompileTerm(Followers + [AdditiveToken]);
+        IF Negated THEN
+        BEGIN
+          PushOperand;
+          IF Operand.DataType = IntegerStructure THEN
+            EmitOpcode(NegateIntegerCode)
+          ELSE
+            IF Operand.DataType = RealStructure THEN
+              EmitOpcode(NegateRealCode)
+            ELSE
+              IF Operand.DataType^.Form = LongIntegerForm THEN
+              BEGIN
+                EmitConstant(6);
+                EmitExternalCall(30, 4)
+              END
+              ELSE
+              BEGIN
+                Error(134);
+                Operand.DataType := NIL
+              END
+        END;
+        WHILE Token = AdditiveToken DO
+        BEGIN
+          PushOperand;
+          LeftOperand := Operand;
+          SumOperator := Operator;
+          NextToken;
+          CompileTerm(Followers + [AdditiveToken]);
+          PushOperand;
+          IF (LeftOperand.DataType <> NIL) AND (Operand.DataType <> NIL) THEN
+            CASE SumOperator OF
+              PlusOperator:
+              BEGIN
+                FloatOperands(LeftOperand, FALSE);
+                WidenOperands(LeftOperand.DataType);
+                IF (LeftOperand.DataType = IntegerStructure) AND
+                    (Operand.DataType = IntegerStructure) THEN
+                  EmitOpcode(AddIntegersCode)
+                ELSE
+                  IF (LeftOperand.DataType = RealStructure) AND
+                      (Operand.DataType = RealStructure) THEN
+                    EmitOpcode(AddRealsCode)
+                  ELSE
+                    IF (Operand.DataType^.Form = LongIntegerForm) AND
+                        (LeftOperand.DataType^.Form = LongIntegerForm) THEN
+                    BEGIN
+                      EmitConstant(2);
+                      EmitExternalCall(30, 4)
+                    END
+                    ELSE
+                      IF (LeftOperand.DataType^.Form = SetForm) AND
+                          CompatibleTypes(LeftOperand.DataType,
+                          Operand.DataType) THEN
+                        EmitOpcode(SetUnionCode)
+                      ELSE
+                      BEGIN
+                        Error(134);
+                        Operand.DataType := NIL
+                      END
+              END;
+              MinusOperator:
+              BEGIN
+                FloatOperands(LeftOperand, FALSE);
+                WidenOperands(LeftOperand.DataType);
+                IF (LeftOperand.DataType = IntegerStructure) AND
+                    (Operand.DataType = IntegerStructure) THEN
+                  EmitOpcode(SubtractIntegersCode)
+                ELSE
+                  IF (LeftOperand.DataType = RealStructure) AND
+                      (Operand.DataType = RealStructure) THEN
+                    EmitOpcode(RealSubtractCode)
+                  ELSE
+                    IF (Operand.DataType^.Form = LongIntegerForm) AND
+                        (LeftOperand.DataType^.Form = LongIntegerForm) THEN
+                    BEGIN
+                      EmitConstant(4);
+                      EmitExternalCall(30, 4)
+                    END
+                    ELSE
+                      IF (LeftOperand.DataType^.Form = SetForm) AND
+                          CompatibleTypes(LeftOperand.DataType,
+                          Operand.DataType) THEN
+                        EmitOpcode(SetDifferenceCode)
+                      ELSE
+                      BEGIN
+                        Error(134);
+                        Operand.DataType := NIL
+                      END
+              END;
+              OrOperator:
+                IF (LeftOperand.DataType = BooleanStructure) AND
+                    (Operand.DataType = BooleanStructure) THEN
+                  EmitOpcode(LogicalOrCode)
+                ELSE
+                BEGIN
+                  Error(134);
+                  Operand.DataType := NIL
+                END
+            END
+          ELSE
+            Operand.DataType := NIL
+        END
+      END;

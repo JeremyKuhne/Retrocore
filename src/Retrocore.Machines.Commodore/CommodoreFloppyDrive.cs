@@ -9,7 +9,7 @@ using Retrocore.Media.Commodore;
 namespace Retrocore.Machines.Commodore;
 
 /// <summary>
-///  One of a Commodore dual drive's two mechanisms: a 5¼-inch single-sided drive with a stepper that moves the head
+///  A Commodore drive's mechanism, one of a dual drive's two or a single drive's one: a 5¼-inch single-sided drive with a stepper that moves the head
 ///  a half track at a step, and its disk turning at 300 rpm while its motor runs.
 /// </summary>
 public sealed class CommodoreFloppyDrive : IDiskDrive, IMediumSlot
@@ -33,16 +33,36 @@ public sealed class CommodoreFloppyDrive : IDiskDrive, IMediumSlot
     ///  The unit's name, <c>2040</c> or <c>4040</c>; a 2040's disks save as D67 sectors, a 4040's as D64.
     /// </param>
     internal CommodoreFloppyDrive(int unit, int drive, string model)
+        : this(
+            $"disk{unit}-{drive}",
+            $"Drive {drive} of unit {unit}",
+            $"Commodore {model} dual drive, 5¼-inch single-sided, 35 tracks",
+            $"The {model}'s 6504 and its GCR read/write logic, on the IEEE-488 bus as device {unit}",
+            model == "2040" ? ["g64", "d67"] : ["g64", "d64"],
+            drive)
+    {
+    }
+
+    /// <summary>
+    ///  Builds a mechanism.
+    /// </summary>
+    /// <param name="id">The device's id, such as <c>disk8</c>.</param>
+    /// <param name="name">Its name.</param>
+    /// <param name="description">What it is.</param>
+    /// <param name="controller">What drives it.</param>
+    /// <param name="saveFormats">The formats its disks save as, the lossless one first.</param>
+    /// <param name="drive">Its number in its unit, 0 for a single drive.</param>
+    internal CommodoreFloppyDrive(string id, string name, string description, string controller, string[] saveFormats, int drive)
     {
         Drive = drive;
-        Id = $"disk{unit}-{drive}";
+        Id = id;
         Info = new()
         {
-            Name = $"Drive {drive} of unit {unit}",
-            Description = $"Commodore {model} dual drive, 5¼-inch single-sided, 35 tracks",
-            Controller = $"The {model}'s 6504 and its GCR read/write logic, on the IEEE-488 bus as device {unit}",
+            Name = name,
+            Description = description,
+            Controller = controller,
             Formats = ["d64", "d67", "g64"],
-            SaveFormats = model == "2040" ? ["g64", "d67"] : ["g64", "d64"],
+            SaveFormats = saveFormats,
             Operations = MediaOperations.Insert | MediaOperations.Eject | MediaOperations.WriteProtect | MediaOperations.Save,
             Tracks = 35,
             Sides = 1
@@ -50,7 +70,7 @@ public sealed class CommodoreFloppyDrive : IDiskDrive, IMediumSlot
     }
 
     /// <summary>
-    ///  Gets the mechanism's number in its unit, 0 or 1.
+    ///  Gets the mechanism's number in its unit: 0 or 1 in a dual drive, 0 in a single one.
     /// </summary>
     public int Drive { get; }
 

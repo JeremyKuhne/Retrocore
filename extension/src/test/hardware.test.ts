@@ -4,7 +4,7 @@
 
 import * as assert from "node:assert/strict";
 import { test } from "node:test";
-import { cardsFor, changesFrom, fingerprint, group, restorable, type HardwareRow } from "../hardware";
+import { cardsFor, changesFrom, fingerprint, fitting, group, restorable, type HardwareRow } from "../hardware";
 
 const row = (id: string, devices: string[] = []): HardwareRow => ({ id, name: id, value: "", description: "", devices });
 
@@ -38,8 +38,10 @@ test("the Mockingboard is offered only for slot 4, and Disk II, mouse, ProFile, 
         "slot 0 takes the language and firmware cards");
 });
 
-test("the Apple III's slots are offered only the ProFile card", () => {
-    assert.deepEqual(cardsFor("slot4", "apple3").map(card => card.label), ["ProFile interface card"]);
+test("the Apple III's slots are offered the ProFile card and the SoftCard ///", () => {
+    assert.deepEqual(cardsFor("slot4", "apple3").map(card => card.label), ["ProFile interface card", "SoftCard ///"]);
+    assert.deepEqual(cardsFor("slot1", "apple3").find(card => card.label === "SoftCard ///")?.args, { action: "addSoftCard3" });
+    assert.ok(!cardsFor("slot5").some(card => card.label === "SoftCard ///"), "the Apple II takes its own SoftCard");
 });
 
 test("a saved machine comes back only while the launch's hardware options are the ones it was saved under", () => {
@@ -75,4 +77,11 @@ test("a saved machine's changes are what differs from the launch's own machine",
     }, "slot 0 and the empty drive are the launch's own, so a setting can change them");
     assert.deepEqual(changesFrom({ media: { cassette: null } }, { media: {} }), { media: { cassette: null } }, "a drive the base lacks is kept");
     assert.deepEqual(changesFrom(undefined, base), {}, "nothing saved, nothing changed");
+});
+
+test("saved media for drives a machine lacks, as Level I lacks disks, is left out of its changes", () => {
+    const changes = { cards: {}, media: { cassette: { path: "a.cas" }, drive0: { path: "ldos.dsk" } } };
+    assert.deepEqual(fitting(changes, { media: { cassette: null } }), { cards: {}, media: { cassette: { path: "a.cas" } } });
+    assert.deepEqual(fitting(changes, { media: { cassette: null, drive0: null } }), changes, "a machine with the drive keeps it");
+    assert.deepEqual(fitting(changes, undefined), changes, "a machine not described leaves them as they are");
 });

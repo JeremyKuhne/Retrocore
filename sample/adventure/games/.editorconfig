@@ -1,0 +1,3 @@
+# A transcript shows the screen as it is: a prompt before an empty command ends its line in a space.
+[*.out]
+trim_trailing_whitespace = false

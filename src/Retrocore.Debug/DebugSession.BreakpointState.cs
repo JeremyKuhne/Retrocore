@@ -48,7 +48,20 @@ internal sealed partial class DebugSession
         /// <summary>
         ///  Gets or sets the expression that must be nonzero for the breakpoint to count a hit.
         /// </summary>
-        internal string? Condition { get; set; }
+        internal string? Condition
+        {
+            get;
+            set
+            {
+                field = value;
+                ConditionTokens = null;
+            }
+        }
+
+        /// <summary>
+        ///  Gets or sets the condition's tokens, once it has been split, so it is not split again at every check.
+        /// </summary>
+        internal string[]? ConditionTokens { get; set; }
 
         /// <summary>
         ///  Gets or sets the hit count condition as VS Code gave it.
@@ -74,6 +87,11 @@ internal sealed partial class DebugSession
         ///  Gets or sets the hits last reported to VS Code.
         /// </summary>
         internal int Reported { get; set; }
+
+        /// <summary>
+        ///  Gets or sets the token of the instruction boundary it was last met at, which it is not met at again.
+        /// </summary>
+        internal long MetToken { get; set; }
 
         /// <summary>
         ///  Gets or sets why the breakpoint cannot stop, or null when it is verified.

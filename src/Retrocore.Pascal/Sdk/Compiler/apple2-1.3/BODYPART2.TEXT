@@ -1,0 +1,55 @@
+(** BODYPART2.TEXT: BODYPART's CompileRoutineBody: its heading.
+
+    Included by COMPILER.TEXT after STATEMEN2.TEXT and before BODY1.TEXT.
+
+    Procedures here, nested ones indented:
+          CompileRoutineBody *)
+
+    (** Compiles the body: BODY1 starts it, CompileStatements compiles the
+        statements, BODY3 ends it.
+
+        UCSD Pascal II.0 calls it BODY (UCSD20). *)
+    PROCEDURE CompileRoutineBody;
+      VAR
+        (** Where the procedure's code starts. *)
+        EntryPoint: INTEGER;
+        (** The word holding a large value parameter's address, as its caller
+            passed it: BODY1 copies the value from there to the parameter. *)
+        CopyOffset: INTEGER;
+        (** The segments to make resident. *)
+        ResidentList: SymbolLink;
+        (** A list being reversed. *)
+        Reversed: SymbolLink;
+        (** The next of the list. *)
+        Following: SymbolLink;
+        (** UCSD Pascal II.0 calls it LCP (UCSD20). *)
+        Current: SymbolLink;
+        (** RNP or RBP, to return. *)
+        ReturnOpcode: INTEGER;
+        (** The program's own body, which starts and ends its units. *)
+        IsMainBody: BOOLEAN;
+        (** UCSD Pascal II.0 calls it LLP (UCSD20). *)
+        UserLabel: LabelLink;
+        (** An entry of the jump table. *)
+        JumpIndex: INTEGER;
+        (** UCSD Pascal II.0 calls it LMAX (UCSD20). *)
+        Highest: INTEGER;
+        (** UCSD Pascal II.0 calls it LMIN (UCSD20). *)
+        Lowest: INTEGER;
+        (** CodeCounter while BODY3 goes back. *)
+        SavedCodeCounter: INTEGER;
+        (** Where the two bytes are that become the jump to the units' start
+            code, when BODY3 emits it. *)
+        Preamble: INTEGER;
+        (** A segment. *)
+        SystemSegment: INTEGER;
+        (** The label past the units' start code, which their end code jumps
+            to. *)
+        ExitJump: Jump;
+        (** The label of the units' start code, which the first jump goes to. *)
+        OverJump: Jump;
+        (** The label of the statements, after the first jump, which the units'
+            start code jumps back to. *)
+        StartJump: Jump;
+        (** MEMAVAIL. *)
+        FreeMemory: AvailableWords;

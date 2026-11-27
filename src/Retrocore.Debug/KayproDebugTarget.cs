@@ -68,6 +68,9 @@ internal sealed partial class KayproDebugTarget : IDebugTarget
     public DebugFrame Frame => Trs80DebugTarget.FrameOf(_machine.Processor.Registers);
 
     /// <inheritdoc/>
+    public int StackPointer => _machine.Processor.Registers.SP;
+
+    /// <inheritdoc/>
     public ushort ProgramCounter
     {
         get => _machine.Processor.Registers.PC;
@@ -81,6 +84,17 @@ internal sealed partial class KayproDebugTarget : IDebugTarget
 
     /// <inheritdoc/>
     public bool IsInstructionBoundary => _machine.Processor.IsInstructionBoundary;
+
+    /// <inheritdoc/>
+    public bool IsTakingInterrupt => _machine.Processor.IsTakingInterrupt;
+
+    /// <inheritdoc/>
+    /// <remarks>
+    ///  <para>
+    ///   A halted Z80 runs a refresh fetch every four T-states without leaving the instruction after its HALT.
+    ///  </para>
+    /// </remarks>
+    public bool IsIdle => _machine.Processor.IsHalted;
 
     /// <inheritdoc/>
     public bool InInstruction => _instruction;

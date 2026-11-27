@@ -130,8 +130,23 @@ internal sealed partial class BbcDebugTarget
             case (BbcCassette, "insert"):
                 InsertTape(path ?? throw new ArgumentException("path is required."));
                 break;
-            case (BbcCassette, "record"):
-                RecordTape(path ?? throw new ArgumentException("path is required, for saving the recording."));
+            case (BbcCassette, "record") when path is not null:
+                RecordTape(path);
+                break;
+            case (BbcCassette cassette, "record"):
+                // RECORD over the tape in it at the head, or a blank one put in for it, saved later with Save As. A
+                // tape put in to play is write-protected (InsertTape), so RECORD will not go down on it.
+                if (cassette.Tape is null) { cassette.Insert(new AcornTape(), "Blank tape", changed: true); }
+                cassette.Record();
+                break;
+            case (BbcCassette cassette, "play"):
+                cassette.Play();
+                break;
+            case (BbcCassette cassette, "stop"):
+                cassette.Stop();
+                break;
+            case (BbcCassette cassette, "rewind"):
+                cassette.Rewind();
                 break;
             case (BbcCassette cassette, "eject"):
                 cassette.Eject();
@@ -150,7 +165,7 @@ internal sealed partial class BbcDebugTarget
         }
     }
 
-    // retro/media: inserts, records and ejects tapes, and inserts and ejects disks.
+    // retro/media: inserts, records and ejects tapes, presses the recorder's keys, and inserts and ejects disks.
     private JsonObject Media(JsonObject args)
     {
         string action = args.String("action") ?? throw new ArgumentException("action is required.");
@@ -172,7 +187,7 @@ internal sealed partial class BbcDebugTarget
         }
         else
         {
-            throw new ArgumentException("device must be cassette or disk, with action insert or eject, or record for a cassette.");
+            throw new ArgumentException("device must be cassette or disk.");
         }
 
         // A changed tape or disk is held back, as from retro/device, so an older client cannot lose it. One let go of is
@@ -243,6 +258,13 @@ internal sealed partial class BbcDebugTarget
         _machine.Cassette.Insert(tape, full);
         _machine.Cassette.Record();
     }
+
+    /// <summary>
+    ///  Gets the disk interface's drive 0, which SHIFT-BREAK boots.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">The machine has no disk interface.</exception>
+    internal BbcFloppyDrive BootDrive =>
+        _machine.Drives.Count != 0 ? _machine.Drives[0] : throw new InvalidOperationException("The machine has no disk interface.");
 
     // An SSD or DSD image; a DSD's second side is drive 2 or 3, the other side of drive 0 or 1.
     private void InsertDisk(int drive, string path)

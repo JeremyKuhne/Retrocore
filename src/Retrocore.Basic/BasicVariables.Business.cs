@@ -6,15 +6,16 @@ namespace Retrocore.Basic;
 
 /// <remarks>
 ///  <para>
-///   Business BASIC keeps its arrays from ARYTAB and its simple variables after them, from VARTAB to STREND, all at
-///   flat addresses its banked pointers give. A simple variable is its entry's length, its name in capitals without
-///   its type character, a type byte ($00 real, $80 integer, $40 long integer, $FF string, $10 a DEF FN function)
-///   and its value: a four-byte real (exponent, then the mantissa high first with the sign in its top bit), an
-///   integer or a long integer high byte first, or a string's descriptor. An array is its length (two bytes, low
-///   first), its name, its type, its count of subscripts, each subscript's size high byte first, the last first, and
-///   its elements, the first subscript varying fastest. A descriptor is the string's length and its distance below
-///   HIMEM; three bytes follow each string in string space: a type ($41 a simple variable's, $81 an array element's)
-///   and the descriptor's offset from VARTAB or ARYTAB.
+///   Business BASIC keeps its arrays from ArraysStart and its simple variables after them, from VariablesStart to
+///   VariablesEnd (Apple's ARYTAB, VARTAB and STREND), all at flat addresses its banked pointers give. A simple
+///   variable is its entry's length, its name in capitals without its type character, a type byte ($00 real, $80
+///   integer, $40 long integer, $FF string, $10 a DEF FN function) and its value: a four-byte real (exponent, then the
+///   mantissa high first with the sign in its top bit), an integer or a long integer high byte first, or a string's
+///   descriptor. An array is its length (two bytes, low first), its name, its type, its count of subscripts, each
+///   subscript's size high byte first, the last first, and its elements, the first subscript varying fastest. A
+///   descriptor is the string's length and its distance below HIMEM; three bytes follow each string in string space: a
+///   type ($41 a simple variable's, $81 an array element's) and the descriptor's offset from VariablesStart or
+///   ArraysStart.
 ///  </para>
 /// </remarks>
 public sealed partial class BasicVariables
@@ -146,9 +147,9 @@ public sealed partial class BasicVariables
         }
     }
 
-    // Puts a string into string space below FRETOP, as BASIC's LET does: the characters, then the type and the
-    // descriptor's offset, which the garbage collector follows. The string it replaces, when it is in string space, is
-    // marked free, a zero type and its length.
+    // Puts a string into string space below StringsBottom (Apple's FRETOP), as BASIC's LET does: the characters, then
+    // the type and the descriptor's offset, which the garbage collector follows. The string it replaces, when it is in
+    // string space, is marked free, a zero type and its length.
     private void BusinessWriteString(int address, byte[] text)
     {
         if (text.Length > 255)
@@ -255,8 +256,8 @@ public sealed partial class BasicVariables
         return loops;
     }
 
-    // A name and type from an entry: the name's capitals, digits and periods, up to the 64 PTRGET takes, then the type
-    // byte.
+    // A name and type from an entry: the name's capitals, digits and periods, up to the 64 FindVariable takes, then the
+    // type byte.
     private BasicVariableKind? BusinessEntry(int at, out string name, out byte type)
     {
         Span<char> letters = stackalloc char[MaximumNameLength + 1];
@@ -314,7 +315,7 @@ public sealed partial class BasicVariables
             _ => BasicVariableKind.Real
         };
 
-        // PTRGET takes 64 characters, a type character among them.
+        // FindVariable takes 64 characters, a type character among them.
         string letters = kind == BasicVariableKind.Real ? text : text[..^1];
         bool named = letters.Length > 0
             && text.Length <= MaximumNameLength

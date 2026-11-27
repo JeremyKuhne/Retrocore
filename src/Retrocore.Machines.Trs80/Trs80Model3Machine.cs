@@ -63,7 +63,10 @@ public sealed class Trs80Model3Machine : IMachine
         List<IDevice> devices = [];
         if (configuration.Variant != Trs80Model3Variant.Model4P)
         {
-            Cassette = new(Bus.Cassette, 500, "$EC");
+            // Only the Model III has Level I; the Model 4 has the Model III ROM.
+            bool model3 = configuration.Variant == Trs80Model3Variant.Model3;
+            string rom = level1 ? "Level I" : model3 ? "the Model III ROM" : "the Model 4's ROM";
+            Cassette = new(Bus.Cassette, level1 ? 250 : 500, "$EC", rom, romSwitches: model3, highSpeed: !level1);
             devices.Add(Cassette);
         }
 
@@ -84,7 +87,7 @@ public sealed class Trs80Model3Machine : IMachine
         Description = "5¼-inch floppy drive",
         Controller = "FD1793, selected at port $F4",
         Formats = ["dsk", "jv1", "jv3", "dmk", "imd"],
-        SaveFormats = ["jv3", "dmk", "dsk", "jv1"],
+        SaveFormats = ["jv3", "dmk", "imd", "dsk", "jv1"],
         Operations = MediaOperations.Insert | MediaOperations.Eject | MediaOperations.WriteProtect | MediaOperations.Save,
         Tracks = 40,
         Sides = 2

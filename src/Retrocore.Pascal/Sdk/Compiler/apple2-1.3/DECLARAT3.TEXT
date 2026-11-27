@@ -1,0 +1,585 @@
+(** DECLARAT3.TEXT: part 3 of 4 of DECLARAT, segment 8: declarations.
+
+    Included by COMPILER.TEXT after DECLARAT2.TEXT and before DECLARAT4.TEXT.
+
+    Procedures here, nested ones indented:
+                  SearchLibrary
+          DeclareLabels
+          DeclareConstants
+          DeclareTypes
+          DeclareVariables
+          DeclareRoutine *)
+
+            (** The kind of the library's segment named UnitName with a kind
+                in Kinds, and its slot; -1 for none. *)
+            FUNCTION SearchLibrary(VAR Slot: INTEGER; Kinds: KindSet; VAR Hit:
+                BOOLEAN): INTEGER;
+              VAR
+                (** Its kind. *)
+                FoundKind: INTEGER;
+            BEGIN
+              Slot := 0;
+              Hit := FALSE;
+              WHILE (Slot <= 15) AND NOT Hit DO
+                IF SlotNames[Slot] = UnitName THEN
+                BEGIN
+                  FoundKind := SlotKinds[Slot];
+                  IF FoundKind IN Kinds THEN
+                    Hit := TRUE
+                  ELSE
+                    Slot := Slot + 1
+                END
+                ELSE
+                  Slot := Slot + 1;
+              IF Hit THEN
+                SearchLibrary := FoundKind
+              ELSE
+                SearchLibrary := -1
+            END;
+
+          BEGIN
+            UnitKind := SearchLibrary(UnitSlot, [0, 3..6], Present);
+            IsInLibrary := Present;
+            IF Present THEN
+              IF UnitKind IN [0, 5, 6] THEN
+                IF SearchLibrary(DataSlot, [7], Present) = 7 THEN
+                BEGIN
+                  UsesIntrinsic := TRUE;
+                  OldDataSegment := DataSegment;
+                  DataSegment := SlotAttributes[DataSlot].Number
+                END
+                ELSE
+                  IF UnitKind IN [5, 6] THEN
+                  BEGIN
+                    UsesIntrinsic := TRUE;
+                    WithoutData := TRUE
+                  END
+          END;
+
+        BEGIN
+          Found := FALSE;
+          Listed.Entry := CompiledUnits.Entry;
+          WHILE (Listed.Entry <> NIL) AND NOT Found DO
+            IF Listed.Entry^.Name = UnitName THEN
+              Found := TRUE
+            ELSE
+              Listed.Entry := Listed.Entry^.Next.Entry;
+          IF Found THEN
+          BEGIN
+            WITH SegmentDictionary[SlotOfSegment[Listed.Entry^.StaticLevel]] DO
+            BEGIN
+              UnitKind := Kind;
+              StartBlock := TextBlock
+            END;
+            CurrentSegment := Listed.Entry^.StaticLevel;
+            NextRoutine := 2;
+            IF (UnitKind IN [5, 6]) OR (UnitKind = 0) AND
+                ODD(Listed.Entry^.CodeSegment) THEN
+            BEGIN
+              UsesIntrinsic := TRUE;
+              IF ODD(Listed.Entry^.CodeSegment) THEN
+              BEGIN
+                OldDataSegment := DataSegment;
+                DataSegment := Listed.Entry^.RoutineKind
+              END
+              ELSE
+                WithoutData := TRUE
+            END;
+            UnitFile := WorkUnitFile
+          END
+          ELSE
+          BEGIN
+            Found := TRUE;
+            IF LibraryClosed THEN
+            BEGIN
+              IF BLOCKREAD(LibraryFile, LibraryExtents, 1, 0) <> 1 THEN
+              BEGIN
+                CLOSE(LibraryFile);
+                RESET(LibraryFile, '*SYSTEM.LIBRARY');
+                IF IORESULT <> 0 THEN
+                  Found := FALSE
+                ELSE
+                  IF BLOCKREAD(LibraryFile, LibraryExtents, 1, 0) <> 1 THEN
+                    Found := FALSE
+                  ELSE
+                    UnitFile := SystemUnitFile
+              END
+              ELSE
+                UnitFile := UserUnitFile;
+              IF Found THEN
+                LibraryClosed := FALSE
+            END;
+            IF Found THEN
+              IF IsInLibrary THEN
+              BEGIN
+              END
+              ELSE
+              BEGIN
+                Error(190);
+                Found := FALSE
+              END
+            ELSE
+              Error(187);
+            IF Found THEN
+            BEGIN
+              StartBlock := SlotTexts[UnitSlot];
+              IF UsesIntrinsic THEN
+              BEGIN
+                CurrentSegment := SlotAttributes[UnitSlot].Number;
+                NextRoutine := 2
+              END
+              ELSE
+              BEGIN
+                IF InIntrinsicUnit THEN
+                  Error(353);
+                CurrentSegment := NextSegment;
+                TakeSegmentSlot(TRUE);
+                WITH SegmentDictionary[LastSegmentSlot] DO
+                BEGIN
+                  FirstBlock := 0;
+                  CodeLength := 0;
+                  NameOfSegment := SlotNames[UnitSlot];
+                  Number := CurrentSegment;
+                  IF InUnit THEN
+                    Kind := LinkedSegment
+                  ELSE
+                    Kind := UnitKind;
+                  TextBlock := 0
+                END;
+                NextRoutine := 2
+              END
+            END
+          END;
+          IF StartBlock = 0 THEN
+          BEGIN
+            Error(195);
+            Found := FALSE
+          END;
+          IF Found THEN
+          BEGIN
+            ReadingInterface := TRUE;
+            UsesCursor := SourceCursor;
+            UsesLineStart := LineStart;
+            UsesBlock := SourceBlock - 2;
+            SourceBlock := StartBlock;
+            ReadSourcePage;
+            NextToken
+          END
+        END;
+
+      BEGIN
+        WithoutData := FALSE;
+        IF Noisy THEN
+        BEGIN
+          WRITELN(OUTPUT);
+          WRITELN(TokenName, ' [', MEMAVAIL:5, ' words]');
+          WRITE('<', LinesRead:4, '>')
+        END;
+        OldSegment := CurrentSegment;
+        OldNextRoutine := NextRoutine;
+        OldDataCounter := DataCounter;
+        FindInterface(Found);
+        IF Found THEN
+        BEGIN
+          IF UsesIntrinsic THEN
+            NEW(NewUnit.Entry, UnitIdentifierSize)
+          ELSE
+            NEW(NewUnit.Entry, PackedFieldSize);
+          WITH NewUnit.Entry^ DO
+          BEGIN
+            Name := UnitName;
+            Next.Entry := UsedUnits.Entry;
+            DataType := NIL;
+            Class := ModuleClass;
+            RoutineNumber := ORD(UnitKind <> 6);
+            Offset := ORD(UnitKind IN [3, 5, 6]);
+            IF ODD(Offset) THEN
+              StaticLevel := CurrentSegment;
+            CodeSegment := ORD(UsesIntrinsic AND NOT WithoutData);
+            IF ODD(CodeSegment) THEN
+              RoutineKind := DataSegment
+          END;
+          UsedUnits.Entry := NewUnit.Entry;
+          IF NOT UsesIntrinsic THEN
+            NeedsLinker := TRUE
+          ELSE
+            DataCounter := 1;
+          LinesAtStart := LinesRead;
+          DECLARAT(Followers + [EndToken]);
+          IF UsesIntrinsic THEN
+            IF WithoutData THEN
+            BEGIN
+              IF DataCounter > 1 THEN
+                Error(350)
+            END
+            ELSE
+              LibrarySegments := LibrarySegments + [DataSegment];
+          IF ODD(NewUnit.Entry^.Offset) THEN
+          BEGIN
+            IF UsesIntrinsic THEN
+              LibrarySegments := LibrarySegments + [CurrentSegment];
+            EnterIdentifier(NewUnit.Entry)
+          END;
+          NextToken;
+          IF Token = NameToken THEN
+          BEGIN
+            IF TokenName = 'P       ' THEN
+            BEGIN
+              LibrarySegments := LibrarySegments + [31];
+              NextToken
+            END;
+            IF TokenName = 'L       ' THEN
+              LibrarySegments := LibrarySegments + [30]
+          END;
+          SourceBlock := 9999;
+          ReadSourcePage
+        END;
+        IF UsesIntrinsic THEN
+          DataCounter := OldDataCounter;
+        CurrentSegment := OldSegment;
+        NextRoutine := OldNextRoutine;
+        IF UsesIntrinsic THEN
+        BEGIN
+          UsesIntrinsic := FALSE;
+          IF NOT WithoutData THEN
+            DataSegment := OldDataSegment
+        END
+      END;
+
+    BEGIN
+      IF Level > 1 THEN
+        Error(189);
+      IF InUnit AND NOT InInterface THEN
+        Error(192);
+      IF NOT ReadingInterface THEN
+        UsedUnits.Entry := NIL;
+      REPEAT
+        IF Token <> NameToken THEN
+          Error(2)
+        ELSE
+          IF ReadingInterface THEN
+          BEGIN
+            Listed.Entry := UsedUnits.Entry;
+            WHILE Listed.Entry <> NIL DO
+              IF Listed.Entry^.Name = TokenName THEN
+                GOTO 1
+              ELSE
+                Listed.Entry := Listed.Entry^.Next.Entry;
+            Error(188);
+            1:
+          END
+          ELSE
+            UseUnit(TokenName);
+        NextToken;
+        LoopDone := Token <> CommaToken;
+        IF LoopDone THEN
+          IF Token <> SemicolonToken THEN
+            Error(20)
+          ELSE
+          BEGIN
+          END
+        ELSE
+          NextToken
+      UNTIL LoopDone;
+      IF Token = SemicolonToken THEN
+        NextToken
+      ELSE
+        Error(14);
+      IF NOT ReadingInterface THEN
+      BEGIN
+        IF InUnit THEN
+          UsedUnits.Entry := NIL;
+        LibraryClosed := TRUE
+      END
+    END;
+
+    (** Compiles LABEL.
+        Also: LABELDECLARATION (UCSD20) *)
+    PROCEDURE DeclareLabels;
+      VAR
+        (** UCSD Pascal II.0 calls it LLP (UCSD20). *)
+        Declared: LabelLink;
+        (** Declared twice.
+            Also: REDEF (UCSD20) *)
+        Redeclared: BOOLEAN;
+    BEGIN
+      REPEAT
+        IF Token = IntegerToken THEN
+        BEGIN
+          WITH Display[DisplayTop] DO
+          BEGIN
+            Declared.Entry := Labels.Entry;
+            Redeclared := FALSE;
+            WHILE (Declared.Entry <> NIL) AND NOT Redeclared DO
+              IF Declared.Entry^.Number.Entry <> TokenValue.Entry THEN
+                Declared.Entry := Declared.Entry^.Next.Entry
+              ELSE
+              BEGIN
+                Redeclared := TRUE;
+                Error(166)
+              END;
+            IF NOT Redeclared THEN
+            BEGIN
+              NEW(Declared.Entry);
+              WITH Declared.Entry^ DO
+              BEGIN
+                Number.Entry := TokenValue.Entry;
+                Target := NIL;
+                Next.Entry := Labels.Entry
+              END;
+              Labels.Entry := Declared.Entry
+            END
+          END;
+          NextToken
+        END
+        ELSE
+          Error(15);
+        CheckFollowers(LabelFollowers);
+        LoopDone := Token <> CommaToken;
+        IF NOT LoopDone THEN
+          NextToken
+      UNTIL LoopDone;
+      IF Token = SemicolonToken THEN
+        NextToken
+      ELSE
+        Error(14)
+    END;
+
+    (** Compiles CONST.
+        Also: CONSTDECLARATION (UCSD20) *)
+    PROCEDURE DeclareConstants;
+      VAR
+        (** UCSD Pascal II.0 calls it LCP (UCSD20). *)
+        Declared: SymbolLink;
+        (** UCSD Pascal II.0 calls it LSP (UCSD20). *)
+        ValueType: Structure;
+        (** UCSD Pascal II.0 calls it LVALU (UCSD20). *)
+        Value: WordValue;
+    BEGIN
+      IF Token <> NameToken THEN
+      BEGIN
+        Error(2);
+        SkipTokens(Followers + [NameToken])
+      END;
+      WHILE Token = NameToken DO
+      BEGIN
+        NEW(Declared.Entry, ConstIdentifierSize);
+        WITH Declared.Entry^ DO
+        BEGIN
+          Name := TokenName;
+          DataType := NIL;
+          Next.Entry := NIL;
+          Class := ConstantClass
+        END;
+        NextToken;
+        IF (Token = RelationalToken) AND (Operator = EqualOperator) THEN
+          NextToken
+        ELSE
+          Error(16);
+        ReadConstant(Followers + [SemicolonToken], ValueType, Value);
+        EnterIdentifier(Declared.Entry);
+        Declared.Entry^.DataType := ValueType;
+        Declared.Entry^.Literal := Value;
+        IF Token = SemicolonToken THEN
+        BEGIN
+          NextToken;
+          CheckFollowers(NameFollowers)
+        END
+        ELSE
+          IF NOT ((Token = EndToken) AND InUnit) THEN
+            Error(14)
+      END
+    END;
+
+    (** Compiles TYPE, then fixes the pointer types declared before their
+        targets.
+        Also: TYPEDECLARATION (UCSD20) *)
+    PROCEDURE DeclareTypes;
+      VAR
+        (** UCSD Pascal II.0 calls it LCP1 (UCSD20). *)
+        PreviousPending: SymbolLink;
+        (** UCSD Pascal II.0 calls it LCP2 (UCSD20). *)
+        Pending: SymbolLink;
+        (** UCSD Pascal II.0 calls it LCP (UCSD20). *)
+        Declared: SymbolLink;
+        (** UCSD Pascal II.0 calls it LSP (UCSD20). *)
+        TypeMade: Structure;
+        (** UCSD Pascal II.0 calls it LSIZE (UCSD20). *)
+        TypeSize: INTEGER;
+    BEGIN
+      IF Token <> NameToken THEN
+      BEGIN
+        Error(2);
+        SkipTokens(Followers + [NameToken])
+      END;
+      WHILE Token = NameToken DO
+      BEGIN
+        NEW(Declared.Entry, TypeIdentifierSize);
+        WITH Declared.Entry^ DO
+        BEGIN
+          Name := TokenName;
+          DataType := NIL;
+          Class := TypeClass
+        END;
+        NextToken;
+        IF (Token = RelationalToken) AND (Operator = EqualOperator) THEN
+          NextToken
+        ELSE
+          Error(16);
+        CompileType(Followers + [SemicolonToken], TypeMade, TypeSize);
+        EnterIdentifier(Declared.Entry);
+        Declared.Entry^.DataType := TypeMade;
+        Pending.Entry := ForwardPointers.Entry;
+        WHILE Pending.Entry <> NIL DO
+        BEGIN
+          IF Pending.Entry^.Name = Declared.Entry^.Name THEN
+          BEGIN
+            Pending.Entry^.DataType^.ScalarKind :=
+                ORD(Declared.Entry^.DataType);
+            IF Pending.Entry <> ForwardPointers.Entry THEN
+              PreviousPending.Entry^.Next.Entry := Pending.Entry^.Next.Entry
+            ELSE
+              ForwardPointers.Entry := Pending.Entry^.Next.Entry
+          END;
+          PreviousPending.Entry := Pending.Entry;
+          Pending.Entry := Pending.Entry^.Next.Entry
+        END;
+        IF Token = SemicolonToken THEN
+        BEGIN
+          NextToken;
+          CheckFollowers(NameFollowers)
+        END
+        ELSE
+          IF NOT ((Token = EndToken) AND InUnit) THEN
+            Error(14)
+      END;
+      IF ForwardPointers.Entry <> NIL THEN
+      BEGIN
+        Error(117);
+        ForwardPointers.Entry := NIL
+      END
+    END;
+
+    (** Compiles VAR, giving each variable its words, and listing a block's
+        files in Display.
+        Also: VARDECLARATION (UCSD20) *)
+    PROCEDURE DeclareVariables;
+      VAR
+        (** UCSD Pascal II.0 calls it LCP1 (UCSD20). *)
+        GroupHead: SymbolLink;
+        (** UCSD Pascal II.0 calls it NXT (UCSD20). *)
+        Variable: SymbolLink;
+        (** UCSD Pascal II.0 calls it LCP (UCSD20). *)
+        Declared: SymbolLink;
+        (** UCSD Pascal II.0 calls it LSP (UCSD20). *)
+        TypeMade: Structure;
+        (** UCSD Pascal II.0 calls it LSIZE (UCSD20). *)
+        TypeSize: INTEGER;
+    BEGIN
+      Variable.Entry := NIL;
+      REPEAT
+        REPEAT
+          IF Token = NameToken THEN
+          BEGIN
+            IF InUnit THEN
+              NEW(Declared.Entry, UnitVariableSize)
+            ELSE
+              NEW(Declared.Entry, SimpleVariableSize);
+            WITH Declared.Entry^ DO
+            BEGIN
+              Name := TokenName;
+              Next.Entry := Variable.Entry;
+              Class := ActualClass;
+              DataType := NIL;
+              IF UsesIntrinsic OR InIntrinsicUnit THEN
+                IF Level <= 1 THEN
+                  StaticLevel := -DataSegment
+                ELSE
+                  StaticLevel := Level
+              ELSE
+                StaticLevel := Level;
+              IF InUnit THEN
+                IF InInterface THEN
+                  RoutineNumber := 1
+                ELSE
+                  RoutineNumber := 0
+            END;
+            EnterIdentifier(Declared.Entry);
+            Variable.Entry := Declared.Entry;
+            NextToken
+          END
+          ELSE
+            Error(2);
+          IF NOT (Token IN Followers + [CommaToken, ColonToken] +
+              CompositeStarters) THEN
+          BEGIN
+            Error(6);
+            SkipTokens(Followers + [CommaToken..SemicolonToken] +
+                CompositeStarters)
+          END;
+          LoopDone := Token <> CommaToken;
+          IF NOT LoopDone THEN
+            NextToken
+        UNTIL LoopDone;
+        IF Token = ColonToken THEN
+          NextToken
+        ELSE
+          Error(5);
+        GroupHead.Entry := Variable.Entry;
+        CompileType(Followers + [SemicolonToken] + CompositeStarters, TypeMade,
+            TypeSize);
+        WHILE Variable.Entry <> NIL DO
+          WITH Variable.Entry^ DO
+          BEGIN
+            DataType := TypeMade;
+            Offset := DataCounter;
+            DataCounter := DataCounter + TypeSize;
+            Variable.Entry := Next.Entry;
+            IF Next.Entry = NIL THEN
+              IF TypeMade <> NIL THEN
+                IF TypeMade^.Form = FileForm THEN
+                BEGIN
+                  Next.Entry := Display[DisplayTop].Files.Entry;
+                  Display[DisplayTop].Files.Entry := GroupHead.Entry
+                END
+          END;
+        IF Token = SemicolonToken THEN
+        BEGIN
+          NextToken;
+          CheckFollowers(NameFollowers)
+        END
+        ELSE
+          IF NOT ((Token = EndToken) AND InUnit) THEN
+            Error(14)
+      UNTIL (Token <> NameToken) AND NOT (Token IN CompositeStarters);
+      IF ForwardPointers.Entry <> NIL THEN
+      BEGIN
+        Error(117);
+        ForwardPointers.Entry := NIL
+      END
+    END;
+
+    (** Compiles a procedure's or function's heading, FORWARD or EXTERNAL,
+        and opens its block; a segment procedure gets a segment of its own.
+        Also: PROCDECLARATION (UCSD20) *)
+    PROCEDURE DeclareRoutine(HeadingToken: INTEGER; AsSegment: BOOLEAN);
+      VAR
+        (** The symbol after SEGMENT. *)
+        RoutineToken: INTEGER;
+        (** UCSD Pascal II.0 calls it LCP1 (UCSD20). *)
+        Parameters: SymbolLink;
+        (** UCSD Pascal II.0 calls it LCP (UCSD20). *)
+        Declared: SymbolLink;
+        (** UCSD Pascal II.0 calls it LSP (UCSD20). *)
+        ResultType: Structure;
+        (** Declared FORWARD before.
+            Also: FORW (UCSD20) *)
+        WasForward: BOOLEAN;
+        (** A parameter without a type. *)
+        Untyped: BOOLEAN;
+        (** The words a parameter ends at. *)
+        EndOfParameter: INTEGER;
+        (** The lexical stack's new record.
+
+            UCSD Pascal II.0 calls it LLEXSTK (UCSD20). *)
+        NewLexicalEntry: LexicalEntry;

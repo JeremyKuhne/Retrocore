@@ -362,7 +362,7 @@ NextWaiting:
 ;; See: <Lines::RunLoop>, <Statements::Colon>
 ;; Also: WAITTOKEN (UNKN)
 Wait:
-    jsr ReadNextLineByte
+    jsr Interpreter::ReadNextLineByte
     lda CurrentVerb
     bcc PushToken                   ; always: the compare cleared carry
 

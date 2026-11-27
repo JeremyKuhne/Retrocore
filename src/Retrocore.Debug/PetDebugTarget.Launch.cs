@@ -171,7 +171,7 @@ internal sealed partial class PetDebugTarget
             return;
         }
 
-        if (device is not PetDatasette deck)
+        if (device is not CommodoreDatasette deck)
         {
             throw new ArgumentException($"{device.Info.Name} does not support {action}.");
         }
@@ -218,10 +218,28 @@ internal sealed partial class PetDebugTarget
         return Directory.Exists(set) ? set : directory;
     }
 
+    /// <summary>
+    ///  Gets cassette 1, the Datasette a <c>basic</c> target's tape plays in.
+    /// </summary>
+    internal CommodoreDatasette BootDeck => _machine.Bus.Cassette1;
+
+    /// <summary>
+    ///  Gets unit 8's drive 0, the drive a <c>basic</c> target's disk boots from.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">No disk unit is connected as 8.</exception>
+    internal CommodoreFloppyDrive BootDiskDrive =>
+        _machine.Disks.FirstOrDefault(unit => unit.Address == FirstDiskAddress)?.Drive0
+            ?? throw new InvalidOperationException("No disk unit is connected as device 8.");
+
+    /// <summary>
+    ///  Gets whether BASIC's screen shows its READY prompt on a line of its own.
+    /// </summary>
+    internal bool ShowsReady => _machine.ReadTextScreen().Any(line => line.TrimEnd() == "READY.");
+
     // Puts a tape in with PLAY down: a TAP image or WAV recording, which saves back to its file, or a program file
     // made into the tape SAVE would write, which saves only as another file. The tape is read before the one in the
     // Datasette comes out, so a file that cannot be read leaves it in.
-    private static void Insert(PetDatasette deck, string path)
+    private static void Insert(CommodoreDatasette deck, string path)
     {
         string full = Path.GetFullPath(path);
         byte[] bytes = File.ReadAllBytes(full);
@@ -275,7 +293,7 @@ internal sealed partial class PetDebugTarget
         ["disks"] = DiskState()
     };
 
-    private static JsonObject Cassette(PetDatasette deck) => new JsonObject
+    private static JsonObject Cassette(CommodoreDatasette deck) => new JsonObject
     {
         ["path"] = deck.Media?.Label,
         ["mode"] = deck.Mode.ToString().ToLowerInvariant(),

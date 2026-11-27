@@ -4,6 +4,7 @@
 
 using Retrocore.Assembler;
 using Retrocore.Cpu.Z80;
+using Retrocore.Debug;
 using Retrocore.Machines.Trs80;
 using Retrocore.Media.Floppy;
 using Retrocore.Media.Trs80;
@@ -169,6 +170,179 @@ public class Trs80Model2Tests
         bus.Read(0x2080).Should().Be(0);
         (bus.Pio.Read(0) & 0x01).Should().Be(1, "the PIO's port A shows INTRQ");
         bus.In(0xE4).Should().Be(0x00, "success");
+    }
+
+    /// <summary>
+    ///  A block's end interrupts with the vector the program gave, and when status affects the vector, with bits 1-2
+    ///  set to 10, the end of a block, as Zilog's DMA gives them. TRSDOS's DMA test copies memory to video RAM and
+    ///  waits for the handler at that vector's entry; with 01, a match's, it stopped at <c>BOOT ERROR DM 23</c>.
+    /// </summary>
+    /// <param name="interruptControl">
+    ///  The interrupt control byte: the end of a block and a vector, with or without status affecting it.
+    /// </param>
+    /// <param name="expected">The vector the DMA gives.</param>
+    [TestMethod]
+    [DataRow((byte)0x32, (byte)0xAC)]
+    [DataRow((byte)0x12, (byte)0xA8)]
+    public void DmaEndOfBlockVector(byte interruptControl, byte expected)
+    {
+        Trs80Model2Bus bus = Create(new()).Bus;
+        for (int index = 0; index < 0x50; index++) { bus.Write((ushort)(0x2100 + index), (byte)(index + 1)); }
+
+        // As TRSDOS's test: A (memory at $2100, counting up) to B (memory at $3000, counting up), $4F, continuous,
+        // forced ready, interrupting at the block's end with vector $A8.
+        foreach (byte value in (byte[])[
+            0xC3, 0x7D, 0x00, 0x21, 0x4F, 0x00, 0x14, 0x10, 0xBD, 0x00, 0x30, interruptControl, 0xA8, 0x92, 0xCF, 0xB3,
+            0xAB, 0x87])
+        {
+            bus.Out(0xF8, value);
+        }
+
+        for (int cycle = 0; cycle < 10_000 && bus.Dma.Enabled; cycle++) { bus.Tick(); }
+
+        bus.Dma.Enabled.Should().BeFalse("the block ended");
+        bus.Read(0x3000).Should().Be(1);
+        bus.Read(0x304F).Should().Be(0x50, "a block moves one byte more than its length");
+        bus.Dma.PendingVector.Should().Be(expected);
+    }
+
+    /// <summary>
+    ///  The PIO's port A shows, in bit 1, that the selected drive's disk has sectors on side 1, following the sectors
+    ///  an image adds and formatting replaces.
+    /// </summary>
+    [TestMethod]
+    public void PortAShowsATwoSidedDisk()
+    {
+        Trs80Model2Machine machine = Create(new());
+        Trs80Model2Bus bus = machine.Bus;
+        FloppyDisk disk = new();
+        disk.Add(0, 0, new FloppySector(0, 0, 1, new byte[128], doubleDensity: false));
+        machine.Drives[0].Insert(disk, "test", "IMD");
+        bus.Out(0xEF, 0x4E);
+
+        disk.Sides.Should().Be(1);
+        (bus.In(0xE0) & 0x02).Should().Be(0);
+        FloppySector tooLong = new(3, 1, 1, new byte[16384], doubleDensity: true);
+        disk.Invoking(target => target.Add(3, 1, tooLong)).Should().Throw<InvalidDataException>("the sector is longer than a track");
+        disk.Sides.Should().Be(1, "the sector that did not fit left side 1 empty");
+        disk.Add(1, 1, new FloppySector(1, 1, 1, new byte[256], doubleDensity: true));
+        disk.Sides.Should().Be(2);
+        (bus.In(0xE0) & 0x02).Should().Be(0x02);
+        disk.Format(1, 1, []);
+        disk.Sides.Should().Be(1, "formatting left side 1 empty");
+        (bus.In(0xE0) & 0x02).Should().Be(0);
+        disk.Format(2, 1, [new FloppySector(2, 1, 1, new byte[256], doubleDensity: true)]);
+        disk.Sides.Should().Be(2);
+        disk.Format(2, 1, [new FloppySector(2, 1, 2, new byte[256], doubleDensity: true)]);
+        disk.Sides.Should().Be(2, "reformatting a track on side 1 keeps it");
+    }
+
+    /// <summary>
+    ///  With the PIO's port A in bit control mode, as LS-DOS 6.3.1 sets it to take the FD1791's INTRQ as an interrupt,
+    ///  the PIO reads port A at every T-state, and with it whether the selected drive's disk is two-sided. That costs
+    ///  nothing: once it sorted all the disk's tracks each time, which slowed LS-DOS's boot after its welcome screen
+    ///  from seconds to minutes.
+    /// </summary>
+    [TestMethod]
+    public void PioWatchingTheControllerDoesNotAllocate()
+    {
+        Trs80Model2Machine machine = Create(new());
+        Trs80Model2Bus bus = machine.Bus;
+        FloppyDisk disk = new();
+        for (int cylinder = 0; cylinder < 77; cylinder++)
+        {
+            for (int side = 0; side < 2; side++)
+            {
+                for (int sector = 1; sector <= 26; sector++)
+                {
+                    disk.Add(cylinder, side, new FloppySector((byte)cylinder, (byte)side, (byte)sector, new byte[256], doubleDensity: true));
+                }
+            }
+        }
+
+        machine.Drives[0].Insert(disk, "test", "DMK");
+        bus.Out(0xEF, 0x4E);
+
+        // Port A in mode 3, bit 0 (INTRQ) an input, its interrupt enabled on bit 0 going high.
+        foreach (byte value in (byte[])[0xCF, 0xFF, 0xB7, 0xFE]) { bus.Out(0xE2, value); }
+        bus.Pio.Mode(0).Should().Be(3);
+        (bus.Pio.Read(0) & 0x02).Should().Be(0x02, "port A's bit 1 shows a two-sided disk");
+
+        void Run()
+        {
+            for (int cycle = 0; cycle < 10_000; cycle++) { bus.Tick(); }
+        }
+
+        Run();
+        Allocations.During(Run).Should().Be(0);
+    }
+
+    /// <summary>
+    ///  LS-DOS 6.3.1 boots from its DMK image with the SDK's version 5 boot ROM: its welcome screen, the date, its
+    ///  prompt and a directory listing. The image is <c>M2LSDOS631.dmk</c> in <c>trs80-disks</c> under
+    ///  <see cref="ExternalTestData.Root"/>; the test is inconclusive without it.
+    /// </summary>
+    /// <remarks>
+    ///  <para>
+    ///   By the date prompt LS-DOS has put the PIO's port A in bit control mode, which once made each T-state sort
+    ///   the disk's tracks (<see cref="PioWatchingTheControllerDoesNotAllocate"/>). Each step is given the machine's
+    ///   own time, so that slowed this test from seconds to minutes without failing it.
+    ///  </para>
+    /// </remarks>
+    [TestMethod]
+    public void BootsLsDos()
+    {
+        string path = Path.Join(ExternalTestData.Root, "trs80-disks", "M2LSDOS631.dmk");
+        if (!File.Exists(path)) { Assert.Inconclusive($"{path} is missing."); }
+
+        string roms = Path.Join(AppContext.BaseDirectory, "Inputs", "Trs80");
+        byte[] boot = Trs80SdkModules.AssembleModel2Boot(Path.Join(roms, "Model2Boot.asm"), 5).Sections[0].Bytes.ToArray();
+        byte[] characters = Trs80SdkModules.AssembleModel2CharacterGenerator(Path.Join(roms, "Model2CharacterGenerator.asm"))
+            .Sections[0].Bytes.ToArray();
+
+        Trs80Model2Machine machine = new(new Trs80Model2Configuration(), new Trs80Model2Roms(boot, characters));
+        (FloppyDisk disk, string format) = Trs80DiskImage.Read(File.ReadAllBytes(path), ".dmk");
+        machine.Drives[0].Insert(disk, "M2LSDOS631.dmk", format);
+
+        ShowsWithin(machine, "W E L C O M E", seconds: 20);
+        ShowsWithin(machine, "Date", seconds: 20);
+        machine.Bus.Pio.Mode(0).Should().Be(3, "LS-DOS watches the controller's INTRQ through port A");
+        Type(machine, "11/14/86\r");
+        Type(machine, "\r");
+        ShowsWithin(machine, "LS-DOS Ready", seconds: 20);
+        Type(machine, "DIR\r");
+        ShowsWithin(machine, "FLOPPY/DCT", seconds: 20);
+    }
+
+    // Types text a key at a time, then runs a second.
+    private static void Type(Trs80Model2Machine machine, string text)
+    {
+        foreach (char character in text) { machine.Bus.Keyboard.Type((byte)character); }
+        for (int ticks = 0; machine.Bus.Keyboard.IsTyping && ticks < 3000; ticks++)
+        {
+            machine.Run(Trs80Model2Timing.ClockHertz / 60);
+        }
+
+        machine.Run(Trs80Model2Timing.ClockHertz);
+    }
+
+    // Runs a second at a time until the screen shows the text, for at most some seconds of the machine's time.
+    private static void ShowsWithin(Trs80Model2Machine machine, string text, int seconds)
+    {
+        for (int second = 0; second < seconds && !Text(machine).Contains(text, StringComparison.Ordinal); second++)
+        {
+            machine.Run(Trs80Model2Timing.ClockHertz);
+        }
+
+        Text(machine).Should().Contain(text, $"it shows within {seconds} seconds");
+    }
+
+    // The screen as shown, a line to a row, with inverse characters as their plain ones.
+    private static string Text(Trs80Model2Machine machine)
+    {
+        Trs80Model2Video video = machine.Bus.Video;
+        return string.Join('\n', Enumerable.Range(0, video.Rows).Select(row => new string([..
+            Enumerable.Range(0, video.Columns).Select(column => (char)(video.Displayed(row, column) & 0x7F))])));
     }
 
     /// <summary>

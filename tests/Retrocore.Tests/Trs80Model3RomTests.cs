@@ -3,9 +3,11 @@
 // See LICENSE file in the project root for full license information
 
 using Retrocore.Debug;
+using Retrocore.Machines.Chips;
 using Retrocore.Machines.Trs80;
 using Retrocore.Media.Floppy;
 using Retrocore.Media.Trs80;
+using System.Text.Json.Nodes;
 
 namespace Retrocore.Tests;
 
@@ -16,6 +18,9 @@ namespace Retrocore.Tests;
 [TestClass]
 public class Trs80Model3RomTests
 {
+    // TRSDOS 6's and LS-DOS's command that saves 256 bytes of memory as a program.
+    private const string Dump = "DUMP SAVED/CMD (START=X'7000',END=X'70FF',TRA=X'7000')";
+
     /// <summary>
     ///  The Model III and Model 4 boot without a disk controller to BASIC, through Cass? and Memory Size?, and run a
     ///  statement.
@@ -39,6 +44,80 @@ public class Trs80Model3RomTests
 
         // No RS-232 board is fitted: its UART's status reads $FF, which the ROM's RS-232 set-up takes as none.
         machine.Bus.In(0xEA).Should().Be(0xFF);
+    }
+
+    /// <summary>
+    ///  The Model 4 ROM's clock (<c>CLOCKZ</c>) counts 30 interrupts to a second at <c>TICKIT</c> and acknowledges
+    ///  each by reading port <c>$EC</c>. At 2 MHz the interrupts come 30 times a second, so its time keeps up; at 4 MHz
+    ///  they come 60 times, as the Model 4's technical reference says, and the ROM, written for the Model III's rate,
+    ///  counts two seconds to each. An interrupt left unacknowledged would run again at once and count far faster.
+    /// </summary>
+    /// <param name="fast">
+    ///  Whether BASIC sets port <c>$EC</c> bit 6 first. The ROM's video driver rewrites the port from its copy at
+    ///  <c>IOSTAT</c> (16912), so the program sets both.
+    /// </param>
+    /// <param name="seconds">The seconds the ROM counts in ten seconds.</param>
+    [TestMethod]
+    [DataRow(false, 10)]
+    [DataRow(true, 20)]
+    public void Model4RomClockCountsTheInterrupts(bool fast, int seconds)
+    {
+        Trs80Model3Machine machine = Model3(Trs80Model3Variant.Model4);
+        machine.Run(Trs80Model3Timing.ClockHertz);
+        Type(machine, "\r");
+        Type(machine, "\r");
+        machine.Run(Trs80Model3Timing.ClockHertz * 2UL);
+
+        Type(machine, fast ? "POKE 16912,PEEK(16912) OR 64:OUT 236,PEEK(16912)\r" : "PRINT\r");
+        machine.Bus.Fast.Should().Be(fast);
+        int start = ClockTicks(machine);
+
+        // Ten seconds of device time: twice the T-states at 4 MHz.
+        machine.Run((ulong)Trs80Model3Timing.ClockHertz * 10 * (fast ? 2UL : 1UL));
+        (ClockTicks(machine) - start).Should().BeInRange((seconds * 30) - 1, (seconds * 30) + 1);
+    }
+
+    /// <summary>
+    ///  On a Model 4 the ROM's keyboard driver (<c>KEYBD</c>) returns the codes at <c>FKEY1</c>, <c>FKEY2</c> and
+    ///  <c>FKEY3</c> for F1, F2 and F3, which its start-up sets to <c>$60</c> (<c>`</c>), <c>$1B</c> (escape) and
+    ///  <c>$08</c> (backspace). It masks row 7 with <c>$7C</c>, leaving out both shift keys, so shift changes nothing.
+    ///  BASIC's <c>INKEY$</c> shows each code; but <c>$60</c> is also shift-@'s code, which pauses a running program
+    ///  (<c>CNTCCN</c>) until the next key, which it keeps for <c>INKEY$</c>. So of two F1 presses one pauses
+    ///  and the other shows 96; which one pauses depends on whether the statement loop's scan or <c>INKEY$</c> sees
+    ///  the press first, and the line is the same either way.
+    /// </summary>
+    [TestMethod]
+    public void Model4FunctionKeysReturnTheirCodes()
+    {
+        Trs80Model3Machine machine = Model3(Trs80Model3Variant.Model4);
+        machine.Run(Trs80Model3Timing.ClockHertz);
+        Type(machine, "\r");
+        Type(machine, "\r");
+        machine.Run(Trs80Model3Timing.ClockHertz * 2UL);
+        Type(machine, "CLS:PRINT\r");
+        Type(machine, "10 A$=INKEY$:IF A$=\"\" THEN 10\r");
+        Type(machine, "20 PRINT ASC(A$);:GOTO 10\r");
+        Type(machine, "RUN\r");
+
+        Trs80Key[] keys = [Trs80Key.F1, Trs80Key.F1, Trs80Key.F2, Trs80Key.F3];
+        Trs80Key?[] shifts = [null, Trs80Key.Shift, Trs80Key.RightShift];
+        foreach (Trs80Key? shift in shifts)
+        {
+            foreach (Trs80Key key in keys)
+            {
+                if (shift is { } held) { machine.Bus.Keyboard.Set(held, pressed: true); }
+                machine.Run(Trs80Model3Timing.ClockHertz / 10);
+                machine.Bus.Keyboard.Set(key, pressed: true);
+                machine.Run(Trs80Model3Timing.ClockHertz / 10);
+                machine.Bus.Keyboard.Set(key, pressed: false);
+                machine.Run(Trs80Model3Timing.ClockHertz / 10);
+                if (shift is { } released) { machine.Bus.Keyboard.Set(released, pressed: false); }
+            }
+        }
+
+        machine.Run(Trs80Model3Timing.ClockHertz / 10);
+        // The line under RUN: unshifted, with the left shift, then with the right; one code for each press.
+        Screen(machine).Substring(5 * 64, 64).TrimEnd().Should().Be(" 96  27  8  96  27  8  96  27  8");
     }
 
     /// <summary>
@@ -157,8 +236,9 @@ public class Trs80Model3RomTests
     }
 
     /// <summary>
-    ///  The Model III with Level I BASIC boots to READY, runs a statement, saves and loads a program on tape at 250
-    ///  baud, the leader zeros and the sync byte $A5, and the reset button stops a running program every time.
+    ///  The Model III with Level I BASIC boots to READY, runs a statement, typed in either case, saves and loads a
+    ///  program on tape at 250 baud, the leader zeros and the sync byte $A5, and the reset button stops a running
+    ///  program every time.
     /// </summary>
     [TestMethod]
     public void Level1BootsAndUsesTheTape()
@@ -177,6 +257,10 @@ public class Trs80Model3RomTests
         Screen(machine).Should().Contain("READY");
         Type(machine, "PRINT 6*7\r");
         Screen(machine).Should().Contain("42");
+
+        // Level I reads shift and a letter as its control code, so lowercase is typed unshifted, in uppercase.
+        Type(machine, "print 7*8\r");
+        Screen(machine).Should().Contain("PRINT 7*8").And.Contain("56");
         Type(machine, "10 PRINT \"HI\";6*7\r");
 
         CassetteImage tape = new();
@@ -247,6 +331,102 @@ public class Trs80Model3RomTests
     }
 
     /// <summary>
+    ///  Each DOS writes a new file, <c>SAVED/CMD</c>: TRSDOS 6 and LS-DOS dump memory to it, and SMAL-LDOS, which has
+    ///  no <c>DUMP</c>, copies a file to it. The host saves the disk to its image in its own format, and the image
+    ///  boots in a new machine and lists the file. The images are in <c>trs80-disks</c> under
+    ///  <see cref="ExternalTestData.Root"/>, copied before they change; the test is inconclusive without one.
+    /// </summary>
+    /// <remarks>
+    ///  <para>
+    ///   TRSDOS 1.3 is not here: its <c>DUMP</c> stops with <c>ERROR 11</c> after reading its directory, before it
+    ///   writes a sector, and its <c>COPY</c> does not finish.
+    ///  </para>
+    /// </remarks>
+    /// <param name="variant">The model.</param>
+    /// <param name="image">The image's file name.</param>
+    /// <param name="ready">The DOS's prompt.</param>
+    /// <param name="command">The command that writes the file.</param>
+    [TestMethod]
+    [DataRow(Trs80Model3Variant.Model3, "LDOS513.dsk", "LDOS Ready", "COPY ALEDIT/CMD TO SAVED/CMD")]
+    [DataRow(Trs80Model3Variant.Model4, "TRSDOS60.dmk", "TRSDOS Ready", Dump)]
+    [DataRow(Trs80Model3Variant.Model4, "TRSDOS60.imd", "TRSDOS Ready", Dump)]
+    [DataRow(Trs80Model3Variant.Model4, "TRSDOS62.imd", "TRSDOS Ready", Dump)]
+    [DataRow(Trs80Model3Variant.Model4, "LSDOS63J.dsk", "LS-DOS Ready", Dump)]
+    public void DosSavesAFile(Trs80Model3Variant variant, string image, string ready, string command)
+    {
+        string source = Path.Join(ExternalTestData.Root, "trs80-disks", image);
+        if (!File.Exists(source)) { Assert.Inconclusive($"{source} is missing."); }
+
+        string path = Path.Join(Path.GetTempPath(), $"retrocore-dos-{Guid.NewGuid():N}{Path.GetExtension(image)}");
+        File.Copy(source, path);
+        try
+        {
+            Trs80Model3Machine machine = Model3(variant, diskController: true);
+            FloppyDrive drive = machine.Drives[0];
+            FloppyMedia.Insert(drive, path, FloppyFamily.Trs80);
+            string format = drive.Media?.Format ?? throw new InvalidOperationException("The drive is empty.");
+            Boot(machine, ready);
+            Type(machine, command + "\r");
+            machine.Run(Trs80Model3Timing.ClockHertz * 20UL);
+            Type(machine, "DIR\r");
+            string verb = command.Split(' ')[0];
+            RunUntil(machine, () => Listed(machine, "SAVED", verb), seconds: 20);
+            drive.Media?.Changed.Should().BeTrue();
+
+            JsonObject answer = MediaActions.Save(drive, new() { ["supportsRetrocoreMedia"] = true });
+            answer.String("outcome").Should().Be("saved");
+            Trs80DiskImage.Read(File.ReadAllBytes(path), Path.GetExtension(path)).Format.Should().Be(format);
+            byte[] before = File.ReadAllBytes(source);
+            byte[] after = File.ReadAllBytes(path);
+            if (format == "DMK") { after.Length.Should().Be(before.Length, "the image keeps its tracks"); }
+            if (format == "IMD")
+            {
+                int comment = Array.IndexOf(before, (byte)0x1A) + 1;
+                after.AsSpan(0, comment).SequenceEqual(before.AsSpan(0, comment)).Should().BeTrue("the image keeps its comment");
+            }
+
+            Trs80Model3Machine again = Model3(variant, diskController: true);
+            FloppyMedia.Insert(again.Drives[0], path, FloppyFamily.Trs80);
+            Boot(again, ready);
+            Type(again, "DIR\r");
+            ShowsWithin(again, "SAVED", seconds: 20);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    /// <summary>
+    ///  Typed text comes out as written on the Model 4's DOSes, which start with caps lock off: an uppercase letter
+    ///  with shift, a lowercase one without.
+    /// </summary>
+    /// <param name="variant">The model.</param>
+    /// <param name="image">The image's file name.</param>
+    /// <param name="ready">The DOS's prompt.</param>
+    [TestMethod]
+    [DataRow(Trs80Model3Variant.Model4, "TRSDOS60.dmk", "TRSDOS Ready")]
+    [DataRow(Trs80Model3Variant.Model4, "TRSDOS62.imd", "TRSDOS Ready")]
+    [DataRow(Trs80Model3Variant.Model4, "LSDOS63J.dsk", "LS-DOS Ready")]
+    [DataRow(Trs80Model3Variant.Model4P, "LSDOS63J.dsk", "LS-DOS Ready")]
+    public void DosShowsTypedCase(Trs80Model3Variant variant, string image, string ready)
+    {
+        string path = Path.Join(ExternalTestData.Root, "trs80-disks", image);
+        if (!File.Exists(path)) { Assert.Inconclusive($"{path} is missing."); }
+
+        Trs80Model3Machine machine = Model3(variant, diskController: true);
+        (FloppyDisk disk, string format) = Trs80DiskImage.Read(File.ReadAllBytes(path), Path.GetExtension(path));
+        machine.Drives[0].Insert(disk, image, format);
+
+        ShowsWithin(machine, "Date", seconds: 20);
+        Type(machine, "11/14/86\r");
+        Type(machine, "\r");
+        ShowsWithin(machine, ready, seconds: 20);
+        Type(machine, "Dir MixedCase");
+        Text(machine).Should().Contain("Dir MixedCase");
+    }
+
+    /// <summary>
     ///  The 4P's boot ROM, with no disk in the drive, says so in English, German and French.
     /// </summary>
     [TestMethod]
@@ -305,6 +485,19 @@ public class Trs80Model3RomTests
         return new(configuration, new Trs80Model3Roms(system, characters));
     }
 
+    // Whether a line other than the command's, which starts with its verb, shows the text.
+    private static bool Listed(Trs80Model3Machine machine, string text, string verb) =>
+        Text(machine).Split('\n').Any(line => line.Contains(text, StringComparison.Ordinal) && !line.Contains(verb, StringComparison.OrdinalIgnoreCase));
+
+    // Boots a DOS from drive 0 to its prompt, giving it a date.
+    private static void Boot(Trs80Model3Machine machine, string ready)
+    {
+        ShowsWithin(machine, "Date", seconds: 20);
+        Type(machine, "11/14/86\r");
+        Type(machine, "\r");
+        ShowsWithin(machine, ready, seconds: 20);
+    }
+
     // Types the keys, waits until the keyboard has pressed them all, then lets the ROM act on the last.
     private static void Type(Trs80Model3Machine machine, string text)
     {
@@ -343,6 +536,14 @@ public class Trs80Model3RomTests
         int columns = video.Eighty ? 80 : 64;
         return string.Join('\n', Enumerable.Range(0, video.Rows)
             .Select(row => new string([.. Enumerable.Range(0, columns).Select(column => (char)(video.Displayed(row, column) & 0x7F))])));
+    }
+
+    // The interrupts the ROM's clock has counted: TICKIT counts down from 30 in each second at SECOND, MINUTE and HOUR.
+    private static int ClockTicks(Trs80Model3Machine machine)
+    {
+        Trs80Model3Bus bus = machine.Bus;
+        int seconds = bus.Peek(0x4217) + (60 * (bus.Peek(0x4218) + (60 * bus.Peek(0x4219))));
+        return (seconds * 30) + 30 - bus.Peek(0x4216);
     }
 
     private static string Screen(Trs80Model3Machine machine) =>

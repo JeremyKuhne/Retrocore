@@ -95,6 +95,10 @@ launch can supply ROM dumps instead, in `romDirectory` or `RETROCORE_TRS80_ROMS`
 1.3 asks `MEM SIZE?` and shows `R/S L2 BASIC`; 1.2 asks `MEMORY SIZE?` and shows `RADIO SHACK LEVEL II BASIC`.
 1.3 also added the keyboard debounce, fixed the cassette timing, and limited TAB to 127.
 
+The debugger reads a dump against its source only when the two are the same bytes. For Level II, the power-up
+message picks the revision to build, `MEM SIZE` for 1.3 and `MEMORY SIZE` for 1.2. A dump that is not that build's
+bytes gets neither the source nor the BASIC thread, and neither does a `level1.rom` that is not `Level1.asm`'s build.
+
 ## The ROM sources
 
 [`Level2.asm`](../src/Retrocore.Machines.Trs80/Roms/Level2.asm), [`Level1.asm`](../src/Retrocore.Machines.Trs80/Roms/Level1.asm)
@@ -267,7 +271,7 @@ with `stopOnEntry`. A Level II file is refused, as Level I cannot load it.
 | `Trs80TapeContentsTests` | Which BASIC a tape is for, from Level II's and Level I's own recordings, the cassette's warning for the other Level's tapes, and Level I's `PRINT MEM` in 4K and 16K. |
 | `Trs80OracleTests` (Conformance) | The same keystrokes on our machine and on MAME, through [`tools/Trs80Oracle.lua`](../tools/Trs80Oracle.lua). The screens must match, and so must the BASIC program bytes; each keystroke must fire within 0.025 s, a frame and a margin, after its time, fractional seconds included. |
 | `Trs80RomSourceTests` | The ROM sources, by digest and against the dumps. |
-| [`tools/Test-Trs80Dap.mjs`](../tools/Test-Trs80Dap.mjs) | The debugger end to end: boot, a ROM-source breakpoint with the call stack, a cassette round trip, stepping from a program into the ROM source, a NEWDOS/80 boot, the warning for a tape of the other Level, in a launch and from a saved machine, and Level I's BASIC thread: RUN's start, steps, a line breakpoint in a GOSUB, its variables, STOP, a Level I tape round trip, and no BASIC thread for a `level1.rom` that is not the SDK's build. |
+| [`tools/Test-Trs80Dap.mjs`](../tools/Test-Trs80Dap.mjs) | The debugger end to end: boot, a ROM-source breakpoint with the call stack, a cassette round trip, stepping from a program into the ROM source, a NEWDOS/80 boot, the warning for a tape of the other Level, in a launch and from a saved machine, and Level I's BASIC thread: RUN's start, steps, a line breakpoint in a GOSUB, its variables, STOP, a Level I tape round trip, and no BASIC thread for a Level I or Level II dump that is not the SDK's build. |
 
 Tests that need dumps, MAME or a DOS image are inconclusive without them. The DAP script needs none, since its
 ROMs come from the SDK sources.

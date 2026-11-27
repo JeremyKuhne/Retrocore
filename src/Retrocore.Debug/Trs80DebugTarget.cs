@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: MIT
 // See LICENSE file in the project root for full license information
 
-using Retrocore.Assembler;
 using Retrocore.Basic;
 using Retrocore.Cpu.Z80;
 using Retrocore.Isa;
@@ -316,13 +315,16 @@ internal sealed partial class Trs80DebugTarget : IDebugTarget
             return;
         }
 
+        // The power-up message picks the revision to build, and the build must be the ROM's bytes, so a dump that only
+        // shares a revision's message gets neither the source nor the BASIC thread.
         string level2 = Path.Join(roms, "Level2.asm");
-        if (_revision is { } revision && File.Exists(level2))
+        if (_revision is { } revision
+            && File.Exists(level2)
+            && Trs80SdkModules.Matching(SystemRomImage, [() => Trs80SdkModules.AssembleLevel2(level2, revision)]) is { } built)
         {
-            AssemblyResult result = Trs80SdkModules.AssembleLevel2(level2, revision);
-            debug.Add(new SourceMapModule(result, Trs80MemoryArea.Rom));
+            debug.Add(new SourceMapModule(built, Trs80MemoryArea.Rom));
             _basicRom = BasicRom.From(
-                result.Symbols,
+                built.Symbols,
                 "READY",
                 run: "ST_RUN",
                 resume: "ST_CONT",

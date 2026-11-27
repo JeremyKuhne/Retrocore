@@ -479,9 +479,19 @@ try {
     await launch({ rom: "level1", romDirectory: otherRoms }, ["basicStart"]);
     assert.deepEqual((await request("threads")).threads.map(thread => thread.name), ["Model I Z80"]);
 
+    // So does a Level II dump that has 1.3's power-up message, MEM SIZE at $0105, but not 1.3's bytes.
+    const levelTwo = Buffer.alloc(0x3000);
+    levelTwo.set([0x18, 0xFE]);
+    levelTwo.write("MEM SIZE\0", 0x0105, "latin1");
+    writeFileSync(join(otherRoms, "rom-a_alt.z1"), levelTwo.subarray(0, 0x2000));
+    writeFileSync(join(otherRoms, "rom-b_alt.z2"), levelTwo.subarray(0x2000, 0x3000));
+    writeFileSync(join(otherRoms, "rom-c_alt.z3"), Buffer.alloc(0x0800));
+    await launch({ romDirectory: otherRoms }, ["basicStart"]);
+    assert.deepEqual((await request("threads")).threads.map(thread => thread.name), ["Model I Z80"]);
+
     await request("disconnect");
     console.log("Model I DAP passed: boot to READY, a Level II source breakpoint with the Z80 call stack, a cassette round trip, RUN and CONT stops, the reset button, power-on and entry stops, 1x and 2x speed, stepping from a Z80 source into Level2.asm"
-        + (existsSync(dos) ? ", a NEWDOS/80 boot" : "") + ", a fast cassette load at real speed, tapes for the other Level warned of, and Level I's BASIC thread: RUN's start, steps, a line breakpoint in a GOSUB, its variables, STOP, a Level I tape round trip, an error in a DATA item, a Level I file's basic launch, and no thread for another Level I ROM.");
+        + (existsSync(dos) ? ", a NEWDOS/80 boot" : "") + ", a fast cassette load at real speed, tapes for the other Level warned of, and Level I's BASIC thread: RUN's start, steps, a line breakpoint in a GOSUB, its variables, STOP, a Level I tape round trip, an error in a DATA item, a Level I file's basic launch, and no BASIC thread for another Level I or Level II ROM.");
 } finally {
     clearTimeout(timeout);
     close();

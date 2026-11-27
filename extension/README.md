@@ -1004,8 +1004,8 @@ The ROMs are dumps from `romDirectory` or `RETROCORE_TRS80_ROMS`, under MAME's n
 byte-identical to them, so the Model I needs no external files. Those sources
 (`Level2.asm` or `Level1.asm`) also debug as ROM modules, so a breakpoint in a ROM
 routine stops there, and stepping into a ROM call from a program goes into its source.
-A `level1.rom` that is not the same bytes as `Level1.asm`'s build gets neither its
-source nor the BASIC thread.
+A dump that is not the same bytes as its source's build, `Level1.asm`'s or the revision's
+`Level2.asm` build, gets neither the source nor the BASIC thread.
 
 A program (`source` or `program`, loaded at `$7000` by default) runs after the ROM
 has booted for `bootSeconds` (1 by default), so the ROM's RAM vectors and device

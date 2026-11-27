@@ -116,6 +116,9 @@ public sealed class Vic20DebugTargetTests
         registers.X = 4;
         target.Machine.Processor.Registers = registers;
         target.BasicError().Message.Should().Be("?FILE NOT FOUND ERROR", "the kernal's errors share the table");
+        registers.X = 30;
+        target.Machine.Processor.Registers = registers;
+        target.BasicError().Message.Should().Be("?BREAK ERROR", "BREAK's NUL and shifted space read as one space");
     }
 
     /// <summary>

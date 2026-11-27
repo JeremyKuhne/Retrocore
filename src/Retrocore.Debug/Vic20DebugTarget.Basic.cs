@@ -122,7 +122,8 @@ internal sealed partial class Vic20DebugTarget
             if ((character & 0x80) != 0) { break; }
         }
 
-        return (code, $"?{text[..length]} ERROR", false);
+        // The shifted space after BREAK's NUL is the space before ERROR.
+        return (code, $"?{text[..length].TrimEnd(' ')} ERROR", false);
     }
 
     /// <inheritdoc/>

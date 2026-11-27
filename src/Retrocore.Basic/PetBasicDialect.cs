@@ -8,8 +8,8 @@ namespace Retrocore.Basic;
 
 /// <summary>
 ///  Commodore BASIC for the PET and the VIC-20: BASIC 1, the 2001's first ROMs; BASIC 2, the 2001-N's and the upgrade
-///  ROMs, and the VIC-20's; and BASIC 4, the 4000 series', with its disk commands. All derive from Microsoft's 6502 BASIC and use the shared
-///  native interpreter or the corresponding <c>m6502.asm</c> MACRO-10 overlay.
+///  ROMs, and the VIC-20's; and BASIC 4, the 4000 series', with its disk commands. All derive from Microsoft's 6502
+///  BASIC and use the shared native interpreter or the corresponding <c>m6502.asm</c> MACRO-10 overlay.
 /// </summary>
 /// <remarks>
 ///  <para>

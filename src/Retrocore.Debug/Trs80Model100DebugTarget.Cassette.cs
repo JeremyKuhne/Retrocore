@@ -94,7 +94,12 @@ internal sealed partial class Trs80Model100DebugTarget
     internal void Insert(string path)
     {
         string full = Path.GetFullPath(path);
-        SaveCassetteRecording();
+        // A path that is neither the recording's nor a file is refused before anything is written.
+        StringComparison names = OperatingSystem.IsWindows() || OperatingSystem.IsMacOS()
+            ? StringComparison.OrdinalIgnoreCase
+            : StringComparison.Ordinal;
+
+        if (string.Equals(full, _recordingPath, names) || File.Exists(full)) { SaveCassetteRecording(); }
         if (!File.Exists(full)) { throw new ArgumentException($"The tape {full} does not exist."); }
         Trs80Model100Tape tape = Trs80Model100Tape.FromWave(File.ReadAllBytes(full));
         EjectCassette();

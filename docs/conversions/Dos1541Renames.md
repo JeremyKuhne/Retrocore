@@ -163,7 +163,7 @@ Address column (`= $30`), as the kernal's table writes them.
 | 37 | IWSA | = 18 | INTERNAL_WRITE_SECONDARY | constant | D1541 | rename 4, tst4 2, tst2 1 | The secondary address of the DOS's own write channel. |
 | 38 | MAXSA | = 18 | LAST_SECONDARY | constant | D1541 | tst2 2, tstflg 1, dskintsf 1 | The highest secondary address in SecondaryChannels; higher ones are taken modulo 16. (The listing says one above it.) |
 | 39 | HEADER | $0016 | LastHeader | location | D1541 | lccseek 12, lccread 9, lccconhdr 5, tst2 2 | The last header read, in binary: the ID's two bytes, the track, the sector and the checksum. |
-| 40 | DIRLEN | = 24 | Directory::BLOCK_COUNT_END | constant | D1541 | trnsfr 3 | ListingLine's starting column for the spacing after a line's block count: 24, less for a wider count (256 or more, 10 or more), so the names line up. |
+| 40 | DIRLEN | = 24 | Directory::BLOCK_COUNT_END | constant | D1541 | trnsfr 3 | ListingLine's starting column for the spacing after a line's block count: 24 for a count below 10, 23 for 10 to 99, and 22 for 100 or more, so the names line up. |
 | 41 | ACTJOB | $001B | DROP | location | D1541 | none | The controller's active job; not used. Named in prose. |
 | 42 | NBSIZ | = 27 | Directory::LISTING_TEXT_LENGTH | constant | D1541 | trnsfr 1 | The listing line's text that is blanked before each entry. |
 | 43 | WPSW | $001C | DiskChanged | location | D1541 | dskintsf 2, idlesf 2, lookup 1, tst2 1, lccend 1 | Each drive's flag, set by the controller when the write-protect sense changes (a disk going in or out); the DOS reinitializes. |
@@ -355,7 +355,7 @@ Address column (`= $30`), as the kernal's table writes them.
 | 229 | PATFLG | $028A | PatternFlag | location | D1541 | parsex 8, lookup 2 | Counts "*" and "?" while a name is parsed. |
 | 230 | IMAGE | $028B | Commands::Structure | location | D1541 | parsex 6, setdrv 2, copset 2 | The command's shape as parsed (patterns, several names, drives, names given), checked against its syntax image. |
 | 231 | DRVCNT | $028C | DriveSearches | location | D1541 | lookup 7, copall 1 | The drives still to search. |
-| 232 | DRVFLG | $028D | Directory::DriveSearchFlag | location | D1541 | trnsfr 5, lookup 3 | The directory code's (the listing half of trnsfr, and lookup): set while the search goes on to the other drive. |
+| 232 | DRVFLG | $028D | Directory::DriveSearchFlag | location | D1541 | trnsfr 5, lookup 3 | Used only by the directory code (lookup and trnsfr's listing half): set while the search goes on to the other drive. |
 | 233 | LSTDRV | $028E | LastDrive | location | D1541 | parsex 2, open 2, setdrv 1, block 1 | The last drive used without an error, the default. |
 | 234 | FOUND | $028F | Directory::Found | location | D1541 | lookup 7 | Set once every name has been found. |
 | 235 | DIRSEC | $0290 | Directory::SearchSector | location | D1541 | lookup 2 | The directory sector being searched. |
@@ -562,8 +562,8 @@ part 1's, named here by their listing names (`JOBS`, `HDRS`, `LSTJOB`, `DRVST`, 
   at 1 MHz (the `TIM` comment's "15 ms" is right). The listing's other comments assume other ticks: END's "every 8
   ms", the settle's "5*8=40ms", TURNON's "1.5 sec" and TRNOFF's "255*.025s". END restarts the timer at its start
   ($F99C), so the next interrupt comes 14.85 ms after a pass ends, not after it began; a tick is that plus the pass, and
-  the times are minimums. The reasons give what the code does: spin-up 60 ticks (at least 0.9 s), timeout 255 ticks (at
-  least 3.8 s), settle 5 ticks (at least 74 ms). The accelerated stepping (SSACL, SSRUN, SSDEC) shortens or lengthens
+  the times are minimums. The reasons give what the code does: spin-up 60 ticks (at least 0.89 s), timeout 255 ticks (at
+  least 3.79 s), settle 5 ticks (at least 74 ms). The accelerated stepping (SSACL, SSRUN, SSDEC) shortens or lengthens
   the tick by `AF`. It is never reached with the ROM's settings, because start-up sets `MINSTP` to 200 and `STEPS` is a
   signed byte, so any move is at most 128 half-tracks. It keeps its names, with a comment that it runs only if a program
   lowers `MINSTP`. SYNC's 20 ms timeout is VIA 1's timer 1 (`TIMER1`, $1805). The format's segment timing is VIA 1's

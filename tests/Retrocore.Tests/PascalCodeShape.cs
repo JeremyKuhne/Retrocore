@@ -59,7 +59,7 @@ internal static class PascalCodeShape
                 PascalTokenKind.Identifier when declared.TryGetValue(token, out int at) => $"#{at}",
                 PascalTokenKind.Identifier when used.TryGetValue(token, out int at) => at < 0 ? "F" : $"#{at}",
                 PascalTokenKind.Identifier or PascalTokenKind.Keyword => token.Text.ToUpperInvariant(),
-                PascalTokenKind.Option => string.Join(separator: ' ', token.Text.ToUpperInvariant().Split(separator: (char[]?)null, StringSplitOptions.RemoveEmptyEntries)),
+                PascalTokenKind.Option or PascalTokenKind.BraceComment => string.Join(separator: ' ', token.Text.ToUpperInvariant().Split(separator: (char[]?)null, StringSplitOptions.RemoveEmptyEntries)),
                 _ => token.Text
             };
 
@@ -69,9 +69,13 @@ internal static class PascalCodeShape
         return Convert.ToHexString(shape.GetHashAndReset());
     }
 
-    // An option that isn't an include, such as (*$I-*), (*$R ROUTINE*) or (*$S++*).
-    private static bool IsCodeOption(PascalToken token, PascalProgram program) =>
-        token.Kind == PascalTokenKind.Option && !program.Includes.Any(include => ReferenceEquals(include.Token, token));
+    // An option that isn't an include, such as (*$I-*), (*$R ROUTINE*), (*$S++*) or {$R-}.
+    private static bool IsCodeOption(PascalToken token, PascalProgram program)
+    {
+        bool option = token.Kind == PascalTokenKind.Option;
+        option |= token.Kind == PascalTokenKind.BraceComment && token.Text.StartsWith("{$", StringComparison.Ordinal);
+        return option && !program.Includes.Any(include => ReferenceEquals(include.Token, token));
+    }
 
     // A file's tokens, each include's file's in its place; a file already being expanded, included again inside
     // itself, is left out, as the model reads it once. Paths compare without case, as the model's files do.

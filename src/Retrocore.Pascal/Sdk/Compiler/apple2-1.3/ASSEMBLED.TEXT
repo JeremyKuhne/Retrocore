@@ -3,9 +3,10 @@
 ; them EXTERNAL; the Linker links this file's code into PASCALCO, segment 1.
 ; Each name is its procedure's, of which the Linker reads 8 letters.
 ;
-; Assembled: scans the identifier at SourceBuffer^[SourceCursor] into TokenName
-; in capitals, and looks it up in the reserved words, setting Token and Operator
-; (UCSD Pascal II.0's IDSEARCH, in 6502 code)
+; Assembled: scans the identifier at SourceBuffer^[SourceCursor] in
+; capitals, and looks it up in the reserved words, setting Token and Operator;
+; TokenName too when it is no reserved word (UCSD Pascal II.0's IDSEARCH, in
+; 6502 code)
          .PROC   SCANIDENTIFIER,2
          PLA
          STA     7E

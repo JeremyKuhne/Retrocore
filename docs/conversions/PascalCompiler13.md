@@ -34,7 +34,7 @@ procedures in 6502 code are `ASSEMBLED.TEXT`, for Apple's Assembler. One build:
   from UCSD Pascal II.0's listing (UCSD20), where the private source's comment cited II.0 for the name and the
   listing's OCR text has the word, or where a constant's value and its type are both in it; 83 p-code mnemonics from
   Apple's manual (A2POSRM), the ones the SDK's interpreter cites. A name given to more than one declaration, or with
-  another declaration's key, goes in a remark instead (131: "UCSD Pascal II.0 calls it LCP (UCSD20)"); one that is a
+  another declaration's key, goes in a remark instead (132: "UCSD Pascal II.0 calls it LCP (UCSD20)"); one that is a
   reserved word or standard identifier (`EXIT`, `SCAN`) is never an `Also:`, as a use of it would find the
   declaration, which the lint now reports. Citations the listing doesn't confirm are left out.
 - **PC5. The docs.** A declaration's comment, above it or after it on its line, is its `(** *)` doc: 1,186 docs. A

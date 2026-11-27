@@ -112,7 +112,7 @@ SEGMENT PROCEDURE PASCALCO(CodeBuffer: CodeReference; SourceBuffer:
     SwapMore: BOOLEAN;
     (** $S+: swap the Compiler's segments, for room for more symbols; on
         when memory is short, MEMAVAIL at most 9950
-        (COMPINIT) (II.0: NOSWAP's opposite). *)
+        (COMPINIT's SetGlobals) (II.0: NOSWAP's opposite). *)
     Swapping: BOOLEAN;
     (** $N+, which only the option sets: leaves out the code that starts and
         ends the units the program uses (from its uses). *)

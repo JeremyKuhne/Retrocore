@@ -106,7 +106,7 @@
         PointerTypeSize: (PadPointer: ARRAY[1..3] OF INTEGER);
         (** An enumeration's, a record's, a tag field's. *)
         EnumerationTypeSize: (PadEnumeration: ARRAY[1..4] OF INTEGER);
-        (** A subrange's, an array's. *)
+        (** A subrange's, an array's, a variant's. *)
         RangeTypeSize: (PadRange: ARRAY[1..5] OF INTEGER);
         (** A packed array's. *)
         PackedTypeSize: (PadPacked: ARRAY[1..8] OF INTEGER);

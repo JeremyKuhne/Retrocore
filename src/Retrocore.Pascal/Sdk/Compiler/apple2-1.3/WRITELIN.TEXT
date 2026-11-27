@@ -45,8 +45,8 @@
         (** One of them. *)
         PendingIndex: INTEGER;
 
-      (** Reads ReferenceFile's next block, back at
-          block 0 after the last.
+      (** Reads ReferenceFile's next block, going
+          back to block 0 after the last.
           Also: GETNEXTBLOCK (UCSD20) *)
       PROCEDURE ReadNextBlock;
       BEGIN

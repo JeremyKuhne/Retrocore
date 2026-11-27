@@ -762,11 +762,13 @@ public sealed class PascalSourceTests
 
         string changed = Sample.Replace("Number + 1", "Number + 2", StringComparison.Ordinal);
         string option = "(*$R-*)\n" + Sample;
+        string braceOption = "{$R-}\n" + Sample;
         string shape = PascalCodeShape.Digest(Analyze());
 
         PascalCodeShape.Digest(Analyze(renamed, Part)).Should().Be(shape);
         PascalCodeShape.Digest(Analyze(changed, Part)).Should().NotBe(shape);
         PascalCodeShape.Digest(Analyze(option, Part)).Should().NotBe(shape, "an option changes the code");
+        PascalCodeShape.Digest(Analyze(braceOption, Part)).Should().NotBe(shape, "an option in braces does too");
     }
 
     /// <summary>

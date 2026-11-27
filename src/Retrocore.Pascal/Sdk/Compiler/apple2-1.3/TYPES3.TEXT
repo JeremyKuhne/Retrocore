@@ -1,5 +1,6 @@
 (** TYPES3.TEXT: part 3 of 3 of TYPES: a library's information words, spare
-    words, case labels, marks and a string's characters.
+    words, a set of segment kinds, MEMAVAIL's result, case labels, marks and a
+    string's characters.
 
     Included by COMPILER.TEXT after TYPES2.TEXT and before SYSGLOBALS.TEXT. *)
 

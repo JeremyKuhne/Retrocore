@@ -79,8 +79,8 @@ VAR
       Also: SLOWTERM (UCSD20) *)
   SlowTerminal: BOOLEAN;
 
-(* The system's procedures, in the order that numbers them; one has its
-   parameters only where the Compiler calls it with them. *)
+(* The system's procedures, in the order that numbers them; only
+   PrepareTitle, which the Compiler calls, has its parameters. *)
 
 (** Reports a run-time error. *)
 PROCEDURE ExecutionError; FORWARD;

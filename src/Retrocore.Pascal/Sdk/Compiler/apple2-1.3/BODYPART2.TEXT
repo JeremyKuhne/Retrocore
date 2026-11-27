@@ -39,7 +39,7 @@
         (** CodeCounter while BODY3 goes back. *)
         SavedCodeCounter: INTEGER;
         (** Where the two bytes are that become the jump to the units' start
-            code. *)
+            code, when BODY3 emits it. *)
         Preamble: INTEGER;
         (** A segment. *)
         SystemSegment: INTEGER;

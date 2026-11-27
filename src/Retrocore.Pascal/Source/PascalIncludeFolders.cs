@@ -34,9 +34,17 @@ public static class PascalIncludeFolders
     {
         if (folder is null || !Directory.Exists(folder)) { return null; }
         string exact = Path.Join(folder, name);
-        return Directory.Exists(exact)
-            ? exact
-            : Directory.EnumerateDirectories(folder).FirstOrDefault(
+        if (Directory.Exists(exact)) { return exact; }
+
+        try
+        {
+            return Directory.EnumerateDirectories(folder).FirstOrDefault(
                 child => string.Equals(Path.GetFileName(child), name, StringComparison.OrdinalIgnoreCase));
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            // A folder that can't be listed has no include folder in it.
+            return null;
+        }
     }
 }

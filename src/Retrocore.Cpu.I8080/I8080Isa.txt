@@ -55,7 +55,8 @@ access read-write DCR:M INR:M XTHL
 # word, the 8085's K and V by name. $1 and $2 are the operands of the form's name; M is memory at HL, which the
 # :Form lines read, and a pair named by its first register (INX B) has a line of its own. These lines are the
 # 8080's, whose bits 5 and 3 read 0 and bit 1 reads 1; the 'effects in I8085' lines add the 8085's K and V.
-# PC is left to the flow lines, and the interrupt enable, masks and serial lines to the hardware.
+# PC is left to the flow lines, and the interrupt enable, masks and serial lines to the hardware; RIM reads
+# them, so its A is A=?.
 parts BC=B,C DE=D,E HL=H,L PSW=A,F
 stack SP
 effects MOV                     reads $2                writes $1               copies $1=$2
@@ -175,7 +176,7 @@ effects LDHI                    reads HL                writes DE
 effects LDSI                    reads SP                writes DE
 effects SHLX                    reads DE HL
 effects LHLX                    reads DE                writes HL
-effects RIM                                             writes A
+effects RIM                                             writes A=?
 effects SIM                     reads A
 effects JNK                      reads K                 taken K=0
 effects JK                       reads K                 taken K=1

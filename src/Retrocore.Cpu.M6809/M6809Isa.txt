@@ -49,9 +49,9 @@ access write XSTS XSTU XSTX XSTY
 # EXG's first register, $2 the second, and 'push $1' and 'pull $1' move the list's bytes. An indexed postbyte's
 # index register, accumulator offset and auto-increment add to every indexed instruction. PC is left to the flow
 # lines, but where a postbyte names it (PULS PC, TFR X,PC, a PCR offset); the state the registers line does not
-# list, NMI's arming and the flags an unprefixed store
-# immediate takes from the instruction before it, is left out. A branch's 'taken' condition joins flag tests with
-# & and then |, and compares flags with = and !=, as BGT's zero=0&negative=overflow.
+# list, NMI's arming and the flags an unprefixed store immediate takes from the instruction before it, is left
+# out. A branch's 'taken' condition joins flag tests with & and then |, and compares flags with = and !=, as BGT's
+# zero=0&negative=overflow.
 parts D=A,B
 stack S
 effects :Direct                 reads DP

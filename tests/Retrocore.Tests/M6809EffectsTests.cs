@@ -80,7 +80,9 @@ public class M6809EffectsTests
     ///  functional, cycle and interrupt programs and the undocumented-behaviour tests check, and checks the data
     ///  both ways, as the 6502 family's test does: what is not written keeps its value, constants take theirs,
     ///  the stack moves by what is pushed and pulled; a register or flag not read changes nothing else, on the bus
-    ///  or in the result; and each one read or written makes a difference in some case.
+    ///  or in the result; and each one read or written makes a difference in some case. The data is checked against
+    ///  the union of an encoding's postbytes' effects, so a register claimed for some postbytes and used by others
+    ///  is not caught.
     /// </summary>
     [TestMethod]
     public void M6809EffectsMatchExecution()

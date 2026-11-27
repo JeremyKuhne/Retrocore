@@ -255,7 +255,7 @@ public class InstructionEffectsTests
     [TestMethod]
     [DataRow("reads A carry ", "reads A Q ", "Line 8: 'Q' is not a register*")]
     [DataRow("reads A carry ", "reads A carry=1 ", "Line 8: Only written flags take a value*")]
-    [DataRow("writes A carry=0", "writes A carry=2", "Line 9: Expected flag=0, flag=1 or flag=bitN*")]
+    [DataRow("writes A carry=0", "writes A carry=2", "Line 9: Expected flag=0, flag=1, flag=bitN or flag=?*")]
     [DataRow("effects NOP none", "effects NOP none\neffects TSX reads S", "Line 15: No encoding takes the effects for 'TSX'.")]
     [DataRow("effects NOP none", "effects NOP none\neffects ADD:Abs none\neffects ADD:Idx none", "Line 8: No encoding takes the effects for 'ADD'.")]
     [DataRow("effects in Big ", "effects in Huge ", "Effects name an unknown instruction set 'Huge'.")]

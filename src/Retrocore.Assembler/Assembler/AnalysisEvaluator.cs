@@ -136,8 +136,8 @@ internal sealed class AnalysisEvaluator
     /// <param name="readCount">Receives how many such reads it made.</param>
     /// <param name="next">Receives where execution goes next.</param>
     /// <param name="read">
-    ///  The registers to set, by bit; the others keep what an earlier run left, which an instruction that does not
-    ///  read them does not see.
+    ///  The registers to set, by bit; the others hold the core's state as built, which an instruction that does
+    ///  not read them does not see.
     /// </param>
     /// <param name="written">The registers to receive the values of, by bit.</param>
     /// <param name="known">

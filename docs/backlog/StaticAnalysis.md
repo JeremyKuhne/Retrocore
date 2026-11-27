@@ -275,6 +275,9 @@ to its arithmetic, K to `INX` and `DCX`, and the whole of F to PSW.
   carry flag cannot be confused. A flag without a word, the Z80's undocumented X and Y, goes by its name. The
   flags register by name (`P`, `F`) means every flag, as `PHP` pushes them and `POP AF` pulls them.
 - In `writes`, `flag=0` and `flag=1` are constants, and `flag=bitN` is a copy of bit N of the memory operand.
+  `Name=?` is a register or flag written from state the effects leave out, which running the instruction cannot
+  tell: the Z80's X and Y after `SCF`, `CCF` and `BIT b,[HL]` (from Q and WZ), the parity after `LD A,I` (IFF2), A
+  and its flags after `LD A,R` (the refresh count), and the 8085's A after `RIM`.
 - `taken Condition` says when a conditional branch, call or return is taken: `taken zero=1` for `BEQ`,
   `taken carry=0` for `RET NC`. Tests on flags (`flag=0`, `flag=1`, `flag=flag`, `flag!=flag`) join with `&`,
   then `|`, as the 6809's `BHI` (`carry=0&zero=0`), `BLS` (`carry=1|zero=1`) and `BGT`

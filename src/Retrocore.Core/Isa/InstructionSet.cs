@@ -346,15 +346,28 @@ public sealed partial class InstructionSet
             Pulled = rule.PullSlot == 1 ? field.Bytes : (byte)0
         };
 
-        // A copy between the postbyte's registers, as TFR X,Y; one naming a register with parts, as D, copies nothing.
+        // A copy between the postbyte's registers, as TFR X,Y; one naming a register with parts, as D, or two of
+        // different widths, as A and X, copies nothing.
         foreach ((int destination, int source) in rule.SlotCopies ?? [])
         {
             int to = SingleBit(destination == -1 ? field.First : destination == -2 ? field.Second : 0);
             int from = SingleBit(source == -1 ? field.First : source == -2 ? field.Second : 0);
-            if (to >= 0 && from >= 0 && to != from) { named = named.WithCopy(to, from); }
+            if (to >= 0 && from >= 0 && to != from && Width(to) == Width(from)) { named = named.WithCopy(to, from); }
         }
 
         return Combine(effects, named);
+    }
+
+    // A register's width in bits, by its bit in the effects' registers; a part the registers line lacks is 8.
+    private int Width(int bit)
+    {
+        string name = Description.EffectRegisters[bit];
+        foreach (IsaRegister register in Description.Registers)
+        {
+            if (register.Name == name) { return register.Bits; }
+        }
+
+        return 8;
     }
 
     private static int SingleBit(uint mask)

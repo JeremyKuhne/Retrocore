@@ -7,6 +7,7 @@ using Retrocore.Machines.Acorn;
 using Retrocore.Machines.Apple2;
 using Retrocore.Machines.Coco;
 using Retrocore.Machines.Kaypro;
+using Retrocore.Machines.Trs80;
 
 namespace Retrocore.Tests;
 
@@ -44,6 +45,28 @@ public class MemoryMapTests
 
         Kinds(new KayproMachine(new KayproRoms(new byte[KayproRoms.MonitorSize], new byte[KayproRoms.CharacterGeneratorSize]))).Should().Equal(
             ("Rom", MemoryKind.Rom), ("Video", MemoryKind.Ram), ("Ram", MemoryKind.Ram));
+    }
+
+    /// <summary>
+    ///  Areas whose kind depends on the machine's set-up: the IIe's slot 4 ROM space is the Mockingboard's devices
+    ///  while it is in, and the TRS-80's video memory is RAM only with the lowercase modification, as without it
+    ///  bit 6 is not stored.
+    /// </summary>
+    [TestMethod]
+    public void KindsFollowTheSetUp()
+    {
+        Apple2Machine apple = Apple2(Apple2Model.IIeEnhanced);
+        IMachine machine = apple;
+        int slot4 = (int)Apple2MemoryArea.Slot4Rom;
+        machine.AreaKind(slot4).Should().Be(MemoryKind.Rom);
+        apple.Bus.InstallMockingboard();
+        machine.AreaKind(slot4).Should().Be(MemoryKind.Io);
+
+        Trs80Roms roms = new(new byte[0x3000], new byte[Trs80Roms.CharacterGeneratorSize]);
+        IMachine plain = new Trs80Machine(new Trs80Configuration(), roms);
+        IMachine lowercase = new Trs80Machine(new Trs80Configuration { LowercaseModification = true }, roms);
+        plain.AreaKind((int)Trs80MemoryArea.Video).Should().Be(MemoryKind.Io);
+        lowercase.AreaKind((int)Trs80MemoryArea.Video).Should().Be(MemoryKind.Ram);
     }
 
     /// <summary>

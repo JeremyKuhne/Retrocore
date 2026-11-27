@@ -150,6 +150,47 @@ public class FlagValueAnalysisTests
     }
 
     /// <summary>
+    ///  A flag from hidden state is not known: LD A,I copies IFF2 into the parity, which the core running the
+    ///  instruction has at its own value, so JP PE after it can go either way; after XOR A, which sets the parity,
+    ///  it is always taken. A register from hidden state is not known either, as A after the 8085's RIM.
+    /// </summary>
+    [TestMethod]
+    public void FlagsFromHiddenStateAreNotKnown()
+    {
+        const string Source = """
+            ;; Jumps while interrupts are on.
+            Interrupts:
+                ld a,i
+                jp pe,Done
+                xor a
+                jp pe,Done
+                nop
+            Done:
+                ret
+            """;
+
+        (List<string> findings, AnalysisContracts contracts) = Check(Source, "Z80");
+        findings.Should().BeEmpty();
+        Summary(contracts, 0x1000).FixedConditions.Should().Equal(new Dictionary<ushort, bool> { [0x1006] = true });
+
+        // The 8085's RIM reads the interrupt masks and the serial input into A.
+        const string Masks = """
+            ;; Jumps while the serial input is 0.
+            Serial:
+                rim
+                ani $80
+                jz Done
+                nop
+            Done:
+                ret
+            """;
+
+        (findings, contracts) = Check(Masks, "I8085");
+        findings.Should().BeEmpty();
+        Summary(contracts, 0x1000).FixedConditions.Should().BeEmpty();
+    }
+
+    /// <summary>
     ///  Some bits known decide a branch: ORA with a constant that has a bit set leaves a non-zero result whatever
     ///  memory held, as the MOS's <c>lda #CFS_AT_EOF</c> then <c>ora CFS_STATUS</c>; AND with $0F leaves bit 7 clear
     ///  whatever A was; a byte read from memory alone decides nothing.

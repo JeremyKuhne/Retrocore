@@ -77,8 +77,8 @@ public static partial class IsaParser
         if (index == first || index == tokens.Count) { throw Error(number, ExpectedEffects); }
         int keys = index;
 
-        uint registersRead = 0, registersWritten = 0, registersMay = 0, operandBits = 0;
-        byte flagsRead = 0, flagsWritten = 0, flagsMay = 0, set = 0, cleared = 0, fromOperand = 0;
+        uint registersRead = 0, registersWritten = 0, registersMay = 0, registersHidden = 0, operandBits = 0;
+        byte flagsRead = 0, flagsWritten = 0, flagsMay = 0, set = 0, cleared = 0, fromOperand = 0, hidden = 0;
         byte pushed = 0, pulled = 0, mayPush = 0, mayPull = 0, readSlots = 0, writeSlots = 0, maySlots = 0;
         byte pushSlot = 0, pullSlot = 0;
         List<(int Destination, int Source)> copies = [];
@@ -192,6 +192,16 @@ public static partial class IsaParser
                 int equals = token.IndexOf('=');
                 string name = equals < 0 ? token : token[..equals];
                 uint mask = map.Mask(name);
+                if (mask != 0 && !reads && !may && token[(equals + 1)..] == "?")
+                {
+                    // A register written from state the effects leave out.
+                    registersWritten |= mask;
+                    registersHidden |= mask;
+                    flagsWritten |= map.FlagsOf(mask);
+                    hidden |= map.FlagsOf(mask);
+                    continue;
+                }
+
                 if (mask != 0 && equals < 0)
                 {
                     byte all = map.FlagsOf(mask);
@@ -242,6 +252,7 @@ public static partial class IsaParser
                 string value = equals < 0 ? "" : token[(equals + 1)..];
                 if (value == "0") { cleared |= bit; }
                 else if (value == "1") { set |= bit; }
+                else if (value == "?") { hidden |= bit; }
                 else if (value.Length == 4 && value.StartsWith("bit", StringComparison.Ordinal) && value[3] is >= '0' and <= '7')
                 {
                     fromOperand |= bit;
@@ -249,7 +260,7 @@ public static partial class IsaParser
                 }
                 else if (equals >= 0)
                 {
-                    throw Error(number, $"Expected flag=0, flag=1 or flag=bitN, not '{token}'.");
+                    throw Error(number, $"Expected flag=0, flag=1, flag=bitN or flag=?, not '{token}'.");
                 }
             }
         }
@@ -285,6 +296,8 @@ public static partial class IsaParser
             FlagsSet = set,
             FlagsCleared = cleared,
             FlagsFromOperand = fromOperand,
+            FlagsHidden = hidden,
+            RegistersHidden = registersHidden,
             OperandBits = operandBits,
             Pushed = pushed,
             Pulled = pulled,

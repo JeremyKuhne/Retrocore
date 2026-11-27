@@ -259,6 +259,8 @@ public sealed partial class InstructionSet
             FlagsSet = (byte)(effects.FlagsSet | other.FlagsSet),
             FlagsCleared = (byte)(effects.FlagsCleared | other.FlagsCleared),
             FlagsFromOperand = (byte)(effects.FlagsFromOperand | other.FlagsFromOperand),
+            FlagsHidden = (byte)(effects.FlagsHidden | other.FlagsHidden),
+            RegistersHidden = effects.RegistersHidden | other.RegistersHidden,
             OperandBits = effects.OperandBits | other.OperandBits,
             Pushed = (byte)(effects.Pushed + other.Pushed),
             Pulled = (byte)(effects.Pulled + other.Pulled),

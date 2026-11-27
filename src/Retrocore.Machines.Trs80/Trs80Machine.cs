@@ -198,6 +198,9 @@ public sealed class Trs80Machine : IMachine
             Trs80MemoryArea.Rom => MemoryKind.Rom,
             Trs80MemoryArea.Unmapped => MemoryKind.None,
             Trs80MemoryArea.ExpansionInterface or Trs80MemoryArea.Keyboard => MemoryKind.Io,
+
+            // Without the lowercase modification video memory keeps seven bits, so a byte stored does not read back.
+            Trs80MemoryArea.Video when !Bus.Video.Lowercase => MemoryKind.Io,
             _ => MemoryKind.Ram
         };
 

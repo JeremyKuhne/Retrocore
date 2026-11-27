@@ -857,7 +857,7 @@ internal sealed class AnalysisRoutineEngine
         int writtenFlags = effects.FlagsWritten | effects.FlagsMayWrite;
 
         // Flags the effects lines set or clear are known without running; the runs stop once the others all vary.
-        int sought = writtenFlags & ~(effects.FlagsSet | effects.FlagsCleared);
+        int sought = writtenFlags & ~(effects.FlagsSet | effects.FlagsCleared | effects.FlagsHidden);
         Array.Clear(_varying);
         int varyingFlags = 0;
         int combinations = 1 << total;
@@ -917,7 +917,13 @@ internal sealed class AnalysisRoutineEngine
             if (all) { return false; }
         }
 
-        flagsKnown = writtenFlags & ~varyingFlags;
+        // What is written from hidden state took the core's value of that state, not the program's.
+        for (int bit = 0; bit < registers.Length; bit++)
+        {
+            if ((effects.RegistersHidden & (1u << bit)) != 0) { _varying[bit] = _widths[bit]; }
+        }
+
+        flagsKnown = writtenFlags & ~varyingFlags & ~effects.FlagsHidden;
         flagsBits = firstFlags & flagsKnown;
         return true;
     }

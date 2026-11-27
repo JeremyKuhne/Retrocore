@@ -89,6 +89,18 @@ public readonly record struct InstructionEffects
     public byte FlagsFromOperand { get; init; }
 
     /// <summary>
+    ///  Gets the flags written from state the effects leave out, such as the Z80's X and Y after <c>SCF</c>, which
+    ///  come from its hidden Q register; running the instruction does not tell their values.
+    /// </summary>
+    public byte FlagsHidden { get; init; }
+
+    /// <summary>
+    ///  Gets the registers written from state the effects leave out, such as the 8085's A after <c>RIM</c>, which
+    ///  holds its interrupt masks; running the instruction does not tell their values.
+    /// </summary>
+    public uint RegistersHidden { get; init; }
+
+    /// <summary>
     ///  Gets, four bits per flag bit, one more than the operand bit each flag in <see cref="FlagsFromOperand"/>
     ///  copies.
     /// </summary>

@@ -78,12 +78,14 @@ access read-write SRL:[IY+d],C SRL:[IY+d],D SRL:[IY+d],E SRL:[IY+d],H SRL:[IY+d]
 # as [HL] or [IX+d], reads its address register. A pair stands for its parts, so writing HL writes H and L. A
 # conditional call or return may write SP and may push or pull. 'copies $1=$2' sets the first operand to the
 # second's value where both are registers without parts. PC, R's refresh count and the hidden state
-# (WZ, Q, IFF1, IFF2 and the interrupt mode) are left out; LD A,R and LD R,A name R.
+# (WZ, Q, IFF1, IFF2 and the interrupt mode) are left out; LD A,R and LD R,A name R. What is written from the
+# hidden state is Name=?: X and Y after SCF, CCF and BIT b,[HL], the parity after LD A,I, and A and its flags
+# after LD A,R, as R counts refreshes.
 parts AF=A,F BC=B,C DE=D,E HL=H,L IX=IXH,IXL IY=IYH,IYL
 stack SP
 effects LD                      reads $2                writes $1                       copies $1=$2
-effects LD:A,I                  reads I                 writes A negative zero Y half-carry=0 X overflow subtract=0 copies A=I
-effects LD:A,R                  reads R                 writes A negative zero Y half-carry=0 X overflow subtract=0
+effects LD:A,I                  reads I                 writes A negative zero Y half-carry=0 X overflow=? subtract=0 copies A=I
+effects LD:A,R                  reads R                 writes A=? negative=? zero=? Y=? half-carry=0 X=? overflow=? subtract=0
 effects PUSH                    reads $1 SP             writes SP                       push 2
 effects POP                     reads SP                writes $1 SP                    pull 2
 effects EX                      reads $1 $2             writes $1 $2
@@ -112,6 +114,7 @@ effects DEC:BC DEC:DE DEC:HL DEC:SP DEC:IX DEC:IY  reads $1        writes $1
 effects RLC RRC SLA SRA SRL SLL reads $1                writes $1 $2 F half-carry=0 subtract=0
 effects RL RR                   reads $1 carry          writes $1 $2 F half-carry=0 subtract=0
 effects BIT                     reads $2                writes negative zero Y half-carry=1 X overflow subtract=0
+effects BIT:b,[HL]              reads $2                writes negative zero Y=? half-carry=1 X=? overflow subtract=0
 effects SET RES                 reads $2                writes $2 $3
 effects RLCA RRCA               reads A                 writes A Y half-carry=0 X subtract=0 carry
 effects RLA RRA                 reads A carry           writes A Y half-carry=0 X subtract=0 carry
@@ -119,8 +122,8 @@ effects RLD RRD                 reads A HL              writes A negative zero Y
 effects DAA                     reads A half-carry subtract carry   writes A negative zero Y half-carry X overflow carry
 effects CPL                     reads A                 writes A Y half-carry=1 X subtract=1
 effects NEG                     reads A                 writes A F subtract=1
-effects SCF                     reads A X Y             writes Y half-carry=0 X subtract=0 carry=1
-effects CCF                     reads A X Y carry       writes Y half-carry X subtract=0 carry
+effects SCF                     reads A X Y             writes Y=? half-carry=0 X=? subtract=0 carry=1
+effects CCF                     reads A X Y carry       writes Y=? half-carry X=? subtract=0 carry
 effects NOP DI EI IM HALT none
 effects JP JR none
 effects JP:[HL] JP:[IX] JP:[IY] reads $1

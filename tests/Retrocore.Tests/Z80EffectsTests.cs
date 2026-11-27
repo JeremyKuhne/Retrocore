@@ -49,6 +49,34 @@ public class Z80EffectsTests
     }
 
     /// <summary>
+    ///  The flags written from the hidden state are marked: X and Y from Q after SCF and CCF and from WZ after
+    ///  BIT b,[HL], the parity from IFF2 after LD A,I, and A and its flags after LD A,R, from the refresh count; BIT b,A takes X
+    ///  and Y from A.
+    /// </summary>
+    [TestMethod]
+    public void FlagsFromHiddenStateAreMarked()
+    {
+        InstructionSet set = Z80Isa.InstructionSet;
+        const byte X = 0x08, Y = 0x20, ParityOverflow = 0x04;
+        Hidden([0x37]).Should().Be(X | Y);
+        Hidden([0x3F]).Should().Be(X | Y);
+        Hidden([0xCB, 0x46]).Should().Be(X | Y);
+        Hidden([0xCB, 0x47]).Should().Be(0);
+        Hidden([0xED, 0x57]).Should().Be(ParityOverflow);
+        Hidden([0xED, 0x5F]).Should().Be(0xEC, "LD A,R's sign, zero, Y, X and parity come from R's count");
+        set.TryDecode([0xED, 0x5F], out int loadR).Should().BeTrue();
+        set.Effects(loadR).RegistersHidden.Should().Be(set.Description.RegisterMask("A"));
+        set.TryDecode([0xED, 0x57], out int loadI).Should().BeTrue();
+        set.Effects(loadI).RegistersHidden.Should().Be(0, "LD A,I copies I");
+
+        byte Hidden(byte[] bytes)
+        {
+            set.TryDecode(bytes, out int encoding).Should().BeTrue();
+            return set.Effects(encoding).FlagsHidden;
+        }
+    }
+
+    /// <summary>
     ///  Runs every Z80 encoding from random states on the core, which the SingleStepTests certify, and checks
     ///  the data both ways, as the 6502 family's test does: what is not written keeps its value, constants take
     ///  theirs, SP moves by what is pushed and pulled; a register or flag not read changes nothing else, on the

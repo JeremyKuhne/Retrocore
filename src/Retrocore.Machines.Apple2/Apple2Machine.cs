@@ -301,6 +301,7 @@ public sealed class Apple2Machine : IMachine
         {
             Apple2MemoryArea.None => MemoryKind.None,
             Apple2MemoryArea.Io => MemoryKind.Io,
+            Apple2MemoryArea.Slot4Rom when Bus.MockingboardInstalled => MemoryKind.Io,
             Apple2MemoryArea.SystemRom or Apple2MemoryArea.Slot1Rom or Apple2MemoryArea.Slot2Rom or Apple2MemoryArea.Slot3Rom or Apple2MemoryArea.Slot4Rom or Apple2MemoryArea.Slot5Rom or Apple2MemoryArea.Slot6Rom or Apple2MemoryArea.Slot7Rom => MemoryKind.Rom,
             _ => MemoryKind.Ram
         };

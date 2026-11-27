@@ -17,9 +17,9 @@ kinds of media; don't make Skip appear or disappear when a disk or tape is mount
 
 Help text: **"Skip supported media operations. Other operations run at Fast speed. See the docs for supported machines
 and formats."** Keep the requested value when falling back, and show what actually ran, for example
-**"Fast (Skip not supported for this load)."** Report a result or fallback once per operation rather than per step
-or UI refresh. The same information must be available to scripts, including when a project boot completes before any
-running-frame update. A reported Skip means an actual transition occurred, not merely that the setting was selected.
+**"Fast (Skip not supported for this load)."** Project boots report a result once per launch, even without any
+running-frame updates. Live fallback is sampled activity, not a per-operation log; report changes instead of repeating
+the current status on every refresh. A reported Skip means an actual transition occurred, not merely a selection.
 
 Fast is the existing unthrottling feature, not a sector shortcut or a higher guest clock. In particular, the
 [DAP pacing loop](../../src/Retrocore.Debug/DebugSession.cs) already runs unthrottled at machine speed `max`,

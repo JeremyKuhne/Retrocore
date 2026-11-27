@@ -36,6 +36,10 @@ public sealed class DapTextTests
         client.Request("initialize", []);
         JsonObject launch = Apple1(textOnly: false);
         launch["fastCassette"] = false;
+        launch["mediaSpeedDefaults"] = new JsonObject { ["tape"] = "skip" };
+        Object(client.Request("launch", launch), "mediaSpeed").String("tape").Should().Be("normal");
+        launch = Apple1(textOnly: false);
+        launch["mediaSpeedDefaults"] = new JsonObject { ["tape"] = "normal" };
         launch["tapeSpeed"] = "skip";
         JsonObject started = client.Request("launch", launch);
         Object(started, "mediaSpeed").String("tape").Should().Be("skip");

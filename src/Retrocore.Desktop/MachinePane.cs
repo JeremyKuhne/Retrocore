@@ -892,8 +892,14 @@ internal sealed class MachinePane : ScrollViewer
                 MediaSpeed mode = (MediaSpeed)media.SelectedIndex;
                 if (tape) { _settings.TapeSpeed = mode; }
                 else { _settings.DiskSpeed = mode; }
+                string option = tape ? "tapeSpeed" : "diskSpeed";
+                if (_session.Configuration.ContainsKey(option))
+                {
+                    _session.Configuration[option] = MediaSpeedPolicy.Name(mode);
+                }
+
                 _session.Host.SetMediaSpeed(tape, mode);
-                _settings.Save();
+                _session.Keep();
             };
 
             _display.Children.Add(Options.Row(tape ? "Tape speed" : "Disk speed", media, MediaHelp));

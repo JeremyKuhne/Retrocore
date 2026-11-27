@@ -142,8 +142,15 @@ internal sealed class DesktopSettings
                 tapeSpeed = diskSpeed = fastValue.GetValue<bool>() ? MediaSpeed.Fast : MediaSpeed.Normal;
             }
 
-            if (desktop["tapeSpeed"] is { } tape) { tapeSpeed = MediaSpeedPolicy.Parse(tape); }
-            if (desktop["diskSpeed"] is { } disk) { diskSpeed = MediaSpeedPolicy.Parse(disk); }
+            MediaSpeed? savedTape = MediaSpeedPolicy.Read(desktop["tapeSpeed"]);
+            MediaSpeed? savedDisk = MediaSpeedPolicy.Read(desktop["diskSpeed"]);
+            tapeSpeed = savedTape ?? tapeSpeed;
+            diskSpeed = savedDisk ?? diskSpeed;
+            if ((savedTape is null && desktop["tapeSpeed"] is not null)
+                || (savedDisk is null && desktop["diskSpeed"] is not null))
+            {
+                Console.Error.WriteLine("Invalid saved media speed; retaining the default or legacy speed.");
+            }
 
             // A machine that is not an object naming one is left out, and the Apple IIe shown.
             if (desktop["machine"] is JsonObject { } kept && kept["machine"] is JsonValue named && named.GetValueKind() == JsonValueKind.String)

@@ -93,6 +93,16 @@ internal sealed class MediaSpeedPolicy(IDebugTarget target)
     {
         if (args["tapeSpeed"] is { } tape) { Set(tape: true, Parse(tape)); }
         if (args["diskSpeed"] is { } disk) { Set(tape: false, Parse(disk)); }
+        if (args["mediaSpeedDefaults"] is not JsonObject defaults) { return; }
+        if (_tape is null && args["fastCassette"] is null)
+        {
+            _tape = Read(defaults["tape"]);
+        }
+
+        if (_disk is null && args["fastDisk"] is null)
+        {
+            _disk = Read(defaults["disk"]);
+        }
     }
 
     /// <summary>
@@ -136,12 +146,20 @@ internal sealed class MediaSpeedPolicy(IDebugTarget target)
     /// </summary>
     /// <param name="value">The value to parse.</param>
     /// <returns>The parsed mode.</returns>
-    internal static MediaSpeed Parse(JsonNode? value) => (value is JsonValue json && json.TryGetValue(out string? name) ? name : null) switch
+    internal static MediaSpeed Parse(JsonNode? value) =>
+        Read(value) ?? throw new ArgumentException("Media speed must be normal, fast or skip.");
+
+    /// <summary>
+    ///  Reads a saved preference without applying an invalid setting.
+    /// </summary>
+    /// <param name="value">The value from settings.</param>
+    /// <returns>The mode, or null if not recognized.</returns>
+    internal static MediaSpeed? Read(JsonNode? value) => (value is JsonValue json && json.TryGetValue(out string? name) ? name : null) switch
     {
         "normal" => MediaSpeed.Normal,
         "fast" => MediaSpeed.Fast,
         "skip" => MediaSpeed.Skip,
-        _ => throw new ArgumentException("Media speed must be normal, fast or skip.")
+        _ => null
     };
 
     /// <summary>

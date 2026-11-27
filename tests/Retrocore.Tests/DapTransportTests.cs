@@ -296,6 +296,26 @@ public sealed class DapTransportTests
         messages.Select(message => message.Bool("success")).Should().Equal(false, true);
     }
 
+    /// <summary>
+    ///  Inspecting malformed requests for cancellation does not terminate the reader.
+    /// </summary>
+    [TestMethod]
+    public void MalformedRequestDoesNotEndReadAhead()
+    {
+        List<JsonObject> messages = Exchange(transport =>
+        {
+            transport.On("cancel", args => new JsonObject { ["requestId"] = args.Int("requestId") });
+            transport.On("next", _ => []);
+        },
+        Encode(new JsonObject { ["type"] = "request", ["seq"] = 1, ["command"] = 99 }),
+        Encode(new JsonObject { ["type"] = "request", ["seq"] = "bad", ["command"] = "launch" }),
+        Request(3, "cancel", new JsonObject { ["requestId"] = "bad" }),
+        Request(4, "next", []));
+
+        messages.Select(message => message.Bool("success")).Should().Equal(false, false, false, true);
+        messages[^1].Int("request_seq").Should().Be(4);
+    }
+
     private static Task StartHost(Action run) =>
         Task.Factory.StartNew(run, CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default);
 
@@ -320,6 +340,11 @@ public sealed class DapTransportTests
             ["arguments"] = arguments
         };
 
+        return Encode(request);
+    }
+
+    private static byte[] Encode(JsonObject request)
+    {
         byte[] json = Encoding.UTF8.GetBytes(request.ToJsonString());
         return [.. Encoding.ASCII.GetBytes($"Content-Length: {json.Length}\r\n\r\n"), .. json];
     }

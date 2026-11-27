@@ -218,11 +218,12 @@ export function activate(context: vscode.ExtensionContext): void {
     }));
     context.subscriptions.push(vscode.debug.registerDebugConfigurationProvider("retrocore", {
         resolveDebugConfiguration(_folder, configuration) {
-            for (const [option, legacy] of [["tapeSpeed", "fastCassette"], ["diskSpeed", "fastDisk"]] as const) {
-                if (configuration[option] !== undefined || configuration[legacy] !== undefined) continue;
-                const mode = context.workspaceState.get<unknown>(`retrocore.${option}`);
-                if (isMediaSpeed(mode)) configuration[option] = mode;
+            const defaults: Partial<Record<"tape" | "disk", string>> = {};
+            for (const kind of ["tape", "disk"] as const) {
+                const mode = context.workspaceState.get<unknown>(`retrocore.${kind}Speed`);
+                if (isMediaSpeed(mode)) defaults[kind] = mode;
             }
+            if (Object.keys(defaults).length !== 0) configuration.mediaSpeedDefaults = defaults;
             return configuration;
         }
     }));

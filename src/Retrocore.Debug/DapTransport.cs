@@ -205,8 +205,10 @@ internal sealed class DapTransport(Stream input, Stream output)
         foreach (JsonObject message in requests.GetConsumingEnumerable())
         {
             if (_stopped) { break; }
-            int? sequence = message.Int("seq");
-            int? launch = message.String("command") == "launch" ? sequence : null;
+            int? launch = ReadAhead<string>(message, "command") == "launch"
+                ? ReadAheadInt(message, "seq")
+                : null;
+
             if (launch is int current)
             {
                 lock (_pendingLaunches)
@@ -234,7 +236,6 @@ internal sealed class DapTransport(Stream input, Stream output)
                             pending.Dispose();
                         }
                     }
-
                 }
             }
 
@@ -268,28 +269,48 @@ internal sealed class DapTransport(Stream input, Stream output)
             }
 
             if (message is null || _stopped) { return; }
-            if (message.String("type") != "request") { continue; }
-            string? command = message.String("command");
+            if (ReadAhead<string>(message, "type") != "request") { continue; }
+            string? command = ReadAhead<string>(message, "command");
             lock (_pendingLaunches)
             {
-                if (command == "launch" && message.Int("seq") is { } sequence)
+                if (command == "launch"
+                    && ReadAheadInt(message, "seq") is int sequence
+                    && !_pendingLaunches.ContainsKey(sequence))
                 {
-                    _pendingLaunches.TryAdd(sequence, new());
+                    _pendingLaunches.Add(sequence, new());
                 }
                 else if (command == "cancel"
-                    && message.Object("arguments")?.Int("requestId") is { } requestId
+                    && message["arguments"] is JsonObject arguments
+                    && ReadAheadInt(arguments, "requestId") is int requestId
                     && _pendingLaunches.TryGetValue(requestId, out CancellationTokenSource? pending))
                 {
                     pending.Cancel();
                 }
                 else if (command == "disconnect")
                 {
-                    foreach (CancellationTokenSource launch in _pendingLaunches.Values) { launch.Cancel(); }
+                    CancelPendingLaunches();
                 }
             }
 
-            requests.Add(message, _stopReading.Token);
+            if (!requests.TryAdd(message))
+            {
+                // A full queue cannot carry a later cancel past a paced launch. Unblock the consumer without
+                // dropping or reordering requests.
+                lock (_pendingLaunches) { CancelPendingLaunches(); }
+                requests.Add(message, _stopReading.Token);
+            }
         }
+    }
+
+    private static T? ReadAhead<T>(JsonObject message, string field) =>
+        message[field] is JsonValue json && json.TryGetValue(out T? value) ? value : default;
+
+    private static int? ReadAheadInt(JsonObject message, string field) =>
+        message[field] is JsonValue json && json.TryGetValue(out int value) ? value : null;
+
+    private void CancelPendingLaunches()
+    {
+        foreach (CancellationTokenSource launch in _pendingLaunches.Values) { launch.Cancel(); }
     }
 
     private void Enqueue(Action write, Action? release = null, int weight = 1)

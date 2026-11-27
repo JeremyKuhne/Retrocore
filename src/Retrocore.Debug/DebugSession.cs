@@ -178,7 +178,12 @@ internal sealed partial class DebugSession
         // An image changed on disk shows in its drive, even while the machine is stopped.
         MediaActions.SourcesChanged += SourcesChanged;
         transport.On("initialize", _ => Capabilities());
-        transport.On("cancel", _ => new JsonObject());
+        transport.On("cancel", args =>
+        {
+            _ = args.Int("requestId");
+            return new JsonObject();
+        });
+
         transport.OnWithFollowUp("launch", args =>
         {
             bool configured = false;
@@ -1001,6 +1006,7 @@ internal sealed partial class DebugSession
 
     private JsonObject Launch(JsonObject args, out bool configured)
     {
+        _transport?.ThrowIfLaunchCancelled();
         // The launch takes a configurationDone that came before it, even if it fails.
         configured = _configured;
         RetireWorker();
@@ -1047,6 +1053,7 @@ internal sealed partial class DebugSession
         // The old machine's changed disks are kept and its recordings saved, and it is disposed before the new one is
         // built, as machines can share host resources, such as the game controllers SDL reads. A launch that then
         // fails leaves no machine, rather than the disposed one.
+        _transport?.ThrowIfLaunchCancelled();
         CloseJournal();
         ReleaseTarget();
         _target = null;
@@ -1219,7 +1226,19 @@ internal sealed partial class DebugSession
         // A project target whose environment boots its image boots it now, over them, to its program's entry.
         if (built is not null && booted)
         {
-            BootImage(built);
+            try
+            {
+                BootImage(built);
+                _transport?.ThrowIfLaunchCancelled();
+            }
+            catch (OperationCanceledException)
+            {
+                CloseJournal();
+                ReleaseTarget();
+                _target = null;
+                _mediaSpeed = null;
+                throw;
+            }
 
             // Its program's lines apply in the memory the CPU reads them in once it is at the entry: under SOS, the
             // switched bank SOS gives the interpreter below $A000 and the fixed system RAM above it, not bank 0. A

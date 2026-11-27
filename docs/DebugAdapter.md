@@ -135,8 +135,9 @@ have `tape` and `disk` values (`null` for a kind not installed).
 A project-image launch returns `mediaSpeedResult` with `kind`, `device`, `requested`, `effective`, and `reason`,
 plus `cycles` and `elapsedMilliseconds` for the boot media phase. `effective: "skip"` means a shortcut actually
 ran. `requested: "skip"` with `effective: "fast"` and `reason: "unsupportedOperation"` means real guest cycles ran
-unthrottled. During ordinary execution a `retro/mediaSpeed` event reports that fallback when an unsupported device
-becomes active. The requested setting does not change. A DAP `cancel` request naming a pending launch's `requestId`
+unthrottled. During ordinary execution, `retro/mediaSpeed` reports fallback when a device is seen active in status
+sampling. This is live telemetry, not a transfer log: short or adjacent operations may not produce separate events.
+The requested setting does not change. A DAP `cancel` request naming a pending launch's `requestId`
 can interrupt its project-image boot.
 
 See [media speed support](Devices.md#media-speed) for the machines and operations that can Skip.

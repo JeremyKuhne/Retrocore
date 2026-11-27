@@ -52,6 +52,12 @@ internal sealed record AnalysisRoutineSummary
     public uint StackAddresses { get; init; }
 
     /// <summary>
+    ///  Gets whether a path to a return writes through a pointer or an index, so a caller holding an address in its
+    ///  stack, as after <c>TSX</c>, cannot know that the routine leaves its stack alone.
+    /// </summary>
+    public bool WritesThroughPointers { get; init; }
+
+    /// <summary>
     ///  Gets, for each register and flag some path to a return surely changes, the address of an instruction that
     ///  changes it: registers by bit, then flags at 32 plus their bit; one missing is changed where the paths disagree.
     /// </summary>

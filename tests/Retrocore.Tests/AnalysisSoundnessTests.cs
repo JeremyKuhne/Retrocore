@@ -425,6 +425,23 @@ public class AnalysisSoundnessTests
                 inx
                 rts
             """, "Mos6502", "A");
+
+        // And a callee that writes through an address in the caller's stack it is given.
+        NotKept("""
+            ;; Saves A, then has a helper clear it on the stack through X.
+            ;; Keeps: A
+            Caller:
+                pha
+                tsx
+                inx
+                jsr Clobber
+                pla
+                rts
+            Clobber:
+                lda #0
+                sta $0100,x
+                rts
+            """, "Mos6502", "A");
     }
 
     /// <summary>

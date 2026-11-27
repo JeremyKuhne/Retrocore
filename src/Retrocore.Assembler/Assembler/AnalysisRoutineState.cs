@@ -43,6 +43,12 @@ internal sealed class AnalysisRoutineState
     internal uint StackAddresses { get; set; }
 
     /// <summary>
+    ///  Gets or sets whether a path here wrote through a pointer or an index, itself or in a callee, so it may have
+    ///  written through an address a caller gave it, in that caller's stack.
+    /// </summary>
+    internal bool WroteThroughPointer { get; set; }
+
+    /// <summary>
     ///  Copies the state.
     /// </summary>
     /// <returns>The copy.</returns>
@@ -53,6 +59,7 @@ internal sealed class AnalysisRoutineState
             Slots = (AnalysisValue[])Slots.Clone(),
             StackLost = StackLost,
             StackAddresses = StackAddresses,
+            WroteThroughPointer = WroteThroughPointer,
             Memory = [with(Memory)]
         };
 
@@ -73,6 +80,7 @@ internal sealed class AnalysisRoutineState
     {
         if (StackLost != other.StackLost
             || StackAddresses != other.StackAddresses
+            || WroteThroughPointer != other.WroteThroughPointer
             || !Slots.AsSpan().SequenceEqual(other.Slots)
             || Memory.Count != other.Memory.Count)
         {

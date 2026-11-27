@@ -47,7 +47,20 @@ public class M6809EffectsTests
         description.RegisterMask("D").Should().Be(a | b);
 
         // An unprefixed store immediate takes its flags from the instruction before it, which the core cannot know.
-        Effects(set, [0x87, 0x00]).FlagsHidden.Should().Be(0x0E, "XSTA #n's N, Z and V");
+        int stores = 0;
+        for (int encoding = 0; encoding < set.Encodings.Count; encoding++)
+        {
+            IsaEncoding store = set.GetEncoding(encoding);
+            string name = set.MnemonicName(store.Mnemonic);
+            if (!name.StartsWith("XST", StringComparison.Ordinal) || store.OpcodeLength != 1) { continue; }
+            set.Effects(encoding).FlagsHidden.Should().Be(0x0E, $"{name}'s N, Z and V");
+            stores++;
+        }
+
+        stores.Should().Be(4, "XSTA, XSTB, XSTX and XSTU; XSTY and XSTS are prefixed, which sets N and clears Z and V");
+        set.TryDecode([0x10, 0x8F, 0x12, 0x34], out int prefixedStore).Should().BeTrue();
+        InstructionEffects prefixed = set.Effects(prefixedStore);
+        (prefixed.FlagsHidden, prefixed.FlagsSet, prefixed.FlagsCleared).Should().Be(((byte)0, (byte)0x08, (byte)0x06));
 
         // PULS A,X,PC: pulls five bytes into A, X and PC through S.
         InstructionEffects puls = Effects(set, [0x35, 0x92]);

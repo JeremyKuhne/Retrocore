@@ -444,7 +444,8 @@ internal sealed partial class AnalysisContracts
             Returns = true,
             Documented = true,
             ChangesCallerStack = Analyzed(address)?.ChangesCallerStack == true,
-            StackAddresses = (Analyzed(address)?.StackAddresses ?? 0) & ~kept
+            StackAddresses = (Analyzed(address)?.StackAddresses ?? 0) & ~kept,
+            WritesThroughPointers = Analyzed(address) is not { Incomplete: null, WritesThroughPointers: false }
         };
     }
 

@@ -316,7 +316,7 @@ public class InstructionEffectsTests
         uint a = description.RegisterMask("A");
         Effects(nmos, 0x8B).RegistersHidden.Should().Be(a);
         Effects(nmos, 0xAB).RegistersHidden.Should().Be(a | description.RegisterMask("X"));
-        Effects(nmos, 0xA9).RegistersHidden.Should().Be(0, "LDA #n is no such instruction");
+        Effects(nmos, 0xA9).RegistersHidden.Should().Be(0, "LDA #n's result is its operand");
 
         InstructionEffects immediate = Effects(M6502Isa.Get(ProcessorVariant.Wdc65C02), 0x89);
         immediate.FlagsWritten.Should().Be((byte)(1 << Flag(description, "zero")));

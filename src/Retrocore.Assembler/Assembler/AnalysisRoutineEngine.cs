@@ -351,9 +351,18 @@ internal sealed class AnalysisRoutineEngine
                 return;
             }
 
+            // A callee that may write through a pointer may write through an address in this routine's stack it is
+            // given, as after TSX; one the analysis cannot see may do anything.
+            AnalysisRoutineSummary? seen = callee is { Incomplete: not null, Documented: false } ? null : callee;
+            if (state.StackAddresses != 0 && seen is not { WritesThroughPointers: false })
+            {
+                Stop($"it calls ${target:X4} with an address in its stack, which may be written through", pc, stack: true);
+                return;
+            }
+
             // A callee followed only in part keeps nothing for certain; a documented one keeps what it says.
-            if (callee is null || callee is { Incomplete: not null, Documented: false }) { Unknown(state, pc); }
-            else { Apply(state, callee, pc); }
+            if (seen is null) { Unknown(state, pc); }
+            else { Apply(state, seen, pc); }
             if (callee is null || callee.Returns || callee.Incomplete is not null) { Follow(next, state, pc); }
         }
 
@@ -399,6 +408,12 @@ internal sealed class AnalysisRoutineEngine
                 if (tail.ChangesCallerStack)
                 {
                     Stop($"it goes on into ${target:X4}, which changes the stack under its return address", from, stack: true);
+                    return;
+                }
+
+                if (state.StackAddresses != 0 && tail.WritesThroughPointers)
+                {
+                    Stop($"it goes on into ${target:X4} with an address in its stack, which may be written through", from, stack: true);
                     return;
                 }
 
@@ -675,6 +690,7 @@ internal sealed class AnalysisRoutineEngine
         if (writes)
         {
             if (!direct && reachesStack) { return AnalysisRoutineOutcome.WroteStack; }
+            if (!direct) { state.WroteThroughPointer = true; }
 
             int width = 0;
             for (int bit = 0; bit < 32; bit++)
@@ -1031,12 +1047,19 @@ internal sealed class AnalysisRoutineEngine
         uint changed = _leaves & ~summary.KeptRegisters;
         uint passed = state.StackAddresses != 0 ? changed : 0;
         state.StackAddresses = (state.StackAddresses & summary.KeptRegisters) | passed | summary.StackAddresses;
+        state.WroteThroughPointer |= summary.WritesThroughPointers;
         Forget(state, at);
     }
 
     // A call the analysis cannot see makes every register, flag and stored value unknown.
-    private void Unknown(AnalysisRoutineState state, ushort at) =>
-        Apply(state, new AnalysisRoutineSummary { UnknownRegisters = uint.MaxValue, UnknownFlags = 0xFF }, at);
+    private void Unknown(AnalysisRoutineState state, ushort at) => Apply(state, s_unknown, at);
+
+    private static readonly AnalysisRoutineSummary s_unknown = new()
+    {
+        UnknownRegisters = uint.MaxValue,
+        UnknownFlags = 0xFF,
+        WritesThroughPointers = true
+    };
 
     private static void Forget(AnalysisRoutineState state, ushort at)
     {
@@ -1091,7 +1114,8 @@ internal sealed class AnalysisRoutineEngine
             Incomplete = incomplete,
             IncompleteAt = incompleteAt,
             ChangesCallerStack = changesCallerStack,
-            StackAddresses = exit is null ? 0 : exit.StackAddresses & ~kept
+            StackAddresses = exit is null ? 0 : exit.StackAddresses & ~kept,
+            WritesThroughPointers = exit?.WroteThroughPointer == true
         };
     }
 
@@ -1148,6 +1172,7 @@ internal sealed class AnalysisRoutineEngine
 
         joined.StackLost |= second.StackLost;
         joined.StackAddresses |= second.StackAddresses;
+        joined.WroteThroughPointer |= second.WroteThroughPointer;
 
         // A stack with frames on one path only differs too, whichever path arrived first.
         foreach ((int stack, List<AnalysisRoutineFrame> frames) in first.Stacks)

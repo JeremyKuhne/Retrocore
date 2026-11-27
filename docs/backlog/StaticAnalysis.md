@@ -486,7 +486,9 @@ and the documentation:
 - **Stack addresses through memory or the stack,** as a stack pointer stored with `LD [nn],SP` and loaded back, or
   pushed and pulled, are not known to be stack addresses again, so a write through them is not seen as one; nor
   are those a callee the analysis cannot see leaves. A callee it follows passes on those it works out, and while
-  the caller holds one, every register a callee changes may be one, as INX on the X a TSX gave.
+  the caller holds one, every register a callee changes may be one, as INX on the X a TSX gave; a call then to a
+  routine that writes through a pointer or an index, or that the analysis cannot see, stops the routine, as the
+  callee may write into the caller's stack through the address it is given.
 - **Stores to a fixed address in the stack,** as the 6502's `STY $0104`, are not seen as writes into it, since
   where the stack pointer is at entry is not known.
 - Where the check runs, as for the other analyses, is the first open question below.
@@ -617,8 +619,8 @@ SET_EOF. Routines followed now for the first time found three documentation erro
 - DEL's `Out: VARTAB = HL = ...` named only VARTAB; it is now `HL, VARTAB = ...`.
 - CHKRES's `Out:` had HL inside the zero flag's meaning; HL now has its own entry.
 
-The closing review's fixes made the check stricter: 889 routines checked, 32 findings, 118 `Keeps:` items not
-verified. Most of the drop is routines now listed as followed in part, 120 of them, which were counted as checked
+The closing review's fixes made the check stricter: 888 routines checked, 32 findings, 121 `Keeps:` items not
+verified. Most of the drop is routines now listed as followed in part, about 120 of them, which were counted as checked
 before; the rest write into the stack through an address worked out from a stack pointer. The 7 new findings are
 all from `Entry:` labels, now checked too: SET_ENTRY_EXEC_ADDRESS_MERGE skips SAVE_REGISTERS, so A, which the
 DFS routine's `Keeps:` names, is changed from there, and the MOS's SET_STATUS_BITS, with A and CFS_STATUS 0, falls

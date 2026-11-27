@@ -153,8 +153,9 @@ errors 1 to 9 share.
 
 The ROM-source builds, the debug target's tests and the DAP scripts need nothing external, apart from the DAP script's
 1541 part, which needs the `c1541` set and is skipped without it. The tests on the dumps, the tape, cartridge and disk
-tests and the comparisons with MAME are inconclusive without them: MAME 0.264's `vic20`, `vic20p`, `c1540` and `c1541`
-sets from the [MAME ROM sets on archive.org](https://archive.org/download/mame-0.264-roms-non-merged/), unzipped in
-`vic20-roms`; MAME 0.202's `vic1001_cart`, `vic1001_cass` and `vic1001_flop` software lists in `vic20-media`, with
-MAME's `hash/vic1001_cart.xml` for the cartridges; and a MAME in `RETROCORE_MAME` for the comparisons, which have been
-run with MAME 0.264.
+tests and the comparisons with MAME are inconclusive without these, under the fixture folder (`RETROCORE_CACHE`, or
+`%USERPROFILE%\Retrocore`): MAME 0.264's `vic20`, `vic20p`, `c1540` and `c1541` sets from the [MAME ROM sets on
+archive.org](https://archive.org/download/mame-0.264-roms-non-merged/), zipped in `vic20-roms\mame` and unzipped in
+`vic20-roms\extract` (or `RETROCORE_VIC20_ROMS`); MAME 0.202's `vic1001_cart`, `vic1001_cass` and `vic1001_flop`
+software lists in `vic20-media\extract`, with MAME's `vic1001_cart.xml` in `mame\hash`; and a MAME in `RETROCORE_MAME`
+for the comparisons, whose own `hash` folder the cartridge comparison reads. They have been run with MAME 0.264.

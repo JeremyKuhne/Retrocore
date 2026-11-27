@@ -13,7 +13,8 @@ namespace Retrocore.Tests;
 /// </summary>
 /// <remarks>
 ///  <para>
-///   The program's tokens in its order, each include's where the include is, without comments; each name as the
+///   The program's tokens in its order, each include's where the include is, without comments but with the options
+///   other than includes, which change the code (in capitals, their blanks one space); each name as the
 ///   number of the declaration it is or refers to, so that renaming leaves the shape as it was; and a field's use as
 ///   one token, as which record's field it is depends on the record's type, which the model doesn't follow. A change
 ///   to the code changes the shape, so a test pins it where Apple's disks aren't there to compile it.
@@ -51,13 +52,14 @@ internal static class PascalCodeShape
 
         using IncrementalHash shape = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
         IEnumerable<PascalToken> tokens = Expand(program, program.Files[0], includes, [with(StringComparer.OrdinalIgnoreCase)]);
-        foreach (PascalToken token in tokens.Where(token => !token.IsComment))
+        foreach (PascalToken token in tokens.Where(token => !token.IsComment || IsCodeOption(token, program)))
         {
             string text = token.Kind switch
             {
                 PascalTokenKind.Identifier when declared.TryGetValue(token, out int at) => $"#{at}",
                 PascalTokenKind.Identifier when used.TryGetValue(token, out int at) => at < 0 ? "F" : $"#{at}",
                 PascalTokenKind.Identifier or PascalTokenKind.Keyword => token.Text.ToUpperInvariant(),
+                PascalTokenKind.Option => string.Join(separator: ' ', token.Text.ToUpperInvariant().Split(separator: (char[]?)null, StringSplitOptions.RemoveEmptyEntries)),
                 _ => token.Text
             };
 
@@ -66,6 +68,10 @@ internal static class PascalCodeShape
 
         return Convert.ToHexString(shape.GetHashAndReset());
     }
+
+    // An option that isn't an include, such as (*$I-*), (*$R ROUTINE*) or (*$S++*).
+    private static bool IsCodeOption(PascalToken token, PascalProgram program) =>
+        token.Kind == PascalTokenKind.Option && !program.Includes.Any(include => ReferenceEquals(include.Token, token));
 
     // A file's tokens, each include's file's in its place; a file already being expanded, included again inside
     // itself, is left out, as the model reads it once. Paths compare without case, as the model's files do.

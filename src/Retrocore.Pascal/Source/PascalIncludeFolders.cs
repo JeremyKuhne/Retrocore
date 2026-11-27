@@ -24,7 +24,19 @@ public static class PascalIncludeFolders
             return [];
         }
 
-        string system = Path.Join(Path.GetDirectoryName(parent), "System", Path.GetFileName(folder));
-        return Directory.Exists(system) ? [system] : [];
+        // The folders' names in any case, as a file system that minds case may have them.
+        string? system = Child(Path.GetDirectoryName(parent), "System") is { } systems ? Child(systems, Path.GetFileName(folder)) : null;
+        return system is null ? [] : [system];
+    }
+
+    // A folder's child folder of a name, whatever its case.
+    private static string? Child(string? folder, string name)
+    {
+        if (folder is null || !Directory.Exists(folder)) { return null; }
+        string exact = Path.Join(folder, name);
+        return Directory.Exists(exact)
+            ? exact
+            : Directory.EnumerateDirectories(folder).FirstOrDefault(
+                child => string.Equals(Path.GetFileName(child), name, StringComparison.OrdinalIgnoreCase));
     }
 }

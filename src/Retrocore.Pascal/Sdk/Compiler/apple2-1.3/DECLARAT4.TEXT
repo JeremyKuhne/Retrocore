@@ -28,7 +28,8 @@
           WordsEach: INTEGER;
           (** Also: LLC (UCSD20) *)
           LocalCounter: INTEGER;
-          (** The parameters in the list. *)
+          (** The names in the group of parameters being read, those of one
+              type. *)
           GroupCount: INTEGER;
       BEGIN
         AllParameters.Entry := NIL;

@@ -14,10 +14,10 @@ procedures in 6502 code are `ASSEMBLED.TEXT`, for Apple's Assembler. One build:
 ## Decisions
 
 - **PC1. The source.** Retrocore's decompilation of `SYSTEM.COMPILER`, named privately after UCSD Pascal II.0's
-  Compiler, whose listing (UCSD20) it descends from, with a comment on each declaration. That source compiled back
-  to the same segments; this conversion starts from it, by script, and each step keeps the code: the code's shape
-  (`PascalCodeShape`: the tokens, each name as the declaration it means, comments left out) is the same before and
-  after, and the round trip gives the same segments.
+  Compiler, whose listing (UCSD20) it descends from, with a comment on each declaration. That source compiled back to
+  the same segments; this conversion starts from it, by script, and each step keeps the code: the code's shape
+  (`PascalCodeShape`: the tokens, each name as the declaration it means, comments left out but options kept) is the
+  same before and after, and the round trip gives the same segments.
 - **PC2. The files.** Every file fits the strictest Editor (16,348 bytes as a disk stores it), at most about 15,000
   so there is room to edit: the main file keeps the header, the options and `PROGRAM`; the constants
   (`CONSTANTS1`, `2`), the types (`TYPES1` to `3`), the system's globals and its procedures' headings
@@ -34,7 +34,7 @@ procedures in 6502 code are `ASSEMBLED.TEXT`, for Apple's Assembler. One build:
   from UCSD Pascal II.0's listing (UCSD20), where the private source's comment cited II.0 for the name and the
   listing's OCR text has the word, or where a constant's value and its type are both in it; 83 p-code mnemonics from
   Apple's manual (A2POSRM), the ones the SDK's interpreter cites. A name given to more than one declaration, or with
-  another declaration's key, goes in a remark instead (136: "UCSD Pascal II.0 calls it LCP (UCSD20)"); one that is a
+  another declaration's key, goes in a remark instead (131: "UCSD Pascal II.0 calls it LCP (UCSD20)"); one that is a
   reserved word or standard identifier (`EXIT`, `SCAN`) is never an `Also:`, as a use of it would find the
   declaration, which the lint now reports. Citations the listing doesn't confirm are left out.
 - **PC5. The docs.** A declaration's comment, above it or after it on its line, is its `(** *)` doc: 1,186 docs. A

@@ -4,9 +4,8 @@
 ; Each name is its procedure's, of which the Linker reads 8 letters.
 ;
 ; Assembled: scans the identifier at SourceBuffer^[SourceCursor] into TokenName
-; in
-; capitals, and looks it up in the reserved
-; words, setting Token and Operator (UCSD Pascal II.0's IDSEARCH, in 6502 code)
+; in capitals, and looks it up in the reserved words, setting Token and Operator
+; (UCSD Pascal II.0's IDSEARCH, in 6502 code)
          .PROC   SCANIDENTIFIER,2
          PLA
          STA     7E
@@ -31,7 +30,7 @@
          STA     97
          LDA     #20
          LDX     #7
-; TokenName := eight blanks
+; The scratch name at $88: blanks its last seven letters
 BLANKID  STA     88,X
          DEX
          BNE     BLANKID
@@ -43,7 +42,7 @@ BLANKID  STA     88,X
          BCS     FIRSTCH
          SEC
          SBC     #20
-; The first letter, in capitals, into TokenName
+; The first letter, in capitals, into the scratch name
 FIRSTCH  STA     88
 ; The next character
 NEXTCH   INY
@@ -67,7 +66,7 @@ NOTDIGIT CMP     #41
          BEQ     NEXTCH
 ; A lower-case letter made a capital
 TOUPPER  SBC     #20
-; Into TokenName, the first 8 only
+; Into the scratch name, the first 8 only
 PUTCH    INX
          CPX     #8
          BCS     NEXTCH
@@ -100,7 +99,7 @@ TABHI    LDA     (94),Y
 ; The next reserved word of the letter's list
 NEXTWORD LDX     #0
          LDY     #1
-; Compares its next letter with TokenName's
+; Compares its next letter with the scratch name's
 CMPCHAR  INX
          INY
          LDA     (92),Y
@@ -138,8 +137,8 @@ MATCHED  CPX     #7
          LDA     #0
          STA     (94),Y
          BEQ     IDRETURN
-; No reserved word: Token NameToken, Operator $15, and TokenName copied to the
-; Compiler's TokenName
+; No reserved word: Token NameToken, Operator $15, and the scratch
+; name copied to the Compiler's TokenName
 NOTWORD  LDA     #0
          LDY     #2
          STA     (94),Y
@@ -153,7 +152,7 @@ NOTWORD  LDA     #0
          STA     (94),Y
          LDY     #0E
          LDX     #7
-; TokenName's letters, last first
+; The scratch name's letters, last first
 COPYID   DEY
          LDA     88,X
          STA     (94),Y

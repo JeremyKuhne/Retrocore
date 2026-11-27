@@ -309,9 +309,8 @@
               END
     END;
 
-    (** Calls routine CalledRoutine of segment CalledSegment (CXP),
-        noting the segment
-        as needed (II.0: GENNR's). *)
+    (** Calls routine CalledRoutine of segment CalledSegment (CXP), noting
+        the segment in LibrarySegments (II.0: GENNR's). *)
     PROCEDURE EmitExternalCall;
     BEGIN
       LibrarySegments := LibrarySegments + [CalledSegment];
@@ -328,8 +327,9 @@
       END
     END;
 
-    (** Generates a jump to a label: back by its offset, or through the jump
-        table; forward, linking it to the label's other jumps to fix later.
+    (** Generates a jump to a label: to a placed label 0 to 127 bytes on, by
+        its distance, else through the jump table; to one not yet placed,
+        linking it to the label's other jumps to fix later.
         Also: GENJMP (UCSD20) *)
     PROCEDURE EmitJump;
       VAR

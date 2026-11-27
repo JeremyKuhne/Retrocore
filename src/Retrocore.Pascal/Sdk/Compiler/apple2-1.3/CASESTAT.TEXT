@@ -35,8 +35,8 @@
           (** After the table and OTHERWISE: where each case's code jumps to
               when it ends. *)
           EndJump: Jump;
-          (** After the XJP: where a selector outside the table goes,
-              OTHERWISE's code or the end. *)
+          (** After the table: where a selector outside it goes, OTHERWISE's
+              code or the end. *)
           DefaultJump: Jump;
           (** The highest label.
 

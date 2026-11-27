@@ -118,7 +118,7 @@
               SetOnStack: BOOLEAN;
               (** A string constant's type. *)
               NewType: Structure;
-              (** ADJ or SGS. *)
+              (** SGS or SRS. *)
               ElementOpcode: INTEGER;
               (** CodeCounter where a constant element's code is dropped. *)
               DroppedCodeStart: INTEGER;

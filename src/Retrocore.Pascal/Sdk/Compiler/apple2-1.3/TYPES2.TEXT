@@ -1,14 +1,15 @@
-(** TYPES2.TEXT: part 2 of 3 of TYPES: the symbol table's entries, types and
-    constants, operands, scopes, labels and the code file's records.
+(** TYPES2.TEXT: part 2 of 3 of TYPES: types, operands, the lexical stack,
+    scopes, jumps and labels, the code file's segment dictionary and blocks, the
+    Linker's references, the listing, and a library's tables.
 
     Included by COMPILER.TEXT after TYPES1.TEXT and before TYPES3.TEXT. *)
 
   (** A type. Its variant part, by Form (0 ScalarForm, 1 SubrangeForm, 2
       PointerForm, 3 LongIntegerForm, 4 SetForm, 5 ArrayForm, 6 RecordForm, 7
       FileForm, 8 TagFieldForm, 9 VariantForm), reuses the same words: word
-      2: ScalarKind, RANGETYPE, BaseType, ELSET, INXTYPE, FirstField,
-      FILTYPE, TAGFIELDP, SUBVAR; word 3: LastConstant, Maximum, ElementType,
-      RECVAR, FSTVAR, NXTVAR; word 4: Minimum, ArrayIsPacked, VARVAL; words
+      2: ScalarKind, BaseType, IndexRange, ComponentType, FirstField or
+      NestedVariant; word 3: LastConstant, Maximum, ElementType or
+      VariantPart; word 4: Minimum or ArrayIsPacked; words
       5-8, an array's: ElementBits, ElementsPerWord, ArrayIsString, Capacity.
 
       UCSD Pascal II.0 calls it STRUCTURE (UCSD20). *)
@@ -46,14 +47,16 @@
            LastValue: INTEGER);
         (** Size and Form, in the variant whose words 2 and 3 are structures. *)
         TypeStructuresView: (HeadOfViews: ARRAY[1..2] OF INTEGER;
-           (** The type it is made of: RANGETYPE, BaseType, ELSET, INXTYPE,
-               FILTYPE, SUBVAR.
+           (** The type it is made of: a subrange's, a set's elements', an
+               array's index, a file's components (II.0's RANGETYPE, ELSET,
+               INXTYPE, FILTYPE).
                Also: ELTYPE (UCSD20) *)
            BaseType: Structure;
-           (** An array's element type; RECVAR, FSTVAR, NXTVAR.
+           (** An array's element type; the same word as II.0's RECVAR, FSTVAR
+               and NXTVAR.
                Also: AELTYPE (UCSD20) *)
            ElementType: Structure;
-           (** A subrange's lowest value; a variant's VARVAL.
+           (** A subrange's lowest value; a variant's value (II.0's VARVAL).
                Also: MIN (UCSD20) *)
            Minimum: WordValue;
            (** ElementBits, in the variant of structures. *)
@@ -65,42 +68,43 @@
            FieldNext: Structure;
            (** Capacity as a value. *)
            LengthValue: WordValue);
-        (** in the variant whose words 2 and 3 are a file's structure and a
-            constant. *)
+        (** Size and Form, in the variant whose words 2 and 3 are a file's
+            component type and an enumeration's last constant. *)
         TypeFileView: (HeadOfFile: ARRAY[1..2] OF INTEGER;
            (** A file's component type, as a pointer to its structure. *)
            ComponentType: ShortStructure;
            (** An enumeration's last constant, the head of their list.
                Also: FCONST (UCSD20) *)
            LastConstant: SymbolLink);
-        (** in the variant whose words 2 and 3 are a subrange and its
-            Maximum. *)
+        (** Size and Form, in the variant whose words 2 and 3 are an index
+            subrange and a Maximum. *)
         TypeRangeView: (HeadOfRange: ARRAY[1..2] OF INTEGER;
            (** An array's index type, as a pointer to a subrange. *)
            IndexRange: RangeStructure;
            (** A subrange's highest value.
                Also: MAX (UCSD20) *)
            Maximum: WordValue);
-        (** in the variant whose words 2 and 3 are a record's FirstField and
-            RECVAR. *)
+        (** Size and Form, in the variant whose words 2 and 3 are a record's
+            FirstField and VariantPart. *)
         TypeRecordView: (HeadOfRecord: ARRAY[1..2] OF INTEGER;
-           (** A record's first field; a tag field's TAGFIELDP.
+           (** A record's first field; a tag field's identifier.
                Also: FSTFLD (UCSD20) *)
            FirstField: SymbolLink;
            (** A record's variant part, as a pointer to its tag field's
                structure.
                Also: RECVAR (UCSD20) *)
            VariantPart: TagStructure);
-        (** in the variant whose word 2 is a variant's SUBVAR. *)
+        (** Size and Form, in the variant whose word 2 is a variant's
+            NestedVariant. *)
         TypeVariantView: (HeadOfVariant: ARRAY[1..2] OF INTEGER;
            (** A variant's own variant part.
                Also: SUBVAR (UCSD20) *)
            NestedVariant: TagStructure);
         (** A long integer's words. *)
         LongTypeSize: (PadLong: ARRAY[1..2] OF INTEGER);
-        (** A pointer's, a set's, a file's. *)
+        (** A pointer's, a set's, a file's, and the standard scalars'. *)
         PointerTypeSize: (PadPointer: ARRAY[1..3] OF INTEGER);
-        (** An enumeration's, a record's. *)
+        (** An enumeration's, a record's, a tag field's. *)
         EnumerationTypeSize: (PadEnumeration: ARRAY[1..4] OF INTEGER);
         (** A subrange's, an array's. *)
         RangeTypeSize: (PadRange: ARRAY[1..5] OF INTEGER);
@@ -270,12 +274,12 @@
   (** A place in the code a jump goes to.
       Also: CODELABEL (UCSD20) *)
   JumpEntry = RECORD
-      (** Whether it is placed: then Offset holds its offset, else
-          PendingReferences the jumps to fix.
+      (** Whether it is placed: then Offset holds its offset, else the
+          last jump to fix (II.0's REFLIST).
           Also: DEFINED (UCSD20) *)
       IsDefined: BOOLEAN;
       (** Its offset; while undefined, the last jump to it, which links the
-          others (PendingReferences).
+          others (II.0's REFLIST, in the same word).
           Also: OCCURIC (UCSD20) *)
       Offset: INTEGER;
       (** Its entry in the jump table, for a jump too far back.
@@ -305,9 +309,7 @@
   (** A set of segment numbers. *)
   SegmentNumbers = SET OF 0..63;
 
-  (** Each procedure's entry offset in the segment.
-
-      UCSD Pascal II.0 calls it PROCTABLE (UCSD20). *)
+  (** Each procedure's entry offset in the segment. *)
   RoutineOffsets = ARRAY[0..254] OF INTEGER;
 
   (** A segment's entry.
@@ -334,9 +336,7 @@
       Kind: INTEGER
     END;
 
-  (** The code file's segment dictionary, by slot.
-
-      UCSD Pascal II.0 calls it SEGTABLE (UCSD20). *)
+  (** The code file's segment dictionary, by slot. *)
   SegmentTable = ARRAY[0..15] OF SegmentEntry;
 
   (** The slot in the segment dictionary of each segment number. *)
@@ -345,9 +345,7 @@
   (** A pointer to a string (II.0: ^STRING). *)
   StringReference = ^STRING;
 
-  (** The jump table.
-
-      UCSD Pascal II.0 calls it JTAB (UCSD20). *)
+  (** The jump table. *)
   JumpOffsets = ARRAY[0..36] OF INTEGER;
 
   (** A reference. *)
@@ -367,9 +365,7 @@
   (** A pointer to a block of references for the linker (II.0: ^REFARRAY). *)
   LinkerBuffer = ^LinkerBlock;
 
-  (** A block of the code file.
-
-      UCSD Pascal II.0 calls it DISKBUF (UCSD20). *)
+  (** A block of the code file. *)
   DiskBlock = PACKED ARRAY[0..511] OF CHAR;
 
   (** The code buffer.
@@ -413,10 +409,10 @@
   (** COMPINIT's list of standard names. *)
   NamesText = PACKED ARRAY[0..511] OF CHAR;
 
-  (** Its bytes. *)
+  (** Memory as bytes, for a MemoryCell. *)
   MemoryBytes = PACKED ARRAY[0..0] OF CHAR;
 
-  (** Its bits. *)
+  (** Memory as bits, for a MemoryCell. *)
   MemoryBits = PACKED ARRAY[0..0] OF BOOLEAN;
 
   (** A word of memory, by its address. *)
@@ -426,13 +422,13 @@
   (** A library's segment dictionary: blocks and lengths. *)
   BlockExtents = ARRAY[1..32] OF INTEGER;
 
-  (** Its segments' names. *)
+  (** A library's segments' names, by slot. *)
   NameTable = ARRAY[0..15] OF Spelling;
 
-  (** Their kinds. *)
+  (** A library's segments' kinds, by slot. *)
   KindTable = ARRAY[0..15] OF INTEGER;
 
-  (** Their interface texts' blocks. *)
+  (** A library's segments' interface texts' blocks, by slot. *)
   TextTable = ARRAY[0..15] OF INTEGER;
 
   (** An information word. *)

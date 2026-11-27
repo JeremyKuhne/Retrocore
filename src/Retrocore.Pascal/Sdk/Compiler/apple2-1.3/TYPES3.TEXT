@@ -1,9 +1,9 @@
-(** TYPES3.TEXT: part 3 of 3 of TYPES: the symbol table's entries, types and
-    constants, operands, scopes, labels and the code file's records.
+(** TYPES3.TEXT: part 3 of 3 of TYPES: a library's information words, spare
+    words, case labels, marks and a string's characters.
 
     Included by COMPILER.TEXT after TYPES2.TEXT and before SYSGLOBALS.TEXT. *)
 
-  (** Their information words. *)
+  (** A library's segments' information words, by slot. *)
   AttributeTable = ARRAY[0..127] OF PackedAttributes;
 
   (** Two words. *)
@@ -43,9 +43,7 @@
         1: (Literal: WordValue)
     END;
 
-  (** A heap mark.
-
-      UCSD Pascal II.0 calls it UMARKP (UCSD20). *)
+  (** A heap mark. *)
   UnitMark = ^INTEGER;
 
   (** A string constant's characters. *)

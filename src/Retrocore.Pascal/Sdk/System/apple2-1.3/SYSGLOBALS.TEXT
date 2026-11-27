@@ -79,7 +79,8 @@ VAR
       Also: SLOWTERM (UCSD20) *)
   SlowTerminal: BOOLEAN;
 
-(* The system's procedures, by number: the code calls those with parameters. *)
+(* The system's procedures, in the order that numbers them; one has its
+   parameters only where the Compiler calls it with them. *)
 
 (** Reports a run-time error. *)
 PROCEDURE ExecutionError; FORWARD;
@@ -190,7 +191,7 @@ PROCEDURE ClearScreen; FORWARD;
 PROCEDURE ClearLine; FORWARD;
 (** Shows a command line's prompt. *)
 PROCEDURE Prompt; FORWARD;
-(** Waits for a space, as its name says.
+(** Waits for a space.
     Also: SPACEWAIT (UCSD20) *)
 PROCEDURE WaitForSpace; FORWARD;
 (** Reads a character from the keyboard; II.0's makes a lower-case letter a

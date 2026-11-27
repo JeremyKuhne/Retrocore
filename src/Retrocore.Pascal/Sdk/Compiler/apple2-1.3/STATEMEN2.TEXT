@@ -18,7 +18,7 @@
           TargetOperand: OperandEntry;
           (** The target is a packed array of characters. *)
           TargetIsPackedChars: BOOLEAN;
-          (** The value is a character or a string. *)
+          (** The value is a character or string constant. *)
           ValueIsString: BOOLEAN;
           (** The target's length. *)
           TargetLength: INTEGER;
@@ -228,7 +228,8 @@
           SavedCodeCounter: INTEGER;
           (** The condition is the constant FALSE. *)
           KnownFalse: BOOLEAN;
-          (** The condition is a constant. *)
+          (** The condition is a constant. It is never set TRUE, so KnownFalse
+              and SavedCodeCounter are not used. *)
           KnownCondition: BOOLEAN;
       BEGIN
         KnownCondition := FALSE;

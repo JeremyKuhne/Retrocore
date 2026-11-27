@@ -9,7 +9,7 @@
           MakeResident
             AddResident *)
 
-  (** Reads the options at the start of a comment, ($ and letters with + or -
+  (** Reads the options at the start of a comment ($ and letters with + or -
       or a name), and says whether the comment goes on; EndCharacter is } or
       * (II.0: INSYMBOL's options). *)
   SEGMENT FUNCTION COMPOPTI(EndCharacter: INTEGER): BOOLEAN;

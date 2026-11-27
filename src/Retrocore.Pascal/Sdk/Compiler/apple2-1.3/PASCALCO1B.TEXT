@@ -1,5 +1,5 @@
-(** PASCALCO1B.TEXT: part 2 of 2 of PASCALCO1: PASCALCO, segment 1: its globals
-    and FORWARD headings.
+(** PASCALCO1B.TEXT: part 2 of 2 of PASCALCO1: PASCALCO, segment 1: the headings
+    of its EXTERNAL and FORWARD procedures.
 
     Included by COMPILER.TEXT after PASCALCO1A.TEXT and before COMPINIT1.TEXT.
 
@@ -38,7 +38,7 @@
 
   (** Assembled: searches a scope's tree for a name; 0 found, 1 to go right,
       -1 left, with the last node looked at (II.0: TREESEARCH, here in 6502
-      code; PS, TRS). *)
+      code). *)
   FUNCTION SearchTree(Root: Identifier; VAR Found: Identifier; VAR SoughtName:
       Spelling): INTEGER;
     EXTERNAL;

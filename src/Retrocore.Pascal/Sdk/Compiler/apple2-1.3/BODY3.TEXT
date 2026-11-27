@@ -12,8 +12,9 @@
           UCSD Pascal II.0 calls it BODY (UCSD20). *)
       SEGMENT PROCEDURE BODY3;
 
-        (** The code that starts and ends the used units and the resident
-            segments, jumped around at the start. *)
+        (** The code that ends the resident segments and the used units, which
+            the statements run into; then the code that starts them, which
+            the first jump goes to and which jumps back to the statements. *)
         PROCEDURE EmitUnitCode;
         BEGIN
           Current.Entry := ResidentList.Entry;

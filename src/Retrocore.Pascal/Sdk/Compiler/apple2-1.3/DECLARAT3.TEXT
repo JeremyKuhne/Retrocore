@@ -581,5 +581,5 @@
         EndOfParameter: INTEGER;
         (** The lexical stack's new record.
 
-            UCSD Pascal II.0 calls it LEXSTKREC (UCSD20). *)
+            UCSD Pascal II.0 calls it LLEXSTK (UCSD20). *)
         NewLexicalEntry: LexicalEntry;

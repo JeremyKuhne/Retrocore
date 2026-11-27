@@ -41,7 +41,7 @@
         Also: ENTSTDTYPES (UCSD20) *)
     PROCEDURE MakeStandardTypes;
       VAR
-        (** The index type of the streams, 1..32767. *)
+        (** The index type of the streams, 0..32767. *)
         StreamRange: RangeStructure;
     BEGIN
       NEW(IntegerStructure, PointerTypeSize);

@@ -17,7 +17,7 @@
           Parameter: LinkedSymbol;
           (** Its type. *)
           ExpectedType: Structure;
-          (** The argument is a character constant. *)
+          (** The argument is a character or string constant. *)
           LiteralArgument: BOOLEAN;
           (** It is not a variable of the parameter's size. *)
           SizeDiffers: BOOLEAN;

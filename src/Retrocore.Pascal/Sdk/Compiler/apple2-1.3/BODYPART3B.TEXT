@@ -439,7 +439,7 @@
           Found: SymbolLink;
           (** The file written. *)
           OutputFile: SymbolLink;
-          (** A string's length. *)
+          (** A packed array of characters' length. *)
           ArrayLength: INTEGER;
           (** A packed array's lowest index. *)
           Lowest: INTEGER;

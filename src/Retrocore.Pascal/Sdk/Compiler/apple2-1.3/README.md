@@ -17,8 +17,8 @@ system (`128K.APPLE` and `128K.PASCAL` as `SYSTEM.APPLE` and `SYSTEM.PASCAL`):
 
 ```sh
 R compile COMPILER.TEXT APPLE1-128K.dsk "$D/UCSD Pascal 1.3_APPLE2.woz" HOST.CODE --includes . --includes ../../System/apple2-1.3 --iie
-R assemble-native ASSEMBLED.TEXT "$D/UCSD Pascal 1.3_APPLE1.woz" "$D/UCSD Pascal 1.3_APPLE2.woz" ASM.CODE
-R link HOST.CODE ASM.CODE "$D/UCSD Pascal 1.3_APPLE1.woz" "$D/UCSD Pascal 1.3_APPLE2.woz" LINKED.CODE
+R assemble-native ASSEMBLED.TEXT "$D/UCSD Pascal 1.3_APPLE1.woz" "$D/UCSD Pascal 1.3_APPLE2.woz" ASM.CODE --iie
+R link HOST.CODE ASM.CODE "$D/UCSD Pascal 1.3_APPLE1.woz" "$D/UCSD Pascal 1.3_APPLE2.woz" LINKED.CODE --iie
 R extract "$D/UCSD Pascal 1.3_APPLE2.woz" SYSTEM.COMPILER COMPILER.CODE --raw
 R compare COMPILER.CODE LINKED.CODE      # The code files' segments are the same.
 ```

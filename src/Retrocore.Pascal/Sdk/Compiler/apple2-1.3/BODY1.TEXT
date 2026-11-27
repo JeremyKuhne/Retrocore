@@ -6,7 +6,7 @@
             BODY1 (segment) *)
 
       (** CompileRoutineBody's start: copies value parameters, makes the
-          labels, and starts a program's units.
+          labels, and leaves room for the jump to a program's units' start.
 
           UCSD Pascal II.0 calls it BODY (UCSD20). *)
       SEGMENT PROCEDURE BODY1;

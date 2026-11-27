@@ -173,7 +173,9 @@ procedures. The compilers' conversion starts it with what they use, and SYSTEM.P
 
 A Compiler's source, in `Compiler/<machine>-<version>/`, includes it from `System/<machine>-<version>/` by its name
 alone (`(*$I SYSGLOBALS.TEXT*)`): the editor and the lint look there after the including file's own folder, and
-`--pascal compile` takes `--includes` once for each folder.
+`--pascal compile` takes `--includes` once for each folder. Its folder has no main file of its own, so until
+SYSTEM.PASCAL's source is there, the editor reads `SYSGLOBALS.TEXT` opened alone as a program by itself: open the
+Compiler's files to see its names as the Compiler's.
 
 ## 8. In the editor
 

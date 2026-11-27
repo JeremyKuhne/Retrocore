@@ -45,8 +45,8 @@
         (** One of them. *)
         PendingIndex: INTEGER;
 
-      (** Reads ReferenceFile's next block, round to the first after the
-          last.
+      (** Reads ReferenceFile's next block, back at
+          block 0 after the last.
           Also: GETNEXTBLOCK (UCSD20) *)
       PROCEDURE ReadNextBlock;
       BEGIN
@@ -90,7 +90,8 @@
         EmitWord(0)
     END;
 
-    (** Writes the entries of a tree's identifiers, in order.
+    (** Writes the entries of a tree's identifiers: a node's, then its left
+        tree's, then its right tree's.
         Also: GLOBALSEARCH (UCSD20) *)
     PROCEDURE EmitEntries(Root: Identifier);
     BEGIN

@@ -225,6 +225,22 @@ public sealed class PascalSourceTests
     }
 
     /// <summary>
+    ///  A use of Pascal's own name never leads to a declaration that gives it as a historical name.
+    /// </summary>
+    /// <param name="name">A standard identifier or a later reserved word.</param>
+    [TestMethod]
+    [DataRow("EXIT")]
+    [DataRow("OTHERWISE")]
+    public void PascalsOwnNamesAreNotHistorical(string name)
+    {
+        string source = $"PROGRAM P;\n(** Q.\n    Also: {name} (UCSD20) *)\nPROCEDURE Q;\nBEGIN\n  {name}(Q)\nEND;\nBEGIN END.";
+        PascalProgram program = Analyze(source);
+
+        Lines(source, $"  {name}(Q)", name, out int line, out int column);
+        program.DeclarationAt(Path.Join("SRC", "P.TEXT"), line, column).Should().BeNull();
+    }
+
+    /// <summary>
     ///  A program written to the style passes the lint.
     /// </summary>
     [TestMethod]
@@ -258,6 +274,8 @@ public sealed class PascalSourceTests
     [DataRow("also", "PROGRAM P;\n(** Q.\n    Also: R (UCSD20) *)\nPROCEDURE Q;\nBEGIN END;\nPROCEDURE R;\nBEGIN END;\nBEGIN END.")]
     [DataRow("also", "PROGRAM P;\n(** Q.\n    Also: X (UCSD20) *)\nPROCEDURE Q;\nBEGIN END;\n(** R.\n    Also: X (UCSD20) *)\nPROCEDURE R;\nBEGIN END;\nBEGIN END.")]
     [DataRow("also", "PROGRAM P;\n(** Q.\n    Also: EXIT (UCSD20) *)\nPROCEDURE Q;\nBEGIN END;\nBEGIN END.")]
+    [DataRow("also", "PROGRAM P;\n(** Q.\n    Also: OTHERWISE (UCSD20) *)\nPROCEDURE Q;\nBEGIN END;\nBEGIN END.")]
+    [DataRow("also", "PROGRAM P;\n(** Q.\n    Also: REPEAT (UCSD20) *)\nPROCEDURE Q;\nBEGIN END;\nBEGIN END.")]
     [DataRow("link", "PROGRAM P;\n(** Q, not <Missing>. *)\nPROCEDURE Q;\nBEGIN END;\nBEGIN END.")]
     [DataRow("link", "PROGRAM P;\nPROCEDURE Report;\n(** R, not <port.Inner>. *)\nPROCEDURE Inner;\nBEGIN END;\nBEGIN END;\nBEGIN END.")]
     [DataRow("also", "PROGRAM P;\n(** Q.\n    Also: OLDQ (UCSD20), OLDQ (A2POSRM) *)\nPROCEDURE Q;\nBEGIN END;\nBEGIN END.")]
@@ -407,6 +425,39 @@ public sealed class PascalSourceTests
 
             program.Includes.Should().ContainSingle().Which.Path.Should().Be(Path.Join(system, "SYSGLOBALS.TEXT"));
             PascalLint.Check(program, bibliography: null).Should().BeEmpty();
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    /// <summary>
+    ///  An include is the file beside the including one if there is one, else the first include folder's.
+    /// </summary>
+    [TestMethod]
+    public void IncludesFindTheFirstFile()
+    {
+        string root = Directory.CreateTempSubdirectory("pascal").FullName;
+        try
+        {
+            string[] folders = [Path.Join(root, "Main"), Path.Join(root, "First"), Path.Join(root, "Second")];
+            foreach (string folder in folders)
+            {
+                Directory.CreateDirectory(folder);
+                File.WriteAllText(Path.Join(folder, "PART.TEXT"), "VAR Count: INTEGER;\n");
+            }
+
+            string main = Path.Join(folders[0], "MAIN.TEXT");
+            File.WriteAllText(main, "PROGRAM P;\n(*$I PART*)\nBEGIN Count := 1 END.\n");
+            string? Found() => PascalProgram.Analyze(main, path => File.Exists(path) ? File.ReadAllText(path) : null, folders[1..])
+                .Includes.Single().Path;
+
+            Found().Should().Be(Path.Join(folders[0], "PART.TEXT"));
+            File.Delete(Path.Join(folders[0], "PART.TEXT"));
+            Found().Should().Be(Path.Join(folders[1], "PART.TEXT"));
+            File.Delete(Path.Join(folders[1], "PART.TEXT"));
+            Found().Should().Be(Path.Join(folders[2], "PART.TEXT"));
         }
         finally
         {
@@ -710,10 +761,12 @@ public sealed class PascalSourceTests
             .Replace("(** Its value. *)", "(* A comment instead. *)", StringComparison.Ordinal);
 
         string changed = Sample.Replace("Number + 1", "Number + 2", StringComparison.Ordinal);
+        string option = "(*$R-*)\n" + Sample;
         string shape = PascalCodeShape.Digest(Analyze());
 
         PascalCodeShape.Digest(Analyze(renamed, Part)).Should().Be(shape);
         PascalCodeShape.Digest(Analyze(changed, Part)).Should().NotBe(shape);
+        PascalCodeShape.Digest(Analyze(option, Part)).Should().NotBe(shape, "an option changes the code");
     }
 
     /// <summary>

@@ -13,7 +13,8 @@
       VAR
         (** Where the procedure's code starts. *)
         EntryPoint: INTEGER;
-        (** Where its value parameters' copies go. *)
+        (** The word holding a large value parameter's address, as its caller
+            passed it: BODY1 copies the value from there to the parameter. *)
         CopyOffset: INTEGER;
         (** The segments to make resident. *)
         ResidentList: SymbolLink;
@@ -37,15 +38,18 @@
         Lowest: INTEGER;
         (** CodeCounter while BODY3 goes back. *)
         SavedCodeCounter: INTEGER;
-        (** Where the jump around the units' start is. *)
+        (** Where the two bytes are that become the jump to the units' start
+            code. *)
         Preamble: INTEGER;
         (** A segment. *)
         SystemSegment: INTEGER;
-        (** The label of the code that ends the units. *)
+        (** The label past the units' start code, which their end code jumps
+            to. *)
         ExitJump: Jump;
-        (** The label past it. *)
+        (** The label of the units' start code, which the first jump goes to. *)
         OverJump: Jump;
-        (** The label of the code that starts them. *)
+        (** The label of the statements, after the first jump, which the units'
+            start code jumps back to. *)
         StartJump: Jump;
         (** MEMAVAIL. *)
         FreeMemory: AvailableWords;

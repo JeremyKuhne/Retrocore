@@ -12,7 +12,7 @@
         VAR
           (** UCSD Pascal II.0 calls it LATTR (UCSD20). *)
           ControlVariable: OperandEntry;
-          (** The limit's word. *)
+          (** Not used. *)
           LimitWord: INTEGER;
           (** ToToken or DowntoToken.
 

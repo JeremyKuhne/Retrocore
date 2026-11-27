@@ -1,5 +1,6 @@
-(** TYPES1.TEXT: part 1 of 3 of TYPES: the symbol table's entries, types and
-    constants, operands, scopes, labels and the code file's records.
+(** TYPES1.TEXT: part 1 of 3 of TYPES: names, the symbol table's entries, and
+    views of a type's words for files, pointers, standard parameters, constants'
+    values, subranges and tag fields.
 
     Included by COMPILER.TEXT after CONSTANTS2.TEXT and before TYPES2.TEXT. *)
 
@@ -18,23 +19,23 @@ TYPE
       UCSD Pascal II.0 calls it STP (UCSD20). *)
   Structure = ^TypeEntry;
 
-  (** A file type's structure: Size, Form, FILTYPE. *)
+  (** A file type's structure: Size, Form, BaseType. *)
   FileEntry = RECORD
       (** Size. *)
       Size: INTEGER;
       (** Form, 7 FileForm. *)
       Form: INTEGER;
-      (** FILTYPE. *)
+      (** The file's component type (II.0's FILTYPE). *)
       BaseType: Structure
     END;
 
-  (** A pointer to the TEXT type's structure. *)
+  (** A pointer to a type's structure seen as a file's: Size, Form, BaseType. *)
   FileStructure = ^FileEntry;
 
-  (** The next parameter. *)
+  (** A pointer to a standard function's next parameter, as a word. *)
   NextFormal = ^INTEGER;
 
-  (** What it points to. *)
+  (** A pointer to what a pointer type points to, as a word. *)
   PointedTo = ^INTEGER;
 
   (** Its structure: Size, Form, BaseType. *)
@@ -202,7 +203,7 @@ TYPE
            (** Taken from a unit's interface.
                Also: IMPORTED (UCSD20) *)
            IsImported: BOOLEAN);
-        (** DataType seen as a TEXT file's structure (Size, Form, FILTYPE). *)
+        (** DataType seen as a file's structure, for its Size. *)
         SymbolValuesView: (TypeAsFile: FileStructure;
            (** Next of a standard function: the list of its parameters'
                descriptions (COMPINIT). *)
@@ -263,13 +264,13 @@ TYPE
   (** A pointer to a structure, seen with its first five words. *)
   ShortStructure = ^ShortTypeEntry;
 
-  (** A subrange: Size, Form, RANGETYPE, Maximum, Minimum. *)
+  (** A subrange: Size, Form, BaseType, Maximum, Minimum. *)
   RangeEntry = RECORD
       (** Size. *)
       Size: INTEGER;
       (** Form, 1 SubrangeForm. *)
       Form: INTEGER;
-      (** RANGETYPE. *)
+      (** The type it is a subrange of (II.0's RANGETYPE). *)
       BaseType: Structure;
       (** Maximum. *)
       Maximum: INTEGER;
@@ -291,15 +292,15 @@ TYPE
   (** A pointer to a tag field's identifier. *)
   TagIdentifier = ^TagSymbolEntry;
 
-  (** A tag field: Size, Form, TAGFIELDP, FSTVAR. *)
+  (** A tag field: Size, Form, Tag, FirstVariant. *)
   TagEntry = RECORD
       (** Size. *)
       Size: INTEGER;
       (** Form, 8 TagFieldForm. *)
       Form: INTEGER;
-      (** TAGFIELDP. *)
+      (** The tag field's identifier (II.0's TAGFIELDP). *)
       Tag: TagIdentifier;
-      (** FSTVAR. *)
+      (** The first variant (II.0's FSTVAR). *)
       FirstVariant: Structure
     END;
 

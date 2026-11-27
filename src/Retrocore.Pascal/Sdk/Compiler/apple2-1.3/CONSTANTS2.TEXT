@@ -1,5 +1,5 @@
-(** CONSTANTS2.TEXT: part 2 of 2 of CONSTANTS: tokens, operators, classes and
-    forms, kinds, the special standard routines' keys and the p-code's opcodes.
+(** CONSTANTS2.TEXT: part 2 of 2 of CONSTANTS: the p-code's opcodes, how a
+    variable operand is reached, and the variants' selectors and sizes.
 
     Included by COMPILER.TEXT after CONSTANTS1.TEXT and before TYPES1.TEXT. *)
 

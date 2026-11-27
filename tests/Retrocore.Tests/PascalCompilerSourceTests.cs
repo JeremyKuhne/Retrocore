@@ -29,7 +29,7 @@ public sealed class PascalCompilerSourceTests
 {
     // The code's shape: the private named source this one was converted from had the same, which the conversion's
     // scripts checked at each step (docs/conversions/PascalCompiler13.md, PC1).
-    private const string Shape = "8DA3303C3A1F2AFC2155010AEB1834C090318E729ED9A205E5FC26D2EDE0482A";
+    private const string Shape = "ADDEEBC407DCE92903F16F6BAC5FB70CB0375631F274443A831609E6EE6BEB48";
 
     // The SHA-256 of SYSTEM.COMPILER on Apple Pascal 1.3's APPLE2.
     private const string CompilerHash = "D18595C2EA04F9B5CDD84C7EEBF3DC871FE8D850173CF86DE8339BEF2E7F0E51";

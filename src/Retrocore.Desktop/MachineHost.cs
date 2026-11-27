@@ -136,6 +136,7 @@ internal sealed class MachineHost : DisposableBase
         Apple1DebugTarget
             or CocoDebugTarget
             or PetDebugTarget
+            or Vic20DebugTarget
             or Trs80DebugTarget
             or Trs80Model3DebugTarget
             or AltairDebugTarget
@@ -164,6 +165,7 @@ internal sealed class MachineHost : DisposableBase
                     Apple1DebugTarget apple1 => apple1.FastCassette,
                     CocoDebugTarget coco => coco.FastCassette,
                     PetDebugTarget pet => pet.FastCassette,
+                    Vic20DebugTarget vic20 => vic20.FastCassette,
                     Trs80DebugTarget model1 => model1.FastCassette,
                     Trs80Model3DebugTarget model3 => model3.FastCassette,
                     AltairDebugTarget altair => altair.FastCassette,
@@ -200,6 +202,9 @@ internal sealed class MachineHost : DisposableBase
                         break;
                     case PetDebugTarget pet:
                         pet.FastCassette = value;
+                        break;
+                    case Vic20DebugTarget vic20:
+                        vic20.FastCassette = value;
                         break;
                     case Trs80DebugTarget model1:
                         model1.FastCassette = value;

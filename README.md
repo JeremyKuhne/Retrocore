@@ -128,7 +128,8 @@ Hardware details, system sources, media formats, and launch options are covered 
 
 - **MOS 6502 / 65C02:** [Apple-1](docs/Apple1.md) · [Apple II, II Plus, and IIe (original and enhanced)](docs/Apple2.md) ·
   [Apple III](docs/Apple3.md) ([SOS](docs/Sos.md), [Business BASIC](docs/BusinessBasic.md)) ·
-  [Commodore PET 2001 and 4032](docs/Pet.md) · [BBC Micro Model B and Model A](docs/BbcMicro.md) ·
+  [Commodore PET 2001 and 4032](docs/Pet.md) · [Commodore VIC-20](docs/Vic20.md) ·
+  [BBC Micro Model B and Model A](docs/BbcMicro.md) ·
   [Atari 400 and 800](docs/Atari800.md)
 - **Zilog Z80:** [TRS-80 Model I](docs/Trs80ModelI.md) ·
   [TRS-80 Model III, 4, and 4P, and Model II, 12, and 16 (Z80 side)](docs/Trs80Model3And2.md) ·

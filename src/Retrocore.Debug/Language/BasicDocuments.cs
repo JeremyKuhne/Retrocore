@@ -39,6 +39,7 @@ internal sealed class BasicDocuments
         LanguageHost.ColorBasicId => BasicDialect.ColorBasic,
         LanguageHost.BbcBasicId => BasicDialect.BbcBasic,
         LanguageHost.MbasicId => BasicDialect.Mbasic,
+        LanguageHost.Model100Id => BasicDialect.Model100,
         LanguageHost.PetBasicId => BasicDialect.PetBasic4,
         LanguageHost.AtariBasicId => BasicDialect.AtariBasic,
         _ => null

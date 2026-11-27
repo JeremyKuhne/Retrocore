@@ -89,7 +89,8 @@ view and breakpoints as the other machines:
   saved to it as the session ends or another launch replaces the machine, through a file beside it, so a save that
   fails leaves the old image and can be tried again. The CPU's state is not kept, as it is not when the power goes;
 - `coldStart`: start from empty RAM even when `ramImage` exists;
-- `time`: the clock's start, such as `2026-11-26T09:30:00`.
+- `time`: the clock's start, such as `2026-11-26T09:30:00`;
+- `files`: host files to put in RAM's directory, so the menu lists them (see [Files](#files)).
 
 A `source` or `program` loads at `$E000` by default, once the ROM has had 3 seconds to set up its RAM
 (`bootSeconds`), and can call the ROM: `RST 4` writes the character in A to the screen. The call stack follows
@@ -103,7 +104,56 @@ LABEL, PRINT, PASTE, PAUSE and BREAK (PAUSE/BREAK with SHIFT), since VS Code kee
 F1-F8 from the keyboard.
 
 **The display** is the LCD, a pixel to a dot, in its dark dots on a gray-green ground, and the ROM's screen copy as
-text. The Machine view lists the ROM, the option ROM, the RAM and its image, the clock's TP and the power.
+text. The Machine view lists the ROM, the option ROM, the RAM and its image, the clock's TP, the power and the files
+in RAM.
+
+## Files
+
+The Model 100 keeps its files in RAM: the menu lists RAM's directory, 27 entries at `$F962`, each a type, an
+address and a six-letter name with its two-letter extension. `.BA` files are tokenized BASIC, `.DO` files text in CR
+LF lines ending in `$1A`, and `.CO` files machine code with its start, length and entry. They lie in that order from
+the bottom of RAM, so adding, changing or removing one moves those after it. Retrocore writes them as the ROM's own
+`SAVE`, `SAVEM` and `OPEN` do, byte for byte.
+
+- **At launch**, `files` lists host files: `.ba`, `.do` and `.co` files as the Model 100 holds them, BASIC text as
+  `.bas` (tokenized as Model 100 BASIC; `game.model100.bas` becomes `GAME.BA`), and text as `.txt` (its lines ended
+  with CR LF). The ROM runs to its menu, the files go into RAM, each replacing any of the same name in its
+  place, and the menu is drawn again with them. With a `ramImage`, they are kept in it when the session ends.
+
+  ```json
+  "files": ["${workspaceFolder}/game.model100.bas", "${workspaceFolder}/notes.txt"]
+  ```
+
+- **In a RAM image**, the `retrocore` host's `--model100` command lists, copies out, adds and removes them:
+
+  ```text
+  retrocore --model100 files m100.ram [--json]
+  retrocore --model100 extract m100.ram GAME.BA game.ba [--list]
+  retrocore --model100 add m100.ram notes.txt [NAME.DO]
+  retrocore --model100 delete m100.ram NOTES.DO
+  ```
+
+  `--list` writes a `.BA` file's listing instead of its bytes. A change is written back only when it succeeds. Like
+  the ROM's `KILL`, `delete` refuses the program BASIC has open.
+
+## BASIC
+
+Model 100 BASIC is a dialect of its own, `model100`, with `.model100.bas` source files and `' retrocore model100` as
+the pragma. Its tokens are the ROM's table at `$0080`, one byte each from `$80` (`END`) to `$FF` (`'`), and
+the tokenizer stores lines as the ROM stores them when they are typed:
+- numbers and line numbers stay as digits;
+- lowercase becomes uppercase outside strings, `DATA` and remarks;
+- `?` is `PRINT`, and `GOTO` may have spaces inside it;
+- `ELSE` and an apostrophe remark are stored after a colon.
+
+`.ba` files open as listings with **Retrocore: Open as BASIC Listing**, and `--basic list` lists them; `--basic
+tokenize` makes them from text, and renumbering follows `RESTORE`'s line, which the Model 100 takes. Hover help
+for its words is still to come.
+
+While BASIC is at its prompt, **Retrocore: Open BASIC Program** edits the program BASIC has open as text: a `.BA`
+file after `LOAD`, or its unsaved program. Saving writes it back over that file, moving the files after it; at the
+menu, in TEXT or while a program runs, it is refused. A program can't yet be stepped through by its lines, and a
+`basic` launch is not offered: both follow the ROM's routines, which wait for the ROM as an SDK source.
 
 ## Testing
 
@@ -115,8 +165,16 @@ text. The Machine view lists the ROM, the option ROM, the RAM and its image, the
   Tandy 102 offers only 24 and 32 KB, so its 8 and 16 are the Model 100's figures), BASIC runs what is typed, sets the clock and keeps its variables through `POWER OFF,RESUME`, and the menu's LCD dots
   match MAME's screen. They read `m100.bin` and `t102.bin` from `RETROCORE_TRS80M100_ROMS` or the external test
   data's `trs80m100-roms` folder, and are inconclusive without them.
-- `Trs80Model100DebugTargetTests`: the launch's messages for a missing ROM, and the RAM image across sessions, cold
-  starts, a mismatched size and failed saves.
-- [`tools/Test-Trs80Model100Dap.mjs`](../tools/Test-Trs80Model100Dap.mjs): a source's breakpoint, call stack,
-  registers and output, the menu, BASIC, POWER OFF and Reset, a RAM image resumed in a new session, and the Tandy
-  102, through the debug adapter. Without the ROM it checks the missing-ROM messages and reports the rest skipped.
+- `Trs80Model100DebugTargetTests`: the launch's messages for a missing ROM, the RAM image across sessions, cold
+  starts, a mismatched size and failed saves, and the launch's files on the menu.
+- `Model100BasicTests`: the tokenizer against the bytes the ROM stored for typed lines (pinned, so they need no ROM),
+  listings, renumbering, and with the ROM, its keyword table, typed lines read back, and a program written into RAM
+  that BASIC runs.
+- `Model100FilesTests`: files written in the order the ROM saved them lie as the ROM left them (pinned), removing and
+  replacing them, programs moved and linked again, bad names and full RAM; and with the ROM, files written at the
+  menu matched byte for byte against the ROM's own `SAVE`, `SAVEM` and `OPEN`, then run and read by BASIC.
+- `Model100CommandTests`: the `--model100` command on a RAM image, and host files read by kind.
+- [`tools/Test-Trs80Model100Dap.mjs`](../tools/Test-Trs80Model100Dap.mjs): a source's breakpoint, call stack, registers
+  and output, the menu, BASIC, POWER OFF and Reset, a RAM image resumed in a new session, a launch's files on the menu,
+  BASIC's program read and written, and the Tandy 102, through the debug adapter. Without the ROM it checks the
+  missing-ROM messages and reports the rest skipped.

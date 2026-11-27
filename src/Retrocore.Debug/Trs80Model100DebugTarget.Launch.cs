@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 // See LICENSE file in the project root for full license information
 
+using Retrocore.Basic;
 using Retrocore.Machines.Trs80Model100;
 using System.Globalization;
 using System.Text.Json.Nodes;
@@ -40,6 +41,11 @@ internal sealed partial class Trs80Model100DebugTarget
     ///   machine cold-starts and the file is written. Either way the RAM is saved to it when the session ends or
     ///   another launch replaces it (see <see cref="SaveRecordings"/>). <c>coldStart</c>, true, starts from empty RAM
     ///   even when the file exists, and replaces it when the session ends.
+    ///  </para>
+    ///  <para>
+    ///   <c>files</c> lists host files to put in RAM's directory, as <see cref="Model100Command.FromHost"/> reads
+    ///   them: <c>.ba</c>, <c>.do</c> and <c>.co</c> files, BASIC text as <c>.bas</c>, and text as <c>.txt</c>. The ROM
+    ///   runs to its menu first, and the menu is drawn again with them; one of a name already in RAM replaces it.
     ///  </para>
     /// </remarks>
     /// <param name="args">The arguments.</param>
@@ -91,6 +97,11 @@ internal sealed partial class Trs80Model100DebugTarget
             target._ramImagePath = path;
         }
 
+        if (args["files"] is { } files)
+        {
+            target.PlaceFiles(files as JsonArray ?? throw new ArgumentException("files must be a list of paths."));
+        }
+
         return target;
     }
 
@@ -112,6 +123,39 @@ internal sealed partial class Trs80Model100DebugTarget
         }
 
         return null;
+    }
+
+    // Runs the ROM to its menu, so RAM's directory is set up, writes each file into it, then resets the machine, so the
+    // menu is drawn again with them. Each file is read and named before any is written; one that then does not go in
+    // fails the launch, which leaves this machine unused.
+    private void PlaceFiles(JsonArray files)
+    {
+        List<(string Name, byte[] Bytes)> read = [];
+        foreach (JsonNode? file in files)
+        {
+            string path = file?.GetValueKind() == System.Text.Json.JsonValueKind.String
+                ? Path.GetFullPath(file.GetValue<string>())
+                : throw new ArgumentException("files must be a list of paths.");
+
+            if (!File.Exists(path)) { throw new ArgumentException($"The file {path} does not exist."); }
+            read.Add(Model100Command.FromHost(path));
+        }
+
+        Boot(BootSeconds);
+        Model100Files ram = new(new TargetBasicMemory(this));
+        foreach ((string name, byte[] bytes) in read)
+        {
+            try
+            {
+                ram.Write(name, bytes);
+            }
+            catch (Exception exception) when (exception is InvalidOperationException or InvalidDataException or ArgumentException)
+            {
+                throw new ArgumentException($"{name} cannot go into RAM: {exception.Message}", exception);
+            }
+        }
+
+        _machine.PowerOn();
     }
 
     private static byte[] Rom(JsonObject args, Trs80Model100Variant model)

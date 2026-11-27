@@ -1068,11 +1068,15 @@ supply: `rom` names its file, or it is found in `romDirectory` (or `RETROCORE_TR
 - `optionRom`: an option ROM's file;
 - `ramImage`: a file that keeps the RAM between sessions, loaded before the power comes on and saved as the session
   ends; `coldStart` starts from empty RAM anyway;
-- `time`: the clock's start, the host's time by default.
+- `time`: the clock's start, the host's time by default;
+- `files`: host files to put in RAM's directory, so the menu lists them: `.ba`, `.do` and `.co` files, BASIC text
+  as `.bas` and text as `.txt`.
 
-A program (`source` or `program`, loaded at `$E000` by default) runs once the ROM has set up its RAM, and can print
-with `RST 4`. The display is the 240x64 LCD; its buttons are F1-F8, LABEL, PRINT, PASTE, PAUSE and BREAK, and Reset turns
-the machine back on after `POWER OFF`. [The Model 100 guide](../docs/Trs80Model100.md) has the rest.
+Model 100 BASIC has `.model100.bas` source files, and `.ba` files open as listings. While BASIC is at its prompt,
+**Retrocore: Open BASIC Program** edits the program it has open. A program (`source` or `program`, loaded at `$E000` by
+default) runs once the ROM has set up its RAM, and can print with `RST 4`. The display is the 240x64 LCD; its buttons
+are F1-F8, LABEL, PRINT, PASTE, PAUSE and BREAK, and Reset turns the machine back on after `POWER OFF`. [The Model 100
+guide](../docs/Trs80Model100.md) has the rest.
 
 ## Debugging on the Altair 8800
 
@@ -1475,16 +1479,14 @@ statement that called it; it shows **BASIC: ready** at the prompt.
 
 ### BASIC files
 
-`.applesoft.bas`, `.integer.bas`, `.apple1.bas`, `.business.bas`, `.level2.bas`, `.level1.bas`,
-`.colorbasic.bas`, `.mbasic.bas`, `.bbcbasic.bas` and `.atari.bas` files are AppleSoft, Integer BASIC, Apple-1 BASIC,
-Business BASIC, Level II BASIC, Level I BASIC, Color BASIC, MBASIC (BASIC-80 5.21, the Kaypro II's
-CP/M BASIC), BBC BASIC and Atari BASIC. Business BASIC and MBASIC take a reserved word only between separators,
-so their highlighting leaves `PRINTER` a name, and their names count in full, dots
-included (MBASIC's to 40 characters). A Color BASIC file may use every word of Disk Extended Color BASIC; a
-machine without those ROMs stores the words they add as letters. A plain `.bas` file
-takes its dialect from a first line such as `REM retrocore applesoft` or
-`' retrocore level2`, else the `retrocore.basic.dialect` setting, else the BASIC of
-the machine being debugged.
+`.applesoft.bas`, `.integer.bas`, `.apple1.bas`, `.business.bas`, `.level2.bas`, `.level1.bas`, `.colorbasic.bas`,
+`.mbasic.bas`, `.model100.bas`, `.bbcbasic.bas` and `.atari.bas` files are AppleSoft, Integer BASIC, Apple-1 BASIC,
+Business BASIC, Level II BASIC, Level I BASIC, Color BASIC, MBASIC (BASIC-80 5.21, the Kaypro II's CP/M BASIC), Model
+100 BASIC, BBC BASIC and Atari BASIC. Business BASIC and MBASIC take a reserved word only between separators, so their
+highlighting leaves `PRINTER` a name, and their names count in full, dots included (MBASIC's to 40 characters). A Color
+BASIC file may use every word of Disk Extended Color BASIC; a machine without those ROMs stores the words they add as
+letters. A plain `.bas` file takes its dialect from a first line such as `REM retrocore applesoft` or
+`' retrocore level2`, else the `retrocore.basic.dialect` setting, else the BASIC of the machine being debugged.
 
 A file may leave out line numbers and use labels: a line of its own, `name:` or
 `@name`, names the line after it, and `GOTO name`, `GOSUB @name`, `THEN name` and

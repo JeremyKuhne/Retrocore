@@ -71,6 +71,11 @@ internal static partial class LanguageHost
     internal const string MbasicId = "retrocore-mbasic";
 
     /// <summary>
+    ///  The VS Code language of TRS-80 Model 100 BASIC documents.
+    /// </summary>
+    internal const string Model100Id = "retrocore-model100";
+
+    /// <summary>
     ///  The VS Code language of Commodore PET BASIC documents, BASIC 2's words.
     /// </summary>
     internal const string PetBasicId = "retrocore-petbasic";
@@ -107,6 +112,7 @@ internal static partial class LanguageHost
         or ColorBasicId
         or BbcBasicId
         or MbasicId
+        or Model100Id
         or PetBasicId
         or AtariBasicId
         or BasicId;

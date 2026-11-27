@@ -8,11 +8,12 @@
 // routine with the 80C85's call stack and registers, steps out to the caller, and shows the LCD's frames and the
 // hardware. A logpoint in a loop the ROM's RST 7.5 keeps interrupting logs once per run, and one at $003C once per
 // interrupt. Then a launch with no program boots to the menu, enters BASIC with ENTER, runs a line typed at it, and
-// turns the power off and back on with Reset. The Tandy 102's ROM, when present, boots to the menu too. Without the
+// turns the power off and back on with Reset. A launch's files go on the menu, and BASIC's program is read and written
+// through the debugger. The Tandy 102's ROM, when present, boots to the menu too. Without the
 // ROM, everything after the first launch is skipped, which is not a pass.
 
 import { resolve, join } from "node:path";
-import { writeFileSync, existsSync, unlinkSync, statSync } from "node:fs";
+import { writeFileSync, existsSync, unlinkSync, statSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir, homedir } from "node:os";
 import assert from "node:assert/strict";
 import { startDap } from "./DapClient.mjs";
@@ -89,6 +90,7 @@ async function type(line) {
 
 const source = join(tmpdir(), `retrocore-model100-${process.pid}.asm`);
 const ramImage = join(tmpdir(), `retrocore-model100-${process.pid}.ram`);
+const files = mkdtempSync(join(tmpdir(), "retrocore-model100-files-"));
 const skipped = [];
 try {
     writeFileSync(source, program.join("\n"));
@@ -119,7 +121,7 @@ try {
         assert.equal((await request("evaluate", { expression: "PC" })).result, "$E000 (57344)");
         assert.equal((await request("threads")).threads[0].name, "TRS-80 Model 100 80C85");
         const hardware = Object.fromEntries((await request("retro/devices")).hardware.map(row => [row.id, row]));
-        assert.deepEqual(Object.keys(hardware), ["model", "rom", "optionRom", "memory", "lcd", "clock", "power", "ramImage", "io"]);
+        assert.deepEqual(Object.keys(hardware), ["model", "rom", "optionRom", "memory", "lcd", "clock", "power", "ramImage", "files", "io"]);
         assert.equal(hardware.rom.value, "32 KB, the US Model 100's");
         assert.equal(hardware.memory.value, "32 KB at $8000-$FFFF");
         assert.equal(hardware.clock.value, "uPD1990AC, TP at 256 Hz on RST 7.5");
@@ -224,6 +226,34 @@ try {
         const ramHardware = Object.fromEntries((await request("retro/devices")).hardware.map(row => [row.id, row]));
         assert.equal(ramHardware.ramImage.value, ramImage);
 
+        // A launch's files go into RAM's directory and on the menu; BASIC loads one, and the debugger reads its program
+        // and writes another over it, which BASIC then runs.
+        phase("launching with files");
+        writeFileSync(join(files, "hello.model100.bas"), "10 PRINT \"HELLO\"\n");
+        writeFileSync(join(files, "notes.txt"), "a note\n");
+        events.length = 0;
+        await request("launch", {
+            machine: "trs80-model100", romDirectory: roms, stopOnEntry: false, speed: "max",
+            files: [join(files, "hello.model100.bas"), join(files, "notes.txt")]
+        });
+        await request("setExceptionBreakpoints", { filters: [] });
+        await request("configurationDone");
+        const listed = await screen(screenText => screenText.includes("HELLO.BA") && screenText.includes("NOTES.DO"), "the menu with the files");
+        const filesHardware = Object.fromEntries((await request("retro/devices")).hardware.map(row => [row.id, row]));
+        assert.equal(filesHardware.files.value, "HELLO.BA, NOTES.DO");
+        await screen((_, running) => running.cycles > listed.cycles + 2 * 2457600, "two seconds at the menu");
+        await type("BASIC\r");
+        await screen(screenText => /^Ok$/m.test(screenText), "BASIC from the menu");
+        await type("load \"HELLO\"\r");
+        await screen(screenText => (screenText.match(/^Ok$/gm) ?? []).length >= 2, "LOAD");
+        const loaded = await request("retro/basic/program");
+        assert.equal(loaded.dialect, "model100");
+        assert.equal(loaded.text, "10 PRINT \"HELLO\"\n");
+        const written = await request("retro/basic/write", { text: "10 PRINT \"CHANGED\";6*7\n" });
+        assert.equal(written.success, true, JSON.stringify(written));
+        await type("run\r");
+        await screen(screenText => screenText.includes("CHANGED 42"), "the written program's output");
+
         if (existsSync(tandy102)) {
             phase("launching the Tandy 102");
             events.length = 0;
@@ -244,7 +274,8 @@ try {
     if (failure()) throw failure();
     console.log(skipped.length === 0
         ? "Model 100 DAP integration passed: the missing-ROM messages, a source's breakpoint, call stack, registers, "
-            + "step out and LCD output, a logpoint met once a run through RST 7.5, the menu, BASIC, POWER OFF and Reset, a RAM image resumed in a new session, and the "
+            + "step out and LCD output, a logpoint met once a run through RST 7.5, the menu, BASIC, POWER OFF and Reset, a RAM image resumed in a new session, "
+            + "a launch's files on the menu, BASIC's program read and written, and the "
             + "Tandy 102's menu."
         : `Model 100 DAP integration checked the missing-ROM messages${skipped.length === 1 && existsSync(model100) ? " and the Model 100" : ""}; `
             + `skipped (inconclusive, not passed): ${skipped.join("; ")}.`);
@@ -252,5 +283,6 @@ try {
     clearTimeout(timeout);
     if (existsSync(source)) unlinkSync(source);
     if (existsSync(ramImage)) unlinkSync(ramImage);
+    rmSync(files, { recursive: true, force: true });
     await close();
 }

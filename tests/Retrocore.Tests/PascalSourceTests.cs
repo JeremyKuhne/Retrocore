@@ -342,10 +342,21 @@ public sealed class PascalSourceTests
             Assert.Inconclusive("src/Retrocore.Pascal/Sdk has no Pascal source yet.");
         }
 
-        // Programs from their main files; a source of Apple's Assembler, which starts with a directive, as text.
+        // Programs from their main files; a source of Apple's Assembler, whose first line after its comments is a
+        // directive, as text.
         static string Read(string path) => File.ReadAllText(path);
         List<string> mains = [.. sources.Where(file => PascalProgram.IsMainFile(Read(file)))];
-        List<string> assembled = [.. sources.Where(file => Read(file).TrimStart().StartsWith('.'))];
+        static bool IsAssembly(string text)
+        {
+            string? first = PascalLexer.Lines(text)
+                .Select(line => line.Trim())
+                .FirstOrDefault(line => line.Length > 0 && !line.StartsWith(';'));
+
+            return first is not null && first.StartsWith('.');
+        }
+
+
+        List<string> assembled = [.. sources.Where(file => IsAssembly(Read(file)))];
         List<PascalProgram> programs =
         [
             .. mains.Select(file => PascalProgram.Analyze(

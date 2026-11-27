@@ -1,0 +1,86 @@
+// Copyright (c) 2025 Jeremy W Kuhne
+// SPDX-License-Identifier: MIT
+// See LICENSE file in the project root for full license information
+
+using Retrocore.Pascal.Source;
+using System.Security.Cryptography;
+using System.Text;
+
+namespace Retrocore.Tests;
+
+/// <summary>
+///  The shape of a Pascal program's code: what it compiles to, without what doesn't change that.
+/// </summary>
+/// <remarks>
+///  <para>
+///   The program's tokens in its order, each include's where the include is, without comments; each name as the
+///   number of the declaration it is or refers to, so that renaming leaves the shape as it was; and a field's use as
+///   one token, as which record's field it is depends on the record's type, which the model doesn't follow. A change
+///   to the code changes the shape, so a test pins it where Apple's disks aren't there to compile it.
+///  </para>
+/// </remarks>
+internal static class PascalCodeShape
+{
+    /// <summary>
+    ///  Gets a program's shape as a SHA-256 digest.
+    /// </summary>
+    /// <param name="program">The program.</param>
+    /// <returns>The digest, in hexadecimal.</returns>
+    public static string Digest(PascalProgram program)
+    {
+        Dictionary<PascalToken, int> declared = [with(ReferenceEqualityComparer.Instance)];
+        for (int index = 0; index < program.Declarations.Count; index++)
+        {
+            declared[program.Declarations[index].Token] = index;
+        }
+
+        Dictionary<PascalToken, int> used = [with(ReferenceEqualityComparer.Instance)];
+        foreach (PascalReference reference in program.References)
+        {
+            if (program.Resolve(reference) is { } found)
+            {
+                used.TryAdd(reference.Token, found.Declaration.Kind == PascalDeclarationKind.Field ? -1 : declared[found.Declaration.Token]);
+            }
+        }
+
+        Dictionary<PascalToken, string> includes = [with(ReferenceEqualityComparer.Instance)];
+        foreach (PascalInclude include in program.Includes)
+        {
+            if (include.Path is { } path) { includes[include.Token] = path; }
+        }
+
+        using IncrementalHash shape = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+        foreach (PascalToken token in Expand(program, program.Files[0], includes).Where(token => !token.IsComment))
+        {
+            string text = token.Kind switch
+            {
+                PascalTokenKind.Identifier when declared.TryGetValue(token, out int at) => $"#{at}",
+                PascalTokenKind.Identifier when used.TryGetValue(token, out int at) => at < 0 ? "F" : $"#{at}",
+                PascalTokenKind.Identifier or PascalTokenKind.Keyword => token.Text.ToUpperInvariant(),
+                _ => token.Text
+            };
+
+            shape.AppendData(Encoding.UTF8.GetBytes(text + " "));
+        }
+
+        return Convert.ToHexString(shape.GetHashAndReset());
+    }
+
+    private static IEnumerable<PascalToken> Expand(
+        PascalProgram program,
+        PascalSourceFile file,
+        Dictionary<PascalToken, string> includes)
+    {
+        foreach (PascalToken token in file.Tokens)
+        {
+            if (includes.TryGetValue(token, out string? path) && program.File(path) is { } included)
+            {
+                foreach (PascalToken inner in Expand(program, included, includes)) { yield return inner; }
+            }
+            else
+            {
+                yield return token;
+            }
+        }
+    }
+}

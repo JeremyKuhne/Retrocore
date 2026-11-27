@@ -490,6 +490,12 @@ say what things are, and `(** *)` comments document declarations, with the names
 them kept in `Also:`. In VS Code, a Pascal file gets the style's lint as you type, hover for its doc comments, and go
 to definition and the outline, by current or historical name, across the files its program includes.
 
+The SDK has Apple Pascal 1.3's Compiler, `SYSTEM.COMPILER`, as such a source:
+[`Sdk/Compiler/apple2-1.3`](../src/Retrocore.Pascal/Sdk/Compiler/apple2-1.3), with the system's globals it uses in
+[`Sdk/System/apple2-1.3`](../src/Retrocore.Pascal/Sdk/System/apple2-1.3), shipped as `Pascal/Compiler/apple2-1.3/`
+and `Pascal/System/apple2-1.3/`. It compiles, assembles and links back to the same segments as APPLE2's file; its
+folder's README has the commands, and [PascalCompiler13.md](conversions/PascalCompiler13.md) its conversion.
+
 ## Testing
 
 - `PcodeTests`, `PascalListingTests` and `PascalMediaTests` need no files for most of their tests.

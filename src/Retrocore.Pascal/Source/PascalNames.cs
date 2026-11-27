@@ -14,13 +14,16 @@ public static class PascalNames
     /// </summary>
     public const int Significant = 8;
 
-    // Apple Pascal 1.1's reserved words, as its interpreter's IdSearch table has them (each read to 8 letters).
+    // The reserved words of Apple Pascal: 1.1's, as its interpreter's IdSearch table has them (each read to 8
+    // letters), and OTHERWISE, which 1.3's Compiler adds (its IDSCAN's table, where SEPARATE is not one). Every
+    // version's sources share names, so a name is none of any version's.
     private static readonly HashSet<string> s_keywords =
     [
         .. new[]
         {
             "AND", "ARRAY", "BEGIN", "CASE", "CONST", "DIV", "DO", "DOWNTO", "ELSE", "END", "EXTERNAL", "FILE", "FOR",
             "FORWARD", "FUNCTION", "GOTO", "IF", "IMPLEMENTATION", "IN", "INTERFACE", "LABEL", "MOD", "NOT", "OF", "OR",
+            "OTHERWISE",
             "PACKED", "PROCEDURE", "PROGRAM", "RECORD", "REPEAT", "SEGMENT", "SEPARATE", "SET", "THEN", "TO", "TYPE",
             "UNIT", "UNTIL", "USES", "VAR", "WHILE", "WITH"
         }.Select(Key)

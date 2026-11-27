@@ -11,8 +11,9 @@ covers the tools, decompiling and compiling.
 
 The lint checks what can be checked without Apple's disks. In VS Code its problems appear as you type, in any
 `retrocore-pascal` file (`.text`, `.pas`, `.pascal`). A test, `PascalSourceTests.SdkSourcesPassTheLint`, runs it over
-every `.TEXT` file under `src/Retrocore.Pascal/Sdk`, each program read from its main file through its includes; until
-the first source lands it reports itself inconclusive. It checks the following rules:
+every program under `src/Retrocore.Pascal/Sdk`, each read from its main file through its includes, and gives a source
+of Apple's Assembler (a `.TEXT` file whose first line after its `;` comments is a directive) only the text checks;
+a file that is neither fails it. It checks the following rules:
 
 | Rule | What it checks |
 | --- | --- |
@@ -20,7 +21,7 @@ the first source lands it reports itself inconclusive. It checks the following r
 | `tab` | No tabs: the Editor has none |
 | `file-size` | Each file within the strictest Editor's size, measured as below |
 | `file-name` | A `.TEXT` file's name in capitals, at most 15 characters with the suffix |
-| `include` | Every `(*$I*)` file present beside the file that includes it |
+| `include` | Every `(*$I*)` file present beside the file that includes it, or in an include folder (section 7) |
 | `comment` | No `{ }` comments |
 | `case` | Reserved words, and standard identifiers the program doesn't declare again, in capitals |
 | `name` | Defined names in PascalCase, without `_`, except the names the code file keeps |
@@ -115,7 +116,8 @@ A definition's names from documents are kept three ways:
    definition, as `Also:` does in the assembler.
 
 A historical name that would clash with another definition, that is one of Pascal's reserved words or standard
-identifiers (`EXIT`, `SCAN`), or that wasn't checked, goes in prose, as in the assembly sources. The decompiler's own generated names (`P12`, `L059A`) aren't historical.
+identifiers (`EXIT`, `SCAN`), or that wasn't checked, goes in prose, as in the assembly sources. The decompiler's
+own generated names (`P12`, `L059A`) aren't historical.
 
 ## 5. Doc comments
 
@@ -168,6 +170,10 @@ tables, and the procedures programs call. It lives in `src/Retrocore.Pascal/Sdk/
 compilers include it (compiled `(*$U-*)`), and SYSTEM.PASCAL's source defines it. The decompiler reads it to name the
 words a system program uses, such as AIIFORMAT's `SYS630`, and to give `.PUBLIC` names to system programs' assembled
 procedures. The compilers' conversion starts it with what they use, and SYSTEM.PASCAL's conversion completes it.
+
+A Compiler's source, in `Compiler/<machine>-<version>/`, includes it from `System/<machine>-<version>/` by its name
+alone (`(*$I SYSGLOBALS.TEXT*)`): the editor and the lint look there after the including file's own folder, and
+`--pascal compile` takes `--includes` once for each folder.
 
 ## 8. In the editor
 

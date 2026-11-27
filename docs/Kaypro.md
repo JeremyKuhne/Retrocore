@@ -2,9 +2,10 @@
 
 Retrocore's Kaypro II is [`KayproMachine`](../src/Retrocore.Machines.Kaypro/KayproMachine.cs): Non-Linear
 Systems' 1982 luggable, a 2.5 MHz Z80 with 64K of RAM, an 80-by-24 green screen, a serial keyboard and two
-single-sided double-density drives, running CP/M 2.2. Its monitor ROM and character generator are SDK sources, so it
-needs nothing external to run; CP/M and its programs come from disk images you supply. This guide covers what it
-emulates and how to debug on it, MBASIC included. [The backlog](backlog/Kaypro.md) has what comes next.
+single-sided double-density drives, running CP/M 2.2. Its monitor ROM, character generator, and CP/M MBASIC 5.21 are
+documented SDK sources, so stepping into the ROM or MBASIC debugs at its source; CP/M and its programs come from disk
+images you supply. This guide covers what it emulates and how to debug on it, MBASIC included.
+[The backlog](backlog/Kaypro.md) has what comes next.
 
 ## The machine
 

@@ -2,7 +2,8 @@
 
 SOS is the Apple III's operating system. The SDK has its sources: the SOS 1.3 kernel, the bootstrap loader that
 starts it, and Apple's drivers. Each assembles byte-identically to the files on Apple's disks, so the debugger
-shows SOS's source wherever SOS runs. They are in the Apple III's ROM sources, under `Sos`:
+shows SOS's source wherever SOS runs. They live in the Apple III's SDK sources under
+[`Roms/Sos`](../src/Retrocore.Machines.Apple3/Roms/Sos):
 
 | Path | What it builds |
 | --- | --- |

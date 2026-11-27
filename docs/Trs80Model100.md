@@ -5,15 +5,15 @@ an OKI 80C85, the 32 KB ROM with Microsoft BASIC and the built-in TEXT, TELCOM, 
 RAM, an option ROM socket, the 240x64 LCD, the keyboard, the uPD1990AC clock, and the 81C55 that ties them
 together. It runs the ROM you supply, boots to its menu and runs BASIC, keeps its RAM between sessions as the
 battery does, saves and loads tapes, and sounds its buzzer. This guide covers what it emulates and how to debug on
-it. [The backlog](backlog/Trs80Model100.md) has the sources behind it and what comes next: the serial port, the
-printer and the disk drive, and the ROM as an SDK source.
+it. [The backlog](backlog/Trs80Model100.md) lists the reference documents behind the emulation and what comes next:
+the serial port, the printer and the disk drive, and writing an SDK source for the ROM.
 
 ## The ROM
 
 The ROM is Microsoft's and Tandy's, so it is not part of Retrocore. A launch finds it as:
 
 - `rom`: the ROM's file, as a path or a name in `romDirectory`;
-- otherwise in `romDirectory`, or in the folder `RETROCORE_TRS80M100_ROMS` names, or in either's `trs80m100`,
+- otherwise in `romDirectory`, or in the folder named by `RETROCORE_TRS80M100_ROMS`, or in either's `trs80m100`,
   `tandy102` or `trs80m100-roms` folder, under MAME's names, `m100rom.m12` for the Model 100 and `m102rom.m12` for
   the Tandy 102, or as `m100.bin` (`m100rom.bin`) and `t102.bin` (`t102_rom.bin`, `m102rom.bin`).
 
@@ -152,9 +152,9 @@ Retrocore keeps a tape as its level changes, timed in the 80C85's cycles while t
 WAV files (8 or 16-bit PCM in, 16-bit 44.1 kHz out). The tape moves only while the motor runs. SID reads the tape's
 level inverted, as MAME's driver has it, and is high with no tape playing.
 
-- **Playing:** `cassette` in the launch, or **Insert** on the cassette in Retro Devices, puts a WAV file's tape in.
+- **Playing:** `cassette` in the launch, or **Insert** on the cassette in the **Drives** view, puts a WAV file's tape in.
   It plays from its start once the ROM runs the motor, as `CLOAD` does.
-- **Recording:** **Record** in Retro Devices names the WAV file to write. The tape takes SOD's changes while the motor
+- **Recording:** **Record** in the **Drives** view names the WAV file to write. The tape takes SOD's changes while the motor
   runs, as `CSAVE` runs it, and is written to the file, through a file beside it, when it comes out: on
   **Eject**, on **Insert** of another tape, or when the session ends, replacing what is at that path; a recording that
   holds nothing writes nothing.
@@ -185,8 +185,8 @@ for its words is still to come.
 
 While BASIC is at its prompt, **Retrocore: Open BASIC Program** edits the program BASIC has open as text: a `.BA`
 file after `LOAD`, or its unsaved program. Saving writes it back over that file, moving the files after it; at the
-menu, in TEXT or while a program runs, it is refused. A program can't yet be stepped through by its lines, and a
-`basic` launch is not offered: both follow the ROM's routines, which wait for the ROM as an SDK source.
+menu, in TEXT or while a program runs, it is refused. Line-by-line BASIC stepping and a `basic` launch are not offered
+yet; both depend on symbol addresses from an SDK source of the ROM.
 
 ## Testing
 

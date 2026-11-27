@@ -2,8 +2,8 @@
 
 Retrocore emulates the Apple III of 1980: its banked memory and extended addressing, video modes, built-in and
 external drives, keyboard and sound. It boots Apple's SOS 1.3 disks: the System Utilities, Business BASIC and the
-rest. The boot ROM is assembled from the SDK's documented source, byte-identical to Apple's, so no dump is needed to
-run or debug it.
+rest. The boot ROM's documented SDK source assembles byte-identically to Apple's chip, so stepping into the boot ROM
+debugs at its source whether built from the SDK or loaded from a matching dump.
 
 ## Starting one
 
@@ -40,7 +40,7 @@ an Apple II disk such as DOS 3.3 in the built-in drive (the **Drives** view's dr
 
 - The disk loads the II Plus's ROMs into write-protected RAM at `$D000-$FFFF`, then clears VIA 1 port A bit 6, the
   mode trap. That hides the VIAs, so nothing can change the environment register again: only turning the machine
-  off leaves the mode. The Hardware view's environment register says "Apple II mode".
+  off leaves the mode. The **Machine** view's environment register says "Apple II mode".
 - CONTROL-RESET is an NMI there, which the emulation's ROM points at the Apple II's reset code, as RESET is on a
   II Plus.
 - The machine is still an Apple III underneath: the debugger shows its banks and its registers, and the panel's
@@ -208,9 +208,10 @@ SOS's entry points, and beam breakpoints are not available on the Apple III.
 
 - `Apple3BusTests` and `Apple3VideoTests` need no files.
 - `Apple3RomSourceTests` pins the boot ROM source by SHA-256.
-- `Apple3MachineTests`, `Apple3SosTests` and `Apple3EmulationTests` need MAME's `apple3` set
-  (`RETROCORE_APPLE3_ROMS`, by default `<cache>\apple3-roms\mame\apple3`) and Apple's disks
-  (`RETROCORE_APPLE3_DISKS`); the emulation test also needs the DOS 3.3 System Master in `<cache>\iie-disks`.
+- `Apple3MachineTests`, `Apple3SosTests` and `Apple3EmulationTests` compare against external fixtures: MAME's `apple3`
+  set (`RETROCORE_APPLE3_ROMS`, by default `<cache>\apple3-roms\mame\apple3`) and Apple's SOS disks
+  (`RETROCORE_APPLE3_DISKS`); the emulation test also uses the DOS 3.3 System Master in `<cache>\iie-disks`. Without
+  them those tests report inconclusive, while normal Apple III sessions build the boot ROM from the SDK.
 - `Apple3OracleTests` runs MAME (`RETROCORE_MAME`). Every archived MAME set (to 0.279) has an older dump of the
   boot ROM (CRC `55e8eec9`), read from a running machine, so `$FFC0-$FFEF` holds RAM; the chip's contents (CRC
   `1af7ec42`) have the copyright string there, which the SDK's source builds.

@@ -1,9 +1,9 @@
 # Business BASIC
 
-Apple Business BASIC is the Apple III's BASIC. SOS loads it from a disk's `SOS.INTERP` file; its programs and
-variables live in the switchable banks, which it reaches through extended addressing. The SDK has its source:
-`BusinessBasic/BusinessBasic.asm`, in the Apple III's ROM sources, assembles byte-identically to Business BASIC
-1.23's `SOS.INTERP`.
+Apple Business BASIC is the Apple III's BASIC. SOS loads the interpreter from a disk's `SOS.INTERP` file, and its
+programs and variables live in the switchable banks, reached through extended addressing. Its SDK source,
+[`BusinessBasic/BusinessBasic.asm`](../src/Retrocore.Machines.Apple3/Roms/BusinessBasic/BusinessBasic.asm), assembles
+byte-identically to Business BASIC 1.23's `SOS.INTERP`.
 
 [`Apple3.md`](Apple3.md) covers the machine, and [`Sos.md`](Sos.md) the operating system.
 

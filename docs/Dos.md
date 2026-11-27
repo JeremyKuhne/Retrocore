@@ -11,15 +11,15 @@ in [`Roms/Dos`](../src/Retrocore.Machines.Apple2/Roms/Dos). It assumes some
 ## The sources
 
 The source covers both DOS 3.3 releases on Apple's System Masters, chosen by `YEAR`: 1983 (the default), the
-DOS on the 680-0210-A master, and 1980, the DOS on the 680-0051 masters. Its names are the SDK's, with Apple's kept
-as historical names; the order of its modules is Apple's, from Apple's DOS 3.3 C source listing (July 1983); its
-comments are the SDK's own.
+DOS on the 680-0210-A master, and 1980, the DOS on the 680-0051 masters. The source's labels are the SDK's, with
+Apple's kept as historical names; the order of its modules is Apple's, from Apple's DOS 3.3 C source listing (July
+1983); and its comments are the SDK's own.
 [`Dos33.asm`](../src/Retrocore.Machines.Apple2/Roms/Dos/Dos33.asm) includes the modules and builds
 either of two images of each, chosen by `MASTER`:
 
 | Build | Origin | What it is |
 | --- | --- | --- |
-| `MASTER = 1` (the default) | $1B00-$3FFF | The image on a System Master's tracks 0 to 2: the relocator at $1B00, then DOS assembled $8000 below where it runs. It is byte for byte that year's master's. |
+| `MASTER = 1` (the default) | $1B00-$3FFF | The image on a System Master's tracks 0 to 2: the relocator at $1B00, then DOS assembled $8000 below where it runs. It matches the DOS bytes on that year's System Master byte for byte. |
 | `MASTER = 0` | $9D00-$BFFF | DOS where it runs on a machine with 48K or more. The debugger maps the running DOS to this build's lines. |
 
 `DosSourceTests` pins all four builds by SHA-256, so no disk is needed to check them. With the masters in

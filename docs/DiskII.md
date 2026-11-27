@@ -1,9 +1,10 @@
 # The Disk II controller
 
 The Disk II is Apple's 5.25-inch floppy drive for the Apple II family, and the controller is the card it plugs
-into, usually in slot 6. This guide explains what the controller's two ROMs do, for anyone reading or stepping
-through the SDK's sources of them in [`Roms/DiskII`](../src/Retrocore.Machines.Apple2/Roms/DiskII). It
-assumes you know some 6502 assembly but not the Apple II's internals.
+into, usually in slot 6. This guide explains what the controller's boot ROM and logic state sequencer ROM do (in both
+16- and 13-sector versions), for anyone reading or stepping through the SDK's sources of them in
+[`Roms/DiskII`](../src/Retrocore.Machines.Apple2/Roms/DiskII). It assumes you know some 6502 assembly but not the Apple
+II's internals.
 
 | Source | Chip | What it is |
 | --- | --- | --- |

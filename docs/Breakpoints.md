@@ -3,7 +3,8 @@
 The Retrocore debugger supports every kind of breakpoint VS Code's **Breakpoints** view offers. Each can have a
 condition, a hit count and a log message (though VS Code's UI does not offer **Edit Log Message** on data
 breakpoints). The debugger counts each breakpoint's hits and shows them in the breakpoint's hover. All of this
-works the same on the Apple II family, the Apple III and the Model I, in your program, in BASIC and in the SDK's ROM sources.
+works across Retrocore's emulated machines—in your assembly code, on BASIC and Pascal threads, and in the SDK's system
+and ROM sources.
 
 | Kind | Set it | Stops when |
 | --- | --- | --- |
@@ -13,7 +14,7 @@ works the same on the Apple II family, the Apple III and the Model I, in your pr
 | SOS call (Apple III) | **+** with a name such as `sos OPEN`, `sos $C8`, or `sos` for every call | A program is about to make that SOS call. See [SOS call breakpoints](#sos-call-breakpoints). |
 | Pascal (Apple II, Apple III) | **+** with a name such as `pascal HELLO.2`, `pascal HELLO.2+$0D` or `pascal 1.2` | Apple Pascal's interpreter is about to run that p-code of the procedure, on the Pascal thread. See [Pascal breakpoints](Pascal.md#pascal-breakpoints). |
 | Instruction | The gutter of the **Disassembly** view (**Open Disassembly View** from the call stack or the editor's context menu) | The PC reaches that instruction. |
-| Data | **Break on Value Read / Change / Access** on a memory variable or a watch expression, **Break on Value Change** on a BASIC variable or array element, or **Add Data Breakpoint at Address** in the Breakpoints view | The CPU reads or writes the watched bytes or Z80 I/O port (stopping after the instruction), or a BASIC statement changes the watched variable. |
+| **Data** | **Break on Value Read / Change / Access** on a memory variable or a watch expression, **Break on Value Change** on a BASIC variable or array element, or **Add Data Breakpoint at Address** in the Breakpoints view | The CPU reads or writes the watched bytes or Z80 / 8080 / 8085 I/O port (stopping after the instruction), or a BASIC statement changes the watched variable. |
 | Exception | The checkboxes in the Breakpoints view | See [Exception filters](#exception-filters). |
 
 ## Exception filters
@@ -22,14 +23,14 @@ The Breakpoints view lists these checkboxes. Each one's hover says what it stops
 
 | Checkbox | Machines | Default | Stops |
 | --- | --- | --- | --- |
-| **Machine reset** | both | on | As the machine powers on, at the reset handler's first instruction, or at a loaded program's entry. Then at each reset: RESET on the Apple II stops at the reset vector's handler (`RESET`, or DOS's handler once booted), and the Model I's reset button at its non-maskable interrupt's handler, `NMI` at `$0066`. A BASIC file's launch boots past reset during the launch, so it stops only at later resets. With `stopOnEntry`, the entry stop is the power-on stop. |
-| **BRK instructions** | Apple II, Apple III | on | Before a 6502 `BRK` runs. On the Apple III, only before one that SOS would refuse as a call, and before SOS's debug call: see [SOS call breakpoints](#sos-call-breakpoints). |
+| **Machine reset** | all | on | As the machine powers on, at the reset handler's first instruction, or at a loaded program's entry. Then at each reset: RESET on the Apple II stops at the reset vector's handler (`RESET`, or DOS's handler once booted), and the Model I's reset button at its non-maskable interrupt's handler, `NMI` at `$0066`. A BASIC file's launch boots past reset during the launch, so it stops only at later resets. With `stopOnEntry`, the entry stop is the power-on stop. |
+| **BRK instructions** | 6502 machines | on (`off` on BBC Micro) | Before a 6502 `BRK` runs. On the BBC Micro, where the MOS, BASIC and filing systems raise errors with `BRK`, it starts off. On the Apple III, it stops only before a `BRK` that SOS would refuse as a call, and before SOS's debug call: see [SOS call breakpoints](#sos-call-breakpoints). |
 | **Video beam reaches a scanline** | Apple II | off | See [Scanline breakpoints](#scanline-breakpoints). |
-| **Routine broke its Keeps: promise** | both | off | Where a call returns having changed something its routine's `;; Keeps:` comment says it keeps. Listed when a source has such a comment and `checkContracts` is not `off`. |
-| **BASIC program start** | both | on | On the BASIC thread, at the first statement each `RUN` runs, and where `CONT` resumes. A BASIC file's launch stops on its first statement as its entry instead. |
-| **BASIC errors** | both | on | At the statement that fails, when no ONERR GOTO or ON ERROR GOTO will take the error. |
-| **Handled BASIC errors** | both | off | Also when an error handler will take the error. |
-| **BASIC program end** | both | off | At STOP, END, the end of the program, and Ctrl-C or BREAK. |
+| **Routine broke its Keeps: promise** | all | off | Where a call returns having changed something its routine's `;; Keeps:` comment says it keeps. Listed when a source has such a comment and `checkContracts` is not `off`. |
+| **BASIC program start** | machines with BASIC filters | on | On the BASIC thread, at the first statement each `RUN` runs, and where `CONT` resumes. A BASIC file's launch stops on its first statement as its entry instead. |
+| **BASIC errors** | machines with BASIC filters | on | At the statement that fails, when no ONERR GOTO, ON ERROR GOTO or TRAP will take the error. |
+| **Handled BASIC errors** | machines with BASIC filters | off | Also when an error handler will take the error. |
+| **BASIC program end** | machines with BASIC filters | off | At STOP, END, the end of the program, and Ctrl-C or BREAK. |
 
 A breakpoint at the same instruction or statement as one of these stops there once, as the breakpoint.
 
@@ -90,11 +91,11 @@ What a data breakpoint watches depends on where it is set:
 
 | From | Watches |
 | --- | --- |
-| A byte in the Variables view's memory scope (zero page on the Apple II, or the $4000-$40FF communication region on the Model I) | that byte |
+| A byte in the Variables view's memory scope (zero page on 6502 machines, direct page on the 6809, or the `$4000-$40FF` communication region on the Model I) | that byte |
 | A watch expression `[address]` or `[address].w` | the byte, or both bytes of the word |
 | A watch expression that is a label, such as `COUNT` | the byte at the label |
-| A watch expression `port N` (Model I) | the Z80 I/O port N |
-| A watch expression `[bank:$0400]`, or `bank:$0400` at an address (Apple II) | the byte in that memory bank, only when the memory map reaches it ([Memory.md](Memory.md)) |
+| A watch expression `port N` (Z80 and 8080/8085 machines) | I/O port N |
+| A watch expression `[bank:$0400]`, or `bank:$0400` at an address (machines with banked memory) | the byte in that memory bank, only when the memory map reaches it ([Memory.md](Memory.md)) |
 | A variable or array element on the BASIC thread | its BASIC value, checked after each statement even if the variable moves in memory |
 | **Add Data Breakpoint at Address** | the bytes it asks for, from an address expression |
 
@@ -105,8 +106,8 @@ reads, and **Break on Value Access** on both. A memory write stops even when it 
 since a write to a soft switch or video memory matters either way. Every bus access counts, including the 6502's
 dummy reads and the second write of a read-modify-write instruction, but not opcode fetches. The stop's
 description says what was read or written and where, such as `Wrote $41 to $3C05.`, and the exception peek in
-the editor shows it. A port below `$100` matches whatever the Z80 drives on the address bus's high byte, as the
-Model I decodes only the low byte.
+the editor shows it. A port below `$100` matches whatever the CPU drives on the address bus's high byte, as
+8-bit port decoders inspect only the low byte.
 
 ## Scanline breakpoints
 
@@ -119,8 +120,9 @@ does not read leaves the checkbox unverified, saying why. The stop's description
 `The video beam reached scanline 192, column 0.`
 
 For a position with its own hit count, condition or log message, add a function breakpoint (**+**) named
-`scanline S:C`, `scanline S` (column 0) or `scanline vbl` (192:0); each is its own entry in the view. The Model I
-has no beam to stop on, so it lists no such checkbox, and a `scanline` function breakpoint there stays unverified.
+`scanline S:C`, `scanline S` (column 0) or `scanline vbl` (192:0); each is its own entry in the view. Other
+machines do not expose scanline breakpoints yet, so they list no such checkbox, and a `scanline` function
+breakpoint there stays unverified.
 
 ## SOS call breakpoints
 
@@ -161,10 +163,11 @@ from there checks them first, so a breakpoint on that instruction stops at once.
 
 ## Breakpoints in a memory bank
 
-On the Apple II family a function or instruction breakpoint can name a memory bank ([Memory.md](Memory.md)), such as
-`bank1:$D000`, `aux:MOVE_DOWN` (on the IIe) or `rom:$FA62`. It stops only while the CPU runs that bank's code at the address,
-so `bank1:$D000` does not stop while ROM or bank 2 is mapped there. Source breakpoints already apply only where
-their module's memory is mapped.
+On machines with banked memory (such as the Apple II family, the Apple III, and the Kaypro II) a function or
+instruction breakpoint can name a memory bank ([Memory.md](Memory.md)), such as `bank1:$D000`, `aux:MOVE_DOWN`
+(on the IIe), `system:$A000` (on the Apple III), or `rom:$FA62`. It stops only while the CPU runs that bank's code at
+the address, so `bank1:$D000` does not stop while ROM or bank 2 is mapped there. Source breakpoints already apply only
+where their module's memory is mapped.
 
 ## The Disassembly view
 

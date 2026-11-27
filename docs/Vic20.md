@@ -26,15 +26,15 @@ This guide covers what it emulates, its ROMs and their sources, and how to debug
 
 What nothing answers reads as the byte the VIC fetched last, as on the real machine.
 
-**CPU.** The 6502 runs at the VIC's dot clock divided by four: 1,022,727 Hz on NTSC (the 14.318 MHz crystal divided
-by 14) and about 1,108,404 Hz on PAL (4.434 MHz divided by 4). The VIC fetches in the half of each cycle the 6502 does not
-use, so it never stops the processor.
+**CPU.** The 6502 runs at the VIC's dot clock divided by four: 1,022,727 Hz on NTSC (the 14.318 MHz crystal divided by
+14) and about 1,108,404 Hz on PAL (4.434 MHz divided by 4). The VIC fetches in the half of each cycle the 6502 does
+not use, so it never stops the processor.
 
 **Video.** The 6560 draws 65 cycles by 261 lines, the 6561 71 by 312, four dots each cycle. The text window is its
-registers' size, 22 columns by 23 rows at power-on, of 8 × 8 or 8 × 16 characters, from the character ROM or RAM,
-with multicolour and reversed characters, the border and background, and MAME's palettes. The window's columns are
-taken at each line and its rows at each frame, as MAME takes them. [`Vic6560`](../src/Retrocore.Core/Machines/Chips/Vic6560.cs)'s
-remarks list where it still differs from MAME.
+registers' size, 22 columns by 23 rows at power-on, of 8 × 8 or 8 × 16 characters, from the character ROM or RAM, with
+multicolour and reversed characters, the border and background, and MAME's palettes. The window's columns are taken at
+each line and its rows at each frame, as MAME takes them.
+[`Vic6560`](../src/Retrocore.Core/Machines/Chips/Vic6560.cs)'s remarks list where it still differs from MAME.
 
 **Sound.** Three square-wave voices and noise, with MAME's periods and noise generator, mixed in stereo.
 
@@ -66,10 +66,11 @@ images, which save back. The reset line resets them with the computer.
 | [`Vic20/Kernal.asm`](../src/Retrocore.Machines.Commodore/Roms/Vic20/Kernal.asm) | The kernal from `$E47C`: 901486-06, and with `PAL = 1` 901486-07. |
 | [`Vic20/CharacterGenerator.asm`](../src/Retrocore.Machines.Commodore/Roms/Vic20/CharacterGenerator.asm) | 901460-03, over the PET's character source. |
 
-`Vic20RomSourceTests` pins each build by digest and compares it with the dumps when they are present; their SHA-1s are
-MAME's. [The conversion log](conversions/Vic20.md) and [the kernal's rename table](conversions/Vic20KernalRenames.md)
-record how the sources were written. Dumps from `romDirectory` or `RETROCORE_VIC20_ROMS`, MAME's `vic20` and `vic20p`
-chips, in the folder or its folder for the set, replace the sources' builds when given.
+`Vic20RomSourceTests` pins each build by its SHA-256 and compares it with MAME's dumps when they are present, which it
+matches byte for byte. [The conversion log](conversions/Vic20.md) and [the kernal's rename
+table](conversions/Vic20KernalRenames.md) record how the sources were written. Dumps from `romDirectory` or
+`RETROCORE_VIC20_ROMS`, MAME's `vic20` and `vic20p` chips, in the folder or its folder for the set, replace the
+sources' builds when given.
 
 ## Debugging
 
@@ -88,11 +89,11 @@ file, a cartridge, a disk (in a 1541 as device 8) or a tape. Launch configuratio
 }
 ```
 
-The ROMs run for `bootSeconds` (four seconds by default when something loads, as the RAM test takes over two with 32K) to `READY.` before the program loads,
-at `$1400` by default, so the kernal's routines are ready for `JSR $FFD2`. A `.prg` file loads as the kernal's LOAD
-does: one at BASIC's start on some VIC-20 (`$0401`, `$1001` or `$1201`) is a BASIC program, which moves to this
-machine's start, is linked again there, has its pointers set and is started by RUN (`run` false leaves it); any other
-is machine code, which starts at its first byte or `entryAddress`.
+The ROMs run for `bootSeconds` (four seconds by default when something loads, as the RAM test takes over two with 32K)
+to `READY.` before the program loads, at `$1400` by default, so the kernal's routines are ready for `JSR $FFD2`. A
+`.prg` file loads as the kernal's LOAD does: one at BASIC's start on some VIC-20 (`$0401`, `$1001` or `$1201`) is a
+BASIC program, which moves to this machine's start, is linked again there, has its pointers set and is started by RUN
+(`run` false leaves it); any other is machine code, which starts at its first byte or `entryAddress`.
 
 The options are:
 
@@ -103,8 +104,8 @@ The options are:
 - `cassette`: a `.tap`, `.wav` or `.prg` tape, put in with PLAY down; and `fastCassette` (on by default), which runs as
   fast as it can while the tape moves;
 - `diskUnits`: the device numbers of drives on the serial bus, 8 to 11, such as `[8]`; `diskModel`: `1541` (the
-  default) or `1540`; `disks`: `.d64` or `.g64` images for device 8's drive, then the next (without `diskUnits`, as
-  many drives as they need, from 8); and `driveRomDirectory`, the drives' ROMs;
+  default) or `1540`; `disks`: `.d64` or `.g64` images for those drives in `diskUnits`' order (without `diskUnits`,
+  as many drives as they need, from 8); and `driveRomDirectory`, the drives' ROMs;
 - `sdkRoms`: the folder of the ROM sources, such as the repository's, so breakpoints set there bind;
 - `screen`: `color` (the default), `white`, `green` or `amber`;
 - `speed`: `1` (the default) runs at the machine's clock, `2`, `4` or `8` that many times as fast, and `"max"` as fast
@@ -145,13 +146,15 @@ errors 1 to 9 share.
 | `Vic20DiskTests` | A 1541 or 1540 on the serial bus through the kernal's and the drive's own DOS. |
 | `Vic20DiskOracleTests` (Conformance) | The 1541's and 1540's DOS against MAME's `c1541` and `c1540`. |
 | `Cbm1541GateArrayTests` | The 1541's gate array on its own, with no disk and no ROMs. |
-| `Vic20RomSourceTests` | Every chip's source by digest and against the dumps, the kernal's citations, and the machine booting from the SDK's builds on both standards. `BuildLinkTests` checks each build's links. |
+| `Vic20RomSourceTests` | Every chip's source by digest and against the dumps, the kernal's citations, and the machine booting from the SDK's builds on both standards. `BuildLinkTests` checks the BASIC and kernal builds' links. |
 | `Vic20DebugTargetTests` | The debug target on the SDK's ROMs: its launch options, the keys that type nothing, its BASIC's pointers, its errors and screen, and the Machine view. |
 | [`tools/Test-Vic20BasicDap.mjs`](../tools/Test-Vic20BasicDap.mjs) | A BASIC file on the BASIC thread unexpanded on NTSC and PAL, and with 3K, 8K and 32K on NTSC: stopping on entry, stepping, a GOSUB's frame, variables and the FOR loop, the program as text, an error, Step Into on SYS, and one hit for each statement though an interrupt returns to GONE. |
-| [`tools/Test-Vic20Dap.mjs`](../tools/Test-Vic20Dap.mjs) | The debugger end to end: BASIC from the sources, breakpoints in BASIC's and the kernal's sources with the call stack, the colour picture, the reset stop, RUN/STOP and RESTORE, a program recorded on tape and saved as TAP, loaded back, a `.prg` on two expansions and a source launched, each expansion's free bytes, and PAL. With the 1541's ROMs, a blank disk on device 8 formatted, a program saved, the disk saved as D64 and listed, and a second drive added and removed. |
+| [`tools/Test-Vic20Dap.mjs`](../tools/Test-Vic20Dap.mjs) | The debugger end to end: BASIC from the sources, breakpoints in BASIC's and the kernal's sources with the call stack, the colour picture, the reset stop, RUN/STOP and RESTORE, a program recorded on tape and saved as TAP, loaded back, a `.prg` on two expansions and a source launched, the free bytes unexpanded and with 3K, 8K and 32K, and PAL. With the 1541's ROMs, a blank disk on device 8 formatted, a program saved, the disk saved as D64 and listed, and a second drive added and removed. |
 
 The ROM-source builds, the debug target's tests and the DAP scripts need nothing external, apart from the DAP script's
 1541 part, which needs the `c1541` set and is skipped without it. The tests on the dumps, the tape, cartridge and disk
-tests and the comparisons with MAME (`RETROCORE_MAME`, MAME 0.264) are inconclusive without MAME 0.264's sets, from the
-[MAME ROM sets on archive.org](https://archive.org/download/mame-0.264-roms-non-merged/): `vic20.zip`, `vic20p.zip`,
-`c1540.zip` and `c1541.zip`, and its `vic1001_cart`, `vic1001_cass` and `vic1001_flop` software lists.
+tests and the comparisons with MAME are inconclusive without them: MAME 0.264's `vic20`, `vic20p`, `c1540` and `c1541`
+sets from the [MAME ROM sets on archive.org](https://archive.org/download/mame-0.264-roms-non-merged/), unzipped in
+`vic20-roms`; MAME 0.202's `vic1001_cart`, `vic1001_cass` and `vic1001_flop` software lists in `vic20-media`, with
+MAME's `hash/vic1001_cart.xml` for the cartridges; and a MAME in `RETROCORE_MAME` for the comparisons, which have been
+run with MAME 0.264.

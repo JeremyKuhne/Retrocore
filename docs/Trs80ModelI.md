@@ -230,10 +230,10 @@ program in memory, and imports and exports `.cas` tapes, listings and tokenized 
 
 **Level I BASIC** has the BASIC thread too, from `Level1.asm`'s symbols, when the ROM is the SDK's build or a dump
 of the same bytes; a `level1.rom` that differs gets neither the source nor the thread. **BASIC program start** stops
-where RUN starts and CONT resumes, line breakpoints and steps go by statement (Level I's colons, and abbreviations such as `P.`
-for PRINT, read as `EXEC` reads them), GOSUBs are in the call stack, and the Variables view shows A to Z, A$ and B$,
-the array A(n) counting down from the top of memory, and the FOR loops. Level I keeps no tokens: a line is its number
-and its text as typed, from `$4200` to `TXTUNF`, so a `.level1.bas` file (or one with `REM retrocore level1`) reads
+where RUN starts and CONT resumes, line breakpoints and steps go by statement (Level I's colons, and abbreviations
+such as `P.` for PRINT, read as `EXEC` reads them), GOSUBs are in the call stack, and the Variables view shows A to
+Z, A$ and B$, the array A(n) counting down from the top of memory, and the FOR loops. Level I keeps no tokens: a
+line is its number and its text as typed, from `$4200` to `TXTUNF`, so a `.level1.bas` file (or one with `REM retrocore level1`) reads
 as the program lists. Its errors, HOW?, WHAT? and SORRY, stop as **BASIC errors**, except a mistyped answer to INPUT,
 which asks again and counts as handled. An error in a DATA item that READ is taking stops in the READ's line, though
 Level I has no current line while it reads the item and reports the error with none: the debugger finds the line where

@@ -207,9 +207,11 @@ internal sealed class AnalysisRoutineEngine
         AnalysisRoutineState start = new();
         for (int slot = 0; slot < SlotCount; slot++)
         {
-            // Each value is still its entry value, so what keeps it is kept; a caller's known bits come with it.
+            // Each value is still its entry value, so what keeps it is kept; a caller's known bits come with it, but
+            // not a stack pointer's, which the call itself moves.
             AnalysisValue value = AnalysisValue.Of(slot);
-            AnalysisValue given = caller?.Slots[slot] ?? value;
+            bool stack = slot < FlagSlot && (_stackRegisters & (1u << slot)) != 0;
+            AnalysisValue given = stack ? value : caller?.Slots[slot] ?? value;
             start.Slots[slot] = value.WithBits(given.Known & _widths[slot], given.Bits);
         }
 

@@ -283,6 +283,88 @@ public class ContractAnalysisTests
 
         (findings, _, _) = Check(table, "Mos6502");
         findings.Should().ContainSingle().Which.Should().Contain("Main ($1008) documents Keeps: X");
+
+        // A call whose run other code also enters, here at Mid with A = 0, is seen from the run's start, with
+        // nothing known.
+        string middle = """
+            ;; Sets bit 0.
+            ;; Uses: A
+            Caller:
+                lda #1
+            Mid:
+                jsr Set
+                rts
+
+            Vector:
+                lda #0
+                jmp Mid
+            """ + Callee;
+
+        (findings, _, _) = Check(middle, "Mos6502");
+        findings.Should().ContainSingle().Which.Should().Contain("Main ($100B) documents Keeps: X");
+
+        // A run that a skip may fall into, as .byte $2C hiding LDA #1 from the code before it, is not seen.
+        string skip = """
+            ;; Sets bit 0, or from the skip nothing.
+            ;; Uses: A
+            Caller:
+                lda #0
+                .byte $2C
+            Other:
+                lda #1
+                jsr Set
+                rts
+            """ + Callee;
+
+        (findings, _, _) = Check(skip, "Mos6502");
+        findings.Should().ContainSingle().Which.Should().Contain("Main ($1009) documents Keeps: X");
+
+        // A jump to the entry is no call: the code that takes it is followed through it, with its own values, and
+        // its own contract is checked.
+        string jump = """
+            ;; Clears nothing, but X.
+            ;; Keeps: X
+            Other:
+                lda #0
+                jmp Set
+            """ + Callee;
+
+        (findings, _, _) = Check(jump, "Mos6502");
+        findings.Should().Contain(finding => finding.StartsWith("Other ($1000) documents Keeps: X", StringComparison.Ordinal));
+    }
+
+    /// <summary>
+    ///  A caller's stack pointer is not passed into an entry it calls, as the call itself moves it: after LDX #$FF and
+    ///  TXS, Set's TSX does not see $FF, so CPX #$FF does not decide BEQ.
+    /// </summary>
+    [TestMethod]
+    public void CallersStackPointersAreNotPassedIn()
+    {
+        const string Source = """
+            ;; Resets the stack and calls Set.
+            ;; Uses: A, X
+            Caller:
+                ldx #$FF
+                txs
+                jsr Set
+                rts
+
+            ;; Returns, or from Set clears Y unless the stack is empty.
+            ;; Keeps: Y
+            ;; Entry: Set = clears Y unless S is $FF
+            Main:
+                rts
+            Set:
+                tsx
+                cpx #$FF
+                beq Done
+                ldy #0
+            Done:
+                rts
+            """;
+
+        (List<string> findings, _, _) = Check(Source, "Mos6502");
+        findings.Should().Contain(finding => finding.StartsWith("Main ($1007) documents Keeps: Y", StringComparison.Ordinal));
     }
 
     /// <summary>

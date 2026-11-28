@@ -38,6 +38,7 @@ internal sealed partial class AnalysisContracts
     // Entry: label with a contract, for checking it with each caller's values.
     private readonly Dictionary<ushort, List<ushort>> _callSites = [];
     private readonly Dictionary<ushort, List<AnalysisRoutineState>> _callStates = [];
+    private ushort? _observing;
 
     // Where code may be entered other than by falling into it: labels and the targets of jumps and branches.
     private readonly HashSet<ushort> _entered = [];
@@ -450,8 +451,9 @@ internal sealed partial class AnalysisContracts
     }
 
     // The start of the straight run of code an instruction is in: back over instructions that fall into the next,
-    // to a label, a jump's or branch's target, or code that does not fall through.
-    private ushort RunStart(ushort address)
+    // to a label, a jump's or branch's target, or code that does not fall through; null where bytes the source
+    // assembles as data come just before it, which a skip, as .byte $2C, may run into the run from.
+    private ushort? RunStart(ushort address)
     {
         for (int steps = 0; steps < MaximumRunSteps && !_entered.Contains(address); steps++)
         {
@@ -472,6 +474,12 @@ internal sealed partial class AnalysisContracts
             address = before;
         }
 
+        for (int back = 1; back <= 3; back++)
+        {
+            ushort at = (ushort)(address - back);
+            if (_defined[at] && _data[at]) { return null; }
+        }
+
         return address;
     }
 
@@ -482,7 +490,11 @@ internal sealed partial class AnalysisContracts
     // A call to an Entry: label: the state there, kept for checking the entry with the caller's values.
     private void ObserveCall(ushort pc, ushort target, AnalysisRoutineState state)
     {
-        if (!_contracts.TryGetValue(target, out AnalysisContract? contract) || contract.Address == target) { return; }
+        if (pc != _observing || !_contracts.TryGetValue(target, out AnalysisContract? contract) || contract.Address == target)
+        {
+            return;
+        }
+
         if (!_callStates.TryGetValue(pc, out List<AnalysisRoutineState>? states)) { _callStates[pc] = states = []; }
         if (states.Count <= MaximumCallStates && !states.Any(state.SameAs)) { states.Add(state.Copy()); }
     }
@@ -498,14 +510,27 @@ internal sealed partial class AnalysisContracts
         List<AnalysisRoutineState> callers = [];
         List<ushort> sites = _callSites.TryGetValue(address, out List<ushort>? calls) ? calls : [];
 
-        // A call no routine's analysis reached is seen from the start of its straight run of code, with nothing
-        // known there, which holds for every way into the run.
+        // Each call is seen from the start of its straight run of code, with nothing known there, which holds for
+        // every way into the run; a routine's analysis that passes the call may have come in one way of several. A
+        // run that data bytes just before it may run into, as a BIT opcode written as .byte $2C to skip the next
+        // instruction, is not seen. Jumps and branches to the entry are no calls: the code that takes them is
+        // followed through it, with its own values, and does not rely on the entry's promise.
         if (found.Count != 0)
         {
-            foreach (ushort site in sites.Where(site => !Seen(site)).ToArray()) { _engine.Analyze(RunStart(site)); }
+            foreach (ushort site in sites)
+            {
+                _callStates.Remove(site);
+                if (RunStart(site) is not { } start) { continue; }
+                _observing = site;
+                _engine.Analyze(start);
+                _observing = null;
+            }
         }
 
-        if (found.Count != 0 && !_referenced.Contains(address) && sites.Count != 0 && sites.All(Seen))
+        // An entry whose address the code takes as data, as in a table, may be called through it.
+        bool onlyCalled = !_referenced.Contains(address);
+
+        if (found.Count != 0 && onlyCalled && sites.Count != 0 && sites.All(Seen))
         {
             foreach (ushort site in sites) { callers.AddRange(_callStates[site]); }
             found.Clear();

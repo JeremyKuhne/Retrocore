@@ -54,12 +54,12 @@ public sealed class T64Tests
     }
 
     /// <summary>
-    ///  The known CONV64 end-address error can be repaired from the next physical payload, without changing file order.
+    ///  An impossible CONV64 end address can be repaired from the next physical payload, without changing file order.
     /// </summary>
-    /// <param name="start">A start address that makes the placeholder length too large or too small.</param>
+    /// <param name="start">A start address that makes the placeholder length too large or empty.</param>
     [TestMethod]
     [DataRow(0x0401)]
-    [DataRow(0xC3BF)]
+    [DataRow(0xC3C6)]
     public void ReadsLegacyEndAddress(int start)
     {
         byte[] image = TapeImage(0x04);
@@ -74,16 +74,23 @@ public sealed class T64Tests
     }
 
     /// <summary>
-    ///  The final payload can have trailing padding even if its real end address equals the CONV64 placeholder.
+    ///  Padding before the next payload or at EOF is not imported when a valid end address equals the CONV64 placeholder.
     /// </summary>
+    /// <param name="final">Whether the program with padding is the final physical payload.</param>
     [TestMethod]
-    public void PreservesValidFinalEndAddress()
+    [DataRow(data: false)]
+    [DataRow(data: true)]
+    public void PreservesValidEndAddressWithPadding(bool final)
     {
         byte[] image = TapeImage(0x04);
-        ReadOnlySpan<byte> addresses = [0xC4, 0xC3, 0xC6, 0xC3];
-        addresses.CopyTo(image.AsSpan(0x42));
-        CommodoreTape first = CommodoreTapeBuilder.FromProgram("FIRST", 0xC3C4, [0, 0]);
-        CommodoreTape second = CommodoreTapeBuilder.FromProgram("SECOND", 0x0401, Program(0x04));
+        BinaryPrimitives.WriteUInt16LittleEndian(image.AsSpan(final ? 0x42 : 0x82), final ? (ushort)0xC3C4 : (ushort)0xC3BF);
+        BinaryPrimitives.WriteUInt16LittleEndian(image.AsSpan(final ? 0x44 : 0x84), 0xC3C6);
+        CommodoreTape first = CommodoreTapeBuilder.FromProgram("FIRST", final ? (ushort)0xC3C4 : (ushort)0x0401, [0, 0]);
+        byte[] program = Program(0x04);
+        CommodoreTape second = final
+            ? CommodoreTapeBuilder.FromProgram("SECOND", 0x0401, program)
+            : CommodoreTapeBuilder.FromProgram("SECOND", 0xC3BF, program.AsSpan(0, 7));
+
         T64Format.Read(image).Pulses.Should().Equal(first.Pulses.Concat(second.Pulses));
     }
 

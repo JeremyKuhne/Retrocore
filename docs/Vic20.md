@@ -46,9 +46,9 @@ port A and VIA 2's PB7. The paddles are the VIC's.
 
 **Tape.** The Datasette at the machine's clock: VIA 2's CA1 reads the tape, its PB3 writes, and VIA 1 senses the keys
 and runs the motor. Tapes are TAP images (which save for the VIC-20, machine 1, at the video standard's clock), WAV
-recordings, a `.prg`, or the programs in a `.t64` archive in directory order. T64 archives containing non-program
-entries are refused, except for the legacy program type markers `$01` and `$44`. PRG and T64 are made into the tape
-SAVE writes; they can be saved as TAP or WAV, not back to the original archive.
+recordings, a `.prg`, or the programs in a `.t64` archive in directory order. T64 uses the same
+[record support and legacy length repair as the PET](Pet.md#the-machine). PRG and T64 are made into the tape SAVE
+writes; they can be saved as TAP or WAV, not back to the original archive.
 
 **Cartridges.** MAME's chip files, named for their address (`.20`, `.40`, `.60`, `.70`, `.a0`, `.b0`), a `.prg` at its
 address, and VICE `.crt` images. Any other file is a `.prg` when its first two bytes are a block's start or middle and

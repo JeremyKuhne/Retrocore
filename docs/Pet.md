@@ -68,8 +68,9 @@ read and write them, so anything a PET could load loads. A Datasette takes:
 - `.prg` program files, made into the tape SAVE would write: each block twice after its leader, the header naming
   the program and its addresses;
 - `.t64` program archives, synthesized the same way, in directory order. T64 stores no original pulses.
-  PRG entries and the legacy `$01` and `$44` type markers are accepted; archives containing other active entries,
-  such as sequential files or C64S snapshots, are refused.
+  Normal records (type 1) accept PRG file types and the legacy `$01` and `$44` program markers. Archives containing
+  other active entries, including records with stored headers (type 2), are refused. A CONV64 `$C3C6` end address is
+  repaired from the next payload or the end of the image only if its declared length is impossible.
 
 The keys are the Datasette's: PLAY, RECORD (with PLAY), STOP, and rewinding. A recording is a changed tape: Save or
 Save As writes it as `.tap` or `.wav` (Save As only for imported PRG or T64), and ejecting it asks first, as a changed disk does

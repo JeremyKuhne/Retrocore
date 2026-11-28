@@ -12,8 +12,9 @@ namespace Retrocore.Media.Commodore;
 /// </summary>
 /// <remarks>
 ///  See <see href="https://ist.uwaterloo.ca/~schepers/formats/T64.TXT">Peter Schepers's T64 format notes</see>.
-///  T64 does not store pulses. Only PRG entries and the legacy program markers <c>$01</c> and <c>$44</c>
-///  can be played; archives containing other active entries are refused.
+///  T64 does not store pulses. Only normal records (type 1) with PRG file types or the legacy program markers
+///  <c>$01</c> and <c>$44</c> can be played; archives containing other active entries are refused.
+///  The CONV64 end address <c>$C3C6</c> is repaired only when its declared length is impossible.
 /// </remarks>
 public static class T64Format
 {
@@ -95,12 +96,11 @@ public static class T64Format
         for (int i = 0; i < entries.Count; i++)
         {
             var entry = entries[i];
-            bool followedByEntry = i + 1 < entries.Count;
-            int available = (followedByEntry ? entries[i + 1].Offset : image.Length) - entry.Offset;
+            int available = (i + 1 < entries.Count ? entries[i + 1].Offset : image.Length) - entry.Offset;
             int length = entry.End - entry.Start;
-            if (entry.End == Conv64EndAddress && (length <= 0 || (followedByEntry ? length != available : length > available)))
+            if (entry.End == Conv64EndAddress && (length <= 0 || length > available))
             {
-                // CONV64 wrote a fixed end address. Use the next payload's offset, but allow padding at EOF.
+                // CONV64 wrote a fixed end address, but a valid extent ending there can be followed by padding.
                 length = available;
             }
 

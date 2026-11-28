@@ -253,6 +253,19 @@ internal static partial class MediaActions
         return problems;
     }
 
+    /// <summary>
+    ///  Gets whether a kept medium's type, as the journal names it, is a tape: a recording, or a tape a deck changed.
+    /// </summary>
+    /// <param name="type">The medium's type name.</param>
+    /// <returns>Whether it is a tape.</returns>
+    internal static bool IsTape(string? type) => type is not null && s_tapes.Contains(type);
+
+    private static readonly HashSet<string> s_tapes =
+    [
+        nameof(CassetteImage), nameof(AltairTape), nameof(Apple1Tape), nameof(Trs80Model100Tape),
+        nameof(AcornTape), nameof(CommodoreTape), nameof(AtariTape),
+    ];
+
     // Reads a kept disk's snapshot as the medium it was.
     private static IMedium Load(string? type, string? kind, byte[] image, bool writeProtected)
     {

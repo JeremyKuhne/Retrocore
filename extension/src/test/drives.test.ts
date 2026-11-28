@@ -6,7 +6,7 @@ import * as assert from "node:assert/strict";
 import * as path from "node:path";
 import { test } from "node:test";
 import {
-    changeWords, crashedMessage, discardKept, discardKeptQuestion, letGoQuestion, saveAllKept, keptSummary, leaveQuestion, revertedMessage, stoppedMessage, unsavedDisks, unsavedTapes,
+    changeWords, crashedMessage, discardKept, mediaKind, mediaNoun, discardKeptQuestion, letGoQuestion, saveAllKept, keptSummary, leaveQuestion, revertedMessage, stoppedMessage, unsavedDisks, unsavedTapes,
     conflictQuestion, contextWords, form, hasTapeKeys, iconName, iconNames, iconSvg, lossless, lossyQuestion, mark, readOnlyQuestion,
     savedMessage, summary, tooltipLines, type Device, type MediaRecovery, type MediaSource
 } from "../drives";
@@ -177,6 +177,13 @@ test("a recording is a changed tape: marked, saved and asked about as a changed 
     // The stop notice counts it as a tape, and the journal keeps it.
     assert.deepEqual(unsavedDisks([recorder], true), { kept: ["program.cas"], lost: [] });
     assert.equal(unsavedTapes([recorder, drive(true), drive(false)]), 1);
+    assert.equal(unsavedTapes([recorder], true), 1, "the journal keeps it");
+    // A changed tape the deck ejected, as when a build's tape took its place, is a tape too, and kept.
+    const ejectedTape = { id: "k-old.cas", label: "old.cas", format: "CAS", why: "ejected" as const, when: "", changed: true };
+    const deck = { ...recorder, media: null, ejected: [ejectedTape] };
+    assert.deepEqual(unsavedDisks([deck], true), { kept: ["old.cas"], lost: [] });
+    assert.equal(unsavedTapes([deck]), 1);
+    assert.equal(unsavedTapes([deck], true), 1);
     assert.equal(stoppedMessage("Model I", ["program.cas"], [], 1),
         "Model I stopped with 1 tape not saved: program.cas. It is kept, still changed, for its next launch.");
     assert.equal(stoppedMessage("Model I", ["program.cas", "work.dsk"], [], 1),
@@ -288,7 +295,17 @@ test("what a disk changed reads as the image's units, in the tooltip, the eject 
         /^Apple IIe did not stop cleanly\. 1 disk had changes not saved: work\.woz, the last kept at .+ today\.$/);
     const discard = discardKeptQuestion("Apple IIe", ["work.woz"]);
     assert.equal(discard.message, "Discard the changes to the disk Apple IIe kept?");
+    // A kept recording is a tape, in the crash notice and the question before it is let go.
+    assert.equal(crashedMessage("TRS-80 Model I", ["game.cas"], undefined, undefined, 1),
+        "TRS-80 Model I did not stop cleanly. 1 tape had changes not saved: game.cas.");
+    assert.equal(crashedMessage("TRS-80 Model I", ["game.cas", "data.dmk"], undefined, undefined, 1),
+        "TRS-80 Model I did not stop cleanly. 2 disks and tapes had changes not saved: game.cas, data.dmk.");
+    assert.equal(discardKeptQuestion("TRS-80 Model I", ["game.cas"], 1).message, "Discard the changes to the tape TRS-80 Model I kept?");
+    assert.equal(discardKeptQuestion("TRS-80 Model I", ["a.cas", "b.cas"], 2).message, "Discard the changes to 2 tapes TRS-80 Model I kept?");
     assert.deepEqual(discard.buttons, ["Discard"]);
+    assert.deepEqual([mediaNoun(1), mediaNoun(1, 1), mediaNoun(2), mediaNoun(2, 1)], ["disk", "tape", "disks", "disks and tapes"]);
+    // A sentence about kept media as a kind names them in the plural, one or many.
+    assert.deepEqual([mediaKind(1), mediaKind(1, 1), mediaKind(3, 3), mediaKind(2, 1)], ["disks", "tapes", "tapes", "disks and tapes"]);
     assert.equal(summary({ ...drive(true), media: { ...drive(true).media!, kept: true }, activity: "idle", head: undefined }),
         "work.woz · kept from the last run");
     assert.equal(stoppedMessage("Apple IIe", ["work.woz"], ["hello.dsk"]),

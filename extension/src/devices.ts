@@ -23,7 +23,7 @@ import { languageRequest } from "./languageClient";
 import {
     changeWords, conflictQuestion, contextWords, discardedMessage, iconName, iconSvg, keptSummary, leaveQuestion,
     lockState, lossless, lossyQuestion, mark, readOnlyQuestion, revertedMessage, savedMessage, stoppedMessage, summary,
-    tooltipLines, unsavedDisks, unsavedTapes, crashedMessage, discardKept, discardKeptQuestion, letGoQuestion, saveAllKept, type Device, type Differences, type KeptDisk, type Question
+    tooltipLines, unsavedDisks, unsavedTapes, mediaKind, crashedMessage, discardKept, discardKeptQuestion, letGoQuestion, saveAllKept, type Device, type Differences, type KeptDisk, type Question
 } from "./drives";
 
 /** What retro/device and retro/hardware say back about media, beside the devices, to a client that speaks it. */
@@ -751,7 +751,8 @@ export function registerDevices(context: vscode.ExtensionContext, basic: BasicPr
             // The kept disks are the off machine's now: saved there, shown in its Drives view, or let go.
             const buttons = kept.length !== 0 && recoveryId !== undefined ? ["Save All", "Review", "Discard"] : [];
             void (lost.length === 0 ? vscode.window.showInformationMessage(message, ...buttons) : vscode.window.showWarningMessage(message, ...buttons))
-                .then(choice => recoveryId === undefined ? undefined : onKeptDisks(choice, recoveryId, machine, ended.id));
+                .then(choice => recoveryId === undefined ? undefined
+                    : onKeptDisks(choice, recoveryId, machine, mediaKind(kept.length, unsavedTapes(devices, true)), ended.id));
         }
         const active = vscode.debug.activeDebugSession;
         void refresh(active?.id === ended.id ? undefined : active);
@@ -760,19 +761,20 @@ export function registerDevices(context: vscode.ExtensionContext, basic: BasicPr
     // What a person chose for a machine's kept disks, from its stop notice or its crash notice. Save All saves each
     // through the off machine, asking only as Save does; Review shows them in the Drives view; Discard asks once, as
     // nothing can put them back. It asks about the disks the journal keeps now, as the machine may have run again
-    // since the notice, and asks again if it keeps others by the time the answer comes.
-    const onKeptDisks = async (choice: string | undefined, recoveryId: string, machine: string, ended?: string): Promise<void> => {
+    // since the notice, and asks again if it keeps others by the time the answer comes. What they are is what the
+    // notice called them: disks, tapes, or disks and tapes.
+    const onKeptDisks = async (choice: string | undefined, recoveryId: string, machine: string, what: string, ended?: string): Promise<void> => {
         if (choice === undefined) return;
         if (choice === "Discard") {
             try {
                 const outcome = await discardKept(
-                    async () => (await languageRequest<{ journals: { disks: string[]; revision: string }[] }>(
+                    async () => (await languageRequest<{ journals: { disks: string[]; tapes?: number; revision: string }[] }>(
                         "retrocore/recovery/list", { id: recoveryId })).journals[0],
-                    async disks => await ask(discardKeptQuestion(machine, disks)) === "Discard",
+                    async (disks, tapes) => await ask(discardKeptQuestion(machine, disks, tapes)) === "Discard",
                     async revision => await languageRequest<{ outcome?: string }>("retrocore/recovery/resolve",
                         { id: recoveryId, action: "discard", revision }));
                 if (outcome === "kept") return;
-                if (outcome === "none") void vscode.window.showInformationMessage(`Retrocore: ${machine} keeps no disks to discard now, or is running.`);
+                if (outcome === "none") void vscode.window.showInformationMessage(`Retrocore: ${machine} keeps no ${what} to discard now, or is running.`);
             } catch (error) {
                 void vscode.window.showErrorMessage(`Retrocore: ${error instanceof Error ? error.message : String(error)}`);
             }
@@ -780,7 +782,7 @@ export function registerDevices(context: vscode.ExtensionContext, basic: BasicPr
             return;
         }
         if (!await off.showRecovery(recoveryId)) {
-            void vscode.window.showInformationMessage(`Retrocore: start ${machine} to see the disks it kept.`);
+            void vscode.window.showInformationMessage(`Retrocore: start ${machine} to see the ${what} it kept.`);
             return;
         }
         // The views show a running session's machine; the stopped one's disks are shown once none runs, and Save All
@@ -793,7 +795,7 @@ export function registerDevices(context: vscode.ExtensionContext, basic: BasicPr
                 return;
             }
             const now = await vscode.window.showInformationMessage(
-                `Retrocore: the Drives view shows ${running.name} while it runs, and ${machine}'s kept disks once it stops.`, "Save All");
+                `Retrocore: the Drives view shows ${running.name} while it runs, and ${machine}'s kept ${what} once it stops.`, "Save All");
             if (now !== "Save All") return;
         } else if (running === undefined) {
             await vscode.commands.executeCommand("retrocore.drives.focus");
@@ -808,7 +810,7 @@ export function registerDevices(context: vscode.ExtensionContext, basic: BasicPr
     // keeps them for the machine's next launch, Review shows them too, and Discard lets them go. A journal of another
     // workspace's machine is that workspace's to offer.
     const offerRecovery = async (): Promise<void> => {
-        let journals: { id: string; name?: string | null; kept?: string | null; disks: string[] }[] | undefined;
+        let journals: { id: string; name?: string | null; kept?: string | null; disks: string[]; tapes?: number }[] | undefined;
         // The language server may still be starting, so a failed look is tried again a few times before giving up
         // until the next start; nothing is marked, so the journals are offered then.
         for (let tries = 0; journals === undefined; tries++) {
@@ -823,19 +825,21 @@ export function registerDevices(context: vscode.ExtensionContext, basic: BasicPr
             const owner = saved.recoveryOf(journal.id);
             if (owner === undefined) continue;
             const machine = journal.name ?? (owner.target === undefined ? owner.name : `${owner.name} · ${owner.target}`);
-            void vscode.window.showWarningMessage(crashedMessage(machine, journal.disks, journal.kept ?? undefined), "Recover", "Review", "Discard")
+            const what = mediaKind(journal.disks.length, journal.tapes ?? 0);
+            void vscode.window.showWarningMessage(crashedMessage(machine, journal.disks, journal.kept ?? undefined, undefined, journal.tapes ?? 0),
+                "Recover", "Review", "Discard")
                 .then(async choice => {
                     if (choice === undefined) return;
                     // A machine that launches with another recovery id now would never put these disks back, so they
                     // stay offered rather than being marked recovered; Discard still lets them go.
                     if (choice !== "Discard" && !off.launchesWith(journal.id)) {
                         void vscode.window.showWarningMessage(`Retrocore: ${machine} now launches with another recovery id, `
-                            + "so its next launch cannot put these disks back. They stay offered; Discard lets them go.");
+                            + `so its next launch cannot put these ${what} back. They stay offered; Discard lets them go.`);
                         return;
                     }
                     // Review marks the disks recovered only once they can be shown, so they are offered again if not.
                     if (choice === "Review" && !await off.showRecovery(journal.id)) {
-                        void vscode.window.showInformationMessage(`Retrocore: start ${machine} to see the disks it kept.`);
+                        void vscode.window.showInformationMessage(`Retrocore: start ${machine} to see the ${what} it kept.`);
                         return;
                     }
                     if (choice !== "Discard") {
@@ -847,10 +851,10 @@ export function registerDevices(context: vscode.ExtensionContext, basic: BasicPr
                         }
                     }
                     if (choice === "Recover") {
-                        void vscode.window.showInformationMessage(`Retrocore: ${machine}'s next launch puts back the disks it kept, still changed.`);
+                        void vscode.window.showInformationMessage(`Retrocore: ${machine}'s next launch puts back the ${what} it kept, still changed.`);
                         return;
                     }
-                    await onKeptDisks(choice, journal.id, machine);
+                    await onKeptDisks(choice, journal.id, machine, what);
                 });
         }
     };

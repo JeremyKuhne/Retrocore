@@ -28,6 +28,8 @@ public sealed class CassetteImage : IMedium
 
     private readonly List<byte> _bytes;
     private bool _writeProtected;
+    // The image the tape was last saved as, while it has no change since, or null.
+    private byte[]? _saved;
 
     /// <summary>
     ///  Creates a blank tape.
@@ -77,10 +79,21 @@ public sealed class CassetteImage : IMedium
     ///  Appends a recorded byte.
     /// </summary>
     /// <param name="value">The byte.</param>
+    /// <remarks>
+    ///  <para>
+    ///   A byte the last save already wrote, as a recorder stopping appends the held bits a save took, leaves the tape
+    ///   saved.
+    ///  </para>
+    /// </remarks>
     public void Append(byte value)
     {
         _bytes.Add(value);
-        Changed();
+        Version++;
+        if (_saved is not { } saved || _bytes.Count > saved.Length || saved[_bytes.Count - 1] != value)
+        {
+            IsDirty = true;
+            _saved = null;
+        }
     }
 
     /// <summary>
@@ -111,14 +124,29 @@ public sealed class CassetteImage : IMedium
     }
 
     /// <inheritdoc/>
-    public void MarkSaved() => IsDirty = false;
+    /// <remarks>
+    ///  <para>
+    ///   The tape remembers the image saved, held bits and all, so their bytes leave it saved when the recorder appends
+    ///   them.
+    ///  </para>
+    /// </remarks>
+    public void MarkSaved()
+    {
+        _saved = Snapshot().Image.ToArray();
+        IsDirty = false;
+    }
 
     /// <inheritdoc/>
-    public void MarkChanged() => IsDirty = true;
+    public void MarkChanged()
+    {
+        IsDirty = true;
+        _saved = null;
+    }
 
     private void Changed()
     {
         Version++;
         IsDirty = true;
+        _saved = null;
     }
 }

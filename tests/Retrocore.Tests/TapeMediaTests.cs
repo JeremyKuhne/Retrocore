@@ -107,6 +107,39 @@ public sealed class TapeMediaTests
     }
 
     /// <summary>
+    ///  A TRS-80 tape saved while its recorder holds bits stays saved when the motor stops and the recorder appends the
+    ///  bytes the save took; a byte beyond them, or another, changes it.
+    /// </summary>
+    [TestMethod]
+    public void ATapeSavedMidRecordingStaysSavedWhenTheRecorderLetsGo()
+    {
+        HoldingRecorder recorder = new() { Bytes = [0x55, 0xA5, 0x42] };
+        CassetteImage tape = new() { Recorder = recorder };
+        tape.Heard();
+        tape.MarkSaved();
+        recorder.Bytes = [];
+        foreach (byte value in (byte[])[0x55, 0xA5, 0x42]) { tape.Append(value); }
+        tape.IsDirty.Should().BeFalse("the save wrote these bytes");
+        tape.Append(0x00);
+        tape.IsDirty.Should().BeTrue("the save did not write this byte");
+
+        CassetteImage other = new() { Recorder = new HoldingRecorder { Bytes = [0x55, 0xA5] } };
+        other.Heard();
+        other.MarkSaved();
+        other.Recorder = null;
+        other.Append(0x55);
+        other.Append(0x00);
+        other.IsDirty.Should().BeTrue("the save wrote another byte here");
+
+        // A bit heard after the save is a change, whatever bytes it makes.
+        CassetteImage heard = new() { Recorder = new HoldingRecorder { Bytes = [0x55] } };
+        heard.MarkSaved();
+        heard.Heard();
+        heard.Append(0x55);
+        heard.IsDirty.Should().BeTrue();
+    }
+
+    /// <summary>
     ///  A TRS-80 host that crashes after a checkpoint kept a whole CSAVE leaves it for the next launch, which puts it
     ///  back in the recorder to play: CLOAD reads the program, and RUN runs it.
     /// </summary>
@@ -127,7 +160,8 @@ public sealed class TapeMediaTests
         RecoveryJournal journal = Open(id);
         journal.Commit(MediaActions.Journal(target.Devices, journal, idle: true));
         Crash(journal);
-        Offered(id).Should().NotBeNull("a session that did not stop cleanly is offered");
+        JsonObject offered = Offered(id) ?? throw new InvalidOperationException("A session that did not stop cleanly is offered.");
+        (offered["tapes"]?.GetValue<int>()).Should().Be(1, "its notices call the recording a tape");
 
         Trs80DebugTarget next = Trs80();
         RecoveryJournal again = Open(id);

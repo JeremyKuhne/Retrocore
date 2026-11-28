@@ -568,7 +568,12 @@ public sealed class ProjectLaunchTests
         client.Fails("launch", Launch("pack")).Should().EndWith(
             "a diskbasic target boots Disk BASIC from the cartridge port, which a cartridge would take over, so its options and its launch cannot give 'cartridge'.");
 
-        client.Request("launch", Launch("disk"))["project"]?["entry"]?.GetValue<int>().Should().Be(0x2712);
+        JsonObject launch = Launch("disk");
+        launch["diskSpeed"] = "skip";
+        JsonObject started = client.Request("launch", launch);
+        started["project"]?["entry"]?.GetValue<int>().Should().Be(0x2712);
+        started["mediaSpeedResult"]?.String("kind").Should().Be("disk", "LOADM's load reports its speed");
+        started["mediaSpeedResult"]?.String("effective").Should().Be("fast", "Disk BASIC's load has no Skip, so it runs Fast");
         client.Request("evaluate", new JsonObject
         {
             ["expression"] = "PC"
@@ -661,7 +666,9 @@ public sealed class ProjectLaunchTests
         client.Fails("launch", Launch("own")).Should().EndWith(
             "a cpm target boots its own disk in drive A and types its program's name, so its options and its launch cannot give 'command'.");
 
-        JsonObject? launched = client.TryRequest("launch", Launch("cpm"), out string? failure);
+        JsonObject cpm = Launch("cpm");
+        cpm["diskSpeed"] = "skip";
+        JsonObject? launched = client.TryRequest("launch", cpm, out string? failure);
         if (launched is null)
         {
             failure.Should().Contain("the Kaypro II's CP/M 2.2 system disk").And.Contain("was not found by its hash");
@@ -669,6 +676,8 @@ public sealed class ProjectLaunchTests
         }
 
         (launched["project"]?["entry"]?.GetValue<int>()).Should().Be(0x0100);
+        launched["mediaSpeedResult"]?.String("kind").Should().Be("disk", "CP/M's boot and load report their speed");
+        launched["mediaSpeedResult"]?.String("effective").Should().Be("fast", "CP/M's load has no Skip, so it runs Fast");
         JsonObject set = client.Request("setBreakpoints", new JsonObject
         {
             ["source"] = new JsonObject { ["path"] = main },

@@ -87,9 +87,18 @@ internal sealed partial class DebugSession
                 kaypro.BootDrive.Insert(cpm, label, "IMG");
                 ForgetBoundaries();
                 long booted = (long)kaypro.CycleCount;
+
+                // CP/M's boot and the program's load both read drive A, so the whole boot is the disk's load, paced and
+                // reported as the others are.
+                MediaSpeed cpmMode = MediaSpeedSettings.Boot(tape: false);
+                long cpmBegan = Stopwatch.GetTimestamp();
+                ImageBootPace cpmPace = cpmMode == MediaSpeed.Normal ? new ImageBootPace(cpmBegan, _speed, Target.ClockHertz) : default;
                 try
                 {
-                    kaypro.TypeAtPrompt(CpmEnvironment.ProgramName(target), target.Built?.BootSeconds ?? 0);
+                    kaypro.TypeAtPrompt(
+                        CpmEnvironment.ProgramName(target),
+                        target.Built?.BootSeconds ?? 0,
+                        cycles => cpmPace.Wait(cycles, _transport));
                 }
                 catch (InvalidOperationException)
                 {
@@ -98,8 +107,10 @@ internal sealed partial class DebugSession
                 }
 
                 // TypeAtPrompt runs in steps, so it may return a little past the boot's limit; the entry then has a cycle.
-                long left = ((long)(target.Built?.BootSeconds ?? 0) * Target.ClockHertz) - ((long)kaypro.CycleCount - booted);
-                RunToEntry(build, Math.Max(1, left));
+                long ran = (long)kaypro.CycleCount - booted;
+                long left = ((long)(target.Built?.BootSeconds ?? 0) * Target.ClockHertz) - ran;
+                RunToEntry(build, Math.Max(1, left), cpmPace with { Start = -ran });
+                RecordImageLoad(tape: false, cpmMode, kaypro.BootDrive.Id, skipped: false, (ulong)booted, cpmBegan);
                 return;
             case CocoDebugTarget coco when target.Environment == "diskbasic":
                 // Drive 0, which LOADM reads by default; the launch fits the disk controller.
@@ -228,12 +239,18 @@ internal sealed partial class DebugSession
         long used = 0;
         RunUntil(build, () => CocoRowsStarting("OK") == 1, "BASIC's OK prompt", limit, ref used);
         TypeWhenReady(build, $"LOADM\"{DiskbasicEnvironment.ProgramName(target)}\"\r", limit, ref used);
+        MediaSpeed mode = MediaSpeedSettings.Boot(tape: false);
+        long began = Stopwatch.GetTimestamp();
+        ulong before = Target.CycleCount;
         RunUntil(
             build,
             () => CocoRowsStarting("OK") == 2 && drive.Activity == Machines.Devices.DeviceActivity.Idle,
             "LOADM's end and BASIC's OK prompt again",
             limit,
-            ref used);
+            ref used,
+            pace: mode == MediaSpeed.Normal ? new ImageBootPace(began, _speed, Target.ClockHertz, used) : default);
+
+        RecordImageLoad(tape: false, mode, drive.Id, skipped: false, before, began);
 
         if (!Loaded(start, program))
         {

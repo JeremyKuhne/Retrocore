@@ -88,9 +88,9 @@ transcripts; the 4040 remained untested because its ROMs were unavailable.
    The data call is a tail jump; return to the existing `LOAD` caller, not to an IRQ epilogue or the game entry.
    Don't wind to EOF, discard an unrelated IRQ, fabricate 180 million elapsed cycles, or restore a whole-machine
    snapshot. Leave the ROM to finish LOAD, reset BASIC state, relink lines and accept `RUN`/`SYS`.
-4. **Preserve the live path.** A breakpoint, watchpoint, trace or other observer requiring the skipped interval,
-   other active timing-sensitive hardware, a different ROM/call context, dirty or changed media, or an unsupported
-   operation keeps the real path. Malformed data and errors must not become successes; the ROM remains the oracle
+4. **Keep the real path for unsupported operations.** Other active timing-sensitive hardware, a different ROM/call
+   context, dirty or changed media, or an unsupported operation keeps the real path. Malformed data and errors
+   must not become successes; the ROM remains the oracle
    for second-copy recovery, checksums, short/long blocks and STOP. Report an internal transition failure rather
    than retrying from half-modified state.
 
@@ -110,8 +110,8 @@ transcripts; the 4040 remained untested because its ROMs were unavailable.
   screen/continuation, tape position, restored IRQ/vector and a subsequent command. Assert that the accelerated
   block actually ran as Skip and used far fewer guest cycles; a passing transcript on fallback isn't a Skip pass.
   Exercise first-copy repair, both copies bad, truncated/EOF, wrong name, STOP/cancellation, changed mount,
-  unsupported ROM and active observers. For failure cases compare to the realistic path, including partial work
-  where applicable.
+  and unsupported ROM. Verify configured observers do not prevent a project-boot Skip. For failure cases compare
+  to the realistic path, including partial work where applicable.
 - **Measure one load before the full matrix:** in Release, gather interleaved fresh-state Normal-at-`max` and Skip
   runs with identical tape, ROM and launch settings. Separate header/transfer, build, boot, source metadata and
   whole launch. Target **0.50 s or less for the adventure LOAD phase** on the same measurement setup; a target is

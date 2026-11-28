@@ -740,13 +740,13 @@ public sealed class ProjectLaunchTests
     }
 
     /// <summary>
-    ///  Watches and beam observers keep a PET project tape on the real pulse path.
+    ///  Configured watches and beam filters do not prevent Skip during PET project boot.
     /// </summary>
     /// <param name="watch">Whether to install a memory watch rather than a beam observer.</param>
     [TestMethod]
     [DataRow(data: true)]
     [DataRow(data: false)]
-    public void PetProjectTapeSkipFallsBackForObservers(bool watch)
+    public void PetProjectTapeSkipsWithObserversConfigured(bool watch)
     {
         Write("retrocore.json", """
             { "sdk": "1", "name": "game", "cpu": "6502", "sources": ["src/*.s"], "entry": "START",
@@ -778,8 +778,8 @@ public sealed class ProjectLaunchTests
 
         JsonNode? result = client.Request("launch", launch.DeepClone().AsObject())["mediaSpeedResult"];
         result.String("requested").Should().Be("skip");
-        result.String("effective").Should().Be("fast");
-        result.Long("cycles").Should().BeGreaterThan(first.Long("cycles") ?? 0);
+        result.String("effective").Should().Be("skip");
+        result.Long("cycles").Should().Be(first.Long("cycles"));
     }
 
     /// <summary>

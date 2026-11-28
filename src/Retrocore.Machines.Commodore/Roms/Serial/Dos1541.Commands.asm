@@ -13,10 +13,13 @@ PatchSpace:
 
 ;; Lights DRVNUM's LED in LEDPRT, LED0 for drive 0 (LED1 is 0: the 1541 has one), the other cleared; interrupts off
 ;; meanwhile. Top level (Q9).
+;; In: DriveNumber = the drive, 0 or 1
+;; Out: the drive's LED bit set in <DriveControl> and the other cleared; interrupts enabled
+;; Keeps: X, Y
 ;; Also: SETLDS (D1541)
 .proc TurnOnActivityLed
     sei
-    lda #$F7
+    lda #$FF - LED_DRIVE1 - LED_DRIVE0
     and DriveControl
     pha
     lda DriveNumber
@@ -37,16 +40,22 @@ Store:
     sta DriveControl
     cli
     rts
+    ; Not reached: the listing's LEDSON, which turned on every LED. Nothing calls it, and it keeps its bytes.
     sei
-    lda #$08
+    lda #LED_DRIVE1 + LED_DRIVE0
     ora DriveControl
     sta DriveControl
     cli
     rts
 .endproc
+
+;; The error channel: building and setting its message (number, text, track and sector), reporting errors
+;; and aborting the command that caused one, and the activity LED's flashing while an error is held.
 .scope Errors
 
 ;; Stops the error LED's flashing: ERWORD and ERLED = 0.
+;; Out: ErrorFlash = 0, ErrorLed = 0
+;; Keeps: X, Y
 ;; Also: ERROFF (D1541)
 .proc StopFlashing
     lda #$00
@@ -57,6 +66,7 @@ Store:
 
 ;; Starts the flashing: ERWORD = `$50` (80 decimal), ERLED = drive 0's mask from <LedMasks>, and that LED on; X kept,
 ;; interrupts off meanwhile.
+;; Keeps: X, Y
 ;; Also: ERRON (D1541)
 .proc StartFlashing
     sei
@@ -176,6 +186,8 @@ NoMessage:
 .endproc
 
 ;; Zeroes the CMDLEN bytes of CMDBUF.
+;; Out: CommandBuffer = 0 throughout
+;; Keeps: X
 ;; Also: CLRCB (D1541)
 .proc ClearBuffer
     ldy #COMMAND_LENGTH_MAX-1
@@ -192,11 +204,14 @@ Loop:
 
 ;; Ends a command with error A: track and sector 0 in the message, then the error channel's handling (CMDER2), which
 ;; does not return.
+;; In: A = the error number
+;; Errors: the error channel is set to A with track and sector 0; <Errors::Abort> does not return
 ;; Also: CMDERR (D1541)
 .proc Fail
     ldy #$00
     sty Track
     sty Sector
+    ; Does not return: Errors::Abort ends the command.
     jmp Errors::Abort
 .endproc
 
@@ -333,6 +348,8 @@ BadSyntax:
 ;; Scans CMDBUF from Y to CMDSIZ for the character A, on the way putting the start of each name after a ',' into
 ;; FILTBL+1,X and marking in PATTYP the names with '*' or '?' (PATFLG counts them). Returns Y just past the character,
 ;; or 0 with Z set if it is not there or there are MXFILS-1 (4) commas or more; FILTBL+1,X = CMDSIZ, the end.
+;; In: A = the character to find, Y = where to start in <CommandBuffer>
+;; Out: Y = the place just past the character, or 0 with zero set when it was not found; X = the commas passed
 ;; Also: PARSE (D1541)
 .proc ScanFor
     sta Character
@@ -406,7 +423,7 @@ Return:
 ;;   ClearTables = Clears the buffer's count, REC, TYPE, TYPFLG, F1PTR, F2PTR, F1CNT, F2CNT, PATFLG and ERWOR
 ;; Also: CMDSET (D1541)
 .proc Prepare
-    ldy $A3
+    ldy CommandPointer
     beq SetSize
     dey
     beq Whole
@@ -441,7 +458,7 @@ SetSize:
 ClearTables:
     ldy #$00
     tya
-    sta $A3
+    sta CommandPointer
     sta RecordSize
     sta FileType
     sta MatchType
@@ -476,6 +493,8 @@ ClearEntry:
     lda #$01
     sta SecondStreamEnd
     sta SecondStreamStart
+    ; Falls into SetDrives.
+    .assert * = SetDrives, "SetFirstDrive must fall into SetDrives."
 .endproc
 
 ;; For each name, 0 to F2CNT-1: its drive (<DriveOfName>) into FILDRV, bit 7 if it was not given, and FILTBL moved past
@@ -505,6 +524,8 @@ Next:
 ;; gives drive 0; a name with no ':' gives drive 0 with bit 7, defaulted. Out: Y = the drive; A = the place past the ':'
 ;; when there is one, else the place as it came in. The listing says Y comes in as the default, but the code sets it to
 ;; 0 (one drive).
+;; In: A = the place of a name in <CommandBuffer>
+;; Out: Y = the drive, A = the place past the ':' if there was one, else the place given
 ;; Also: SETDRV (D1541)
 .proc DriveOfName
     tax
@@ -593,6 +614,9 @@ Found:
 .scope Directory continued
 
 ;; DRVNUM to the other drive, 0 or 1.
+;; In: DriveNumber = the drive
+;; Out: DriveNumber = the other drive
+;; Keeps: X, Y
 ;; Also: TOGDRV (D1541)
 .proc ToggleDrive
     lda DriveNumber
@@ -636,6 +660,8 @@ Store:
 .endproc
 
 ;; A = 0 or 1 for the character '0' or '1', N clear; any other character comes back with bit 7 set.
+;; In: A = a character
+;; Out: A = 0 or 1 for '0' or '1' with negative clear, else A has bit 7 set and negative is set
 ;; Also: TST0V1 (D1541)
 .proc DriveDigit
     cmp #$30
@@ -1023,7 +1049,8 @@ StoreType:
     sta RecordSize
 .endproc
 
-;; CP50: <MatchEntry>'s label on NextUnfound's first instruction, where it falls in; one name, with CP50 in Also:.
+;; Sets <Found> to 0 if some name in the stream is still unfound, else leaves it $FF. Starts from the last name; <NextUnfound::Continue>
+;; goes on from the one before the current. <MatchEntry> falls in here at the end of its comparison.
 ;; Entry:
 ;;   Continue = From the name before F2PTR (<MatchEntry> enters here for its next name)
 ;; Also: CP50 (D1541), CMPCHK (D1541)
@@ -1509,8 +1536,9 @@ Loop:
     lda (BufferPointer),y
     cmp #$A0
     bne Store
-    lda #$31
-    .byte $2C
+    lda #'1'
+    ; BIT absolute: skips the next instruction's two bytes, so a missing format letter is stored as '1'.
+    .byte OPCODE_BIT
 
 ;; Each byte down to the first: a shifted space becomes a space.
 ;; Also: ND15 (D1541)
@@ -1668,6 +1696,7 @@ FreeNext:
 .scope Directory continued
 
 ;; The directory entry at DIRBUF gets type 0 (deleted), and its sector is written and waited for.
+;; In: BufferPointer = the entry
 ;; Also: DELDIR (D1541)
 .proc DeleteEntry
     ldy #$00
@@ -1693,11 +1722,11 @@ FreeNext:
 ;; Also: FORMAT (D1541)
 .proc Format
     lda #$4C
-    sta Buffers+768
+    sta Buffers + $300
     lda #<Controller::Format
-    sta Buffers+769
+    sta Buffers + $301
     lda #>Controller::Format
-    sta Buffers+770
+    sta Buffers + $302
     lda #$03
     jsr Jobs::SetHeader::ForBuffer
     lda DriveNumber
@@ -1827,10 +1856,10 @@ Mismatch:
 Append:
     lda #INTERNAL_WRITE_SECONDARY
     sta SecondaryAddress
-    lda $023C
-    sta $023D
+    lda SecondaryChannels + INTERNAL_READ_SECONDARY
+    sta SecondaryChannels + INTERNAL_WRITE_SECONDARY
     lda #$FF
-    sta $023C
+    sta SecondaryChannels + INTERNAL_READ_SECONDARY
     jsr Files::Append
     ldx #$02
     jsr CreateCopy::CopySources
@@ -2130,7 +2159,7 @@ Read:
     clc
     adc Temporary
     inc Temporary
-    sta $0249
+    sta ChannelLastByte + MESSAGE_CHANNEL
     lda Temporary
     sta CommandPointer+2
     lda Temporary+1
@@ -2150,7 +2179,8 @@ BadSyntax:
     lda #ERROR_INVALID_COMMAND
     jmp Fail
 
-;; The listing's second name for M10's address.
+;; M-W: copies the bytes of the command from character 6 on to the address, as many as character 5 says. Then returns
+;; to the idle loop without <Finish>.
 ;; Also: MEMWRT (D1541), M10 (D1541)
 Write:
     lda CommandBuffer+6,y
@@ -2293,7 +2323,7 @@ SetChannel:
     tax
     lda #$01
     sta BufferPositions,x
-    lda #$0E
+    lda #TYPE_DIRECT + TYPE_DIRECT
     sta a:ChannelFileType,y
     jmp Commands::Finish
 .endproc
@@ -2703,6 +2733,8 @@ Valid:
 ;; Also: BKOTST (D1541)
 .proc CheckChannelBlock
     jsr FindBlockChannel
+    ; Falls into CheckBlock.
+    .assert * = CheckBlock, "CheckChannelBlock must fall into CheckBlock."
 .endproc
 
 ;; From the parameters at F1PTR: DRVNUM, TRACK and SECTOR; the track and sector checked (TSCHK), then the LEDs.

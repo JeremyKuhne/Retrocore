@@ -650,13 +650,15 @@ AOERR:
 
 DSERR:
     MVI E,$38
-    .byte $01
+    .byte $01                           ; LXI B,$341E: skips the next two bytes
 
 FFERR:
-    .byte $1E, $34, $01
+    MVI E,$34
+    .byte $01                           ; LXI B,$3A1E: skips the next two bytes
 
 CFERR:
-    .byte $1E, $3A, $01
+    MVI E,$3A
+    .byte $01                           ; LXI B,$331E: skips the next two bytes
 
 BNERR:
     MVI E,$33

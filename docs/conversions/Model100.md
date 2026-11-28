@@ -63,8 +63,8 @@ The IDs are M100.
 - M100-5. No names from MBASIC's math package: the Model 100's numbers are BCD, its math package other code, and the
   alignment found nothing there. The floating accumulator's bytes keep their `D_` names. The math package does use
   some of the interpreter's scratch variables, such as `TEMP3` and `TEMP8`, under those names.
-- M100-6. One source for both machines, `MODEL` 100 or 102. 355 of the Tandy 102's bytes differ; widened to whole
-  instructions in both ROMs, they make 51 places, 30 of them in the font ($770B-$7D32), and places within 24 bytes
+- M100-6. One source for both machines, `MODEL` 100 or 102. 355 of the Tandy 102's bytes differ; counting differences
+  within four bytes of each other as one, and widening each to whole instructions in both ROMs, they make 51 places, 30 of them in the font ($770B-$7D32), and places within 24 bytes
   of each other share a block, which makes 24 `.if` blocks. The font's glyphs and
   the other binary tables are written in hex, never as text.
 - M100-7. The modules follow the ROM's subjects, at routine boundaries both ROMs share: Microsoft's BASIC in
@@ -82,7 +82,7 @@ The IDs are M100.
 | `BASIC`, `TEXT`, `TELCOM`, `ADDRSS`, `SCHEDL` | The ROM's programs, named as the menu shows them. |
 | `COLD` | The cold start. |
 | `DIRTBL`, `DOSTRT`, `COSTRT`, `PRGNAM` | The file directory, the starts of the DO and CO files, and the running program's name. |
-| `STKTOP` | Level II's name (Level2.asm) for the top of the stack, which MBASIC keeps elsewhere. |
+| `STKTOP` | Level II's name (Level2.asm) for the pointer the stack starts below: MENU sets it from `MEMSIZ`, and CLEAR, the stack and string space are bounded by it. |
 
 - M100-8. `BEGLCD` names the screen's memory at $FE00. The manual's `ENDLCD`, $FF40, the byte after the screen, is not a
   label: the ROM keeps the RS-232 port's state there, and the name would read wrong at those uses.

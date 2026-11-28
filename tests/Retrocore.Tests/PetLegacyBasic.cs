@@ -3,7 +3,6 @@
 // See LICENSE file in the project root for full license information
 
 using Retrocore.Assembler;
-using Retrocore.Debug;
 using Retrocore.Machines.Commodore;
 
 namespace Retrocore.Tests;
@@ -21,5 +20,5 @@ internal static class PetLegacyBasic
     /// <param name="original">Whether BASIC 1 or 4 uses its original chip.</param>
     /// <returns>The assembled overlay.</returns>
     internal static AssemblyResult Assemble(string directory, PetModel model, bool original = false) =>
-        PetSdkModules.AssembleBasic(directory, model, original, BasicSourceKind.Macro10);
+        BasicNames.AssemblePetLegacy(directory, model, original);
 }

@@ -3,9 +3,6 @@
 // See LICENSE file in the project root for full license information
 
 using Retrocore.Assembler;
-using Retrocore.Debug;
-using Retrocore.Machines.Apple2;
-using Retrocore.Machines.Commodore;
 
 namespace Retrocore.Tests;
 
@@ -28,10 +25,7 @@ internal sealed class BasicMathMachine
     /// <param name="apple">Whether to load AppleSoft.</param>
     public BasicMathMachine(bool apple)
     {
-        _build = apple
-            ? SdkModules.AssembleAppleSoft(SdkModules.AppleSoftPath(BasicNames.Inputs), Apple2Model.IIeEnhanced)
-            : PetSdkModules.AssembleBasic(Path.Join(BasicNames.Inputs, "Pet"), PetModel.Pet4032);
-
+        _build = BasicNames.AssembleMath(apple);
         _build.Success.Should().BeTrue();
         _build.Sections[0].Bytes.Span.CopyTo(_bus.Memory);
         Cpu = new(_bus);

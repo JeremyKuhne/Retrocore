@@ -34,6 +34,8 @@
     "apple2": { "machine": "apple2-iiplus", "environment": "bare" },
     "apple2-dos": { "machine": "apple2-iiplus", "environment": "dos33", "defines": { "GAME_LINKED": 0 },
                     "files": [{ "path": "${obj}/pirate.bin", "name": "PIRATE.DAT" }] },
+    "apple2-prodos": { "machine": "apple2-iiplus", "environment": "prodos", "defines": { "GAME_LINKED": 0 },
+                       "files": [{ "path": "${obj}/pirate.bin", "name": "PIRATE.DAT" }] },
     "apple2-test": { "machine": "apple2-iiplus", "environment": "bare",
                      "defines": { "TEST_GAME": 1 } },
     "apple3": { "machine": "apple3", "environment": "bare" },

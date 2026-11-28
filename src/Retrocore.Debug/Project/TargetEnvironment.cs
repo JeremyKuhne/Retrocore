@@ -17,7 +17,7 @@ namespace Retrocore.Debug.Project;
 /// </remarks>
 internal abstract class TargetEnvironment
 {
-    private static readonly TargetEnvironment[] s_built = [new BareEnvironment(), new WozmonEnvironment(), new Dos33Environment(), new DfsEnvironment(), new BasicEnvironment(), new SosEnvironment()];
+    private static readonly TargetEnvironment[] s_built = [new BareEnvironment(), new WozmonEnvironment(), new Dos33Environment(), new DfsEnvironment(), new BasicEnvironment(), new SosEnvironment(), new ProdosEnvironment()];
 
     /// <summary>
     ///  Gets the environment's name, one of <see cref="ProjectTarget.Environments"/>.
@@ -90,7 +90,7 @@ internal abstract class TargetEnvironment
     internal static IEnumerable<string> Built => s_built.Select(environment => environment.Name);
 
     /// <summary>
-    ///  Gets the environments that build, by name, as a phrase: <c>'bare', 'wozmon', 'dos33', 'dfs', 'basic' and 'sos'</c>.
+    ///  Gets the environments that build, by name, as a phrase: <c>'bare', 'wozmon', 'dos33', 'dfs', 'basic', 'sos' and 'prodos'</c>.
     /// </summary>
     internal static string BuiltPhrase
     {

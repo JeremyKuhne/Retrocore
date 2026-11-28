@@ -1,5 +1,5 @@
 {
-  "description": "The boot media and device dumps the SDK's environments use that are not SDK sources, each identified by the SHA-1 its usual source publishes. A launch finds a set's files by hash, whatever they are named, in a target's bootImage folder, the launch's ROM folder, the machine's ROM folder variable, and RETROCORE_CACHE.",
+  "description": "The boot media and device dumps the SDK's environments use that are not SDK sources, each file identified by its SHA-1, from its source where that gives one (MAME's sets do), else of the file the source publishes (ProDOS's release gives only a SHA-256). A set's files are found by hash, whatever they are named, in a target's bootImage folder, the launch's ROM folder where the environment gives one, the folder a set's variable names where it has one, and RETROCORE_CACHE.",
   "media": [
     {
       "id": "c4040",
@@ -14,6 +14,16 @@
         { "name": "901468-16.uh1", "size": 4096, "sha1": "04b918cf4adeee8015b43383d3cea7288a7d0aa8" },
         { "name": "901466-04.uk3", "size": 1024, "sha1": "6645fa40b81be1ff7d1384e9b52df06a26ab0bfb" },
         { "name": "901467.uk6", "size": 2048, "sha1": "97df576397608455616331f8e837cb3404363fa2" }
+      ]
+    },
+    {
+      "id": "prodos-2.4.3",
+      "title": "ProDOS 2.4.3's disk",
+      "for": "an Apple II prodos target's disk, which takes its boot blocks and its PRODOS file",
+      "source": "the ProDOS 2.4.3 release, ProDOS_2_4_3.po from releases.prodos8.com, which tools/Fetch-M1Dependencies.ps1 fetches and checks by its SHA-256",
+      "folder": "prodos",
+      "files": [
+        { "name": "ProDOS_2_4_3.po", "size": 143360, "sha1": "4bd80c2220b48cdcdcbe3876529a34b9a18efe5f" }
       ]
     }
   ]

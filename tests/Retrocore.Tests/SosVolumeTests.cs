@@ -199,6 +199,22 @@ public class SosVolumeTests
     }
 
     /// <summary>
+    ///  A directory's later blocks hold thirteen entries each from offset 4, as its header in the first block
+    ///  says, so a file there reads as one in the first block does: the twelve after the header fill the first block,
+    ///  and the thirteenth file starts the second.
+    /// </summary>
+    [TestMethod]
+    public void FilesInLaterDirectoryBlocksRead()
+    {
+        SosVolumeBuilder builder = new("MANY");
+        for (int file = 0; file < 20; file++) { builder.Add($"FILE{file}", 0x06, file, [(byte)file]); }
+
+        SosVolume volume = SosVolume.Read(builder.Build(proDosOrder: true), proDosOrder: true);
+        volume.Files.Select(file => (file.Name, file.AuxType)).Should().Equal(Enumerable.Range(0, 20).Select(file => ($"FILE{file}", file)));
+        volume.ReadFile("FILE19").Should().Equal([(byte)19]);
+    }
+
+    /// <summary>
     ///  A file of more than 256 blocks is a tree, a master index of index blocks, and reads back whole.
     /// </summary>
     [TestMethod]

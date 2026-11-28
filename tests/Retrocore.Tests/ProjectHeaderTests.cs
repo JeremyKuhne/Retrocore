@@ -323,6 +323,7 @@ public sealed partial class ProjectHeaderTests
     [DataRow("apple1", "wozmon", "WozMonitor")]
     [DataRow("apple2-iie-enhanced", "bare", "Monitor")]
     [DataRow("apple2-iiplus", "dos33", "Monitor,Dos33")]
+    [DataRow("apple2-iie", "prodos", "Monitor")]
     [DataRow("apple3", "bare", "")]
     [DataRow("apple3", "sos", "")]
     [DataRow("pet4032", "bare", "Kernal4")]

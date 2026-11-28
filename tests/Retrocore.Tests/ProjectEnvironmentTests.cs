@@ -493,6 +493,114 @@ public sealed class ProjectEnvironmentTests
     }
 
     /// <summary>
+    ///  A <c>prodos</c> target's disk is ProDOS's own disk's boot blocks and <c>PRODOS</c>, then the program as a SYS
+    ///  file loading at <c>$2000</c>, named for the project and cut to eight before <c>.SYSTEM</c>, then its files, each
+    ///  a BIN file whose aux type is its address, in ProDOS's block order.
+    /// </summary>
+    [TestMethod]
+    public void ProdosDiskHoldsProDosThenTheProgram()
+    {
+        Write("retrocore.json", """
+            { "sdk": "1", "name": "my-adventure", "cpu": "6502", "sources": ["main.s"], "entry": "START",
+              "targets": { "prodos": { "machine": "apple2-iiplus", "environment": "prodos", "image": false,
+                "files": [{ "path": "data.bin", "name": "GAME.DAT", "address": "$4000" }, "notes.txt"] } } }
+            """);
+
+        Write("data.bin", "XYZ");
+        Write("notes.txt", "N");
+        Write("main.s", "    jmp START\nDATA:\n    .byte 1\nSTART:\n    rts\n");
+        TargetBuild build = ProjectBuild.Build(RetrocoreProject.Load(_folder).Target("prodos"));
+        build.Media.Should().Be(new TargetMedia(File: null, FileKind: null, Image: null, ImageKind: null, "the binary is the system file MYADVENT.SYSTEM, which ProDOS loads at $2000"));
+
+        SosVolume volume = SosVolume.Read(ProdosEnvironment.Disk(build, ProDosDisk()), proDosOrder: true);
+        volume.Name.Should().Be("MYADVENTURE");
+        volume.Block(0).Should().OnlyContain(value => value == 0xB0, "block 0 is ProDOS's boot loader");
+        volume.Block(1).Should().OnlyContain(value => value == 0xB1);
+        volume.Files.Select(file => (file.Name, file.FileType, file.AuxType)).Should().Equal(
+            ("PRODOS", 0xFF, 0), ("MYADVENT.SYSTEM", 0xFF, 0x2000), ("GAME.DAT", 0x06, 0x4000), ("NOTES.TXT", 0x06, 0));
+
+        volume.ReadFile("PRODOS").Should().Equal("SYSTEM"u8.ToArray());
+        volume.ReadFile("MYADVENT.SYSTEM").Should().Equal(0x4C, 0x04, 0x20, 1, 0x60);
+        volume.ReadFile("GAME.DAT").Should().Equal("XYZ"u8.ToArray());
+    }
+
+    /// <summary>
+    ///  A <c>prodos</c> target starts at <c>$2000</c>, at its entry or with a <c>JMP</c>, and its files need ProDOS
+    ///  names, each once on the disk, beside <c>PRODOS</c> and the program.
+    /// </summary>
+    [TestMethod]
+    public void ProdosRefusesWhatProDosCannotStartOrHold()
+    {
+        string Fails(string target, string source)
+        {
+            Write("retrocore.json", $$"""
+                { "sdk": "1", "name": "game", "cpu": "6502", "sources": ["main.s"], "entry": "START",
+                  "targets": { "prodos": { "machine": "apple2-iie", "environment": "prodos", "image": false{{target}} } } }
+                """);
+
+            Write("main.s", source);
+            Action build = () => ProdosEnvironment.Disk(ProjectBuild.Build(RetrocoreProject.Load(_folder).Target("prodos")), ProDosDisk());
+            return build.Should().Throw<ProjectException>().Which.Message;
+        }
+
+        const string Starts = "START:\n    rts\n";
+        Write("data.bin", "1");
+        Fails("", "DATA:\n    .byte 1\nSTART:\n    rts\n").Should().EndWith(
+            "ProDOS starts a system file at its first byte, $2000, but the entry is $2001; start the program at its entry, or with jmp on to it.");
+
+        Fails(""", "memoryMap": { "load": "$4000" }""", Starts).Should().EndWith(
+            "ProDOS loads a system file at $2000, but the program starts at $4000; place it at $2000.");
+
+        Fails(""", "files": [{ "path": "data.bin", "name": "GAME_DATA" }]""", Starts).Should().EndWith(
+            "'GAME_DATA' is not a ProDOS file name, 1 to 15 letters, digits and periods from a letter; give its file a 'name'.");
+
+        Fails(""", "files": [{ "path": "data.bin", "name": "prodos" }]""", Starts).Should().EndWith("two files on the disk are named PRODOS.");
+        Fails(""", "files": [{ "path": "data.bin", "name": "Game.System" }]""", Starts).Should().EndWith("two files on the disk are named GAME.SYSTEM.");
+    }
+
+    /// <summary>
+    ///  A <c>prodos</c> target builds its disk when ProDOS 2.4.3's is found by its hash, and otherwise writes the binary
+    ///  alone, its note naming the disk it needs and where it was looked for.
+    /// </summary>
+    [TestMethod]
+    public void ProdosBuildsItsDiskOnlyWithProDos()
+    {
+        Write("retrocore.json", """
+            { "sdk": "1", "name": "game", "cpu": "6502", "sources": ["main.s"],
+              "targets": { "prodos": { "machine": "apple2-iie-enhanced", "environment": "prodos" } } }
+            """);
+
+        Write("main.s", "rts\n");
+        TargetBuild build = ProjectBuild.Build(RetrocoreProject.Load(_folder).Target("prodos"));
+        if (build.Media.Image is { } image)
+        {
+            // ProDOS 2.4.3's disk was found.
+            build.Media.ImageKind.Should().Be("ProDOS disk");
+            Path.GetFileName(image).Should().Be("game.po");
+            SosVolume.Read(File.ReadAllBytes(image), proDosOrder: true).Files.Select(file => file.Name).Should().Equal("PRODOS", "GAME.SYSTEM");
+        }
+        else
+        {
+            string note = build.Media.Note ?? "";
+            note.Should().StartWith("no disk: ProDOS 2.4.3's disk, for an Apple II prodos target's disk, which takes its boot blocks and its PRODOS file, was not found by its hash in ");
+            note.Should().EndWith("The binary is the system file GAME.SYSTEM");
+            File.Exists(Path.Join(_folder, "artifacts", "prodos", "game.po")).Should().BeFalse();
+        }
+    }
+
+    // A small ProDOS disk in ProDOS's order, as the build reads ProDOS 2.4.3's: its boot blocks, each filled with a
+    // byte of its own, and PRODOS, whose contents stand in for ProDOS itself.
+    private static byte[] ProDosDisk()
+    {
+        SosVolumeBuilder builder = new("PRODOS.2.4.3");
+        byte[] boot = [.. Enumerable.Repeat((byte)0xB0, 512), .. Enumerable.Repeat((byte)0xB1, 512)];
+        builder.BootFrom(boot);
+        builder.Add("README", 0x04, 0, "R"u8);
+        builder.Add("PRODOS", 0xFF, 0, "SYSTEM"u8);
+        return builder.Build(proDosOrder: true);
+    }
+
+    /// <summary>
     ///  <c>&lt;environment.inc&gt;</c> for <c>wozmon</c> refuses a target of another environment.
     /// </summary>
     [TestMethod]

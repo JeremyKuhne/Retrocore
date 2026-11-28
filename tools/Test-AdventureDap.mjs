@@ -7,7 +7,9 @@
 // Apple-1 with 32K, the PET 4032, the Apple II Plus and the BBC Micro), its win on the Apple-1's wozmon target, which a
 // launch loads as if its hex had been typed in, both on the Apple II Plus's dos33 target and the BBC Micro's dfs
 // target, each booted from its disk, which loads the game from the disk, both on the PET's basic target, LOADed from
-// its tape and RUN, the win on its 4040 disk (skipped, and said to be, without the drive's ROMs), and the test game's
+// its tape and RUN, the win on its 4040 disk (skipped, and said to be, without the drive's ROMs), both on the Apple II
+// Plus's prodos target, booted from a ProDOS 2.4.3 disk whose ProDOS is found by its hash (skipped, and said to be,
+// without it), which loads the game from the disk through the MLI, and the test game's
 // transcripts on apple2-test,
 // through project launches, each running the project's steps, which pack the games with the sample's packer, and
 // building the same core with its machine's platform folder. It checks that what the engine writes matches the C#
@@ -17,7 +19,7 @@
 // The Apple II's, PET's and BBC's screens are checked for the game's end as well. The launches check Keeps: contracts
 // and fail on a broken one. A false Keeps: on the top-level LocateTables stops the run, but one on
 // Numbers::NextRandom, inside a .scope, did not, so the engine's scoped contracts are checked by reading rather than
-// here. On the SDK's ROMs, so it needs no dumps but the 4040's for pet-disk. Give target names to play only those, such as
+// here. On the SDK's ROMs, so it needs no dumps but the 4040's for pet-disk, and ProDOS 2.4.3 for apple2-prodos. Give target names to play only those, such as
 // `node tools/Test-AdventureDap.mjs pet`.
 
 import { startDap } from "./DapClient.mjs";
@@ -49,6 +51,7 @@ const plays = {
     "pet-basic": { family: "pet", transcripts: ["pirate-win", "pirate-die"] },
     "apple3-sos": { family: "apple3", folder: "sos", transcripts: ["pirate-win", "pirate-die"] },
     "pet-disk": { family: "pet", transcripts: ["pirate-win"], needs: "the 4040's ROMs" },
+    "apple2-prodos": { family: "apple2", transcripts: ["pirate-win", "pirate-die"], needs: "ProDOS 2.4.3's disk" },
     apple2: { family: "apple2", transcripts: ["pirate-win", "pirate-die"] },
     "apple2-dos": { family: "apple2", transcripts: ["pirate-win", "pirate-die"] },
     bbc: { family: "bbc", transcripts: ["pirate-win", "pirate-die"] },
@@ -179,8 +182,8 @@ try {
             try {
                 launched = await request("launch", launchArgs);
             } catch (error) {
-                if (!plays[target].needs || !/were not found by their hashes/.test(error.message)) throw error;
-                console.log(`SKIPPED ${target}: ${plays[target].needs} were not found: ${error.message}`);
+                if (!plays[target].needs || !/(were not found by their hashes|was not found by its hash)/.test(error.message)) throw error;
+                console.log(`SKIPPED ${target}, which needs ${plays[target].needs}: ${error.message}`);
                 skippedTargets.push(target);
                 skipped = true;
                 break;
@@ -266,7 +269,7 @@ try {
         console.log(`Adventure DAP passed: the 6502 engine plays each transcript on ${played.join(", ")} as the reference engine does.`);
     }
     if (skippedTargets.length !== 0) {
-        console.log(`Adventure DAP skipped ${skippedTargets.join(", ")}: not played, so not passed, as their dumps were not found.`);
+        console.log(`Adventure DAP skipped ${skippedTargets.join(", ")}: not played, so not passed, as the dumps or disks they need were not found.`);
     }
     console.log(`Adventure work: ${JSON.stringify({ ...measured, ...received() })}`);
 } finally {

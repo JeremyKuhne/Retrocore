@@ -271,7 +271,10 @@ public sealed class MemoryMapTests
             ["basic"] = 4,
 
             // The Apple III.
-            ["sos"] = 1
+            ["sos"] = 1,
+
+            // The II Plus with its language card and the IIe.
+            ["prodos"] = 1
         };
 
         string environments = Path.Join(SdkModules.SdkDirectory, "1", "environments");

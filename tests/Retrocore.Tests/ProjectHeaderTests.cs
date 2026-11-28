@@ -326,6 +326,8 @@ public sealed partial class ProjectHeaderTests
     [DataRow("apple2-iie", "prodos", "Monitor")]
     [DataRow("trs80-model1-level2", "level2", "Level2")]
     [DataRow("trs80-model3", "level2", "Level2")]
+    [DataRow("coco2", "colorbasic", "ColorBasic")]
+    [DataRow("coco3", "colorbasic", "ColorBasic")]
     [DataRow("apple3", "bare", "")]
     [DataRow("apple3", "sos", "")]
     [DataRow("pet4032", "bare", "Kernal4")]

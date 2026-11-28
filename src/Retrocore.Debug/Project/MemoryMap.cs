@@ -26,7 +26,7 @@ namespace Retrocore.Debug.Project;
 ///  <para>
 ///   Every address from <c>$0100</c> up is in a free area or a reserved one, never both; the zero page is given as
 ///   the bytes a program may use, and the rest of it is the machine's. A map for a CPU with no zero page, such as the
-///   Z80's, leaves <c>zeroPage</c> out and gives every address from <c>$0000</c> as free or reserved. A target's <c>memoryMap</c> changes its map
+///   Z80's or the 6809's, leaves <c>zeroPage</c> out and gives every address from <c>$0000</c> as free or reserved. A target's <c>memoryMap</c> changes its map
 ///   (<see cref="With"/>): its <c>free</c> areas leave the reserved areas they overlap, its <c>reserved</c> areas
 ///   leave free RAM, and its <c>load</c> and <c>zeroPage</c> replace the map's.
 ///  </para>

@@ -981,33 +981,35 @@ After the reviews:
      the blank was deleted) is a `conflict`, and an eject, an insert or another `record` over a changed recording
      answers `changed`, through `retro/media` too. Nothing else writes it: the eject and the session's end that did,
      and the Apple-1's, the Altair's and the Model 100's `IRecordingTarget` saves of it, are gone (the Model 100 keeps
-     its RAM image's). The checkpoint keeps a recording, the next launch with the same `recoveryId` puts it back in the
-     recorder to play, and the stop and crash notices and the off machine's kept media include it. The TRS-80's
+     its RAM image's). The checkpoint keeps a recording, the next launch with the same `recoveryId` puts it back in
+     the recorder to play, and the stop and crash notices and the off machine's kept media include it. The TRS-80's
      recorder holds every bit until the motor stops, so its tape counts each bit heard as a change, and its snapshot
      packs the bits held so far into the bytes stopping would append, without the recorder letting them go
-     (`ICassetteRecorder`), so taking one never changes what the machine sees; the plan's "record of the recorder's
-     state" is those bytes, as the recorder cannot go on in another machine. The Color Computer's recorder adds each
-     byte as it completes, and the others each half cycle or byte. A recorder recording is `Writing` while its motor
-     runs (the Altair's, which has no motor control, while it records), so a checkpoint waits for it and then takes it
-     mid-write, which loses nothing. A WAV save moves each change of level to its sample, which the machines read the
-     same, so it is a note, not a loss, and leaves the tape saved; the journal keeps the half cycles exactly. Decks with keys
-     say so with a `keys` operation, so the Drives view and Retrocore Desktop tell the PET's, VIC-20's, BBC's and
-     Atari's from recorders that now save too. In the Drives view a changed recording shows `●`, Save, Save As... and
-     the eject prompt, which says the tape has a recording not saved, with no lock badge; the stop notice counts
-     tapes as tapes. Tests: `TapeMediaTests` (a Model I's CSAVE stopped while its recorder holds every bit, which
-     comes back as far as it got and saves; a CSAVE kept by a crashed session that CLOADs and RUNs in the next launch;
-     a read-only file and a folder gone keeping the recording changed; a file written at the path, over the blank or
-     after it was deleted, as a conflict; the Altair's recording through a stop, a conflict, a refusal and a crash; the
-     Apple-1's half cycles kept exactly and saved as WAV with a note; the Model 100's kept and not written at the
-     session's end), `Trs80Model100DebugTargetTests`, `drives.test.ts`, `Test-RecoveryDap.mjs`, where a Model I host
-     killed while CSAVE records leaves its recording, which the off machine saves, and the Model I's, Apple-1's,
-     Altair's and Model 100's DAP scripts, which save a recording before its eject.
+     (`ICassetteRecorder`), so taking one never changes what the machine sees, and a tape saved with bits held stays
+     saved when the motor stops and the recorder appends the bytes the save wrote; the plan's "record of the
+     recorder's state" is those bytes, as the recorder cannot go on in another machine. The Color Computer's recorder
+     adds each byte as it completes, and the others each half cycle or byte. A recorder recording is `Writing` while
+     its motor runs (the Altair's, which has no motor control, while it records), so a checkpoint waits for it and
+     then takes it mid-write, which loses nothing. A WAV save moves each change of level to its sample, which the
+     machines read the same, so it is a note, not a loss, and leaves the tape saved; the journal keeps the half cycles
+     exactly. Decks with keys say so with a `keys` operation, so the Drives view and Retrocore Desktop tell the PET's,
+     VIC-20's, BBC's and Atari's from recorders that now save too. In the Drives view a changed recording shows `●`,
+     Save, Save As... and the eject prompt, which says the tape has a recording not saved, with no lock badge; the
+     stop notice, the crash notice and the question before kept media are discarded count tapes as tapes (the language
+     server's list of unclean journals says how many of its media are `tapes`). Tests: `TapeMediaTests` (a Model I's
+     CSAVE stopped while its recorder holds every bit, which comes back as far as it got and saves; a tape saved with
+     bits held staying saved as the recorder appends them; a CSAVE kept by a crashed session that CLOADs and RUNs in
+     the next launch; a read-only file and a folder gone keeping the recording changed; a file written at the path,
+     over the blank or after it was deleted, as a conflict; the Altair's recording through a stop, a conflict, a
+     refusal and a crash; the Apple-1's half cycles kept exactly and saved as WAV with a note; the Model 100's kept
+     and not written at the session's end), `Trs80Model100DebugTargetTests`, `drives.test.ts`, `Test-RecoveryDap.mjs`,
+     where a Model I host killed while CSAVE records leaves its recording, which the off machine saves, and the Model
+     I's, Apple-1's, Altair's and Model 100's DAP scripts, which save a recording before its eject.
    - **Left for the next parts.** The machine's own eject is not yet tested through a running machine, as no test
      program ejects a 3.5 disk. A kept disk whose launch image is gone cannot yet be shown or saved while off, as the
-     machine is not built without it. The crash notice, and the question before its kept media are discarded, still
-     count a kept recording among "disks", as the language server's list gives only labels. Then built disks (kept in
-     the history once it is built, with a notice), slot 7's device (which cannot be mounted again in a running
-     machine), Retrocore Desktop's journal, and the source-aware default lock.
+     machine is not built without it. Then built disks (kept in the history once it is built, with a notice), slot
+     7's device (which cannot be mounted again in a running machine), Retrocore Desktop's journal, and the
+     source-aware default lock.
 5. **The history.** The chunk store with its lock and grace window, thinning to a target, the History rows, Compare,
    the clocks and gears. Done when the *History* tests pass and a disk restores to any version, running or off.
 6. **Machine files.** The `Unsaved\` mirror and machine ids, with [machine files](MachineFiles.md#phases)' fourth

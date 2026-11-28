@@ -422,10 +422,26 @@ export function unsavedDisks(devices: readonly Device[], recovery = false): { ke
     return { kept, lost };
 }
 
-/** How many of a machine's media not saved are tapes, recordings its recorders hold, as the stop notice counts them. */
-export function unsavedTapes(devices: readonly Device[]): number {
-    return devices.filter(device => device.kind === "tapeDrive" && device.media?.changed && device.operations.includes("save")).length;
+/**
+ * How many of a machine's media not saved are tapes, in its decks or ejected from them, as the stop notice counts
+ * them; or, given kept, how many of those its recovery journal keeps, as unsavedDisks sorts them.
+ */
+export function unsavedTapes(devices: readonly Device[], kept = false): number {
+    const decks = devices.filter(device => device.kind === "tapeDrive");
+    // A tape a deck ejected, or a build's tape took the place of, is kept as unsavedDisks keeps an ejected disk.
+    return decks.filter(device => device.media?.changed && device.operations.includes("save")
+        && (!kept || (device.media.source?.kind === "image" && device.operations.includes("insert")))).length
+        + decks.reduce((count, device) => count + (device.ejected ?? []).filter(tape => tape.changed).length, 0);
 }
+
+/** What count media, tapes of them tapes, are called: disk, tapes, or disks and tapes. */
+export function mediaNoun(count: number, tapes = 0): string {
+    const many = count === 1 ? "" : "s";
+    return tapes === 0 ? `disk${many}` : tapes === count ? `tape${many}` : "disks and tapes";
+}
+
+/** What count media, tapes of them tapes, are called in a sentence about them as a kind: disks, tapes, or disks and tapes. */
+export const mediaKind = (count: number, tapes = 0): string => mediaNoun(2, tapes === 0 ? 0 : tapes === count ? 2 : 1);
 
 /**
  * What a notice says when a machine stops with disks or tapes not saved: those kept for its next launch, and those
@@ -433,9 +449,7 @@ export function unsavedTapes(devices: readonly Device[]): number {
  */
 export function stoppedMessage(machine: string, kept: string[], lost: string[], tapes = 0): string {
     const count = kept.length + lost.length;
-    const disks = tapes === 0 ? `${count} disk${count === 1 ? "" : "s"}`
-        : tapes === count ? `${count} tape${count === 1 ? "" : "s"}`
-        : `${count} disks and tapes`;
+    const disks = `${count} ${mediaNoun(count, tapes)}`;
     const after = lost.length === 0
         ? `${count === 1 ? "It is" : "They are"} kept, still changed, for its next launch.`
         : kept.length === 0
@@ -445,16 +459,22 @@ export function stoppedMessage(machine: string, kept: string[], lost: string[], 
     return `${machine} stopped with ${disks} not saved: ${[...kept, ...lost].join(", ")}. ${after}`;
 }
 
-/** What a notice says of a machine whose session did not stop cleanly, with the disks its journal kept. */
-export function crashedMessage(machine: string, files: string[], kept: string | undefined, now: Date = new Date()): string {
-    const disks = `${files.length} disk${files.length === 1 ? "" : "s"}`;
+/**
+ * What a notice says of a machine whose session did not stop cleanly, with the disks and tapes its journal kept; tapes
+ * is how many of them are tapes.
+ */
+export function crashedMessage(machine: string, files: string[], kept: string | undefined, now: Date = new Date(), tapes = 0): string {
+    const disks = `${files.length} ${mediaNoun(files.length, tapes)}`;
     const last = kept === undefined ? "" : `, the last kept at ${when(kept, now)}`;
     return `${machine} did not stop cleanly. ${disks} had changes not saved: ${files.map(file => path.basename(file) || file).join(", ")}${last}.`;
 }
 
-/** What a question asks before the kept disks of a machine are let go, which nothing can put back. */
-export function discardKeptQuestion(machine: string, files: string[]): Question {
-    const disks = files.length === 1 ? "the disk" : `${files.length} disks`;
+/**
+ * What a question asks before the kept disks and tapes of a machine are let go, which nothing can put back; tapes is
+ * how many of them are tapes.
+ */
+export function discardKeptQuestion(machine: string, files: string[], tapes = 0): Question {
+    const disks = `${files.length === 1 ? "the" : files.length} ${mediaNoun(files.length, tapes)}`;
     return {
         message: `Discard the changes to ${disks} ${machine} kept?`,
         detail: `${files.map(file => path.basename(file) || file).join(", ")}. Their images stay as they are; the changes cannot be put back.`,
@@ -479,13 +499,13 @@ export function letGoQuestion(drive: string, action: "revert" | "discard", file:
  * said no), or none (the journal keeps no disks, or a running session has it).
  */
 export async function discardKept(
-    now: () => Promise<{ disks: string[]; revision: string } | undefined>,
-    confirm: (disks: string[]) => Promise<boolean>,
+    now: () => Promise<{ disks: string[]; tapes?: number; revision: string } | undefined>,
+    confirm: (disks: string[], tapes: number) => Promise<boolean>,
     resolve: (revision: string) => Promise<{ outcome?: string }>): Promise<"discarded" | "kept" | "none"> {
     for (;;) {
         const journal = await now();
         if (journal === undefined) return "none";
-        if (!await confirm(journal.disks)) return "kept";
+        if (!await confirm(journal.disks, journal.tapes ?? 0)) return "kept";
         if ((await resolve(journal.revision)).outcome !== "changed") return "discarded";
     }
 }

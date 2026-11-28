@@ -27,9 +27,9 @@ internal sealed partial class RecoveryJournal
     /// </summary>
     /// <param name="args">Nothing, or <c>{ id }</c>: one journal's recovery id.</param>
     /// <returns>
-    ///  Each one's <c>{ id, name, started, kept, disks, revision }</c>: its recovery id, the machine's name, when the
-    ///  session started, when its disks were last kept, the disks' labels, and the journal's revision, which a
-    ///  discard can name so that disks kept since are asked about again.
+    ///  Each one's <c>{ id, name, started, kept, disks, tapes, revision }</c>: its recovery id, the machine's name, when
+    ///  the session started, when its media were last kept, the labels of its disks and tapes, how many of them are
+    ///  tapes, and the journal's revision, which a discard can name so that media kept since are asked about again.
     /// </returns>
     internal static JsonArray Unclean(JsonObject? args = null)
     {
@@ -88,6 +88,7 @@ internal sealed partial class RecoveryJournal
             ["started"] = Text(session, "started"),
             ["kept"] = entries.Select(entry => Text(entry, "kept")).Where(kept => kept is not null).Max(StringComparer.Ordinal),
             ["disks"] = new JsonArray([.. entries.Select(entry => (JsonNode?)(Text(entry, "label") ?? "a disk"))]),
+            ["tapes"] = entries.Count(entry => MediaActions.IsTape(Text(entry, "type"))),
             ["revision"] = Revision(folder),
         };
     }

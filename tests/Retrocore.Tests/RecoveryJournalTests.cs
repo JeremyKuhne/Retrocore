@@ -360,6 +360,7 @@ public sealed class RecoveryJournalTests
         offered.String("name").Should().Be("Apple IIe for Work");
         offered["disks"]?.AsArray().Select(disk => disk?.GetValue<string>()).Should().Equal(image);
         offered.String("kept").Should().NotBeNull();
+        (offered["tapes"]?.GetValue<int>()).Should().Be(0, "a disk is not a tape");
 
         RecoveryJournal.Resolve(new JsonObject { ["id"] = id, ["action"] = "recover" });
         Offered(id).Should().BeNull("a recovered session is not offered again");

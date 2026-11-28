@@ -636,18 +636,18 @@ they keep. An entry label with a comment and a contract of its own now keeps tha
 rather than taking its routine's.
 
 The last two were the MOS's SET_STATUS_BITS, an entry of SET_EOF: with A and CFS_STATUS both 0 it falls through its
-`bne` into the next routine, so SET_EOF's `Keeps: X, Y, carry` holds from there only because every caller passes a
-bit to set. So an entry whose own analysis, with nothing known, contradicts its promise is checked again from each
-direct call to it, starting with what the caller's registers and flags hold there, but not its stack pointer, which
-the call moves: a sure change with any caller's values is a finding. Each call's values come from its straight run
-of code, followed from the run's start with nothing known there, as for each caller's `lda #CFS_INPUT_OPEN` then
-`jsr SET_STATUS_BITS`. A run starts at a label, a jump's or branch's target, an address the code writes as a number
-(an operand that is no direct target, or any word of data, and the address after it, for an RTS), or the code after
-one that does not fall through. The first finding stands where some call's run cannot be followed to the call,
-where data or a patched byte comes just before a run, as a skip written `.byte $2C` that falls into it, or a byte
-of the run may be patched, and for an entry whose address the code also takes as data or writes as a number. A jump or branch to an entry is no call, and does
-not rely on its promise: the code that takes it is followed through the entry with its own values. That brings the
-report to 894 routines checked, 25 findings and 121 `Keeps:` items not verified.
+`bne` into the next routine, so SET_EOF's `Keeps: X, Y, carry` holds from there only because every caller passes a bit
+to set. So an entry whose own analysis, with nothing known, contradicts its promise is checked again from each direct
+call to it, starting with what the caller's registers and flags hold there, but not its stack pointer, which the call
+moves: a sure change with any caller's values is a finding. Each call's values come from its straight run of code,
+followed from the run's start with nothing known there, as for each caller's `lda #CFS_INPUT_OPEN` then `jsr
+SET_STATUS_BITS`. A run starts at a label, a jump's or branch's target, an address the code writes as a number (an
+operand that is no direct target, or any word of data, and the address after it, for an RTS), or the code after one that
+does not fall through. The first finding stands where some call's run cannot be followed to the call, where data or a
+patched byte comes just before a run, as a skip written `.byte $2C` that falls into it, or a byte of the run may be
+patched, and for an entry whose address the code also takes as data or writes as a number. A jump or branch to an entry
+is no call, and does not rely on its promise: the code that takes it is followed through the entry with its own values.
+That brings the report to 894 routines checked, 25 findings and 121 `Keeps:` items not verified.
 
 What it costs, measured in Release over the MOS, the DFS and MBASIC with their maps: about 190 ms for the three
 once warm, and 114 MB allocated (220 ms and 107 MB before the review's fixes). Without maps it was about 140 ms and

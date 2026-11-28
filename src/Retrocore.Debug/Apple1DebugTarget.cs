@@ -6,7 +6,6 @@ using Retrocore.Isa;
 using Retrocore.Machines.Apple1;
 using Retrocore.Machines.Devices;
 using System.Text.Json.Nodes;
-using Touki;
 
 namespace Retrocore.Debug;
 
@@ -14,7 +13,7 @@ namespace Retrocore.Debug;
 ///  The Apple-1 as the debugger sees it: a 6502, the Apple-1's memory areas, its 40x24 terminal, keyboard and
 ///  cassette interface.
 /// </summary>
-internal sealed partial class Apple1DebugTarget : DisposableBase, IDebugTarget, IRecordingTarget
+internal sealed partial class Apple1DebugTarget : IDebugTarget
 {
     private const byte JsrOpcode = 0x20;
     private const byte BrkOpcode = 0x00;
@@ -32,9 +31,6 @@ internal sealed partial class Apple1DebugTarget : DisposableBase, IDebugTarget, 
     private bool _resetPending;
     private GuestInputPath? _monitorInput;
     private GuestInputPath? _basicInput;
-
-    // The path a recording is saved to when its tape is ejected.
-    private string? _recordingPath;
 
     /// <summary>
     ///  Creates the target for a launched Apple-1.
@@ -541,26 +537,14 @@ internal sealed partial class Apple1DebugTarget : DisposableBase, IDebugTarget, 
                 Insert(path ?? throw new ArgumentException("path is required."));
                 break;
             case (Apple1CassetteDrive cassette, "record"):
-                // The path is checked before the tape in the recorder comes out, so a bad one leaves it in.
-                string full = Path.GetFullPath(
-                    path ?? throw new ArgumentException("path is required, for saving the recording."));
-
-                if (!Directory.Exists(Path.GetDirectoryName(full)))
-                {
-                    throw new ArgumentException($"The folder for {full} does not exist.");
-                }
-
-                if (Directory.Exists(full) || Path.GetFileName(full).Length == 0)
-                {
-                    throw new ArgumentException($"{full} is a folder; a recording needs a file name.");
-                }
-
-                EjectCassette();
-                cassette.Record(new Apple1Tape(), full);
-                _recordingPath = full;
+                // The recording's file is written blank first, so a bad path leaves the tape in the recorder.
+                Apple1Tape blank = new();
+                string full = TapeMedia.Record(path, blank, new Apple1TapeCodec());
+                cassette.Eject();
+                cassette.Record(blank, full);
                 break;
-            case (Apple1CassetteDrive, "eject"):
-                EjectCassette();
+            case (Apple1CassetteDrive cassette, "eject"):
+                cassette.Eject();
                 break;
             default:
                 throw new ArgumentException($"{device.Info.Name} does not support {action}.");
@@ -585,54 +569,33 @@ internal sealed partial class Apple1DebugTarget : DisposableBase, IDebugTarget, 
             throw new ArgumentException("The Apple-1's only media is the cassette interface's tape.");
         }
 
-        DeviceAction(drive, action, args);
+        // A changed recording is held back, as from retro/device, so an older client cannot lose it. One let go of is
+        // ejected or replaced through the host, which keeps it for Undo.
+        JsonObject? answer = MediaActions.Device(drive, action, args, (what, with) => DeviceAction(drive, what, with));
+        if (answer is null)
+        {
+            DeviceAction(drive, action, args);
+        }
+        else if (answer.String("outcome") != "discarded")
+        {
+            return answer;
+        }
+
         return MediaState();
     }
 
-    /// <summary>
-    ///  Saves a recording still in the recorder, as ejecting it would, when the session ends or relaunches.
-    /// </summary>
-    /// <param name="disposing">Whether it is disposing rather than finalizing.</param>
-    /// <exception cref="IOException">The recording could not be written.</exception>
-    protected override void Dispose(bool disposing)
-    {
-        if (disposing) { EjectCassette(); }
-    }
-
-    // The new tape is read before the one in the recorder comes out, so a file that cannot be read leaves it in. A
-    // recording is saved first, where it stays in, so a tape reinserted from the recording's own path is the one
-    // just recorded, whatever the file system's case rules.
+    // The new tape is read before the one in the recorder comes out, so a file that cannot be read leaves it in.
     private void Insert(string path)
     {
         string full = Path.GetFullPath(path);
         Apple1CassetteDrive drive = _machine.CassetteDrive
             ?? throw new InvalidOperationException("This Apple-1 has no cassette interface.");
 
-        SaveRecording();
-        Apple1Tape tape = Apple1Tape.FromWave(File.ReadAllBytes(full));
-        EjectCassette();
+        byte[] bytes = File.ReadAllBytes(full);
+        Apple1Tape tape = Apple1Tape.FromWave(bytes);
+        MediaActions.Register(tape, full, new Apple1TapeCodec(), bytes);
+        drive.Eject();
         drive.Play(tape, full);
-    }
-
-    /// <inheritdoc/>
-    public void SaveRecordings() => SaveRecording();
-
-    // Writes a recording to its path, leaving it in the recorder.
-    private void SaveRecording()
-    {
-        if (_recordingPath is { } path && _machine.CassetteDrive?.Tape is { } tape)
-        {
-            File.WriteAllBytes(path, tape.ToWave());
-        }
-    }
-
-    // A recording is saved to its path when it is ejected.
-    private void EjectCassette()
-    {
-        // Saved before it comes out, so a recording that cannot be written stays in to be ejected again.
-        SaveRecording();
-        _machine.CassetteDrive?.Eject();
-        _recordingPath = null;
     }
 
     private JsonObject MediaState()
@@ -641,7 +604,7 @@ internal sealed partial class Apple1DebugTarget : DisposableBase, IDebugTarget, 
         JsonObject cassette = new()
         {
             ["path"] = drive.Media?.Label,
-            ["recording"] = _recordingPath is not null,
+            ["recording"] = drive.Transport.Mode == TapeMode.Recording,
             ["motor"] = drive.Transport.Motor,
             ["atEnd"] = _machine.Bus.Cassette?.AtEnd ?? true
         };

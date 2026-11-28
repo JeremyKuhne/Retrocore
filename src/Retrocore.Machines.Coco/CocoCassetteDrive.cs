@@ -3,6 +3,7 @@
 // See LICENSE file in the project root for full license information
 
 using Retrocore.Machines.Devices;
+using Retrocore.Media;
 using Retrocore.Media.Trs80;
 
 namespace Retrocore.Machines.Coco;
@@ -10,7 +11,7 @@ namespace Retrocore.Machines.Coco;
 /// <summary>
 ///  The Color Computer's cassette recorder as a device: a <c>.cas</c> tape played or recorded at 1500 baud.
 /// </summary>
-public sealed class CocoCassetteDrive : ITapeDrive
+public sealed class CocoCassetteDrive : ITapeDrive, IMediumSlot
 {
     private readonly CocoCassette _cassette;
     private readonly CocoBus _bus;
@@ -31,7 +32,8 @@ public sealed class CocoCassetteDrive : ITapeDrive
             Description = "Cassette recorder, 1500 baud",
             Controller = "PIA 1: PA0 reads the tape, the DAC writes it, and CA2 runs the motor",
             Formats = ["cas"],
-            Operations = MediaOperations.Insert | MediaOperations.Eject | MediaOperations.Record
+            SaveFormats = ["cas"],
+            Operations = MediaOperations.Insert | MediaOperations.Eject | MediaOperations.Record | MediaOperations.Save
         };
     }
 
@@ -56,7 +58,7 @@ public sealed class CocoCassetteDrive : ITapeDrive
         {
             if (Tape is not { } tape) { return null; }
             bool recording = _cassette.Mode == TapeMode.Recording;
-            return new(_label, "CAS", WriteProtected: !recording, Changed: recording && tape.Bytes.Count != 0);
+            return new(_label, "CAS", WriteProtected: !recording, Changed: tape.IsDirty);
         }
     }
 
@@ -72,6 +74,12 @@ public sealed class CocoCassetteDrive : ITapeDrive
         _cassette.Position,
         _tape?.Bytes.Count ?? 0);
 
+    /// <inheritdoc/>
+    IMedium? IMediumSlot.Medium => Tape;
+
+    /// <inheritdoc/>
+    public int MountGeneration { get; private set; } = MountGenerations.Next();
+
     /// <summary>
     ///  Puts a tape in and presses PLAY.
     /// </summary>
@@ -82,6 +90,7 @@ public sealed class CocoCassetteDrive : ITapeDrive
         _cassette.Play(tape);
         _tape = tape;
         _label = label;
+        MountGeneration = MountGenerations.Next();
     }
 
     /// <summary>
@@ -94,6 +103,7 @@ public sealed class CocoCassetteDrive : ITapeDrive
         _cassette.Record(tape);
         _tape = tape;
         _label = label;
+        MountGeneration = MountGenerations.Next();
     }
 
     /// <summary>
@@ -106,6 +116,28 @@ public sealed class CocoCassetteDrive : ITapeDrive
         _cassette.Stop();
         _tape = null;
         _label = "";
+        MountGeneration = MountGenerations.Next();
         return tape;
     }
+
+    /// <inheritdoc/>
+    public void Saved(string label, string format, bool whole)
+    {
+        if (Tape is not { } tape) { throw new InvalidOperationException("There is no tape in the recorder."); }
+        _label = label;
+        if (whole) { tape.MarkSaved(); } else { tape.MarkChanged(); }
+    }
+
+    /// <inheritdoc/>
+    /// <remarks>
+    ///  <para>
+    ///   The tape plays from its start, as a recording put back from the recovery journal or for Undo is there for
+    ///   <c>CLOAD</c>; it keeps its changes until it is saved.
+    ///  </para>
+    /// </remarks>
+    public void Mount(IMedium medium, string label, string format) =>
+        Play(medium as CassetteImage ?? throw new ArgumentException($"{Info.Name} does not take a {medium?.GetType().Name}.", nameof(medium)), label);
+
+    /// <inheritdoc/>
+    public IMedium? Unmount() => Eject();
 }

@@ -10,7 +10,6 @@ namespace Retrocore.Debug;
 
 internal sealed partial class Trs80Model100DebugTarget
 {
-    private string? _recordingPath;
     private DebugAudioSink? _sound;
     private string _soundMode = "off";
 
@@ -38,24 +37,14 @@ internal sealed partial class Trs80Model100DebugTarget
                 Insert(path ?? throw new ArgumentException("path is required."));
                 break;
             case (Trs80Model100CassetteDrive cassette, "record"):
-                // The path is checked before the tape in the recorder comes out, so a bad one leaves it in.
-                string full = Path.GetFullPath(path ?? throw new ArgumentException("path is required, for saving the recording."));
-                if (!Directory.Exists(Path.GetDirectoryName(full)))
-                {
-                    throw new ArgumentException($"The folder for {full} does not exist.");
-                }
-
-                if (Directory.Exists(full) || Path.GetFileName(full).Length == 0)
-                {
-                    throw new ArgumentException($"{full} is a folder; a recording needs a file name.");
-                }
-
-                EjectCassette();
-                cassette.Record(new Trs80Model100Tape(), full);
-                _recordingPath = full;
+                // The recording's file is written blank first, so a bad path leaves the tape in the recorder.
+                Trs80Model100Tape blank = new();
+                string full = TapeMedia.Record(path, blank, new Trs80Model100TapeCodec());
+                cassette.Eject();
+                cassette.Record(blank, full);
                 break;
-            case (Trs80Model100CassetteDrive, "eject"):
-                EjectCassette();
+            case (Trs80Model100CassetteDrive cassette, "eject"):
+                cassette.Eject();
                 break;
             default:
                 throw new ArgumentException($"{device.Info.Name} does not support {action}.");
@@ -84,9 +73,7 @@ internal sealed partial class Trs80Model100DebugTarget
     /// <remarks>
     ///  <para>
     ///   The new tape is read before the one in the recorder comes out, so a file that cannot be read leaves it in. A
-    ///   recording is saved first, and stays in the recorder until the new tape is read, so a tape put in from the
-    ///   recording's own path is the one just recorded; a recording that holds nothing writes nothing, so its own path
-    ///   is refused as a missing tape.
+    ///   changed recording in the recorder is asked about first, as a changed disk is (<see cref="MediaActions"/>).
     ///  </para>
     /// </remarks>
     /// <param name="path">The WAV file.</param>
@@ -95,15 +82,11 @@ internal sealed partial class Trs80Model100DebugTarget
     internal void Insert(string path)
     {
         string full = Path.GetFullPath(path);
-        // A path that is neither the recording's nor a file is refused before anything is written.
-        StringComparison names = OperatingSystem.IsWindows() || OperatingSystem.IsMacOS()
-            ? StringComparison.OrdinalIgnoreCase
-            : StringComparison.Ordinal;
-
-        if (string.Equals(full, _recordingPath, names) || File.Exists(full)) { SaveCassetteRecording(); }
         if (!File.Exists(full)) { throw new ArgumentException($"The tape {full} does not exist."); }
-        Trs80Model100Tape tape = Trs80Model100Tape.FromWave(File.ReadAllBytes(full));
-        EjectCassette();
+        byte[] bytes = File.ReadAllBytes(full);
+        Trs80Model100Tape tape = Trs80Model100Tape.FromWave(bytes);
+        MediaActions.Register(tape, full, new Trs80Model100TapeCodec(), bytes);
+        _machine.Bus.CassetteDrive.Eject();
         _machine.Bus.CassetteDrive.Play(tape, full);
     }
 
@@ -136,36 +119,20 @@ internal sealed partial class Trs80Model100DebugTarget
             throw new ArgumentException("The Model 100's only media is the cassette's tape.");
         }
 
-        DeviceAction(_machine.Bus.CassetteDrive, action, args);
+        // A changed recording is held back, as from retro/device, so an older client cannot lose it. One let go of is
+        // ejected or replaced through the host, which keeps it for Undo.
+        Trs80Model100CassetteDrive drive = _machine.Bus.CassetteDrive;
+        JsonObject? answer = MediaActions.Device(drive, action, args, (what, with) => DeviceAction(drive, what, with));
+        if (answer is null)
+        {
+            DeviceAction(drive, action, args);
+        }
+        else if (answer.String("outcome") != "discarded")
+        {
+            return answer;
+        }
+
         return MediaState();
-    }
-
-    // Writes a recording to its path, leaving it in the recorder: to a file beside it first, then over it, so a save
-    // that fails leaves what was there. A recording that holds nothing writes nothing, so recording then ejecting
-    // leaves a file at the path as it was.
-    private void SaveCassetteRecording()
-    {
-        if (_recordingPath is not { } path || _machine.Bus.CassetteDrive.Tape is not { } tape) { return; }
-        if (tape.HalfCycles.Count == 0) { return; }
-        string temporary = $"{path}.{Environment.ProcessId}.tmp";
-        try
-        {
-            File.WriteAllBytes(temporary, tape.ToWave());
-            File.Move(temporary, path, overwrite: true);
-        }
-        finally
-        {
-            if (File.Exists(temporary)) { File.Delete(temporary); }
-        }
-    }
-
-    // A recording is saved to its path before it comes out, so one that cannot be written stays in to be ejected
-    // again.
-    private void EjectCassette()
-    {
-        SaveCassetteRecording();
-        _machine.Bus.CassetteDrive.Eject();
-        _recordingPath = null;
     }
 
     private JsonObject MediaState()
@@ -174,7 +141,7 @@ internal sealed partial class Trs80Model100DebugTarget
         JsonObject cassette = new()
         {
             ["path"] = drive.Media?.Label,
-            ["recording"] = _recordingPath is not null,
+            ["recording"] = drive.Transport.Mode == TapeMode.Recording,
             ["motor"] = drive.Transport.Motor,
             ["atEnd"] = _machine.Bus.Cassette.AtEnd
         };

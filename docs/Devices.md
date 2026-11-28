@@ -13,7 +13,7 @@ without side effects, so a debugger can show it at any time, even mid-instructio
 | Type | What it is |
 | --- | --- |
 | `IDevice` | Any device: its `Id` (stable for the machine's configuration, such as `disk0`), `Kind`, `Info`, `Media` and `Activity`. |
-| `DeviceInfo` | What the device is, which does not change while the machine runs: `Name`, `Description`, `Controller`, the image `Formats` the host can insert, the `Operations` it allows (insert, eject, record, write protect), and its `Tracks` and `Sides`. |
+| `DeviceInfo` | What the device is, which does not change while the machine runs: `Name`, `Description`, `Controller`, the image `Formats` the host can insert, the `Operations` it allows (insert, eject, record, write protect, save, and for a tape deck, keys pressed on its tape), and its `Tracks` and `Sides`. |
 | `MediaState` | The media in it: the host's `Label` for it (such as the image's path), its `Format`, whether it is `WriteProtected`, and whether the machine has `Changed` it since it was inserted. |
 | `DeviceActivity` | `Idle`, `Seeking`, `Reading` or `Writing`. |
 | `IDiskDrive` | A floppy drive. Its `Head` gives the motor, whether the controller has selected it, the track (with a fraction for a drive that steps in quarter tracks), the side, and the sector the controller is working on. |
@@ -28,7 +28,7 @@ Inserting media belongs to the concrete devices, since the image formats are the
 
 | Machine | Device | Id | Notes |
 | --- | --- | --- | --- |
-| Apple-1, Model I/III/4, Model 100/Tandy 102, CoCo, BBC Micro, Atari, Altair | Cassette | `cassette` | Plays and records tape images in the machine's format (`.wav` on the Apple-1 and Model 100, `.cas` on the TRS-80s, CoCo, and Atari 410, `.uef` on the BBC Micro, `.tap` on the Altair 88-ACR). The Atari 410 has deck controls and independent write-protect toggling; on the others a playing tape shows as write-protected, and a recording shows as changed once it holds data. |
+| Apple-1, Model I/III/4, Model 100/Tandy 102, CoCo, BBC Micro, Atari, Altair | Cassette | `cassette` | Plays and records tape images in the machine's format (`.wav` on the Apple-1 and Model 100, `.cas` on the TRS-80s, CoCo, and Atari 410, `.uef` on the BBC Micro, `.tap` on the Altair 88-ACR). The Atari 410 has deck controls and independent write-protect toggling; on the others a playing tape shows as write-protected. A recording is a changed tape, saved like a disk (below). |
 | PET | Datasette 1-2 | `cassette1`, `cassette2` | Plays and records `.tap`, `.wav`, and `.prg` tapes with deck keys (PLAY, RECORD, STOP, rewind); changed tapes save as `.tap` or `.wav`. |
 | Model I, III, 4, II, CoCo, Altair, BBC Micro, Kaypro II | Floppy drives | `disk0`-`disk3` (`disk0`-`disk1` on BBC Micro and Kaypro II) | Present when the machine's disk controller is fitted. Supports write-protect toggling and saving changed disks to their image or as supported formats (`.jv3`/`.dmk`/`.imd`/`.dsk`/`.jv1` on the Model I, III, 4, and 4P; `.imd`/`.dmk`/`.jv3` on the Model II family; `.dsk`/`.jvc`/`.dmk` on CoCo; `.dsk` on Altair; `.ssd`/`.dsd` on BBC Micro; `.img`/`.imd`/`.dmk` on Kaypro II, with an inserted `.dsk` also saving in place). On the Model I, drive 3 is single-sided since its select line is the other drives' side select. |
 | PET | Dual drives (4040, 2040) | `disk8-0`, `disk8-1` ... `disk15-1` | Two mechanisms per IEEE-488 unit (devices 8-15). Takes `.d64`, `.d67`, and `.g64` images; changed disks save back to their image or as `.g64` / `.d64` (4040) / `.d67` (2040). |
@@ -123,8 +123,8 @@ state changes: on each stop, and with the running frames while the machine runs.
 The body's `configuration` is what a later launch can restore: each slot's card (`languageCard` or `firmwareCard` in
 slot 0 of a II or II Plus, `mockingboard`, `softCard`, `softCard3` (the Apple III's), `mouse`, `proFile`, `disk35`, `diskII16` or `diskII13`; `diskII` for one with the launch's ROM dumps, `blockStorage`, or
 `empty`), and the media in each drive
-that takes media, null when it is empty. Media the host cannot insert again, such as a disk a `dos` launch built or a
-tape being recorded, is left out. Rows with switches add `settings`, each row's by its id, such as
+that takes media, null when it is empty. Media the host cannot insert again, such as a disk a `dos` launch built, is
+left out; a tape being recorded is its file, written blank as the recording starts, and goes back in to play. Rows with switches add `settings`, each row's by its id, such as
 `{ "slot4": { "translation": true, "refresh": false } }`, restored after the cards.
 
 ```json
@@ -153,7 +153,18 @@ exists is reported in the Debug Console and skipped.
 { "id": "disk2", "action": "eject", "discard": true }
 ```
 
-An action the device does not support is an error. A recording is saved to its path when its tape is ejected.
+An action the device does not support is an error.
+
+A recording is a changed tape. The recorders without keys (the Apple-1's, the TRS-80s', the Model 100's, the Color
+Computer's and the Altair's) write the recording's file blank when `record` starts, so the file is the tape's image:
+the tape is `changed` once the recorder hears anything, `save` writes it there (CAS on the TRS-80s and the Color
+Computer, TAP on the Altair, WAV on the Apple-1 and Model 100) with the answers a disk's save gives, a file written at
+the path since the recording started is a `conflict`, and an eject, an insert or another `record` over a changed
+recording answers `changed` first. Nothing but a save writes it, not an eject and not the session's end; the recovery
+journal keeps it (below). A WAV save moves each change of level to its sample, which the machines read the same,
+and says so in `notes`. The TRS-80's recorder holds the bits it hears until the motor stops, to find where bytes
+start; a save or a snapshot while it records takes the bytes those bits make so far, without stopping it.
+
 Disks the machine changes stay in memory, and `changed` shows that they differ from their images. An Apple drive's
 `save` writes its disk to its own image, in the format and sector order it was read in, or to `path`: a `.woz` keeps
 the disk's tracks as they are, lock included, and a `.dsk`, `.do` or `.po` reads them back as 35 to 40 tracks of
@@ -223,7 +234,7 @@ or null for WOZ, DMK and JV3.
 A launch's `recoveryId` (letters, digits, `-` and `_`) names the machine's recovery journal, in local data under
 `Recovery\<recoveryId>\`: every 30 seconds, and as the machine stops or another launch replaces it, each changed disk
 that came from an image, in a drive or ejected by the machine, is kept there as a lossless snapshot (WOZ2, 2MG or
-DMK), with its image and the revision of the image it was read from. The next launch with the same `recoveryId` puts
+DMK; a tape as CAS, TAP or its half cycles), with its image and the revision of the image it was read from. The next launch with the same `recoveryId` puts
 each one back where it was, after the launch and its `machineState` have set the machine up, still changed against
 its image (and stale or a conflict as the image is now), so a stop or relaunch loses no changes. A disk saved or let
 go leaves the journal; one that cannot go back, as when its drive is gone, stays in it, and the Debug Console says so.

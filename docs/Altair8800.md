@@ -206,8 +206,10 @@ Things to know:
   or give it less RAM. SIMH avoids this only because its boot ROM sits at `$FF00`, and hangs the same way without
   it.
 - **Tapes.** 8K BASIC's `CSAVE "P"` saves the program to the 88-ACR's tape, and `CLOAD "P"` reads it back. Record
-  from the **Drives** view's cassette, or with `retro/media`; the recording is saved when the tape is ejected. To
-  load, type `CLOAD`, then insert the tape, since it starts playing as it goes in.
+  from the **Drives** view's cassette, or with `retro/media`. A recording is a changed tape
+  ([Devices.md](Devices.md)): its TAP file is written blank as it starts, **Save** writes the recording there, an
+  eject asks about one not saved, and the recovery journal keeps it across a stop or a crash. To load, type `CLOAD`,
+  then insert the tape, since it starts playing as it goes in.
 
 ## Disks and CP/M
 

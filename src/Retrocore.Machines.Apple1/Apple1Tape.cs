@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 // See LICENSE file in the project root for full license information
 
+using Retrocore.Media;
 using System.Buffers.Binary;
 
 namespace Retrocore.Machines.Apple1;
@@ -16,9 +17,21 @@ namespace Retrocore.Machines.Apple1;
 ///   their lengths. Recordings come from and go to WAV files; <see cref="FromData"/> makes one that the ACI's
 ///   R command reads.
 ///  </para>
+///  <para>
+///   A tape is a medium: what the W command records onto it is a change, saved like a disk's. Its snapshot holds the
+///   half cycles themselves, as no image format keeps them exactly; a WAV file moves each change of level to its sample.
+///  </para>
 /// </remarks>
-public sealed class Apple1Tape
+public sealed class Apple1Tape : IMedium
 {
+    /// <summary>
+    ///  The <see cref="MediumSnapshot.Kind"/> of a tape's snapshot, whose image is each half cycle's length in cycles,
+    ///  four bytes, low first.
+    /// </summary>
+    public const string SnapshotKind = "apple1-half-cycles";
+
+    private bool _writeProtected;
+
     // The half cycles the ACI's W command writes, in cycles: the leader's (about 860 Hz), the short one that ends
     // it, and the halves of a 1 bit (about 1080 Hz) and a 0 bit (about 2150 Hz).
     private const int LeaderHalf = 592;
@@ -72,7 +85,74 @@ public sealed class Apple1Tape
     ///  Adds a half cycle to the end, as recording does.
     /// </summary>
     /// <param name="cycles">Its length.</param>
-    internal void Add(int cycles) => _halves.Add(Math.Max(1, cycles));
+    internal void Add(int cycles)
+    {
+        _halves.Add(Math.Max(1, cycles));
+        Version++;
+        IsDirty = true;
+    }
+
+    /// <inheritdoc/>
+    public long Version { get; private set; }
+
+    /// <inheritdoc/>
+    public bool IsDirty { get; private set; }
+
+    /// <inheritdoc/>
+    /// <remarks>
+    ///  <para>
+    ///   A WAV file keeps no record tab, so the lock lasts only as long as the session.
+    ///  </para>
+    /// </remarks>
+    public bool IsWriteProtected
+    {
+        get => _writeProtected;
+        set
+        {
+            if (value == _writeProtected) { return; }
+            _writeProtected = value;
+            Version++;
+        }
+    }
+
+    /// <inheritdoc/>
+    public MediumSnapshot Snapshot()
+    {
+        byte[] image = new byte[_halves.Count * 4];
+        for (int i = 0; i < _halves.Count; i++)
+        {
+            BinaryPrimitives.WriteInt32LittleEndian(image.AsSpan(i * 4), _halves[i]);
+        }
+
+        return new(SnapshotKind, Version, _writeProtected, image);
+    }
+
+    /// <summary>
+    ///  Reads a tape back from its snapshot's image.
+    /// </summary>
+    /// <param name="image">The image of a <see cref="SnapshotKind"/> snapshot.</param>
+    /// <returns>The tape.</returns>
+    /// <exception cref="InvalidDataException">
+    ///  The image is not a whole number of half cycles, or has one that is not positive.
+    /// </exception>
+    public static Apple1Tape FromSnapshot(ReadOnlySpan<byte> image)
+    {
+        if (image.Length % 4 != 0) { throw new InvalidDataException("A tape's snapshot is four bytes a half cycle."); }
+        int[] halves = new int[image.Length / 4];
+        for (int i = 0; i < halves.Length; i++)
+        {
+            halves[i] = BinaryPrimitives.ReadInt32LittleEndian(image[(i * 4)..]);
+            if (halves[i] <= 0) { throw new InvalidDataException("A half cycle in the snapshot is not positive."); }
+        }
+
+        return new(halves);
+    }
+
+    /// <inheritdoc/>
+    public void MarkSaved() => IsDirty = false;
+
+    /// <inheritdoc/>
+    public void MarkChanged() => IsDirty = true;
 
     /// <summary>
     ///  Makes the recording the ACI's W command would of some bytes: a leader, the short half cycle that ends it,

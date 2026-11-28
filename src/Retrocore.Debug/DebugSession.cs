@@ -609,13 +609,13 @@ internal sealed partial class DebugSession
     private IDebugTarget Target => _target ?? throw new InvalidOperationException("No machine has been launched.");
 
     /// <summary>
-    ///  Ends the session: the machine stops, its recordings are saved and its target is disposed. Disconnect ends it,
-    ///  and so does the client closing the input without one.
+    ///  Ends the session: the machine stops, what it keeps in a file of its own (the Model 100's RAM image) is saved and
+    ///  its target is disposed. Disconnect ends it, and so does the client closing the input without one.
     /// </summary>
     /// <exception cref="IOException">
-    ///  A recording could not be written. The session has not ended, so ending it again tries the save again.
+    ///  The file could not be written. The session has not ended, so ending it again tries the save again.
     /// </exception>
-    /// <exception cref="UnauthorizedAccessException">A recording's path cannot be written; likewise.</exception>
+    /// <exception cref="UnauthorizedAccessException">The file cannot be written; likewise.</exception>
     internal void End()
     {
         lock (_gate)
@@ -832,8 +832,8 @@ internal sealed partial class DebugSession
         ["output"] = text + "\n"
     });
 
-    // Saves the target's recordings, then disposes it. The save comes first and can be retried, since disposing
-    // happens only once: if it fails, the target is left as it was.
+    // Saves what the target keeps in a file of its own (the Model 100's RAM image), then disposes it. The save comes
+    // first and can be retried, since disposing happens only once: if it fails, the target is left as it was.
     private void ReleaseTarget()
     {
         (_target as IRecordingTarget)?.SaveRecordings();
@@ -1029,8 +1029,8 @@ internal sealed partial class DebugSession
         bool booted = built?.Target.Built?.BootsImage == true;
         bool loads = sourceFile is not null || program is not null || (built is not null && !booted);
 
-        // The old machine's changed disks are kept and its recordings saved, and it is disposed before the new one is
-        // built, as machines can share host resources, such as the game controllers SDL reads. A launch that then
+        // The old machine's changed disks and tapes are kept and its RAM image saved, and it is disposed before the new
+        // one is built, as machines can share host resources, such as the game controllers SDL reads. A launch that then
         // fails leaves no machine, rather than the disposed one.
         CloseJournal();
         ReleaseTarget();

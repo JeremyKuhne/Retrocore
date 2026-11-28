@@ -448,6 +448,7 @@ internal sealed partial class RecoveryJournal
         WozDisk.SnapshotKind => "woz",
         TwoImgContainer.SnapshotKind => "2mg",
         Media.Commodore.CommodoreDisk.SnapshotKind => "g64",
+        Media.Altair.AltairTape.SnapshotKind => "tap",
         _ => kind,
     };
 

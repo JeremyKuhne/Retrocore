@@ -75,7 +75,7 @@ internal static partial class MediaActions
         IMedium disk = drive.Medium ?? throw new InvalidOperationException($"{device.Info.Name} is empty.");
         if (Source(disk) is not { } source || device.Media is not { } media)
         {
-            throw new InvalidOperationException($"The disk in {device.Info.Name} has no image to revert to.");
+            throw new InvalidOperationException($"The {Medium(device)} in {device.Info.Name} has no image to revert to.");
         }
 
         KeptDisk kept = new(disk, media.Label, media.Format, "reverted");
@@ -178,7 +178,7 @@ internal static partial class MediaActions
             return Answer(device, "undone", Source(kept.Medium));
         }
 
-        return Detach([device], args, "put the disk back") ?? Replace(device, kept, "undone");
+        return Detach([device], args, $"put the {Medium(device)} back") ?? Replace(device, kept, "undone");
     }
 
     // Acts on a disk the machine ejected: saves it, puts it back in its drive (the disk there going as an eject

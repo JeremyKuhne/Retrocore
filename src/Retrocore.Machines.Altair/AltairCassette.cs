@@ -3,6 +3,8 @@
 // See LICENSE file in the project root for full license information
 
 using Retrocore.Machines.Devices;
+using Retrocore.Media;
+using Retrocore.Media.Altair;
 
 namespace Retrocore.Machines.Altair;
 
@@ -18,18 +20,18 @@ namespace Retrocore.Machines.Altair;
 ///   tape plays, or skips a leader. A tape that records takes each byte the 88-ACR sends.
 ///  </para>
 ///  <para>
-///   A tape image is its bytes in order, the <c>.tap</c> files Altair emulators and the MITS tape archives use.
+///   A tape image is its bytes in order, the <c>.tap</c> files Altair emulators and the MITS tape archives use. A
+///   recording is a changed tape (<see cref="AltairTape"/>), saved as a disk is.
 ///  </para>
 /// </remarks>
-public sealed class AltairCassette : ITapeDrive
+public sealed class AltairCassette : ITapeDrive, IMediumSlot
 {
     private readonly AltairSio _acr;
-    private readonly List<byte> _tape = [];
+    private AltairTape? _tape;
     private TapeMode _mode;
     private int _position;
     private int _cycles;
     private string _label = "";
-    private bool _changed;
 
     /// <summary>
     ///  Connects the recorder to the 88-ACR.
@@ -45,7 +47,8 @@ public sealed class AltairCassette : ITapeDrive
             Description = "Cassette recorder",
             Controller = "the 88-ACR, ports $06 and $07",
             Formats = ["tap"],
-            Operations = MediaOperations.Insert | MediaOperations.Eject | MediaOperations.Record
+            SaveFormats = ["tap"],
+            Operations = MediaOperations.Insert | MediaOperations.Eject | MediaOperations.Record | MediaOperations.Save
         };
     }
 
@@ -59,20 +62,22 @@ public sealed class AltairCassette : ITapeDrive
     public DeviceInfo Info { get; }
 
     /// <summary>
-    ///  Gets the tape's bytes, empty when the recorder is empty.
+    ///  Gets the tape in the recorder, or null.
     /// </summary>
-    public byte[] Tape => [.. _tape];
+    public AltairTape? Tape => _tape;
 
     /// <summary>
     ///  Gets whether a tape that plays has no bytes left.
     /// </summary>
-    public bool AtEnd => _mode == TapeMode.Playing && _position >= _tape.Count;
+    public bool AtEnd => _mode == TapeMode.Playing && _position >= (_tape?.Bytes.Count ?? 0);
 
     /// <inheritdoc/>
-    /// <remarks>A tape that plays is protected; one that records has changed once it holds a byte.</remarks>
-    public MediaState? Media => _mode == TapeMode.Stopped
+    /// <remarks>
+    ///  A tape that plays is protected; one that records has changed once it holds a byte, until it is saved.
+    /// </remarks>
+    public MediaState? Media => _tape is not { } tape
         ? null
-        : new(_label, "TAP", WriteProtected: _mode == TapeMode.Playing, Changed: _changed);
+        : new(_label, "TAP", WriteProtected: _mode == TapeMode.Playing, Changed: tape.IsDirty);
 
     /// <inheritdoc/>
     public DeviceActivity Activity => _mode switch
@@ -83,68 +88,108 @@ public sealed class AltairCassette : ITapeDrive
     };
 
     /// <inheritdoc/>
-    public TapeTransport Transport => new(_mode != TapeMode.Stopped, _mode, _position, _tape.Count);
+    public TapeTransport Transport => new(_mode != TapeMode.Stopped, _mode, _position, _tape?.Bytes.Count ?? 0);
+
+    /// <inheritdoc/>
+    IMedium? IMediumSlot.Medium => _tape;
+
+    /// <inheritdoc/>
+    public int MountGeneration { get; private set; } = MountGenerations.Next();
 
     /// <summary>
     ///  Loads a tape and plays it from the start.
     /// </summary>
     /// <param name="tape">The tape's bytes.</param>
     /// <param name="label">What the host calls it, such as its file's path.</param>
-    public void Play(ReadOnlySpan<byte> tape, string label)
+    public void Play(ReadOnlySpan<byte> tape, string label) => Play(new AltairTape(tape), label);
+
+    /// <summary>
+    ///  Loads a tape and plays it from the start.
+    /// </summary>
+    /// <param name="tape">The tape, which keeps any changes it has.</param>
+    /// <param name="label">What the host calls it, such as its file's path.</param>
+    public void Play(AltairTape tape, string label)
     {
-        Load(tape, label);
-        _mode = TapeMode.Playing;
+        ArgumentNullException.ThrowIfNull(tape);
+        Load(tape, label, TapeMode.Playing);
     }
 
     /// <summary>
     ///  Loads a blank tape to record onto.
     /// </summary>
     /// <param name="label">What the host calls it, such as the path it will be saved to.</param>
-    public void Record(string label)
+    public void Record(string label) => Record(new AltairTape(), label);
+
+    /// <summary>
+    ///  Loads a tape to record onto, appending what the 88-ACR sends.
+    /// </summary>
+    /// <param name="tape">The tape.</param>
+    /// <param name="label">What the host calls it, such as the path it will be saved to.</param>
+    public void Record(AltairTape tape, string label)
     {
-        Load([], label);
-        _mode = TapeMode.Recording;
+        ArgumentNullException.ThrowIfNull(tape);
+        Load(tape, label, TapeMode.Recording);
+        _position = tape.Bytes.Count;
     }
 
     /// <summary>
     ///  Stops the recorder and takes the tape out.
     /// </summary>
-    /// <returns>The tape's bytes, or null when the recorder was empty.</returns>
-    public byte[]? Eject()
+    /// <returns>The tape, or null when the recorder was empty.</returns>
+    public AltairTape? Eject()
     {
-        byte[]? tape = _mode == TapeMode.Stopped ? null : [.. _tape];
-        Load([], "");
-        _mode = TapeMode.Stopped;
+        AltairTape? tape = _tape;
+        Load(tape: null, "", TapeMode.Stopped);
         return tape;
     }
+
+    /// <inheritdoc/>
+    public void Saved(string label, string format, bool whole)
+    {
+        if (_tape is not { } tape) { throw new InvalidOperationException("There is no tape in the recorder."); }
+        _label = label;
+        if (whole) { tape.MarkSaved(); } else { tape.MarkChanged(); }
+    }
+
+    /// <inheritdoc/>
+    /// <remarks>
+    ///  <para>
+    ///   The tape plays from its start, as a recording put back from the recovery journal or for Undo is there for
+    ///   <c>CLOAD</c>; it keeps its changes until it is saved.
+    ///  </para>
+    /// </remarks>
+    public void Mount(IMedium medium, string label, string format) =>
+        Play(medium as AltairTape ?? throw new ArgumentException($"{Info.Name} does not take a {medium?.GetType().Name}.", nameof(medium)), label);
+
+    /// <inheritdoc/>
+    public IMedium? Unmount() => Eject();
 
     /// <summary>
     ///  Advances one CPU cycle: a tape that plays delivers its next byte each character time.
     /// </summary>
     internal void Tick()
     {
-        if (_mode != TapeMode.Playing || _position >= _tape.Count) { return; }
+        if (_mode != TapeMode.Playing || _tape is not { } tape || _position >= tape.Bytes.Count) { return; }
         if (++_cycles < _acr.CyclesPerCharacter) { return; }
         _cycles = 0;
-        _acr.Receive(_tape[_position++]);
+        _acr.Receive(tape.Bytes[_position++]);
     }
 
-    private void Load(ReadOnlySpan<byte> tape, string label)
+    private void Load(AltairTape? tape, string label, TapeMode mode)
     {
-        _tape.Clear();
-        _tape.AddRange(tape);
+        _tape = tape;
+        _mode = mode;
         _position = 0;
         _cycles = 0;
         _label = label;
-        _changed = false;
+        MountGeneration = MountGenerations.Next();
     }
 
     // The 88-ACR sent a byte: a tape that records takes it.
     private void Record(byte value)
     {
-        if (_mode != TapeMode.Recording) { return; }
-        _tape.Add(value);
-        _position = _tape.Count;
-        _changed = true;
+        if (_mode != TapeMode.Recording || _tape is not { } tape) { return; }
+        tape.Append(value);
+        _position = tape.Bytes.Count;
     }
 }

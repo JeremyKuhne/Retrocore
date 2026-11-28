@@ -993,10 +993,10 @@ L_1904:
     RST 2
     PUSH H
     CALL L_198D
-    CALL L_190F
+    CALL TIME
     JMP PUTNEW
 
-L_190F:
+TIME:
     CALL L_19A0
     LXI D,$F928
     CALL L_1996
@@ -1013,10 +1013,10 @@ L_1924:
     RST 2
     PUSH H
     CALL L_198D
-    CALL L_192F
+    CALL DATE
     JMP PUTNEW
 
-L_192F:
+DATE:
     CALL L_19A0
     LXI D,$F92C
     LDAX D
@@ -1043,10 +1043,10 @@ L_1955:
     PUSH H
     MVI A,$03
     CALL L_198F
-    CALL L_1962
+    CALL DAY
     JMP PUTNEW
 
-L_1962:
+DAY:
     CALL L_19A0
     LDA D_F92B
     MOV C,A

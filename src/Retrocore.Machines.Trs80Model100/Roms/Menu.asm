@@ -392,14 +392,14 @@ L_5A12:
 L_5A15:
     CALL L_5D6A
     LXI H,$FD8B
-    CALL L_192F
+    CALL DATE
     MVI M,$20
     INX H
-    CALL L_1962
+    CALL DAY
     XCHG
     MVI M,$20
     INX H
-    CALL L_190F
+    CALL TIME
     MVI M,$00
     LDA D_F92C
     LXI H,$5AE6

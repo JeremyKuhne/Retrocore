@@ -10,7 +10,7 @@ the first stage, where each name came from, and what is left.
 ## Sources and citations
 
 - **M100TR**: Tandy's [TRS-80 Model 100 Technical Reference Manual](https://archive.org/details/trs-80-model-100-technical-reference-manual)
-  (1984), whose section 8, "ROM Subroutines", names 67 entry points and three variables with their addresses. Only
+  (1984), whose section 8, "ROM Subroutines", names 70 entry points and three variables with their addresses. Only
   the names and addresses come into the source, never the manual's text.
 - **MBASIC**: the SDK's [MBASIC 5.21](../../src/Retrocore.Machines.Kaypro/Roms/Mbasic/Mbasic.asm), whose names are
   Microsoft's (from GW-BASIC's source, Level II's and memory; see [Mbasic.md](Mbasic.md)). The Model 100's BASIC is
@@ -59,8 +59,9 @@ The IDs are M100.
   Model 100's file errors from code 50 (`IEERR` to `CFERR`) by the same rule.
 - M100-5. No names from MBASIC's math package: the Model 100's numbers are BCD, its math package other code, and the
   alignment found nothing there. The floating accumulator's bytes keep their `D_` names.
-- M100-6. One source for both machines, `MODEL` 100 or 102. The Tandy 102 differs in 51 places, 30 of them in the
-  font; places within 24 bytes of each other share a block, which makes 24 `.if` blocks. The font's glyphs and
+- M100-6. One source for both machines, `MODEL` 100 or 102. 355 of the Tandy 102's bytes differ; widened to whole
+  instructions in both ROMs, they make 51 places, 30 of them in the font ($770B-$7D32), and places within 24 bytes
+  of each other share a block, which makes 24 `.if` blocks. The font's glyphs and
   the other binary tables are written in hex, never as text.
 - M100-7. The modules follow the ROM's subjects, at routine boundaries both ROMs share: Microsoft's BASIC in
   MBASIC's order, then the Model 100's own code by what it drives. The boundaries are a first cut, to be refined

@@ -421,7 +421,7 @@ and from a `CSAVE` MAME 0.264 recorded to WAV. No new downloads.
   restarts and tables to the cold start, assemble byte for byte to the US Model 100's ROM, and with `MODEL = 102`
   to the Tandy 102's; each difference is an `.if MODEL = 100` block. `Trs80Model100RomSourceTests` pin both builds'
   digests, so they need no ROM.
-- **The names**, named but not yet converted ([the naming log](../conversions/Model100.md)): Tandy's names for the 67
+- **The names**, named but not yet converted ([the naming log](../conversions/Model100.md)): Tandy's names for the 70
   entry points and 3 variables the Technical Reference documents; the statement and function handlers by their
   keywords; about 280 of Microsoft's names, where the interpreter's and the string package's code lines up with
   MBASIC's, and 36 of its variables; and the tables, restarts and the ROM's programs by what they are. The rest keep

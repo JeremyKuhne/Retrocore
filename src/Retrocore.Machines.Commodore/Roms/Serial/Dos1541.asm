@@ -4,10 +4,10 @@
 ;; The disk drives' DOS, 16 KB at $C000-$FFFF: 325302-01 at $C000, the same in every drive, and at $E000 the 1541's
 ;; 901229 or the 1540's 325303-01. The drive is a computer of its own, a 6502 with 2 KB of RAM and two VIAs: one
 ;; for the serial bus to the VIC-20 or 64 ($1800), one for the mechanism ($1C00). The DOS has two halves that share
-;; the job queue at $0000-$0005. The controller, run by the 6522's timer interrupt every 14.85 ms or more, does the
-;; jobs on the disk: seeking, reading and writing sectors in GCR, and formatting. The DOS, which the idle loop runs,
-;; is the rest: the serial bus, the command channel and its commands, the directory, the block availability map, the
-;; files and channels and the error channel.
+;; the job queue at $0000-$0005. The controller, run by the 6522's timer interrupt every 14.848 ms (58 x 256 cycles at
+;; 1 MHz) or more, does the jobs on the disk: seeking, reading and writing sectors in GCR, and formatting. The DOS,
+;; which the idle loop runs, is the rest: the serial bus, the command channel and its commands, the directory, the
+;; block availability map, the files and channels and the error channel.
 ;;
 ;; THE LAYOUT
 ;;

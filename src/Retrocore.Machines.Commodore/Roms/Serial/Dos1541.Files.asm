@@ -88,7 +88,7 @@ Done:
 ;; Also: DIV254 (D1541)
 .proc DivideBy254
     lda #$FE
-    .byte $2C
+    .byte OPCODE_BIT
 .endproc
 
 ;; Divides `Relative::Product` by 120 (entries in a side sector), or by the divisor in A from <DivideBy254>: subtracts
@@ -397,7 +397,7 @@ Done:
 ;; Also: PBYTE (D1541)
 ToChannel:
     lda SecondaryAddress
-    cmp #$0F
+    cmp #COMMAND_SECONDARY
     beq AcceptByte::ToCommand
     bne AcceptByte::ToFile
 .endproc
@@ -411,7 +411,7 @@ ToChannel:
 .proc AcceptByte
     lda SecondaryCommand
     and #$8F
-    cmp #$0F
+    cmp #COMMAND_SECONDARY
     bcs ToCommand
 
 ;; A file's byte, by type (<AcceptInternalByte> enters here).
@@ -442,7 +442,7 @@ ToCommand:
     lda #COMMAND_CHANNEL
     sta Channel
     jsr GetPointer
-    cmp #$2A
+    cmp #<CommandBuffer+COMMAND_LENGTH_MAX+1
     beq CheckEnd
     lda DataByte
     jsr PutByte
@@ -669,7 +669,7 @@ Start:
     lda #$00
     sta BufferPositions,x
     jsr ChannelType
-    cmp #$04
+    cmp #TYPE_RELATIVE
     bcs Done
     inc ChannelBlocks,x
     bne Done
@@ -981,7 +981,7 @@ Done:
 ;; Also: FRECHN (D1541)
 .proc FreeChannel
     lda SecondaryAddress
-    cmp #$0F
+    cmp #COMMAND_SECONDARY
     bne Free
     rts
 
@@ -1199,7 +1199,7 @@ Next:
 ;; CLRCHN: frees the channels of secondary addresses 14 down to 1 (the new command calls it).
 ;; Also: CLRCHN (D1541)
 .proc FreeAllChannels
-    lda #$0E
+    lda #COMMAND_SECONDARY-1
     sta SecondaryAddress
 
 ;; Each one.
@@ -1214,7 +1214,7 @@ Loop:
 ;; CLDCHN: frees each channel, SA 14 down to 0, whose active buffer's last job was for DRVNUM.
 ;; Also: CLDCHN (D1541)
 .proc FreeDriveChannels
-    lda #$0E
+    lda #COMMAND_SECONDARY-1
     sta SecondaryAddress
 
 ;; Each secondary address.
@@ -1372,7 +1372,7 @@ Found:
 ;; Also: GET00 (D1541)
 NotRelative:
     lda SecondaryAddress
-    cmp #$0F
+    cmp #COMMAND_SECONDARY
     beq ErrorChannel
     lda ChannelStatus,x
     and #CHANNEL_MORE
@@ -1397,7 +1397,7 @@ More:
     lda SecondaryAddress
     beq Load
     jsr ChannelType
-    cmp #$04
+    cmp #TYPE_RELATIVE
     bcc Sequential
 
 ;; A direct or user channel's next byte; after the last the pointer wraps.
@@ -1492,9 +1492,9 @@ ErrorReady:
 ;; The error channel's CHNRDY and CHNDAT.
 ;; Also: GE30 (D1541)
 SetError:
-    sta $F7
+    sta ChannelStatus+MESSAGE_CHANNEL
     lda DataByte
-    sta $0243
+    sta ChannelByte+MESSAGE_CHANNEL
     rts
 .endproc
 
@@ -2264,7 +2264,7 @@ WriteBlock:
     ldx CommandBuffer
     lda SavedSecondary
     bne NotLastProgram
-    cpx #$2A
+    cpx #'*'
     bne NotLastProgram
     lda LastProgramTrack
     beq NoLastProgram
@@ -2278,7 +2278,7 @@ WriteBlock:
     sta Sector
     jsr TurnOnActivityLed
     jsr OpenReadChannel
-    lda #$04
+    lda #TYPE_PROGRAM+TYPE_PROGRAM
     ora DriveNumber
 
 ;; FILTYP = A; the command ends. (The store indexes with Y, which the read leaves as the channel; the code loads X.)
@@ -2291,7 +2291,7 @@ SetType:
 ;; "$": the directory.
 ;; Also: OP021 (D1541)
 NotLastProgram:
-    cpx #$24
+    cpx #'$'
     bne NotDirectory
     lda SavedSecondary
     bne DirectoryAsFile
@@ -2307,13 +2307,13 @@ DirectoryAsFile:
     sta Sector
     jsr OpenReadChannel
     lda DriveNumber
-    ora #$02
+    ora #TYPE_SEQUENTIAL+TYPE_SEQUENTIAL
     jmp SetType
 
 ;; "#": a direct channel (the block command's).
 ;; Also: OP041 (D1541)
 NotDirectory:
-    cpx #$23
+    cpx #'#'
     bne ParseName
     jmp OpenDirect
 
@@ -2448,7 +2448,7 @@ CheckExists:
 ;; Also: OP81 (D1541)
 Exists:
     lda CommandBuffer
-    cmp #$40
+    cmp #'@'
     beq Replace
     txa
     bne PatternName
@@ -2726,7 +2726,7 @@ AllFiles:
     inc FileNameStart
     lda #$80
     sta FileNamePattern
-    lda #$2A
+    lda #'*'
     sta CommandBuffer
     sta CommandBuffer+1
     bne Search
@@ -2764,7 +2764,7 @@ Search:
     ora #$04
     sta ChannelFileType,x
     lda #$00
-    sta $A3
+    sta CommandPointer
     rts
 .endproc
 
@@ -2788,7 +2788,7 @@ FreeInternal:
 ;; Not SA 0: SA 15 closes every channel; others their own, SA 1 the internal ones too.
 ;; Also: CLS10 (D1541)
 NotLoad:
-    cmp #$0F
+    cmp #COMMAND_SECONDARY
     beq CommandChannel
     jsr CloseChannel
     lda SecondaryAddress
@@ -2806,7 +2806,7 @@ Error:
 ;; SA 15: SA 14 down to 0, each closed.
 ;; Also: CLSALL (D1541)
 CommandChannel:
-    lda #$0E
+    lda #COMMAND_SECONDARY-1
     sta SecondaryAddress
 
 ;; The next.

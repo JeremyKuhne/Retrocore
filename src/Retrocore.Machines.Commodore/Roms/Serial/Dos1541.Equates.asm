@@ -2,7 +2,7 @@
 ; COMMODORE 1541 DOS: THE LOCATIONS AND THE CONSTANTS
 
 ; The job queue, $0000-$0011: the DOS's requests to the controller, one entry per buffer, with each job's header. See
-; <Jobs> for the DOS's side of it and <Controller> for the other.
+; the Jobs family for the DOS's side of it and the Controller for the other.
 
 ;; The job queue, a byte per buffer: the job code with the drive in bit 0, which the controller replaces with a result
 ;; below $80 when it is done (Q4).
@@ -175,7 +175,8 @@ JobNumber = $00F9
 ;; Each drive's flag, set when initializing it failed.
 ;; Also: NODRV (D1541)
 NoDrive = $00FF
-; Page 1, which the stack shares: its bottom byte is a variable (the stack's top holds <Controller::OverflowBuffer>).
+; Page 1, which the stack shares: the disk formats' two bytes are at its bottom, and a data block's GCR overflow fills
+; its top (<Controller::OverflowBuffer>).
 
 ;; Each drive's disk format, from the BAM, "A"; writing refuses another.
 ;; Also: DSKVER (D1541)
@@ -321,7 +322,8 @@ FreeBlocksHigh = $02FC
 ;; listing's comment is wrong.)
 ;; Also: PHASE (D1541)
 StepRequest = $02FE
-; The buffers, $0300-$07FF: five data buffers of a page each, which the job queue's entries are for, buffer n at page 3 + n.
+; The buffers, $0300-$07FF: five data buffers of a page each, which the job queue's entries are for, buffer n at
+; page 3 + n.
 
 ;; Buffer 0, where formatting builds the headers.
 ;; Also: BUFF0 (D1541)
@@ -655,6 +657,10 @@ JOB_JUMP = $D0
 ;; Job code $E0: run the code in the buffer once its track is reached.
 ;; Also: EXEC (D1541)
 JOB_EXECUTE = $E0
+
+;; The block availability map: which blocks of each disk are free. The BAM is a sector of the disk, held in a buffer
+;; of its own; this family reads and writes it, allocates and frees blocks in it, keeps the free counts and swaps the
+;; two drives' images of it. Its variables here are the allocation's and the swap's.
 .scope Bam
 ;; Non-zero to stop a changed disk being initialized on its next use; only a memory write sets it.
 ;; Also: AUTOFG (D1541)
@@ -672,6 +678,10 @@ ImageTracks = $029D
 ;; Also: BAM (D1541)
 Images = $02A1
 .endscope
+
+;; The command channel: the parser that splits a command into names and numbers, the commands (the file commands,
+;; the block and memory commands, the user commands, and the one that formats), and the status of the LED they
+;; control. Its locations are the parser's.
 .scope Commands
 ;; A pointer to <UserCommandVectors>, the U commands' jump table.
 ;; Also: USRJMP (D1541)
@@ -708,6 +718,11 @@ COUNT = 12
 ;; Also: LDCMD (D1541)
 LOAD_STRUCTURE = 12
 .endscope
+
+;; The drive controller, run by VIA 2's timer interrupt: it takes the jobs from the job queue, steps the head to
+;; their tracks, finds their sectors, reads and writes them in GCR, and formats a disk. Its locations are the
+;; controller's own zero page and the formatting's variables, and its constants are the GCR codes' masks, the
+;; formatting results and the scheduling's distances.
 .scope Controller
 ;; The write-protect sense at the last interrupt, to see it change.
 ;; Also: LWPT (D1541)
@@ -915,8 +930,8 @@ CODE5_HIGH = $0F
 ;; GCR decoding: the eighth code, bits 0-4 of the fifth byte.
 ;; Also: MASK8 (D1541)
 CODE8 = $1F
-;; VIA 2's timer 1 latch, high byte: 58 x 256 cycles, an interrupt every 14.8 ms, counted from the end of each pass, so
-;; times counted in interrupts are minimums. (Not 8 ms, as `lccend` says.)
+;; VIA 2's timer 1 latch, high byte: 58 x 256 cycles, an interrupt every 14.848 ms at 1 MHz, counted from the end of
+;; each pass, so times counted in interrupts are minimums. (Not 8 ms, as `lccend` says.)
 ;; Also: TIM (D1541)
 IRQ_PERIOD = 58
 ;; GCR decoding: the third code, bits 1-5 of the second byte.
@@ -925,8 +940,9 @@ CODE3 = $3E
 ;; <JOB_BUMP> as <JobCode> holds it, the top bit and drive removed.
 ;; Also: BUMPC (D1541)
 JOB_CODE_BUMP = $40
-;; As TOPWRT, which it equals: the read side's name. Reading takes 70 bytes, from $01BA (`ldy #255-TOPRD`), one more
-;; than writing.
+;; The 69 GCR bytes of a data block beyond 256, kept at the top of the stack page: written from $01BB (256 minus this,
+;; 69 bytes); the stack resets load the stack pointer with it. Reading takes 70 bytes, from $01BA (`ldy #255-TOPRD`),
+;; one more, the listing's TOPRD name for this value.
 ;; Also: TOPRD (D1541), TOPWRT (D1541)
 OVERFLOW_SIZE = 69
 ;; <JOB_EXECUTE> as <JobCode> holds it.
@@ -957,6 +973,9 @@ CODE1 = $F8
 ;; listing writes as DRVTRK+1.
 SerialNoDelay = Controller::HeadTrack + 1
 
+
+;; The directory: searching it for file names, listing it as a program and the entries' bookkeeping. Its locations
+;; are the search's and the listing's.
 .scope Directory
 ;; Used only by the directory code (lookup and trnsfr's listing half): set while the search goes on to the other drive.
 ;; Also: DRVFLG (D1541)
@@ -987,6 +1006,9 @@ BLOCK_COUNT_END = 24
 ;; Also: NBSIZ (D1541)
 LISTING_TEXT_LENGTH = 27
 .endscope
+
+;; The channels and the files on them: OPEN and CLOSE, the channels' buffers and their least-recently-used order,
+;; and the sequential and program files' reading and writing. Its locations are OPEN's and the last program's.
 .scope Files
 ;; The first track of the last program loaded, for LOAD "*".
 ;; Also: PRGTRK (D1541)
@@ -1019,11 +1041,17 @@ MODE_MODIFY = 3
 ;; Also: NMODES (D1541)
 MODE_COUNT = 4
 .endscope
+
+;; The idle loop, which the DOS runs when the serial bus and the controller have nothing for it: it serves the bus,
+;; runs the command channel's commands and flashes the error LED. It has one variable here.
 .scope Idle
 ;; Cleared before each command; nothing reads it.
 ;; Also: NMIFLG (D1541)
 NmiDebounce = $0067
 .endscope
+
+;; The DOS's side of the job queue: setting up a job, queueing it for the controller, waiting for it and, when it
+;; fails, recovering: retrying, with the head offset from the track and a bump to find track 1.
 .scope Jobs
 ;; A failed job's recovery: bits 0-5 the tries, bit 6 set for no head offsets, bit 7 set to give up without the last
 ;; bump (CheckBump bumps when it is clear).
@@ -1036,6 +1064,9 @@ OffsetIndex = $0299
 ;; Also: TOFF (D1541)
 TotalOffset = $029A
 .endscope
+
+;; The relative files: their side sectors, which list a file's data blocks, and the record arithmetic that finds a
+;; record's block and place. Its locations are the arithmetic's and its constants the side sectors' sizes.
 .scope Relative
 ;; Four bytes: the record number times the record size plus the offset, the record's place in the file.
 ;; Also: RESULT (D1541)
@@ -1050,6 +1081,9 @@ SIDE_SECTOR_COUNT = 6
 ;; Also: NSSP (D1541)
 POINTERS_PER_SIDE_SECTOR = 120
 .endscope
+
+;; The serial bus, to the VIC-20 or 64: the lines on VIA 1's port B, the handshake that sends and receives a byte
+;; under the bus's protocol, and the commands under ATN (LISTEN, TALK, UNLISTEN, UNTALK and the secondary addresses).
 .scope Serial
 ;; The drive's LISTEN command, $20 plus the device number from the jumpers.
 ;; Also: LSNADR (D1541)
@@ -1085,6 +1119,9 @@ UNLISTEN = $3F
 ;; Also: UNTLK (D1541)
 UNTALK = $5F
 .endscope
+
+;; Start-up: the reset, the tests of the ROM and the RAM, the initialization of the variables, the VIAs and the
+;; channels, and the self-test's failure signals.
 .scope Startup
 ;; <FreeChannels> at reset: channels 0-3 free, the command and error channels taken.
 ;; Also: LXINT (D1541)

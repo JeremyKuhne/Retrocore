@@ -447,10 +447,12 @@ public class ContractAnalysisTests
         // Text after a return, just before a caller's run, which only a label names, is no way into it; nor is an
         // equate whose value falls inside one of its instructions.
         string text = """
-            Thing = $1005
+            Thing = $1008
 
-            ;; Returns.
-            Before:
+            ;; Reads the text's end, which a load names but no code runs into.
+            ;; Uses: A
+            Peek:
+                lda Message+2
                 rts
 
             Message:
@@ -487,7 +489,7 @@ public class ContractAnalysisTests
             """ + Callee;
 
         (findings, _, _) = Check(vector, "Mos6502");
-        findings.Should().Contain(finding => finding.StartsWith("Main ($100C) documents Keeps: X", StringComparison.Ordinal));
+        findings.Should().ContainSingle().Which.Should().Contain("Main ($100C) documents Keeps: X");
 
         // An exported entry may be called by programs outside the assembly, with any values.
         string exported = """

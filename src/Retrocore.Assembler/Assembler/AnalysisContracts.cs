@@ -50,6 +50,9 @@ internal sealed partial class AnalysisContracts
     // was pushed.
     private readonly HashSet<ushort> _numbers = [];
 
+    // The numbers data holds, which a vector jump, as JMP (Vector), or an RTS table may go to.
+    private readonly HashSet<ushort> _vectors = [];
+
     // The direct targets of jumps, branches and calls, where code surely goes.
     private readonly HashSet<ushort> _targets = [];
 
@@ -341,6 +344,8 @@ internal sealed partial class AnalysisContracts
                 ushort word = little ? (ushort)(first | (second << 8)) : (ushort)((first << 8) | second);
                 _numbers.Add(word);
                 _numbers.Add((ushort)(word + 1));
+                _vectors.Add(word);
+                _vectors.Add((ushort)(word + 1));
             }
         }
 
@@ -559,13 +564,14 @@ internal sealed partial class AnalysisContracts
     }
 
     // Whether code may run into a data byte: through a jump, branch or call to it or before it in its data, a number
-    // that points there, as a JMP (Vector) may go, or by falling into the data from the instruction before, as into a
-    // .byte $2C written as a skip; a table or text after a return, which only a label names, is not.
+    // data holds that points there, as a JMP (Vector) may go, or by falling into the data from the instruction before,
+    // as into a .byte $2C written as a skip; a table or text after a return, which only a label or a load names, is
+    // not.
     private bool DataReached(ushort at)
     {
         for (int steps = 0; steps < MaximumRunSteps; steps++)
         {
-            if (_targets.Contains(at) || _numbers.Contains(at)) { return true; }
+            if (_targets.Contains(at) || _vectors.Contains(at)) { return true; }
             ushort before = (ushort)(at - 1);
             if (!_defined[before] || !_data[before]) { return FallsInto(at) is not null; }
             at = before;

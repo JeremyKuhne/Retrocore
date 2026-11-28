@@ -646,16 +646,17 @@ number (an operand that is no direct target, or any two bytes of one data statem
 RTS) where an instruction starts, as an RTS table's `CATALOGUE-1` is at CATALOGUE, since a font's bytes may read as
 numbers too, or after an instruction that may go elsewhere (a jump, branch or return), and is cut short after 64
 instructions. The first finding stands where some call's run cannot be followed to the call, where a patched byte, or
-data that code falls into, jumps to or holds a number for, as a `JMP (Vector)` may go, comes just before a run, as a
-skip written `.byte $2C`, or a way in lies inside one of its instructions, as a jump to an operand byte, and for an
-entry whose address the code also takes as data or writes as a number, or that is exported, since programs outside the
-assembly may call it with any values. A jump or branch to an entry is no call: the code that takes it is followed
-through the entry with its own values. But one from outside the entry's routine may follow a pushed return address, as a
-JSR would, so such an entry keeps its finding, as does one that code from outside its routine falls into. Not seen: a
-number that points into the middle of an instruction, as a `JMP (table)` into an operand byte; a return address pushed
-as two numbers rather than a name; a jump within the entry's own routine after a pushed return address; and a way in
-before a run whose instructions, decoded from there, take more than one step to reach it. That brings the report to 894
-routines checked, 25 findings and 121 `Keeps:` items not verified.
+data that code falls into, jumps to, or that a number in data points at, as a `JMP (Vector)` may go (not one an
+instruction only reads, as `lda Table`), comes just before a run, as a skip written `.byte $2C`, or a way in lies inside
+one of its instructions, as a jump to an operand byte, and for an entry whose address the code also takes as data or
+writes as a number, or that is exported, since programs outside the assembly may call it with any values. A jump or
+branch to an entry is no call: the code that takes it is followed through the entry with its own values. But one from
+outside the entry's routine may follow a pushed return address, as a JSR would, so such an entry keeps its finding, as
+does one that code from outside its routine falls into. Not seen: a number that points into the middle of an
+instruction, as a `JMP (table)` into an operand byte; a return address pushed as two numbers rather than a name; a jump
+within the entry's own routine after a pushed return address; and a way in before a run whose instructions, decoded from
+there, take more than one step to reach it. That brings the report to 894 routines checked, 25 findings and 121 `Keeps:`
+items not verified.
 
 What it costs, measured in Release over the MOS, the DFS and MBASIC with their maps: about 190 ms for the three
 once warm, and 114 MB allocated (220 ms and 107 MB before the review's fixes). Without maps it was about 140 ms and

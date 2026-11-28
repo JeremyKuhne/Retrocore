@@ -40,7 +40,8 @@ internal sealed partial class AnalysisContracts
     private readonly Dictionary<ushort, List<AnalysisRoutineState>> _callStates = [];
     private ushort? _observing;
 
-    // Where code may be entered other than by falling into it: labels and the targets of jumps and branches.
+    // Where code may be entered other than by falling into it: labels and the targets of jumps and branches, at any
+    // byte, and addresses the code writes as numbers, at an instruction's start.
     private readonly HashSet<ushort> _entered = [];
     private readonly HashSet<ushort> _instructionSet = [];
 
@@ -48,6 +49,9 @@ internal sealed partial class AnalysisContracts
     // target, as LDX #$100B, and every word of data, each with the next address too, as an RTS goes one past what
     // was pushed.
     private readonly HashSet<ushort> _numbers = [];
+
+    // The jumps and branches to each address, by their addresses.
+    private readonly Dictionary<ushort, List<ushort>> _jumpSites = [];
     private const int MaximumCallStates = 16;
     private const int MaximumRunSteps = 64;
     private const int MaximumInstruction = 5;
@@ -209,7 +213,7 @@ internal sealed partial class AnalysisContracts
         int unverified = 0;
         IsaDescription description = _set.Description;
 
-        // Every routine first, so the calls to each entry have been seen.
+        // Every routine first, so what each one visits is known when its entries are checked.
         foreach (ushort address in _contracts.Keys) { Analyzed(address); }
         foreach ((ushort address, AnalysisContract contract) in _contracts)
         {
@@ -284,6 +288,12 @@ internal sealed partial class AnalysisContracts
             if (!_engine.TryDecode(address, out DisassembledInstruction instruction)) { continue; }
             _instructionSet.Add(address);
             if (instruction.DirectTarget is { } target) { _entered.Add(target); }
+            if (instruction.Flow is DisassemblyFlow.Jump or DisassemblyFlow.ConditionalBranch && instruction.DirectTarget is { } jumped)
+            {
+                if (!_jumpSites.TryGetValue(jumped, out List<ushort>? jumps)) { _jumpSites[jumped] = jumps = []; }
+                jumps.Add(address);
+            }
+
             if (instruction.Form.FieldCount != 0 && instruction.DirectTarget != instruction.Operand)
             {
                 _numbers.Add(instruction.Operand);
@@ -323,7 +333,9 @@ internal sealed partial class AnalysisContracts
             }
         }
 
-        _entered.UnionWith(_numbers);
+        // A number is a guess, as a font's bytes may read as one: it is a way in only at an instruction's start, as
+        // an RTS table's CATALOGUE-1 is at CATALOGUE.
+        _entered.UnionWith(_numbers.Where(_instructionSet.Contains));
 
         // Each symbol by its name and by its last part, as Inner of Routine::Inner, with every address a part names
         // where scopes share it, as two routines' Loop labels.
@@ -517,6 +529,19 @@ internal sealed partial class AnalysisContracts
             if (_patched[at]) { return null; }
         }
 
+        // A way in that is no instruction's start, as JMP Caller+3 into a CMP #$EA that runs as NOP, or as a BIT whose
+        // operand hides an instruction, may come into the run in the middle of one: inside the run, or just before it
+        // where what it decodes to runs on past the run's start.
+        for (ushort at = (ushort)(address - (MaximumInstruction - 1)); at != site; at++)
+        {
+            if (!_entered.Contains(at) || _instructionSet.Contains(at)) { continue; }
+            bool inside = (ushort)(at - address) < (ushort)(site - address);
+            if (inside || (_engine.TryDecode(at, out DisassembledInstruction hidden) && (ushort)(address - at) < hidden.Size))
+            {
+                return null;
+            }
+        }
+
         return address;
     }
 
@@ -564,8 +589,13 @@ internal sealed partial class AnalysisContracts
             }
         }
 
-        // An entry whose address the code takes as data, as in a table, or writes as a number, may be called through it.
-        bool onlyCalled = !_referenced.Contains(address) && !_numbers.Contains(address);
+        // An entry whose address the code takes as data, as in a table, or writes as a number, may be called through
+        // it; one other code jumps or branches to may be called by a jump, after a return address pushed, as a JSR
+        // would. Its own routine's jumps and branches to it are its own code.
+        IReadOnlySet<ushort> own = Analyzed(contract.Address)?.Visited ?? new HashSet<ushort>();
+        bool onlyCalled = !_referenced.Contains(address)
+            && !_numbers.Contains(address)
+            && (!_jumpSites.TryGetValue(address, out List<ushort>? jumps) || jumps.All(own.Contains));
 
         if (found.Count != 0 && onlyCalled && sites.Count != 0 && sites.All(Seen))
         {

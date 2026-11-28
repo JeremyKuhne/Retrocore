@@ -373,6 +373,49 @@ public class ContractAnalysisTests
         (findings, _, _) = Check(patched, "Mos6502");
         findings.Should().ContainSingle().Which.Should().Contain("Main ($100C) documents Keeps: X");
 
+        // A jump into the middle of an instruction of a caller's run, here to CMP #$EA's operand, a NOP, comes in
+        // with A = 0, so that run is not seen.
+        string hidden = """
+            ;; Sets bit 0.
+            ;; Uses: A
+            Caller:
+                lda #1
+                cmp #$EA
+                jsr Set
+                rts
+
+            Other:
+                lda #0
+                jmp Caller+3
+            """ + Callee;
+
+        (findings, _, _) = Check(hidden, "Mos6502");
+        findings.Should().ContainSingle().Which.Should().Contain("Main ($100D) documents Keeps: X");
+
+        // A jump to the entry from other code may follow a pushed return address, as a call: the finding stands.
+        string pushed = """
+            ;; Sets bit 0.
+            ;; Uses: A
+            Caller:
+                lda #1
+                jsr Set
+                rts
+
+            Back:
+                rts
+
+            Pusher:
+                lda #>(Back-1)
+                pha
+                lda #<(Back-1)
+                pha
+                lda #0
+                jmp Set
+            """ + Callee;
+
+        (findings, _, _) = Check(pushed, "Mos6502");
+        findings.Should().ContainSingle().Which.Should().Contain("Main ($1012) documents Keeps: X");
+
         // A jump to the entry is no call: the code that takes it is followed through it, with its own values, and
         // its own contract is checked.
         string jump = """

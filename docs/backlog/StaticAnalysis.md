@@ -642,12 +642,14 @@ call to it, starting with what the caller's registers and flags hold there, but 
 moves: a sure change with any caller's values is a finding. Each call's values come from its straight run of code,
 followed from the run's start with nothing known there, as for each caller's `lda #CFS_INPUT_OPEN` then `jsr
 SET_STATUS_BITS`. A run starts at a label, a jump's or branch's target, an address the code writes as a number (an
-operand that is no direct target, or any word of data, and the address after it, for an RTS), or the code after one that
-does not fall through. The first finding stands where some call's run cannot be followed to the call, where data or a
-patched byte comes just before a run, as a skip written `.byte $2C` that falls into it, or a byte of the run may be
-patched, and for an entry whose address the code also takes as data or writes as a number. A jump or branch to an entry
-is no call, and does not rely on its promise: the code that takes it is followed through the entry with its own values.
-That brings the report to 894 routines checked, 25 findings and 121 `Keeps:` items not verified.
+operand that is no direct target, or any two bytes of one data statement, and the address after it, for an RTS), or the
+code after one that does not fall through. The first finding stands where some call's run cannot be followed to the
+call, where data or a patched byte comes just before a run, as a skip written `.byte $2C` that falls into it, or a byte
+of the run may be patched, or a way in lies inside one of its instructions, as a jump to an operand byte, and for an
+entry whose address the code also takes as data or writes as a number. A jump or branch to an entry is no call: the code
+that takes it is followed through the entry with its own values. But one from outside the entry's routine may follow a
+pushed return address, as a JSR would, so such an entry keeps its finding. That brings the report to 894 routines
+checked, 25 findings and 121 `Keeps:` items not verified.
 
 What it costs, measured in Release over the MOS, the DFS and MBASIC with their maps: about 190 ms for the three
 once warm, and 114 MB allocated (220 ms and 107 MB before the review's fixes). Without maps it was about 140 ms and

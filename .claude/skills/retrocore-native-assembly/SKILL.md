@@ -1,6 +1,6 @@
 ---
 name: retrocore-native-assembly
-description: Write, edit and review assembly in Retrocore's native dialect, for the 6502 family and the Z80, including the SDK's hand-maintained ROM sources (Monitor.asm, the IIe firmware, AppleSoft, PET BASIC, WozMonitor.asm, Apple-1 BASIC, Level2.asm, Level1.asm, Model3.asm, Model2Boot.asm, CharacterGenerator.asm). Use when creating or changing a .asm or .s file in native syntax, writing Z80 or 6502 examples, documenting routines with ;; comments, converting a disassembled or old-style source to the maintained style (structure, names, constants, links, historical names), or checking that a ROM source still assembles byte-identically.
+description: Write, edit and review assembly in Retrocore's native dialect, for the 6502 family, the Z80 and the 8080 and 8085, including the SDK's hand-maintained ROM sources (Monitor.asm, the IIe firmware, AppleSoft, PET BASIC, WozMonitor.asm, Apple-1 BASIC, Level2.asm, Level1.asm, Model3.asm, Model2Boot.asm, CharacterGenerator.asm, Model100.asm). Use when creating or changing a .asm or .s file in native syntax, writing Z80 or 6502 examples, documenting routines with ;; comments, converting a disassembled or old-style source to the maintained style (structure, names, constants, links, historical names), or checking that a ROM source still assembles byte-identically.
 license: MIT
 compatibility: Requires the .NET SDK to assemble and test. The full reference is docs/NativeAssembly.md.
 metadata:
@@ -39,7 +39,7 @@ errors, or worse, sources that assemble to the wrong bytes. Read these rules bef
 11. **On the 6502, an address below $100 assembles as zero page** when it is known; `a:`, `!` or `.w` force
     absolute and `z:` forces zero page.
 12. **`.cpu Name` picks the instruction set**: `Mos6502` (undocumented opcodes included), `Wdc65C02`,
-    `Rockwell65C02`, `65SC02` or `Z80`.
+    `Rockwell65C02`, `65SC02`, `Z80`, or `I8080` and `I8085` (Intel's mnemonics: `MOV A,M`, `LXI H,Table`).
 
 ## Writing a source
 
@@ -113,13 +113,14 @@ For a disassembly, an old-style SDK source, or anything maintained by hand that 
 ## Editing the SDK's ROM sources
 
 The sources in `src/Retrocore.Machines.Apple2/Roms`, `src/Retrocore.Machines.Apple1/Roms`,
-`src/Retrocore.Machines.Trs80/Roms`, `src/Retrocore.Machines.Kaypro/Roms` (MBASIC.COM's too), and
-`src/Retrocore.Machines.Commodore/Roms` must assemble byte-identically to the ROMs, as must the Microsoft BASIC
-modules shared by AppleSoft and PET in `src/Retrocore.Basic/Roms/Microsoft6502Basic`. Check every variant:
-`ENHANCED` for the IIe; `REVISION` 12 or 13 for Level II; `MODEL` 1 or 3 for `Level1.asm`; `MODEL` and `ROMC` for
-`Model3.asm`; `VERSION` and `FILL_11BE` for `Model2Boot.asm`; `MODEL4P` for `Model3CharacterGenerator.asm`; and
-original and revised PET BASIC 1 and 4. They are maintained by hand: change names, comments and structure only in
-ways that keep the bytes.
+`src/Retrocore.Machines.Trs80/Roms`, `src/Retrocore.Machines.Kaypro/Roms` (MBASIC.COM's too),
+`src/Retrocore.Machines.Trs80Model100/Roms`, and `src/Retrocore.Machines.Commodore/Roms` must assemble
+byte-identically to the ROMs, as must the Microsoft BASIC modules shared by AppleSoft and PET in
+`src/Retrocore.Basic/Roms/Microsoft6502Basic`. Check every variant: `ENHANCED` for the IIe; `REVISION` 12 or 13 for
+Level II; `MODEL` 1 or 3 for `Level1.asm`; `MODEL` and `ROMC` for `Model3.asm`; `VERSION` and `FILL_11BE` for
+`Model2Boot.asm`; `MODEL4P` for `Model3CharacterGenerator.asm`; `MODEL` 100 or 102 for `Model100.asm`; and original
+and revised PET BASIC 1 and 4. They are maintained by hand: change names, comments and structure only in ways that
+keep the bytes.
 
 - **Renaming:** rename a label everywhere it is used, including other variants' `.if` blocks and the sources
   that include the file. A documented name that changes goes in the definition's `Also:` section.
@@ -127,11 +128,11 @@ ways that keep the bytes.
 - **Verifying:** run the digest tests, which need no ROMs:
 
   ```powershell
-  dotnet test tests/Retrocore.Tests -c Release --filter "FullyQualifiedName~SdkDocumentationTests|FullyQualifiedName~SystemSourceTests|FullyQualifiedName~Trs80RomSourceTests|FullyQualifiedName~Apple1RomTests|FullyQualifiedName~AppleSoftTests|FullyQualifiedName~KayproTests|FullyQualifiedName~PetRomSourceTests|FullyQualifiedName~PetBasicConformanceTests|FullyQualifiedName~BasicShared|FullyQualifiedName~BasicNativeRootSwitchTests|FullyQualifiedName~Basic1IndependentSwitchTests|FullyQualifiedName~PetBasic4|FullyQualifiedName~PetNativeEquatesTests|FullyQualifiedName~PetSharedFloatAssemblyTests"
+  dotnet test tests/Retrocore.Tests -c Release --filter "FullyQualifiedName~SdkDocumentationTests|FullyQualifiedName~SystemSourceTests|FullyQualifiedName~Trs80RomSourceTests|FullyQualifiedName~Trs80Model100RomSourceTests|FullyQualifiedName~Apple1RomTests|FullyQualifiedName~AppleSoftTests|FullyQualifiedName~KayproTests|FullyQualifiedName~PetRomSourceTests|FullyQualifiedName~PetBasicConformanceTests|FullyQualifiedName~BasicShared|FullyQualifiedName~BasicNativeRootSwitchTests|FullyQualifiedName~Basic1IndependentSwitchTests|FullyQualifiedName~PetBasic4|FullyQualifiedName~PetNativeEquatesTests|FullyQualifiedName~PetSharedFloatAssemblyTests"
   ```
 
-  With the dumps present (`RETROCORE_IIE_ROMS`, `RETROCORE_TRS80_ROMS`, `RETROCORE_PET_ROMS`), the same tests
-  name the first byte that differs.
+  With the dumps present (`RETROCORE_IIE_ROMS`, `RETROCORE_TRS80_ROMS`, `RETROCORE_TRS80M100_ROMS`,
+  `RETROCORE_PET_ROMS`), the same tests name the first byte that differs.
 
 Byte identity proves the assembled program has not changed; it does not prove that a new comment or contract is
 semantically correct. For `In:`, `Out:`, `Uses:` and `Keeps:`, trace every relevant exit path, including errors,

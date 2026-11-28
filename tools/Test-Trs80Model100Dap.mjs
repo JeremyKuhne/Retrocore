@@ -3,23 +3,26 @@
 // See LICENSE file in the project root for full license information
 
 // TRS-80 Model 100 DAP integration. A launch with no ROM says which ROM it needs. With the US Model 100's ROM in the
-// external test data (RETROCORE_TRS80M100_ROMS, or the cache's trs80m100-roms folder), the ROM boots to its menu,
-// and an 8085 source loaded at $E000 prints through the ROM's RST 4 onto the LCD; it stops at a breakpoint in its
-// Print routine with the 80C85's call stack and registers, steps out to the caller, and shows the LCD's frames and
-// the hardware. A logpoint in a loop the ROM's RST 7.5 keeps interrupting logs once per run, and one at $003C once
-// per interrupt. Then a launch with no program boots to the menu, enters BASIC with ENTER, runs a line typed at it,
-// and turns the power off and back on with Reset. A launch's files go on the menu, BASIC's program is read and
-// written through the debugger, and a program goes onto a tape with CSAVE and back with CLOAD. The Tandy 102's ROM,
-// when present, boots to the menu too. Without the ROM, everything after the first launch is skipped, which is not a
-// pass.
+// external test data (RETROCORE_TRS80M100_ROMS, or the cache's trs80m100-roms folder), the ROM boots to its menu, and
+// an 8085 source loaded at $E000 prints through the ROM's RST 4 onto the LCD; it stops at a breakpoint in its Print
+// routine with the 80C85's call stack and registers, stops in the ROM's LCD routine in the SDK's source for the ROM,
+// steps out to the callers, and shows the LCD's frames and the hardware. A logpoint in a loop the ROM's RST 7.5 keeps
+// interrupting logs once per run, and one at $003C once per interrupt. Then a launch with no program boots to the menu,
+// enters BASIC with ENTER, runs a line typed at it, and turns the power off and back on with Reset. A launch's files go
+// on the menu, BASIC's program is read and written through the debugger, and a program goes onto a tape with CSAVE and
+// back with CLOAD. The Tandy 102's ROM, when present, boots to the menu too. Without the ROM, everything after the
+// first launch is skipped, which is not a pass.
 
 import { resolve, join } from "node:path";
-import { writeFileSync, existsSync, unlinkSync, statSync, mkdtempSync, rmSync } from "node:fs";
+import { writeFileSync, readFileSync, existsSync, unlinkSync, statSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir, homedir } from "node:os";
 import assert from "node:assert/strict";
 import { startDap } from "./DapClient.mjs";
 
 const root = resolve(import.meta.dirname, "..");
+// The SDK's source for the ROM, which the debugger maps the US Model 100's ROM to.
+const sdkRoms = join(root, "src", "Retrocore.Machines.Trs80Model100", "Roms");
+const output = join(sdkRoms, "Output.asm");
 const { request, event, events, fail, close, failure } = startDap(root);
 let last = "";
 const timeout = setTimeout(() => fail(new Error(`Model 100 DAP integration timed out; the screen was:
@@ -112,7 +115,7 @@ try {
         // The ROM boots, then the source loads at $E000 and stops on entry.
         phase("launching the source");
         events.length = 0;
-        await request("launch", { machine: "trs80-model100", romDirectory: roms, source, stopOnEntry: true, speed: "max" });
+        await request("launch", { machine: "trs80-model100", romDirectory: roms, sdkRoms, source, stopOnEntry: true, speed: "max" });
         await request("setExceptionBreakpoints", { filters: [] });
         const print = lineOf("Print");
         const set = await request("setBreakpoints", { source: { path: source }, breakpoints: [{ line: print }] });
@@ -139,8 +142,24 @@ try {
         assert.ok(registers.variables.some(variable => variable.name === "HL"), "the 8085's register pairs are shown");
         assert.equal((await request("evaluate", { expression: "HL" })).result.startsWith("$E0"), true);
 
-        // Stepping out returns to Start, after the CALL.
+        // RST 4 reaches LCD, Tandy's documented entry, in the SDK's source for the ROM; stepping out of it returns to
+        // Print.
         await request("setBreakpoints", { source: { path: source }, breakpoints: [] });
+        const lcd = readFileSync(output, "utf8").split(/\r?\n/).indexOf("LCD:") + 2;
+        const inRom = await request("setBreakpoints", { source: { path: output }, breakpoints: [{ line: lcd }] });
+        assert.equal(inRom.breakpoints[0].verified, true, "the ROM's source is mapped");
+        await request("continue", { threadId: 1 });
+        assert.equal((await event("stopped")).reason, "breakpoint");
+        stack = await request("stackTrace", { threadId: 1 });
+        assert.equal(stack.stackFrames[0].name, "LCD");
+        assert.equal(stack.stackFrames[0].source.path.toLowerCase(), output.toLowerCase());
+        assert.equal(stack.stackFrames[1].name, "Print");
+        await request("setBreakpoints", { source: { path: output }, breakpoints: [] });
+        await request("stepOut", { threadId: 1 });
+        assert.equal((await event("stopped")).reason, "step");
+        assert.equal((await request("stackTrace", { threadId: 1 })).stackFrames[0].name, "Print");
+
+        // Stepping out again returns to Start, after the CALL.
         await request("stepOut", { threadId: 1 });
         assert.equal((await event("stopped")).reason, "step");
         stack = await request("stackTrace", { threadId: 1 });
@@ -303,7 +322,7 @@ try {
     clearTimeout(timeout);
     if (failure()) throw failure();
     console.log(skipped.length === 0
-        ? "Model 100 DAP integration passed: the missing-ROM messages, a source's breakpoint, call stack, registers, "
+        ? "Model 100 DAP integration passed: the missing-ROM messages, a source's breakpoint, call stack, registers, a breakpoint in the ROM's SDK source, "
             + "step out and LCD output, a logpoint met once a run through RST 7.5, the menu, BASIC, POWER OFF and Reset, a RAM image resumed in a new session, "
             + "a launch's files on the menu, BASIC's program read and written, a tape CSAVEd and CLOADed, and the "
             + "Tandy 102's menu."

@@ -30,4 +30,9 @@ internal sealed record AnalysisContract(
     ///  Gets the flags <c>Out:</c> names, which the routine changes.
     /// </summary>
     public byte OutFlags { get; init; }
+
+    /// <summary>
+    ///  Gets the <c>Entry:</c> label whose keeps clause this contract is, or null for the routine's own.
+    /// </summary>
+    public string? Entry { get; init; }
 }

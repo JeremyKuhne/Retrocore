@@ -832,8 +832,8 @@ internal sealed partial class DebugSession
         ["output"] = text + "\n"
     });
 
-    // Saves what the target keeps in a file of its own (the Model 100's RAM image), then disposes it. The save comes first and can be retried, since disposing
-    // happens only once: if it fails, the target is left as it was.
+    // Saves what the target keeps in a file of its own (the Model 100's RAM image), then disposes it. The save comes
+    // first and can be retried, since disposing happens only once: if it fails, the target is left as it was.
     private void ReleaseTarget()
     {
         (_target as IRecordingTarget)?.SaveRecordings();

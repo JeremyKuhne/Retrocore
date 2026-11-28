@@ -100,7 +100,7 @@ L_2BDB:
 
 L_2BDE:
     LXI H,$FC19
-    LXI B,L_0800
+    LXI B,$0800
 
 L_2BE4:
     MOV A,M
@@ -1027,7 +1027,9 @@ L_31A3:
     CALL L_31B8
     JMP L_2CFF
 
-    .byte $CD, $B8, $31, $C3, $C7, $2D
+L_31A9:
+    CALL L_31B8
+    JMP L_2DC7
 
 L_31AF:
     CALL L_31B8

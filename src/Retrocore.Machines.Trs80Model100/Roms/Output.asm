@@ -1,4 +1,4 @@
-;; MODEL 100 ROM: CHARACTER OUTPUT TO THE SCREEN, PRINTER AND FILES
+;; MODEL 100 ROM: CHARACTER OUTPUT TO THE SCREEN, THE PRINTER AND FILES, INKEY$, FILE NAMES AND FILE NUMBERS
 ;;
 ;; Runs at $4B44-$4CCA. Model100.asm describes the ROM as a whole and how it is named.
 
@@ -255,7 +255,7 @@ L_4C84:
     CPI $09
     JNC L_4CAE
     RST 7
-    .byte $1E                           ; the hook's number
+    .byte $1E                           ; the hook's offset in the table at $FADA
     JMP IEERR
 
 L_4CAE:
@@ -279,5 +279,5 @@ L_4CBF:
     JZ CFERR
     SHLD D_FC8C
     RST 7
-    .byte $0C                           ; the hook's number
+    .byte $0C                           ; the hook's offset in the table at $FADA
     RET

@@ -1,4 +1,4 @@
-;; MODEL 100 ROM: THE KEYBOARD QUEUE, POWER, THE CASSETTE MOTOR AND BYTES, AND THE DRIVERS BASIC OPENS FILES ON
+;; MODEL 100 ROM: THE KEYBOARD QUEUE, POWER, THE CASSETTE'S MOTOR AND BYTES, AND THE DEVICES' DRIVERS
 ;;
 ;; Runs at $12CB-$19AA. Model100.asm describes the ROM as a whole and how it is named.
 
@@ -11,7 +11,7 @@ CHGET:
 
 L_12D4:
     RST 7
-    .byte $04                           ; the hook's number
+    .byte $04                           ; the hook's offset in the table at $FADA
     LHLD D_F62C
     INR H
     DCR H
@@ -193,7 +193,7 @@ CHSNS:
     POP H
     RNZ
     RST 7
-    .byte $06                           ; the hook's number
+    .byte $06                           ; the hook's offset in the table at $FADA
     JMP KEYX
 
 L_13F3:
@@ -278,7 +278,7 @@ L_1469:
 
 PNOTAB:
     RST 7
-    .byte $0A                           ; the hook's number
+    .byte $0A                           ; the hook's offset in the table at $FADA
     CALL PRINTR
     JNC L_147F
     XRA A
@@ -355,13 +355,12 @@ CSOUT:
     POP D
     RET
 
-L_14D2:
-    RC
-    INR D
-    MOV E,C
-    MOV C,L
-    PUSH H
-    INR D
+LCDDEV:
+    .word L_14D8                        ; the driver's routine 0
+    .word L_4D59                        ; the driver's routine 1
+    .word L_14E5                        ; the driver's routine 2
+
+L_14D8:
     MVI A,$02
     CMP E
     JNZ NMERR
@@ -373,7 +372,10 @@ L_14DE:
     POP H
     RET
 
-    .byte $F1, $F5, $CD, $1F, $43
+L_14E5:
+    POP PSW
+    PUSH PSW
+    CALL L_431F
 
 L_14EA:
     CALL L_1BB1
@@ -387,24 +389,28 @@ L_14EE:
     POP H
     RET
 
-L_14F2:
-    RM
-    INR D
-    MOV E,C
-    MOV C,L
-    JM D_FF14
-    MOV B,B
-    RST 7
-    .byte $44                           ; the hook's number
+CRTDEV:
+    .word L_14F8                        ; the driver's routine 0
+    .word L_4D59                        ; the driver's routine 1
+    .word L_14FA                        ; the driver's routine 2
 
-L_14FC:
-    MVI B,$15
-    ADC L
-    DCR D
-    XRA H
-    DCR D
-    CNZ L_1B15
-    MVI D,$E5
+L_14F8:
+    RST 7
+    .byte $40                           ; the hook's offset in the table at $FADA
+
+L_14FA:
+    RST 7
+    .byte $44                           ; the hook's offset in the table at $FADA
+
+RAMDEV:
+    .word L_1506                        ; the driver's routine 0
+    .word L_158D                        ; the driver's routine 1
+    .word L_15AC                        ; the driver's routine 2
+    .word L_15C4                        ; the driver's routine 3
+    .word L_161B                        ; the driver's routine 4
+
+L_1506:
+    PUSH H
     PUSH D
     INX H
     INX H
@@ -521,16 +527,90 @@ L_15A0:
     MOV M,A
     RET
 
-    .byte $F1, $F5, $01, $EA, $14, $C5, $A7, $C8, $FE, $1A, $C8, $FE, $7F, $C8, $CD, $39
-    .byte $17, $C0, $01, $00, $01, $C3, $21, $16, $EB, $CD, $75, $16, $CD, $C7, $18, $EB
-    .byte $CD, $49, $17, $C2, $09, $16, $EB, $2A, $87, $FC, $DF, $F5, $D5, $C4, $46, $21
-    .byte $E1, $F1, $01, $F9, $FF, $09, $5E, $23, $56, $EB, "~#fo", $C2, $F5
-    .byte $15, $D5, $EB, $2A, $D8, $FA, $EB, $19, $D1, $EB, "####N#"
-    .byte $46, $34, $23, $EB, $09, $06, $00, $CD, $42, $25, $EB, $25, $AF, $4F, $09, $7E
-    .byte $FE, $1A, $37, $3F, $C2, $8A, $4E, $CD, $75, $16, $77, $37, $C3, $8A, $4E, $CD
+L_15AC:
+    POP PSW
+    PUSH PSW
+    LXI B,L_14EA
+    PUSH B
+    ANA A
+    RZ
+    CPI $1A
+    RZ
+    CPI $7F
+    RZ
+    CALL L_1739
+    RNZ
+    LXI B,$0100
+    JMP L_1621
 
-D_161C:
-    .byte $75, $16, $C3, $CD, $17
+L_15C4:
+    XCHG
+    CALL L_1675
+    CALL L_18C7
+    XCHG
+    CALL L_1749
+    JNZ L_1609
+    XCHG
+    LHLD D_FC87
+    RST 3
+    PUSH PSW
+    PUSH D
+    CNZ L_2146
+    POP H
+    POP PSW
+    LXI B,$FFF9
+    DAD B
+    MOV E,M
+    INX H
+    MOV D,M
+    XCHG
+    MOV A,M
+    INX H
+    MOV H,M
+    MOV L,A
+    JNZ L_15F5
+    PUSH D
+    XCHG
+    LHLD D_FAD8
+    XCHG
+    DAD D
+    POP D
+
+L_15F5:
+    XCHG
+    INX H
+    INX H
+    INX H
+    INX H
+    MOV C,M
+    INX H
+    MOV B,M
+    INR M
+    INX H
+    XCHG
+    DAD B
+    MVI B,$00
+    CALL L_2542
+    XCHG
+    DCR H
+    XRA A
+
+L_1609:
+    MOV C,A
+    DAD B
+    MOV A,M
+    CPI $1A
+    STC
+    CMC
+    JNZ L_4E8A
+    CALL L_1675
+    MOV M,A
+    STC
+    JMP L_4E8A
+
+L_161B:
+    CALL L_1675
+    JMP L_17CD
 
 L_1621:
     PUSH H
@@ -605,13 +685,14 @@ L_1675:
     POP D
     RET
 
-L_167F:
-    ADC C
-    MVI D,$AD
-    MVI D,$C7
-    MVI D,$D2
-    MVI D,$10
-    RAL
+CASDEV:
+    .word L_1689                        ; the driver's routine 0
+    .word L_16AD                        ; the driver's routine 1
+    .word L_16C7                        ; the driver's routine 2
+    .word L_16D2                        ; the driver's routine 3
+    .word L_1710                        ; the driver's routine 4
+
+L_1689:
     PUSH H
     PUSH D
     LXI B,$0006
@@ -654,11 +735,55 @@ L_16C0:
     STA D_FA8E
     JMP L_4D59
 
-    .byte $F1, $F5, $CD, $39, $17, $CC, $16, $17, $C3, $EA, $14, $EB, $21, $8E, $FA, $CD
-    .byte $C7, $18, $EB, $CD, $49, $17, $C2, $FF, $16, $E5, $CD, $D1, $26, $E1, $01, $00
-    .byte $00, $CD, $B0, $14, $77, $23, $05, $C2, $E8, $16, $CD, $B0, $14, $79, $A7, $C2
-    .byte $91, $14, $CD, $AA, $14, $25, $AF, $47, $4F, $09, $7E, $FE, $1A, $37, $3F, $C2
-    .byte $8A, $4E, $32, $8E, $FA, $37, $C3, $8A, $4E, $21, $8E, $FA, $C3, $CD, $17
+L_16C7:
+    POP PSW
+    PUSH PSW
+    CALL L_1739
+    CZ L_1716
+    JMP L_14EA
+
+L_16D2:
+    XCHG
+    LXI H,$FA8E
+    CALL L_18C7
+    XCHG
+    CALL L_1749
+    JNZ L_16FF
+    PUSH H
+    CALL L_26D1
+    POP H
+    LXI B,$0000
+
+L_16E8:
+    CALL CASIN
+    MOV M,A
+    INX H
+    DCR B
+    JNZ L_16E8
+    CALL CASIN
+    MOV A,C
+    ANA A
+    JNZ L_1491
+    CALL CTOFF
+    DCR H
+    XRA A
+    MOV B,A
+
+L_16FF:
+    MOV C,A
+    DAD B
+    MOV A,M
+    CPI $1A
+    STC
+    CMC
+    JNZ L_4E8A
+    STA D_FA8E
+    STC
+    JMP L_4E8A
+
+L_1710:
+    LXI H,$FA8E
+    JMP L_17CD
 
 L_1716:
     PUSH H
@@ -685,8 +810,27 @@ L_172A:
     MVI M,$00
     JMP L_174F
 
-    .byte $5F, $01, $06, $00, $09, "~4###", $E5, $4F, $09, $73, $E1, $C9
-    .byte $01, $06, $00, $09, $7E, $34
+L_1739:
+    MOV E,A
+    LXI B,$0006
+    DAD B
+    MOV A,M
+    INR M
+    INX H
+    INX H
+    INX H
+    PUSH H
+    MOV C,A
+    DAD B
+    MOV M,E
+    POP H
+    RET
+
+L_1749:
+    LXI B,$0006
+    DAD B
+    MOV A,M
+    INR M
 
 L_174F:
     INX H
@@ -695,28 +839,28 @@ L_174F:
     ANA A
     RET
 
-L_1754:
-    RC
-    INR D
-    MOV E,C
-    MOV C,L
-    MOV E,D
-    RAL
+LPTDEV:
+    .word L_14D8                        ; the driver's routine 0
+    .word L_4D59                        ; the driver's routine 1
+    .word L_175A                        ; the driver's routine 2
+
+L_175A:
     POP PSW
     PUSH PSW
     CALL PRTTAB
     JMP L_14EA
 
-L_1762:
-    MOV L,L
-    RAL
-    SBB M
-    RAL
-    XRA B
-    RAL
-    ORA B
-    RAL
-    JZ D_F617
+COMDEV:
+    .word L_176D                        ; the driver's routine 0
+    .word L_179E                        ; the driver's routine 1
+    .word L_17A8                        ; the driver's routine 2
+    .word L_17B0                        ; the driver's routine 3
+    .word L_17CA                        ; the driver's routine 4
+
+L_176C:
+    .byte $F6                           ; ORI $37: skips the next byte
+
+L_176D:
     STC
     PUSH PSW
     CC DISC
@@ -756,20 +900,35 @@ L_17A8:
     CALL SD232C
     JMP L_14EA
 
-    .byte $21, $8F, $FA, $CD, $C7, $18, $CD, $7E, $6D, $DA, $94, $14, $FE, $1A, $37, $3F
-    .byte $C2, $8A, $4E, $32, $8F, $FA, $37, $C3, $8A, $4E, $21, $8F, $FA, $71, $C3, $23
-    .byte $50
+L_17B0:
+    LXI H,$FA8F
+    CALL L_18C7
+    CALL RV232C
+    JC L_1494
+    CPI $1A
+    STC
+    CMC
+    JNZ L_4E8A
+    STA D_FA8F
+    STC
+    JMP L_4E8A
 
-L_17D1:
-    MOV L,H
-    RAL
-    IN $17
-    XRA B
-    RAL
-    ORA B
-    RAL
-    JZ L_3E17
-    STAX B
+L_17CA:
+    LXI H,$FA8F
+
+L_17CD:
+    MOV M,C
+    JMP NOSKCR
+
+MDMDEV:
+    .word L_176C                        ; the driver's routine 0
+    .word L_17DB                        ; the driver's routine 1
+    .word L_17A8                        ; the driver's routine 2
+    .word L_17B0                        ; the driver's routine 3
+    .word L_17CA                        ; the driver's routine 4
+
+L_17DB:
+    MVI A,$02
     CALL L_5316
     CALL DISC
     JMP L_179E
@@ -879,28 +1038,32 @@ L_1864:
     POP H
     RET
 
-L_1877:
-    ADD C
-    RDEL
-    ADD E
-    RDEL
-    IN $08
-    ADD L
-    RDEL
-    ADD A
-    RDEL
+WNDDEV:
+    .word L_1881                        ; the driver's routine 0
+    .word L_1883                        ; the driver's routine 1
+    .word FCERR                         ; the driver's routine 2
+    .word L_1885                        ; the driver's routine 3
+    .word L_1887                        ; the driver's routine 4
+
+L_1881:
     RST 7
-    .byte $46                           ; the hook's number
+    .byte $46                           ; the hook's offset in the table at $FADA
+
+L_1883:
     RST 7
-    .byte $48                           ; the hook's number
+    .byte $48                           ; the hook's offset in the table at $FADA
+
+L_1885:
     RST 7
-    .byte $4A                           ; the hook's number
+    .byte $4A                           ; the hook's offset in the table at $FADA
+
+L_1887:
     RST 7
-    .byte $4C                           ; the hook's number
+    .byte $4C                           ; the hook's offset in the table at $FADA
 
 FN_EOF:
     RST 7
-    .byte $26                           ; the hook's number
+    .byte $26                           ; the hook's offset in the table at $FADA
     CALL L_4C81
     JZ CFERR
     CPI $01

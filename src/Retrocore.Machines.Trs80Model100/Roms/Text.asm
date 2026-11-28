@@ -3,11 +3,13 @@
 ;; Runs at $5DEE-$6B60. Model100.asm describes the ROM as a whole and how it is named.
 
 TEXT:
-    LXI H,$5DFB
+    LXI H,L_5DFB
     SHLD D_F652
     LXI H,D_5E22
     CALL STFNK
     XRA A
+
+L_5DFB:
     CNZ ST_BEEP
     CALL L_5D53
     LXI H,D_5E15
@@ -46,7 +48,7 @@ L_5E5A:
     STA D_FC95
     LXI H,$2020
     SHLD D_FC99
-    LXI H,$5EDA
+    LXI H,L_5EDA
     SHLD D_F652
     LXI D,$F802
     LXI H,D_5F48
@@ -65,6 +67,8 @@ L_5E82:
     STA D_FACC
     LXI H,$0000
     SHLD D_F6E7
+
+L_5E94:
     CALL L_2146
     CALL L_4009
     LHLD D_F9B0
@@ -78,7 +82,7 @@ L_5E82:
 
 L_5EAB:
     XRA A
-    LXI H,D_5EEB
+    LXI H,L_5EEB
     SHLD D_F652
     LXI H,D_5F48
     MVI D,$F8
@@ -103,6 +107,8 @@ L_5ED5:
     PUSH D
     CALL L_1FF8
     POP D
+
+L_5EDA:
     PUSH D
     XRA A
     STA D_F651
@@ -113,11 +119,41 @@ L_5ED5:
     POP D
     JMP ERROR
 
-D_5EEB:
-    .byte $7B, $F5, $2A, $87, $FC, $2B, $46, $05, "+N+n", $AF, $67, $09, $01
-    .byte $FF, $FF, $09, $DA, $03, $5F, $6F, $67, $22, $E7, $F6, $CD, $45, $4F, $F1, $FE
-    .byte $07, $21, $B1, $60, $CA, $15, "_!8_", $CD, $31, $42, $CD, $B1, $27
-    .byte $21, $60, $5F, $CD, $24, $5F, $C3, $94, $5E
+L_5EEB:
+    MOV A,E
+    PUSH PSW
+    LHLD D_FC87
+    DCX H
+    MOV B,M
+    DCR B
+    DCX H
+    MOV C,M
+    DCX H
+    MOV L,M
+    XRA A
+    MOV H,A
+    DAD B
+    LXI B,$FFFF
+    DAD B
+    JC L_5F03
+    MOV L,A
+    MOV H,A
+
+L_5F03:
+    SHLD D_F6E7
+    CALL L_4F45
+    POP PSW
+    CPI $07
+    LXI H,D_60B1
+    JZ L_5F15
+    LXI H,D_5F38
+
+L_5F15:
+    CALL CLS
+    CALL STROUT
+    LXI H,D_5F60
+    CALL L_5F24
+    JMP L_5E94
 
 L_5F24:
     PUSH H
@@ -132,6 +168,7 @@ L_5F2F:
     JNZ L_5F2F
     RET
 
+D_5F38:
     .byte "Text ill-formed", $07
 
 D_5F48:
@@ -139,7 +176,10 @@ D_5F48:
 
 D_5F49:
     .byte $0D, $0A, "Press space ba"
-    .byte "r for ", $00, "TEXT", $00
+    .byte "r for ", $00
+
+D_5F60:
+    .byte "TEXT", $00
 
 L_5F65:
     PUSH H
@@ -269,7 +309,7 @@ L_6056:
     MOV H,A
     SHLD D_F652
     RST 7
-    .byte $38                           ; the hook's number
+    .byte $38                           ; the hook's offset in the table at $FADA
     CALL L_65B9
     CALL UNLOCK
     CALL ERAFNK

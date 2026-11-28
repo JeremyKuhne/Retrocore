@@ -1,4 +1,4 @@
-;; MODEL 100 ROM: DIM AND THE VARIABLE SEARCH
+;; MODEL 100 ROM: DIM, THE VARIABLE SEARCH AND PRINT USING
 ;;
 ;; Runs at $478B-$4B43. Model100.asm describes the ROM as a whole and how it is named.
 
@@ -695,7 +695,7 @@ L_4B07:
     MVI C,$00
     MOV A,B
     PUSH PSW
-    CALL L_29B2
+    CALL LEFTUS
     CALL STRPRT
     LHLD D_FC1A
     POP PSW

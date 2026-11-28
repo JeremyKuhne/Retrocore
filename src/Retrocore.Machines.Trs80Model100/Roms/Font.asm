@@ -1,8 +1,8 @@
-;; MODEL 100 ROM: THE KEYBOARD'S TABLES AND THE CHARACTER SET
+;; MODEL 100 ROM: A COMMAND FOR THE DEVICE ON PORTS $80-$83, THE KEYBOARD'S TABLES AND THE CHARACTER SET
 ;;
 ;; Runs at $770B-$7D32. Model100.asm describes the ROM as a whole and how it is named.
 
-KEYTAB:
+D_770B:
     .byte $02, $01, $00, $00, $01
 
 D_7710:

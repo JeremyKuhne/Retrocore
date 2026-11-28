@@ -159,7 +159,7 @@ VALNSM:
     JNC FACSNG
 
 INTDPC:
-    LXI H,$0310
+    LXI H,INTDSP
     MVI B,$00
     DAD B
     DAD B
@@ -188,7 +188,7 @@ SNGDBL:
 
 SETDBL:
     CALL FN_CDBL
-    LXI H,$02F8
+    LXI H,DBLDSP
 
 DODSP:
     LDA DORES
@@ -224,7 +224,7 @@ SNGDPC:
     POP D
 
 SNGDO:
-    LXI H,$0304
+    LXI H,SNGDSP
     JMP DODSP
 
 FACSNG:
@@ -324,11 +324,11 @@ VARRET:
 
 L_0FA3:
     CPI $C7
-    JZ L_2A37
+    JZ FN_INSTR
     CPI $C9
     JZ L_4BEA
     CPI $C6
-    JZ L_296D
+    JZ FN_STRING
     CPI $84
     JZ L_4E8E
     CPI $CA
@@ -594,7 +594,8 @@ L_10F4:
     INX H
     JMP LHSMID
 
-    .byte $C3, $46, $04
+L_10FD:
+    JMP SNERR
 
 FN_INP:
     CALL CONINT

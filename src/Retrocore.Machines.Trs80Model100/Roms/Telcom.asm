@@ -433,7 +433,7 @@ L_540A:
 L_5414:
     LDA D_F62B
     RRC
-    LXI D,D_161C
+    LXI D,$161C
     JNC L_5421
     LXI D,$2440
 
@@ -578,12 +578,12 @@ TRMFNK:
 
 L_551D:
     RST 7
-    .byte $32                           ; the hook's number
+    .byte $32                           ; the hook's offset in the table at $FADA
     RET
 
 L_5520:
     RST 7
-    .byte $34                           ; the hook's number
+    .byte $34                           ; the hook's offset in the table at $FADA
     RET
 
 L_5523:
@@ -660,7 +660,7 @@ D_5595:
     .byte "Wait ", $00, $20, $20
 
 L_559D:
-    LXI H,D_56EF
+    LXI H,L_56EF
     SHLD D_F652
     PUSH H
     LDA D_FAC2
@@ -743,7 +743,7 @@ L_562D:
     MOV A,M
     CPI $1A
     RST 7
-    .byte $36                           ; the hook's number
+    .byte $36                           ; the hook's offset in the table at $FADA
     JZ L_566C
     CPI $0A
     JNZ L_5646
@@ -790,7 +790,7 @@ L_567E:
     XRI $FF
     STA D_FAC2
     JZ L_56BF
-    LXI H,$56E2
+    LXI H,L_56E2
     SHLD D_F652
     PUSH H
     LXI H,D_5760
@@ -839,14 +839,16 @@ L_56D8:
     CALL L_6396
     SHLD D_FAC4
     RNC
+
+L_56E2:
     XRA A
     STA D_FAC2
     CALL FNKSB
     LXI H,D_5768
     JMP L_56F2
 
-D_56EF:
-    .byte $21, $59, $57
+L_56EF:
+    LXI H,D_5759
 
 L_56F2:
     CALL L_5791
@@ -904,7 +906,10 @@ L_5739:
     JMP TELCOM
 
 D_5751:
-    .byte "File to Upload", $00
+    .byte "File to "
+
+D_5759:
+    .byte "Upload", $00
 
 D_5760:
     .byte "File to "

@@ -83,7 +83,7 @@ L_5823:
 
 L_5837:
     CALL L_5D4D
-    LXI H,$5906
+    LXI H,L_5906
     SHLD D_F652
     LXI H,$0108
     CALL POSIT
@@ -208,6 +208,8 @@ L_58F7:
     MVI M,$00
     CALL L_5AB1
     JNZ L_5921
+
+L_5906:
     CALL ST_BEEP
     JMP L_5837
 
@@ -617,7 +619,9 @@ L_5B74:
     JNZ L_5BA9
     POP H
     SHLD D_FDEE
-    LXI H,$5B88
+
+L_5B88:
+    LXI H,L_5B88
     SHLD D_F652
     CALL CLS
     CALL ST_BEEP
@@ -634,7 +638,7 @@ L_5BA9:
     CALL CLS
     LXI H,D_5D0A
     CALL STDSPF
-    LXI H,$5BE2
+    LXI H,L_5BE2
     SHLD D_F652
 
 L_5BBB:
@@ -654,9 +658,11 @@ L_5BCF:
     MOV A,M
     ORA A
     JZ L_5BBB
-    LXI D,D_5CEF
+    LXI D,ADRCMD
     CALL L_6CA7
     RNZ
+
+L_5BE2:
     SUB A
     STA PRTFLG
     CALL L_4BB8
@@ -667,7 +673,10 @@ L_5BCF:
 
 L_5BF5:
     SUB A
-    LXI B,$FF3E
+    .byte $01                           ; LXI B,$FF3E: skips the next two bytes
+
+L_5BF7:
+    MVI A,$FF
     CALL L_5DB1
 
 L_5BFC:
@@ -825,9 +834,14 @@ D_5CE1:
 D_5CE8:
     .byte "Schd: ", $00
 
-D_5CEF:
-    .byte "FIND", $F5, "[LFND", $F7, "[MENU"
-    .byte $97, $57, $FF
+ADRCMD:
+    .byte "FIND"
+    .word L_5BF5
+    .byte "LFND"
+    .word L_5BF7
+    .byte "MENU"
+    .word MENU
+    .byte $FF                               ; the end
 
 D_5D02:
     .byte "NOTE.DO", $00

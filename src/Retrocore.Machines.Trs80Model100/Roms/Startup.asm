@@ -1,4 +1,4 @@
-;; MODEL 100 ROM: THE COLD START, THE POWER-UP MESSAGES AND MAX
+;; MODEL 100 ROM: THE COLD START, MAX, BASIC'S SIGN-ON AND THE BYTES-FREE MESSAGE
 ;;
 ;; Runs at $7D33-$7FFF. Model100.asm describes the ROM as a whole and how it is named.
 

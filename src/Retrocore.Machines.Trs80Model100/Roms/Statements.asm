@@ -263,7 +263,10 @@ L_09A7:
     MOV D,A
     JMP L_09A7
 
-    .byte $F1, $C6, $03, $C3, $D6, $09
+LETCON:
+    POP PSW
+    ADI $03
+    JMP LETCN2
 
 ST_LET:
     CALL L_4790
@@ -349,7 +352,7 @@ COPNUM:
 
 ST_ON:
     CPI $94
-    JNZ NTOERR
+    JNZ L_0A5B
     RST 2
     RST 1
     .byte $88                           ; SYNCHR: the GOTO token
@@ -376,7 +379,7 @@ RESTRP:
     MOV E,A
     JMP ERRESM
 
-NTOERR:
+L_0A5B:
     CALL L_1AFC
     JC L_0A94
     PUSH B

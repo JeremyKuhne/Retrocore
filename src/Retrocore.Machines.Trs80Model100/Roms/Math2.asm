@@ -107,6 +107,8 @@ L_3459:
 
 L_3461:
     LXI D,$FC69
+
+L_3464:
     XCHG
 
 L_3465:
@@ -135,7 +137,7 @@ L_347B:
     LXI H,$FC69
 
 L_347E:
-    LXI D,$3464
+    LXI D,L_3464
     JMP L_348A
 
 L_3484:
@@ -829,7 +831,8 @@ L_37DF:
     POP PSW
     JMP L_37C2
 
-    .byte $CD, $50, $34
+L_37F1:
+    CALL L_3450
 
 L_37F4:
     CALL L_3827
@@ -1952,11 +1955,7 @@ L_3E12:
     JMP L_3510
 
 L_3E15:
-    .byte $22                           ; SHLD $FB90, which L_3E17 starts inside
-    .byte $90
-
-L_3E17:
-    EI
+    SHLD TEMP8
     PUSH D
     MOV A,H
     ORA A

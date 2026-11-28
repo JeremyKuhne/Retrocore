@@ -1,4 +1,4 @@
-;; MODEL 100 ROM: RESTORE, STOP, END, CONT, CLEAR AND NEXT
+;; MODEL 100 ROM: BLTU AND GETSTK, THE ON COM AND ON TIME$ INTERRUPT STATES, RESTORE, STOP, END, CONT, CLEAR AND NEXT
 ;;
 ;; Runs at $3EF0-$4221. Model100.asm describes the ROM as a whole and how it is named.
 
@@ -376,7 +376,8 @@ ST_CONT:
     XCHG
     RET
 
-    .byte $C3, $DB, $08
+L_40EE:
+    JMP FCERR
 
 L_40F1:
     MOV A,M
@@ -396,7 +397,7 @@ ST_CLEAR:
     RST 2
     JZ L_3F2C
     RST 7
-    .byte $00                           ; the hook's number
+    .byte $00                           ; the hook's offset in the table at $FADA
     CALL INTID2
     DCX H
     RST 2

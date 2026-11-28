@@ -75,7 +75,7 @@ STRINI:
     CALL GETSPA
 
 STRAD2:
-    LXI H,$FB89
+    LXI H,DSCTMP
     PUSH H
     MOV M,A
     INX H
@@ -119,10 +119,10 @@ STRFIN:
     CALL STRAD2
 
 PUTNEW:
-    LXI D,$FB89
+    LXI D,DSCTMP
     .byte $3E                           ; MVI A,$D5: skips the next byte
 
-L_2791:
+PUTTMP:
     PUSH D
     LHLD TEMPPT
     SHLD D_FC1A
@@ -163,7 +163,7 @@ GETSPA:
     ORA A
     .byte $0E                           ; MVI C,$F1: skips the next byte
 
-L_27CA:
+TRYGI2:
     POP PSW
     PUSH PSW
     LHLD STKTOP
@@ -190,7 +190,7 @@ GARBAG:
     JZ ERROR
     CMP A
     PUSH PSW
-    LXI B,L_27CA
+    LXI B,TRYGI2
     PUSH B
 
 GARBA2:
@@ -490,7 +490,7 @@ FINBCK:
     POP B
     JMP PUTNEW
 
-L_296D:
+FN_STRING:
     RST 2
     RST 1
     .byte $28                           ; SYNCHR: '('
@@ -546,18 +546,18 @@ LEFT3:
     MOV C,A
     .byte $3E                           ; MVI A,$E5: skips the next byte
 
-L_29B2:
+LEFTUS:
     PUSH H
 
 LEFT2:
     PUSH H
     MOV A,M
     CMP B
-    JC L_29BB
+    JC ALLSTR
     MOV A,B
     .byte $11                           ; LXI D,$000E: skips the next two bytes
 
-L_29BB:
+ALLSTR:
     MVI C,$00
     PUSH B
     CALL GETSPA
@@ -654,7 +654,7 @@ PREAM2:
     MOV B,E
     RET
 
-L_2A37:
+FN_INSTR:
     RST 2
     CALL FRMPRN
     RST 5

@@ -423,8 +423,8 @@ and from a `CSAVE` MAME 0.264 recorded to WAV. No new downloads.
   digests, so they need no ROM.
 - **The names**, named but not yet converted ([the naming log](../conversions/Model100.md)): Tandy's names for the 70
   entry points and 4 of the 5 variables the Technical Reference documents; the statement and function handlers by their
-  keywords; 279 of Microsoft's names, where the interpreter's and the string package's code lines up with
-  MBASIC's, and 35 of its variables; and the tables, restarts and the ROM's programs by what they are. The rest keep
+  keywords; 285 of Microsoft's names, where the interpreter's and the string package's code lines up with
+  MBASIC's, and 36 of its variables; and the tables, restarts and the ROM's programs by what they are. The rest keep
   the disassembler's `L_` and `D_` names for now.
 - **The debugger.** The source ships in the SDK, and a session running either ROM steps through it by name: a
   breakpoint in `Output.asm`'s `LCD` stops there, with the program that called it below on the call stack. Another

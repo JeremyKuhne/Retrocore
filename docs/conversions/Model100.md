@@ -28,10 +28,10 @@ the first stage, where each name came from, and what is left.
 1. **Tracing the code.** The SDK's disassembler, with hints, found the code: RST 1 (SYNCHR) and RST 7 (a hook) each
    take the byte after them; the tables of routines (FUNDSP, STMDSP, the math dispatch, DEVDSP, TEXT's and TELCOM's
    keys, the screen's control characters and escape sequences, INLIN's keys) and the ROM's directory give entry
-   points; so do Tandy's entries, and an LXI that a PUSH follows, which is a return address. A few runs of code
-   reached in no other way were given as entries by hand, each after an unconditional jump or return. What is left
-   untraced is mostly data (text, tables, the RAM image and the font), with a few runs of code the trace does not
-   reach yet, such as $15AC-$1620 and $16C7-$1715 in the device drivers, written as bytes.
+   points; so do Tandy's entries, and an LXI that a PUSH follows, which is a return address, and an LXI H that sets
+   the error handler at $F652. A few runs of code reached in no other way were given as entries by hand, each after
+   an unconditional jump or return. What is left untraced is mostly data (text, tables, the RAM image and the font),
+   with a few runs of code the trace does not reach yet, written as bytes.
 2. **Naming.** Tandy's names first, then the handlers', then Microsoft's interpreter core by hand (NEWSTT, GONE,
    MAIN, ERROR, CONSTP, STPEND, ENDCON, DIRIS and SNGFOR, read against MBASIC's code), then the rest of Microsoft's
    names by aligning the two programs' instruction streams: a diff of MBASIC's instructions against the ROM's,
@@ -59,9 +59,11 @@ The IDs are M100.
   the name is a clear sign of what is left.
 - M100-3. The restarts are named for what BASIC uses them as, and the routines they jump to keep Microsoft's names:
   `CHRGET` at $0010 jumps to `CHRGTR`, `GETYPE` at $0028 to `GETYPR`. The 80C85's interrupt entries are `TRAP`,
-  `RST55`, `RST65` and `RST75`; RST 7's is `RST38`, and the hook dispatcher it jumps to `HOOK`.
+  `RST55`, `RST65` and `RST75`; RST 7's is `RST38`, and the hook dispatcher it jumps to `HOOK`. `GONE3`, the `RZ`
+  after GONE, is Level II's name (Level2.asm), which MBASIC lacks.
 - M100-4. The error entries are named for their two letters, as Microsoft's are (`SNERR`, `DV0ERR` for `/0`), and the
-  Model 100's file errors from code 50 (`IEERR` to `CFERR`) by the same rule.
+  Model 100's file errors from code 50 (`IEERR` to `CFERR`) by the same rule. Code 20 is `RWERR`, for the Model
+  100's RW (RESUME without error), where MBASIC has `REERR`.
 - M100-5. No names from MBASIC's math package: the Model 100's numbers are BCD, its math package other code, and the
   alignment found nothing there. The floating accumulator's bytes keep their `D_` names. The math package does use
   some of the interpreter's scratch variables, such as `TEMP3` and `TEMP8`, under those names.
@@ -78,12 +80,12 @@ The IDs are M100.
 | Names | What |
 | --- | --- |
 | `RESET`, `TRAP`, `GETYPE`, `RST55`, `RST65`, `RST38`, `RST75`, `HOOK` | The restarts and interrupts (M100-3). |
-| `DECDSP`, `RAMIMG`, `ERRMSG` | The interpreter's tables, beside `FUNDSP`, `RESLST`, `STMDSP`, `OPTAB` and `ERRTAB`, which are Microsoft's names for the same tables in MBASIC. |
-| `IEERR`, `BNERR`, `FFERR`, `AOERR`, `EFERR`, `DSERR`, `FLERR`, `CFERR` | The file errors' entries (M100-4). |
-| `LCDCTL`, `ESCTAB`, `INLCTL`, `DEVTAB`, `DEVDSP`, `TELCMD`, `TRMFNK`, `TXTCTL`, `TXTINL`, `ROMDIR`, `KEYTAB` | The Model 100's own tables: the screen's control characters and escape sequences, INLIN's keys, the devices' names and drivers, TELCOM's commands and terminal keys, TEXT's keys, the ROM's directory entries and the keyboard's tables. |
+| `DECDSP`, `RAMIMG`, `ERRMSG` | The interpreter's tables, beside `FUNDSP`, `RESLST`, `STMDSP`, `OPTAB`, `DBLDSP`, `SNGDSP`, `INTDSP` and `ERRTAB`, which are Microsoft's names for the same tables in MBASIC. `DECDSP` is the conversions before `DBLDSP`; each type has six routines, + - * / ^ and compare. |
+| `IEERR`, `BNERR`, `FFERR`, `AOERR`, `EFERR`, `NMERR`, `DSERR`, `FLERR`, `CFERR` | The file errors' entries (M100-4). |
+| `LCDCTL`, `ESCTAB`, `INLCTL`, `DEVTAB`, `DEVDSP`, `LCDDEV` to `RAMDEV`, `TELCMD`, `TRMFNK`, `ADRCMD`, `TXTCTL`, `TXTINL`, `ROMDIR` | The Model 100's own tables: the screen's control characters and escape sequences, INLIN's keys, the devices' names, the devices' driver tables and each driver's own (LCD:, CRT: and LPT: have three routines, the others five), TELCOM's commands and terminal keys, ADDRSS's and SCHEDL's commands, TEXT's keys and the ROM's directory entries. |
 | `BASIC`, `TEXT`, `TELCOM`, `ADDRSS`, `SCHEDL` | The ROM's programs, named as the menu shows them. |
 | `COLD` | The cold start. |
-| `DIRTBL`, `DOSTRT`, `COSTRT`, `PRGNAM` | The file directory, the starts of the DO and CO files, and the running program's name. |
+| `DIRTBL`, `DOSTRT`, `COSTRT`, `PRGNAM` | The file directory, the starts of the DO and CO files, and the menu's file name: what is typed at Select:, each name it formats for the screen, the name CHKDC looks for, and so the program the menu runs. |
 | `STKTOP` | Level II's name (Level2.asm) for the bottom of string space, which the stack sits below: MENU sets it from `MEMSIZ`, and CLEAR, the stack and string space are bounded by it. |
 
 - M100-8. `BEGLCD` names the screen's memory at $FE00. The manual's `ENDLCD`, $FF40, the byte after the screen, is not a

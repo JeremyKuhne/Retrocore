@@ -181,7 +181,7 @@ L_4313:
     PUSH B
     PUSH PSW
     RST 7
-    .byte $08                           ; the hook's number
+    .byte $08                           ; the hook's offset in the table at $FADA
     CALL L_431F
     JMP L_14ED
 
@@ -212,7 +212,7 @@ L_433B:
 
 L_434A:
     RST 7
-    .byte $3C                           ; the hook's number
+    .byte $3C                           ; the hook's offset in the table at $FADA
 
 L_434C:
     LXI H,$F646

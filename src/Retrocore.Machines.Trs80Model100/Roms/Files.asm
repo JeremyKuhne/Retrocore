@@ -146,7 +146,7 @@ L_22CC:
     CPI $F8
     JZ L_22F4
     RST 7
-    .byte $5C                           ; the hook's number
+    .byte $5C                           ; the hook's offset in the table at $FADA
 
 L_22DD:
     RST 2
@@ -410,7 +410,7 @@ L_2491:
     CPI $F8
     JZ L_24E7
     RST 7
-    .byte $5E                           ; the hook's number
+    .byte $5E                           ; the hook's offset in the table at $FADA
 
 L_24A7:
     RST 2

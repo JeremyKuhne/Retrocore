@@ -241,10 +241,7 @@ L_1AFC:
     RNZ
     INX H
     CALL L_1A42
-    .byte $21, $3D
-
-L_1B15:
-    SPHL
+    LXI H,$F93D
     MVI B,$06
     CALL L_3469
     POP H
@@ -762,7 +759,7 @@ L_1D9B:
     .byte $4D                           ; SYNCHR: 'M'
     PUSH H
     RST 7
-    .byte $02                           ; the hook's number
+    .byte $02                           ; the hook's offset in the table at $FADA
     LXI H,$F5F0
     CALL L_37DB
     POP H
@@ -783,7 +780,7 @@ L_1DB9:
 
 ST_WIDTH:
     RST 7
-    .byte $3A                           ; the hook's number
+    .byte $3A                           ; the hook's offset in the table at $FADA
 
 ST_SOUND:
     CPI $97
@@ -883,7 +880,7 @@ L_1E3C:
     XRA A
     STA D_F638
     RST 7
-    .byte $3E                           ; the hook's number
+    .byte $3E                           ; the hook's offset in the table at $FADA
 
 L_1E52:
     SHLD CSRY
@@ -1097,7 +1094,7 @@ ST_KILL:
     CPI $F8
     JZ L_1FA1
     RST 7
-    .byte $58                           ; the hook's number
+    .byte $58                           ; the hook's offset in the table at $FADA
 
 L_1FA1:
     PUSH H
@@ -1216,7 +1213,7 @@ ST_NAME:
     CPI $F8
     JZ L_2052
     RST 7
-    .byte $5A                           ; the hook's number
+    .byte $5A                           ; the hook's offset in the table at $FADA
 
 L_2052:
     PUSH H

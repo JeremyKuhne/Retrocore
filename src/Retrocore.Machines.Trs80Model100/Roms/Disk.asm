@@ -1,4 +1,4 @@
-;; MODEL 100 ROM: OPEN, LOAD, MERGE, SAVE, CLOSE, THE FILE INPUT ROUTINES, LOF, LOC, LFILES AND DSKO$
+;; MODEL 100 ROM: OPEN, LOAD, MERGE, SAVE, CLOSE, THE DEVICES (DEVTAB, DEVDSP), THE FILE INPUT ROUTINES, LOF, LOC, LFILES AND DSKO$
 ;;
 ;; Runs at $4CCB-$5145. Model100.asm describes the ROM as a whole and how it is named.
 
@@ -55,8 +55,8 @@ L_4CFD:
     ORA A
     JZ BNERR
     RST 7
-    .byte $18                           ; the hook's number
-    .byte $1E
+    .byte $18                           ; the hook's offset in the table at $FADA
+    .byte $1E                           ; MVI E,$D5: skips the next byte
 
 L_4D12:
     PUSH D
@@ -74,7 +74,7 @@ L_4D12:
     MOV A,D
     CPI $09
     RST 7
-    .byte $1C                           ; the hook's number
+    .byte $1C                           ; the hook's offset in the table at $FADA
     JC IEERR
     PUSH H
     LXI B,$0004
@@ -100,7 +100,7 @@ L_4D45:
     MVI A,$02
     JC L_5123
     RST 7
-    .byte $14                           ; the hook's number
+    .byte $14                           ; the hook's offset in the table at $FADA
     JMP IEERR
 
 L_4D59:
@@ -143,7 +143,7 @@ ST_MERGE:
     CPI $FD
     JZ L_2387
     RST 7
-    .byte $1A                           ; the hook's number
+    .byte $1A                           ; the hook's offset in the table at $FADA
 
 L_4D8D:
     POP PSW
@@ -203,7 +203,7 @@ ST_SAVE:
     CPI $FD
     JZ L_2288
     RST 7
-    .byte $16                           ; the hook's number
+    .byte $16                           ; the hook's offset in the table at $FADA
     DCX H
     RST 2
     MVI E,$80
@@ -240,12 +240,12 @@ L_4E0B:
 
 L_4E18:
     RST 7
-    .byte $22                           ; the hook's number
+    .byte $22                           ; the hook's offset in the table at $FADA
     JMP NMERR
 
 L_4E1D:
     RST 7
-    .byte $24                           ; the hook's number
+    .byte $24                           ; the hook's offset in the table at $FADA
     JMP NMERR
 
 L_4E22:
@@ -295,7 +295,7 @@ L_4E52:
     MVI A,$04
     CALL L_4E65
     RST 7
-    .byte $20                           ; the hook's number
+    .byte $20                           ; the hook's offset in the table at $FADA
     JMP NMERR
 
 L_4E65:
@@ -322,7 +322,7 @@ L_4E7A:
     MVI A,$06
     CALL L_4E65
     RST 7
-    .byte $0E                           ; the hook's number
+    .byte $0E                           ; the hook's offset in the table at $FADA
     JMP NMERR
 
 L_4E8A:
@@ -393,7 +393,7 @@ L_4ED9:
     POP B
     POP H
     RST 7
-    .byte $10                           ; the hook's number
+    .byte $10                           ; the hook's offset in the table at $FADA
     SHLD D_FC8C
     PUSH B
     JMP PUTNEW
@@ -492,7 +492,7 @@ L_4F5B:
     CALL L_4790
     CALL L_35D9
     PUSH D
-    LXI B,$09BD
+    LXI B,LETCON
     XRA A
     MOV D,A
     MOV E,A
@@ -601,7 +601,7 @@ BAKUPT:
     MVI A,$08
     CALL L_4E65
     RST 7
-    .byte $12                           ; the hook's number
+    .byte $12                           ; the hook's offset in the table at $FADA
     JMP NMERR
 
 NOSKCR:
@@ -678,27 +678,27 @@ FLERR:
 
 FN_LOF:
     RST 7
-    .byte $4E                           ; the hook's number
+    .byte $4E                           ; the hook's offset in the table at $FADA
 
 FN_LOC:
     RST 7
-    .byte $50                           ; the hook's number
+    .byte $50                           ; the hook's offset in the table at $FADA
 
 ST_LFILES:
     RST 7
-    .byte $52                           ; the hook's number
+    .byte $52                           ; the hook's offset in the table at $FADA
 
 ST_DSKO:
     RST 7
-    .byte $56                           ; the hook's number
+    .byte $56                           ; the hook's offset in the table at $FADA
 
 L_5073:
     RST 7
-    .byte $54                           ; the hook's number
+    .byte $54                           ; the hook's offset in the table at $FADA
 
 L_5075:
     RST 7
-    .byte $28                           ; the hook's number
+    .byte $28                           ; the hook's offset in the table at $FADA
     MOV A,M
     CPI $3A
     JC L_5096
@@ -718,12 +718,12 @@ L_5090:
     POP H
     XRA A
     RST 7
-    .byte $2A                           ; the hook's number
+    .byte $2A                           ; the hook's offset in the table at $FADA
     RET
 
 L_5096:
     RST 7
-    .byte $2E                           ; the hook's number
+    .byte $2E                           ; the hook's offset in the table at $FADA
     JMP NMERR
 
 L_509B:
@@ -733,7 +733,7 @@ L_509B:
     CPI $02
     JNC L_50A8
     RST 7
-    .byte $2C                           ; the hook's number
+    .byte $2C                           ; the hook's offset in the table at $FADA
     JMP NMERR
 
 L_50A8:
@@ -801,18 +801,18 @@ DEVTAB:
     .byte $F8, $00
 
 DEVDSP:
-    .word L_14D2                        ; LCD:
-    .word L_14F2                        ; CRT:
-    .word L_167F                        ; CAS:
-    .word L_1762                        ; COM:
-    .word L_1877                        ; WAND:
-    .word L_1754                        ; LPT:
-    .word L_17D1                        ; MDM:
-    .word L_14FC                        ; RAM:
+    .word LCDDEV                        ; LCD:
+    .word CRTDEV                        ; CRT:
+    .word CASDEV                        ; CAS:
+    .word COMDEV                        ; COM:
+    .word WNDDEV                        ; WAND:
+    .word LPTDEV                        ; LPT:
+    .word MDMDEV                        ; MDM:
+    .word RAMDEV                        ; RAM:
 
 L_5123:
     RST 7
-    .byte $30                           ; the hook's number
+    .byte $30                           ; the hook's offset in the table at $FADA
     PUSH H
     PUSH D
     PUSH PSW

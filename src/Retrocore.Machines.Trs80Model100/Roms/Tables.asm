@@ -330,24 +330,30 @@ DECDSP:
     .word FN_CINT                       ; to integer
     .word L_35D9                        ; string check
     .word FN_CSNG                       ; to single
+
+DBLDSP:
     .word L_2B78                        ; double +
     .word L_2B69                        ; double -
     .word L_2CFF                        ; double *
     .word L_2DC7                        ; double /
-    .word L_3D8E                        ; double compare
-    .word L_34FA                        ; single +
-    .word L_37F4                        ; single -
-    .word L_37FD                        ; single *
-    .word L_3803                        ; single /
-    .word L_380E                        ; single compare
-    .word L_3D7F                        ; integer +
-    .word L_3498                        ; integer -
-    .word L_3704                        ; integer *
-    .word L_36F8                        ; integer /
-    .word L_3725                        ; integer compare
-    .word INTDIV                        ; integer \
-    .word L_3DF7                        ; integer compare
-    .word L_34C2                        ; ?
+    .word L_3D8E                        ; double ^
+    .word L_34FA                        ; double compare
+
+SNGDSP:
+    .word L_37F4                        ; single +
+    .word L_37FD                        ; single -
+    .word L_3803                        ; single *
+    .word L_380E                        ; single /
+    .word L_3D7F                        ; single ^
+    .word L_3498                        ; single compare
+
+INTDSP:
+    .word L_3704                        ; integer +
+    .word L_36F8                        ; integer -
+    .word L_3725                        ; integer *
+    .word INTDIV                        ; integer /
+    .word L_3DF7                        ; integer ^
+    .word L_34C2                        ; integer compare
 
 ERRTAB:
     .byte "NF"                          ; 1

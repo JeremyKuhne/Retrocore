@@ -6,10 +6,10 @@
 ;;
 ;; The first page holds the restarts. BASIC uses them as one-byte calls: RST 1 checks the next character against the
 ;; byte that follows it (SYNCHR), RST 2 gets the next character (CHRGET, which jumps to CHRGTR), RST 3 compares HL
-;; with DE (DCOMPR), RST 4 prints the character in A (OUTDO), RST 5 tests the accumulator's type (GETYPE, which
-;; jumps to GETYPR) and RST 6 its sign (VSIGN). RST 7 takes a byte after it, the number of a hook in RAM that a
-;; program can take over (HOOK). Between them are the 80C85's interrupts: TRAP (the power failing), RST55 (the bar
-;; code wand), RST65 (the serial port) and RST75 (the clock's 256 Hz tick, which scans the keyboard).
+;; with DE (DCOMPR), RST 4 prints the character in A (OUTDO), RST 5 tests the accumulator's type (GETYPE, which jumps
+;; to GETYPR) and RST 6 its sign (VSIGN). RST 7 takes a byte after it, the offset of a hook in the table of addresses
+;; at $FADA, which a program can take over (HOOK). Between them are the 80C85's interrupts: TRAP (the power failing),
+;; RST55 (the bar code wand), RST65 (the serial port) and RST75 (the clock's 256 Hz tick, which scans the keyboard).
 ;;
 ;; BASIC follows Microsoft's design, close to MBASIC's (the SDK's Kaypro/Roms/Mbasic), but its numbers are BCD:
 ;;
@@ -37,28 +37,32 @@
 ;; - Evaluator.asm ($0DA9-$113A): the formula evaluator, the operators, LPOS, POS, INP, OUT and the argument
 ;;   helpers.
 ;; - List.asm ($113B-$12CA): LIST and LLIST, PEEK and POKE.
-;; - Devices.asm ($12CB-$19AA): the keyboard queue, POWER, the cassette's motor and bytes, and the drivers that
-;;   BASIC opens files on (DEVTAB, DEVDSP).
+;; - Devices.asm ($12CB-$19AA): the keyboard queue, POWER, the cassette's motor and bytes, and the devices' drivers,
+;;   each reached through a table of its routines (LCDDEV to RAMDEV).
 ;; - Commands.asm ($19AB-$220E): the Model 100's own statements, TIME$ to NEW.
 ;; - Files.asm ($220F-$270B): making a text file, CSAVE and CLOAD.
 ;; - Strings.asm ($270C-$2B4B): the string package.
 ;; - Math1.asm and Math2.asm ($2B4C-$3EEF): FRE and the BCD math package.
-;; - Misc.asm ($3EF0-$4221): RESTORE, STOP, END, CONT, CLEAR and NEXT.
+;; - Misc.asm ($3EF0-$4221): BLTU and GETSTK, the ON COM and ON TIME$ interrupt states, RESTORE, STOP, END, CONT,
+;;   CLEAR and NEXT.
 ;; - Lcd.asm ($4222-$4643): the screen's controls, its escape sequences and the function keys' line.
 ;; - LineInput.asm ($4644-$478A): INLIN, the line editor.
-;; - Variables.asm ($478B-$4B43): DIM and the variable search.
-;; - Output.asm ($4B44-$4CCA): character output to the screen, the printer and files.
-;; - Disk.asm ($4CCB-$5145): OPEN, LOAD, MERGE, SAVE, CLOSE, the file input routines, LOF, LOC, LFILES and DSKO$.
+;; - Variables.asm ($478B-$4B43): DIM, the variable search and PRINT USING.
+;; - Output.asm ($4B44-$4CCA): character output to the screen, the printer and files, INKEY$, file names and file
+;;   numbers.
+;; - Disk.asm ($4CCB-$5145): OPEN, LOAD, MERGE, SAVE, CLOSE, the devices' names and tables (DEVTAB, DEVDSP), the
+;;   file input routines, LOF, LOC, LFILES and DSKO$.
 ;; - Telcom.asm ($5146-$5796): TELCOM.
 ;; - Menu.asm ($5797-$5DED): the main menu, the function keys, the directory search, ADDRSS and SCHEDL.
 ;; - Text.asm ($5DEE-$6B60): TEXT.
 ;; - Directory.asm ($6B61-$6CD5): inserting and deleting in RAM files, ROMDIR and BASIC's entry.
 ;; - Io.asm ($6CD6-$6F45): the devices' cold and warm resets, the printer, the RS-232 port and the modem.
-;; - Cassette.asm ($6F46-$7241): the cassette's leaders, sync and bytes.
-;; - Keyboard.asm ($7242-$744B): the keyboard's scan, BREAK, sound and the clock.
-;; - LcdDriver.asm ($744C-$770A): PLOT, UNPLOT and the LCD's drivers.
-;; - Font.asm ($770B-$7D32): the keyboard's tables and the character set.
-;; - Startup.asm ($7D33-$7FFF): the cold start, the power-up messages and MAX.
+;; - Cassette.asm ($6F46-$7054): the cassette's leaders, sync, bytes and motor.
+;; - Keyboard.asm ($7055-$744B): the keyboard's scan and its buffer, BREAK, sound, the clock and character drawing.
+;; - LcdDriver.asm ($744C-$770A): PLOT, UNPLOT, the LCD's drivers, the buzzer and the routines for the device on
+;;   ports $80-$83.
+;; - Font.asm ($770B-$7D32): a command for the device on ports $80-$83, the keyboard's tables and the character set.
+;; - Startup.asm ($7D33-$7FFF): the cold start, MAX, BASIC's sign-on and the bytes-free message.
 ;;
 ;; Equates.asm holds the RAM's names. The modules' boundaries and subjects are a first cut, to be refined as each
 ;; is named.

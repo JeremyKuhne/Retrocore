@@ -273,14 +273,14 @@ FRQINT:
     RST 6
     RM
     CALL FN_CSNG
-    LXI B,L_3245
+    LXI B,$3245
     LXI D,$8076
     CALL L_3498
     RC
     LXI B,$6545
-    LXI D,TXTCTL+61
+    LXI D,$6053
     CALL L_3498
     JNC OVERR
     LXI B,$65C5
-    LXI D,TXTCTL+61
+    LXI D,$6053
     JMP L_37F4

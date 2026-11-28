@@ -1,4 +1,4 @@
-;; MODEL 100 ROM: PLOT, UNPLOT AND THE LCD'S DRIVERS
+;; MODEL 100 ROM: PLOT, UNPLOT, THE LCD'S DRIVERS, THE BUZZER AND THE ROUTINES FOR THE DEVICE ON PORTS $80-$83
 ;;
 ;; Runs at $744C-$770A. Model100.asm describes the ROM as a whole and how it is named.
 
@@ -303,7 +303,7 @@ L_76A0:
 L_76B6:
     MVI A,$03
     STA D_FFFA
-    LXI H,KEYTAB
+    LXI H,D_770B
     MVI B,$05
 
 L_76C0:

@@ -88,7 +88,7 @@ internal static class MachineConfiguration
             {
                 Restore(target, device, node as JsonObject);
             }
-            catch (Exception error) when (error is ArgumentException or IOException or InvalidOperationException)
+            catch (Exception error) when (error is ArgumentException or IOException or InvalidDataException or InvalidOperationException)
             {
                 problems.Add($"{device.Info.Name}: {error.Message}");
             }

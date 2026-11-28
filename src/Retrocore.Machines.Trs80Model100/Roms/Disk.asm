@@ -331,7 +331,7 @@ L_4E8A:
     POP B
     RET
 
-L_4E8E:
+FN_INPUT:
     RST 2
     RST 1
     .byte $24                           ; SYNCHR: '$'
@@ -692,7 +692,7 @@ ST_DSKO:
     RST 7
     .byte $56                           ; the hook's offset in the table at $FADA
 
-L_5073:
+FN_DSKI:
     RST 7
     .byte $54                           ; the hook's offset in the table at $FADA
 

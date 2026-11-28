@@ -15,7 +15,7 @@ FRMCHK:
 LPOPER:
     PUSH D
     MVI C,$01
-    CALL L_3EFF
+    CALL GETSTK
     CALL EVAL
 
 TSTOP:
@@ -326,15 +326,15 @@ L_0FA3:
     CPI $C7
     JZ FN_INSTR
     CPI $C9
-    JZ L_4BEA
+    JZ FN_INKEY
     CPI $C6
     JZ FN_STRING
     CPI $84
-    JZ L_4E8E
+    JZ FN_INPUT
     CPI $CA
-    JZ L_1D90
+    JZ FN_CSRLIN
     CPI $C8
-    JZ L_5073
+    JZ FN_DSKI
     SUI $DF
     JNC NTMRND
 

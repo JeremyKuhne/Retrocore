@@ -121,7 +121,7 @@ L_4BE5:
     STA TTYPOS
     RET
 
-L_4BEA:
+FN_INKEY:
     RST 2
     PUSH H
     CALL CHSNS

@@ -2,8 +2,8 @@
 ;;
 ;; Runs at $3EF0-$4221. Model100.asm describes the ROM as a whole and how it is named.
 
-L_3EF0:
-    CALL L_3F08
+BLTU:
+    CALL REASON
 
 L_3EF3:
     PUSH B
@@ -19,7 +19,7 @@ L_3EF6:
     DCX H
     JMP L_3EF6
 
-L_3EFF:
+GETSTK:
     PUSH H
     LHLD STREND
     MVI B,$00
@@ -27,7 +27,7 @@ L_3EFF:
     DAD B
     .byte $3E                           ; MVI A,$E5: skips the next byte
 
-L_3F08:
+REASON:
     PUSH H
     MVI A,$88
     SUB L
@@ -285,7 +285,7 @@ L_4054:
     CALL L_3FF1
     CALL L_3FB9
     MVI C,$03
-    CALL L_3EFF
+    CALL GETSTK
     POP B
     POP D
     POP H

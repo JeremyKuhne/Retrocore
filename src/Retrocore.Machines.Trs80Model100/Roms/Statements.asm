@@ -142,7 +142,7 @@ CONRUN:
 
 ST_GOSUB:
     MVI C,$03
-    CALL L_3EFF
+    CALL GETSTK
     POP B
     PUSH H
     PUSH H

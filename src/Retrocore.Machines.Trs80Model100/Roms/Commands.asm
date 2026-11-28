@@ -736,7 +736,7 @@ L_1D6F:
     POP H
     RET
 
-L_1D90:
+FN_CSRLIN:
     PUSH H
     LDA CSRY
     DCR A

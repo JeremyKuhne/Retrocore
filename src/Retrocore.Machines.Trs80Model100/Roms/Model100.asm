@@ -61,7 +61,7 @@
 ;; - Keyboard.asm ($7055-$744B): the keyboard's scan and its buffer, BREAK, sound, the clock and character drawing.
 ;; - LcdDriver.asm ($744C-$770A): PLOT, UNPLOT, the LCD's drivers, the buzzer and the routines for the device on
 ;;   ports $80-$83.
-;; - Font.asm ($770B-$7D32): a command for the device on ports $80-$83, the keyboard's tables and the character set.
+;; - Font.asm ($770B-$7D32): a command for the device on ports $80-$83, the character set and the keyboard's tables.
 ;; - Startup.asm ($7D33-$7FFF): the cold start, MAX, BASIC's sign-on and the bytes-free message.
 ;;
 ;; Equates.asm holds the RAM's names. The modules' boundaries and subjects are a first cut, to be refined as each

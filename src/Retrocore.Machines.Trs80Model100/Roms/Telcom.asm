@@ -42,7 +42,7 @@ TELCMD:
     .word L_524D
     .byte "MENU"
     .word MENU
-    .byte $FF                               ; the end
+    .byte $FF                           ; the end
 
 D_51A4:
     .byte "Find", $A0, "Call", $A0, "Stat", $A0, $54

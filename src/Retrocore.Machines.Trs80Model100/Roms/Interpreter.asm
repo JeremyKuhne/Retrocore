@@ -300,7 +300,7 @@ LEVFRE:
     PUSH H
     DAD B
     PUSH H
-    CALL L_3EF0
+    CALL BLTU
     POP H
     SHLD VARTAB
     XCHG
@@ -635,7 +635,7 @@ L_0758:
     POP D
     XCHG
     MVI C,$0C
-    CALL L_3EFF
+    CALL GETSTK
     PUSH H
     LHLD ENDFOR
     XTHL

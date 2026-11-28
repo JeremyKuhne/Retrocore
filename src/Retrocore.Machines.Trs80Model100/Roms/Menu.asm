@@ -841,7 +841,7 @@ ADRCMD:
     .word L_5BF7
     .byte "MENU"
     .word MENU
-    .byte $FF                               ; the end
+    .byte $FF                           ; the end
 
 D_5D02:
     .byte "NOTE.DO", $00

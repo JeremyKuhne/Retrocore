@@ -148,7 +148,7 @@ L_4835:
     DAD B
     POP B
     PUSH H
-    CALL L_3EF0
+    CALL BLTU
     POP H
     SHLD STREND
     MOV H,B
@@ -282,7 +282,7 @@ L_48FC:
     MOV M,B
     INX H
     MOV C,A
-    CALL L_3EFF
+    CALL GETSTK
     INX H
     INX H
     SHLD TEMP3
@@ -314,7 +314,7 @@ L_4924:
     XCHG
     DAD D
     JC L_3F17
-    CALL L_3F08
+    CALL REASON
     SHLD STREND
 
 L_493F:

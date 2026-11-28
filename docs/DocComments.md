@@ -467,12 +467,12 @@ broken link.
   its own; a label with a comment of its own is checked against that comment's `Keeps:` and `Uses:`, if any. An
   entry whose meaning ends in a keeps clause, as `Aux = stores from an auxiliary byte; keeps A`, or
   `; keeps nothing` for one that relies on its caller to save the registers, is checked against that clause
-  instead of the routine's `Keeps:`, and not for `Uses:`; where the label's own comment has a `Keeps:` or `Uses:`,
-  that comment wins, and a label at the same address with no comment of its own takes the clause too. A routine's
-  own contract at its start wins over another routine's entry at that address, and a keeps clause over another
-  routine's entry without one. The clause
-  names items as `Keeps:` does, each with an optional note in parentheses, separated by commas or, unlike
-  `Keeps:`, "and"; the documentation check warns about one it does not know.
+  instead of the routine's `Keeps:`, and not for `Uses:`; where the label's own comment has a `Keeps:` or `Uses:`
+  that applies in the build and model, that comment wins, and a label at the same address with no comment of its
+  own takes the clause too. A routine's own contract at its start wins over another routine's entry at that
+  address, and a keeps clause over another routine's entry without one. The clause names items as `Keeps:` does,
+  each with an optional note in parentheses, separated by commas or, unlike `Keeps:`, "and"; the documentation
+  check warns about one it does not know.
 
   The launch option `checkContracts` selects `warn` (the default: a Debug Console message), `stop` (also stops, with
   reason `exception`, at the instruction after the call) or `off`. With `warn`, ticking the **Routine broke

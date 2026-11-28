@@ -282,6 +282,32 @@ public class ContractAnalysisTests
                 rts
             """;
 
+        // A label's own Keeps: in a branch the build leaves out leaves the clause to apply. (The parser keeps only the
+        // assembled branch's comment, so this does not reach the sections' conditions, which HasContract follows.)
+        const string Conditional = """
+            MODEL = 3
+
+            ;; Returns, or from Alias clears A.
+            ;; Keeps: X
+            ;; Entry: Alias = clears A; keeps A
+            Saver:
+                rts
+
+            .if MODEL = 1
+            ;; Clears A.
+            ;; Keeps: A
+            .else
+            ;; Clears A.
+            .endif
+            Alias:
+                lda #0
+                rts
+            """;
+
+        (List<string> conditional, _, _) = Check(Conditional, "Mos6502");
+        conditional.Should().Equal("Saver ($1000) documents that its entry Alias keeps A, but A is changed by the instruction at $1001.");
+        DebugContracts(Conditional)[0x1001].Registers.Should().Equal("A");
+
         (List<string> clause, _, _) = Check(Clause, "Mos6502");
         clause.Should().Equal("Second ($1001) documents that its entry Alias keeps A, but A is changed by the instruction at $1002.");
         DebugContracts(Clause)[0x1002].Registers.Should().Equal("A");
@@ -373,8 +399,9 @@ public class ContractAnalysisTests
 
         result.Diagnostics.Should().BeEmpty();
         DocumentationSet documentation = DocumentationSet.Create([DocumentationParser.Parse(source, path)], result);
+        long? Symbol(string name) => result.Symbols.TryGetValue(name, out long value) ? value : null;
         return Retrocore.Debug.DebugContracts.Build(
-            new DocumentationResolver(documentation), model: "", new DebugRegisters(M6502Isa.Description));
+            new DocumentationResolver(documentation), model: "", new DebugRegisters(M6502Isa.Description), Symbol);
     }
 
     private static (List<string> Findings, int Checked, IReadOnlyList<string> Skipped) Check(string source, string cpu)

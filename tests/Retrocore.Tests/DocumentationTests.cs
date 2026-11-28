@@ -707,7 +707,7 @@ public class DocumentationTests
         List<string> messages = [.. new DocumentationResolver(set).Check().Select(diagnostic => diagnostic.Message)];
         messages.Should().Equal(
             "Entry: 'Wrong' keeps 'the carry', which is not a register, flag or symbol.",
-            "Entry: 'Section' has '; keeps', but not as a clause at the end, as '; keeps X, Y'.");
+            "Entry: 'Section' has '; keeps' not followed by items, as '; keeps X, Y'.");
 
         // Whether a label's own comment has a contract follows the sections that apply.
         topic.HasContract(_ => true).Should().BeTrue();

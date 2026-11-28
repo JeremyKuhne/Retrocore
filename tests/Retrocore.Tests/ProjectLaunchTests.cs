@@ -221,7 +221,7 @@ public sealed class ProjectLaunchTests
             { "sdk": "1", "cpu": "z80", "sources": ["main.s"], "targets": { "dos": { "machine": "trs80-model3", "environment": "trsdos" } } }
             """);
 
-        client.Fails("launch", Launch("dos")).Should().EndWith("the 'trsdos' environment is not yet supported; only 'bare', 'wozmon', 'dos33', 'dfs', 'basic', 'sos', 'prodos' and 'level2' build.");
+        client.Fails("launch", Launch("dos")).Should().EndWith("the 'trsdos' environment is not yet supported; only 'bare', 'wozmon', 'dos33', 'dfs', 'basic', 'sos', 'prodos', 'level2' and 'colorbasic' build.");
         Write("retrocore.json", project);
 
         // The machine the launch names gives way to the target's.
@@ -432,6 +432,121 @@ public sealed class ProjectLaunchTests
         client.Request("continue", new JsonObject { ["threadId"] = 1 });
         client.Event("stopped").String("reason").Should().Be("breakpoint", "the program runs to its loop once it has shown its line");
         Trs80Screen(client).Should().Contain("*? HELLO").And.Contain("LOADED FROM TAPE");
+    }
+
+    /// <summary>
+    ///  A <c>colorbasic</c> target's launch puts its cassette in the recorder and boots Color BASIC from the SDK's
+    ///  ROMs with no disk controller: at OK it types <c>CLOADM"&lt;NAME&gt;"</c>, and once the program is in, <c>EXEC</c>,
+    ///  and stops at the entry, on the Color Computer 1, 2 and 3. The program, 2K, plays for over ten of the machine's
+    ///  seconds, with <c>$55</c> bytes in its blocks, which are not leaders, and a name with OK in it, which is not
+    ///  BASIC's prompt. It then shows its line, and a breakpoint in its source stops. Its target cannot give a disk
+    ///  controller, nor, on the CoCo 1 and 2, leave out Extended BASIC.
+    /// </summary>
+    /// <param name="machine">The catalog machine.</param>
+    [TestMethod]
+    [DataRow("coco1")]
+    [DataRow("coco2")]
+    [DataRow("coco3")]
+    public void ColorbasicLaunchBootsItsTape(string machine)
+    {
+        Write("retrocore.json", $$"""
+            { "sdk": "1", "name": "bookshop", "cpu": "6809", "sources": ["src/*.s"], "entry": "START",
+              "targets": { "tape": { "machine": "{{machine}}", "environment": "colorbasic" },
+                           "disk": { "machine": "{{machine}}", "environment": "colorbasic", "options": { "diskController": true } },
+                           "alone": { "machine": "{{machine}}", "environment": "colorbasic", "options": { "extendedBasic": "none" } } } }
+            """);
+
+        string main = Write("src/main.s", """
+            .include <machine.inc>
+            MESSAGE:
+                .byte "LOADED FROM TAPE", RETURN, 0
+            START:
+                leax MESSAGE,pcr
+            NEXT:
+                lda ,x+
+                beq DONE
+                jsr [CharacterOutVector]
+                bra NEXT
+            DONE:
+                bra DONE
+
+            ; Data after the code, so the tape plays for a while: a block's own $55s, which are not a leader, a run of
+            ; them, and a $3C after one.
+                .res 2048, $E5
+                .byte $55, 1, $55, $55, $3C
+                .res 64, $55
+                .byte "PUMPKIN UNUSUAL", $55
+            """);
+
+        using DapTestClient client = new();
+        client.Request("initialize", []);
+        client.Fails("launch", Launch("disk")).Should().EndWith(
+            "a colorbasic target boots Color BASIC with no disk controller, as Disk BASIC is the diskbasic environment, so its options and its launch cannot give 'diskController'.");
+
+        if (machine != "coco3")
+        {
+            client.Fails("launch", Launch("alone")).Should().EndWith(
+                "a colorbasic target runs under Extended Color BASIC, whose memory its maps give, so its options and its launch cannot give 'extendedBasic' none.");
+        }
+
+        client.Request("launch", Launch("tape"))["project"]?["entry"]?.GetValue<int>().Should().Be(0x1F12);
+        client.Request("evaluate", new JsonObject
+        {
+            ["expression"] = "PC"
+        }).String("result").Should().StartWith("$1F12");
+
+        JsonObject set = client.Request("setBreakpoints", new JsonObject
+        {
+            ["source"] = new JsonObject { ["path"] = main },
+            ["breakpoints"] = new JsonArray(new JsonObject { ["line"] = 12 })
+        });
+
+        (set["breakpoints"]?[0]?["verified"]?.GetValue<bool>()).Should().BeTrue();
+        client.Request("configurationDone", []);
+        client.Event("stopped").String("reason").Should().Be("entry");
+        client.Request("continue", new JsonObject { ["threadId"] = 1 });
+        client.Event("stopped").String("reason").Should().Be("breakpoint", "the program runs to its loop once it has shown its line");
+        CocoScreen(client).Should().Contain("F BOOKSHOP").And.Contain("LOADED FROM TAPE");
+    }
+
+    /// <summary>
+    ///  The 6809 sample, <c>sample/6809</c>, boots on each of its targets and shows its greeting, then goes back to
+    ///  Color BASIC's OK.
+    /// </summary>
+    /// <param name="target">The sample's target.</param>
+    [TestMethod]
+    [DataRow("coco-colorbasic")]
+    [DataRow("coco3-colorbasic")]
+    public void M6809SampleRunsOnEachTarget(string target)
+    {
+        string sample = Path.Join(RepositoryRoot(), "sample", "6809");
+        using DapTestClient client = new();
+        client.Request("initialize", []);
+        client.Request("launch", new JsonObject { ["project"] = sample, ["target"] = target, ["stopOnEntry"] = false });
+        client.Request("configurationDone", []);
+        for (DateTime end = DateTime.UtcNow.AddSeconds(30); !CocoScreen(client).Contains("HELLO, WORLD!\nOK", StringComparison.Ordinal); Thread.Sleep(100))
+        {
+            DateTime.UtcNow.Should().BeBefore(end, $"{target} shows its greeting and BASIC's OK:\n{CocoScreen(client)}");
+        }
+    }
+
+    // The Color Computer's text screen, 32 columns by 16 rows from $0400, as rows of text with their trailing spaces
+    // left out: each byte's low six bits, $00-$1F as @ to _ and $20-$3F as space to ?.
+    private static string CocoScreen(DapTestClient client)
+    {
+        byte[] bytes = Convert.FromBase64String(client.Request("readMemory", new JsonObject
+        {
+            ["memoryReference"] = "0x400",
+            ["count"] = 512
+        }).String("data") ?? "");
+
+        IEnumerable<string> rows = bytes.Chunk(32).Select(row => new string([.. row.Select(value =>
+        {
+            int character = value & 0x3F;
+            return (char)(character < 0x20 ? character + 0x40 : character);
+        })]).TrimEnd());
+
+        return string.Join("\n", rows);
     }
 
     /// <summary>

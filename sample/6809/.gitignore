@@ -1,0 +1,2 @@
+# retrocore build's intermediate files; its output goes to artifacts/, which the repository ignores.
+obj/

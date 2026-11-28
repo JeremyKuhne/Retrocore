@@ -653,6 +653,41 @@ public sealed class ProjectEnvironmentTests
             "the 'level2' environment puts only its program on its tape, so it takes no 'files'.");
     }
 
+    /// <summary>
+    ///  A <c>colorbasic</c> target links at <c>$1F00</c>, above Extended BASIC's graphics pages and BASIC's empty
+    ///  program, and writes its cassette: one machine-language file under the project's name cut to eight, which EXEC
+    ///  starts at the entry. Its map has no zero page, as the 6809's direct page is not one, so a section is checked from
+    ///  <c>$0000</c>, and a program too big for 16K says how far over it is.
+    /// </summary>
+    /// <param name="machine">The catalog machine.</param>
+    [TestMethod]
+    [DataRow("coco1")]
+    [DataRow("coco3")]
+    public void ColorbasicWritesItsTape(string machine)
+    {
+        Write("retrocore.json", $$"""
+            { "sdk": "1", "name": "space-adventure", "cpu": "6809", "sources": ["main.s"], "entry": "START",
+              "targets": { "tape": { "machine": "{{machine}}", "environment": "colorbasic" },
+                           "big": { "machine": "coco1", "environment": "colorbasic", "options": { "ramKilobytes": 16 } } } }
+            """);
+
+        Write("main.s", "DATA:\n    .byte 1\nSTART:\n    rts\n");
+        TargetBuild build = ProjectBuild.Build(RetrocoreProject.Load(_folder).Target("tape"));
+        string tape = Path.Join(_folder, "artifacts", "tape", "space-adventure.cas");
+        build.Media.Should().Be(new TargetMedia(
+            File: null, FileKind: null, tape, "Color Computer tape (CAS)", "CLOADM\"SPACEADV\", then EXEC once it has loaded"));
+
+        (string name, int address, byte[] bytes, int entry) = Retrocore.Media.Trs80.CocoTape.Read(File.ReadAllBytes(tape));
+        (name, address, entry).Should().Be(("SPACEADV", 0x1F00, 0x1F01));
+        bytes.Should().Equal(1, 0x39);
+        File.ReadAllText(Path.Join(_folder, "obj", "tape", "memory.cfg")).Should().NotContain("ZP:", "the 6809 has no zero page");
+
+        Write("main.s", "START:\n    rts\n    .res $2000\n");
+        Action big = () => ProjectBuild.Build(RetrocoreProject.Load(_folder).Target("big"));
+        big.Should().Throw<ProjectException>().Which.Message.Should().Contain(
+            "overlaps BASIC's 200 bytes of string space at the top of RAM").And.Contain("so it is 257 bytes over.");
+    }
+
     // A small ProDOS disk in ProDOS's order, as the build reads ProDOS 2.4.3's: its boot blocks, each filled with a
     // byte of its own, and PRODOS, whose contents stand in for ProDOS itself.
     private static byte[] ProDosDisk()

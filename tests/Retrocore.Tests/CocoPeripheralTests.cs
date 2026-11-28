@@ -37,6 +37,23 @@ public class CocoPeripheralTests
     }
 
     /// <summary>
+    ///  CLOADM reads a tape whose blocks hold <c>$55</c> bytes, alone, in a run of 40 and before a <c>$3C</c>: the
+    ///  player puts its silence only before a leader between blocks, never inside one, where it would cut the block's
+    ///  bits apart.
+    /// </summary>
+    [TestMethod]
+    public void CloadmReadsBlocksThatHoldLeaderBytes()
+    {
+        byte[] program = [0x55, 1, 0x55, 0x55, 0x3C, .. Enumerable.Repeat((byte)0x55, 40), 0x3C, 0x55, .. "UNUSUAL"u8];
+        CocoMachine machine = Boot();
+        machine.Cassette.Play(new CassetteImage(CocoTape.Write("U55", 0x3000, program, 0x3000)), "test");
+        CocoMachineTests.Type(machine, "cloadm\r");
+        RunSeconds(machine, 8);
+        CocoMachineTests.Screen(machine).Should().Contain("F U55").And.NotContain("I/O ERROR");
+        Enumerable.Range(0, program.Length).Select(offset => machine.Bus.Peek((ushort)(0x3000 + offset))).Should().Equal(program);
+    }
+
+    /// <summary>
     ///  JOYSTK reads each axis through the DAC and comparator.
     /// </summary>
     [TestMethod]

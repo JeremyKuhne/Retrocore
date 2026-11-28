@@ -658,9 +658,9 @@ JOB_JUMP = $D0
 ;; Also: EXEC (D1541)
 JOB_EXECUTE = $E0
 
-;; The block availability map: which blocks of each disk are free. The BAM is a sector of the disk, held in a buffer
-;; of its own; this family reads and writes it, allocates and frees blocks in it, keeps the free counts and swaps the
-;; two drives' images of it. Its variables here are the allocation's and the swap's.
+;; The block availability map: which blocks of each disk are free. The BAM is a sector of the disk, held in a buffer of
+;; its own; this family reads and writes it, allocates and frees blocks in it, keeps the free counts and swaps the two
+;; drives' images of it. Its variables here are the allocation's and the swap's.
 .scope Bam
 ;; Non-zero to stop a changed disk being initialized on its next use; only a memory write sets it.
 ;; Also: AUTOFG (D1541)
@@ -679,9 +679,9 @@ ImageTracks = $029D
 Images = $02A1
 .endscope
 
-;; The command channel: the parser that splits a command into names and numbers, the commands (the file commands,
-;; the block and memory commands, the user commands, and the one that formats), and the status of the LED they
-;; control. Its locations are the parser's.
+;; The command channel: the parser that splits a command into names and numbers, the commands (the file commands, the
+;; block and memory commands, the user commands, and the one that formats), and the status of the LED they control. Its
+;; locations are the parser's.
 .scope Commands
 ;; A pointer to <UserCommandVectors>, the U commands' jump table.
 ;; Also: USRJMP (D1541)
@@ -719,10 +719,10 @@ COUNT = 12
 LOAD_STRUCTURE = 12
 .endscope
 
-;; The drive controller, run by VIA 2's timer interrupt: it takes the jobs from the job queue, steps the head to
-;; their tracks, finds their sectors, reads and writes them in GCR, and formats a disk. Its locations are the
-;; controller's own zero page and the formatting's variables, and its constants are the GCR codes' masks, the
-;; formatting results and the scheduling's distances.
+;; The drive controller, run by VIA 2's timer interrupt: it takes the jobs from the job queue, steps the head to their
+;; tracks, finds their sectors, reads and writes them in GCR, and formats a disk. Its locations are the controller's own
+;; zero page and the formatting's variables, and its constants are the GCR codes' masks, the formatting results and the
+;; scheduling's distances.
 .scope Controller
 ;; The write-protect sense at the last interrupt, to see it change.
 ;; Also: LWPT (D1541)
@@ -974,8 +974,8 @@ CODE1 = $F8
 SerialNoDelay = Controller::HeadTrack + 1
 
 
-;; The directory: searching it for file names, listing it as a program and the entries' bookkeeping. Its locations
-;; are the search's and the listing's.
+;; The directory: searching it for file names, listing it as a program and the entries' bookkeeping. Its locations are
+;; the search's and the listing's.
 .scope Directory
 ;; Used only by the directory code (lookup and trnsfr's listing half): set while the search goes on to the other drive.
 ;; Also: DRVFLG (D1541)
@@ -1007,8 +1007,8 @@ BLOCK_COUNT_END = 24
 LISTING_TEXT_LENGTH = 27
 .endscope
 
-;; The channels and the files on them: OPEN and CLOSE, the channels' buffers and their least-recently-used order,
-;; and the sequential and program files' reading and writing. Its locations are OPEN's and the last program's.
+;; The channels and the files on them: OPEN and CLOSE, the channels' buffers and their least-recently-used order, and
+;; the sequential and program files' reading and writing. Its locations are OPEN's and the last program's.
 .scope Files
 ;; The first track of the last program loaded, for LOAD "*".
 ;; Also: PRGTRK (D1541)
@@ -1042,16 +1042,16 @@ MODE_MODIFY = 3
 MODE_COUNT = 4
 .endscope
 
-;; The idle loop, which the DOS runs when the serial bus and the controller have nothing for it: it serves the bus,
-;; runs the command channel's commands and flashes the error LED. It has one variable here.
+;; The idle loop, which the DOS runs when the serial bus and the controller have nothing for it: it serves the bus, runs
+;; the command channel's commands and flashes the error LED. It has one variable here.
 .scope Idle
 ;; Cleared before each command; nothing reads it.
 ;; Also: NMIFLG (D1541)
 NmiDebounce = $0067
 .endscope
 
-;; The DOS's side of the job queue: setting up a job, queueing it for the controller, waiting for it and, when it
-;; fails, recovering: retrying, with the head offset from the track and a bump to find track 1.
+;; The DOS's side of the job queue: setting up a job, queueing it for the controller, waiting for it and, when it fails,
+;; recovering: retrying, with the head offset from the track and a bump to find track 1.
 .scope Jobs
 ;; A failed job's recovery: bits 0-5 the tries, bit 6 set for no head offsets, bit 7 set to give up without the last
 ;; bump (CheckBump bumps when it is clear).
@@ -1082,8 +1082,8 @@ SIDE_SECTOR_COUNT = 6
 POINTERS_PER_SIDE_SECTOR = 120
 .endscope
 
-;; The serial bus, to the VIC-20 or 64: the lines on VIA 1's port B, the handshake that sends and receives a byte
-;; under the bus's protocol, and the commands under ATN (LISTEN, TALK, UNLISTEN, UNTALK and the secondary addresses).
+;; The serial bus, to the VIC-20 or 64: the lines on VIA 1's port B, the handshake that sends and receives a byte under
+;; the bus's protocol, and the commands under ATN (LISTEN, TALK, UNLISTEN, UNTALK and the secondary addresses).
 .scope Serial
 ;; The drive's LISTEN command, $20 plus the device number from the jumpers.
 ;; Also: LSNADR (D1541)

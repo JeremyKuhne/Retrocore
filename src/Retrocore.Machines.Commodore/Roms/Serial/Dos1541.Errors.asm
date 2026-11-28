@@ -26,8 +26,8 @@
 .endmacro
 
 ;; Emits an error message's entry for <Errors::Messages>: its BCD number, then its text of up to three pieces, each a
-;; string or a word token, with bit 7 set on the text's first and last byte. A message with more numbers has the
-;; others in a `.byte` line above this one.
+;; string or a word token, with bit 7 set on the text's first and last byte. A message with more numbers has the others
+;; in a `.byte` line above this one.
 ;; Parameters:
 ;;   number = the error's number, in BCD as the DOS keeps it
 ;;   first = the text's first piece
@@ -144,8 +144,8 @@ TOKEN_LIMIT = $20
 ;; Sets the message for a job that failed, then ends the command like <Abort>, so it never returns.
 ;;
 ;; The job's track and sector, from <JobHeaders>, go in the message. Its error code, the low nybble of A, becomes the
-;; DOS's number: codes 2 to 11 are 20 to 29, code 0 (the code $10) is 24, and code $0F is 74, drive not ready. While
-;; the VALIDATE command runs, it instead sets <CommandNumber> to $FF, sets the message, reinitializes the drive and goes
+;; DOS's number: codes 2 to 11 are 20 to 29, code 0 (the code $10) is 24, and code $0F is 74, drive not ready. While the
+;; VALIDATE command runs, it instead sets <CommandNumber> to $FF, sets the message, reinitializes the drive and goes
 ;; straight to <Recover>.
 ;; In: A = the job's error code, X = the job's number
 ;; Errors: 20 to 29 and 74, by the code
@@ -298,7 +298,7 @@ ToIdle:
 .endproc
 
 ;; Makes a number below 100 BCD by counting up in decimal mode, then puts its digits like <PutBcd>.
-;; In: A = a number from 0 to 99, Y = the offset into the message being built, at (CommandPointer+2)
+;; In: A = a number from 0 to 99, Y = the offset into the message being built, at (<CommandPointer>+2)
 ;; Out: A = the low digit's character, X = the BCD, Y = advanced by 2, decimal = clear
 ;; Also: HEXDEC (D1541)
 .proc PutDecimal
@@ -325,7 +325,7 @@ Converted:
 .endproc
 
 ;; Puts a BCD number's two digits, as characters, at the message's end.
-;; In: A = the BCD number, Y = the offset into the message being built, at (CommandPointer+2)
+;; In: A = the BCD number, Y = the offset into the message being built, at (<CommandPointer>+2)
 ;; Out: A = the low digit's character, X = the BCD, Y = advanced by 2
 ;; Also: BCDDEC (D1541)
 .proc PutBcd
@@ -341,7 +341,7 @@ Converted:
 .endproc
 
 ;; Puts a digit's character at the message's end.
-;; In: A = the digit, in the low nybble, Y = the offset into the message being built, at (CommandPointer+2)
+;; In: A = the digit, in the low nybble, Y = the offset into the message being built, at (<CommandPointer>+2)
 ;; Out: A = the character, Y = advanced by 1
 ;; Keeps: X
 ;; Also: BCD2 (D1541)
@@ -353,8 +353,7 @@ Converted:
     rts
 .endproc
 
-;; Stops the error LED's flashing and sets the message 00, OK,00,00.
-;; Out: as <SetMessage>
+;; Stops the error LED's flashing and sets the message 00, OK,00,00, as <SetMessage> does.
 ;; Also: OKERR (D1541)
 .proc SetOk
     jsr StopFlashing
@@ -365,7 +364,6 @@ Converted:
 
 ;; Sets the message for an error with no block: its track and sector are 0.
 ;; In: A = the error's number, in BCD
-;; Out: as <SetMessage>
 ;; Also: ERRTS0 (D1541)
 .proc SetMessageWithoutBlock
     ldy #$00
@@ -379,13 +377,13 @@ Converted:
 ;; channel ready to talk it.
 ;;
 ;; The message's first byte goes to the channel's byte, its last byte's offset to the channel's last, and the channel's
-;; status is set to <CHANNEL_TALK>. The channel's read position, (CommandPointer+2), is left at the message's second
+;; status is set to <CHANNEL_TALK>. The channel's read position, (<CommandPointer>+2), is left at the message's second
 ;; byte.
 ;; In: A = the error's number, in BCD
 ;; Out:
 ;;   ChannelByte+MESSAGE_CHANNEL = the message's first byte
 ;;   ChannelLastByte+MESSAGE_CHANNEL = the offset of the message's end
-;;   ChannelStatus+MESSAGE_CHANNEL = CHANNEL_TALK
+;;   ChannelStatus+MESSAGE_CHANNEL = <CHANNEL_TALK>
 ;; Uses: A, X, Y, Work0
 ;; Also: ERRMSG (D1541)
 .proc SetMessage
@@ -430,7 +428,7 @@ Converted:
 
 ;; Finds an error's entry in <Messages> and copies its text to the message being built, with its tokens expanded: it
 ;; calls itself for each. It copies nothing when no entry has the number.
-;; In: A = a BCD error number or a word token, Y = the offset into the message, at (CommandPointer+2)
+;; In: A = a BCD error number or a word token, Y = the offset into the message, at (<CommandPointer>+2)
 ;; Out: X = 0, Y = advanced past the text
 ;; Keeps: Work0, Work0+1
 ;; Also: ERMOVE (D1541)
@@ -511,7 +509,7 @@ Done:
 .endproc
 
 ;; Puts a byte of a message's text at the message's end: a character as it is, a token as a space and then its word.
-;; In: A = the byte without bit 7, Y = the offset into the message, at (CommandPointer+2)
+;; In: A = the byte without bit 7, Y = the offset into the message, at (<CommandPointer>+2)
 ;; Out: Y = advanced; X = 0 after a token
 ;; Also: E60 (D1541)
 .proc PutMessageByte
@@ -535,7 +533,6 @@ Character:
 
 ;; Moves the table pointer on one byte, then reads it as <AdvanceAndRead::Read> does.
 ;; In: X = 0, Work0 = the pointer
-;; Out: as Read
 ;; Entry:
 ;;   Read = reads the byte at the pointer without moving it: A = the byte without bit 7, carry = bit 7, which a text's
 ;;     first and last byte have set
@@ -587,10 +584,9 @@ Done:
     rts
 .endif
 
-;; Start-up calls it last. Before -05, and in the 1540, it is the boot loader: with CLK and DATA both pulled (a clip
-;; on the bus), it waits for the clip to come off, then loads the first utility on the disk, as the `&` command
-;; would. -05 removed it, because it does not work on the serial bus: there it is an RTS, 33 bytes of NOPs and another
-;; RTS.
+;; Start-up calls it last. Before -05, and in the 1540, it is the boot loader: with CLK and DATA both pulled (a clip on
+;; the bus), it waits for the clip to come off, then loads the first utility on the disk, as the `&` command would. -05
+;; removed it, because it does not work on the serial bus: there it is an RTS, 33 bytes of NOPs and another RTS.
 ;; Also: BOOT (D1541)
 .proc Boot
 .if LATE_PATCHES
@@ -633,8 +629,8 @@ WaitForClip:
 ;; many bytes and a checksum byte, is stored, and the first record's address is jumped to, with the file count in
 ;; <SecondStreamEnd> as the command left it for the utility.
 ;;
-;; The older builds' boot loader (before -05, and the 1540's) enters the routine at `AfterName`, after the name
-;; scan, with the name `*` set.
+;; The older builds' boot loader (before -05, and the 1540's) enters the routine at `AfterName`, after the name scan,
+;; with the name `*` set.
 ;; Errors: 39 = the name is not found, 50 = a record's checksum is wrong, 51 = the file ends within a record
 ;; Also: UTLODR (D1541)
 .proc LoadUtility

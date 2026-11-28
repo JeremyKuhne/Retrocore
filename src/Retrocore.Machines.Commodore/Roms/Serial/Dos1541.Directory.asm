@@ -15,8 +15,8 @@
 
 ; The listing's program.
 
-;; Where the listing loads, written in its first two bytes as a program file's load address does: $0401 is where
-;; BASIC keeps its program on a VIC-20.
+;; Where the listing loads, written in its first two bytes as a program file's load address does: $0401 is where BASIC
+;; keeps its program on a VIC-20.
 LISTING_LOAD_ADDRESS = $0401
 
 ;; Each byte of a line's link word, which so reads $0101: a placeholder, since the drive cannot know where the computer
@@ -35,18 +35,18 @@ FIRST_SECTOR = 1
 ;; an empty directory block is written.
 LAST_BYTE_OFFSET = $FF
 
-;; The offset in a directory entry of its relative file's first side sector's track, which the sector follows. It is
-;; 0 for a file that is not relative.
+;; The offset in a directory entry of its relative file's first side sector's track, which the sector follows. It is 0
+;; for a file that is not relative.
 ENTRY_SIDE_SECTOR_TRACK = $13
 
 ;; Lists the directory as a BASIC program for LOAD "$", through a read channel with one buffer.
 ;;
 ;; The program's first two bytes are its load address, <LISTING_LOAD_ADDRESS>. Then each line is a link word
-;; (<LINK_PLACEHOLDER>), its line number, the line's 27 bytes of text from <ListingLine> and a 0, 32 bytes with the
-;; line number's two bytes, so a buffer holds eight lines. The first line is the disk's header, with the drive as its
-;; number, which <Files::LoadDirectory> has built with <HeaderLine>; the others come from <NextLine>, until the BLOCKS
-;; FREE line, then the three zero bytes that end the program. The header's text is two bytes shorter than the others',
-;; which makes room for the load address, so the first buffer holds eight lines as well.
+;; (<LINK_PLACEHOLDER>), its line number, the line's 27 bytes of text from <ListingLine> and a 0, 32 bytes with the line
+;; number's two bytes, so a buffer holds eight lines. The first line is the disk's header, with the drive as its number,
+;; which <Files::LoadDirectory> has built with <HeaderLine>; the others come from <NextLine>, until the BLOCKS FREE
+;; line, then the three zero bytes that end the program. The header's text is two bytes shorter than the others', which
+;; makes room for the load address, so the first buffer holds eight lines as well.
 ;; In: BlockTotal = the header line's number, ListingLine = its text, with the first matching entry already found
 ;; Out: A = <DataByte>, the channel's first buffer full, or holding all of the listing, with its pointer at 0, the
 ;;   listing active and the channel ready to talk
@@ -185,8 +185,8 @@ Loop:
 ;; Gives the listing's next byte, from the active buffer, and when that was the buffer's last, makes the buffer ready
 ;; for the lines after it.
 ;;
-;; At the end of the last buffer the channel's status becomes <CHANNEL_TALK_LAST>, so the byte goes out with EOI;
-;; before it, <StartListing::FillBuffer> refills the buffer, whose pointer has wrapped to 0.
+;; At the end of the last buffer the channel's status becomes <CHANNEL_TALK_LAST>, so the byte goes out with EOI; before
+;; it, <StartListing::FillBuffer> refills the buffer, whose pointer has wrapped to 0.
 ;; Out: A = the byte
 ;; Errors: 61, FILE NOT OPEN, with no active buffer, and the errors of reading the directory for the next lines
 ;; Also: GETDIR (D1541)
@@ -351,12 +351,12 @@ LABEL_ID_OFFSET = $12
 ;; The N command: formats a disk and gives it a name, or clears the directory of a disk with the same format.
 ;;
 ;; The drive must be given, or error 33, SYNTAX ERROR, ends the command. With an ID after the name, the disk is
-;; formatted: every channel is freed, <Format> runs, and the BAM's buffer is cleared. Without one, only the directory
-;; is cleared, on a disk that has this DOS's format (73 otherwise). Either way a new BAM follows, with the name and ID,
-;; the DOS version and the format letter. Its own sector and the directory's first are marked used, the BAM is
-;; written, and an empty directory block is written to 18/1. Then the BAM is read back, and the command ends through
-;; <Finish>, so it does not return.
-;; In: the command in <CommandBuffer>, with the drive, the name and the ID, as the command table gave it
+;; formatted: every channel is freed, <Format> runs, and the BAM's buffer is cleared. Without one, only the directory is
+;; cleared, on a disk that has this DOS's format (73 otherwise). Either way a new BAM follows, with the name and ID, the
+;; DOS version and the format letter. Its own sector and the directory's first are marked used, the BAM is written, and
+;; an empty directory block is written to 18/1. Then the BAM is read back, and the command ends through <Finish>, so it
+;; does not return.
+;; In: CommandBuffer = the command, with the drive, the name and the ID
 ;; Errors: 33, SYNTAX ERROR, when no drive is given, 73 when no ID is given and the disk's format is not <FormatType>,
 ;;   and the errors of <Format>, which a failed format reports
 ;; Also: NEW (D1541)
@@ -368,8 +368,8 @@ LABEL_ID_OFFSET = $12
     lda #ERROR_INVALID_NAME
     jmp Fail
 
-;; Takes the drive's number from the command, turns on its LED, and looks for the ID after the name's comma: with
-;; one, the ID goes to <DiskId> for the drive.
+;; Takes the drive's number from the command, turns on its LED, and looks for the ID after the name's comma: with one,
+;; the ID goes to <DiskId> for the drive.
 ;; Also: N101 (D1541)
 Drive:
     and #$01
@@ -403,8 +403,8 @@ Drive:
     jsr Bam::ZeroBuffer
     jmp Build
 
-;; No ID: only the directory is cleared, by initializing the drive, and the disk's format must be the DOS's, else
-;; error 73, which <Jobs::VersionError> reports.
+;; No ID: only the directory is cleared, by initializing the drive, and the disk's format must be the DOS's, else error
+;; 73, which <Jobs::VersionError> reports.
 ;; Also: N108 (D1541)
 Clear:
     jsr Bam::InitializeDrive
@@ -497,11 +497,12 @@ BITS_BYTES = 3
 ;; <BamWriteDeferred>'s bit 7: a BAM write is waiting, which <FlushPending> may do.
 WRITE_PENDING = $80
 
-;; <BamWriteDeferred>'s bit 6: <FlushPending> is not to write the BAM, as when <Validate> is changing it block by block.
+;; <BamWriteDeferred>'s bit 6: <FlushPending> is not to write the BAM, as when <Directory::Validate> is changing it
+;; block by block.
 WRITE_HOLD = $40
 
-;; The bit the allocation routines set in <BamWriteDeferred> while they work, so that swapping a track's image into
-;; the BAM's buffer does not write the buffer at once, but sets <WRITE_PENDING> for later.
+;; The bit the allocation routines set in <BamWriteDeferred> while they work, so that swapping a track's image into the
+;; BAM's buffer does not write the buffer at once, but sets <WRITE_PENDING> for later.
 WRITE_DEFERRED = $01
 
 ; The BAM's buffer, as the channel tables hold it.
@@ -587,7 +588,6 @@ StoreBits:
 .endproc
 
 ;; Writes the BAM of the drive that the active buffer's last job used, as <WriteIfDirty> does.
-;; In: the active buffer
 ;; Also: MAPOUT (D1541)
 .proc WriteForChannel
     jsr Files::GetActiveBuffer
@@ -897,8 +897,8 @@ Loop:
 .endproc
 
 ;; Makes the image of the track's entry current and points <BamPointer> to it. The drive keeps two images of its BAM's
-;; track entries, outside the BAM buffer, four bytes each, and <LastImage> notes the one used last; when neither has
-;; the track, <SwapIn> brings it in.
+;; track entries, outside the BAM buffer, four bytes each, and <LastImage> notes the one used last; when neither has the
+;; track, <SwapIn> brings it in.
 ;; In: Track = the track, DriveNumber = the drive
 ;; Out: BamPointer = the track's image, Y = 0, LastImage = the image's number
 ;; Errors: 70, NO CHANNEL, when the BAM has no buffer and none is free. A drive with no disk (<NoDrive> set) goes to
@@ -1021,8 +1021,8 @@ Pending:
     rts
 .endproc
 
-;; Puts an image back into the BAM's buffer, at its track's place, and empties the image and its track. An image with
-;; no track, which is empty, is left alone.
+;; Puts an image back into the BAM's buffer, at its track's place, and empties the image and its track. An image with no
+;; track, which is empty, is left alone.
 ;; In: A = the image's number, 0 to 3, JobNumber = the BAM's buffer
 ;; Also: PUTBAM (D1541)
 .proc PutImage
@@ -1081,8 +1081,8 @@ Done:
 
 ;; Reads the BAM into a buffer, when it has none.
 ;;
-;; The buffer is one that may be taken for another use, being marked inactive. The sector read is the directory
-;; track's first.
+;; The buffer is one that may be taken for another use, being marked inactive. The sector read is the directory track's
+;; first.
 ;; In: X = the BAM's channel index (<ChannelIndex>)
 ;; Out: JobNumber = the BAM's buffer
 ;; Errors: 70, NO CHANNEL, when no buffer is free
@@ -1230,8 +1230,8 @@ Downward:
     beq DiskFull
 
 ;; The track has a free block. The next sector is the interleave on from the block's, past the track's last sector
-;; wrapping to the start of the track. The track's count of sectors goes in <LastSector>, and in <JobCommand>, which
-;; the listing also sets here and nothing reads.
+;; wrapping to the start of the track. The track's count of sectors goes in <LastSector>, and in <JobCommand>, which the
+;; listing also sets here and nothing reads.
 ;; Also: FNDNXT (D1541)
 NextSector:
     lda Sector

@@ -109,7 +109,7 @@ OffInner:
 ;;
 ;; The tests are zero page (each byte takes its own address, counts up 256 times back to it and clears), both 8 KB ROMs
 ;; (each sums to its own first page) and the RAM to $07FF (an address-sensitive pattern, then its inverse). A failure
-;; blinks the LEDs in <BlinkFault>. Then <Initialize> sets up the drive.
+;; blinks the LEDs in <BlinkFault>. Then <Reset::Initialize> sets up the drive.
 ;;
 ;; With interrupts off and binary mode set it makes VIA 1's port A all outputs. In -05 and -06 that is done in a patch
 ;; (`ResetPatch`), which also sets up the bus lines for the self-test and returns at `SelfTest`.
@@ -166,8 +166,8 @@ CountUp:
     bne CheckZeroPageByte
 
 ;; Tests an 8 KB ROM, first the upper one, then the lower: counts <Temporary> up for the failure blinks, then sums the
-;; ROM's bytes from the top page down, each carry added into the next byte. The sum, with the last carry, must equal
-;; the ROM's first page, $E0 or $C0; the <UpperRomChecksum> byte makes it so for the upper. After both it goes on.
+;; ROM's bytes from the top page down, each carry added into the next byte. The sum, with the last carry, must equal the
+;; ROM's first page, $E0 or $C0; the <UpperRomChecksum> byte makes it so for the upper. After both it goes on.
 ;; Also: RM10 (D1541)
 TestRom:
     inc Temporary
@@ -249,17 +249,17 @@ CheckRamByte:
 ToBlinkFault:
     jmp BlinkFault::Numbered
 
-;; The tests passed, and the NMI vector points here (<Reinitialize> jumps through it), so a reinitialization comes
-;; with no self-test. It sets up everything the DOS keeps in RAM, in this order:
+;; The tests passed, and the NMI vector points here (<Reinitialize> jumps through it), so a reinitialization comes with
+;; no self-test. It sets up everything the DOS keeps in RAM, in this order:
 ;;
-;; - the stack, the LEDs off, and the ATN interrupt on VIA 1's CA1;
-;; - the drive's talk and listen addresses, from the device jumpers: <DEFAULT_TALK_ADDRESS> with the jumpers' number;
-;; - the buffers' pointers, <BufferPositions>, from <BufferPages>, and those of the command and error buffers;
-;; - the channels and secondary addresses, free, with the command and error channels taken;
-;; - the buffers' use, the disk changed flags, the user commands' vectors, the use order of the channels, the
+;; - the stack, the LEDs off, and the ATN interrupt on VIA 1's CA1; - the drive's talk and listen addresses, from the
+;; device jumpers: <DEFAULT_TALK_ADDRESS> with the jumpers' number; - the buffers' pointers, <BufferPositions>, from
+;; <BufferPages>, and those of the command and error buffers; - the channels and secondary addresses, free, with the
+;; command and error channels taken; - the buffers' use, the disk changed flags, the user commands' vectors, the use
+;; order of the channels, the
 ;;   controller and its mechanism, the NMI vector, the sector interleave and the retries;
-;; - message 73, the DOS version, as the error channel's first message; and the bus lines, released and then driven;
-;; - the boot loader, and then the idle loop.
+;; - message 73, the DOS version, as the error channel's first message; and the bus lines, released and then driven; -
+;; the boot loader, and then the idle loop.
 ;;
 ;; It does not return: it falls into the idle loop.
 ;; Also: DIAGOK (D1541)
@@ -392,7 +392,7 @@ FreeBuffers:
     lda #ERROR_DOS_VERSION
     jsr Errors::SetMessageWithoutBlock
 
-    ; The bus: CLK, DATA and ATNA released, and port B's ATNA, CLK and DATA bits made outputs.
+; The bus: CLK, DATA and ATNA released, and port B's ATNA, CLK and DATA bits made outputs.
 .if LATE_PATCHES
     ; -05 and -06 release the lines first, then set the directions, which `ResetPatch` has set already.
     lda #$00

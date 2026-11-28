@@ -21,8 +21,8 @@ BITS_PER_BYTE = 8
 TIMER_1_DONE = %01000000
 
 ;; Timer 1's high byte for the EOI wait: at least $0100 counts, 256 cycles, about a quarter of a millisecond, the low
-;; byte being whatever was last latched. A talker that waits longer than that before it sends marks the byte as the
-;; last (EOI, End Or Identify).
+;; byte being whatever was last latched. A talker that waits longer than that before it sends marks the byte as the last
+;; (EOI, End Or Identify).
 EOI_TIMER_HIGH = $01
 
 ;; The passes of the loop that holds DATA pulled to acknowledge an EOI, 5 cycles each.
@@ -30,8 +30,8 @@ EOI_PULSE_PASSES = 10
 
 ; The command bytes under ATN that are secondary addresses.
 
-;; The bits that mark a command byte as a secondary address: $60 to $7F for a data channel, $E0 to $FF for a CLOSE or
-;; an OPEN, whose high bit is set as well.
+;; The bits that mark a command byte as a secondary address: $60 to $7F for a data channel, $E0 to $FF for a CLOSE or an
+;; OPEN, whose high bit is set as well.
 SECONDARY_MARK = $60
 
 ;; The secondary address's number, in its low nybble.
@@ -139,8 +139,8 @@ NotTalk:
 
 ;; Is it a secondary address? Any byte with <SECONDARY_MARK>'s bits is: $60 to $7F or $E0 to $FF. Its number is kept as
 ;; <SecondaryAddress> and the whole byte as <SecondaryCommand>, and a CLOSE closes the channel now, with interrupts on.
-;; Any other secondary address is the last command byte, so the wait for ATN's end follows. The listing warns that
-;; the close may not return in time for that wait.
+;; Any other secondary address is the last command byte, so the wait for ATN's end follows. The listing warns that the
+;; close may not return in time for that wait.
 ;; Also: ATN50 (D1541)
 NotListen:
     tax
@@ -165,9 +165,9 @@ StillAtn:
     bit Via1PortB
     bmi NextCommand
 
-;; ATN has ended: the commands are done, so the drive does what it was told. It leaves ATN mode and releases ATNA,
-;; which returns the control of DATA to the hardware, then goes to <Listen> if it was addressed to listen. <Listen>
-;; never returns, so the jump after it is not reached.
+;; ATN has ended: the commands are done, so the drive does what it was told. It leaves ATN mode and releases ATNA, which
+;; returns the control of DATA to the hardware, then goes to <Listen> if it was addressed to listen. <Listen> never
+;; returns, so the jump after it is not reached.
 ;; Also: ATNS20 (D1541)
 AtnEnded:
     lda #$00
@@ -212,8 +212,8 @@ WaitAtnEnd:
 
 ;; The drive as talker, once it is addressed to talk: sends the bytes of the channel that the secondary address names,
 ;; each with the next one got from the file, and the last with EOI, until ATN comes. It returns when that secondary
-;; address has no channel ready to talk or the channel has no more to send; ATN, or a bus error, leaves for
-;; <HandleAtn> or <BusError> instead.
+;; address has no channel ready to talk or the channel has no more to send; ATN, or a bus error, leaves for <HandleAtn>
+;; or <BusError> instead.
 ;;
 ;; Interrupts are off, except across <Files::NextByte>, which can wait for a disk job that the controller's interrupt
 ;; runs.
@@ -291,9 +291,9 @@ WaitReady:
     lda #BITS_PER_BYTE
     sta BitCount
 
-;; Each bit, low bit first. DATA must be released at this point: if a listener holds it, the bus is in error and it
-;; goes to <BusError>. The bit goes out on DATA, released for a 1, from the channel's byte, which is shifted down
-;; through the carry.
+;; Each bit, low bit first. DATA must be released at this point: if a listener holds it, the bus is in error and it goes
+;; to <BusError>. The bit goes out on DATA, released for a 1, from the channel's byte, which is shifted down through the
+;; carry.
 ;; Also: ISR01 (D1541)
 NextBit:
     jsr ReadLines
@@ -315,8 +315,8 @@ BitOne:
 ;; Clocks the bit: releases CLK, which says that DATA now holds it.
 ;;
 ;; The 1541 then holds it for 40 microseconds more (`SlowDown`) when <SerialNoDelay> is 0, the VIC-20's speed, and not
-;; when it is nonzero, the 64's; and pulls CLK and releases DATA again (`PullClockAndReleaseData`). The 1540 has
-;; neither the speed test nor the delay.
+;; when it is nonzero, the 64's; and pulls CLK and releases DATA again (`PullClockAndReleaseData`). The 1540 has neither
+;; the speed test nor the delay.
 ;; Also: ISRCLK (D1541)
 ClockBit:
     jsr ReleaseClock
@@ -342,8 +342,8 @@ EndBit:
     dec BitCount
     bne NextBit
 
-;; The byte is out. Waits for a listener to pull DATA, which accepts it; then gets the file's next byte, with
-;; interrupts on, and sends it from the top.
+;; The byte is out. Waits for a listener to pull DATA, which accepts it; then gets the file's next byte, with interrupts
+;; on, and sends it from the top.
 ;; Also: ISR04 (D1541)
 WaitAccepted:
     jsr CheckAtn
@@ -420,8 +420,8 @@ ToBusError:
 ;; Receives a byte from the talker, as the computer's own receive does from its end: for each of eight bits waits for
 ;; CLK released, which says that DATA holds the bit, and shifts it in, low bit first. A talker that holds CLK back for
 ;; more than about 256 microseconds before the first bit marks the byte as the last (EOI), which is acknowledged by
-;; pulsing DATA and clears <MoreBytes>. Every wait calls <CheckAtn>, so an ATN that comes (or ends, in ATN mode)
-;; leaves this routine for good.
+;; pulsing DATA and clears <MoreBytes>. Every wait calls <CheckAtn>, so an ATN that comes (or ends, in ATN mode) leaves
+;; this routine for good.
 ;; Out: A = the byte, MoreBytes = 0 when the byte was sent with EOI (it is not set here)
 ;; Keeps: Y
 ;; Entry:
@@ -488,12 +488,12 @@ WaitClockAfterEoi:
     lda #$00
     sta MoreBytes
 
-;; Each bit: waits for the talker to release CLK, which says that DATA now holds the bit, and shifts it into
-;; <DataByte>, from the top, so that after eight the first bit is the lowest. The first bit comes here from
-;; <WaitForClock>, or after an EOI; the others from <WaitClockLow>.
+;; Each bit: waits for the talker to release CLK, which says that DATA now holds the bit, and shifts it into <DataByte>,
+;; from the top, so that after eight the first bit is the lowest. The first bit comes here from <WaitForClock>, or after
+;; an EOI; the others from <WaitClockLow>.
 ;;
-;; In -01 and the 1540 the CLK wait and the DATA read are two reads. From -02 on one read gives both: the DATA bit
-;; goes into the carry as the CLK bit is tested, so the bit is the one that was there when CLK was released.
+;; In -01 and the 1540 the CLK wait and the DATA read are two reads. From -02 on one read gives both: the DATA bit goes
+;; into the carry as the CLK bit is tested, so the bit is the one that was there when CLK was released.
 ;; Also: ACP01 (D1541), ACP03 (D1541)
 WaitClockHigh:
     lda Via1PortB

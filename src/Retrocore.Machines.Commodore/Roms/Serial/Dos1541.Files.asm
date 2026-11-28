@@ -772,7 +772,7 @@ Done:
 ;; Finds the channel a secondary address reads: its number goes into <Channel>. Secondary address 15 reads the error
 ;; channel; addresses above 18 are taken modulo 16.
 ;; In: SecondaryAddress = the secondary address
-;; Out: carry = set when the address has no read channel; clear, with Channel and X = the channel, when it has
+;; Out: carry = set when the address has no read channel; clear, with <Channel> and X = the channel, when it has
 ;; Uses: A
 ;; Also: FNDRCH (D1541)
 .proc FindReadChannel
@@ -809,7 +809,7 @@ Done:
 ;; Finds the channel a secondary address writes: bit 7 of its entry in <SecondaryChannels> marks a write channel, and
 ;; bit 6 a relative file's, which is written too. Addresses above 18 are taken modulo 16.
 ;; In: SecondaryAddress = the secondary address
-;; Out: carry = set when the address has no write channel; clear, with Channel and X = the channel, when it has
+;; Out: carry = set when the address has no write channel; clear, with <Channel> and X = the channel, when it has
 ;; Uses: A, Y
 ;; Also: FNDWCH (D1541)
 .proc FindWriteChannel
@@ -1672,7 +1672,7 @@ Done:
 .scope Jobs continued
 
 ;; Reads <Track> and <Sector> into the buffer of <JobNumber>, and waits for it.
-;; In: JobNumber = the job, Track, Sector = the block
+;; In: JobNumber = the job, <Track>, Sector = the block
 ;; Also: DRTRD (D1541)
 .proc ReadTrackSector
     lda #JOB_READ
@@ -1680,7 +1680,7 @@ Done:
 .endproc
 
 ;; Writes the buffer of <JobNumber> to <Track> and <Sector>, and waits for it.
-;; In: JobNumber = the job, Track, Sector = the block
+;; In: JobNumber = the job, <Track>, Sector = the block
 ;; Entry:
 ;;   Start = Runs the job in A for the current drive, with its header set, and waits (<ReadTrackSector> enters here)
 ;; Also: DRTWRT (D1541)
@@ -1977,7 +1977,7 @@ Report:
 .endproc
 
 ;; Reads the job's sector and waits, by branching to <Run> with the read command.
-;; In: JobNumber = the job, Track, Sector = the block
+;; In: JobNumber = the job, <Track>, Sector = the block
 ;; Also: DOREAD (D1541)
 .proc Read
     lda #JOB_READ
@@ -1985,7 +1985,7 @@ Report:
 .endproc
 
 ;; Writes the job's sector and waits: <Run> with the write command.
-;; In: JobNumber = the job, Track, Sector = the block
+;; In: JobNumber = the job, <Track>, Sector = the block
 ;; Also: DOWRIT (D1541)
 .proc Write
     lda #JOB_WRITE
@@ -2335,8 +2335,8 @@ ForBuffer:
 ;; hold its place in the directory.
 ;; In: Track, Sector = the file's first block, FileType = its type, SecondaryAddress = its secondary address, Channel =
 ;;   its channel
-;; Out: FileNameTrack, FileNameSector = the file's first block, FileNameEntrySector, FileNameEntryIndex, and the
-;;   channel's ChannelEntrySector, ChannelEntryIndex = the entry's place
+;; Out: FileNameTrack, FileNameSector = the file's first block, <FileNameEntrySector>, <FileNameEntryIndex>, and the
+;;   channel's <ChannelEntrySector>, ChannelEntryIndex = the entry's place
 ;; Keeps: Channel, SecondaryAddress
 ;; Also: ADDFIL (D1541)
 .proc AddEntry

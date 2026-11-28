@@ -47,9 +47,9 @@ CommandRoutinesHigh:
     .byte >Commands::Rename, >Commands::Scratch, >Commands::New
 
 ;; The patterns of the commands that take names: copy, rename, scratch and new, then LOAD's. Each byte says which shapes
-;; of command the parser allows, as it checks them against <Structure>: whether a pattern, more than one file, a default
-;; drive and a file name are allowed. The table starts at `$FEAD`, and <PATTERN_ORIGIN> indexes it by the command's
-;; number.
+;; of command the parser allows, as it checks them against <Commands::Structure>: whether a pattern, more than one file,
+;; a default drive and a file name are allowed. The table starts at `$FEAD`, and <PATTERN_ORIGIN> indexes it by the
+;; command's number.
 CommandPatterns:
     .byte $51
     .byte $DD
@@ -59,8 +59,8 @@ CommandPatterns:
 
 ;; Where <CommandPatterns> would start if it held a pattern for command 0: the table's address less 8, the number of its
 ;; first command (copy), so that the command's number indexes the table (LOAD's is <Commands::LOAD_STRUCTURE>, 12). The
-;; listing's STRUCT is this address, which is not a table's: its bytes are the end of <CommandRoutinesHigh> (`$FEA1`
-;; to `$FEAC`).
+;; listing's STRUCT is this address, which is not a table's: its bytes are the end of <CommandRoutinesHigh> (`$FEA1` to
+;; `$FEAC`).
 ;; Also: STRUCT (D1541)
 PATTERN_ORIGIN = CommandPatterns - 8
 

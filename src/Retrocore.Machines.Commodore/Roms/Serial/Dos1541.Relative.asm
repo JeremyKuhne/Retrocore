@@ -85,10 +85,8 @@ Clean:
 .scope Files continued
 
 ;; Finds the read channel for <SecondaryAddress> (<Files::FindReadChannel>), without looking at whether it found one,
-;; and
-;; falls into <GetBufferBlock>.
+;; and falls into <GetBufferBlock>.
 ;; In: SecondaryAddress = the channel's secondary address
-;; Out: as <GetBufferBlock>
 ;; Also: CURBLK (D1541)
 .proc GetChannelBlock
     jsr FindReadChannel
@@ -167,12 +165,10 @@ Clean:
     lda #JOB_READ
 
 ;; Puts the command in A in <JobCommand>, takes the channel's side-sector buffer into X and, if the channel has one,
-;; starts
-;; the job (<Files::StartBlockJob::Start>). <WriteSideSector> branches here, and <ReadSideSector> falls into it. A
-;; channel
-;; with none has $FF, which is negative, so the branch is not taken and the routine falls on into
+;; starts the job (<Files::StartBlockJob::Start>). <WriteSideSector> branches here, and <ReadSideSector> falls into it.
+;; A channel with none has $FF, which is negative, so the branch is not taken and the routine falls on into
 ;; <Files::StartBlockJob>, which would use the active buffer's header instead.
-;; In: A = JOB_READ or JOB_WRITE
+;; In: A = <JOB_READ> or <JOB_WRITE>
 ;; Also: RDS5 (D1541)
 SetCommand:
     sta JobCommand
@@ -188,12 +184,11 @@ SetCommand:
 .scope Files continued
 
 ;; The tail of the block-job starters (Q3): sets the active buffer's header from <Track> and <Sector>, and notes the
-;; drive
-;; in its <LastJobs> entry...
+;; drive in its <LastJobs> entry...
 ;; Entry:
 ;;   ClearDirty = ...clears the buffer's dirty bit (<MarkClean>), X = the buffer...
 ;;   Start = ...and starts the job in <JobCommand> on buffer X, with its last job's drive (<Jobs::StartOnLastDrive>)
-;; In: JobCommand = the job, Track, Sector = the block, DriveNumber = the drive
+;; In: JobCommand = the job, <Track>, Sector = the block, DriveNumber = the drive
 ;; Also: SJ10 (D1541)
 .proc StartBlockJob
     jsr Jobs::SetHeader
@@ -232,8 +227,7 @@ Start:
 .scope Relative continued
 
 ;; Copies A bytes (counting down) from the start of buffer Y to the start of buffer X. A count of 1 to 129 copies that
-;; many
-;; bytes; 0 and 130 to 255 copy one, as the loop ends with `bpl` (Q11). Its one caller copies 16.
+;; many bytes; 0 and 130 to 255 copy one, as the loop ends with `bpl` (Q11). Its one caller copies 16.
 ;; In: A = the count, Y = the source buffer's number, X = the destination's
 ;; Uses: A, Y, Temporary, Temporary1, Temporary2, Temporary3
 ;; Also: B0TOB0 (D1541)
@@ -283,8 +277,7 @@ NextByte:
 .endproc
 
 ;; Points <BufferPointer> at the start of the channel's side-sector buffer and reads the side sector's own number from
-;; it
-;; (its byte 2).
+;; it (its byte 2).
 ;; Out: A = the number of the side sector in the buffer, BufferPointer = the buffer's start, X = the buffer, Y = 2
 ;; Also: SSSET (D1541)
 .proc GetSideSectorNumber
@@ -361,9 +354,8 @@ InRange:
 .endproc
 
 ;; Reads a side sector into buffer A and waits. Its track and sector are at (<BufferPointer>),Y, and it is on the drive
-;; of
-;; the channel in X.
-;; In: A = the buffer's number, X = the channel, BufferPointer, Y = where the track and sector are
+;; of the channel in X.
+;; In: A = the buffer's number, X = the channel, <BufferPointer>, Y = where the track and sector are
 ;; Out: JobNumber = the buffer
 ;; Also: IBRD (D1541)
 .proc ReadLinkedSideSector
@@ -376,9 +368,8 @@ InRange:
     lda #JOB_WRITE
 
 ;; The command, with the drive from the channel's file type, into <JobCommand>, and the track and sector into the
-;; buffer's
-;; header; then <Jobs::Run::Repeat> starts the job and waits. Only <ReadLinkedSideSector>'s first path reaches it: the
-;; write path before it is dead code (Q4).
+;; buffer's header; then <Jobs::Run::Repeat> starts the job and waits. Only <ReadLinkedSideSector>'s first path reaches
+;; it: the write path before it is dead code (Q4).
 ;; Also: IBOP (D1541)
 StartJob:
     pha
@@ -400,7 +391,7 @@ StartJob:
 .endproc
 
 ;; Gets the side-sector buffer's pointer, with <BufferPointer> there (<Files::GetPointer::OfBuffer>).
-;; Out: A = the pointer's low byte, BufferPointer
+;; Out: A = the pointer's low byte, <BufferPointer>
 ;; Also: GSSPNT (D1541)
 .proc GetSideSectorPointer
     ldx Channel
@@ -456,8 +447,8 @@ Done:
 ;; the buffer
 ;;
 ;; The three exits are: N and V clear, the entry is in the buffer and used; N clear, V set, that side sector exists but
-;; is
-;; not in the buffer; N set, past the end, with V clear if the side sector is in the buffer (and set if it has no link).
+;; is not in the buffer; N set, past the end, with V clear if the side sector is in the buffer (and set if it has no
+;; link).
 ;; Also: SSTEST (D1541)
 .proc TestSideSector
     jsr GetSideSectorNumber
@@ -585,14 +576,13 @@ SecondSlot:
 .scope Relative continued
 
 ;; Moves the channel to its next record. The record number goes up, and if the record starts in the next block the
-;; buffers
-;; move on (<NextBuffer>). The record's first byte goes into <DataByte>, <ChannelNextRecord> is put past the record and
-;; its
-;; last byte is found (<FindRecordEnd>). At the file's end it sets the last-record flag and gives a carriage return.
+;; buffers move on (<NextBuffer>). The record's first byte goes into <DataByte>, <ChannelNextRecord> is put past the
+;; record and its last byte is found (<FindRecordEnd>). At the file's end it sets the last-record flag and gives a
+;; carriage return.
 ;; Entry:
 ;;   CheckEnd = with A the next record's place and carry set if it is in the next block (<SeekRecord> enters here)
 ;; In: Channel, ChannelRecord = the channel and its record
-;; Out: DataByte = the record's first byte, or CARRIAGE_RETURN at the file's end
+;; Out: DataByte = the record's first byte, or <CARRIAGE_RETURN> at the file's end
 ;; Also: NXTREC (D1541)
 .proc NextRecord
     lda #RELATIVE_OVERFLOW
@@ -632,8 +622,7 @@ ReadFirstByte:
     jsr AddRecordSize
 
 ;; With A the next record's place and carry set if it is in the next block: in the last block (track link 0) that place
-;; is
-;; the file's end; otherwise it is stored in <ChannelNextRecord>. <SeekRecord> enters here.
+;; is the file's end; otherwise it is stored in <ChannelNextRecord>. <SeekRecord> enters here.
 ;; Also: NXOUT (D1541)
 CheckEnd:
     pha
@@ -685,9 +674,8 @@ SetNext:
 
 ;; Goes on to the next block of a relative file. It writes the active buffer if it is dirty, swaps to the other buffer,
 ;; which the read-ahead filled, and reads the block there now if the last job on it was a write. Then it starts reading
-;; the
-;; block after into the buffer it left: that read-ahead only on the clean path, since after a write it returns once the
-;; needed block is in.
+;; the block after into the buffer it left: that read-ahead only on the clean path, since after a write it returns once
+;; the needed block is in.
 ;; Also: NRBUF (D1541)
 .proc NextBuffer
     jsr Files::SetDriveFromBuffer
@@ -775,9 +763,8 @@ Done:
 .endproc
 
 ;; Takes a byte sent to a relative channel. It puts the byte in the record, adding blocks first past the file's end. At
-;; EOI
-;; it fills the record's rest with zeros, moves to the next record, and reports 51 RECORD OVERFLOW if it was too long. A
-;; byte past the record's end without EOI is dropped.
+;; EOI it fills the record's rest with zeros, moves to the next record, and reports 51 RECORD OVERFLOW if it was too
+;; long. A byte past the record's end without EOI is dropped.
 ;; In: DataByte = the byte, MoreBytes = 0 at EOI
 ;; Errors: 51 RECORD OVERFLOW (<ERROR_RECORD_OVERFLOW>), reported at EOI after a record that was too long
 ;; Also: WRTREL (D1541)
@@ -841,8 +828,7 @@ Extend:
     jmp Put
 .endproc
 
-;; Puts zeros in the rest of the record, until the record overflows.
-;; Out: the record full
+;; Puts zeros in the rest of the record, until the record overflows and the record is full.
 ;; Also: CLREC (D1541)
 .proc FillRecord
     lda #RELATIVE_OVERFLOW
@@ -1044,8 +1030,7 @@ Found:
 .endproc
 
 ;; Finds the file's last side sector from the link table and puts it in the buffer, with <SideSectorNumber> its number,
-;; and
-;; <SideSectorIndex> and the pointer at its last entry: the last data block.
+;; and <SideSectorIndex> and the pointer at its last entry: the last data block.
 ;; Errors: 67 ILLEGAL TRACK OR SECTOR (<SideSectorError>), when the side sectors' links are not in order
 ;; Also: SSEND (D1541)
 .proc SeekEnd
@@ -1104,10 +1089,8 @@ LastSideSector:
 .endproc
 
 ;; The P command (Q8): sets the channel on the secondary address in the command to the record and byte given, through
-;; the
-;; side sectors. The command buffer holds the secondary address at 1, the record number at 2 and 3 and the byte offset
-;; at 4.
-;; Past the end it reports 50 RECORD NOT PRESENT, and 51 RECORD OVERFLOW for a byte past the record's size.
+;; the side sectors. The command buffer holds the secondary address at 1, the record number at 2 and 3 and the byte
+;; offset at 4. Past the end it reports 50 RECORD NOT PRESENT, and 51 RECORD OVERFLOW for a byte past the record's size.
 ;; Errors: 70 NO CHANNEL, 64 FILE TYPE MISMATCH, 50 RECORD NOT PRESENT, 51 RECORD OVERFLOW, 67 ILLEGAL TRACK OR SECTOR
 ;; Also: RECORD (D1541)
 .proc PositionCommand
@@ -1154,10 +1137,9 @@ IsRelative:
     lda #$00
 
 ;; Sets the offset in the record: A, the command's offset less 1 (0 if it gave none or 1) when that is inside the
-;; record,
-;; else 0 after 51 RECORD OVERFLOW is noted in <ErrorFlash>. Then finds the record and its side sector
-;; (<Files::FindRecord>, <PositionSideSector>). The listing labelled this address twice, R35 (reached with an offset
-;; inside the record) and R40 (reached with offset 0 or 1); it is one label here (Q7).
+;; record, else 0 after 51 RECORD OVERFLOW is noted in <ErrorFlash>. Then finds the record and its side sector
+;; (<FindRecord>, <PositionSideSector>). The listing labelled this address twice, R35 (reached with an offset inside the
+;; record) and R40 (reached with offset 0 or 1); it is one label here (Q7).
 ;; Also: R35 (D1541), R40 (D1541)
 SetOffset:
     sta RecordOffset
@@ -1184,9 +1166,9 @@ Done:
 .endproc
 
 ;; With the side sector placed, puts the record's block in the active buffer (<LoadBlocks>), the pointer at
-;; <BlockOffset>,
-;; <ChannelNextRecord> past the record, and the record's first wanted byte readied (<ReadByte::ReadAtPointer>).
-;; In: BufferPointer = the side-sector entry for the record's block, BlockOffset, RecordOffset
+;; <BlockOffset>, <ChannelNextRecord> past the record, and the record's first wanted byte readied
+;; (<ReadByte::ReadAtPointer>).
+;; In: BufferPointer = the side-sector entry for the record's block, <BlockOffset>, <RecordOffset>
 ;; Errors: 67 ILLEGAL TRACK OR SECTOR (<SideSectorError>), if the record size is under <RecordOffset>
 ;; Also: POSITN (D1541)
 .proc SeekRecord
@@ -1222,11 +1204,9 @@ CheckEnd:
 .endproc
 
 ;; Makes the active buffer hold the data block the side-sector pointer names, and the other buffer the block after. If
-;; the
-;; block is already there nothing is read. If the wanted block is the buffer's next, it swaps buffers and jumps to
+;; the block is already there nothing is read. If the wanted block is the buffer's next, it swaps buffers and jumps to
 ;; <Files::FreeInactiveBuffer>, which frees the old one and reads nothing after. Else it reads. The listing's "yes!" is
-;; on
-;; the branch for the block not being there (Q10).
+;; on the branch for the block not being there (Q10).
 ;; In: BufferPointer = the side-sector entry (the block's track and sector)
 ;; Also: POSBUF (D1541)
 .proc LoadBlocks
@@ -1270,8 +1250,7 @@ ReadWanted:
 .endproc
 
 ;; Tests whether the active buffer holds the block named at (<Work3>): its header's block (<Files::GetBufferBlock>),
-;; then
-;; <IsSameBlock>.
+;; then <IsSameBlock>.
 ;; In: Work3 = the address of the track and sector wanted
 ;; Out: zero = set if it does
 ;; Also: BHERE (D1541)
@@ -1369,8 +1348,7 @@ Done:
 .endproc
 
 ;; Extends the file to the record wanted. It counts the blocks and side sectors needed against the free blocks, then
-;; adds
-;; blocks of empty records, with new side sectors as they fill, and writes the BAM, and ends at the record
+;; adds blocks of empty records, with new side sectors as they fill, and writes the BAM, and ends at the record
 ;; (<SeekRecord>).
 ;; Entry:
 ;;   CheckRoom = with the end found (the relative-file copy in rename enters here)
@@ -1579,8 +1557,7 @@ NoRecord:
 .endproc
 
 ;; Starts a side sector in a new block. It copies the link table into it, adds itself to the table, writes it, makes it
-;; the
-;; side-sector buffer, links the old one to it, and adds it to every earlier side sector's table.
+;; the side-sector buffer, links the old one to it, and adds it to every earlier side sector's table.
 ;; Also: NEWSS (D1541)
 .proc NewSideSector
     ; Allocates the block, and copies the link table into a cleared buffer for the new side sector.

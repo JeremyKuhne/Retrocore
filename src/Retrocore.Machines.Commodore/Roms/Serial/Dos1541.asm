@@ -41,16 +41,21 @@ REVISION = 5
 
 .assert (REVISION >= 1 && REVISION <= 6 && REVISION != 4) || REVISION = 40, "REVISION is 1, 2, 3, 5, 6 or 40."
 
-;; 1 for the 1540's 325303-01: the VIC-20's bus timing alone, with no `Serial::SlowDown` and no UI+ and UI-, and its
-;; own power-on message.
+;; 1 for the 1540's 325303-01: the VIC-20's bus timing alone, with no `Serial::SlowDown`, CLKDAT or `Startup::Nmi`
+;; (so no UI+ and UI-, and the NMI vector at <Startup::Reinitialize>), its own power-on message, and a format that
+;; fills each new block with zeros (a NOP where the 1541 has the INX before <Controller::WriteTrack::FillData>).
 DRIVE_1540 = REVISION = 40
 
 ;; 1 for 901229-05 and -06: -05's patches, `Startup::ResetPatch` and `Serial::ReceiveBytePatch`, the boot loader
-;; removed and the bus errors no longer released at the error channel.
+;; removed, the bus errors no longer released at the error channel, and VIA 1's port B set before its directions after
+;; message 73.
 LATE_PATCHES = REVISION = 5 || REVISION = 6
 
 ;; 1 where a bit is taken with CLK and DATA in one read, from 901229-02 on; 901229-01 and the 1540 read them apart.
 SINGLE_BIT_READ = REVISION != 1 && REVISION != 40
+
+; The revisions differ in four more places, tested on REVISION where they are: <HEADER_GAP>, the upper ROM's checksum
+; byte (<Startup::UpperRomChecksum>), -06's `Commands::FormatPatch`, and `RSR` in -02's and -03's fill at $FFE2.
 
 .include "Dos1541.Equates.asm"
 

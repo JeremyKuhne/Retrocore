@@ -1884,7 +1884,7 @@
                   "maximum": 15
                 },
                 "uniqueItems": true,
-                "description": "PET: the device numbers of the dual disk drives on the IEEE-488 bus, such as [8, 9], each the diskModel. Each needs its ROMs, MAME's c4040 or c2040 set, in driveRomDirectory or romDirectory. A 4032 has one as 8 when the ROMs are found; [] leaves it out. VIC-20: the device numbers, 8 to 11, of the drives on the serial bus, each the diskModel, with MAME's c1541 or c1540 set."
+                "description": "PET: the device numbers of the dual disk drives on the IEEE-488 bus, such as [8, 9], each the diskModel. Each needs its ROMs, MAME's c4040 or c2040 set, in driveRomDirectory or romDirectory. A 4032 has one as 8 when the ROMs are found; [] leaves it out. VIC-20: the device numbers, 8 to 11, of the drives on the serial bus, each the diskModel, with MAME's c1541 or c1540 set when it is found, else the SDK's build of the same DOS."
               },
               "diskModel": {
                 "type": "string",
@@ -1899,7 +1899,7 @@
               },
               "driveRomDirectory": {
                 "type": "string",
-                "description": "PET: a folder with the drives' ROMs under MAME's names: the 4040's c4040 set (901468-14 to -16, 901466-04 and 901467) or the 2040's c2040 set (901468-06 and -07, 901466-01 and 901467), or a folder holding c4040 and c2040 folders, or one beside them. Defaults to romDirectory, then RETROCORE_PET_ROMS. VIC-20: the 1541's c1541 set (325302-01 and 901229-06) or the 1540's c1540 set (325302-01 and 325303-01), or a folder holding c1541 and c1540 folders, or one beside them; defaults to romDirectory, then RETROCORE_VIC20_ROMS."
+                "description": "PET: a folder with the drives' ROMs under MAME's names: the 4040's c4040 set (901468-14 to -16, 901466-04 and 901467) or the 2040's c2040 set (901468-06 and -07, 901466-01 and 901467), or a folder holding c4040 and c2040 folders, or one beside them. Defaults to romDirectory, then RETROCORE_PET_ROMS. VIC-20: the 1541's c1541 set (325302-01 and 901229-06) or the 1540's c1540 set (325302-01 and 325303-01), or a folder holding c1541 and c1540 folders, or one beside them; defaults to romDirectory, then RETROCORE_VIC20_ROMS. Without them, the drives run the SDK's build of their DOS."
               },
               "bootSeconds": {
                 "type": "number",

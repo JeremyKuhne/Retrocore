@@ -58,7 +58,7 @@ internal static class Cbm1541SdkModules
         {
             throw new ArgumentOutOfRangeException(
                 nameof(revision),
-                "The DOS builds 901229-01, -02, -03, -05 and -06 (1-6) and the 1540's 325303-01 (40).");
+                "The DOS builds 901229-01, -02, -03, -05 and -06 (1, 2, 3, 5 and 6) and the 1540's 325303-01 (40).");
         }
 
         string full = Path.GetFullPath(Path.Join(directory, "Dos1541.asm"));

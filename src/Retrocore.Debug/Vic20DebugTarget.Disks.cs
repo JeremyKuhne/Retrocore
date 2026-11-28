@@ -32,8 +32,8 @@ internal sealed partial class Vic20DebugTarget
     private static readonly string[] s_1540Files = ["325302-01.uab4", "325303-01.uab5"];
 
     /// <summary>
-    ///  Gets or sets the drives' ROMs by model, <c>1541</c> and <c>1540</c>, for drives added while the machine runs;
-    ///  a model without its dumps is missing.
+    ///  Gets or sets the drives' ROMs by model, <c>1541</c> and <c>1540</c>, for drives added while the machine runs:
+    ///  MAME's sets the launch found, and the SDK's builds once a drive has needed one.
     /// </summary>
     internal Dictionary<string, Cbm1541Roms> DiskRoms { get; set; } = [];
 
@@ -95,6 +95,8 @@ internal sealed partial class Vic20DebugTarget
     /// <param name="args">The launch's arguments.</param>
     /// <param name="romDirectory">The VIC-20's ROM directory, or null.</param>
     /// <exception cref="ArgumentException">A number, model or path is invalid.</exception>
+    /// <exception cref="IOException">MAME's set is missing and the SDK's DOS source cannot be read.</exception>
+    /// <exception cref="InvalidDataException">MAME's set is missing and the SDK's DOS source has errors.</exception>
     internal void LaunchDisks(JsonObject args, string? romDirectory)
     {
         DiskRoms = LoadDiskRoms(args.String("driveRomDirectory"));
@@ -243,7 +245,14 @@ internal sealed partial class Vic20DebugTarget
             }
 
             if (card is null or "empty" || present is not null) { continue; }
-            _machine.AddDisk(RomsFor(card), address);
+            try
+            {
+                _machine.AddDisk(RomsFor(card), address);
+            }
+            catch (Exception exception) when (exception is IOException or InvalidDataException or UnauthorizedAccessException)
+            {
+                problems.Add($"Device {address}'s {card} has no ROMs: {exception.Message}");
+            }
         }
 
         return problems;

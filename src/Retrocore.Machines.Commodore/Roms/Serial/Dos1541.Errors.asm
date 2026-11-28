@@ -31,6 +31,7 @@ Messages:
     .byte $71, $C4, "IR", $89
     .byte $72, $88, " FUL", $CC
 .if DRIVE_1540
+    ; The 1540's message 73 is CBM DOS V2.6 V170.
     .byte $73, $C3, "BM DOS V2.6 V17", $B0
 .else
     .byte $73, $C3, "BM DOS V2.6 154", $B1
@@ -427,8 +428,9 @@ Done:
     rts
 .endif
 
-;; Start-up calls it last: only an RTS, where the boot loader was (it ran a utility when clock and data were grounded;
-;; it does not work on the serial bus). 34 bytes of filler follow, NOPs and an RTS.
+;; Start-up calls it last. Before -05, and in the 1540, it is the boot loader: with CLK and DATA both grounded (a clip
+;; on the bus), it waits for the clip to come off and loads the first utility on the disk, as & would. -05 removed it,
+;; since it does not work on the serial bus: there it is only an RTS, with 34 bytes of filler, NOPs and an RTS.
 ;; Also: BOOT (D1541)
 .proc Boot
 .if LATE_PATCHES

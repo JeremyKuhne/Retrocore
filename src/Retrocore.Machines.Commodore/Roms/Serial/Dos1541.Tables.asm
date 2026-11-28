@@ -186,6 +186,7 @@ UpperRomChecksum:
 .endproc
 .endscope
 .if DRIVE_1540
+    ; The 1540 has no SlowDown, CLKDAT or NNMI: their 29 bytes are fill.
     .res 29, $AA
 .else
 .scope Serial continued
@@ -264,6 +265,7 @@ SetSpeed:
 .endproc
 .endscope
 .else
+    ; Before -05, the patches' 31 bytes are fill.
     .res 31, $AA
 .endif
 .if REVISION = 6
@@ -279,6 +281,7 @@ SetSpeed:
 .endif
     .res $FFE2 - *, $AA
 .if REVISION = 2 || REVISION = 3
+    ; -02 and -03 have RSR in three bytes of the fill.
     .byte "RSR"
 .else
     .res 3, $AA

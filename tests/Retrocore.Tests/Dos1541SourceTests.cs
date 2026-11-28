@@ -19,8 +19,8 @@ namespace Retrocore.Tests;
 /// </summary>
 /// <remarks>
 ///  <para>
-///   Digests pin each build, so no ROM is needed. With MAME's <c>c1541</c> and <c>c1540</c> sets (see
-///   <see cref="Vic20DiskTests"/>), a build that differs names its first different byte.
+///   Digests pin each build, so no ROM is needed. With MAME's <c>c1541</c> and <c>c1540</c> sets in
+///   <see cref="Vic20MachineTests.RomRoot"/>, a build that differs names its first different byte.
 ///  </para>
 /// </remarks>
 [TestClass]
@@ -64,8 +64,8 @@ public sealed class Dos1541SourceTests
     }
 
     /// <summary>
-    ///  In each build, every old name cites only Commodore's listing of 901229-05 (D1541), which is in the
-    ///  bibliography, and is one of the build's historical names.
+    ///  Every old name in the source cites only Commodore's listing of 901229-05 (D1541), which is in the bibliography,
+    ///  and each build resolves the listing's names for code every build has.
     /// </summary>
     /// <param name="revision">The build's <c>REVISION</c>.</param>
     [TestMethod]
@@ -110,7 +110,8 @@ public sealed class Dos1541SourceTests
     }
 
     /// <summary>
-    ///  The build's own definitions: those -05's patches add, those only the 1540 leaves out, and -06's.
+    ///  Each build has the code of its own revision: the boot loader before -05, -05's patches, -06's format patch, and
+    ///  the 1540 without the 64's bus speed.
     /// </summary>
     /// <param name="revision">The build's <c>REVISION</c>.</param>
     /// <param name="has">Definitions the build has.</param>

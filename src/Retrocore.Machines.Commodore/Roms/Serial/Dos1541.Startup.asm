@@ -77,10 +77,11 @@ OffInner:
     beq Again
 .endproc
 
-;; The reset vector's target (and UJ's): interrupts off, binary mode, `ResetPatch`; tests zero page, both ROMs'
-;; checksums and RAM to $07FF, then sets the drive up (Initialize) and falls into the idle loop.
+;; The reset vector's target (and UJ's): interrupts off, binary mode, VIA 1's port A all outputs (in -05 and -06
+;; through `ResetPatch`, which sets up the bus lines too); tests zero page, both ROMs' checksums and RAM to $07FF, then
+;; sets the drive up (Initialize) and falls into the idle loop.
 ;; Entry:
-;;   SelfTest = Where `ResetPatch` returns
+;;   SelfTest = The self-test, after port A's set-up
 ;;   Initialize = The tests passed (and VNMI's target, so <Reinitialize> comes here)
 ;; Also: DSKINT (D1541)
 .proc Reset
@@ -93,7 +94,7 @@ OffInner:
     stx Via1DirectionA
 .endif
 
-;; Where `ResetPatch` returns: the self-test.
+;; The self-test, after port A's set-up (where `ResetPatch` returns, in -05 and -06).
 ;; Also: DKIT10 (D1541)
 SelfTest:
     inx

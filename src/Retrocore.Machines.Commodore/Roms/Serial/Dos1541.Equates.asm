@@ -860,7 +860,8 @@ CODE2_HIGH = $07
 ;; A write is taken only if its sector is at least 9 away.
 ;; Also: WRTMIN (D1541)
 WRITE_DISTANCE_MIN = 9
-;; The gap after a header, in GCR bytes, that writing a data block waits out (less two).
+;; The gap after a header, in GCR bytes, that writing a data block waits out (less two): 11 from -03 on, 10 in -01, -02
+;; and the 1540.
 ;; Also: GAP1 (D1541)
 .if REVISION < 3 || DRIVE_1540
 HEADER_GAP = 10

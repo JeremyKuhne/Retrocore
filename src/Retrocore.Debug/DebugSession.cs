@@ -1011,12 +1011,6 @@ internal sealed partial class DebugSession
         _configured = false;
         _launchAttempted = true;
         _transport?.ThrowIfLaunchCancelled();
-        RetireWorker();
-        CompleteInteraction("replaced");
-        CancelPhysicalInput();
-        _lastInput = null;
-        _textOnly = false;
-        _launchReady = false;
         // A project launch builds its target, as retrocore build does, and launches the target's machine with the
         // target's options, which the saved media then goes over as over any launch's.
         TargetBuild? built = null;
@@ -1030,12 +1024,13 @@ internal sealed partial class DebugSession
         };
 
         args = LaunchMedia.WithSaved(args, args["machineState"]);
+        var mediaSpeed = MediaSpeedPolicy.LaunchModes(args);
         if (args["throttle"] is not null)
         {
             throw new ArgumentException("throttle is now speed: 1, 2, 4 or 8 times the machine's clock, or \"max\".");
         }
 
-        _speed = Speed(args["speed"]);
+        double speed = Speed(args["speed"]);
         string machine = DebugMachines.Require(args.String("machine"));
         string? sourceFile = args.String("source");
         string? program = args.String("program");
@@ -1054,8 +1049,15 @@ internal sealed partial class DebugSession
         // one is built, as machines can share host resources, such as the game controllers SDL reads. A launch that then
         // fails leaves no machine, rather than the disposed one.
         _transport?.ThrowIfLaunchCancelled();
+        RetireWorker();
+        CompleteInteraction("replaced");
+        CancelPhysicalInput();
+        _lastInput = null;
+        _textOnly = false;
+        _launchReady = false;
         CloseJournal();
         ReleaseTarget();
+        _speed = speed;
         _target = null;
         _mediaSpeed = null;
         ForgetBoundaries();
@@ -1077,12 +1079,12 @@ internal sealed partial class DebugSession
             _ => Apple2DebugTarget.Launch(args)
         };
 
+        ConfigureMediaSpeed(mediaSpeed);
         if (!Target.SetFastIo(fastIo))
         {
             throw new ArgumentException($"Fast I/O is not supported for machine '{machine}'.", nameof(args));
         }
 
-        ConfigureMediaSpeed(args);
         _textOnly = textOnly;
         _launchId++;
         ConfigureInteraction(args);

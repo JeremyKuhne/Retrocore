@@ -40,12 +40,12 @@ public sealed class DapTextTests
         MediaSpeedPolicy policy = new(Apple1DebugTarget.Launch(launch));
         policy.Boot(tape).Should().Be(MediaSpeed.Fast, "an unspecified project boot is unpaced");
         launch[tape ? "fastCassette" : "fastDisk"] = false;
-        policy.Apply(launch);
+        policy.Apply(MediaSpeedPolicy.LaunchModes(launch));
         policy.Boot(tape).Should().Be(MediaSpeed.Normal);
         MediaSpeedPolicy.LaunchMode(launch, tape).Should().Be(MediaSpeed.Normal);
 
         launch[tape ? "tapeSpeed" : "diskSpeed"] = "skip";
-        policy.Apply(launch);
+        policy.Apply(MediaSpeedPolicy.LaunchModes(launch));
         policy.Boot(tape).Should().Be(MediaSpeed.Skip);
         MediaSpeedPolicy.LaunchMode(launch, tape).Should().Be(MediaSpeed.Skip);
     }
@@ -99,7 +99,7 @@ public sealed class DapTextTests
         policy.Accelerated.Should().BeTrue();
 
         launch["tapeSpeed"] = "normal";
-        policy.Apply(launch);
+        policy.Apply(MediaSpeedPolicy.LaunchModes(launch));
         target.Accelerated.Should().BeFalse();
         policy.Accelerated.Should().BeFalse();
 
@@ -127,6 +127,30 @@ public sealed class DapTextTests
 
         client.Request("launch", Apple1(textOnly: true));
         client.Request("retro/mediaSpeed", []).String("tape").Should().Be("fast");
+    }
+
+    /// <summary>
+    ///  Invalid media settings are rejected before the active machine and its preferences are replaced.
+    /// </summary>
+    /// <param name="option">The invalid launch option.</param>
+    [TestMethod]
+    [DataRow("tapeSpeed")]
+    [DataRow("diskSpeed")]
+    public void InvalidMediaSpeedDoesNotReplaceTheCurrentTarget(string option)
+    {
+        using DapTestClient client = new();
+        client.Request("initialize", []);
+        JsonObject launch = Apple1(textOnly: true);
+        launch["tapeSpeed"] = "skip";
+        client.Request("launch", launch);
+        client.Request("configurationDone", []);
+        client.Event("stopped").String("reason").Should().Be("entry");
+
+        JsonObject replacement = Apple1(textOnly: true);
+        replacement[option] = "invalid";
+        client.Fails("launch", replacement).Should().Contain("normal, fast or skip");
+        client.Request("retro/mediaSpeed", []).String("tape").Should().Be("skip");
+        client.Request("retro/text", []).String("machine").Should().Be("apple1");
     }
 
     /// <summary>

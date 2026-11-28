@@ -35,10 +35,10 @@ internal sealed partial class DebugSession
         return MediaSpeedSettings.ToJson();
     }
 
-    private void ConfigureMediaSpeed(JsonObject args)
+    private void ConfigureMediaSpeed((MediaSpeed? Tape, MediaSpeed? Disk) settings)
     {
         _mediaSpeed = new(Target);
-        _mediaSpeed.Apply(args);
+        _mediaSpeed.Apply(settings);
         _bootMediaSpeed = null;
         _tapeSpeedFallback = _diskSpeedFallback = null;
     }

@@ -99,14 +99,25 @@ internal sealed class MediaSpeedPolicy(IDebugTarget target)
     }
 
     /// <summary>
-    ///  Applies explicit media speed settings from launch arguments.
+    ///  Applies validated media speeds to the new target.
     /// </summary>
-    /// <param name="args">The launch arguments.</param>
-    internal void Apply(JsonObject args)
+    /// <param name="settings">The tape and disk choices, if supplied.</param>
+    internal void Apply((MediaSpeed? Tape, MediaSpeed? Disk) settings)
+    {
+        if (settings.Tape is { } tape) { Set(tape: true, tape); }
+        if (settings.Disk is { } disk) { Set(tape: false, disk); }
+    }
+
+    /// <summary>
+    ///  Resolves and validates the launch preferences before replacing the target.
+    /// </summary>
+    /// <param name="args">The merged launch arguments.</param>
+    /// <returns>The tape and disk choices, if supplied.</returns>
+    internal static (MediaSpeed? Tape, MediaSpeed? Disk) LaunchModes(JsonObject args)
     {
         JsonObject? defaults = args["mediaSpeedDefaults"] as JsonObject;
-        if ((LaunchMode(args, tape: true) ?? Read(defaults?["tape"])) is { } tape) { Set(tape: true, tape); }
-        if ((LaunchMode(args, tape: false) ?? Read(defaults?["disk"])) is { } disk) { Set(tape: false, disk); }
+        return (LaunchMode(args, tape: true) ?? Read(defaults?["tape"]),
+            LaunchMode(args, tape: false) ?? Read(defaults?["disk"]));
     }
 
     /// <summary>

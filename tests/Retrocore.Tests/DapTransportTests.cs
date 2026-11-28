@@ -5,6 +5,7 @@
 using Retrocore.Debug;
 using System.Text;
 using System.Text.Json.Nodes;
+using System.Diagnostics;
 
 namespace Retrocore.Tests;
 
@@ -113,6 +114,56 @@ public sealed class DapTransportTests
             Request(2, "after", []));
 
         messages.Should().ContainSingle().Which.String("command").Should().Be("disconnect");
+    }
+
+    /// <summary>
+    ///  Disconnect does not leave a reader waiting for more input from a peer that has not closed its pipe.
+    /// </summary>
+    [TestMethod]
+    public void DisconnectStopsReadingBeforeThePeerCloses()
+    {
+        using ManualResetEventSlim readingPastMessage = new();
+        using ManualResetEventSlim close = new();
+        using DisconnectReadStream input = new(Request(1, "disconnect", []), readingPastMessage, close);
+        using MemoryStream output = new();
+        DapTransport transport = new(input, output);
+        bool readAhead = false;
+        transport.On("disconnect", _ =>
+        {
+            readAhead = readingPastMessage.Wait(TimeSpan.FromMilliseconds(250));
+            return Stopped(transport);
+        });
+
+        try
+        {
+            transport.Run();
+            readAhead.Should().BeFalse();
+            Frames(output.ToArray()).Should().ContainSingle().Which.Bool("success").Should().BeTrue();
+        }
+        finally
+        {
+            close.Set();
+        }
+    }
+
+    /// <summary>
+    ///  A failed disconnect leaves the reader available to service a retry.
+    /// </summary>
+    [TestMethod]
+    public void FailedDisconnectDoesNotStopReading()
+    {
+        bool first = true;
+        List<JsonObject> messages = Exchange(transport =>
+        {
+            transport.On("disconnect", _ =>
+            {
+                if (!first) { return Stopped(transport); }
+                first = false;
+                throw new IOException("Retry disconnect");
+            });
+        }, Request(1, "disconnect", []), Request(2, "disconnect", []));
+
+        messages.Select(message => message.Bool("success")).Should().Equal(false, true);
     }
 
     /// <summary>
@@ -268,6 +319,218 @@ public sealed class DapTransportTests
         }
     }
 
+    /// <summary>
+    ///  A broken output cancels a reader waiting for input even when the peer keeps its pipe open.
+    /// </summary>
+    /// <returns>The test task.</returns>
+    [TestMethod]
+    public async Task OutputFailureStopsBlockedReader()
+    {
+        using ManualResetEventSlim reading = new();
+        using ManualResetEventSlim close = new();
+        using DisconnectReadStream input = new(Request(1, "initialize", []), reading, close);
+        MemoryStream output = new();
+        output.Dispose();
+        DapTransport transport = new(input, output, (bytes, token) => input.Read(bytes.Span, token));
+        transport.On("initialize", _ =>
+        {
+            reading.Wait(s_threadTimeout).Should().BeTrue();
+            return new JsonObject();
+        });
+
+        Task host = StartHost(transport.Run);
+        try
+        {
+            await host.WaitAsync(s_threadTimeout).ConfigureAwait(continueOnCapturedContext: false);
+            transport.OutputFailed.Should().BeTrue();
+        }
+        finally
+        {
+            close.Set();
+            await host.WaitAsync(s_threadTimeout).ConfigureAwait(continueOnCapturedContext: false);
+        }
+    }
+
+    /// <summary>
+    ///  The actual debugger host detects a closed output pipe and exits without waiting for input EOF.
+    /// </summary>
+    /// <returns>The test task.</returns>
+    [TestMethod]
+    public async Task RedirectedHostExitsWhenPeerClosesOnlyOutput()
+    {
+        ProcessStartInfo start = new("dotnet")
+        {
+            ArgumentList = { typeof(DebugSession).Assembly.Location },
+            RedirectStandardInput = true,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+            CreateNoWindow = true
+        };
+
+        using Process host = Process.Start(start) ?? throw new AssertFailedException("Could not start the DAP host.");
+        host.StandardOutput.Dispose();
+        Task<string> errors = host.StandardError.ReadToEndAsync();
+        try
+        {
+            Stream input = host.StandardInput.BaseStream;
+            await input.WriteAsync(Request(1, "initialize", [])).ConfigureAwait(continueOnCapturedContext: false);
+            await input.FlushAsync().ConfigureAwait(continueOnCapturedContext: false);
+            await host.WaitForExitAsync().WaitAsync(s_threadTimeout).ConfigureAwait(continueOnCapturedContext: false);
+            host.ExitCode.Should().Be(1);
+            (await errors.ConfigureAwait(continueOnCapturedContext: false)).Should().Contain("DAP output failed:");
+        }
+        finally
+        {
+            if (!host.HasExited)
+            {
+                host.Kill();
+                await host.WaitForExitAsync().WaitAsync(s_threadTimeout).ConfigureAwait(continueOnCapturedContext: false);
+            }
+        }
+    }
+
+    /// <summary>
+    ///  A queued cancellation interrupts a launch without reordering the two responses.
+    /// </summary>
+    /// <param name="id">A whole request ID in JSON.</param>
+    [TestMethod]
+    [DataRow("1")]
+    [DataRow("1.0")]
+    [DataRow("1e0")]
+    public void CancelInterruptsLaunch(string id)
+    {
+        List<JsonObject> messages = Exchange(transport =>
+        {
+            transport.On("launch", _ =>
+            {
+                long started = Stopwatch.GetTimestamp();
+                while (Stopwatch.GetElapsedTime(started) < s_threadTimeout)
+                {
+                    transport.ThrowIfLaunchCancelled();
+                    Thread.Sleep(1);
+                }
+
+                return new JsonObject();
+            });
+
+            transport.On("cancel", _ => new JsonObject());
+        }, Request(1, "launch", []), Request(2, "cancel", new JsonObject { ["requestId"] = JsonNode.Parse(id) }));
+
+        messages.Select(message => message.Int("request_seq")).Should().Equal(1, 2);
+        messages.Select(message => message.Bool("success")).Should().Equal(false, true);
+    }
+
+    /// <summary>
+    ///  Ordinary requests queued behind a paced launch do not cancel it or reorder replies.
+    /// </summary>
+    [TestMethod]
+    public void FullRequestQueueDoesNotCancelLaunch()
+    {
+        const int RequestCount = 300;
+        List<JsonObject> messages = Exchange(transport =>
+        {
+            transport.On("launch", _ =>
+            {
+                long started = Stopwatch.GetTimestamp();
+                while (Stopwatch.GetElapsedTime(started) < TimeSpan.FromMilliseconds(250))
+                {
+                    transport.ThrowIfLaunchCancelled();
+                    Thread.Sleep(1);
+                }
+
+                return new JsonObject();
+            });
+
+            transport.On("next", _ => new JsonObject());
+        }, [Request(1, "launch", []), .. Enumerable.Range(2, RequestCount).Select(seq => Request(seq, "next", []))]);
+
+        messages.Select(message => message.Int("request_seq")).Should().Equal(Enumerable.Range(1, RequestCount + 1).Select(seq => (int?)seq));
+        messages.Should().OnlyContain(message => message.Bool("success") == true);
+    }
+
+    /// <summary>
+    ///  EOF cancels paced work rather than leaving the adapter waiting for the launch to finish.
+    /// </summary>
+    [TestMethod]
+    public void PacedLaunchStopsAtInputEof()
+    {
+        List<JsonObject> messages = Exchange(transport =>
+        {
+            transport.On("launch", _ =>
+            {
+                long started = Stopwatch.GetTimestamp();
+                while (Stopwatch.GetElapsedTime(started) < TimeSpan.FromSeconds(1))
+                {
+                    transport.ThrowIfLaunchCancelled(requireInput: true);
+                    Thread.Sleep(1);
+                }
+
+                return new JsonObject();
+            });
+        }, Request(1, "launch", []));
+
+        messages.Should().ContainSingle().Which.String("message").Should().Contain("DAP input closed");
+    }
+
+    /// <summary>
+    ///  A pre-cancelled launch consumes its configuration handshake without starting a replacement.
+    /// </summary>
+    [TestMethod]
+    public void PreCancelledLaunchDoesNotConfigureTheRetry()
+    {
+        using ManualResetEventSlim sawEnd = new();
+        using ManualResetEventSlim close = new(initialState: true);
+        JsonObject apple1 = new()
+        {
+            ["machine"] = "apple1",
+            ["sdkRoms"] = Path.Join(AppContext.BaseDirectory, "Inputs"),
+            ["textOnly"] = true,
+            ["stopOnEntry"] = true
+        };
+
+        using DisconnectReadStream input = new(
+            [.. Request(1, "initialize", []), .. Request(2, "configurationDone", []), .. Request(3, "gate", []),
+             .. Request(4, "launch", apple1), .. Request(5, "cancel", new JsonObject { ["requestId"] = 4 }),
+             .. Request(6, "launch", apple1.DeepClone().AsObject())], sawEnd, close);
+
+        using MemoryStream output = new();
+        DapTransport transport = new(input, output, (bytes, token) => input.Read(bytes.Span, token));
+        DebugSession session = new();
+        session.Register(transport, transport.Stop);
+        transport.On("gate", _ =>
+        {
+            sawEnd.Wait(s_threadTimeout).Should().BeTrue();
+            return new JsonObject();
+        });
+
+        transport.Run(session.End);
+        List<JsonObject> messages = Frames(output.ToArray());
+        messages.Single(message => message.Int("request_seq") == 4).Bool("success").Should().BeFalse();
+        messages.Single(message => message.Int("request_seq") == 6).Bool("success").Should().BeTrue();
+        messages.Should().NotContain(message => message.String("event") == "stopped");
+    }
+
+    /// <summary>
+    ///  Inspecting malformed requests for cancellation does not terminate the reader.
+    /// </summary>
+    [TestMethod]
+    public void MalformedRequestDoesNotEndReadAhead()
+    {
+        List<JsonObject> messages = Exchange(transport =>
+        {
+            transport.On("cancel", args => new JsonObject { ["requestId"] = args.Int("requestId") });
+            transport.On("next", _ => new JsonObject());
+        },
+        Encode(new JsonObject { ["type"] = "request", ["seq"] = 1, ["command"] = 99 }),
+        Encode(new JsonObject { ["type"] = "request", ["seq"] = "bad", ["command"] = "launch" }),
+        Request(3, "cancel", new JsonObject { ["requestId"] = "bad" }),
+        Request(4, "next", []));
+
+        messages.Select(message => message.Bool("success")).Should().Equal(false, false, false, true);
+        messages[^1].Int("request_seq").Should().Be(4);
+    }
+
     private static Task StartHost(Action run) =>
         Task.Factory.StartNew(run, CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default);
 
@@ -292,6 +555,11 @@ public sealed class DapTransportTests
             ["arguments"] = arguments
         };
 
+        return Encode(request);
+    }
+
+    private static byte[] Encode(JsonObject request)
+    {
         byte[] json = Encoding.UTF8.GetBytes(request.ToJsonString());
         return [.. Encoding.ASCII.GetBytes($"Content-Length: {json.Length}\r\n\r\n"), .. json];
     }

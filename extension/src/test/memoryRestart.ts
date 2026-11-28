@@ -44,6 +44,7 @@ export async function testMemoryRestart(workspace: vscode.WorkspaceFolder): Prom
             debugHost: path.join(root, "artifacts/AnyCPU/Release/Retrocore.Debug/net11.0/Retrocore.Debug.dll"),
             sdkRoms: path.join(root, "src/Retrocore.Machines.Trs80/Roms"),
             source: path.join(root, "sample/trs80/hello.asm"),
+            tapeSpeed: "normal",
             stopOnEntry: true
         };
         assert.equal(await vscode.debug.startDebugging(workspace, configuration), true);
@@ -54,10 +55,12 @@ export async function testMemoryRestart(workspace: vscode.WorkspaceFolder): Prom
         await openMemory(session, "0x4000");
         const open = [`Memory $4000 @${session.id}`];
         assert.deepEqual(memoryTabs(), open);
+        assert.equal((await session.customRequest("retro/mediaSpeed", { kind: "tape", mode: "skip" })).tape, "skip");
 
         await vscode.commands.executeCommand("workbench.action.debug.restart");
         assert.ok(await until(() => ready === 2, 15000), "the session restarts");
         assert.equal(vscode.debug.activeDebugSession?.id, session.id, "a restart keeps the session's id");
+        assert.equal((await session.customRequest("retro/mediaSpeed")).tape, "skip", "a restart keeps the live media speed");
         assert.deepEqual(memoryTabs(), open, "the editor stays open");
         let state = await vscode.commands.executeCommand<{ ended: boolean; cursor: number; label?: string }>("retrocore.memory.test", [{ goto: 0x4001 }]);
         assert.deepEqual([state.ended, state.cursor], [false, 0x4001], "and reads the restarted machine");

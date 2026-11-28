@@ -2,6 +2,8 @@
 
 Status: **agreed 2026-11-16.** Phases 0-5 are built; phases 4 and 5 await review. Phase 6 is built and awaits review.
 
+For the planned Normal/Fast/Skip settings and the PET cassette's first Skip path, see [tape and disk speed](MediaSpeed.md).
+
 The PET 2001 (1977) is the third of the 1977 trinity beside the Apple II and the TRS-80 Model I. It is built from
 parts the code base already has:
 

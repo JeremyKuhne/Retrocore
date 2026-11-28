@@ -178,6 +178,12 @@ internal sealed partial class DebugSession
         // An image changed on disk shows in its drive, even while the machine is stopped.
         MediaActions.SourcesChanged += SourcesChanged;
         transport.On("initialize", _ => Capabilities());
+        transport.On("cancel", args =>
+        {
+            _ = args.Int("requestId");
+            return new JsonObject();
+        });
+
         transport.OnWithFollowUp("launch", args =>
         {
             bool configured = false;
@@ -427,6 +433,7 @@ internal sealed partial class DebugSession
         transport.On("retro/display", args => Reply(DisplayNow));
         RegisterInteraction(transport);
         transport.On("retro/devices", args => Reply(DevicesBody));
+        transport.On("retro/mediaSpeed", args => Reply(() => MediaSpeedRequest(args)));
         transport.On("retro/device", args => Reply(() =>
         {
             string id = args.String("id") ?? throw new ArgumentException("id is required.");
@@ -592,6 +599,12 @@ internal sealed partial class DebugSession
         }
 
         JsonObject result = handler(args);
+
+        if (name is "apple2/fastDisk" or "apple3/fastDisk")
+        {
+            MediaSpeedSettings.Set(tape: false, args.Bool("enabled") == true ? MediaSpeed.Fast : MediaSpeed.Normal);
+            _paceAgain = true;
+        }
 
         // A tape or disk that goes in or comes out changes the devices, so Retro Devices hears of it even while the
         // machine is stopped, as it does for retro/device.
@@ -868,6 +881,7 @@ internal sealed partial class DebugSession
     private static JsonObject Capabilities() => new JsonObject
     {
         ["supportsConfigurationDoneRequest"] = true,
+        ["supportsCancelRequest"] = true,
 
         // retro/device and retro/hardware answer media's outcomes (saved, changed, conflict, losses, readOnly) to a
         // client that sends supportsRetrocoreMedia, as the media persistence plan has them.
@@ -994,13 +1008,9 @@ internal sealed partial class DebugSession
     {
         // The launch takes a configurationDone that came before it, even if it fails.
         configured = _configured;
-        RetireWorker();
-        CompleteInteraction("replaced");
-        CancelPhysicalInput();
-        _lastInput = null;
-        _textOnly = false;
         _configured = false;
         _launchAttempted = true;
+        _transport?.ThrowIfLaunchCancelled();
         _launchReady = false;
         // A project launch builds its target, as retrocore build does, and launches the target's machine with the
         // target's options, which the saved media then goes over as over any launch's.
@@ -1015,6 +1025,13 @@ internal sealed partial class DebugSession
         };
 
         args = LaunchMedia.WithSaved(args, args["machineState"]);
+        var mediaSpeed = MediaSpeedPolicy.LaunchModes(args);
+        if (args["throttle"] is not null)
+        {
+            throw new ArgumentException("throttle is now speed: 1, 2, 4 or 8 times the machine's clock, or \"max\".");
+        }
+
+        double speed = Speed(args["speed"]);
         string machine = DebugMachines.Require(args.String("machine"));
         string? sourceFile = args.String("source");
         string? program = args.String("program");
@@ -1032,9 +1049,17 @@ internal sealed partial class DebugSession
         // The old machine's changed disks and tapes are kept and its RAM image saved, and it is disposed before the new
         // one is built, as machines can share host resources, such as the game controllers SDL reads. A launch that then
         // fails leaves no machine, rather than the disposed one.
+        _transport?.ThrowIfLaunchCancelled();
+        RetireWorker();
+        CompleteInteraction("replaced");
+        CancelPhysicalInput();
+        _lastInput = null;
+        _textOnly = false;
         CloseJournal();
         ReleaseTarget();
+        _speed = speed;
         _target = null;
+        _mediaSpeed = null;
         ForgetBoundaries();
         _target = machine switch
         {
@@ -1054,6 +1079,7 @@ internal sealed partial class DebugSession
             _ => Apple2DebugTarget.Launch(args)
         };
 
+        ConfigureMediaSpeed(mediaSpeed);
         if (!Target.SetFastIo(fastIo))
         {
             throw new ArgumentException($"Fast I/O is not supported for machine '{machine}'.", nameof(args));
@@ -1203,7 +1229,19 @@ internal sealed partial class DebugSession
         // A project target whose environment boots its image boots it now, over them, to its program's entry.
         if (built is not null && booted)
         {
-            BootImage(built);
+            try
+            {
+                BootImage(built);
+                _transport?.ThrowIfLaunchCancelled();
+            }
+            catch (OperationCanceledException)
+            {
+                CloseJournal();
+                ReleaseTarget();
+                _target = null;
+                _mediaSpeed = null;
+                throw;
+            }
 
             // Its program's lines apply in the memory the CPU reads them in once it is at the entry: under SOS, the
             // switched bank SOS gives the interpreter below $A000 and the fixed system RAM above it, not bank 0. A
@@ -1258,12 +1296,6 @@ internal sealed partial class DebugSession
         _memoryFrames = 0;
         _sentPixels = [];
 
-        if (args["throttle"] is not null)
-        {
-            throw new ArgumentException("throttle is now speed: 1, 2, 4 or 8 times the machine's clock, or \"max\".");
-        }
-
-        _speed = Speed(args["speed"]);
         int? limit = args.Int("logpointLimit");
         if (limit < 0) { throw new ArgumentException("logpointLimit must be 0 or more."); }
         _logpointLimit = limit ?? DefaultLogpointLimit;
@@ -1289,9 +1321,11 @@ internal sealed partial class DebugSession
         _launchReady = true;
 
         // A project launch says which machine it started, which only the target said, for the editor to follow.
-        return built is null ? WithIdentity([]) : WithIdentity(new JsonObject
+        JsonObject launched = new() { ["mediaSpeed"] = MediaSpeedSettings.ToJson() };
+        if (_bootMediaSpeed is { } outcome) { launched["mediaSpeedResult"] = outcome; }
+        if (built is not null)
         {
-            ["project"] = new JsonObject
+            launched["project"] = new JsonObject
             {
                 ["file"] = built.Target.Project.File,
                 ["target"] = built.Target.Name,
@@ -1301,8 +1335,10 @@ internal sealed partial class DebugSession
                 ["rom"] = built.Target.Machine.Rom,
                 ["binary"] = built.Binary,
                 ["entry"] = built.Entry
-            }
-        });
+            };
+        }
+
+        return WithIdentity(launched);
     }
 
     // The Monitor sets up the PIA as it starts, so a loaded program's output through ECHO, and BASIC's own, reaches
@@ -2286,7 +2322,7 @@ internal sealed partial class DebugSession
             paceCycles = Target.CycleCount;
         }
 
-        if (Target.Accelerated)
+        if (MediaSpeedSettings.Accelerated)
         {
             // Pacing starts over once the acceleration ends, rather than waiting for the clock to catch up.
             paceTime = Stopwatch.GetTimestamp();
@@ -2342,7 +2378,7 @@ internal sealed partial class DebugSession
         JsonObject speed = new()
         {
             ["setting"] = _speed == 0 ? "max" : (JsonNode)_speed,
-            ["accelerated"] = running && _speed != 0 && Target.Accelerated
+            ["accelerated"] = running && _speed != 0 && MediaSpeedSettings.Accelerated
         };
 
         bool measured = running && !double.IsNaN(_measured);
@@ -2475,6 +2511,7 @@ internal sealed partial class DebugSession
     {
         foreach ((string name, JsonObject body) in Target.StatusEvents()) { Notify(name, body); }
         NotifyDevices();
+        NotifyMediaSpeed();
         NotifyHits();
         FlushLog();
     }
@@ -2585,6 +2622,7 @@ internal sealed partial class DebugSession
 
         JsonObject state = Target.DisplayState(running);
         state["speed"] = SpeedJson(running);
+        state["mediaSpeed"] = MediaSpeedFrame();
         ReadOnlySpan<byte> pixels = Target.RenderVideo();
         bool changed = !running || !pixels.SequenceEqual(_sentPixels);
         if (changed)

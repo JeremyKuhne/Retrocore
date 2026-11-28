@@ -413,7 +413,12 @@ public sealed class ProjectLaunchTests
             "a level2 target boots with no disk controller, for the ROM to start in BASIC, so its options and its launch cannot give 'diskController'.");
 
         int start = machine == "trs80-model3" ? 0x4400 : 0x4300;
-        client.Request("launch", Launch("tape"))["project"]?["entry"]?.GetValue<int>().Should().Be(start + 18);
+        JsonObject launch = Launch("tape");
+        launch["tapeSpeed"] = "skip";
+        JsonObject started = client.Request("launch", launch);
+        started["project"]?["entry"]?.GetValue<int>().Should().Be(start + 18);
+        started["mediaSpeedResult"]?.String("kind").Should().Be("tape");
+        started["mediaSpeedResult"]?.String("effective").Should().Be("fast");
         string entry = "$" + (start + 18).ToString("X4", System.Globalization.CultureInfo.InvariantCulture);
         client.Request("evaluate", new JsonObject
         {
@@ -489,7 +494,12 @@ public sealed class ProjectLaunchTests
                 "a colorbasic target runs under Extended Color BASIC, whose memory its maps give, so its options and its launch cannot give 'extendedBasic' none.");
         }
 
-        client.Request("launch", Launch("tape"))["project"]?["entry"]?.GetValue<int>().Should().Be(0x1F12);
+        JsonObject launch = Launch("tape");
+        launch["tapeSpeed"] = "skip";
+        JsonObject started = client.Request("launch", launch);
+        started["project"]?["entry"]?.GetValue<int>().Should().Be(0x1F12);
+        started["mediaSpeedResult"]?.String("kind").Should().Be("tape");
+        started["mediaSpeedResult"]?.String("effective").Should().Be("fast");
         client.Request("evaluate", new JsonObject
         {
             ["expression"] = "PC"
@@ -798,6 +808,49 @@ public sealed class ProjectLaunchTests
 
         client.Request("configurationDone", []);
         client.Event("stopped").String("reason").Should().Be("entry");
+    }
+
+    /// <summary>
+    ///  Configured watches and beam filters do not prevent Skip during PET project boot.
+    /// </summary>
+    /// <param name="watch">Whether to install a memory watch rather than a beam observer.</param>
+    [TestMethod]
+    [DataRow(data: true)]
+    [DataRow(data: false)]
+    public void PetProjectTapeSkipsWithObserversConfigured(bool watch)
+    {
+        Write("retrocore.json", """
+            { "sdk": "1", "name": "game", "cpu": "6502", "sources": ["src/*.s"], "entry": "START",
+              "targets": { "pet": { "machine": "pet4032", "environment": "basic" } } }
+            """);
+
+        Write("src/main.s", "START:\n    nop\n    jmp START\n");
+        using DapTestClient client = new();
+        client.Request("initialize", []);
+        JsonObject launch = Launch("pet");
+        launch["tapeSpeed"] = "skip";
+        launch["ioMode"] = "fast";
+        JsonNode? first = client.Request("launch", launch)["mediaSpeedResult"];
+        first.String("effective").Should().Be("skip");
+        if (watch)
+        {
+            client.Request("setDataBreakpoints", new JsonObject
+            {
+                ["breakpoints"] = new JsonArray(new JsonObject { ["dataId"] = "0x0410", ["accessType"] = "write" })
+            });
+        }
+        else
+        {
+            client.Request("setExceptionBreakpoints", new JsonObject
+            {
+                ["filters"] = new JsonArray("scanline")
+            });
+        }
+
+        JsonNode? result = client.Request("launch", launch.DeepClone().AsObject())["mediaSpeedResult"];
+        result.String("requested").Should().Be("skip");
+        result.String("effective").Should().Be("skip");
+        result.Long("cycles").Should().Be(first.Long("cycles"));
     }
 
     /// <summary>

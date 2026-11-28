@@ -158,7 +158,13 @@ select{font-family:inherit;font-size:12px;padding:1px 4px;border-radius:2px;back
 <label class="speed" id="screenChoice" hidden title="The monitor: color, a IIe's RGB card and monitor (Color RGB: solid colors without fringing), or a monochrome monitor of the time; on an Apple II it shows every dot sharply, as double hi-res desktops need">Screen <select id="screenType" aria-label="Screen">
 <option value="color">Color</option><option value="rgb">Color RGB</option><option value="white">Black and white</option><option value="green">Green</option><option value="amber">Amber</option>
 </select></label>
-<label data-machine="apple2 apple3" title="Runs as fast as it can while a disk drive's motor turns, then back at the chosen speed"><input id="fastDisk" type="checkbox" checked> Fast disk</label>
+<label class="speed" id="tapeSpeedChoice" hidden title="Skip supported tape operations. Other operations run at Fast speed.">Tape speed <select id="tapeSpeed" aria-label="Tape speed">
+<option value="normal">Normal</option><option value="fast">Fast</option><option value="skip">Skip</option>
+</select></label>
+<label class="speed" id="diskSpeedChoice" hidden title="Skip supported disk operations. Other operations run at Fast speed.">Disk speed <select id="diskSpeed" aria-label="Disk speed">
+<option value="normal">Normal</option><option value="fast">Fast</option><option value="skip">Skip</option>
+</select></label>
+<button id="mediaSpeedHelp" hidden title="See the documentation for supported machines, images and operations">Media speed help</button>
 <label id="details" title="While stopped, marks where the video beam is drawing"><input id="overlay" type="checkbox"> Beam overlay</label>
 </span></div>
 <div class="hint" id="hint"></div>
@@ -189,15 +195,43 @@ function speedText(frame){
     // Accelerated is the Model I's, Apple-1's, Color Computer's, PET's, VIC-20's or Atari's fast cassette or the IIe's
     // fast disk, running flat out while the media moves.
     const tapes=['trs80-model1','trs80-model3','apple1','coco','pet','vic20','bbc','atari800'];
-    const fast=speed.accelerated===true?[tapes.includes(frame.machine)?'Fast tape':'Fast disk']:[];
+    const fast=speed.accelerated===true?[frame.mediaSpeed?(frame.mediaSpeed.tape!==null&&frame.mediaSpeed.disk!==null?'Fast media':frame.mediaSpeed.tape!==null?'Fast tape':'Fast disk'):tapes.includes(frame.machine)?'Fast tape':'Fast disk']:[];
     return [...(speed.setting==='max'?['Max']:[]),...fast,speed.actual.toFixed(2)+'×',(speed.hertz/1e6).toFixed(2)+' MHz'];
 }
-const fastDisk=document.getElementById('fastDisk');
-fastDisk.addEventListener('change',()=>{api.postMessage({command:'fastDisk',enabled:fastDisk.checked});screen.focus();});
+const mediaSpeedKinds=['tape','disk'];
+for(const kind of mediaSpeedKinds){
+    const select=document.getElementById(kind+'Speed');
+    select.addEventListener('change',()=>{api.postMessage({command:'mediaSpeed',kind,mode:select.value});screen.focus();});
+}
+const mediaSpeedHelp=document.getElementById('mediaSpeedHelp');
+mediaSpeedHelp.addEventListener('click',()=>api.postMessage({command:'mediaSpeedHelp'}));
+function mediaSpeedText(frame){
+    const media=frame.mediaSpeed;
+    if(!media)return [];
+    const boot=media.boot;
+    const parts=mediaSpeedKinds.filter(kind=>media[kind+'Fallback']).map(kind=>(kind==='tape'?'Tape':'Disk')+': Fast (Skip not supported)');
+    if(!frame.running&&boot?.requested==='skip'){
+        const label=boot.kind==='tape'?'Tape':'Disk';
+        const result=boot.effective==='skip'?'Skip':'Fast (Skip not supported)';
+        const text=label+': '+result;
+        if(!parts.includes(text))parts.push(text);
+    }
+    return parts;
+}
 function draw(frame){
     const video=frame.video;
     if(frame.speed&&document.activeElement!==speedSelect)speedSelect.value=String(frame.speed.setting);
-    if(typeof frame.fastDisk==='boolean'&&document.activeElement!==fastDisk)fastDisk.checked=frame.fastDisk;
+    let hasMediaSpeed=false;
+    for(const kind of mediaSpeedKinds){
+        const select=document.getElementById(kind+'Speed');
+        const value=frame.mediaSpeed?.[kind];
+        const supported=typeof value==='string';
+        document.getElementById(kind+'SpeedChoice').hidden=!supported;
+        if(!supported)continue;
+        hasMediaSpeed=true;
+        if(document.activeElement!==select)select.value=value;
+    }
+    mediaSpeedHelp.hidden=!hasMediaSpeed;
     if(!video||video.pixelFormat!=='rgba'||!(video.width>0)||!(video.height>0)){
         api.postMessage({error:'The display needs an updated debug host and an RGBA frame.'});return;
     }
@@ -226,7 +260,7 @@ function draw(frame){
     if(frame.machine==='apple3'){
         const drives=frame.disk?frame.disk.drives.filter(drive=>drive.mounted||drive.motor).map(drive=>'.D'+drive.drive
             +' track '+drive.track.toFixed(0)+(drive.motor?' · motor on':'')):[];
-        document.getElementById('status').textContent=[running?'Running':frame.cycles+' cycles'].concat(running?speedText(frame):[]).join(' · ');
+        document.getElementById('status').textContent=[running?'Running':frame.cycles+' cycles'].concat(running?speedText(frame):[],mediaSpeedText(frame)).join(' · ');
         document.getElementById('disk').textContent=drives.join(' | ');
         return;
     }
@@ -250,20 +284,21 @@ function draw(frame){
             ?disk.device.replace(/^disk(\\d+)-(\\d)$/,'Unit $1 drive $2').replace(/^disk(\\d+)$/,'Device $1')+' track '+(Number.isInteger(disk.track)?disk.track:disk.track.toFixed(1))+(disk.motor?' · motor on':'')
             :drive(disk)+' cylinder '+disk.cylinder+(disk.selected?' · selected':'');
         const disks=media?.disks?media.disks.filter(disk=>disk.mounted).map(diskLabel):[];
-        document.getElementById('status').textContent=[running?'Running':frame.cycles+' cycles'].concat(running?speedText(frame):[],tape).join(' · ');
+        document.getElementById('status').textContent=[running?'Running':frame.cycles+' cycles'].concat(running?speedText(frame):[],mediaSpeedText(frame),tape).join(' · ');
         document.getElementById('disk').textContent=disks.join(' | ');
         return;
     }
     const beam=video.beam;
     if(running){
         const motors=frame.disk?frame.disk.drives.filter(drive=>drive.motor).map(drive=>'D'+drive.drive+' track '+drive.track.toFixed(0)):[];
-        document.getElementById('status').textContent=['Running'].concat(speedText(frame),motors).join(' · ');
+        document.getElementById('status').textContent=['Running'].concat(speedText(frame),mediaSpeedText(frame),motors).join(' · ');
         document.getElementById('disk').textContent='';
         return;
     }
     if(beamOverlay){drawBeam(ctx,beam);paintedOverlay=true;}
     document.getElementById('status').textContent=frame.cycles+' cycles · line '+beam.scanline+' · column '+beam.column
-        +' · frame cycle '+beam.cycleInFrame+(beam.verticalBlank?' · VBL':beam.horizontalBlank?' · HBL':'');
+        +' · frame cycle '+beam.cycleInFrame+(beam.verticalBlank?' · VBL':beam.horizontalBlank?' · HBL':'')
+        +mediaSpeedText(frame).map(text=>' · '+text).join('');
     if(frame.disk){
         document.getElementById('disk').textContent=frame.disk.drives.map(drive=>'D'+drive.drive
             +': track '+drive.track.toFixed(2)+' · bit '+drive.bitPosition+'/'+drive.bitCount

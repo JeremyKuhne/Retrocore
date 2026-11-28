@@ -243,6 +243,29 @@ public sealed class CommodoreDatasette : ITapeDrive, IMediumSlot
         _recordingStarted = false;
     }
 
+    /// <summary>
+    ///  Advances a parked playing tape to an equivalent pulse, retaining its phase and read line.
+    /// </summary>
+    /// <param name="pulse">The later pulse index.</param>
+    /// <returns>Whether the tape head was moved.</returns>
+    internal bool TrySkipTo(int pulse)
+    {
+        if (Motor
+            || _mode != TapeMode.Playing
+            || _tape is not { } tape
+            || _length == 0
+            || !Read
+            || pulse <= _index
+            || pulse >= tape.Pulses.Count
+            || tape.Pulses[_index] != tape.Pulses[pulse])
+        {
+            return false;
+        }
+
+        _index = pulse;
+        return true;
+    }
+
     /// <inheritdoc/>
     public void Saved(string label, string format, bool whole)
     {

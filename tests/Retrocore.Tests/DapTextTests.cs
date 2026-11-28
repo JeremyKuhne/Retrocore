@@ -3,6 +3,7 @@
 // See LICENSE file in the project root for full license information
 
 using Retrocore.Debug;
+using Retrocore.Machines.Apple1;
 using System.Text;
 using System.Text.Json.Nodes;
 
@@ -25,6 +26,132 @@ public sealed class DapTextTests
         ["ioMode"] = fastIo ? "fast" : null,
         ["speed"] = "max"
     };
+
+    /// <summary>
+    ///  An explicit legacy setting controls both project boot and the device preference unless a new mode is supplied.
+    /// </summary>
+    /// <param name="tape">Whether to check the tape or disk alias.</param>
+    [TestMethod]
+    [DataRow(data: true)]
+    [DataRow(data: false)]
+    public void LegacyMediaSpeedControlsProjectBoot(bool tape)
+    {
+        JsonObject launch = Apple1(textOnly: true);
+        MediaSpeedPolicy policy = new(Apple1DebugTarget.Launch(launch));
+        policy.Boot(tape).Should().Be(MediaSpeed.Fast, "an unspecified project boot is unpaced");
+        launch[tape ? "fastCassette" : "fastDisk"] = false;
+        policy.Apply(MediaSpeedPolicy.LaunchModes(launch));
+        policy.Boot(tape).Should().Be(MediaSpeed.Normal);
+        MediaSpeedPolicy.LaunchMode(launch, tape).Should().Be(MediaSpeed.Normal);
+
+        launch[tape ? "tapeSpeed" : "diskSpeed"] = "skip";
+        policy.Apply(MediaSpeedPolicy.LaunchModes(launch));
+        policy.Boot(tape).Should().Be(MediaSpeed.Skip);
+        MediaSpeedPolicy.LaunchMode(launch, tape).Should().Be(MediaSpeed.Skip);
+    }
+
+    /// <summary>
+    ///  An explicit media mode overrides the legacy flag and remains selected independently of machine speed.
+    /// </summary>
+    [TestMethod]
+    public void MediaSpeedCanChangeWithoutChangingMachineSpeed()
+    {
+        using DapTestClient client = new();
+        client.Request("initialize", []);
+        JsonObject launch = Apple1(textOnly: false);
+        launch["fastCassette"] = false;
+        launch["mediaSpeedDefaults"] = new JsonObject { ["tape"] = "skip" };
+        Object(client.Request("launch", launch), "mediaSpeed").String("tape").Should().Be("normal");
+        launch = Apple1(textOnly: false);
+        launch["mediaSpeedDefaults"] = new JsonObject { ["tape"] = "normal" };
+        launch["tapeSpeed"] = "skip";
+        JsonObject started = client.Request("launch", launch);
+        Object(started, "mediaSpeed").String("tape").Should().Be("skip");
+        client.Request("configurationDone", []);
+        client.Event("stopped").String("reason").Should().Be("entry");
+        JsonObject requested = client.Request("retro/mediaSpeed", new JsonObject
+        {
+            ["kind"] = "tape", ["mode"] = "normal"
+        });
+
+        requested.String("tape").Should().Be("normal");
+        client.Request("retro/mediaSpeed", []).String("tape").Should().Be("normal");
+        client.Fails("retro/mediaSpeed", new JsonObject
+        {
+            ["kind"] = "tape", ["mode"] = "invalid"
+        }).Should().Contain("normal, fast or skip");
+
+        client.Request("retro/mediaSpeed", []).String("tape").Should().Be("normal");
+    }
+
+    /// <summary>
+    ///  Normal disables the target's legacy acceleration while an Apple-1 cassette is actually playing.
+    /// </summary>
+    [TestMethod]
+    public void NormalTapePacesAnActiveLegacyDrive()
+    {
+        JsonObject launch = Apple1(textOnly: true);
+        launch["fastCassette"] = true;
+        Apple1DebugTarget target = Apple1DebugTarget.Launch(launch);
+        Apple1CassetteDrive drive = target.Machine.CassetteDrive ?? throw new AssertFailedException("No cassette drive.");
+        drive.Play(new Apple1Tape([100, 100]), "tape");
+        MediaSpeedPolicy policy = new(target);
+        policy.Accelerated.Should().BeTrue();
+
+        launch["tapeSpeed"] = "normal";
+        policy.Apply(MediaSpeedPolicy.LaunchModes(launch));
+        target.Accelerated.Should().BeFalse();
+        policy.Accelerated.Should().BeFalse();
+
+        policy.Set(tape: false, MediaSpeed.Fast);
+        policy.Accelerated.Should().BeFalse("the disk setting cannot unthrottle tape");
+        policy.Set(tape: true, MediaSpeed.Fast);
+        policy.Accelerated.Should().BeTrue();
+    }
+
+    /// <summary>
+    ///  Failing to construct a replacement machine invalidates the old media policy.
+    /// </summary>
+    [TestMethod]
+    public void FailedReplacementLaunchDoesNotExposeOldMediaSettings()
+    {
+        using DapTestClient client = new();
+        client.Request("initialize", []);
+        JsonObject launch = Apple1(textOnly: true);
+        launch["tapeSpeed"] = "skip";
+        client.Request("launch", launch);
+        client.Request("retro/mediaSpeed", []).String("tape").Should().Be("skip");
+
+        client.Fails("launch", new JsonObject { ["machine"] = "pet", ["model"] = "unknown" }).Should().Contain("model");
+        client.Fails("retro/mediaSpeed", []).Should().Contain("No machine has been launched");
+
+        client.Request("launch", Apple1(textOnly: true));
+        client.Request("retro/mediaSpeed", []).String("tape").Should().Be("fast");
+    }
+
+    /// <summary>
+    ///  Invalid media settings are rejected before the active machine and its preferences are replaced.
+    /// </summary>
+    /// <param name="option">The invalid launch option.</param>
+    [TestMethod]
+    [DataRow("tapeSpeed")]
+    [DataRow("diskSpeed")]
+    public void InvalidMediaSpeedDoesNotReplaceTheCurrentTarget(string option)
+    {
+        using DapTestClient client = new();
+        client.Request("initialize", []);
+        JsonObject launch = Apple1(textOnly: true);
+        launch["tapeSpeed"] = "skip";
+        client.Request("launch", launch);
+        client.Request("configurationDone", []);
+        client.Event("stopped").String("reason").Should().Be("entry");
+
+        JsonObject replacement = Apple1(textOnly: true);
+        replacement[option] = "invalid";
+        client.Fails("launch", replacement).Should().Contain("normal, fast or skip");
+        client.Request("retro/mediaSpeed", []).String("tape").Should().Be("skip");
+        client.Request("retro/text", []).String("machine").Should().Be("apple1");
+    }
 
     /// <summary>
     ///  Text-only sessions return the terminal buffer, suppress frame events, and complete text waits asynchronously.

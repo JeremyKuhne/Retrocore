@@ -27,10 +27,19 @@ public sealed class CocoCassette
     private const double ThresholdUnits = (ZeroCycleUnits + OneCycleUnits) / 2;
 
     // A .cas file leaves out the silence before each leader, where Color BASIC waits half a second for the motor
-    // to come up to speed; playing puts it back so the leader is still running when BASIC starts reading.
+    // to come up to speed; playing puts it back so the leader is still running when BASIC starts reading. A $55 inside
+    // a block is not a leader: silence there would cut the block's bits apart.
     private const double GapUnits = CocoTiming.CrystalHertz / 8 / 2;
 
+    // The $55 bytes in a row, between blocks, that make a leader: Color BASIC writes 128 before the name block and
+    // before the data. Between blocks that follow one another there are only the two that end and start them.
+    private const int LeaderRun = 32;
+
     private CassetteImage? _tape;
+
+    // Where the tape's leaders start, found by walking its blocks, and the length of tape they were found for.
+    private HashSet<int>? _leaders;
+    private int _leadersLength;
     private int _byteIndex;
     private int _bitIndex;
     private double _phase;
@@ -116,6 +125,7 @@ public sealed class CocoCassette
     private void Load(CassetteImage tape, TapeMode mode)
     {
         _tape = tape;
+        _leaders = null;
         Mode = mode;
         _byteIndex = mode == TapeMode.Recording ? tape.Bytes.Count : 0;
         _bitIndex = 0;
@@ -131,7 +141,34 @@ public sealed class CocoCassette
         Input = true;
     }
 
-    // Each bit is a full cycle, high for its first half.
+    // Where a tape's leaders start: walking it block by block, as Color BASIC reads it (the $55s before a block, its
+    // $3C sync byte, its type and length, then its data and checksum, which are passed over), each run of at least
+    // LeaderRun $55 bytes between blocks, and one at the tape's start. Where a run is not followed by a whole block's
+    // sync byte, the run and the one byte after it are passed over, and the walk goes on from there. A $55 inside a
+    // block is never one.
+    private static HashSet<int> Leaders(IReadOnlyList<byte> bytes)
+    {
+        HashSet<int> leaders = [];
+        int at = 0;
+        while (at < bytes.Count)
+        {
+            int run = at;
+            while (run < bytes.Count && bytes[run] == 0x55) { run++; }
+            if (run - at >= LeaderRun || (at == 0 && run > 0)) { leaders.Add(at); }
+            if (run >= bytes.Count) { break; }
+            if (bytes[run] != 0x3C || run + 2 >= bytes.Count)
+            {
+                at = run + 1;
+                continue;
+            }
+
+            // The sync byte, the type, the length, the data and the checksum.
+            at = run + 3 + bytes[run + 2] + 1;
+        }
+
+        return leaders;
+    }
+
     private void Play(CassetteImage tape, int units)
     {
         IReadOnlyList<byte> bytes = tape.Bytes;
@@ -146,9 +183,13 @@ public sealed class CocoCassette
                     return;
                 }
 
-                bool leaderStarts = _bitIndex == 0
-                    && bytes[_byteIndex] == 0x55
-                    && (_byteIndex == 0 || bytes[_byteIndex - 1] != 0x55);
+                if (_leaders is null || _leadersLength != bytes.Count)
+                {
+                    _leaders = Leaders(bytes);
+                    _leadersLength = bytes.Count;
+                }
+
+                bool leaderStarts = _bitIndex == 0 && _leaders.Contains(_byteIndex);
 
                 if (leaderStarts && !_inGap)
                 {

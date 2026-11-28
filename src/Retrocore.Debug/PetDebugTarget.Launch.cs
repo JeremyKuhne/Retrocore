@@ -4,7 +4,6 @@
 
 using Retrocore.Machines.Commodore;
 using Retrocore.Machines.Devices;
-using Retrocore.Media;
 using Retrocore.Media.Commodore;
 using System.Text.Json.Nodes;
 
@@ -29,7 +28,7 @@ internal sealed partial class PetDebugTarget
     ///   <c>ramKilobytes</c> is 4, 8, 16 or 32, by default 8, or 32 on a 4032; <c>snow</c> shows CPU accesses to video
     ///   RAM during the display (on by default on the 2001, whose static board has it, and off otherwise);
     ///   <c>sound</c> is <c>speaker</c> (the default) or <c>off</c>; <c>cassette1</c>
-    ///   and <c>cassette2</c> put a tape (<c>.tap</c>, <c>.wav</c> or <c>.prg</c>) in each Datasette with PLAY down.
+    ///   and <c>cassette2</c> put a tape (<c>.tap</c>, <c>.wav</c>, <c>.prg</c> or <c>.t64</c>) in each Datasette with PLAY down.
     ///  </para>
     ///  <para>
     ///   <c>diskUnits</c>, <c>diskModel</c> and <c>disks</c> connect 4040 or 2040 dual drives to the IEEE-488 bus and
@@ -117,8 +116,8 @@ internal sealed partial class PetDebugTarget
         }
 
         target.LaunchDisks(args, sdkRoms ? Environment.GetEnvironmentVariable("RETROCORE_PET_ROMS") : directory);
-        if (args.String("cassette1") is { } first) { Insert(machine.Bus.Cassette1, first); }
-        if (args.String("cassette2") is { } second) { Insert(machine.Bus.Cassette2, second); }
+        if (args.String("cassette1") is { } first) { CommodoreTapeMedia.Insert(machine.Bus.Cassette1, first); }
+        if (args.String("cassette2") is { } second) { CommodoreTapeMedia.Insert(machine.Bus.Cassette2, second); }
 
         // Power-up's reset sequence takes seven cycles, after which the kernal's first instruction is next.
         machine.Run(7);
@@ -179,7 +178,7 @@ internal sealed partial class PetDebugTarget
         switch (action)
         {
             case "insert":
-                Insert(deck, args.String("path") ?? throw new ArgumentException("path is required."));
+                CommodoreTapeMedia.Insert(deck, args.String("path") ?? throw new ArgumentException("path is required."));
                 break;
             case "play":
                 deck.Play();
@@ -235,37 +234,6 @@ internal sealed partial class PetDebugTarget
     ///  Gets whether BASIC's screen shows its READY prompt on a line of its own.
     /// </summary>
     internal bool ShowsReady => _machine.ReadTextScreen().Any(line => line.TrimEnd() == "READY.");
-
-    // Puts a tape in with PLAY down: a TAP image or WAV recording, which saves back to its file, or a program file
-    // made into the tape SAVE would write, which saves only as another file. The tape is read before the one in the
-    // Datasette comes out, so a file that cannot be read leaves it in.
-    private static void Insert(CommodoreDatasette deck, string path)
-    {
-        string full = Path.GetFullPath(path);
-        byte[] bytes = File.ReadAllBytes(full);
-        CommodoreTape tape;
-        IImageCodec? codec;
-        string format;
-        if (Path.GetExtension(full).Equals(".prg", StringComparison.OrdinalIgnoreCase))
-        {
-            string name = Path.GetFileNameWithoutExtension(full);
-            tape = CommodoreTapeBuilder.FromPrg(name.Length > 16 ? name[..16] : name, bytes);
-            codec = null;
-            format = "PRG";
-        }
-        else
-        {
-            CommodoreTapeCodec loaded;
-            (tape, loaded) = CommodoreTapeCodec.Load(bytes);
-            codec = loaded;
-            format = loaded.Format;
-        }
-
-        deck.Eject();
-        deck.Insert(tape, full, format);
-        MediaActions.Register(tape, full, codec, bytes);
-        deck.Play();
-    }
 
     // retro/media: the Datasettes' keys and tapes, by device cassette1 or cassette2, and the disk drives' disks, by
     // device disk8-0 for unit 8's drive 0.

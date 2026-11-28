@@ -133,7 +133,7 @@
         },
         "environment": {
           "$ref": "#/definitions/environment",
-          "description": "How the program is loaded and started, and which system calls it may make. Every machine runs bare; each other environment runs on the machines the SDK plan pairs it with. bare, wozmon, dos33, dfs, basic, sos, prodos and level2 build yet."
+          "description": "How the program is loaded and started, and which system calls it may make. Every machine runs bare; each other environment runs on the machines the SDK plan pairs it with. bare, wozmon, dos33, dfs, basic, sos, prodos, level2 and colorbasic build yet."
         },
         "cpu": {
           "$ref": "#/definitions/cpu",
@@ -299,7 +299,7 @@
         "A .COM file under CP/M. The Apple II and IIe with a SoftCard, the TRS-80 Model 4, the Altair and the Kaypro II. Not yet supported.",
         "A Level II SYSTEM tape (CAS) that the ROM's SYSTEM command loads and / starts. The TRS-80 Model I and III.",
         "A /CMD load module. The TRS-80 Model I, III and 4. Not yet supported.",
-        "A DECB .BIN under Color BASIC. The Color Computer. Not yet supported.",
+        "A machine-language file on a cassette (CAS) that Color BASIC's CLOADM loads and EXEC starts. The Color Computer 1, 2 and 3.",
         "A DECB .BIN under Disk BASIC. The Color Computer. Not yet supported."
       ]
     },

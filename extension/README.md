@@ -1227,9 +1227,9 @@ by:
   it) or `off`;
 - `screen`: `green` (the default with BASIC 2), `white` (the default on a `pet2001`)
   or `amber`;
-- `cassette1` and `cassette2`: a `.tap`, `.wav` or `.prg` tape in each Datasette,
-  with PLAY down. A `.prg` goes in as the tape SAVE writes. `fastCassette` (on by
-  default) runs flat out while a cassette motor runs;
+- `cassette1` and `cassette2`: a `.tap`, `.wav`, `.prg` or `.t64` tape in each
+  Datasette, with PLAY down. A `.prg` or the programs in a `.t64` go in as the tape
+  SAVE writes. `fastCassette` (on by default) runs flat out while a cassette motor runs;
 - `diskUnits`: the device numbers of Commodore dual drives on the IEEE-488 bus, 8 to
   15, such as `[8]`, and `diskModel`, `4040` (the default) or `2040`; `disks`: `.d64`,
   `.d67` or `.g64` images for the first unit's drive 0, its drive 1, then the next
@@ -1293,9 +1293,9 @@ cycle counts and `Keeps:` checks. The machine is configured by:
 - `cartridge`: a cartridge in the expansion port, a file or a list of its chips: MAME's
   chip files, named for where they go (such as `game.a0` and `game.20`), a `.prg` at
   its address, or a VICE `.crt`. One that signs itself at `$A000` starts at power-on;
-- `cassette`: a `.tap`, `.wav` or `.prg` tape in the Datasette, with PLAY down. A
-  `.prg` goes in as the tape SAVE writes. `fastCassette` (on by default) runs flat out
-  while the cassette motor runs;
+- `cassette`: a `.tap`, `.wav`, `.prg` or `.t64` tape in the Datasette, with PLAY down.
+  A `.prg` or the programs in a `.t64` go in as the tape SAVE writes. `fastCassette`
+  (on by default) runs flat out while the cassette motor runs;
 - `diskUnits`: the device numbers of drives on the serial bus, 8 to 11, such as `[8]`,
   and `diskModel`, `1541` (the default) or `1540`; `disks`: `.d64` or `.g64` images for
   those drives in the order `diskUnits` lists them (without `diskUnits`, as many drives

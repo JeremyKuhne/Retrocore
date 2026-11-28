@@ -81,6 +81,9 @@ internal sealed partial class DebugSession
             case Trs80Model3DebugTarget { BootDeck: { } deck }:
                 BootLevel2(build, deck, model3: true, bytes, label);
                 return;
+            case CocoDebugTarget coco:
+                BootColorBasic(build, coco.BootDeck, bytes, label);
+                return;
             default:
                 throw new ProjectException($"{target.Project.File}: target {target.Name}: {target.Machine.Id} cannot boot the '{target.Environment}' environment's image yet.");
         }
@@ -147,9 +150,89 @@ internal sealed partial class DebugSession
         RunToEntry(build, limit - used);
     }
 
-    // Boots a TRS-80 from a level2 target's SYSTEM tape in its cassette recorder, as a user would: the Model III's Cass?
-    // answered L, for the tape's 500 baud, MEMORY SIZE? (or MEM SIZE?) with Return, SYSTEM at BASIC's READY, the tape's name at the *?
-    // prompt, and once the program is in memory and the prompt is back, a bare /, which jumps to the tape's entry.
+    // Boots a Color Computer from a colorbasic target's tape in its cassette recorder, as a user would: CLOADM"<NAME>"
+    // at BASIC's OK, then EXEC once the program is in memory, the tape has stopped and OK is back, which jumps to the
+    // address the tape's name file gives, the entry. CLOADM clears the screen as it searches, then shows F and the name
+    // it found at the top, and BASIC's OK below once the file is in.
+    private void BootColorBasic(TargetBuild build, Machines.Coco.CocoCassetteDrive deck, byte[] bytes, string label)
+    {
+        ProjectTarget target = build.Target;
+        MediaActions.KeepReplaced(deck, $"the build's {build.Media.ImageKind} took its place");
+        deck.Play(new Media.Trs80.CassetteImage(bytes), label);
+
+        (int start, byte[] program) = ProjectBuild.Image(build);
+        ForgetBoundaries();
+        long limit = (long)(target.Built?.BootSeconds ?? 0) * Target.ClockHertz;
+        long used = 0;
+        RunUntil(build, () => CocoRowsStarting("OK") == 1, "BASIC's OK prompt", limit, ref used);
+        string name = ColorbasicEnvironment.ProgramName(target);
+        TypeWhenReady(build, $"CLOADM\"{name}\"\r", limit, ref used);
+        MediaSpeed mode = MediaSpeedSettings.Boot(tape: true);
+        long began = Stopwatch.GetTimestamp();
+        ulong before = Target.CycleCount;
+        RunUntil(
+            build,
+            () => Loaded(start, program)
+                && deck.Activity == Machines.Devices.DeviceActivity.Idle
+                && CocoRowsStarting($"F {name}") == 1
+                && CocoRowsStarting("OK") == 1,
+            "the program loaded and BASIC's OK prompt again",
+            limit,
+            ref used,
+            pace: mode == MediaSpeed.Normal ? new ImageBootPace(began, _speed, Target.ClockHertz, used) : default);
+
+        RecordImageLoad(tape: true, mode, deck.Id, skipped: false, before, began);
+        TypeWhenReady(build, "EXEC\r", limit, ref used);
+        RunToEntry(build, limit - used);
+    }
+
+    // Types keys once BASIC has run a quarter of a second at its prompt: BASIC prints OK before it reads the keyboard,
+    // and a key typed at once can be lost, as the first key of CLOADM was at start-up.
+    private void TypeWhenReady(TargetBuild build, string keys, long limit, ref long used)
+    {
+        for (long ready = used + (Target.ClockHertz / 4); used < ready; used++)
+        {
+            if (used >= limit)
+            {
+                ProjectTarget target = build.Target;
+                throw new ProjectException(
+                    $"{target.Project.File}: target {target.Name}: booted from its {build.Media.ImageKind}, the machine did not reach BASIC's keyboard within {target.Built?.BootSeconds} seconds.");
+            }
+
+            Target.StepCycle();
+        }
+
+        foreach (char key in keys) { Target.Key(key); }
+    }
+
+    // How many of the Color Computer's 16 text rows at $0400 start with text: OK, or the F and name CLOADM shows when it
+    // finds the file, rather than the same letters inside a file's name. The VDG shows a character's low six bits,
+    // $00-$1F as @ to _ and $20-$3F as space to ?; this reads normal and inverse characters alike.
+    private int CocoRowsStarting(string text)
+    {
+        const int Video = 0x0400;
+        const int Columns = 32;
+        const int Rows = 16;
+        int count = 0;
+        for (int row = 0; row < Rows; row++)
+        {
+            bool starts = true;
+            for (int column = 0; column < text.Length && starts; column++)
+            {
+                int value = Target.Peek((ushort)(Video + (row * Columns) + column)) & 0x3F;
+                starts = (char)(value < 0x20 ? value + 0x40 : value) == text[column];
+            }
+
+            if (starts) { count++; }
+        }
+
+        return count;
+    }
+
+    // Boots a TRS-80 from a level2 target's SYSTEM tape in its cassette recorder, as a user would: the Model III's
+    // Cass? answered L, for the tape's 500 baud, MEMORY SIZE? (or MEM SIZE?) with Return, SYSTEM at BASIC's READY, the
+    // tape's name at the *? prompt, and once the program is in memory and the prompt is back, a bare /, which jumps to
+    // the tape's entry.
     private void BootLevel2(TargetBuild build, Machines.Trs80.Trs80CassetteDrive deck, bool model3, byte[] bytes, string label)
     {
         ProjectTarget target = build.Target;

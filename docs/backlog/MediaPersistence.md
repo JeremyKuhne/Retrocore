@@ -211,7 +211,7 @@ defaults, including the Disk II's loading every disk locked, once the recovery j
 | **Save as** | Written to a path and format the user picks; the medium then comes from it, with a fresh history. |
 | **Eject**, by the user, and every other detach | [Prepare to detach](#one-way-out-of-a-drive): save, save as, discard (with Undo) or cancel. |
 | **Eject**, by the machine | Snapshotted into the journal before it lets go, and kept under its drive. |
-| **A recording** | A changed tape like any changed disk: written to its file on Save or eject, through the same writer, and kept in the journal at stop or a crash. A file that appeared at its path since the recording started is a conflict. |
+| **A recording** | A changed tape like any changed disk: written to its file on Save, through the same writer, asked about on eject, and kept in the journal at stop or a crash. A file that appeared at its path since the recording started is a conflict. |
 | **Session end** | Nothing is written to images. The journal's last snapshots are the machine's unsaved state ([below](#the-recovery-journal)). |
 | **Checkpoints** | Every 30 seconds while a medium changes, a snapshot goes to the journal, and to the history when it is on. Never to images. |
 | **Write-through** | Later, and separately ([below](#write-through)). |
@@ -1004,9 +1004,10 @@ After the reviews:
      Altair's and Model 100's DAP scripts, which save a recording before its eject.
    - **Left for the next parts.** The machine's own eject is not yet tested through a running machine, as no test
      program ejects a 3.5 disk. A kept disk whose launch image is gone cannot yet be shown or saved while off, as the
-     machine is not built without it. The crash notice still counts a kept recording among "disks", as the language
-     server's list gives only labels. Then built disks (kept in the history once it is built, with a notice), slot 7's device (which cannot be mounted again in a running machine),
-     Retrocore Desktop's journal, and the source-aware default lock.
+     machine is not built without it. The crash notice, and the question before its kept media are discarded, still
+     count a kept recording among "disks", as the language server's list gives only labels. Then built disks (kept in
+     the history once it is built, with a notice), slot 7's device (which cannot be mounted again in a running
+     machine), Retrocore Desktop's journal, and the source-aware default lock.
 5. **The history.** The chunk store with its lock and grace window, thinning to a target, the History rows, Compare,
    the clocks and gears. Done when the *History* tests pass and a disk restores to any version, running or off.
 6. **Machine files.** The `Unsaved\` mirror and machine ids, with [machine files](MachineFiles.md#phases)' fourth

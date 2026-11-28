@@ -189,7 +189,7 @@ try {
     await assert.rejects(request("retro/media", { device: "cassette", action: "eject" }), /tape in Cassette has changes not saved/);
     const saved = await request("retro/device", { id: "cassette", action: "save", supportsRetrocoreMedia: 1 });
     assert.equal(saved.outcome, "saved", JSON.stringify(saved));
-    assert.equal(saved.notes?.length, 1, "a WAV file's rounding is a note, not a loss");
+    assert.equal(saved.notes?.length, 1, "moving each change of level to its WAV sample is a note, not a loss");
     await request("retro/media", { device: "cassette", action: "eject" });
     assert.ok(readFileSync(tape).length > 1000, "the recording is saved");
 

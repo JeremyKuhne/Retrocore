@@ -19,7 +19,7 @@ namespace Retrocore.Machines.Trs80Model100;
 ///  </para>
 ///  <para>
 ///   A tape is a medium: what the ROM records onto it is a change, saved like a disk's. Its snapshot holds the level
-///   and the half cycles themselves, as a WAV file rounds each to its samples.
+///   and the half cycles themselves, as a WAV file moves each change of level to its sample.
 ///  </para>
 /// </remarks>
 public sealed class Trs80Model100Tape : IMedium

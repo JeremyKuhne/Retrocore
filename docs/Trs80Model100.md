@@ -200,7 +200,8 @@ yet; both depend on symbol addresses from an SDK source of the ROM.
   data's `trs80m100-roms` folder, and are inconclusive without them.
 - `Trs80Model100DebugTargetTests`: the launch's messages for a missing ROM, the RAM image across sessions, cold
   starts, a mismatched size and failed saves, the launch's files on the menu, a tape recorded and played through the
-  cassette's actions, and a recording that cannot be written staying in the recorder.
+  cassette's actions, a recording as a changed tape that an eject holds back until it is saved, and the session's end
+  writing the RAM image and not the recording.
 - `Model100BasicTests`: the tokenizer against the bytes the ROM stored for typed lines (pinned, so they need no ROM),
   listings, renumbering, and with the ROM, its keyword table, typed lines read back, and a program written into RAM
   that BASIC runs.

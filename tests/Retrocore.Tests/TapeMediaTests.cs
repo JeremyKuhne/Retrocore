@@ -234,8 +234,8 @@ public sealed class TapeMediaTests
 
     /// <summary>
     ///  An Altair recording stopped and crashed with: the bytes the 88-ACR sent are a changed tape, kept at a stop and
-    ///  after a crash, put back in the next launch's recorder to play, and saved to the recording's TAP file. A failed
-    ///  write leaves it changed, and a file written at its path meanwhile is a conflict.
+    ///  after a crash, put back in the next launch's recorder to play, and saved to the recording's TAP file. A
+    ///  read-only file is refused and leaves it changed, and a file written at its path meanwhile is a conflict.
     /// </summary>
     [TestMethod]
     public void AnAltairRecordingIsAChangedTape()
@@ -285,8 +285,8 @@ public sealed class TapeMediaTests
     }
 
     /// <summary>
-    ///  An Apple-1 recording is kept as its half cycles, exactly, and saves as a WAV file with a note that it rounds
-    ///  them, which leaves it saved, as the ACI reads it the same.
+    ///  An Apple-1 recording is kept as its half cycles, exactly, and saves as a WAV file with a note that each change of
+    ///  level moves to its sample, which leaves it saved, as the ACI reads it the same.
     /// </summary>
     [TestMethod]
     public void AnApple1RecordingIsKeptAsItsHalfCycles()

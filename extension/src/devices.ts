@@ -958,7 +958,7 @@ export function registerDevices(context: vscode.ExtensionContext, basic: BasicPr
                     // An image changed on disk since the disk was read can also be read again in its place.
                     const own = body.baseline && body.current && current.ejected === undefined && typeof current.path !== "string"
                         && device?.operations.includes("insert") === true;
-                    const question = conflictQuestion(body.path ? path.basename(body.path) : file, name, body.baseline, body.current);
+                    const question = conflictQuestion(body.path ? path.basename(body.path) : file, name, body.baseline, body.current, undefined, medium);
                     const choice = await ask(own ? { ...question, buttons: [...question.buttons, "Revert to Image"] } : question);
                     if (choice !== undefined && choice === question.buttons[0]) {
                         current = { ...current, overwrite: { sha256: body.current?.sha256 ?? null }, generation };
@@ -979,7 +979,7 @@ export function registerDevices(context: vscode.ExtensionContext, basic: BasicPr
                     return offered !== undefined && choice === `Save as ${offered.toUpperCase()}...` && await saveAsNew(on, id, generation, current, offered);
                 }
                 case "readOnly": {
-                    const choice = await ask(readOnlyQuestion(target ? path.basename(target) : undefined, name, device?.media?.format, body.reason));
+                    const choice = await ask(readOnlyQuestion(target ? path.basename(target) : undefined, name, device?.media?.format, body.reason, medium));
                     // The host makes the file writable as it saves, for this mount and only over the revision the
                     // save may replace, so an answer left open while the disk or file changed alters nothing.
                     if (choice === "Make Writable and Save") {
@@ -1034,7 +1034,7 @@ export function registerDevices(context: vscode.ExtensionContext, basic: BasicPr
         const file = path.basename(device?.media?.source?.path ?? device?.media?.label ?? "its image");
         const differences = device?.media?.changed ? await differencesOf(on, id) : undefined;
         // Off, nothing puts the changes back, so they are let go only when the person says so.
-        if (!on.undoes && device?.media?.changed && await ask(letGoQuestion(device.name, "revert", file)) !== "Revert") return false;
+        if (!on.undoes && device?.media?.changed && await ask(letGoQuestion(device.name, "revert", file, mediumOf(device))) !== "Revert") return false;
         try {
             if (!on.still()) return false;
             const body = await on.request("device", { id, action: "revert", generation, supportsRetrocoreMedia: 1 });

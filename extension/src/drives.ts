@@ -259,8 +259,9 @@ export function tooltipLines(device: Device, now: Date = new Date(), changes?: s
             lines.push(source.current === null ? "Image deleted since it was read"
                 : `Image changed on disk: ${source.current ? when(source.current.written, now) : "since it was read"}${read}`);
         }
-        if (source?.readOnly === "file") lines.push("Read-only file: Save As saves the disk under another name");
-        else if (source?.readOnly === "format" || (source?.kind === "image" && !source.saves)) lines.push(`${media.format} can only be read: Save As saves the disk as another image`);
+        const medium = form(device) === "tape" ? "tape" : "disk";
+        if (source?.readOnly === "file") lines.push(`Read-only file: Save As saves the ${medium} under another name`);
+        else if (source?.readOnly === "format" || (source?.kind === "image" && !source.saves)) lines.push(`${media.format} can only be read: Save As saves the ${medium} as another image`);
         const recovery = recoveryLine(media, now);
         if (recovery !== undefined) lines.push(recovery);
     }
@@ -317,13 +318,13 @@ export function lossyQuestion(file: string, drive: string, format: string, losse
     };
 }
 
-/** Asks about an image that changed or went since the disk matched it, or since the person chose it. */
+/** Asks about an image that changed or went since the disk or tape matched it, or since the person chose it. */
 export function conflictQuestion(file: string, drive: string, baseline: Revision | null | undefined, current: Revision | null | undefined,
-    now: Date = new Date()): Question {
+    now: Date = new Date(), medium: "disk" | "tape" = "disk"): Question {
     if (!current) {
         return {
             message: `${file} was deleted after ${drive} read it`,
-            detail: "Saving writes the disk there again.",
+            detail: `Saving writes the ${medium} there again.`,
             buttons: ["Save There Again", "Save As..."]
         };
     }
@@ -342,32 +343,32 @@ export function conflictQuestion(file: string, drive: string, baseline: Revision
     };
 }
 
-/** Says why a disk cannot be saved where it was asked, and what can be done instead. */
+/** Says why a disk or tape cannot be saved where it was asked, and what can be done instead. */
 export function readOnlyQuestion(file: string | undefined, drive: string, format: string | undefined,
-    reason: "noImage" | "format" | "file" | "access" | undefined): Question {
+    reason: "noImage" | "format" | "file" | "access" | undefined, medium: "disk" | "tape" = "disk"): Question {
     switch (reason) {
         case "file":
             return {
                 message: `${file ?? "The image"} is a read-only file`,
-                detail: `Save the disk in ${drive} under another name, or make the file writable and save over it.`,
+                detail: `Save the ${medium} in ${drive} under another name, or make the file writable and save over it.`,
                 buttons: ["Save As...", "Make Writable and Save"]
             };
         case "format":
             return {
                 message: `${file ?? "The image"} is ${format ?? "an image"} Retrocore can only read`,
-                detail: `Save the disk in ${drive} as another image.`,
+                detail: `Save the ${medium} in ${drive} as another image.`,
                 buttons: ["Save As..."]
             };
         case "noImage":
             return {
-                message: `The disk in ${drive} has no image of its own`,
+                message: `The ${medium} in ${drive} has no image of its own`,
                 detail: "Save it as an image to keep it.",
                 buttons: ["Save As..."]
             };
         default:
             return {
                 message: `${file ?? "The image"} can't be written`,
-                detail: `Save the disk in ${drive} somewhere else.`,
+                detail: `Save the ${medium} in ${drive} somewhere else.`,
                 buttons: ["Save As..."]
             };
     }
@@ -465,10 +466,10 @@ export function discardKeptQuestion(machine: string, files: string[]): Question 
  * The question before a machine that is off lets a changed disk go, which nothing can put back: reverting the disk in
  * a drive to its image, or discarding one the machine ejected.
  */
-export function letGoQuestion(drive: string, action: "revert" | "discard", file: string): Question {
+export function letGoQuestion(drive: string, action: "revert" | "discard", file: string, medium: "disk" | "tape" = "disk"): Question {
     const name = path.basename(file) || file;
     return action === "revert"
-        ? { message: `Revert the disk in ${drive} to ${name}?`, detail: "The machine is off, so its changes cannot be put back with Undo.", buttons: ["Revert"] }
+        ? { message: `Revert the ${medium} in ${drive} to ${name}?`, detail: "The machine is off, so its changes cannot be put back with Undo.", buttons: ["Revert"] }
         : { message: `Discard the disk ejected from ${drive}?`, detail: `${name}. The machine is off, so its changes cannot be put back with Undo.`, buttons: ["Discard"] };
 }
 

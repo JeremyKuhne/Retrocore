@@ -101,7 +101,8 @@ internal sealed class MachinePane : ScrollViewer
 
         _machine.SetMessage(_session.Problems.Count == 0 ? null : $"{_session.Name} could not be fully set up: {string.Join(" ", _session.Problems)}");
 
-        // The badge counts the disks changed in the machine and not yet saved to their images, in drives or ejected.
+        // The badge counts the disks and tapes changed in the machine and not yet saved to their images, in drives or
+        // ejected.
         int ejected = _session.Host.UnsavedEjected().Count;
         int changed = ejected + devices.Count(device => device.Media?.Changed == true && device.Can(MediaOperations.Save));
         _drives.SetBadge(changed, $"{changed} {(changed == 1 ? "disk or tape" : "disks or tapes")} changed and not saved to {(changed == 1 ? "its image" : "their images")}");
@@ -495,7 +496,7 @@ internal sealed class MachinePane : ScrollViewer
             string file = Path.GetFileName(device.Media?.Label) ?? "its image";
             string? answer = saved.Contains(mount)
                 ? await _window.Ask(
-                    $"{file} cannot hold all of the disk in {device.Info.Name}, so it still has changes. Let them go before {what}?",
+                    $"{file} cannot hold all of the {Medium(device)} in {device.Info.Name}, so it still has changes. Let them go before {what}?",
                     ["Discard"])
                 : await _window.Ask($"The {Medium(device)} in {device.Info.Name} has changes not saved to {file}. Save them before {what}?", ["Save", "Discard"]);
 
@@ -795,8 +796,8 @@ internal sealed class MachinePane : ScrollViewer
         }
     }
 
-    // The files Record offers: those the deck saves its tapes as, or, on a deck that writes the recording itself, the
-    // ones it takes. An Atari's .xex goes in but is not written.
+    // The files Record offers: those the deck saves its tapes as, or the ones it takes for a deck that saves none. An
+    // Atari's .xex goes in but is not written.
     private static IReadOnlyList<string> RecordFormats(DeviceState device) =>
         device.Info.SaveFormats.Count > 0 ? device.Info.SaveFormats : device.Info.Formats;
 
@@ -834,7 +835,7 @@ internal sealed class MachinePane : ScrollViewer
             Title = $"Save the {Medium(device)} in {device.Info.Name} as",
             SuggestedFileName = Path.GetFileName(label),
             SuggestedStartLocation = folder,
-            FileTypeChoices = Filters("Disk images", device.Info.SaveFormats),
+            FileTypeChoices = Filters(device.Kind == DeviceKind.TapeDrive ? "Tape images" : "Disk images", device.Info.SaveFormats),
         });
 
         if (file?.TryGetLocalPath() is not { } path) { return false; }

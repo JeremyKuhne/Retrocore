@@ -184,7 +184,7 @@ internal static partial class MediaActions
         HashSet<string> filled = [];
         foreach (JsonObject disk in journal.Kept)
         {
-            string label = "a disk";
+            string label = "a disk or tape";
             try
             {
                 // Everything the entry says is read and checked before the disk goes anywhere, so a bad entry leaves
@@ -215,10 +215,10 @@ internal static partial class MediaActions
                 }
                 else
                 {
-                    slot = device as IMediumSlot ?? throw new InvalidDataException($"{device.Info.Name} holds no disk.");
+                    slot = device as IMediumSlot ?? throw new InvalidDataException($"{device.Info.Name} holds no {Medium(device)}.");
                     if (filled.Contains(drive))
                     {
-                        throw new InvalidDataException($"Another disk kept for {device.Info.Name} went back in it.");
+                        throw new InvalidDataException($"Another {Medium(device)} kept for {device.Info.Name} went back in it.");
                     }
                 }
 

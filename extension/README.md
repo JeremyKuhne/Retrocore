@@ -1042,7 +1042,8 @@ The panel shows the 64x16 display (32 columns in wide mode) and takes keys: arro
 **Home** for CLEAR, **Escape** for BREAK and **Ctrl+F12** or **Ctrl+Break** for the reset button,
 which is also **Reset** on the key bar. The reset button boots a disk when there is
 a disk controller, and otherwise restarts BASIC with the program kept. **TRS-80: Insert Cassette…**, **Record
-Cassette…** and **Eject Cassette** handle tapes (a recording is a changed tape: **Save** writes it, and an eject asks first),
+Cassette…** and **Eject Cassette** handle tapes (a recording is a changed tape, which **Save** in the Drives view writes;
+these commands refuse to take one out that is not saved),
 and **TRS-80: Insert Disk…** and **Eject Disk…** handle drives 0-3, through the
 debug host's `retro/media` request.
 

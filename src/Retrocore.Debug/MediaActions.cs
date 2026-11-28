@@ -153,7 +153,7 @@ internal static partial class MediaActions
         if (args.Int("generation") is { } generation && device is IMediumSlot slot && slot.MountGeneration != generation)
         {
             throw new InvalidOperationException(
-                $"Another disk went in {device.Info.Name} since you were asked about it, so nothing was done.");
+                $"Another {Medium(device)} went in {device.Info.Name} since you were asked about it, so nothing was done.");
         }
 
         if (args.String("ejected") is { } ejected)

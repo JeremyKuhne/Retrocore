@@ -19,7 +19,7 @@ namespace Retrocore.Machines.Apple1;
 ///  </para>
 ///  <para>
 ///   A tape is a medium: what the W command records onto it is a change, saved like a disk's. Its snapshot holds the
-///   half cycles themselves, as no image format keeps them exactly; a WAV file rounds each to its samples.
+///   half cycles themselves, as no image format keeps them exactly; a WAV file moves each change of level to its sample.
 ///  </para>
 /// </remarks>
 public sealed class Apple1Tape : IMedium

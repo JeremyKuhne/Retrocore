@@ -16,8 +16,8 @@ namespace Retrocore.Debug;
 ///   The configuration is <c>{ "cards": { "4": "mockingboard", "5": "diskII16", ... }, "media": { "disk1":
 ///   { "path": "...", "writeProtected": false }, "disk2": null } }</c>. A drive given as null is empty. Media the
 ///   host cannot insert again, such as a disk a DOS launch built, is left out, so the launch's own stays; a tape being
-///   recorded is its file, which goes back in to play. Slot 7's image, which comes from the launch, is kept too; the launch takes it from there
-///   (<see cref="LaunchMedia"/>), and only its lock is restored here.
+///   recorded is its file, which goes back in to play. Slot 7's image, which comes from the launch, is kept too; the
+///   launch takes it from there (<see cref="LaunchMedia"/>), and only its lock is restored here.
 ///  </para>
 ///  <para>
 ///   Hardware with switches adds <c>"settings": { "slot4": { "translation": true, "refresh": false } }</c>, by

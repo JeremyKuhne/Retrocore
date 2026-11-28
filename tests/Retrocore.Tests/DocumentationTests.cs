@@ -663,6 +663,58 @@ public class DocumentationTests
     }
 
     /// <summary>
+    ///  An <c>Entry:</c> meaning's keeps clause names items as <c>Keeps:</c> does, with notes in parentheses, split
+    ///  at commas and, unlike <c>Keeps:</c>, "and" outside them, in any case and with a final period; the check
+    ///  reports an item it does not know.
+    /// </summary>
+    [TestMethod]
+    public void EntryKeepsClausesAreRead()
+    {
+        DocumentationSet set = Set("""
+            ;; Moves a byte.
+            ;; Keeps: X, Y
+            ;; Entry:
+            ;;   Later = skips the first; Keeps X (the index) And Y.
+            ;;   Last = skips both; keeps nothing
+            ;;   Wrong = skips all; keeps the carry
+            ;;   Nothing = skips all; keeps none
+            ;;   Section = skips all; keeps: A
+            ROUTINE:
+                nop
+            Later:
+                nop
+            Last:
+                nop
+            Wrong:
+            Nothing:
+            Section:
+                rts
+            """);
+
+        DocumentationTopic topic = set.Find("ROUTINE") ?? throw new AssertFailedException("ROUTINE");
+        List<DocumentationEntry> entries = [.. topic.SectionsNamed("Entry").SelectMany(section => section.Entries)];
+        entries[0].Keeps.Should().Equal("X", "Y");
+        entries[1].Keeps.Should().BeEmpty();
+        entries[2].Keeps.Should().Equal("the carry");
+        new DocumentationEntry("Plain", "skips the first", 0).Keeps.Should().BeNull();
+        new DocumentationEntry("Noted", "skips; keeps X (the index, or the count) and Y (and so on)", 0).Keeps
+            .Should().Equal("X", "Y");
+
+        // A note left open keeps the rest as one item, which the check reports; a stray ")" closes nothing.
+        new DocumentationEntry("Open", "skips; keeps X (the index", 0).Keeps.Should().Equal("X (the index");
+        new DocumentationEntry("Stray", "skips; keeps X), Y", 0).Keeps.Should().Equal("X)", "Y");
+
+        List<string> messages = [.. new DocumentationResolver(set).Check().Select(diagnostic => diagnostic.Message)];
+        messages.Should().Equal(
+            "Entry: 'Wrong' keeps 'the carry', which is not a register, flag or symbol.",
+            "Entry: 'Section' has '; keeps' not followed by items, as '; keeps X, Y'.");
+
+        // Whether a label's own comment has a contract follows the sections that apply.
+        topic.HasContract(_ => true).Should().BeTrue();
+        topic.HasContract(_ => false).Should().BeFalse();
+    }
+
+    /// <summary>
     ///  Each CPU's flags have words and a description, which hover text shows with the CPU's own letter.
     /// </summary>
     [TestMethod]

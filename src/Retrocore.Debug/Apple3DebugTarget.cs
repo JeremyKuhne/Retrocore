@@ -42,6 +42,7 @@ internal sealed partial class Apple3DebugTarget : IZ80CardHost
     private DebugAudioSink? _sound;
     private bool _resetPending;
     private SosDriverModules? _sosDrivers;
+    private bool _fastIo;
 
     /// <summary>
     ///  Creates the target for a launched Apple III.
@@ -472,7 +473,7 @@ internal sealed partial class Apple3DebugTarget : IZ80CardHost
         {
             AssemblyResult sos = Apple3SdkModules.AssembleSosKernel(kernel);
             debug.Add(new SourceMapModule(sos, area: null));
-            _sosDrivers = new SosDriverModules(_machine.Bus, sos, Path.Join(roms, "Sos", "Drivers"));
+            _sosDrivers = new SosDriverModules(this, sos, Path.Join(roms, "Sos", "Drivers"));
         }
 
         // Business BASIC runs where SOS loaded it, at $5200 in the bank the window shows while it runs.
@@ -501,13 +502,47 @@ internal sealed partial class Apple3DebugTarget : IZ80CardHost
     }
 
     /// <inheritdoc/>
+    public bool SupportsGuestInput => true;
+
+    /// <inheritdoc/>
+    public int? PendingKeys => _machine.Bus.KeysWaiting;
+
+    /// <inheritdoc/>
+    public GuestInputPath? WaitingForInput() => _sosDrivers?.Console?.Waiting();
+
+    /// <summary>
+    ///  Gets whether to discover drivers now rather than waiting for the host's periodic display update.
+    /// </summary>
+    internal bool MayBeUnmappedConsoleWait
+    {
+        get
+        {
+            // This branch shape only requests a scan; it does not establish keyboard demand.
+            ushort pc = ProgramCounter;
+            return _sosDrivers is { Console: null }
+                && pc is >= 0x2000 and <= 0x9FFB
+                && Peek(pc) == 0xAD
+                && Peek((ushort)(pc + 3)) == 0xF0
+                && Peek((ushort)(pc + 4)) == 0xFB;
+        }
+    }
+
+    /// <inheritdoc/>
     /// <remarks>
     ///  <para>
     ///   About 30 ms a key and 300 ms after a line, at the III's 2 MHz: SOS takes each key into its type-ahead buffer
     ///   at once, which overflows if a pasted program comes faster than Apple III Pascal's Editor reads it.
     ///  </para>
     /// </remarks>
-    public (ulong Key, ulong Line)? TypingPace => (60_000, 600_000);
+    public (ulong Key, ulong Line)? TypingPace => _fastIo ? (30_000UL, 600_000UL) : (60_000UL, 600_000UL);
+
+    /// <inheritdoc/>
+    public bool SetFastIo(bool enabled)
+    {
+        _fastIo = enabled;
+        _machine.Bus.FastTyping = enabled;
+        return true;
+    }
 
     /// <inheritdoc/>
     /// <remarks>
@@ -617,6 +652,20 @@ internal sealed partial class Apple3DebugTarget : IZ80CardHost
             ["screens"] = Screens.ToJsonArray(),
             ["running"] = running
         };
+    }
+
+    /// <inheritdoc/>
+    public DebugTextSurface? ReadTextSurface(string surface)
+    {
+        if (surface is not ("visibleText" or "textMemory")) { return null; }
+        Apple3Bus bus = _machine.Bus;
+        bool graphics = (bus.VideoSwitches & 8) != 0;
+        int columns = !graphics && (bus.VideoSwitches & 2) != 0 ? 80 : 40;
+        bool blanked = (bus.Environment & Apple3Bus.VideoEnable) == 0;
+        string mode = blanked ? "blank" : graphics ? "graphics" : "text";
+        string[] rows = surface == "textMemory" || mode == "text" ? _machine.ReadTextScreen() : [];
+        return new(DebugMachines.Apple3, "Apple III", mode, columns, 24, 0, rows,
+            bus.AppleIIMode ? "apple3Apple2CodeConvention" : "apple3SosCodeConvention");
     }
 
     /// <inheritdoc/>
@@ -807,7 +856,8 @@ internal sealed partial class Apple3DebugTarget : IZ80CardHost
         return problems;
     }
 
-    private JsonObject VideoState() => new JsonObject
+    /// <inheritdoc/>
+    public JsonObject VideoState() => new JsonObject
     {
         ["width"] = _machine.Video.Width,
         ["height"] = _machine.Video.Height,

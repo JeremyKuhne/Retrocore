@@ -230,14 +230,14 @@ public sealed class ProjectBuildTests
     public void UnsupportedTargetsAndMissingEntriesFail()
     {
         Write("retrocore.json", """
-            { "sdk": "1", "cpu": "6502", "sources": ["main.s"], "entry": "GO", "targets": {
-                "dos": { "machine": "apple2-iiplus", "environment": "prodos" },
-                "bare": { "machine": "apple2-iiplus", "environment": "bare" } } }
+            { "sdk": "1", "cpu": "z80", "sources": ["main.s"], "entry": "GO", "targets": {
+                "dos": { "machine": "trs80-model3", "environment": "trsdos" },
+                "bare": { "machine": "trs80-model3", "environment": "bare" } } }
             """);
 
-        Write("main.s", "rts");
+        Write("main.s", "ret");
         RetrocoreProject project = RetrocoreProject.Load(_folder);
-        Error(() => ProjectBuild.Build(project.Target("dos"))).Should().EndWith("the 'prodos' environment is not yet supported; only 'bare', 'wozmon', 'dos33', 'dfs', 'basic' and 'sos' build.");
+        Error(() => ProjectBuild.Build(project.Target("dos"))).Should().EndWith("the 'trsdos' environment is not yet supported; only 'bare', 'wozmon', 'dos33', 'dfs', 'basic', 'sos', 'prodos' and 'level2' build.");
         Error(() => ProjectBuild.Build(project.Target("bare"))).Should().EndWith("target bare: the entry 'GO' is not an address the sources define.");
         Directory.Exists(Path.Join(_folder, "artifacts")).Should().BeFalse();
     }

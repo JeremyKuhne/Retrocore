@@ -3,6 +3,7 @@
 // See LICENSE file in the project root for full license information
 
 using Retrocore.Assembler;
+using Retrocore.Debug;
 using Retrocore.Documentation;
 
 namespace Retrocore.Tests;
@@ -116,6 +117,203 @@ public class ContractAnalysisTests
     }
 
     /// <summary>
+    ///  An <c>Entry:</c> whose meaning ends in <c>; keeps ...</c> promises that from there, in place of the
+    ///  routine's <c>Keeps:</c>: an entry that skips the save keeps less, and is checked for what it says.
+    /// </summary>
+    [TestMethod]
+    public void EntriesKeepWhatTheirClauseSays()
+    {
+        // Narrower than Keeps: and checked for what it says: from Change A is changed and X is kept, as its clause
+        // says, but Y, which the clause names, is not.
+        const string Wrong = """
+            ;; Returns, or from Change clears A and Y first.
+            ;; Keeps: A, X, Y
+            ;; Entry: Change = clears A and Y; keeps X, Y
+            Saver:
+                rts
+            Change:
+                lda #0
+                ldy #0
+                rts
+            """;
+
+        (List<string> findings, _, _) = Check(Wrong, "Mos6502");
+        findings.Should().Equal("Saver ($1000) documents that its entry Change keeps Y, but Y is changed by the instruction at $1003.");
+
+        const string Right = """
+            ;; Returns, or from Change clears X first.
+            ;; Keeps: X
+            ;; Entry: Change = clears X; keeps nothing
+            Saver:
+                rts
+            Change:
+                ldx #0
+                rts
+            """;
+
+        (findings, int count, _) = Check(Right, "Mos6502");
+        findings.Should().BeEmpty();
+        count.Should().Be(1);
+
+        // An entry with a comment of its own is a routine of its own: the routine's Keeps: does not reach it.
+        const string Own = """
+            ;; Returns.
+            ;; Keeps: X
+            ;; Entry: Clear = clears X first
+            Saver:
+                rts
+
+            ;; Clears X and returns.
+            Clear:
+                ldx #0
+                rts
+            """;
+
+        (findings, _, _) = Check(Own, "Mos6502");
+        findings.Should().BeEmpty();
+
+        // One with a contract of its own is checked for that. TYA copies the value LDY #0 made, so A is changed
+        // there.
+        const string OwnContract = """
+            ;; Returns.
+            ;; Keeps: X
+            ;; Entry: Clear = clears X and Y first
+            Saver:
+                rts
+
+            ;; Clears X and Y and returns.
+            ;; Keeps: A
+            Clear:
+                ldx #0
+                ldy #0
+                tya
+                rts
+            """;
+
+        (findings, _, _) = Check(OwnContract, "Mos6502");
+        findings.Should().Equal("Clear ($1001) documents Keeps: A, but A is changed by the instruction at $1003.");
+
+        // A label with no comment at the same address as an entry with a clause takes the clause.
+        const string Shared = """
+            ;; Returns, or from Later or Clause clears X.
+            ;; Keeps: X
+            ;; Entry:
+            ;;   Later = clears X
+            ;;   Clause = clears X; keeps nothing
+            Saver:
+                rts
+            Later:
+            Clause:
+                ldx #0
+                rts
+            """;
+
+        (findings, _, _) = Check(Shared, "Mos6502");
+        findings.Should().BeEmpty();
+        Dictionary<ushort, DebugContract> contracts = DebugContracts(Shared);
+        contracts.Should().NotContainKey(0x1001, "the debugger checks nothing at the shared address either");
+        contracts[0x1000].Registers.Should().Equal("X");
+    }
+
+    /// <summary>
+    ///  A routine's own contract at its start wins over another routine's entry there, in the check and the
+    ///  debugger alike, though the entry's routine comes first: Target keeps A as it says, though Saver lists the
+    ///  label at its address as an entry, plain or with a clause; and Target's Keeps: none holds its address too.
+    /// </summary>
+    [TestMethod]
+    public void RoutinesWinOverOtherRoutinesEntries()
+    {
+        foreach (string entry in (string[])["Alias = clears A", "Alias = clears A; keeps nothing"])
+        {
+            string source = $"""
+                ;; Returns, or from Alias clears A.
+                ;; Keeps: X
+                ;; Entry: {entry}
+                Saver:
+                    rts
+
+                ;; Clears A.
+                ;; Keeps: A
+                Target:
+                Alias:
+                    lda #0
+                    rts
+                """;
+
+            (List<string> findings, _, _) = Check(source, "Mos6502");
+            findings.Should().Equal("Target ($1001) documents Keeps: A, but A is changed by the instruction at $1001.");
+            DebugContracts(source)[0x1001].Registers.Should().Equal("A");
+        }
+
+        const string None = """
+            ;; Returns.
+            ;; Keeps: X
+            ;; Entry: Alias = clears A; keeps A
+            Saver:
+                rts
+
+            ;; Clears A.
+            ;; Keeps: none
+            Target:
+            Alias:
+                lda #0
+                rts
+            """;
+
+        (List<string> none, _, _) = Check(None, "Mos6502");
+        none.Should().BeEmpty();
+        DebugContracts(None).Should().NotContainKey(0x1001, "Target promises nothing, and holds its address");
+
+        // A keeps clause wins over an earlier routine's plain entry at the same address.
+        const string Clause = """
+            ;; Returns, or from Alias clears A.
+            ;; Keeps: none
+            ;; Entry: Alias = clears A
+            First:
+                rts
+
+            ;; Returns, or from Alias clears A.
+            ;; Keeps: X
+            ;; Entry: Alias = clears A; keeps A
+            Second:
+                rts
+            Alias:
+                lda #0
+                rts
+            """;
+
+        // A label's own Keeps: in a branch the build leaves out leaves the clause to apply. (The parser keeps only the
+        // assembled branch's comment, so this does not reach the sections' conditions, which HasContract follows.)
+        const string Conditional = """
+            MODEL = 3
+
+            ;; Returns, or from Alias clears A.
+            ;; Keeps: X
+            ;; Entry: Alias = clears A; keeps A
+            Saver:
+                rts
+
+            .if MODEL = 1
+            ;; Clears A.
+            ;; Keeps: A
+            .else
+            ;; Clears A.
+            .endif
+            Alias:
+                lda #0
+                rts
+            """;
+
+        (List<string> conditional, _, _) = Check(Conditional, "Mos6502");
+        conditional.Should().Equal("Saver ($1000) documents that its entry Alias keeps A, but A is changed by the instruction at $1001.");
+        DebugContracts(Conditional)[0x1001].Registers.Should().Equal("A");
+
+        (List<string> clause, _, _) = Check(Clause, "Mos6502");
+        clause.Should().Equal("Second ($1001) documents that its entry Alias keeps A, but A is changed by the instruction at $1002.");
+        DebugContracts(Clause)[0x1002].Registers.Should().Equal("A");
+    }
+
+    /// <summary>
     ///  A path the analysis cannot follow, such as an indirect jump, leaves the routine unchecked, not wrong, even
     ///  where its other paths return.
     /// </summary>
@@ -189,6 +387,21 @@ public class ContractAnalysisTests
 
         Check(M6809, "M6809").Findings.Should().Equal(
             "Saver ($1000) documents Keeps: B, but B is changed by the instruction at $1004.");
+    }
+
+    // The debugger's contracts for a 6502 source, by address.
+    private static Dictionary<ushort, DebugContract> DebugContracts(string source)
+    {
+        string path = Path.Join(AppContext.BaseDirectory, "ContractAnalysis.Debugger.asm");
+        AssemblyResult result = new Retrocore.Assembler.Assembler().Assemble(
+            new AssemblySource(source, path),
+            new AssemblyOptions("Mos6502", 0x1000, 0x100));
+
+        result.Diagnostics.Should().BeEmpty();
+        DocumentationSet documentation = DocumentationSet.Create([DocumentationParser.Parse(source, path)], result);
+        long? Symbol(string name) => result.Symbols.TryGetValue(name, out long value) ? value : null;
+        return Retrocore.Debug.DebugContracts.Build(
+            new DocumentationResolver(documentation), model: "", new DebugRegisters(M6502Isa.Description), Symbol);
     }
 
     private static (List<string> Findings, int Checked, IReadOnlyList<string> Skipped) Check(string source, string cpu)

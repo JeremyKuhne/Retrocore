@@ -6,10 +6,10 @@
 // breakpoint in its Print routine with the 8080 call stack and registers, steps out to the caller, shows the terminal's
 // frames and hardware, clears the screen while stopped, echoes typed keys, stops on a write to the serial data port and
 // where the machine resets, and holds a breakpoint after HLT until a key's interrupt wakes the 8080. Then the 88-ACR's
-// cassette records a tape through retro/media, which saves it on eject, and plays it back from the launch's cassette
-// option. The Altair has no ROM, so nothing is needed but the repository; with 8K BASIC's image in the external test
-// data (RETROCORE_ALTAIR_BASIC, or the cache's altair-basic folder), it also runs BASIC on the terminal, and with
-// MITS's 4K BASIC 3.2 tape (its tapes folder) it loads BASIC through the bootstrap and the 88-ACR.
+// cassette records a tape through retro/media, a changed tape that eject holds back until it is saved, and plays it
+// back from the launch's cassette option. The Altair has no ROM, so nothing is needed but the repository; with 8K
+// BASIC's image in the external test data (RETROCORE_ALTAIR_BASIC, or the cache's altair-basic folder), it also runs
+// BASIC on the terminal, and with MITS's 4K BASIC 3.2 tape (its tapes folder) it loads BASIC through the bootstrap and the 88-ACR.
 
 import { resolve, join } from "node:path";
 import { writeFileSync, existsSync, unlinkSync, readFileSync, mkdirSync, rmSync } from "node:fs";
@@ -291,7 +291,8 @@ try {
     assert.equal((await request("stackTrace", { threadId: 1 })).stackFrames[0].line, after);
     assert.equal((await request("evaluate", { expression: "B" })).result, "$4B (75)", "the handler read the key");
 
-    // The 88-ACR records onto a blank tape, which eject saves.
+    // The 88-ACR records onto a tape whose file is written blank as the recording starts. The recording is a changed
+    // tape, which an eject holds back until it is saved.
     phase("recording a tape");
     writeFileSync(source, recording.join("\n"));
     events.length = 0;
@@ -304,6 +305,7 @@ try {
     drop("retro/devices");
     let media = await request("retro/media", { device: "cassette", action: "record", path: tape });
     assert.equal(media.cassette.recording, true);
+    assert.equal(readFileSync(tape).length, 0, "the recording's file is written blank");
     // Retro Devices hears of the new tape while the machine is stopped.
     const devices = await event("retro/devices");
     assert.equal(devices.devices.find(device => device.id === "cassette").media?.label, resolve(tape));
@@ -324,9 +326,12 @@ try {
     await new Promise(resolve => setTimeout(resolve, 1500));
     await request("pause", { threadId: 1 });
     await event("stopped");
+    await assert.rejects(request("retro/media", { device: "cassette", action: "eject" }), /tape in Cassette has changes not saved/);
+    const saved = await request("retro/device", { id: "cassette", action: "save", supportsRetrocoreMedia: 1 });
+    assert.equal(saved.outcome, "saved", JSON.stringify(saved));
+    assert.equal(readFileSync(tape, "latin1"), "TAPE", "the save wrote the recording");
     media = await request("retro/media", { device: "cassette", action: "eject" });
     assert.equal(media.cassette.path, null);
-    assert.equal(readFileSync(tape, "latin1"), "TAPE", "eject saved the recording");
 
     // The launch's cassette option plays the tape from the start; the program reads it into BC and DE.
     phase("playing the tape");
@@ -347,7 +352,7 @@ try {
     // The breakpoint stays with the source's path, which the tape step below reuses.
     await request("setBreakpoints", { source: { path: source }, breakpoints: [] });
 
-    // A recording still in the recorder is saved when the session relaunches, as ejecting it would.
+    // A recording still in the recorder is not written when the session relaunches: nothing but a save writes an image.
     phase("relaunching while recording");
     const second = join(tmpdir(), `retrocore-altair-${process.pid}-2.tap`);
     writeFileSync(source, recording.join("\n"));
@@ -360,10 +365,10 @@ try {
     await new Promise(resolve => setTimeout(resolve, 1500));
     await request("pause", { threadId: 1 });
     await event("stopped");
-    assert.ok(!existsSync(second), "nothing is written until the recording comes out");
+    assert.equal(readFileSync(second).length, 0, "nothing but a save writes the recording");
     writeFileSync(source, playing.join("\n"));
     await request("launch", { machine: "altair", source, stopOnEntry: true, speed: "max" });
-    assert.equal(readFileSync(second, "latin1"), "TAPE", "the relaunch saved the recording");
+    assert.equal(readFileSync(second).length, 0, "the relaunch does not write the recording");
     unlinkSync(second);
 
     // 8K BASIC, when its image is in the cache, on the 88-2SIO with caps lock.
@@ -464,9 +469,9 @@ try {
 
     await request("disconnect", {});
 
-    // A recording whose save fails is kept, so the save can be tried again: here the disconnect fails while the
-    // recording's folder is gone, and closing the adapter's input without another disconnect saves it once the folder
-    // is back. This adapter has its own timeout, which kills it, since the script's covers only the first.
+    // A recording whose save fails stays changed, so the save can be tried again: here while the recording's folder
+    // is gone, and then once it is back; closing the adapter's input ends the session. This adapter has its own
+    // timeout, which kills it, since the script's covers only the first.
     phase("a failed save, then closing the input while recording");
     const folder = join(tmpdir(), `retrocore-altair-${process.pid}-folder`);
     const third = join(folder, "third.tap");
@@ -484,11 +489,18 @@ try {
         await new Promise(resolve => setTimeout(resolve, 1500));
         await other.request("pause", { threadId: 1 });
         await other.event("stopped");
+        // With the folder gone, the blank file is too, which the save says first; saving there again fails, and the
+        // recording stays changed, until the folder is back.
         rmSync(folder, { recursive: true });
-        await assert.rejects(other.request("disconnect", {}), "the save fails while the folder is gone");
+        const gone = await other.request("retro/device", { id: "cassette", action: "save", supportsRetrocoreMedia: 1 });
+        assert.equal(gone.outcome, "conflict", JSON.stringify(gone));
+        const again = { id: "cassette", action: "save", overwrite: { sha256: null }, supportsRetrocoreMedia: 1 };
+        await assert.rejects(other.request("retro/device", again), "the save fails while the folder is gone");
+        assert.equal((await other.request("retro/devices")).devices.find(device => device.id === "cassette").media.changed, true);
         mkdirSync(folder);
+        assert.equal((await other.request("retro/device", again)).outcome, "saved");
+        assert.equal(readFileSync(third, "latin1"), "TAPE", "the second try saved the recording");
         await other.endInput();
-        assert.equal(readFileSync(third, "latin1"), "TAPE", "closing the input saved the recording on the second try");
     } finally {
         clearTimeout(guard);
         other.close();

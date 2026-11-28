@@ -15,9 +15,9 @@ namespace Retrocore.Debug;
 ///  <para>
 ///   The configuration is <c>{ "cards": { "4": "mockingboard", "5": "diskII16", ... }, "media": { "disk1":
 ///   { "path": "...", "writeProtected": false }, "disk2": null } }</c>. A drive given as null is empty. Media the
-///   host cannot insert again, such as a disk a DOS launch built or a tape being recorded, is left out, so the
-///   launch's own stays. Slot 7's image, which comes from the launch, is kept too; the launch takes it from there
-///   (<see cref="LaunchMedia"/>), and only its lock is restored here.
+///   host cannot insert again, such as a disk a DOS launch built, is left out, so the launch's own stays; a tape being
+///   recorded is its file, which goes back in to play. Slot 7's image, which comes from the launch, is kept too; the
+///   launch takes it from there (<see cref="LaunchMedia"/>), and only its lock is restored here.
 ///  </para>
 ///  <para>
 ///   Hardware with switches adds <c>"settings": { "slot4": { "translation": true, "refresh": false } }</c>, by
@@ -42,7 +42,7 @@ internal static class MachineConfiguration
             {
                 media[device.Id] = null;
             }
-            else if (Reinsertable(device, state))
+            else if (Reinsertable(state))
             {
                 media[device.Id] = new JsonObject { ["path"] = state.Label, ["writeProtected"] = state.WriteProtected };
             }
@@ -166,11 +166,9 @@ internal static class MachineConfiguration
         }
     }
 
-    // An image the host inserted from a file that is still there. A tape that records to a file named first only
-    // while it plays, as that file is not written until its tape is ejected; one that saves like a disk, as the PET's
-    // Datasettes do, always, as its file is its image.
-    private static bool Reinsertable(IDevice device, MediaState media) =>
-        Path.IsPathFullyQualified(media.Label)
-            && File.Exists(media.Label)
-            && (device is not ITapeDrive || media.WriteProtected || device.Info.Operations.HasFlag(MediaOperations.Save));
+    // An image the host inserted from a file that is still there. A tape's file is its image too, while it records: a
+    // recording's file is written blank as it starts and saved like a disk's, so the tape goes back in to play, and
+    // the recovery journal puts back what was not saved.
+    private static bool Reinsertable(MediaState media) =>
+        Path.IsPathFullyQualified(media.Label) && File.Exists(media.Label);
 }

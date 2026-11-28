@@ -15,7 +15,9 @@ engine, which loads Pirate Adventure from the disk as `PIRATE.DAT` (`GAME_LINKED
 `src/platform/dos33/game.s` loads the game), and `bbc-dfs` builds a DFS disk whose `!BOOT` runs the engine, which
 loads the game with OSFILE as `$.PIRATE` (`src/platform/dfs/game.s`). `pet-basic` builds a PRG whose BASIC line
 `SYS`es the engine, on a tape that a launch `LOAD`s and `RUN`s; `pet-disk` boots the same program from a 4040 disk,
-once the drive's ROMs are found (they are not the SDK's). The PET links its game in, as the plan has it. The packer writes the game's size beside it, `obj/pirate.inc`, for the
+once the drive's ROMs are found (they are not the SDK's). `apple2-prodos` builds a ProDOS disk, once ProDOS 2.4.3's
+disk is found (ProDOS is not the SDK's), whose ProDOS starts the engine as its system file, which reads the game
+through the MLI (`src/platform/prodos/`: `start.s`, the `JMP` at its first byte, and `game.s`). The PET links its game in, as the plan has it. The packer writes the game's size beside it, `obj/pirate.inc`, for the
 buffer it loads into.
 
 ```text
@@ -24,8 +26,9 @@ sample/adventure/
   src/core/                   the engine, which uses no machine's addresses
   src/linked-game.s           the packed game, linked in as Game: Pirate Adventure, or the test game
   src/platform/<family>/      console.s, the machine's screen and keyboard
-  src/platform/<environment>/ an environment's own platform files, after the family's: dos33/, dfs/ and sos/game.s
-                              load the game, and sos/console.s replaces the Apple III's console
+  src/platform/<environment>/ an environment's own platform files, after the family's: dos33/, dfs/, prodos/ and
+                              sos/game.s load the game, sos/console.s replaces the Apple III's console, and
+                              prodos/start.s starts the system file
   tools/packer.cs             .dat to the packed format, and the C# reference engine
   games/test.dat              a small test adventure of our own, MIT
   games/test-*.in, *.out      its transcripts: the commands, and what the screen shows
@@ -40,6 +43,7 @@ sample/adventure/
 | `apple1-wozmon` | Apple-1, 32K, as Woz Monitor hex and an ACI tape | the Woz Monitor's ECHO, and the PIA's keyboard | `$0300` |
 | `apple2` | Apple II Plus | the Monitor's COUT and GETLN1 | `$6000` |
 | `apple2-dos` | Apple II Plus, from a DOS 3.3 disk, the game loaded from `PIRATE.DAT` | the Monitor's COUT and GETLN1 | `$6000` |
+| `apple2-prodos` | Apple II Plus, from a ProDOS 2.4.3 disk, the game read from `PIRATE.DAT` | the Monitor's COUT and GETLN1 | `$2000` |
 | `apple2-test` | Apple II Plus, the test game | the Monitor's COUT and GETLN1 | `$6000` |
 | `apple3` | Apple III | its own text page 1 and keyboard routines | `$2000` |
 | `apple3-sos` | Apple III, from a SOS boot disk, the game read from `PIRATE.DAT` | SOS's `.CONSOLE`, through SOS calls | `$2000` |
@@ -80,8 +84,9 @@ dotnet ../../artifacts/AnyCPU/Release/Retrocore.Debug/net11.0/Retrocore.Debug.dl
 Its own `.github/workflows/build.yml` builds every target and plays the transcripts once the sample is the root of a
 repository and the tool is on a source the workflow can restore it from; until the tool is published, its restore
 fails unless its restore step adds a source or the repository has a nuget.config that does. In Retrocore, GitHub
-runs only the root's workflows, and Retrocore's CI checks that a fresh clone of the sample's files alone restores
-the tool from a local pack and builds every target ([`tools/Test-FreshClone.mjs`](../../tools/Test-FreshClone.mjs)).
+runs only the root's workflows. Retrocore's [`fresh-clone.yml`](../../.github/workflows/fresh-clone.yml) workflow,
+run by hand, checks that a fresh clone of the sample's files alone restores the tool from a local pack and builds
+every target ([`tools/Test-FreshClone.mjs`](../../tools/Test-FreshClone.mjs)).
 `.vscode/extensions.json` recommends the Retrocore extension. What changes on the move: the links into Retrocore's `docs/`, `sdk/` and `tools/` here, and into its
 `LICENSE` in [games/README.md](games/README.md), become links to Retrocore's repository on GitHub, the repository
 gets Retrocore's `LICENSE` (the tools' headers name it), and the Release-build command above goes.
@@ -117,7 +122,8 @@ engine itself writes it. `--columns` sets the screen's width, 40 by default.
 win from start to finish and the death, on the Apple-1 with 32K, the PET 4032, the Apple II and the BBC Micro, the
 win on `apple1-wozmon`, whose hex it checks against what the launch loaded, both on `apple2-dos` and `bbc-dfs`, each
 booted from its disk, both on `pet-basic`, from its tape, the win on `pet-disk` (reported as skipped without the 4040's
-ROMs), both on `apple3-sos`, booted from its SOS disk, and the test game's three on
+ROMs), both on `apple2-prodos`, booted from its ProDOS disk (skipped without ProDOS 2.4.3), both on `apple3-sos`,
+booted from its SOS disk, and the test game's three on
 `apple2-test` alone, under the debug adapter, through project launches, and checks that what the
 6502 engine writes matches the transcript's `.out`, character for character. Give target names to play only those,
 such as `node tools/Test-AdventureDap.mjs apple1 pet`.

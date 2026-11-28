@@ -165,6 +165,7 @@ internal static class DeviceJson
         if ((operations & MediaOperations.Record) != 0) { result.Add((JsonNode)"record"); }
         if ((operations & MediaOperations.WriteProtect) != 0) { result.Add((JsonNode)"writeProtect"); }
         if ((operations & MediaOperations.Save) != 0) { result.Add((JsonNode)"save"); }
+        if ((operations & MediaOperations.Keys) != 0) { result.Add((JsonNode)"keys"); }
         return result;
     }
 

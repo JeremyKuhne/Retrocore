@@ -170,27 +170,19 @@ internal sealed class DebugContracts
     {
         Dictionary<ushort, DebugContract> contracts = [];
         DocumentationSet set = resolver.Current;
+
+        // Each routine's contract at its start first, then entries' keeps clauses, then other entries' contracts,
+        // each where nothing came before, in source order.
+        List<(ushort At, DebugContract Contract)> entered = [];
+        List<(ushort At, DebugContract Contract)> plain = [];
         foreach (DocumentationTopic documented in set.Topics)
         {
             if (documented.Kind != DocumentationKind.Routine || documented.Value is not { } value) { continue; }
             DocumentationTopic topic = resolver.Effective(documented);
             bool Applies(DocumentationSection section) => DocumentationResolver.Applies(section.Condition, model, symbol);
 
-            List<string> kept = [];
-            List<(string, ushort, int)> memory = [];
-            foreach (string item in topic.SectionsNamed("Keeps").Where(Applies).SelectMany(section => section.Items).Select(WithoutNote))
-            {
-                string upper = item.ToUpperInvariant();
-                if (registers.Knows(upper))
-                {
-                    // Registers read in capitals; flags keep their words, as in "kept carry".
-                    kept.Add(registers.IndexOf(item) >= 0 ? upper : item.ToLowerInvariant());
-                }
-                else if (Memory(set, item) is { } location)
-                {
-                    memory.Add((item, location.Address, location.Length));
-                }
-            }
+            (List<string> kept, List<(string, ushort, int)> memory) = Kept(
+                topic.SectionsNamed("Keeps").Where(Applies).SelectMany(section => section.Items).Select(WithoutNote));
 
             HashSet<string>? changes = null;
             if (topic.SectionsNamed("Uses").Any(Applies))
@@ -204,19 +196,83 @@ internal sealed class DebugContracts
                 }
             }
 
-            if (kept.Count == 0 && memory.Count == 0 && changes is null) { continue; }
-            DebugContract contract = new(topic.Name, kept, memory, changes);
-            contracts.TryAdd((ushort)value, contract);
+            // An Entry: whose meaning ends in "; keeps ..." promises that instead, and no Uses:, at a call there,
+            // unless the label is a routine of its own with a contract; a label at the same address takes the clause
+            // too.
+            Dictionary<ushort, IReadOnlyList<string>> clauses = [];
+            foreach (DocumentationEntry entry in topic.SectionsNamed("Entry").Where(Applies).SelectMany(section => section.Entries))
+            {
+                string label = set.EntrySymbol(documented, entry.Name);
+                if (entry.Keeps is { } keeps
+                    && set.Symbols.TryGetValue(label, out long at)
+                    && (ushort)at != (ushort)value
+                    && !(set.Find(label) is { } found && resolver.Effective(found).HasContract(Applies)))
+                {
+                    clauses.TryAdd((ushort)at, keeps);
+                }
+            }
+
+            foreach ((ushort at, IReadOnlyList<string> keeps) in clauses)
+            {
+                (List<string> entryKept, List<(string, ushort, int)> entryMemory) = Kept(keeps);
+                entered.Add((at, new(topic.Name, entryKept, entryMemory, Changes: null)));
+            }
+
+            // Another entry takes the routine's contract where the label has no comment of its own. A routine that
+            // documents Keeps: or Uses: holds its addresses even where they name nothing checked, as the analysis does.
+            DebugContract? routine = null;
+            if (topic.HasContract(Applies))
+            {
+                routine = new(topic.Name, kept, memory, changes);
+                contracts.TryAdd((ushort)value, routine);
+            }
+
             foreach (string label in topic.EntryLabels.Select(entry => set.EntrySymbol(documented, entry)))
             {
-                if (set.Symbols.TryGetValue(label, out long entry) && set.Find(label) is null)
+                if (routine is not null
+                    && set.Symbols.TryGetValue(label, out long entry)
+                    && (ushort)entry != (ushort)value
+                    && !clauses.ContainsKey((ushort)entry)
+                    && set.Find(label) is null)
                 {
-                    contracts.TryAdd((ushort)entry, contract);
+                    plain.Add(((ushort)entry, routine));
                 }
             }
         }
 
+        // A clause that keeps nothing holds its address, so no other contract is checked there, but checks nothing.
+        foreach ((ushort at, DebugContract contract) in entered.Concat(plain)) { contracts.TryAdd(at, contract); }
+        foreach ((ushort at, DebugContract contract) in contracts.ToArray())
+        {
+            if (contract.Registers.Count == 0 && contract.Memory.Count == 0 && contract.Changes is null)
+            {
+                contracts.Remove(at);
+            }
+        }
+
         return contracts;
+
+        // The registers, flags and memory a Keeps: list names.
+        (List<string> Kept, List<(string, ushort, int)> Memory) Kept(IEnumerable<string> items)
+        {
+            List<string> kept = [];
+            List<(string, ushort, int)> memory = [];
+            foreach (string item in items)
+            {
+                string upper = item.ToUpperInvariant();
+                if (registers.Knows(upper))
+                {
+                    // Registers read in capitals; flags keep their words, as in "kept carry".
+                    kept.Add(registers.IndexOf(item) >= 0 ? upper : item.ToLowerInvariant());
+                }
+                else if (Memory(set, item) is { } location)
+                {
+                    memory.Add((item, location.Address, location.Length));
+                }
+            }
+
+            return (kept, memory);
+        }
     }
 
     // A kept memory item: a symbol, symbol+n, or a range symbol..symbol+n.

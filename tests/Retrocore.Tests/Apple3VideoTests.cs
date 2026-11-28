@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 // See LICENSE file in the project root for full license information
 
+using Retrocore.Debug;
 using Retrocore.Machines.Apple3;
 
 namespace Retrocore.Tests;
@@ -84,6 +85,37 @@ public class Apple3VideoTests
         frame[1].Should().Be(Black);
         frame[7].Should().Be(Black);
         frame[8].Should().Be(White);
+    }
+
+    /// <summary>
+    ///  The debugger's current text follows the 80-column page order and does not present hidden RAM as visible.
+    /// </summary>
+    [TestMethod]
+    public void TextSurfaceFollowsPageOrderAndBlanking()
+    {
+        (Apple3Machine machine, Apple3Bus bus) = Machine(Mix);
+        Apple3DebugTarget target = new(machine);
+        System(bus, 0x400) = 0xC1;
+        System(bus, 0x800) = 0xC2;
+        DebugTextSurface initial = TextSurface();
+        initial.Columns.Should().Be(80);
+        initial.Rows[0].Should().StartWith("AB");
+        bus.Write(0xC055, value: 0);
+        TextSurface().Rows[0].Should().StartWith("BA");
+
+        bus.Write(0xC057, value: 0);
+        TextSurface().Mode.Should().Be("graphics");
+        TextSurface().Rows.Should().BeEmpty();
+        TextSurface("textMemory").Rows[0].Should().StartWith("B");
+        bus.Write(0xC056, value: 0);
+        bus.Write(0xFFDF, (byte)(bus.Environment & ~Apple3Bus.VideoEnable));
+        bus.Write(0xFFD3, value: 0xFF);
+        TextSurface().Mode.Should().Be("blank");
+        TextSurface().Rows.Should().BeEmpty();
+        TextSurface("textMemory").Rows[0].Should().StartWith("BA");
+
+        DebugTextSurface TextSurface(string surface = "visibleText") =>
+            target.ReadTextSurface(surface) ?? throw new AssertFailedException($"No {surface} surface.");
     }
 
     /// <summary>

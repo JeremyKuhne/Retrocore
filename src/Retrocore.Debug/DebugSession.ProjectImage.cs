@@ -45,12 +45,14 @@ internal sealed partial class DebugSession
         switch (Target)
         {
             case Apple2DebugTarget apple2:
-                // Slot 6's drive 1, which the Disk II's firmware boots; the dos33 launch fits the Disk II. The image is
+                // Slot 6's drive 1, which the Disk II's firmware boots; the dos33 and prodos launches fit the Disk II. The image is
                 // converted to a disk before the one there is kept, so an image that is not a disk leaves the drive and
                 // the kept disks as they were.
-                WozDisk disk = SectorDiskConverter.Convert(bytes, proDosOrder: false);
+                // A prodos disk is in ProDOS's block order, a dos33 disk in DOS's.
+                bool proDos = target.Environment == "prodos";
+                WozDisk disk = SectorDiskConverter.Convert(bytes, proDosOrder: proDos);
                 MediaActions.KeepReplaced(apple2.BootDrive, $"the build's {build.Media.ImageKind} took its place");
-                apple2.BootDrive.Insert(disk, label, "DSK");
+                apple2.BootDrive.Insert(disk, label, proDos ? "PO" : "DSK");
                 break;
             case BbcDebugTarget bbc:
                 // Drive 0, which SHIFT-BREAK boots.
@@ -66,6 +68,12 @@ internal sealed partial class DebugSession
                 break;
             case PetDebugTarget pet:
                 BootPet(build, pet, bytes, label);
+                return;
+            case Trs80DebugTarget model1:
+                BootLevel2(build, model1.BootDeck, model3: false, bytes, label);
+                return;
+            case Trs80Model3DebugTarget { BootDeck: { } deck }:
+                BootLevel2(build, deck, model3: true, bytes, label);
                 return;
             default:
                 throw new ProjectException($"{target.Project.File}: target {target.Name}: {target.Machine.Id} cannot boot the '{target.Environment}' environment's image yet.");
@@ -112,6 +120,73 @@ internal sealed partial class DebugSession
         RunUntil(build, () => drive.Activity == Machines.Devices.DeviceActivity.Idle && Loaded(start, program), "the program loaded", limit, ref used);
         foreach (char key in "RUN\r") { pet.Key(key); }
         RunToEntry(build, limit - used);
+    }
+
+    // Boots a TRS-80 from a level2 target's SYSTEM tape in its cassette recorder, as a user would: the Model III's Cass?
+    // answered L, for the tape's 500 baud, MEMORY SIZE? (or MEM SIZE?) with Return, SYSTEM at BASIC's READY, the tape's name at the *?
+    // prompt, and once the program is in memory and the prompt is back, a bare /, which jumps to the tape's entry.
+    private void BootLevel2(TargetBuild build, Machines.Trs80.Trs80CassetteDrive deck, bool model3, byte[] bytes, string label)
+    {
+        ProjectTarget target = build.Target;
+        MediaActions.KeepReplaced(deck, $"the build's {build.Media.ImageKind} took its place");
+        deck.Play(new Media.Trs80.CassetteImage(bytes), label);
+
+        (int start, byte[] program) = ProjectBuild.Image(build);
+        ForgetBoundaries();
+        long limit = (long)(target.Built?.BootSeconds ?? 0) * Target.ClockHertz;
+        long used = 0;
+        void Type(string keys)
+        {
+            foreach (char key in keys) { Target.Key(key); }
+        }
+
+        if (model3)
+        {
+            RunUntil(build, () => Trs80ScreenShows("Cass?"), "the Model III's Cass? question", limit, ref used);
+            Type("L");
+        }
+
+        // Level II 1.2 asks MEMORY SIZE?, 1.3 MEM SIZE?, and the Model III Memory Size?.
+        RunUntil(build, () => Trs80ScreenShows(model3 ? "Size?" : "SIZE?"), "the MEMORY SIZE? question", limit, ref used);
+        Type("\r");
+        RunUntil(build, () => Trs80ScreenShows("READY"), "BASIC's READY prompt", limit, ref used);
+        Type("SYSTEM\r");
+        RunUntil(build, () => Trs80ScreenCount("*?") == 1, "SYSTEM's *? prompt", limit, ref used);
+        Type($"{Level2Environment.ProgramName(target)}\r");
+        RunUntil(
+            build,
+            () => Loaded(start, program) && deck.Activity == Machines.Devices.DeviceActivity.Idle && Trs80ScreenCount("*?") == 2,
+            "the program loaded and SYSTEM's *? prompt again",
+            limit,
+            ref used);
+
+        Type("/\r");
+        RunToEntry(build, limit - used);
+    }
+
+    // Whether the TRS-80's screen, 64 columns by 16 rows from $3C00, shows text.
+    private bool Trs80ScreenShows(string text) => Trs80ScreenCount(text) != 0;
+
+    // How many times the TRS-80's screen shows text. Each byte is a character in its low 7 bits; the Model I's video
+    // RAM has no bit 6 without the lowercase modification, so a byte below $20 is the capital or symbol 64 above it.
+    private int Trs80ScreenCount(string text)
+    {
+        const int Video = 0x3C00;
+        const int Size = 64 * 16;
+        char[] screen = new char[Size];
+        for (int index = 0; index < Size; index++)
+        {
+            int value = Target.Peek((ushort)(Video + index)) & 0x7F;
+            screen[index] = (char)(value < 0x20 ? value + 0x40 : value);
+        }
+
+        int count = 0;
+        for (int at = new string(screen).IndexOf(text, StringComparison.Ordinal); at >= 0; at = new string(screen).IndexOf(text, at + 1, StringComparison.Ordinal))
+        {
+            count++;
+        }
+
+        return count;
     }
 
     // Runs the machine one cycle at a time until a condition holds at an instruction's start, counting the cycles it

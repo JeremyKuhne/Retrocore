@@ -370,6 +370,25 @@ public sealed partial class DocumentationResolver
                     {
                         warn($"Entry: '{entry.Name}' is not a label inside {topic.Name}.", entry.Line);
                     }
+
+                    // A keeps clause names what Keeps: would: registers, flags by word, memory, or none.
+                    if (entry.Keeps is null && entry.Meaning.Contains("; keeps", StringComparison.OrdinalIgnoreCase))
+                    {
+                        warn($"Entry: '{entry.Name}' has '; keeps' not followed by items, as '; keeps X, Y'.", entry.Line);
+                    }
+
+                    foreach (string item in entry.Keeps ?? [])
+                    {
+                        if (Array.IndexOf(s_nothing, item.ToLowerInvariant()) >= 0) { continue; }
+                        if (item.Contains(' ', StringComparison.Ordinal))
+                        {
+                            warn($"Entry: '{entry.Name}' keeps '{item}', which is not a register, flag or symbol.", entry.Line);
+                        }
+                        else if (Unknown(topic, item) is { } unknown)
+                        {
+                            warn(NotKnown(topic, section.Name, unknown), entry.Line);
+                        }
+                    }
                 }
 
                 break;

@@ -8,7 +8,6 @@ using Retrocore.Machines.Altair;
 using Retrocore.Machines.Devices;
 using Retrocore.Media.Altair;
 using System.Text.Json.Nodes;
-using Touki;
 
 namespace Retrocore.Debug;
 
@@ -22,7 +21,7 @@ namespace Retrocore.Debug;
 ///   are the sense switches) and <c>baudRate</c> (the 88-2SIO's, default 9600).
 ///  </para>
 /// </remarks>
-internal sealed class AltairDebugTarget : DisposableBase, IDebugTarget, IRecordingTarget
+internal sealed class AltairDebugTarget : IDebugTarget
 {
     private static readonly DebugRegisters s_registers = new(I8080Isa.Description);
 
@@ -40,7 +39,6 @@ internal sealed class AltairDebugTarget : DisposableBase, IDebugTarget, IRecordi
     private bool _interrupt;
     private bool _fetched;
     private bool _resetPending;
-    private string? _recordingPath;
 
     /// <summary>
     ///  Wraps a machine.
@@ -508,26 +506,14 @@ internal sealed class AltairDebugTarget : DisposableBase, IDebugTarget, IRecordi
                 Insert(path ?? throw new ArgumentException("path is required."));
                 break;
             case (AltairCassette cassette, "record"):
-                // The path is checked before the tape in the recorder comes out, so a bad one leaves it in.
-                string full = Path.GetFullPath(
-                    path ?? throw new ArgumentException("path is required, for saving the recording."));
-
-                if (!Directory.Exists(Path.GetDirectoryName(full)))
-                {
-                    throw new ArgumentException($"The folder for {full} does not exist.");
-                }
-
-                if (Directory.Exists(full) || Path.GetFileName(full).Length == 0)
-                {
-                    throw new ArgumentException($"{full} is a folder; a recording needs a file name.");
-                }
-
-                EjectCassette();
-                cassette.Record(full);
-                _recordingPath = full;
+                // The recording's file is written blank first, so a bad path leaves the tape in the recorder.
+                AltairTape blank = new();
+                string full = TapeMedia.Record(path, blank, new AltairTapeCodec());
+                cassette.Eject();
+                cassette.Record(blank, full);
                 break;
-            case (AltairCassette, "eject"):
-                EjectCassette();
+            case (AltairCassette cassette, "eject"):
+                cassette.Eject();
                 break;
             default:
                 throw new ArgumentException($"{device.Info.Name} does not support {action}.");
@@ -552,24 +538,23 @@ internal sealed class AltairDebugTarget : DisposableBase, IDebugTarget, IRecordi
     {
         string action = args.String("action") ?? throw new ArgumentException("action is required.");
         string id = args.String("device") ?? "cassette";
-        if (id == "cassette")
-        {
-            AltairCassette cassette = _machine.Bus.Cassette ?? throw new ArgumentException("This Altair has no 88-ACR.");
-            DeviceAction(cassette, action, args);
-            return MediaState();
-        }
-
         if (id == "disk") { id = $"disk{args.Int("drive") ?? 0}"; }
-        IDevice device = Drives.FirstOrDefault(drive => drive.Id == id)
-            ?? throw new ArgumentException("device must be cassette, or a drive of the 88-DCDD, such as disk0.");
+        IDevice device = id == "cassette"
+            ? _machine.Bus.Cassette ?? throw new ArgumentException("This Altair has no 88-ACR.")
+            : Drives.FirstOrDefault(drive => drive.Id == id)
+                ?? throw new ArgumentException("device must be cassette, or a drive of the 88-DCDD, such as disk0.");
 
-        // As retro/device does: the host saves and reverts, and keeps a changed disk that leaves for Undo.
-        if (MediaActions.Device(device, action, args, (what, with) => DeviceAction(device, what, with)) is { } answer)
+        // As retro/device does: the host saves and reverts, and keeps a changed disk or recording that leaves for Undo.
+        JsonObject? answer = MediaActions.Device(device, action, args, (what, with) => DeviceAction(device, what, with));
+        if (answer is null)
+        {
+            DeviceAction(device, action, args);
+        }
+        else if (answer.String("outcome") != "discarded")
         {
             return answer;
         }
 
-        DeviceAction(device, action, args);
         return MediaState();
     }
 
@@ -615,50 +600,18 @@ internal sealed class AltairDebugTarget : DisposableBase, IDebugTarget, IRecordi
         MediaActions.Register(disk, full, codec, bytes);
     }
 
-    /// <summary>
-    ///  Saves a recording still in the recorder, as ejecting it would, when the session ends or relaunches.
-    /// </summary>
-    /// <param name="disposing">Whether it is disposing rather than finalizing.</param>
-    /// <exception cref="IOException">The recording could not be written.</exception>
-    protected override void Dispose(bool disposing)
-    {
-        if (disposing) { EjectCassette(); }
-    }
-
-    // The new tape is read before the one in the recorder comes out, so a file that cannot be read leaves it in. A
-    // recording is saved first, where it stays in, so a tape reinserted from the recording's own path is the one
-    // just recorded, whatever the file system's case rules.
+    // The new tape is read before the one in the recorder comes out, so a file that cannot be read leaves it in.
     private void Insert(string path)
     {
         string full = Path.GetFullPath(path);
         AltairCassette drive = _machine.Bus.Cassette
             ?? throw new InvalidOperationException("This Altair has no 88-ACR.");
 
-        SaveRecording();
-        byte[] tape = File.ReadAllBytes(full);
-        EjectCassette();
+        byte[] bytes = File.ReadAllBytes(full);
+        AltairTape tape = new(bytes);
+        MediaActions.Register(tape, full, new AltairTapeCodec(), bytes);
+        drive.Eject();
         drive.Play(tape, full);
-    }
-
-    /// <inheritdoc/>
-    public void SaveRecordings() => SaveRecording();
-
-    // Writes a recording to its path, leaving it in the recorder.
-    private void SaveRecording()
-    {
-        if (_recordingPath is { } path && _machine.Bus.Cassette is { Media: not null } cassette)
-        {
-            File.WriteAllBytes(path, cassette.Tape);
-        }
-    }
-
-    // A recording is saved to its path when it is ejected.
-    private void EjectCassette()
-    {
-        // Saved before it comes out, so a recording that cannot be written stays in to be ejected again.
-        SaveRecording();
-        _machine.Bus.Cassette?.Eject();
-        _recordingPath = null;
     }
 
     private JsonObject MediaState()
@@ -677,7 +630,7 @@ internal sealed class AltairDebugTarget : DisposableBase, IDebugTarget, IRecordi
         JsonObject cassette = new()
         {
             ["path"] = tape.Media?.Label,
-            ["recording"] = _recordingPath is not null,
+            ["recording"] = tape.Transport.Mode == TapeMode.Recording,
             ["motor"] = tape.Transport.Motor,
             ["atEnd"] = tape.AtEnd
         };

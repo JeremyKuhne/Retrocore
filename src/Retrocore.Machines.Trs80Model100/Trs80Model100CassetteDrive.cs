@@ -3,13 +3,14 @@
 // See LICENSE file in the project root for full license information
 
 using Retrocore.Machines.Devices;
+using Retrocore.Media;
 
 namespace Retrocore.Machines.Trs80Model100;
 
 /// <summary>
 ///  The cassette recorder on the Model 100's tape port.
 /// </summary>
-public sealed class Trs80Model100CassetteDrive : ITapeDrive
+public sealed class Trs80Model100CassetteDrive : ITapeDrive, IMediumSlot
 {
     private readonly Trs80Model100Cassette _cassette;
     private Trs80Model100Tape? _tape;
@@ -28,7 +29,8 @@ public sealed class Trs80Model100CassetteDrive : ITapeDrive
             Description = "Cassette recorder",
             Controller = "SOD and SID, with the motor on port $E0 bit 3",
             Formats = ["wav"],
-            Operations = MediaOperations.Insert | MediaOperations.Eject | MediaOperations.Record
+            SaveFormats = ["wav"],
+            Operations = MediaOperations.Insert | MediaOperations.Eject | MediaOperations.Record | MediaOperations.Save
         };
     }
 
@@ -52,9 +54,9 @@ public sealed class Trs80Model100CassetteDrive : ITapeDrive
     {
         get
         {
-            if (Tape is null) { return null; }
+            if (Tape is not { } tape) { return null; }
             bool recording = _cassette.Mode == TapeMode.Recording;
-            return new(_label, "WAV", WriteProtected: !recording, Changed: recording && _cassette.Length != 0);
+            return new(_label, "WAV", WriteProtected: !recording, Changed: tape.IsDirty);
         }
     }
 
@@ -79,6 +81,7 @@ public sealed class Trs80Model100CassetteDrive : ITapeDrive
         _cassette.Play(tape);
         _tape = tape;
         _label = label;
+        MountGeneration = MountGenerations.Next();
     }
 
     /// <summary>
@@ -91,6 +94,7 @@ public sealed class Trs80Model100CassetteDrive : ITapeDrive
         _cassette.Record(tape);
         _tape = tape;
         _label = label;
+        MountGeneration = MountGenerations.Next();
     }
 
     /// <summary>
@@ -103,6 +107,34 @@ public sealed class Trs80Model100CassetteDrive : ITapeDrive
         _cassette.Stop();
         _tape = null;
         _label = "";
+        MountGeneration = MountGenerations.Next();
         return tape;
     }
+
+    /// <inheritdoc/>
+    IMedium? IMediumSlot.Medium => Tape;
+
+    /// <inheritdoc/>
+    public int MountGeneration { get; private set; } = MountGenerations.Next();
+
+    /// <inheritdoc/>
+    public void Saved(string label, string format, bool whole)
+    {
+        if (Tape is not { } tape) { throw new InvalidOperationException("There is no tape in the recorder."); }
+        _label = label;
+        if (whole) { tape.MarkSaved(); } else { tape.MarkChanged(); }
+    }
+
+    /// <inheritdoc/>
+    /// <remarks>
+    ///  <para>
+    ///   The tape plays from its start, as a recording put back from the recovery journal or for Undo is there to be
+    ///   read; it keeps its changes until it is saved.
+    ///  </para>
+    /// </remarks>
+    public void Mount(IMedium medium, string label, string format) =>
+        Play(medium as Trs80Model100Tape ?? throw new ArgumentException($"{Info.Name} does not take a {medium?.GetType().Name}.", nameof(medium)), label);
+
+    /// <inheritdoc/>
+    public IMedium? Unmount() => Eject();
 }

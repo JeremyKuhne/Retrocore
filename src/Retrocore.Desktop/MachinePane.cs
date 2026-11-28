@@ -101,10 +101,11 @@ internal sealed class MachinePane : ScrollViewer
 
         _machine.SetMessage(_session.Problems.Count == 0 ? null : $"{_session.Name} could not be fully set up: {string.Join(" ", _session.Problems)}");
 
-        // The badge counts the disks changed in the machine and not yet saved to their images, in drives or ejected.
+        // The badge counts the disks and tapes changed in the machine and not yet saved to their images, in drives or
+        // ejected.
         int ejected = _session.Host.UnsavedEjected().Count;
         int changed = ejected + devices.Count(device => device.Media?.Changed == true && device.Can(MediaOperations.Save));
-        _drives.SetBadge(changed, $"{changed} disk{(changed == 1 ? "" : "s")} changed and not saved to {(changed == 1 ? "its image" : "their images")}");
+        _drives.SetBadge(changed, $"{changed} {(changed == 1 ? "disk or tape" : "disks or tapes")} changed and not saved to {(changed == 1 ? "its image" : "their images")}");
 
         // Built again for another machine, or when a card changes what this one offers, as adding a Mockingboard does.
         string displayFor = $"{RuntimeHelpers.GetHashCode(host)}|{string.Join(',', host.SoundModes)}|{string.Join(',', host.Screens)}";
@@ -317,9 +318,9 @@ internal sealed class MachinePane : ScrollViewer
         // While the machine is off, a tape cannot record and nothing has changed a disk to save.
         List<TreeAction> inline = [];
         if (device.Can(MediaOperations.Insert)) { inline.Add(new("add", "Insert Media...", () => _ = Insert(device))); }
-        // A tape drive that saves its tape, as the PET's Datasettes do, has the recorder's own keys: a recording is
-        // a changed tape, saved afterwards. Others record straight to a file.
-        bool deck = device.Kind == DeviceKind.TapeDrive && device.Can(MediaOperations.Save);
+        // A tape drive with keys, as the PET's Datasettes have, presses them on the tape in it. Others record to a
+        // file named first. Either way a recording is a changed tape, saved as a disk is.
+        bool deck = device.Kind == DeviceKind.TapeDrive && device.Can(MediaOperations.Keys);
         if (running && deck)
         {
             if (device.Media is not null) { inline.Add(new("play", "Play", () => Act(device, "play"))); }
@@ -495,9 +496,9 @@ internal sealed class MachinePane : ScrollViewer
             string file = Path.GetFileName(device.Media?.Label) ?? "its image";
             string? answer = saved.Contains(mount)
                 ? await _window.Ask(
-                    $"{file} cannot hold all of the disk in {device.Info.Name}, so it still has changes. Let them go before {what}?",
+                    $"{file} cannot hold all of the {Medium(device)} in {device.Info.Name}, so it still has changes. Let them go before {what}?",
                     ["Discard"])
-                : await _window.Ask($"The disk in {device.Info.Name} has changes not saved to {file}. Save them before {what}?", ["Save", "Discard"]);
+                : await _window.Ask($"The {Medium(device)} in {device.Info.Name} has changes not saved to {file}. Save them before {what}?", ["Save", "Discard"]);
 
             if (answer == "Discard")
             {
@@ -541,8 +542,8 @@ internal sealed class MachinePane : ScrollViewer
     }
 
     // Lets changed disks go, then acts, as Stop, Restart, switching, starting another machine and resetting do. The
-    // machine held for the questions runs on if the action left it in place, as when Stop could not write a recording
-    // or the new machine could not be built.
+    // machine held for the questions runs on if the action left it in place, as when Stop could not write the Model
+    // 100's RAM image or the new machine could not be built.
     private async Task Release(string what, Action action)
     {
         MachineHost held = _session.Host;
@@ -573,7 +574,9 @@ internal sealed class MachinePane : ScrollViewer
             if (failed) { return false; }
             string device = answer?["device"]?.GetValue<string>() ?? "";
             JsonNode? generation = answer?["generation"]?.DeepClone();
-            string name = _session.Host.DeviceStates().FirstOrDefault(state => state.Id == device)?.Info.Name ?? device;
+            DeviceState? state = _session.Host.DeviceStates().FirstOrDefault(candidate => candidate.Id == device);
+            string name = state?.Info.Name ?? device;
+            string medium = state is null ? "disk" : Medium(state);
             string file = Path.GetFileName(answer?["label"]?.GetValue<string>() ?? "");
             string label = file.Length != 0 ? file : "its image";
             switch (answer?["outcome"]?.GetValue<string>())
@@ -581,10 +584,10 @@ internal sealed class MachinePane : ScrollViewer
                 case null:
                     return true;
                 case "saved":
-                    Said(answer, name);
+                    Said(answer, name, medium);
                     return true;
                 case "changed":
-                    string? choice = await _window.Ask($"The disk in {name} has changes not saved to {label}.", ["Save", "Discard"]);
+                    string? choice = await _window.Ask($"The {medium} in {name} has changes not saved to {label}.", ["Save", "Discard"]);
                     if (choice is null) { return false; }
                     // A disk the machine ejected, which a card's removal would take, is named by its ejected id.
                     JsonNode? ejected = answer["ejected"]?.DeepClone();
@@ -608,10 +611,10 @@ internal sealed class MachinePane : ScrollViewer
                     string image = Path.GetFileName(answer["path"]?.GetValue<string>()) ?? "The image";
                     string? replace = await _window.Ask(
                         answer["current"] is null
-                            ? $"{image} was deleted since the disk in {name} was read from it. Save the disk there again?"
+                            ? $"{image} was deleted since the {medium} in {name} was read from it. Save the {medium} there again?"
                             : answer["baseline"] is null
-                                ? $"{image} changed since you chose it. Replace it with the disk in {name}?"
-                                : $"{image} changed since the disk in {name} was read from it. Replace it with the disk?",
+                                ? $"{image} changed since you chose it. Replace it with the {medium} in {name}?"
+                                : $"{image} changed since the {medium} in {name} was read from it. Replace it with the {medium}?",
                         ["Replace", "Save As..."]);
 
                     if (replace == "Replace")
@@ -625,7 +628,7 @@ internal sealed class MachinePane : ScrollViewer
                 case "losses":
                     string losses = string.Join(" ", (answer["losses"]?.AsArray() ?? []).Select(loss => loss?.GetValue<string>()));
                     string? accept = await _window.Ask(
-                        $"{answer["format"]?.GetValue<string>()} cannot hold all of the disk in {name}: {losses}",
+                        $"{answer["format"]?.GetValue<string>()} cannot hold all of the {medium} in {name}: {losses}",
                         ["Save Anyway", "Save As..."]);
 
                     if (accept == "Save Anyway")
@@ -639,13 +642,13 @@ internal sealed class MachinePane : ScrollViewer
                 case "readOnly":
                     string why = answer["reason"]?.GetValue<string>() switch
                     {
-                        "noImage" => $"The disk in {name} has no image of its own.",
-                        "format" => $"The disk in {name} came from an image that can only be read.",
-                        "file" => $"The image of the disk in {name} is read-only.",
-                        _ => $"The image of the disk in {name} cannot be written.",
+                        "noImage" => $"The {medium} in {name} has no image of its own.",
+                        "format" => $"The {medium} in {name} came from an image that can only be read.",
+                        "file" => $"The image of the {medium} in {name} is read-only.",
+                        _ => $"The image of the {medium} in {name} cannot be written.",
                     };
 
-                    return await _window.Ask($"{why} Save the disk as a new image?", ["Save As..."]) is not null && await SaveAsNew(device, generation, args);
+                    return await _window.Ask($"{why} Save the {medium} as a new image?", ["Save As..."]) is not null && await SaveAsNew(device, generation, args);
                 default:
                     return true;
             }
@@ -653,14 +656,17 @@ internal sealed class MachinePane : ScrollViewer
     }
 
     // What a save says beside saving: a WOZ1 image now WOZ2, a sector that read from a second copy, what was lost.
-    private void Said(JsonObject answer, string name)
+    private void Said(JsonObject answer, string name, string medium)
     {
         IEnumerable<string?> said = (answer["notes"]?.AsArray() ?? []).Concat(answer["losses"]?.AsArray() ?? [])
             .Select(node => node?.GetValue<string>());
 
         string text = string.Join(" ", said.Where(line => line is not null));
-        if (text.Length != 0) { _window.Notify($"Saved the disk in {name}. {text}", "info"); }
+        if (text.Length != 0) { _window.Notify($"Saved the {medium} in {name}. {text}", "info"); }
     }
+
+    // What a drive holds, as a question names it: a tape or a disk.
+    private static string Medium(DeviceState device) => device.Kind == DeviceKind.TapeDrive ? "tape" : "disk";
 
     // A save's arguments for the mount an answer was about.
     private static JsonObject SaveOf(JsonNode? generation) => new() { ["generation"] = generation?.DeepClone() };
@@ -769,8 +775,8 @@ internal sealed class MachinePane : ScrollViewer
     // writes.
     private static IReadOnlyList<string> InsertFormats(DeviceState device)
     {
-        // A Datasette is a tape deck that saves, and takes TAP images.
-        bool deck = device.Kind == DeviceKind.TapeDrive && device.Can(MediaOperations.Save);
+        // A Datasette is a tape deck with keys, and takes TAP images.
+        bool deck = device.Kind == DeviceKind.TapeDrive && device.Can(MediaOperations.Keys);
         bool datasette = deck && device.Info.Formats.Contains("tap") && !device.Info.Formats.Contains("prg");
         return datasette ? [.. device.Info.Formats, "prg"] : device.Info.Formats;
     }
@@ -790,8 +796,8 @@ internal sealed class MachinePane : ScrollViewer
         }
     }
 
-    // The files Record offers: those the deck saves its tapes as, or, on a deck that writes the recording itself, the
-    // ones it takes. An Atari's .xex goes in but is not written.
+    // The files Record offers: those the deck saves its tapes as, or the ones it takes for a deck that saves none. An
+    // Atari's .xex goes in but is not written.
     private static IReadOnlyList<string> RecordFormats(DeviceState device) =>
         device.Info.SaveFormats.Count > 0 ? device.Info.SaveFormats : device.Info.Formats;
 
@@ -810,7 +816,7 @@ internal sealed class MachinePane : ScrollViewer
     private async Task Save(DeviceState device)
     {
         if (device.Media is not { } media) { return; }
-        string? answer = await _window.Ask($"Replace {media.Label} with the disk in {device.Info.Name}?", ["Save"]);
+        string? answer = await _window.Ask($"Replace {media.Label} with the {Medium(device)} in {device.Info.Name}?", ["Save"]);
         if (answer == "Save") { Act(device, "save"); }
     }
 
@@ -826,10 +832,10 @@ internal sealed class MachinePane : ScrollViewer
 
         IStorageFile? file = await _window.StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
         {
-            Title = $"Save the disk in {device.Info.Name} as",
+            Title = $"Save the {Medium(device)} in {device.Info.Name} as",
             SuggestedFileName = Path.GetFileName(label),
             SuggestedStartLocation = folder,
-            FileTypeChoices = Filters("Disk images", device.Info.SaveFormats),
+            FileTypeChoices = Filters(device.Kind == DeviceKind.TapeDrive ? "Tape images" : "Disk images", device.Info.SaveFormats),
         });
 
         if (file?.TryGetLocalPath() is not { } path) { return false; }

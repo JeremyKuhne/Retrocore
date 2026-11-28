@@ -255,14 +255,17 @@ try {
         await type("run\r");
         await screen(screenText => screenText.includes("CHANGED 42"), "the written program's output");
 
-        // CSAVE records onto a tape in the recorder, ejecting it writes its WAV file, and a launch with that file as
-        // its cassette CLOADs the program back.
+        // CSAVE records onto a tape in the recorder, a changed tape that saving writes to its WAV file, and a launch
+        // with that file as its cassette CLOADs the program back.
         phase("recording a tape");
         const tape = join(files, "prog.wav");
         await request("retro/media", { device: "cassette", action: "record", path: tape });
+        const blank = statSync(tape).size;
         await type("csave \"PROG\"\r");
         await screen(screenText => /csave "PROG"\nOk/i.test(screenText), "CSAVE");
-        assert.ok(!existsSync(tape), "the recording is written when it comes out");
+        assert.equal(statSync(tape).size, blank, "nothing but a save writes the recording");
+        const saved = await request("retro/device", { id: "cassette", action: "save", supportsRetrocoreMedia: 1 });
+        assert.equal(saved.outcome, "saved", JSON.stringify(saved));
         const ejected = await request("retro/media", { device: "cassette", action: "eject" });
         assert.equal(ejected.cassette.path, null);
         assert.ok(statSync(tape).size > 100000, "the WAV file holds the recording");

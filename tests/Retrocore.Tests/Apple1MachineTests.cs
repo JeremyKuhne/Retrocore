@@ -95,6 +95,27 @@ public sealed class Apple1MachineTests
     }
 
     /// <summary>
+    ///  Fast output acknowledges each write without waiting for the beam, keeping the text and handshake working.
+    /// </summary>
+    [TestMethod]
+    public void FastTerminalOutputsTheSameTextWithoutFrameWaits()
+    {
+        Apple1Machine machine = Boot();
+
+        // LDY #120; loop: LDA #'A' | $80, JSR ECHO, DEY, BNE loop; JMP GETLINE
+        TypeLine(machine, "300: A0 78 A9 C1 20 EF FF 88 D0 F8 4C 1F FF");
+        machine.Keyboard.FastTyping = true;
+        machine.Terminal.FastOutput = true;
+        machine.Keyboard.Type("300R\n");
+        RunUntil(machine, () => machine.Terminal.Line(7).StartsWith("0300: A0", StringComparison.Ordinal));
+        ulong start = machine.Terminal.Frames;
+        RunUntil(machine, () => machine.Terminal.CursorRow == 11);
+
+        machine.Terminal.Line(8).Should().Be(new string('A', 40));
+        (machine.Terminal.Frames - start).Should().BeLessThan(3UL);
+    }
+
+    /// <summary>
     ///  The terminal stores six bits a character: lowercase shows as uppercase, and control characters other than
     ///  Return are dropped.
     /// </summary>

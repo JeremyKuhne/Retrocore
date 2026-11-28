@@ -130,9 +130,11 @@ root a workflow of its own. `retrocore --version` prints the version `new` pins.
 
 A fresh clone builds every target with `dotnet tool restore` and `dotnet retrocore build --all`, with the tool from a
 local pack until a feed exists: [`tools/Test-FreshClone.mjs`](../../tools/Test-FreshClone.mjs) commits and clones a
-project `retrocore new` makes and the adventure sample's files alone, and builds each, in CI on Linux, Windows and
-macOS. The sample is ready to move to its own repository: it pins the tool, recommends the extension, ignores its
-output and has its own workflow, which builds every target and plays the transcripts once the tool is on a source it
+project `retrocore new` makes and the adventure sample's files alone, and builds each. It ran on Linux, Windows and
+macOS in CI when phase 5 was built, and now runs there when started by hand
+([`fresh-clone.yml`](../../.github/workflows/fresh-clone.yml)), not on every change. The sample is ready to move to
+its own repository: it pins the tool, recommends the extension, ignores its output and has its own workflow, which
+builds every target and plays the transcripts once the tool is on a source it
 can restore from. Its README lists what else changes on the move.
 
 In VS Code, *Retrocore: New Project* asks for the machines, a name and a folder and runs the host's `retrocore new`.
@@ -142,8 +144,8 @@ and a Restore button when its version differs ([open questions](#open-questions)
 Preview builds: [`.github/workflows/preview.yml`](../../.github/workflows/preview.yml), on each push to main or by
 hand, packs the tool as `0.1.0-preview.<run>` (checking that it installs from its package alone, says its version and
 makes a project that pins it) and the extension's VSIX with a host of that same version, and keeps both as the run's
-artifacts. They are published nowhere: a NuGet feed for the tool, a release, or the Marketplace each wait for a
-decision of their own.
+artifacts. They are published nowhere. The tool goes on a NuGet feed only when the rest of the project is published
+with it, the extension included, not ahead of it.
 
 ## The project
 
@@ -234,9 +236,10 @@ assembler already rejects a 65C02 opcode under `.cpu Mos6502`. What is new is th
 the target lacks is an error naming the target, where today it silently replaces the launch's CPU.
 
 **Boot media.** An environment whose system is an SDK source boots with nothing external: DOS 3.3, SOS, DFS, and
-the ROM environments. The SDK lists the known images of every other environment (title, version, SHA-256), such as
-ProDOS, CP/M and TRSDOS, and the dumps a device needs, such as the PET's 4040 ROMs. A PET target therefore builds
-its tape by default, which runs from SDK sources alone, and adds a disk only when the 4040's dumps are found. The build and F5 look for them by hash
+the ROM environments. The SDK lists the known images of every other environment (title, source, SHA-1), and the
+dumps a device needs: so far ProDOS 2.4.3's disk and the PET's 4040 ROMs, with CP/M's and TRSDOS's to come with their
+environments. A PET target therefore builds its tape by default, which runs from SDK sources alone, and adds a disk
+only when the 4040's dumps are found. The build and F5 look for them by hash
 in the user's [libraries](MachineFiles.md#libraries) and `RETROCORE_CACHE`. A target can name one with `bootImage`.
 When none is found, the error names the image, says where to put it, and offers a Fetch command where a legal source
 exists, as `Fetch-M1Dependencies.ps1` does for ProDOS 2.4.3.
@@ -433,6 +436,30 @@ own over `.CONSOLE` (new-line mode; Return and line feed, as the console's autom
 `PIRATE.DAT` from the disk and plays both transcripts: the Apple III is played at last. A target's `bootImage` names the folder its boot media is looked for in
 first, by hash, as the `basic` environment's 4040 disk, above, uses it.
 
+**As built so far (phase 7).** `prodos` writes `<name>.po`, a ProDOS disk named for the project: ProDOS 2.4.3's boot
+blocks and `PRODOS`, from its release disk found by hash (`sdk/1/boot-media.json`; `tools/Fetch-M1Dependencies.ps1`
+fetches it from prodos8.com, a legal source), then the program as its system file, `<NAME>.SYSTEM` (the name cut to
+8), a SYS file at `$2000`, and the target's `files` as BIN files. ProDOS runs the volume's first system file whose
+name ends `.SYSTEM` at its first byte, so a program starts with its entry or a `JMP`, which the made linker configuration's new `STARTUP`
+section puts first. Without ProDOS 2.4.3 the build writes the binary alone and says what it needs, and the launch fails
+naming the disk. A launch boots the disk in slot 6 on the II Plus with its language card and on both IIe models. The
+BIN-file form the targets table names, a program `BRUN` from BASIC.SYSTEM, is not built. The adventure's
+`apple2-prodos` target reads `PIRATE.DAT` through the MLI and plays both transcripts. Two bugs this found are fixed: the
+SOS and ProDOS volume reader missed the files in a directory's later blocks, and a routine's `Keeps:` contract was
+checked wherever its module's memory was mapped, so Integer BASIC's, mapped in a language card, fired on ProDOS's code
+there; a routine's contract from a source map, as the SDK's ROM sources and a project's are, now holds only where
+memory holds the routine's first instruction (for a whole image, every statement's), as its source lines do, so a
+routine whose first instruction a program patches is no longer checked.
+
+`level2` writes `<name>.cas`, a 500 baud SYSTEM tape (`SystemTape` in the media layer, which also reads one back,
+more strictly than Level II's loader): the bytes from the load address in blocks of 256, under the project's name cut to 6, and the entry.
+A launch plays it fast with no disk controller, answers `MEMORY SIZE?` and the Model III's `Cass?`, types `SYSTEM`,
+the name and `/`, on the Model I with Level II 1.3 or 1.2 and on the Model III. The TRS-80 has its first headers,
+`<cpu.inc>` for the Z80 and `<machine.inc>` over Level II's documented calls, and the maps gain a form for a CPU with no
+zero page, which accounts for every address from `$0000`. The Z80 sample, `sample/z80`, builds a hello world for both
+machines; `ProjectLaunchTests` boots each and reads its screen. The adventure's engine is 6502, so no Pirate
+Adventure plays here.
+
 ## Debugging in VS Code
 
 - **The active target** shows in the status bar (`adventure · apple2-dos ▾`) and in the Retrocore view. It is the
@@ -520,9 +547,10 @@ and 80 on the Apple III's SOS console.
 adventures are normally hosted and the terms given there. Recording the exact page and terms is part of adding the
 file.
 
-**Where it lives.** The sample starts in this repository, in `sample/adventure/`, so it can change with the SDK. Once
-the tool has its first preview build, it moves to a repository of its own, made with `retrocore new` and keeping its
-history, and its CI builds it with the published tool. This repository's tests then build it at a pinned commit.
+**Where it lives.** The sample starts in this repository, in `sample/adventure/`, so it can change with the SDK. It is
+ready to move to a repository of its own, keeping its history (phase 5). Its own CI builds it once the tool is
+published, which waits until the rest of the project, the extension included, is published with it. This
+repository's tests then build it at a pinned commit.
 
 ## Dialects
 
@@ -575,12 +603,12 @@ Apple Pascal comes after BASIC, with its own [plan](ApplePascal.md).
 | Generated headers | Regenerating them changes nothing (checked by digest), and every entry point matches its ROM source's address. |
 | Hardware equates | Each one matches the emulator's device map for its machine. |
 | CPU checks | A 65C02 opcode fails the 6502 targets and builds for the enhanced IIe; a Z80 opcode fails an 8080 project. |
-| Memory maps | A section in a reserved area fails with the target's name; a `memoryMap` override frees it; the generated linker configuration places a sample in free RAM on every target. |
-| Boot media | A missing image fails with its name and hash; a library image with the right hash is found; a PET target without the 4040's dumps builds its tape and no disk. |
-| Media writers | Each writer's image reads back through the existing readers (`DosDisk`, `SosVolume`, the D64 and DFS readers, `TapFormat`, `UefFormat`) and boots under emulation: the DOS 3.3 disk on a II Plus as well as a IIe, the SOS disk with SOS 1.3 built from source, the DFS disk with `!BOOT`. |
+| Memory maps | A section in a reserved area fails with the target's name; a `memoryMap` override frees it; the generated linker configuration places a sample in free RAM on every target. As built in phase 7: a `level2` map has no zero page and checks a section from `$0000`. |
+| Boot media | A missing image fails with its name and hash; a library image with the right hash is found; a PET target without the 4040's dumps builds its tape and no disk. As built in phase 7: a `prodos` target without ProDOS 2.4.3's disk builds its binary and no disk, saying what it needs, and its launch fails naming the disk; with it, the disk boots on the II Plus and both IIe models. |
+| Media writers | Each writer's image reads back through the existing readers (`DosDisk`, `SosVolume`, the D64 and DFS readers, `TapFormat`, `UefFormat`) and boots under emulation: the DOS 3.3 disk on a II Plus as well as a IIe, the SOS disk with SOS 1.3 built from source, the DFS disk with `!BOOT`. As built in phase 7: the ProDOS disk reads back through `SosVolume` and boots on the II Plus and both IIe models; the SYSTEM tape reads back through `SystemTape.Read` and `CassetteFormat`, and loads with `SYSTEM` on the Model I (Level II 1.2 and 1.3) and the Model III. |
 | The Apple-1's RAM | 16K and 32K boot the Woz Monitor and run a program above `$1FFF`; other sizes are still rejected. |
 | Dialects | ca65 and Merlin samples include the native headers and build byte-identically to their native twin. |
-| The adventure | It builds for all five targets. A scripted walkthrough of the test adventure, and an opening of Pirate Adventure, run on each target under the debug adapter, in the style of the `tools/Test-*Dap.mjs` scripts, and each transcript must match the packer's reference engine. As built in phase 3: Pirate Adventure's win, from start to finish, and its death play on the bare Apple-1, PET, Apple II and BBC Micro, and the test game's three transcripts on a second Apple II target; the Apple III builds but is not played until it has a character set. As built in phase 4: both play on each machine's own environment too, from its disk or tape, or its hex as typed in (`apple1-wozmon`, `apple2-dos`, `apple3-sos`, `pet-basic`, `bbc-dfs`), loading the game from the disk on the Apple II, the Apple III and the BBC Micro; the bare Apple III is still not played, and `pet-disk` plays only with the 4040's dumps, reported as skipped without them. |
+| The adventure | It builds for all five targets. A scripted walkthrough of the test adventure, and an opening of Pirate Adventure, run on each target under the debug adapter, in the style of the `tools/Test-*Dap.mjs` scripts, and each transcript must match the packer's reference engine. As built in phase 3: Pirate Adventure's win, from start to finish, and its death play on the bare Apple-1, PET, Apple II and BBC Micro, and the test game's three transcripts on a second Apple II target; the Apple III builds but is not played until it has a character set. As built in phase 4: both play on each machine's own environment too, from its disk or tape, or its hex as typed in (`apple1-wozmon`, `apple2-dos`, `apple3-sos`, `pet-basic`, `bbc-dfs`), loading the game from the disk on the Apple II, the Apple III and the BBC Micro; the bare Apple III is still not played, and `pet-disk` plays only with the 4040's dumps, reported as skipped without them. As built in phase 7: both play on `apple2-prodos`, from its ProDOS disk, reading the game through the MLI; reported as skipped without ProDOS 2.4.3, as in CI. |
 | VS Code | The active target picker, F5 without a launch.json, the `project` launch, and the language server switching targets. |
 | Versions | A project on the previous major builds with its deprecation warnings; a removed name fails on the current major. |
 
@@ -608,13 +636,14 @@ media writers can go alongside them, each in its own change.
    file format, its image and how F5 loads it, and boot media lookup by hash. Done when Pirate Adventure plays on all
    five targets from their disks and tapes, loading `PIRATE.DAT` where there is a disk.
 5. **The repository workflow.** `retrocore new` and `retrocore init` with their templates, *Retrocore: New Project*,
-   the generated CI workflow, and preview builds of the tool and the extension. Then the sample moves to its own
-   repository. Done when a fresh clone builds every target with `dotnet tool restore` and `dotnet retrocore build --all`
-   on Windows, macOS and Linux.
+   the generated CI workflow, and preview builds of the tool and the extension. Then the sample is ready to move to its
+   own repository, which it does once the tool is published. Done when a fresh clone builds every target with
+   `dotnet tool restore` and `dotnet retrocore build --all` on Windows, macOS and Linux (`fresh-clone.yml`, run by
+   hand).
 6. **Deprecation.** Deprecation warnings from `retrocore build`, and the previous-major support, needed before the
    SDK's first breaking change.
 7. **More environments.** `prodos`, `cpm`, `level2`, `trsdos`, `colorbasic` and `diskbasic`, and SOS interpreters that
-   relocate.
+   relocate. Built so far: `prodos` and `level2` (as built under [media writers](#media-writers)).
 8. **Portable macros.** A small `rc_` set (`rc_putchar`, `rc_getkey`, `rc_getline`, `rc_cls`, `rc_exit`) for every
    target, grown out of the adventure's console layer.
 9. **BASIC sources**, which load routines the same project assembles.

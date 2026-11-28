@@ -65,7 +65,7 @@ public sealed class CommodoreDatasette : ITapeDrive, IMediumSlot
             Controller = controller,
             Formats = ["tap", "wav", "t64"],
             SaveFormats = ["tap", "wav"],
-            Operations = MediaOperations.Insert | MediaOperations.Eject | MediaOperations.Record | MediaOperations.Save
+            Operations = MediaOperations.Insert | MediaOperations.Eject | MediaOperations.Record | MediaOperations.Save | MediaOperations.Keys
         };
     }
 

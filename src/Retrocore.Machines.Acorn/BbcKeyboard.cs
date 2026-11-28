@@ -34,6 +34,11 @@ public sealed class BbcKeyboard
     private int _typingCycles;
     private (BbcKey Key, bool Shift, bool Control)? _holding;
 
+    /// <summary>
+    ///  Gets or sets whether typed keys use accelerated scan-length holds and gaps.
+    /// </summary>
+    public bool FastTyping { get; set; }
+
     // The 1 MHz cycles left that SHIFT is held for SHIFT-BREAK.
     private int _shiftCycles;
 
@@ -66,6 +71,16 @@ public sealed class BbcKeyboard
     ///  Gets whether typed text is still going in.
     /// </summary>
     public bool IsTyping => _holding is not null || _typed.Count != 0;
+
+    /// <summary>
+    ///  Gets how many typed keys are queued or held.
+    /// </summary>
+    public int Pending => _typed.Count + (_holding is not null ? 1 : 0);
+
+    /// <summary>
+    ///  Gets whether the physical matrix has any keys down, excluding the startup links.
+    /// </summary>
+    public bool AnyPressed => _columns.AsSpan().ContainsAnyExcept((byte)0);
 
     /// <summary>
     ///  Gets the column the keyboard addresses.
@@ -200,7 +215,7 @@ public sealed class BbcKeyboard
             _holding = next;
 
             // Held for four of the keyboard routine's 10 ms polls, well short of the 0.32 s auto-repeat delay.
-            _typingCycles = 40_000;
+            _typingCycles = FastTyping ? 20_000 : 40_000;
         }
     }
 

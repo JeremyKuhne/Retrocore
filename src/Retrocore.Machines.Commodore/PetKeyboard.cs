@@ -30,6 +30,11 @@ public sealed class PetKeyboard
     private int _remaining;
 
     /// <summary>
+    ///  Gets or sets whether typed keys use scan-length rather than typist-length holds and gaps.
+    /// </summary>
+    public bool FastTyping { get; set; }
+
+    /// <summary>
     ///  Creates a keyboard with every key up.
     /// </summary>
     /// <param name="business">Whether it is the business keyboard rather than the graphics one.</param>
@@ -99,6 +104,16 @@ public sealed class PetKeyboard
     public bool IsTyping => _current is not null || _typed.Count != 0;
 
     /// <summary>
+    ///  Gets how many typed keys are queued or held.
+    /// </summary>
+    public int Pending => _typed.Count + (_current is not null ? 1 : 0);
+
+    /// <summary>
+    ///  Gets whether the physical matrix has any keys down.
+    /// </summary>
+    public bool AnyPressed => _rows.AsSpan().ContainsAnyExcept((byte)0);
+
+    /// <summary>
     ///  Queues a typed character, in PETSCII, with SHIFT where the keyboard needs it: letters of either case type
     ///  unshifted, as the capitals the PET shows; 9 is the business keyboard's TAB and 27 its ESC;
     ///  13 is RETURN, 20 or 8 DELETE, 3 STOP, 19 HOME, 147 CLEAR (SHIFT-HOME), 17 and 145 cursor down and up, 29 and
@@ -147,7 +162,9 @@ public sealed class PetKeyboard
             SetPosition(held.Key, pressed: false);
             if (held.Shift) { SetPosition(_shift, pressed: false); }
             _current = null;
-            _remaining = held.Key == _return ? ReleaseAfterReturnCycles : ReleaseCycles;
+            if (held.Key == _return) { _remaining = ReleaseAfterReturnCycles; }
+            else if (FastTyping) { _remaining = PetTiming.CyclesPerFrame; }
+            else { _remaining = ReleaseCycles; }
             return;
         }
 
@@ -156,7 +173,7 @@ public sealed class PetKeyboard
             if (next.Shift) { SetPosition(_shift, pressed: true); }
             SetPosition(next.Key, pressed: true);
             _current = next;
-            _remaining = HoldCycles;
+            _remaining = FastTyping ? 2 * PetTiming.CyclesPerFrame : HoldCycles;
         }
     }
 

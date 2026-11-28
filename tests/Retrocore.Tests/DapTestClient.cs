@@ -40,7 +40,7 @@ internal sealed class DapTestClient : DisposableBase
         _hostOutput = new(PipeDirection.Out, _fromHost.ClientSafePipeHandle);
         DapTransport transport = new(_hostInput, _hostOutput);
         _session.Register(transport, transport.Stop);
-        _host = new(transport.Run) { IsBackground = true };
+        _host = new(() => transport.Run(_session.End)) { IsBackground = true };
 
         _reader = new(Read) { IsBackground = true };
         _host.Start();
@@ -53,10 +53,15 @@ internal sealed class DapTestClient : DisposableBase
     /// <param name="command">The request's command, such as <c>launch</c>.</param>
     /// <param name="arguments">Its arguments.</param>
     /// <returns>The response's body, or an empty object when it has none.</returns>
-    internal JsonObject Request(string command, JsonObject arguments)
+    internal JsonObject Request(string command, JsonObject arguments) => Request(command, arguments, out _);
+
+    /// <inheritdoc cref="Request(string, JsonObject)"/>
+    /// <param name="sequence">The response's position on the wire.</param>
+    internal JsonObject Request(string command, JsonObject arguments, out int? sequence)
     {
         JsonObject response = Send(command, arguments);
         response.Bool("success").Should().BeTrue($"{command} failed: {response.String("message")}");
+        sequence = response.Int("seq");
         return response["body"] as JsonObject ?? [];
     }
 
@@ -71,6 +76,21 @@ internal sealed class DapTestClient : DisposableBase
         JsonObject response = Send(command, arguments);
         response.Bool("success").Should().BeFalse($"{command} should fail");
         return response.String("message") ?? "";
+    }
+
+    /// <summary>
+    ///  Sends a request that may fail, and waits for its response.
+    /// </summary>
+    /// <param name="command">The request's command, such as <c>launch</c>.</param>
+    /// <param name="arguments">Its arguments.</param>
+    /// <param name="failure">The response's message when it failed, else null.</param>
+    /// <returns>The response's body, or null when it failed.</returns>
+    internal JsonObject? TryRequest(string command, JsonObject arguments, out string? failure)
+    {
+        JsonObject response = Send(command, arguments);
+        bool succeeded = response.Bool("success") == true;
+        failure = succeeded ? null : response.String("message") ?? "";
+        return succeeded ? response["body"] as JsonObject ?? [] : null;
     }
 
     private JsonObject Send(string command, JsonObject arguments)
@@ -100,12 +120,20 @@ internal sealed class DapTestClient : DisposableBase
     /// </summary>
     /// <param name="name">The event, such as <c>stopped</c>.</param>
     /// <returns>The event's body.</returns>
-    internal JsonObject Event(string name)
+    internal JsonObject Event(string name) => Event(name, out _);
+
+    /// <inheritdoc cref="Event(string)"/>
+    /// <param name="sequence">The event's position on the wire.</param>
+    internal JsonObject Event(string name, out int? sequence)
     {
         DateTime end = DateTime.UtcNow + s_timeout;
         while (_events.TryTake(out JsonObject? message, Remaining(end)))
         {
-            if (message.String("event") == name) { return message["body"] as JsonObject ?? []; }
+            if (message.String("event") == name)
+            {
+                sequence = message.Int("seq");
+                return message["body"] as JsonObject ?? [];
+            }
         }
 
         throw new AssertFailedException($"No {name} event came.");
@@ -122,6 +150,20 @@ internal sealed class DapTestClient : DisposableBase
         while (_events.TryTake(out JsonObject? message, Remaining(end)))
         {
             message.String("event").Should().NotBe("stopped", because);
+        }
+    }
+
+    /// <summary>
+    ///  Checks that no event with a name comes for a while, passing over other events.
+    /// </summary>
+    /// <param name="name">The event that must not come.</param>
+    /// <param name="wait">How long to watch.</param>
+    internal void NoEvent(string name, TimeSpan wait)
+    {
+        DateTime end = DateTime.UtcNow + wait;
+        while (_events.TryTake(out JsonObject? message, Remaining(end)))
+        {
+            message.String("event").Should().NotBe(name);
         }
     }
 

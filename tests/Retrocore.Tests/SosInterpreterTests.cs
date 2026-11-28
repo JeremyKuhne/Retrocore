@@ -6,6 +6,7 @@ using Retrocore.Assembler;
 using Retrocore.Debug;
 using Retrocore.Machines.Apple3;
 using Retrocore.Media;
+using System.Text.Json.Nodes;
 
 namespace Retrocore.Tests;
 
@@ -33,11 +34,26 @@ public sealed class SosInterpreterTests
         OPEN = $C8
         WRITE = $CB
 
+        ;; SOS reads a fixed number of bytes from the open console.
+        READ_CALL = $CA
+        ;; The READ parameter list has four parameters.
+        READ_PARAMETER_COUNT = 4
+        ;; The test feeds four keys, including a repeated letter.
+        KEY_COUNT = 4
+
         Start:
             brk
             .byte OPEN
             .word OpenParameters
             bne Stop
+        .if READ_KEYBOARD
+            lda OpenReference
+            sta ReadReference
+            brk
+            .byte READ_CALL
+            .word ReadParameters
+            bne Stop
+        .endif
             lda OpenReference
             sta WriteReference
             brk
@@ -69,6 +85,22 @@ public sealed class SosInterpreterTests
         Text:
             .byte "HELLO FROM THE SDK'S SOS"
         TextEnd:
+
+        .if READ_KEYBOARD
+        ;; Parameters for the console read, including the returned byte count.
+        ReadParameters:
+            .byte READ_PARAMETER_COUNT
+        ReadReference:
+            .byte 0
+            .word Keys
+            .word KEY_COUNT
+        ReadCount:
+            .word 0
+
+        ;; The bytes the driver passed back to the interpreter.
+        Keys:
+            .res KEY_COUNT
+        .endif
         """;
 
     /// <summary>
@@ -195,11 +227,82 @@ public sealed class SosInterpreterTests
         SosBootDiskTests.RunUntil(machine, "HELLO FROM THE SDK'S SOS", seconds: 60);
     }
 
-    private static byte[] AssembleProgram()
+    /// <summary>
+    ///  Both shipped SOS console releases accept at IRQ ring commit and return the input to a real SOS READ caller.
+    /// </summary>
+    /// <param name="define">The SDK driver build's release selector.</param>
+    /// <param name="profile">The expected verified input profile.</param>
+    [TestMethod]
+    [DataRow("RELEASE_130", "sosConsole130")]
+    [DataRow("", "sosConsole131")]
+    public void RelocatedConsoleAcknowledgesThenAdmitsKeys(string define, string profile)
+    {
+        string sdk = SosBootDiskTests.SdkDirectory;
+        AssemblyResult program = Assemble(readKeyboard: true);
+        SosDriver console = Apple3SdkModules.BuildSosDriver(sdk, "Console", define);
+        byte[] drivers = SosDriverFile.Write(Apple3SdkModules.BuildSosDriverHeader(sdk, drives: 1), [console]);
+        byte[] interpreter = SosInterpreterFile.Write(LoadAddress, Bytes(program));
+        SosVolumeBuilder disk = SosBootDisk.Create(
+            "KEYS", Apple3SdkModules.BuildSosBoot(sdk), Apple3SdkModules.BuildSosKernel(sdk), drivers, interpreter);
+
+        Apple3DebugTarget target = Apple3DebugTarget.Launch(new JsonObject { ["sdkRoms"] = sdk, ["sound"] = "off" });
+        target.BootDrive.Insert(SectorDiskConverter.Convert(disk.Build(proDosOrder: false), proDosOrder: false), "sdk", "DSK");
+        DebugInfo debug = new();
+        target.AddSdkModules(debug, sdk);
+        RunWhile(() => target.ProgramCounter != LoadAddress, maxCycles: 70_000_000);
+        target.AddLoadedModules(debug).Should().BeTrue();
+
+        const string Keys = "ABBA";
+        InputBatch batch = new(1, [.. Keys.Select(key => (int)key)], 0, guestDemand: true);
+        while (batch.Pending > 0)
+        {
+            GuestInputPath? path = null;
+            RunWhile(() => (path = target.WaitingForInput()) is null);
+            GuestInputPath active = path ?? throw new AssertFailedException("No SOS console path.");
+            active.Profile.Should().Be(profile);
+            batch.Deliver(active);
+            RunWhile(() =>
+            {
+                batch.Observe();
+                return batch.InFlight;
+            });
+        }
+
+        ushort end = (ushort)program.Symbols["Stop"];
+        RunWhile(() => target.ProgramCounter != end);
+        batch.ToJson().Int("acknowledged").Should().Be(Keys.Length);
+        batch.ToJson().Int("accepted").Should().Be(Keys.Length);
+        ushort count = (ushort)program.Symbols["ReadCount"];
+        InputFirmware.Word(target, count).Should().Be((ushort)Keys.Length);
+        int data = (int)program.Symbols["Keys"];
+        Enumerable.Range(data, Keys.Length).Select(address => (char)target.Peek((ushort)address)).Should().Equal(Keys);
+
+        void RunWhile(Func<bool> waiting, ulong maxCycles = 500_000)
+        {
+            ulong deadline = target.CycleCount + maxCycles;
+            while (target.CycleCount < deadline)
+            {
+                if (target.IsInstructionBoundary && !waiting()) { return; }
+                target.StepCycle();
+            }
+
+            throw new AssertFailedException($"SOS did not reach the expected boundary at ${target.ProgramCounter:X4}.");
+        }
+    }
+
+    private static byte[] AssembleProgram() => Bytes(Assemble(readKeyboard: false));
+
+    private static AssemblyResult Assemble(bool readKeyboard)
     {
         AssemblyOptions options = new(ProcessorVariant.Mos6502, LoadAddress, 0x100);
-        AssemblyResult result = new Assembler.Assembler().Assemble(new AssemblySource(Program, "Hello.asm"), options);
+        string text = $"READ_KEYBOARD = {(readKeyboard ? 1 : 0)}\n{Program}";
+        AssemblyResult result = new Assembler.Assembler().Assemble(new AssemblySource(text, "Hello.asm"), options);
         result.Diagnostics.Should().BeEmpty();
+        return result;
+    }
+
+    private static byte[] Bytes(AssemblyResult result)
+    {
         int end = result.SourceMap.Max(entry => entry.Offset + entry.Size);
         return result.Sections[0].Bytes[..end].ToArray();
     }

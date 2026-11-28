@@ -91,6 +91,7 @@ public sealed class Apple3Bus : IOpcodeFetchBus
     private const string ShiftedSymbols = "!@#$%^&*()_+{}|:\"<>?~";
 
     private const int KeyInterval = 286_363_620;         // 20 ms between queued keys
+    private const int FastKeyInterval = 14_318_180;      // 1 ms for SOS's keyboard interrupt to finish
 
     private readonly byte[] _ram;
     private readonly byte[] _rom;
@@ -104,6 +105,7 @@ public sealed class Apple3Bus : IOpcodeFetchBus
     private int _bankBase;
     private byte _extendedBank;
     private bool _sync;
+    private bool _fastTyping;
 
     private int _viaTime;
     private int _paddleTime;
@@ -507,6 +509,20 @@ public sealed class Apple3Bus : IOpcodeFetchBus
 
         if (_strobe == 0 && _keyDelay == 0) { DeliverKey(); }
     }
+
+    /// <summary>
+    ///  Gets or sets whether queued keys use a short interrupt-safe gap rather than a typist's gap.
+    /// </summary>
+    public bool FastTyping
+    {
+        get => _fastTyping;
+        set => _fastTyping = value;
+    }
+
+    /// <summary>
+    ///  Gets the count of queued characters and the one, if any, latched with its strobe set.
+    /// </summary>
+    public int KeysWaiting => _keys.Count + (_strobe != 0 ? 1 : 0);
 
     /// <summary>
     ///  Sets the screen-blank input (VIA 1 PB6), low while the beam draws a visible line.
@@ -1083,7 +1099,7 @@ public sealed class Apple3Bus : IOpcodeFetchBus
 
         // The next queued key comes a typist's beat later, not at once: SOS's console driver takes keys on VIA 1's
         // interrupt, and a key arriving inside its handler would have its flag cleared with the last one's.
-        if (_keys.Count != 0 && _keyDelay == 0) { _keyDelay = KeyInterval; }
+        if (_keys.Count != 0 && _keyDelay == 0) { _keyDelay = FastTyping ? FastKeyInterval : KeyInterval; }
     }
 
     // The analog inputs: $C05C discharges the timing capacitor, $C05D starts the ramp, $C066 reads it running.

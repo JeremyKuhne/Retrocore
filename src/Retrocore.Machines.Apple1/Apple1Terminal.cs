@@ -96,6 +96,16 @@ public sealed class Apple1Terminal : IVideoSource, ICharacterSet
     public bool Busy { get; private set; }
 
     /// <summary>
+    ///  Gets or sets whether output is accepted immediately rather than waiting for the beam to reach the cursor.
+    /// </summary>
+    public bool FastOutput { get; set; }
+
+    /// <summary>
+    ///  Gets or sets a receiver for the seven data bits accepted from the PIA, before display normalization.
+    /// </summary>
+    public Action<byte>? AcceptedByte { get; set; }
+
+    /// <summary>
     ///  Gets the cycle within the frame.
     /// </summary>
     public int CycleInFrame { get; private set; }
@@ -170,15 +180,17 @@ public sealed class Apple1Terminal : IVideoSource, ICharacterSet
 
         if (_acknowledge > 0 && --_acknowledge == 0) { _pia.SetCB1(level: false); }
 
-        if (CycleInFrame == CursorCycle)
+        if ((FastOutput && Busy) || (!FastOutput && CycleInFrame == CursorCycle))
         {
             if (Busy)
             {
                 Busy = false;
-                Take((byte)(_pia.PinsB & 0x7F));
+                byte code = (byte)(_pia.PinsB & 0x7F);
+                Take(code);
+                AcceptedByte?.Invoke(code);
             }
 
-            // The one-shot acknowledges as the cursor comes around.
+            // The one-shot acknowledges the write; fast output accepts it as soon as the falling edge is latched.
             _pia.SetCB1(level: true);
             _acknowledge = AcknowledgeCycles;
         }

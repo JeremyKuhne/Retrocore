@@ -86,7 +86,7 @@ internal sealed partial class DebugSession
                 MediaActions.KeepReplaced(kaypro.BootDrive, $"the build's {build.Media.ImageKind} took its place");
                 kaypro.BootDrive.Insert(cpm, label, "IMG");
                 ForgetBoundaries();
-                long start = (long)kaypro.CycleCount;
+                long booted = (long)kaypro.CycleCount;
                 try
                 {
                     kaypro.TypeAtPrompt(CpmEnvironment.ProgramName(target), target.Built?.BootSeconds ?? 0);
@@ -98,7 +98,7 @@ internal sealed partial class DebugSession
                 }
 
                 // TypeAtPrompt runs in steps, so it may return a little past the boot's limit; the entry then has a cycle.
-                long left = ((long)(target.Built?.BootSeconds ?? 0) * Target.ClockHertz) - ((long)kaypro.CycleCount - start);
+                long left = ((long)(target.Built?.BootSeconds ?? 0) * Target.ClockHertz) - ((long)kaypro.CycleCount - booted);
                 RunToEntry(build, Math.Max(1, left));
                 return;
             case CocoDebugTarget coco when target.Environment == "diskbasic":

@@ -153,7 +153,9 @@ if (args.Length > 0 && args[0] is "--boot-probe" or "--boot-state")
 
 // The debugger: the Debug Adapter Protocol on standard input and output, until VS Code disconnects or closes the pipe.
 DebugSession session = new();
-DapTransport transport = new(Console.OpenStandardInput(), Console.OpenStandardOutput());
+using Stream input = Console.OpenStandardInput();
+using Stream output = DapStandardIo.OpenOutput();
+DapTransport transport = new(input, output, DapStandardIo.Reader(input));
 session.Register(transport, transport.Stop);
 transport.Run(() =>
 {

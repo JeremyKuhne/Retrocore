@@ -24,7 +24,8 @@ namespace Retrocore.Debug;
 /// </remarks>
 /// <param name="input">Where messages arrive, such as standard input.</param>
 /// <param name="output">Where messages go, such as standard output.</param>
-internal sealed class MessageFraming(Stream input, Stream output)
+/// <param name="read">An optional cancellable read for the transport.</param>
+internal sealed class MessageFraming(Stream input, Stream output, Func<Memory<byte>, CancellationToken, int>? read = null)
 {
     private const string LengthHeader = "Content-Length";
 
@@ -36,30 +37,34 @@ internal sealed class MessageFraming(Stream input, Stream output)
     };
 
     private readonly ArrayBufferWriter<byte> _buffer = new();
-    private readonly Stream _input = new BufferedStream(input);
     private readonly Lock _write = new();
+    private readonly byte[] _inputBytes = new byte[4096];
+    private int _inputStart;
+    private int _inputEnd;
 
     /// <summary>
     ///  Reads the next message.
     /// </summary>
+    /// <param name="cancellation">Cancels a transport read.</param>
     /// <returns>The message, or null at the end of the input.</returns>
     /// <exception cref="JsonException">The message is not a JSON object; the next one can still be read.</exception>
-    internal JsonObject? Read()
+    internal JsonObject? Read(CancellationToken cancellation = default)
     {
         int? length = null;
-        while (ReadLine() is { } line)
+        while (ReadLine(cancellation) is { } line)
         {
             if (line.Length == 0)
             {
                 if (length is not { } count) { continue; }
                 byte[] json = new byte[count];
-                try
+                int copied = 0;
+                while (copied < count)
                 {
-                    _input.ReadExactly(json);
-                }
-                catch (EndOfStreamException)
-                {
-                    return null;
+                    if (!Fill(cancellation)) { return null; }
+                    int take = Math.Min(count - copied, _inputEnd - _inputStart);
+                    _inputBytes.AsSpan(_inputStart, take).CopyTo(json.AsSpan(copied));
+                    _inputStart += take;
+                    copied += take;
                 }
 
                 // A message that is JSON but not an object has nothing to answer, as one that is not JSON.
@@ -106,15 +111,25 @@ internal sealed class MessageFraming(Stream input, Stream output)
     }
 
     // A header line without its line ending, or null at the end of the input.
-    private string? ReadLine()
+    private string? ReadLine(CancellationToken cancellation)
     {
         using ValueStringBuilder line = new(stackalloc char[64]);
-        while (true)
+        while (Fill(cancellation))
         {
-            int next = _input.ReadByte();
-            if (next < 0) { return line.Length == 0 ? null : line.ToString(); }
+            int next = _inputBytes[_inputStart++];
             if (next == '\n') { return line.ToString().TrimEnd('\r'); }
             line.Append((char)next);
         }
+
+        return line.Length == 0 ? null : line.ToString();
+    }
+
+    private bool Fill(CancellationToken cancellation)
+    {
+        if (_inputStart < _inputEnd) { return true; }
+        cancellation.ThrowIfCancellationRequested();
+        _inputStart = 0;
+        _inputEnd = read is null ? input.Read(_inputBytes) : read(_inputBytes, cancellation);
+        return _inputEnd != 0;
     }
 }

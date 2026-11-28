@@ -320,6 +320,77 @@ public sealed class DapTransportTests
     }
 
     /// <summary>
+    ///  A broken output cancels a reader waiting for input even when the peer keeps its pipe open.
+    /// </summary>
+    /// <returns>The test task.</returns>
+    [TestMethod]
+    public async Task OutputFailureStopsBlockedReader()
+    {
+        using ManualResetEventSlim reading = new();
+        using ManualResetEventSlim close = new();
+        using DisconnectReadStream input = new(Request(1, "initialize", []), reading, close);
+        MemoryStream output = new();
+        output.Dispose();
+        DapTransport transport = new(input, output, (bytes, token) => input.Read(bytes.Span, token));
+        transport.On("initialize", _ =>
+        {
+            reading.Wait(s_threadTimeout).Should().BeTrue();
+            return new JsonObject();
+        });
+
+        Task host = StartHost(transport.Run);
+        try
+        {
+            await host.WaitAsync(s_threadTimeout).ConfigureAwait(continueOnCapturedContext: false);
+            transport.OutputFailed.Should().BeTrue();
+        }
+        finally
+        {
+            close.Set();
+            await host.WaitAsync(s_threadTimeout).ConfigureAwait(continueOnCapturedContext: false);
+        }
+    }
+
+    /// <summary>
+    ///  The actual debugger host detects a closed output pipe and exits without waiting for input EOF.
+    /// </summary>
+    /// <returns>The test task.</returns>
+    [TestMethod]
+    public async Task RedirectedHostExitsWhenPeerClosesOnlyOutput()
+    {
+        ProcessStartInfo start = new("dotnet")
+        {
+            ArgumentList = { typeof(DebugSession).Assembly.Location },
+            RedirectStandardInput = true,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+            CreateNoWindow = true
+        };
+
+        using Process host = Process.Start(start) ?? throw new AssertFailedException("Could not start the DAP host.");
+        host.StandardOutput.Dispose();
+        Task<string> errors = host.StandardError.ReadToEndAsync();
+        try
+        {
+            Stream input = host.StandardInput.BaseStream;
+            await input.WriteAsync(Request(1, "initialize", [])).ConfigureAwait(continueOnCapturedContext: false);
+            await input.FlushAsync().ConfigureAwait(continueOnCapturedContext: false);
+            await host.WaitForExitAsync().WaitAsync(s_threadTimeout).ConfigureAwait(continueOnCapturedContext: false);
+            host.ExitCode.Should().Be(1);
+            (await errors.ConfigureAwait(continueOnCapturedContext: false)).Should().Contain("DAP output failed:");
+        }
+        finally
+        {
+            if (!host.HasExited)
+            {
+                host.Kill();
+                await host.WaitForExitAsync().WaitAsync(s_threadTimeout).ConfigureAwait(continueOnCapturedContext: false);
+            }
+        }
+    }
+
+    /// <summary>
     ///  A queued cancellation interrupts a launch without reordering the two responses.
     /// </summary>
     [TestMethod]

@@ -1,5 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <TargetFrameworks />
     <TargetFramework>net11.0</TargetFramework>
     <OutputType>Exe</OutputType>

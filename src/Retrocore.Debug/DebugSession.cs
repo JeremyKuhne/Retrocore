@@ -1057,6 +1057,7 @@ internal sealed partial class DebugSession
         CloseJournal();
         ReleaseTarget();
         _target = null;
+        _mediaSpeed = null;
         ForgetBoundaries();
         _target = machine switch
         {

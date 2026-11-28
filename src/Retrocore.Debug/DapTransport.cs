@@ -22,11 +22,15 @@ namespace Retrocore.Debug;
 /// </remarks>
 /// <param name="input">Where requests arrive, such as standard input.</param>
 /// <param name="output">Where responses and events go, such as standard output.</param>
-internal sealed class DapTransport(Stream input, Stream output)
+/// <param name="read">
+///  An optional read for input that does not support cancellation through
+///  <see cref="Stream.ReadAsync(Memory{byte}, CancellationToken)"/>.
+/// </param>
+internal sealed class DapTransport(Stream input, Stream output, Func<Memory<byte>, CancellationToken, int>? read = null)
 {
     private const int OutputDrainMilliseconds = 2_000;
 
-    private readonly MessageFraming _wire = new(input, output);
+    private readonly MessageFraming _wire = new(input, output, read ?? ((bytes, token) => input.ReadAsync(bytes, token).AsTask().GetAwaiter().GetResult()));
     private readonly Dictionary<string, Func<JsonObject, (JsonNode? Body, Action? FollowUp)>> _handlers = [with(StringComparer.Ordinal)];
     private readonly object _outboundGate = new();
     private Queue<(Action Write, Action? Release, int Weight)> _outbound = new();
@@ -243,7 +247,7 @@ internal sealed class DapTransport(Stream input, Stream output)
             if (_stopped) { break; }
         }
 
-        if (!_outputFailed) { reader.GetAwaiter().GetResult(); }
+        reader.GetAwaiter().GetResult();
     }
 
     private void ReadRequests(BlockingCollection<(JsonObject Message, TaskCompletionSource? Disconnect)> requests)
@@ -260,7 +264,7 @@ internal sealed class DapTransport(Stream input, Stream output)
             JsonObject? message;
             try
             {
-                message = _wire.Read();
+                message = _wire.Read(_stopReading.Token);
             }
             catch (JsonException exception)
             {
@@ -352,7 +356,8 @@ internal sealed class DapTransport(Stream input, Stream output)
             catch (Exception exception) when (exception is IOException or ObjectDisposedException or InvalidOperationException or JsonException)
             {
                 _outputFailed = true;
-                _stopped = true;
+                Stop();
+                lock (_pendingLaunches) { CancelPendingLaunches(); }
                 Console.Error.WriteLine($"DAP output failed: {exception.Message}");
             }
             finally

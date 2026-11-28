@@ -84,6 +84,26 @@ public sealed class DapTextTests
     }
 
     /// <summary>
+    ///  Failing to construct a replacement machine invalidates the old media policy.
+    /// </summary>
+    [TestMethod]
+    public void FailedReplacementLaunchDoesNotExposeOldMediaSettings()
+    {
+        using DapTestClient client = new();
+        client.Request("initialize", []);
+        JsonObject launch = Apple1(textOnly: true);
+        launch["tapeSpeed"] = "skip";
+        client.Request("launch", launch);
+        client.Request("retro/mediaSpeed", []).String("tape").Should().Be("skip");
+
+        client.Fails("launch", new JsonObject { ["machine"] = "pet", ["model"] = "unknown" }).Should().Contain("model");
+        client.Fails("retro/mediaSpeed", []).Should().Contain("No machine has been launched");
+
+        client.Request("launch", Apple1(textOnly: true));
+        client.Request("retro/mediaSpeed", []).String("tape").Should().Be("fast");
+    }
+
+    /// <summary>
     ///  Text-only sessions return the terminal buffer, suppress frame events, and complete text waits asynchronously.
     /// </summary>
     [TestMethod]

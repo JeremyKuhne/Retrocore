@@ -17,7 +17,15 @@ internal sealed class DisconnectReadStream(byte[] message, ManualResetEventSlim 
     public override int Read(byte[] buffer, int offset, int count) => Read(buffer.AsSpan(offset, count));
 
     /// <inheritdoc/>
-    public override int Read(Span<byte> buffer)
+    public override int Read(Span<byte> buffer) => Read(buffer, CancellationToken.None);
+
+    /// <summary>
+    ///  Reads from the open input until it supplies bytes, closes or is canceled.
+    /// </summary>
+    /// <param name="buffer">Where to put the received bytes.</param>
+    /// <param name="cancellation">The token that interrupts the input wait.</param>
+    /// <returns>The number of bytes read.</returns>
+    internal int Read(Span<byte> buffer, CancellationToken cancellation)
     {
         if (Position < Length)
         {
@@ -28,7 +36,7 @@ internal sealed class DisconnectReadStream(byte[] message, ManualResetEventSlim 
         }
 
         readingPastMessage.Set();
-        close.Wait();
+        close.Wait(cancellation);
         return 0;
     }
 }

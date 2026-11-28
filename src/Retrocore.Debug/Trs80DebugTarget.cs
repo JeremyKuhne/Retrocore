@@ -75,6 +75,11 @@ internal sealed partial class Trs80DebugTarget : IDebugTarget
     /// </summary>
     internal Trs80Machine Machine => _machine;
 
+    /// <summary>
+    ///  Gets the cassette recorder, which a level2 target's tape goes in.
+    /// </summary>
+    internal Trs80CassetteDrive BootDeck => _machine.Cassette;
+
     /// <inheritdoc/>
     public string ThreadName => "Model I Z80";
 

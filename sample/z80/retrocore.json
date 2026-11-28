@@ -1,0 +1,14 @@
+// A Z80 project: a hello world for the SDK's Z80 environments, each target with its machine's console in
+// src/platform/<family>/ and its environment's Exit in src/platform/<environment>/, as the 6502 template lays them
+// out. Build it with `retrocore build --all` here; ProjectLaunchTests boots each target and reads its screen.
+{
+  "sdk": "1",
+  "name": "hello",
+  "cpu": "z80",
+  "sources": ["src/*.s"],
+  "entry": "Main",
+  "targets": {
+    "trs80-level2": { "machine": "trs80-model1-level2", "environment": "level2" },
+    "trs80-model3-level2": { "machine": "trs80-model3", "environment": "level2" }
+  }
+}

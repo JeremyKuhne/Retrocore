@@ -687,7 +687,7 @@ Done:
 ;; the record's end without EOI is dropped.
 ;; Also: WRTREL (D1541)
 .proc WriteByte
-    lda #$A0
+    lda #RELATIVE_LAST_RECORD+RELATIVE_OVERFLOW
     jsr Files::TestFlag
     bne FlagSet
 
@@ -1012,7 +1012,7 @@ LastSideSector:
 ;; The channel found (else 70 NO CHANNEL); its flags cleared.
 ;; Also: R20 (D1541)
 HaveChannel:
-    lda #$A0
+    lda #RELATIVE_LAST_RECORD+RELATIVE_OVERFLOW
     jsr Files::ClearFlag
     jsr Files::ChannelType
     beq IsRelative
@@ -1043,7 +1043,10 @@ IsRelative:
     sta ErrorFlash
     lda #$00
 
-;; As R40: one label at this address (Q7).
+;; Sets the offset in the record: A, the command's offset less 1 (0 if it gave none or 1) when that is inside the
+;; record, else 0 after 51 RECORD OVERFLOW is noted in <ErrorFlash>. Then finds the record and its side sector
+;; (<Files::FindRecord>, <PositionSideSector>). The listing labelled this address twice, R35 (reached with an offset
+;; inside the record) and R40 (reached with offset 0 or 1); it is one label here (Q7).
 ;; Also: R35 (D1541), R40 (D1541)
 SetOffset:
     sta RecordOffset
@@ -1150,6 +1153,7 @@ ReadWanted:
 ;; Also: BHERE (D1541)
 .proc IsInBuffer
     jsr Files::GetBufferBlock
+    ; Falls into <IsSameBlock>.
 .endproc
 
 ;; Z set if `track` and `sector` are the block named at (`r3`).

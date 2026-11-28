@@ -1,6 +1,9 @@
 ; retrocore: style=strict
 ; COMMODORE 1541 DOS: THE LOCATIONS AND THE CONSTANTS
 
+; The job queue, $0000-$0011: the DOS's requests to the controller, one entry per buffer, with each job's header. See
+; <Jobs> for the DOS's side of it and <Controller> for the other.
+
 ;; The job queue, a byte per buffer: the job code with the drive in bit 0, which the controller replaces with a result
 ;; below $80 when it is done (Q4).
 ;; Also: JOBS (D1541)
@@ -8,6 +11,8 @@ JobQueue = $0000
 ;; The jobs' headers, two bytes a buffer, the track then the sector (Q4).
 ;; Also: HDRS (D1541)
 JobHeaders = $0006
+; The rest of the zero page. The families' own bytes are in their scopes below.
+
 ;; Each drive's disk ID, two bytes, which the controller checks every header against.
 ;; Also: DSKID (D1541)
 DiskId = $0012
@@ -27,7 +32,8 @@ SectorInterleave = $0069
 ;; A pointer to the BAM entry of the track being allocated or freed.
 ;; Also: BMPNT (D1541)
 BamPointer = $006D
-;; As TEMP: its first byte's second name.
+;; The temporaries every family uses, six bytes from $006F, to hold a value between nearby instructions; routines name
+;; their uses by scoped aliases. This is the first, which the listing calls both T0 and TEMP.
 ;; Also: T0 (D1541), TEMP (D1541)
 Temporary = $006F
 ;; Temporary's second byte.
@@ -169,9 +175,14 @@ JobNumber = $00F9
 ;; Each drive's flag, set when initializing it failed.
 ;; Also: NODRV (D1541)
 NoDrive = $00FF
+; Page 1, which the stack shares: its bottom byte is a variable (the stack's top holds <Controller::OverflowBuffer>).
+
 ;; Each drive's disk format, from the BAM, "A"; writing refuses another.
 ;; Also: DSKVER (D1541)
 DiskVersion = $0101
+; Page 2, $0200-$02FF: the command channel and the DOS's variables, as tables with an entry per channel or per file name
+; where the comments say so.
+
 ;; The command channel's text, and an OPEN's name.
 ;; Also: CMDBUF (D1541)
 CommandBuffer = $0200
@@ -310,6 +321,8 @@ FreeBlocksHigh = $02FC
 ;; listing's comment is wrong.)
 ;; Also: PHASE (D1541)
 StepRequest = $02FE
+; The buffers, $0300-$07FF: five data buffers of a page each, which the job queue's entries are for, buffer n at page 3 + n.
+
 ;; Buffer 0, where formatting builds the headers.
 ;; Also: BUFF0 (D1541)
 Buffer0 = $0300
@@ -319,6 +332,9 @@ Buffers = $0300
 ;; Buffer 2, where formatting builds a sector's data.
 ;; Also: BUFF2 (D1541)
 Buffer2 = $0500
+; VIA 1, the 6522 at $1800: the serial bus, the ATN interrupt, and timer 1 for the EOI wait, the LED's flash and
+; formatting's timing.
+
 ;; VIA 1's port B, the serial bus: data, clock and ATN in and out, ATN's acknowledge, and the device number's jumpers on
 ;; PB5-PB6.
 ;; Also: PB (D1541)
@@ -369,6 +385,9 @@ Via1InterruptEnable = $180E
 ;; VIA 1's port A, without handshake (not used; the listing's photo sensor is not read).
 ;; Also: POTA1 (D1541)
 Via1PortA = $180F
+; VIA 2, the 6522 at $1C00: the mechanism, the stepper, motor, LED and the read and write of the GCR bytes. Its timer 1
+; interrupts every <Controller::IRQ_PERIOD> x 256 cycles, which runs the controller.
+
 ;; VIA 2's port B, as the drive's lines: stepper phase in bits 0-1, motor 2, LED 3, write protect 4, density 5-6, sync
 ;; 7.
 ;; Also: DSKCNT (D1541), LEDPRT (D1541)
@@ -415,15 +434,40 @@ Via2InterruptFlags = $1C0D
 ;; VIA 2's interrupt enable register.
 ;; Also: IER2 (D1541)
 Via2InterruptEnable = $1C0E
+; Constants, by kind. A family's own constants are in its scope, further down.
+;
+; <ChannelStatus>'s values and bits: each channel's readiness.
 ;; <ChannelStatus>: nothing more to send, after the last byte.
 ;; Also: NOTRDY (D1541)
 CHANNEL_NOT_READY = 0
-;; Drive 1's LED bit in <DriveControl>: the 1541 has no drive 1, so 0, and the masks that include it change nothing.
-;; Also: LED1 (D1541)
-LED_DRIVE1 = 0
 ;; <ChannelStatus>'s bit 0: the channel accepts bytes.
 ;; Also: RDYLST (D1541)
 CHANNEL_LISTEN = $01
+;; <ChannelStatus>'s bit 3: set while the byte to send is not the last, so it goes without EOI.
+;; Also: EOISND (D1541), EOI (D1541)
+CHANNEL_MORE = $08
+;; <ChannelStatus>'s bit 7 alone: the channel has one byte left, to send with EOI.
+;; Also: EOIOUT (D1541)
+CHANNEL_TALK_LAST = $80
+;; <ChannelStatus> for a channel both ways whose next byte is the last.
+;; Also: RNDEOI (D1541)
+CHANNEL_RANDOM_LAST = $81
+;; <ChannelStatus> for a channel with more to send.
+;; Also: RDYTLK (D1541)
+CHANNEL_TALK = $88
+;; <ChannelStatus> for a channel both ways, more to send.
+;; Also: RNDRDY (D1541)
+CHANNEL_RANDOM = $89
+
+; The drive's LED bits in <DriveControl>.
+;; Drive 1's LED bit in <DriveControl>: the 1541 has no drive 1, so 0, and the masks that include it change nothing.
+;; Also: LED1 (D1541)
+LED_DRIVE1 = 0
+;; The activity LED's bit in <DriveControl>, PB3.
+;; Also: LED0 (D1541)
+LED_DRIVE0 = $08
+
+; File types, as a directory entry's low bits and <ChannelFileType> hold them.
 ;; File type 1, SEQ.
 ;; Also: SEQTYP (D1541)
 TYPE_SEQUENTIAL = 1
@@ -433,12 +477,23 @@ TYPE_PROGRAM = 2
 ;; File type 3, USR.
 ;; Also: USRTYP (D1541)
 TYPE_USER = 3
-;; The command channel's channel number, which secondary address 15 writes to.
-;; Also: CMDCHN (D1541)
-COMMAND_CHANNEL = 4
 ;; File type 4, REL.
 ;; Also: RELTYP (D1541)
 TYPE_RELATIVE = 4
+;; The five letters of the type tables, D, S, P, U and R or L.
+;; Also: NTYPES (D1541)
+TYPE_COUNT = 5
+;; The file type of a direct-access channel, opened on "#".
+;; Also: DIRTYP (D1541)
+TYPE_DIRECT = 7
+;; The type's bits in a directory entry.
+;; Also: TYPMSK (D1541)
+TYPE_MASK = 7
+
+; The channels, buffers and tables' sizes, and the command buffer's limits.
+;; The command channel's channel number, which secondary address 15 writes to.
+;; Also: CMDCHN (D1541)
+COMMAND_CHANNEL = 4
 ;; The five data buffers.
 ;; Also: BFCNT (D1541)
 BUFFER_COUNT = 5
@@ -449,9 +504,6 @@ FILE_NAME_COUNT = 5
 ;; The error channel's channel number, which reading secondary address 15 reaches (Q6 for the name).
 ;; Also: ERRCHN (D1541)
 MESSAGE_CHANNEL = 5
-;; The five letters of the type tables, D, S, P, U and R or L.
-;; Also: NTYPES (D1541)
-TYPE_COUNT = 5
 ;; The seventh entry of <ChannelBuffer> and <ChannelSecondBuffer>, which hold the BAM's buffers.
 ;; Also: BLINDX (D1541)
 BAM_CHANNEL = 6
@@ -461,33 +513,20 @@ CHANNEL_COUNT = 6
 ;; The job queue's six entries, which the controller scans (Q4).
 ;; Also: NUMJOB (D1541)
 JOB_COUNT = 6
-;; The file type of a direct-access channel, opened on "#".
-;; Also: DIRTYP (D1541)
-TYPE_DIRECT = 7
-;; The type's bits in a directory entry.
-;; Also: TYPMSK (D1541)
-TYPE_MASK = 7
-;; <ChannelStatus>'s bit 3: set while the byte to send is not the last, so it goes without EOI.
-;; Also: EOISND (D1541), EOI (D1541)
-CHANNEL_MORE = $08
-;; The activity LED's bit in <DriveControl>, PB3.
-;; Also: LED0 (D1541)
-LED_DRIVE0 = $08
 ;; The command buffer's pointer's offset in <BufferPositions>, 2 x <BUFFER_COUNT>.
 ;; Also: CBPTR (D1541)
 COMMAND_BUFFER_SLOT = 10
-;; 13, RETURN, which ends a command and a relative record's data.
-;; Also: CR (D1541)
-CARRIAGE_RETURN = $0D
+;; The longest command, 41 characters (the buffer has 42).
+;; Also: CMDLEN (D1541)
+COMMAND_LENGTH_MAX = 41
+
+; Secondary addresses, the bus's and the DOS's own.
 ;; Secondary address 15, the command and error channel.
 ;; Also: CMDSA (D1541)
 COMMAND_SECONDARY = 15
 ;; The internal secondary address the error channel is entered under: reading 15 is switched to it.
 ;; Also: ERRSA (D1541)
 MESSAGE_SECONDARY = 16
-;; The offset in a side sector of its data blocks' track-and-sector pairs, after the links to the six side sectors.
-;; Also: SSIOFF (D1541)
-SIDE_SECTOR_POINTERS = 16
 ;; The secondary address of the DOS's own read channel (directory and copying).
 ;; Also: IRSA (D1541)
 INTERNAL_READ_SECONDARY = 17
@@ -498,15 +537,33 @@ INTERNAL_WRITE_SECONDARY = 18
 ;; it.)
 ;; Also: MAXSA (D1541)
 LAST_SECONDARY = 18
+
+; The flags in <ChannelFileType>'s top bits.
 ;; <ChannelFileType>'s flag for a record written past its size.
 ;; Also: OVRFLO (D1541)
 RELATIVE_OVERFLOW = $20
-;; The longest command, 41 characters (the buffer has 42).
-;; Also: CMDLEN (D1541)
-COMMAND_LENGTH_MAX = 41
+;; <ChannelFileType>'s flag for a relative file whose records changed.
+;; Also: DYFILE (D1541)
+RELATIVE_DIRTY = $40
+;; <ChannelFileType>'s flag for a relative file at its last record.
+;; Also: LRF (D1541)
+RELATIVE_LAST_RECORD = $80
+
+; Characters, an opcode and the disk format's letter.
+;; 13, RETURN, which ends a command and a relative record's data.
+;; Also: CR (D1541)
+CARRIAGE_RETURN = $0D
+;; The offset in a side sector of its data blocks' track-and-sector pairs, after the links to the six side sectors.
+;; Also: SSIOFF (D1541)
+SIDE_SECTOR_POINTERS = 16
 ;; The BIT absolute opcode, as a byte that skips the next two (K-P3-Q4).
 ;; Also: SKIP2 (D1541)
 OPCODE_BIT = $2C
+;; "A", the format of 4040 and 1541 disks, which the BAM holds.
+;; Also: FM4040 (D1541)
+FORMAT_VERSION = $41
+
+; The error messages' numbers, in BCD as the error channel prints them.
 ;; 30 SYNTAX ERROR: the command's form is wrong.
 ;; Also: BADSYN (D1541)
 ERROR_SYNTAX = $30
@@ -525,12 +582,6 @@ ERROR_NO_NAME = $34
 ;; 39 FILE NOT FOUND: the & command's file.
 ;; Also: NOCFIL (D1541)
 ERROR_COMMAND_FILE_NOT_FOUND = $39
-;; <ChannelFileType>'s flag for a relative file whose records changed.
-;; Also: DYFILE (D1541)
-RELATIVE_DIRTY = $40
-;; "A", the format of 4040 and 1541 disks, which the BAM holds.
-;; Also: FM4040 (D1541)
-FORMAT_VERSION = $41
 ;; 50 RECORD NOT PRESENT.
 ;; Also: NOREC (D1541)
 ERROR_RECORD_NOT_PRESENT = $50
@@ -580,24 +631,11 @@ ERROR_DOS_VERSION = $73
 ;; 74 DRIVE NOT READY.
 ;; Also: NODRIV (D1541)
 ERROR_DRIVE_NOT_READY = $74
-;; <ChannelStatus>'s bit 7 alone: the channel has one byte left, to send with EOI.
-;; Also: EOIOUT (D1541)
-CHANNEL_TALK_LAST = $80
+
+; The job codes the controller runs, as <JobQueue> holds them.
 ;; Job code $80: read the header's block into the buffer.
 ;; Also: READ (D1541)
 JOB_READ = $80
-;; <ChannelFileType>'s flag for a relative file at its last record.
-;; Also: LRF (D1541)
-RELATIVE_LAST_RECORD = $80
-;; <ChannelStatus> for a channel both ways whose next byte is the last.
-;; Also: RNDEOI (D1541)
-CHANNEL_RANDOM_LAST = $81
-;; <ChannelStatus> for a channel with more to send.
-;; Also: RDYTLK (D1541)
-CHANNEL_TALK = $88
-;; <ChannelStatus> for a channel both ways, more to send.
-;; Also: RNDRDY (D1541)
-CHANNEL_RANDOM = $89
 ;; Job code $90: write the buffer to its header's block.
 ;; Also: WRITE (D1541)
 JOB_WRITE = $90

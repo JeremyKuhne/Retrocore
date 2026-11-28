@@ -30,7 +30,7 @@ namespace Retrocore.Machines.Atari;
 public sealed class Atari410 : ITapeDrive, IMediumSlot
 {
     private const MediaOperations Operations =
-        MediaOperations.Insert | MediaOperations.Eject | MediaOperations.Record | MediaOperations.WriteProtect | MediaOperations.Save;
+        MediaOperations.Insert | MediaOperations.Eject | MediaOperations.Record | MediaOperations.WriteProtect | MediaOperations.Save | MediaOperations.Keys;
 
     private readonly AtariBus _bus;
     private readonly double _hertz;

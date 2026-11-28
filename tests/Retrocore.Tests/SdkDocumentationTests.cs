@@ -200,6 +200,7 @@ public class SdkDocumentationTests
     // Each sample folder's machine project, whose sources its links reach.
     private static readonly Dictionary<string, string> s_sampleMachines = new()
     {
+        ["6809"] = "Retrocore.Machines.Coco",
         ["adventure"] = "Retrocore.Machines.Apple2",
         ["atari"] = "Retrocore.Machines.Atari",
         ["bbc"] = "Retrocore.Machines.Acorn",
@@ -207,7 +208,8 @@ public class SdkDocumentationTests
         ["iie"] = "Retrocore.Machines.Apple2",
         ["project"] = "Retrocore.Machines.Apple2",
         ["softcard"] = "Retrocore.Machines.Apple2",
-        ["trs80"] = "Retrocore.Machines.Trs80"
+        ["trs80"] = "Retrocore.Machines.Trs80",
+        ["z80"] = "Retrocore.Machines.Trs80"
     };
 
     /// <summary>
@@ -521,6 +523,37 @@ public class SdkDocumentationTests
 
         contracts[0xCE1F].Registers.Should().Equal("Y");
         contracts[0xCE26].Registers.Should().BeEquivalentTo(["A", "Y"]);
+    }
+
+    /// <summary>
+    ///  An <c>Entry:</c> whose meaning ends in a keeps clause has that contract at its address: DFS_OSBPUT keeps A, X
+    ///  and Y, but DFS_OSBPUT_CHANNEL, entered after its caller's SAVE_REGISTERS, keeps nothing itself, so a call there
+    ///  is not checked; SET_ENTRY_EXEC_ADDRESS_MERGE keeps X and Y, not A; and Fill80::Aux keeps A, not X.
+    /// </summary>
+    [TestMethod]
+    public void EntriesKeepWhatTheirClauseSays()
+    {
+        AssemblyResult dnfs = BbcSdkModules.AssembleDnfs(Path.Join(s_inputs, "Acorn"));
+        SourceMapModule module = new(dnfs, area: null);
+        long? Symbol(string name) => module.TryResolve(name, out long value) ? value : null;
+        Dictionary<ushort, DebugContract> contracts = DebugContracts.Build(
+            new DocumentationResolver(module.Documentation), model: "", new DebugRegisters(M6502Isa.Description), Symbol);
+
+        contracts[(ushort)dnfs.Symbols["DFS_OSBPUT"]].Registers.Should().BeEquivalentTo(["A", "X", "Y"]);
+        contracts.Should().NotContainKey((ushort)dnfs.Symbols["DFS_OSBPUT_CHANNEL"]);
+        contracts[(ushort)dnfs.Symbols["SET_ENTRY_EXEC_ADDRESS"]].Registers.Should().BeEquivalentTo(["A", "X", "Y"]);
+        contracts[(ushort)dnfs.Symbols["SET_ENTRY_EXEC_ADDRESS_MERGE"]].Registers.Should().BeEquivalentTo(["X", "Y"]);
+
+        // An entry with a comment of its own but no Keeps: of its own, as the IIe's Fill80::Aux, has its clause too.
+        List<DocumentationSet> sets = Sets();
+        DocumentationSet firmware = sets.Single(set => set.Symbols.ContainsKey("Fill80::Aux"));
+        Dictionary<ushort, DebugContract> iie = DebugContracts.Build(
+            new DocumentationResolver(firmware, sets),
+            "Enhanced",
+            new DebugRegisters(M6502Isa.Description));
+
+        iie[(ushort)firmware.Symbols["Fill80"]].Registers.Should().BeEquivalentTo(["A", "X"]);
+        iie[(ushort)firmware.Symbols["Fill80::Aux"]].Registers.Should().Equal("A");
     }
 
     /// <summary>

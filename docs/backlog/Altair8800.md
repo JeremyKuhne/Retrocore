@@ -106,7 +106,8 @@ Every download (SIMH, software images, ROM dumps) is approved first, as before.
 - **The terminal's board.** The terminal is on the 88-2SIO or the 88-SIO (the `console` option); the BASICs pick
   their terminal by the sense switches, as MITS documented.
 - **The cassette.** The 88-ACR has no motor control, so a tape plays from the moment it goes in, a byte each
-  300-baud character time; recordings save on eject, as the Apple-1's do.
+  300-baud character time; recordings saved on eject, as the Apple-1's did, until they became changed tapes, saved like
+  a disk ([MediaPersistence.md](MediaPersistence.md#phases), phase 4).
 
 ## Decisions for phase 4 (agreed 2026-11-20)
 

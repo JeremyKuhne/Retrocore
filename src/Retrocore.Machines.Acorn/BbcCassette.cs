@@ -43,7 +43,7 @@ public sealed class BbcCassette : ITapeDrive, IMediumSlot
             Controller = "Serial ULA: tones to and from the 6850 ACIA, and the motor relay",
             Formats = ["uef"],
             SaveFormats = ["uef"],
-            Operations = MediaOperations.Insert | MediaOperations.Eject | MediaOperations.Record | MediaOperations.Save
+            Operations = MediaOperations.Insert | MediaOperations.Eject | MediaOperations.Record | MediaOperations.Save | MediaOperations.Keys
         };
     }
 

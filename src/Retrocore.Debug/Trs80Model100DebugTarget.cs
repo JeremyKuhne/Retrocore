@@ -8,7 +8,6 @@ using Retrocore.Isa;
 using Retrocore.Machines.Devices;
 using Retrocore.Basic;
 using Retrocore.Machines.Trs80Model100;
-using System.Runtime.ExceptionServices;
 using System.Text.Json.Nodes;
 
 namespace Retrocore.Debug;
@@ -364,34 +363,11 @@ internal sealed partial class Trs80Model100DebugTarget : IDebugTarget, IRecordin
     ///   the power coming on.
     ///  </para>
     ///  <para>
-    ///   A recording on the cassette is written to its file first, the same way, and stays in the recorder.
+    ///   A recording on the cassette is not written: it is a changed tape, saved as a disk is and kept in the recovery
+    ///   journal.
     ///  </para>
     /// </remarks>
-    public void SaveRecordings()
-    {
-        // The cassette's recording is saved first, and a failure of it does not keep the RAM image from saving; it is
-        // reported once the image is saved, or with the image's own failure.
-        Exception? failure = null;
-        try
-        {
-            SaveCassetteRecording();
-        }
-        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
-        {
-            failure = exception;
-        }
-
-        try
-        {
-            SaveRamImage();
-        }
-        catch (Exception exception) when (failure is not null && (exception is IOException or UnauthorizedAccessException))
-        {
-            throw new IOException($"Neither the recording nor the RAM image was saved: {failure.Message} {exception.Message}", exception);
-        }
-
-        if (failure is not null) { ExceptionDispatchInfo.Throw(failure); }
-    }
+    public void SaveRecordings() => SaveRamImage();
 
     private void SaveRamImage()
     {

@@ -154,10 +154,10 @@ level inverted, as MAME's driver has it, and is high with no tape playing.
 
 - **Playing:** `cassette` in the launch, or **Insert** on the cassette in the **Drives** view, puts a WAV file's tape in.
   It plays from its start once the ROM runs the motor, as `CLOAD` does.
-- **Recording:** **Record** in the **Drives** view names the WAV file to write. The tape takes SOD's changes while the motor
-  runs, as `CSAVE` runs it, and is written to the file, through a file beside it, when it comes out: on
-  **Eject**, on **Insert** of another tape, or when the session ends, replacing what is at that path; a recording that
-  holds nothing writes nothing.
+- **Recording:** **Record** in the **Drives** view names the WAV file to write, which is written blank at once. The
+  tape takes SOD's changes while the motor runs, as `CSAVE` runs it, and is a changed tape ([Devices.md](Devices.md)):
+  **Save** writes it to the file, **Eject** and **Insert** ask about it first, and the recovery journal keeps its
+  half cycles across a stop or a crash. The session's end writes the RAM image, not the recording.
 
 Checked by hand against MAME 0.264 (2026-11-27): `CLOAD` read MAME's recording of a `CSAVE`, and MAME's `CLOAD`
 read Retrocore's. The tests check Retrocore's own `CSAVE` and `CLOAD` against each other, and the recording's blocks
@@ -213,7 +213,8 @@ yet; they are next, now that the ROM is an SDK source.
   data's `trs80m100-roms` folder, and are inconclusive without them.
 - `Trs80Model100DebugTargetTests`: the launch's messages for a missing ROM, the RAM image across sessions, cold
   starts, a mismatched size and failed saves, the launch's files on the menu, a tape recorded and played through the
-  cassette's actions, and a recording that cannot be written staying in the recorder.
+  cassette's actions, a recording as a changed tape that an eject holds back until it is saved, and the session's end
+  writing the RAM image and not the recording.
 - `Trs80Model100RomSourceTests`: the ROM's source builds both models' ROMs, their digests pinned so no ROM is
   needed, with Microsoft's and Tandy's names where the ROM has them; with the ROMs, each build compares byte for
   byte. `Trs80Model100DebugTargetTests` check that the debugger maps the source onto either ROM and onto no other.

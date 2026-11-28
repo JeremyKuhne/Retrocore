@@ -271,7 +271,16 @@ public sealed class MemoryMapTests
             ["basic"] = 4,
 
             // The Apple III.
-            ["sos"] = 1
+            ["sos"] = 1,
+
+            // The II Plus with its language card and the IIe.
+            ["prodos"] = 1,
+
+            // The TRS-80 Model I with Level II and the Model III, each at 3 sizes.
+            ["level2"] = 6,
+
+            // Five map files: the CoCo 1 and 2 share the 16K and 64K ones, the CoCo 1 has a 32K one, and the CoCo 3 two.
+            ["colorbasic"] = 5
         };
 
         string environments = Path.Join(SdkModules.SdkDirectory, "1", "environments");
@@ -284,12 +293,15 @@ public sealed class MemoryMapTests
             {
                 MemoryMap map = MemoryMap.Read(file);
                 map.Description.Should().NotBeNullOrWhiteSpace(file);
-                map.ZeroPage.Should().NotBeEmpty(file);
+                // A map gives the bytes of zero page a program may use where the CPU has one, the 6502 family's.
+                string name = Path.GetFileName(file)[..^".map.json".Length];
+                bool zeroPage = CatalogMachine.All.Any(machine => machine.Cpu.Runs(ProjectCpu.Mos6502) && (name == machine.Id || name.StartsWith(machine.Id + "-", StringComparison.Ordinal) || name.StartsWith(machine.Family + "-", StringComparison.Ordinal) || name == machine.Family));
+                if (zeroPage) { map.ZeroPage.Should().NotBeEmpty(file); }
+                else { map.ZeroPage.Should().BeEmpty(file); }
 
                 // Each map is for machines that run its environment, by a catalog id or a family.
-                string name = Path.GetFileName(file)[..^".map.json".Length];
                 CatalogMachine.All.Should().Contain(
-                    machine => ProjectTarget.Runs(machine, environment) && (name == machine.Id || name == machine.Family || name.StartsWith(machine.Family + "-", StringComparison.Ordinal)),
+                    machine => ProjectTarget.Runs(machine, environment) && (name == machine.Id || name == machine.Family || name.StartsWith(machine.Id + "-", StringComparison.Ordinal) || name.StartsWith(machine.Family + "-", StringComparison.Ordinal)),
                     file);
             }
         }

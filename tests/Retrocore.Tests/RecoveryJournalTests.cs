@@ -791,6 +791,38 @@ public sealed class RecoveryJournalTests
         Disks(id).Should().BeEmpty();
     }
 
+    /// <summary>
+    ///  A changed T64 import is recovered from its pulses, even with no source file, and can only be saved as a new image.
+    /// </summary>
+    [TestMethod]
+    public void AT64ImportRecoversWithoutItsArchive()
+    {
+        string id = Id();
+        string archive = Path.Join(s_root, $"{id}.t64");
+        string output = Path.Join(s_root, $"{id}.tap");
+        File.WriteAllBytes(archive, T64Tests.TapeImage(0x04));
+        CommodoreDatasette deck = new("cassette1", "Cassette #1", "A PET's port 1", cpuHertz: 1_000_000);
+        CommodoreTapeMedia.Insert(deck, archive);
+        CommodoreTape tape = deck.Tape ?? throw new InvalidOperationException("The Datasette is empty.");
+        tape.Record(tape.Pulses.Count, 352);
+        Stop(Open(id), deck);
+        File.Delete(archive);
+
+        CommodoreDatasette next = new("cassette1", "Cassette #1", "A PET's port 1", cpuHertz: 1_000_000);
+        RecoveryJournal journal = Open(id);
+        MediaActions.Recover([next], journal).Should().BeEmpty();
+        CommodoreTape back = next.Tape ?? throw new InvalidOperationException("The Datasette is empty.");
+        back.Pulses.Should().Equal(tape.Pulses);
+        next.Media.Should().Be(new MediaState(archive, "T64", WriteProtected: false, Changed: true));
+        MediaActions.Save(next, []).String("outcome").Should().Be("readOnly");
+        File.Exists(archive).Should().BeFalse();
+
+        MediaActions.Save(next, new() { ["path"] = output }).String("outcome").Should().Be("saved");
+        TapFormat.Read(File.ReadAllBytes(output)).Pulses.Should().Equal(tape.Pulses);
+        Stop(journal, next);
+        Disks(id).Should().BeEmpty();
+    }
+
     private static string Id() => $"test-{Guid.NewGuid():N}";
 
     private static RecoveryJournal Open(string id) => RecoveryJournal.Open(id, []) ?? throw new InvalidOperationException("The journal is taken.");

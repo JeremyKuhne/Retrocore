@@ -637,10 +637,11 @@ internal sealed class MachineHost : DisposableBase
     }
 
     /// <summary>
-    ///  Writes the machine's tape recordings, as a debug session does when it ends.
+    ///  Writes what the machine keeps between sessions to its own file, the Model 100's RAM image, as a debug session
+    ///  does when it ends. A tape's recording is a changed tape, which the machine's Stop asks about as it does a disk.
     /// </summary>
-    /// <exception cref="IOException">A recording could not be written.</exception>
-    /// <exception cref="UnauthorizedAccessException">A recording's path cannot be written.</exception>
+    /// <exception cref="IOException">The file could not be written.</exception>
+    /// <exception cref="UnauthorizedAccessException">The file cannot be written.</exception>
     internal void SaveRecordings()
     {
         using (Gate()) { (_target as IRecordingTarget)?.SaveRecordings(); }

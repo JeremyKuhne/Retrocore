@@ -132,7 +132,24 @@ internal sealed class ProjectTarget
                 $"{Project.File}: target {Name} gives 'memoryMap', but the SDK has no memory map for {Machine.Id} in the '{Environment}' environment to change.");
         }
 
-        return map?.With(this);
+        // A map for a CPU with no zero page takes none from the target either.
+        if (map is { ZeroPage.Count: 0 } && MemoryMapOverride?["zeroPage"] is not null)
+        {
+            throw new ProjectException(
+                $"{Project.File}: target {Name}: its CPU has no zero page, so its 'memoryMap' cannot give 'zeroPage'.");
+        }
+
+        map = map?.With(this);
+
+        // The 6502 family has a zero page, so its maps give the bytes of it a program may use; a map leaves it out only
+        // for a CPU that has none.
+        if (map is not null && map.ZeroPage.Count == 0 && Cpu.Runs(ProjectCpu.Mos6502))
+        {
+            throw new ProjectException(
+                $"{Project.File}: target {Name}: {Path.GetFileName(map.File)}: its CPU has a zero page, so its map must give 'zeroPage', at least one byte a program may use.");
+        }
+
+        return map;
     }
 
     /// <summary>

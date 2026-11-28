@@ -3,6 +3,7 @@
 // See LICENSE file in the project root for full license information
 
 using Retrocore.Machines.Devices;
+using Retrocore.Media;
 using Retrocore.Media.Trs80;
 
 namespace Retrocore.Machines.Trs80;
@@ -10,7 +11,7 @@ namespace Retrocore.Machines.Trs80;
 /// <summary>
 ///  The cassette recorder on the cassette port.
 /// </summary>
-public sealed class Trs80CassetteDrive : ITapeDrive
+public sealed class Trs80CassetteDrive : ITapeDrive, IMediumSlot
 {
     private readonly Trs80Cassette _cassette;
     private readonly bool _level1;
@@ -43,7 +44,8 @@ public sealed class Trs80CassetteDrive : ITapeDrive
             Description = highSpeed ? $"Cassette recorder, {baud} or 1500 baud" : $"Cassette recorder, {baud} baud",
             Controller = $"the cassette port, with the motor relay on port {motorPort}",
             Formats = ["cas"],
-            Operations = MediaOperations.Insert | MediaOperations.Eject | MediaOperations.Record
+            SaveFormats = ["cas"],
+            Operations = MediaOperations.Insert | MediaOperations.Eject | MediaOperations.Record | MediaOperations.Save
         };
     }
 
@@ -62,14 +64,16 @@ public sealed class Trs80CassetteDrive : ITapeDrive
     public CassetteImage? Tape => _cassette.Mode == TapeMode.Stopped ? null : _tape;
 
     /// <inheritdoc/>
-    /// <remarks>A tape that plays is protected; one that records has changed once it holds a byte.</remarks>
+    /// <remarks>
+    ///  A tape that plays is protected; one that records has changed once the recorder hears a bit, until it is saved.
+    /// </remarks>
     public MediaState? Media
     {
         get
         {
-            if (Tape is null) { return null; }
+            if (Tape is not { } tape) { return null; }
             bool recording = _cassette.Mode == TapeMode.Recording;
-            return new(_label, "CAS", WriteProtected: !recording, Changed: recording && _cassette.Length != 0)
+            return new(_label, "CAS", WriteProtected: !recording, Changed: tape.IsDirty)
             {
                 Contents = recording ? null : Describe(_contents),
                 Warning = recording ? null : Warning(_contents)
@@ -101,10 +105,11 @@ public sealed class Trs80CassetteDrive : ITapeDrive
         _tape = tape;
         _label = label;
         _contents = CassetteFormat.Detect(tape.Bytes);
+        MountGeneration = MountGenerations.Next();
     }
 
     /// <summary>
-    ///  Loads a blank tape to record onto.
+    ///  Loads a tape to record onto, appending what the machine records.
     /// </summary>
     /// <param name="tape">The tape, which receives what the machine records.</param>
     /// <param name="label">What the host calls it, such as the path it will be saved to.</param>
@@ -114,6 +119,7 @@ public sealed class Trs80CassetteDrive : ITapeDrive
         _tape = tape;
         _label = label;
         _contents = CassetteContents.Unknown;
+        MountGeneration = MountGenerations.Next();
     }
 
     /// <summary>
@@ -126,8 +132,36 @@ public sealed class Trs80CassetteDrive : ITapeDrive
         _cassette.Stop();
         _tape = null;
         _label = "";
+        MountGeneration = MountGenerations.Next();
         return tape;
     }
+
+    /// <inheritdoc/>
+    IMedium? IMediumSlot.Medium => Tape;
+
+    /// <inheritdoc/>
+    public int MountGeneration { get; private set; } = MountGenerations.Next();
+
+    /// <inheritdoc/>
+    public void Saved(string label, string format, bool whole)
+    {
+        if (Tape is not { } tape) { throw new InvalidOperationException("There is no tape in the recorder."); }
+        _label = label;
+        if (whole) { tape.MarkSaved(); } else { tape.MarkChanged(); }
+    }
+
+    /// <inheritdoc/>
+    /// <remarks>
+    ///  <para>
+    ///   The tape plays from its start, as a recording put back from the recovery journal or for Undo is there for
+    ///   <c>CLOAD</c>; it keeps its changes until it is saved.
+    ///  </para>
+    /// </remarks>
+    public void Mount(IMedium medium, string label, string format) =>
+        Play(medium as CassetteImage ?? throw new ArgumentException($"{Info.Name} does not take a {medium?.GetType().Name}.", nameof(medium)), label);
+
+    /// <inheritdoc/>
+    public IMedium? Unmount() => Eject();
 
     private static string? Describe(CassetteContents contents) => contents switch
     {

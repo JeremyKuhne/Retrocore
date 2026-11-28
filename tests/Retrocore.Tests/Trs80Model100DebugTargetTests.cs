@@ -16,8 +16,9 @@ namespace Retrocore.Tests;
 /// </summary>
 /// <remarks>
 ///  <para>
-///   Every test but the missing-ROM one launches with the ROM, read as <see cref="Trs80Model100RomTests"/> does, and
-///   is inconclusive without it.
+///   The tests that run the ROM launch with it, read as <see cref="Trs80Model100RomTests"/> does, and are
+///   inconclusive without it, CSAVE and CLOAD among them; those that need nothing of it, the cassette's recordings fed
+///   to it directly and the session's end, run on a ROM of zeros.
 ///  </para>
 /// </remarks>
 [TestClass]
@@ -215,7 +216,7 @@ public sealed class Trs80Model100DebugTargetTests
 
     /// <summary>
     ///  A tape recorded through the cassette's record action takes the ROM's CSAVE, the machine runs fast while the
-    ///  motor moves it, ejecting it writes its WAV file, and the launch's cassette option plays that file to CLOAD; a
+    ///  motor moves it, saving it writes its WAV file, and the launch's cassette option plays that file to CLOAD; a
     ///  record to a folder that does not exist is refused and leaves the deck as it was.
     /// </summary>
     [TestMethod]
@@ -242,9 +243,10 @@ public sealed class Trs80Model100DebugTargetTests
             Run(saver, 1);
             saver.Accelerated.Should().BeTrue("CSAVE runs the motor");
             Run(saver, 14);
-            File.Exists(wave).Should().BeFalse("nothing is written until the tape comes out");
+            (drive.Media?.Changed).Should().BeTrue("the recording is a changed tape");
+            (MediaActions.Device(drive, "save", Speaking())?.String("outcome")).Should().Be("saved");
             saver.DeviceAction(drive, "eject", []);
-            File.Exists(wave).Should().BeTrue();
+            Trs80Model100Tape.FromWave(File.ReadAllBytes(wave)).HalfCycles.Should().NotBeEmpty();
             Directory.GetFiles(folder, "*.tmp").Should().BeEmpty();
 
             JsonObject options = new() { ["cassette"] = wave, ["sound"] = "off" };
@@ -267,68 +269,56 @@ public sealed class Trs80Model100DebugTargetTests
     }
 
     /// <summary>
-    ///  A recording that holds nothing writes nothing when it comes out; one whose file cannot be written stays in the
-    ///  recorder when it is ejected, with nothing left beside it, and comes out once its path can be written; a tape
-    ///  that is not a WAV file is refused with the recording saved and left in, and one that does not exist is
-    ///  refused with the recording left in, unwritten; a recording put in again from its own path is saved first and
-    ///  plays.
+    ///  A recording is a changed tape: its file is written blank as it starts, an unchanged one comes out without a
+    ///  word, and a changed one is held back by an eject until it is saved or let go; a tape that is not a WAV file, or
+    ///  is missing, is refused with the recording left in; and once saved, the recording plays from its own file. The
+    ///  cassette needs nothing of the ROM, so this runs on a ROM of zeros.
     /// </summary>
     [TestMethod]
-    public void FailedRecordingsStayIn()
+    public void RecordingsAreChangedTapes()
     {
         string folder = Folder();
         try
         {
             string wave = Path.Join(folder, "rec.wav");
             File.WriteAllText(wave, "was here");
-            Trs80Model100DebugTarget target = Launch(Path.Join(folder, "m100.ram"));
+            Trs80Model100DebugTarget target = Launch(Path.Join(folder, "m100.ram"), rom: new byte[32 * 1024]);
             IDevice drive = target.Devices.Single();
             JsonObject recording = new() { ["path"] = wave };
             target.DeviceAction(drive, "record", recording);
+            Trs80Model100Tape.FromWave(File.ReadAllBytes(wave)).HalfCycles.Should().BeEmpty("the file is written blank at once");
+            (drive.Media?.Changed).Should().BeFalse();
+            MediaActions.Device(drive, "eject", Speaking()).Should().BeNull("an unchanged recording comes out without a word");
             target.DeviceAction(drive, "eject", []);
-            File.ReadAllText(wave).Should().Be("was here", "a recording that holds nothing writes nothing");
+            drive.Media.Should().BeNull();
 
             // A recording with changes on it: SOD toggled while the motor runs.
             target.DeviceAction(drive, "record", recording);
             Record(target, changes: 4);
+            (drive.Media?.Changed).Should().BeTrue();
             string bad = Path.Join(folder, "bad.wav");
             File.WriteAllText(bad, "not a wave");
             JsonObject insertBad = new() { ["path"] = bad };
             Action insert = () => target.DeviceAction(drive, "insert", insertBad);
             insert.Should().Throw<InvalidDataException>();
-            drive.Media.Should().NotBeNull("the recording is still in");
-            drive.Media?.Label.Should().Be(wave);
-            File.Delete(wave);
-
-            Directory.CreateDirectory(wave);
-            Action eject = () => target.DeviceAction(drive, "eject", []);
-            Exception thrown = eject.Should().Throw<Exception>().Which;
-            (thrown is IOException or UnauthorizedAccessException).Should().BeTrue(thrown.ToString());
-            drive.Media.Should().NotBeNull("the recording is still in");
-            drive.Media?.Label.Should().Be(wave);
-            Directory.GetFiles(folder, "*.tmp").Should().BeEmpty();
-
-            Directory.Delete(wave);
-            target.DeviceAction(drive, "eject", []);
-            drive.Media.Should().BeNull();
-            Trs80Model100Tape.FromWave(File.ReadAllBytes(wave)).HalfCycles.Should().NotBeEmpty();
-
-            // A recording to a new file, put in again from its own path, is saved first and plays.
-            string fresh = Path.Join(folder, "fresh.wav");
-            JsonObject freshRecording = new() { ["path"] = fresh };
-            target.DeviceAction(drive, "record", freshRecording);
-            Record(target, changes: 4);
+            (drive.Media?.Label).Should().Be(wave, "the recording is still in");
             JsonObject missingTape = new() { ["path"] = Path.Join(folder, "missing.wav") };
             Action missing = () => target.DeviceAction(drive, "insert", missingTape);
             missing.Should().Throw<ArgumentException>().WithMessage("*does not exist*");
-            File.Exists(fresh).Should().BeFalse("a refused insert writes nothing");
-            drive.Media?.Label.Should().Be(fresh, "the recording is still in");
-            Directory.GetFiles(folder, "*.tmp").Should().BeEmpty();
-            target.DeviceAction(drive, "insert", freshRecording);
-            Trs80Model100Tape.FromWave(File.ReadAllBytes(fresh)).HalfCycles.Should().NotBeEmpty("the recording was saved first");
+            (drive.Media?.Label).Should().Be(wave, "the recording is still in");
+
+            // An eject asks about it, and an older client is told to save it first.
+            (MediaActions.Device(drive, "eject", Speaking())?.String("outcome")).Should().Be("changed");
+            Action older = () => MediaActions.Device(drive, "eject", []);
+            older.Should().Throw<InvalidOperationException>().WithMessage("*not saved*");
             drive.Media.Should().NotBeNull();
-            drive.Media?.Label.Should().Be(fresh);
-            drive.Media?.WriteProtected.Should().BeTrue("the tape now plays");
+
+            (MediaActions.Device(drive, "save", Speaking())?.String("outcome")).Should().Be("saved");
+            (drive.Media?.Changed).Should().BeFalse();
+            Trs80Model100Tape.FromWave(File.ReadAllBytes(wave)).HalfCycles.Should().NotBeEmpty();
+            target.DeviceAction(drive, "insert", recording);
+            (drive.Media?.WriteProtected).Should().BeTrue("the tape now plays");
+            Directory.GetFiles(folder, "*.tmp").Should().BeEmpty();
         }
         finally
         {
@@ -337,42 +327,36 @@ public sealed class Trs80Model100DebugTargetTests
     }
 
     /// <summary>
-    ///  Saving the session's recordings writes the cassette's recording and the RAM image, and a recording that cannot
-    ///  be written does not keep the RAM image from saving.
+    ///  The session's end writes the RAM image and not the recording, which is a changed tape the recovery journal
+    ///  keeps; a RAM image that cannot be written fails the save, with the recording still in. It runs on a ROM of
+    ///  zeros.
     /// </summary>
     [TestMethod]
-    public void SessionsSaveTheRecordingAndTheRam()
+    public void SessionsSaveTheRamAndNotTheRecording()
     {
         string folder = Folder();
         try
         {
             string image = Path.Join(folder, "m100.ram");
             string wave = Path.Join(folder, "rec.wav");
-            Trs80Model100DebugTarget target = Launch(image);
+            Trs80Model100DebugTarget target = Launch(image, rom: new byte[32 * 1024]);
             IDevice drive = target.Devices.Single();
             JsonObject recording = new() { ["path"] = wave };
             target.DeviceAction(drive, "record", recording);
+            byte[] blank = File.ReadAllBytes(wave);
             Record(target, changes: 4);
             target.SaveRecordings();
-            File.Exists(wave).Should().BeTrue();
+            File.ReadAllBytes(wave).Should().Equal(blank);
             File.Exists(image).Should().BeTrue();
-            drive.Media.Should().NotBeNull("the recording stays in");
+            (drive.Media?.Changed).Should().BeTrue("the recording stays in, changed");
 
-            File.Delete(wave);
             File.Delete(image);
-            Directory.CreateDirectory(wave);
+            Directory.CreateDirectory(image);
             Action save = target.SaveRecordings;
             Exception thrown = save.Should().Throw<Exception>().Which;
             (thrown is IOException or UnauthorizedAccessException).Should().BeTrue(thrown.ToString());
-            File.Exists(image).Should().BeTrue("the RAM image is saved all the same");
-
-            // When neither can be written, both are named.
-            File.Delete(image);
-            Directory.CreateDirectory(image);
-            Exception both = save.Should().Throw<IOException>().Which;
-            both.Message.Should().StartWith("Neither the recording nor the RAM image was saved");
+            (drive.Media?.Changed).Should().BeTrue();
             Directory.Delete(image);
-            Directory.Delete(wave);
         }
         finally
         {
@@ -429,6 +413,9 @@ public sealed class Trs80Model100DebugTargetTests
             Directory.Delete(folder, recursive: true);
         }
     }
+
+    // Arguments from a client that speaks media's answers.
+    private static JsonObject Speaking() => new() { ["supportsRetrocoreMedia"] = 1 };
 
     private static string Folder()
     {

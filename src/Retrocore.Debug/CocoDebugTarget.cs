@@ -56,6 +56,11 @@ internal sealed partial class CocoDebugTarget : IDebugTarget
     /// </summary>
     internal CocoMachine Machine => _machine;
 
+    /// <summary>
+    ///  Gets the cassette recorder, which a colorbasic target's tape goes in.
+    /// </summary>
+    internal CocoCassetteDrive BootDeck => _machine.Cassette;
+
     /// <inheritdoc/>
     public string ThreadName => _machine.Model switch
     {

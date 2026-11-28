@@ -102,6 +102,11 @@ internal sealed partial class AnalysisContracts
 
         DocumentationResolver resolver = new(documentation, others);
         long? Symbol(string name) => result.Symbols.TryGetValue(name, out long value) ? value : null;
+
+        // Each routine's contract at its start first, then entries' keeps clauses, then other entries' contracts,
+        // each where nothing came before, in source order.
+        List<(ushort At, AnalysisContract Contract)> entered = [];
+        List<(ushort At, AnalysisContract Contract)> plain = [];
         foreach (DocumentationTopic documented in documentation.Topics)
         {
             if (documented.Kind != DocumentationKind.Routine || documented.Value is not { } value)
@@ -122,13 +127,52 @@ internal sealed partial class AnalysisContracts
                 }
             }
 
+            // An Entry: whose meaning ends in "; keeps ..." has that in place of the routine's Keeps:, unless the
+            // label is a routine of its own with a contract; a label at the same address takes the clause too.
+            Dictionary<ushort, (string Name, IReadOnlyList<string> Keeps)> clauses = [];
+            foreach (DocumentationEntry entry in topic.SectionsNamed("Entry")
+                .Where(section => DocumentationResolver.Applies(section.Condition, model, Symbol))
+                .SelectMany(section => section.Entries))
+            {
+                string label = documentation.EntrySymbol(documented, entry.Name);
+                if (entry.Keeps is { } keeps
+                    && documentation.Symbols.TryGetValue(label, out long at)
+                    && (ushort)at != address
+                    && !(documentation.Find(label) is { } found
+                        && resolver.Effective(found).HasContract(section => DocumentationResolver.Applies(section.Condition, model, Symbol))))
+                {
+                    clauses.TryAdd((ushort)at, (entry.Name, keeps));
+                }
+            }
+
+            foreach ((ushort at, (string name, IReadOnlyList<string> keeps)) in clauses)
+            {
+                if (Read(topic, model, Symbol, own, address, keeps) is { } clause)
+                {
+                    entered.Add((at, clause with { Entry = name }));
+                }
+            }
+
+            // A call to another entry takes the routine's contract where the label has no comment of its own, as the
+            // debugger takes it; one with a comment is a routine of its own.
             _routines.TryAdd(address, topic);
-            if (Read(topic, model, Symbol, own, address) is { } contract)
+            if (Read(topic, model, Symbol, own, address, keeps: null) is { } contract)
             {
                 _contracts.TryAdd(address, contract);
-                foreach (ushort entry in own) { _contracts.TryAdd(entry, contract); }
+                foreach (string label in topic.EntryLabels.Select(entry => documentation.EntrySymbol(documented, entry)))
+                {
+                    if (documentation.Symbols.TryGetValue(label, out long entry)
+                        && (ushort)entry != address
+                        && !clauses.ContainsKey((ushort)entry)
+                        && documentation.Find(label) is null)
+                    {
+                        plain.Add(((ushort)entry, contract));
+                    }
+                }
             }
         }
+
+        foreach ((ushort at, AnalysisContract contract) in entered.Concat(plain)) { _contracts.TryAdd(at, contract); }
     }
 
     /// <summary>
@@ -146,7 +190,8 @@ internal sealed partial class AnalysisContracts
         {
             AnalysisRoutineSummary? summary = Analyzed(address);
 
-            // An Entry: label keeps what the routine says too: a sure change from there is a finding.
+            // An Entry: label keeps what the routine says, or what its keeps clause says: a sure change from there is
+            // a finding.
             if (address != contract.Address)
             {
                 if (summary is { Returns: true }) { unverified += CheckKeeps(contract, summary, findings); }
@@ -358,7 +403,10 @@ internal sealed partial class AnalysisContracts
     }
 
     private static AnalysisContractFinding Finding(AnalysisContract contract, string item, AnalysisContractProblem kind, ushort? at) =>
-        new(contract.Topic.Name, contract.Address, item, kind, at, contract.Topic.Path, contract.Topic.Line);
+        new(contract.Topic.Name, contract.Address, item, kind, at, contract.Topic.Path, contract.Topic.Line)
+        {
+            Entry = contract.Entry
+        };
 
     /// <summary>
     ///  Gets the analysis of the code at an address, as a routine: what it keeps when called.
@@ -450,17 +498,27 @@ internal sealed partial class AnalysisContracts
     }
 
     // A routine's contract, or null when it documents none.
-    private AnalysisContract? Read(DocumentationTopic topic, string model, Func<string, long?> symbol, HashSet<ushort> own, ushort address)
+    // An entry's own keeps, from its "; keeps ..." clause, stand in for Keeps: and Uses:, which promise for the
+    // routine's start.
+    private AnalysisContract? Read(
+        DocumentationTopic topic,
+        string model,
+        Func<string, long?> symbol,
+        HashSet<ushort> own,
+        ushort address,
+        IReadOnlyList<string>? keeps)
     {
         bool Applies(DocumentationSection section) => DocumentationResolver.Applies(section.Condition, model, symbol);
-        List<DocumentationSection> keeps = [.. topic.SectionsNamed("Keeps").Where(Applies)];
-        List<DocumentationSection> uses = [.. topic.SectionsNamed("Uses").Where(Applies)];
-        if (keeps.Count == 0 && uses.Count == 0) { return null; }
+        IEnumerable<string> routineKeeps = topic.SectionsNamed("Keeps").Where(Applies).SelectMany(section => section.Items);
+        IEnumerable<string> keptItems = keeps ?? routineKeeps.Select(WithoutNote);
+        List<DocumentationSection> uses = keeps is null ? [.. topic.SectionsNamed("Uses").Where(Applies)] : [];
+        bool documents = keeps is not null || uses.Count != 0 || topic.SectionsNamed("Keeps").Any(Applies);
+        if (!documents) { return null; }
 
         List<(string Item, uint Registers, byte Flags)> items = [];
         uint kept = 0;
         byte keptFlags = 0;
-        foreach (string item in keeps.SelectMany(section => section.Items).Select(WithoutNote))
+        foreach (string item in keptItems)
         {
             (uint registers, byte flags) = Names(item);
             if (registers == 0 && flags == 0) { continue; }

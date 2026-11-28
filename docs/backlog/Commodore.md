@@ -1,7 +1,8 @@
 # Backlog: the Commodore VIC-20, 64 and 128
 
 Status: **agreed 2026-11-25** ("Start phase V1"). Phases V1 to V4 and V6 are built; V5, the drives' DOS sources, is
-next, and the `cbmbasic` rename is still to do.
+under way (the 1541's names are settled, [Dos1541.md](../conversions/Dos1541.md)), and the `cbmbasic` rename is still
+to do.
 
 Commodore's three home computers after the PET share most of what they are made of: a 6502 family processor,
 Commodore BASIC 2 (7.0 on the 128), a kernal with the same jump table, the Datasette, and the serial bus with the
@@ -446,7 +447,8 @@ plan (#239).
 #### V5. The drives' DOS sources
 
 - `Serial/Dos1541.asm`: the 1541's DOS (325302-01 and 901229-xx, 16 KB), one source with a switch for each of the
-  901229 revisions (-01 to -06), and the 1540's 325303-01 as another switch.
+  901229 revisions (-01 to -06), and the 1540's 325303-01 as another switch. 901229-04 has no dump, so it has no
+  switch; the rename table and the inventory are in [Dos1541.md](../conversions/Dos1541.md).
 - Reviewed in parts, as the Atari BASIC source was: the job loop and GCR code, the command parser, the file and
   directory code, and the serial bus.
 - **Done when** every revision is byte-identical, the docs lint is clean, and the drive runs from the SDK's builds.

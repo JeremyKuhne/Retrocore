@@ -15,12 +15,13 @@ namespace Retrocore.Debug.Project;
 /// </summary>
 /// <remarks>
 ///  <para>
-///   Each set is identified by the SHA-1 of each file, as its usual source publishes it (MAME's sets give SHA-1). The
-///   files are looked for in a target's <c>bootImage</c> folder, the launch's ROM folder and the set's folder beside
-///   it, the folder an environment variable names (such as <c>RETROCORE_PET_ROMS</c>), and <c>RETROCORE_CACHE</c> (by
-///   default <c>%USERPROFILE%\Retrocore</c>), each searched with its subfolders, a linked file read as its target is
-///   and a linked folder left out, so no search loops. Only files of a set's sizes are read. A set is found when every
-///   file is.
+///   Each set is identified by the SHA-1 of each file, from its source where that gives one (MAME's sets do), else of
+///   the file the source publishes (ProDOS 2.4.3's release gives only a SHA-256). The files are looked for in a
+///   target's <c>bootImage</c> folder; where the environment takes a launch's ROM folder, in it and the set's folder
+///   beside it; where the set has an environment variable, in the folder it names (such as <c>RETROCORE_PET_ROMS</c>);
+///   and in <c>RETROCORE_CACHE</c> (by default <c>%USERPROFILE%\Retrocore</c>), each searched with its subfolders, a
+///   linked file read as its target is and a linked folder left out, so no search loops. Only files of a set's sizes
+///   are read. A set is found when every file is.
 ///  </para>
 /// </remarks>
 internal static class BootMedia
@@ -208,8 +209,13 @@ internal static class BootMedia
         string files = string.Join(", ", set.Files.Select(file => $"{file.Name} (SHA-1 {file.Sha1})"));
         string searched = roots.Count == 0 ? "no folder, as none of them exists" : string.Join(", ", roots);
         string variable = set.Variable is { } name ? $", or the folder {name} names" : "";
+        // A set of one file, such as a system's disk, is named as one thing.
+        (string were, string their, string hashes, string they, string them) = set.Files.Count == 1
+            ? ("was", "its", "hash", "It is", "it")
+            : ("were", "their", "hashes", "They are", "them");
+
         return string.Create(
             CultureInfo.InvariantCulture,
-            $"{set.Title}, for {set.For}, were not found by their hashes in {searched}. They are {set.Source}: {files}. Put them in {CacheDirectory}{variable}, or name their folder with the target's 'bootImage'");
+            $"{set.Title}, for {set.For}, {were} not found by {their} {hashes} in {searched}. {they} {set.Source}: {files}. Put {them} in {CacheDirectory}{variable}, or name {their} folder with the target's 'bootImage'");
     }
 }

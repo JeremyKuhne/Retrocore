@@ -440,9 +440,12 @@ with the routines checked, the `Keeps:` items it could not verify, and the routi
   registers and pairs, as `PUSH BC` then `POP DE`, pair up in order.
 - At a call it applies the callee's documented contract, where there is one, else the callee's own analysis; a
   callee the analysis could not follow to its end keeps nothing. A call to an `Entry:` label takes the analysis of
-  the code from there, and the routine's `Keeps:` is checked from each entry as well as from its start. A jump to
-  the start of another routine with a contract, with nothing pushed, is a tail call, whose contract applies; a
-  jump to an internal label is followed.
+  the code from there. The routine's `Keeps:` is checked from each entry as well as from its start, as the
+  debugger checks it, except from an entry whose meaning ends in a keeps clause (`; keeps A`), which is checked
+  against that clause, and from a label with a comment of its own, which is checked against that label's own
+  contract, if it has one; a routine's own contract at its start wins over another routine's entry there. A jump to
+  the start of another routine with a contract, with nothing pushed, is a tail call, whose contract applies; a jump
+  to an internal label is followed.
 - It gives up on a routine, and skips it, where the code does what the model cannot follow: an indirect jump, or
   a write of the program counter other than a return, as the 6809's `TFR X,PC` and `PULU PC`; a return through
   data it pushed, a pull of its return address, or a pull of other bytes than a push saved; a change of the stack
@@ -620,12 +623,18 @@ SET_EOF. Routines followed now for the first time found three documentation erro
 - CHKRES's `Out:` had HL inside the zero flag's meaning; HL now has its own entry.
 
 The closing review's fixes made the check stricter: 888 routines checked, 32 findings, 121 `Keeps:` items not
-verified. Most of the drop is routines now listed as followed in part, about 120 of them, which were counted as checked
-before; the rest write into the stack through an address worked out from a stack pointer. The 7 new findings are
-all from `Entry:` labels, now checked too: SET_ENTRY_EXEC_ADDRESS_MERGE skips SAVE_REGISTERS, so A, which the
-DFS routine's `Keeps:` names, is changed from there, and the MOS's SET_STATUS_BITS, with A and CFS_STATUS 0, falls
-through its `bne` into the next routine, so SET_EOF's `Keeps: X, Y` holds only for the bits its callers pass. The
-documentation is not yet changed for them.
+verified. Most of the drop is routines now listed as followed in part, about 120 of them, which were counted as
+checked before; the rest write into the stack through an address worked out from a stack pointer. The 7 new findings
+were all from `Entry:` labels, now checked too. Most were entries whose callers set something up first: Fill80::Aux
+gets X back from ScrollBase, and DFS_OSBPUT_CHANNEL and SET_ENTRY_EXEC_ADDRESS_MERGE run after their callers'
+SAVE_REGISTERS. For those, an `Entry:` meaning may now end in a keeps clause (`; keeps A`, `; keeps nothing`), which
+the check and the debugger take in place of the routine's `Keeps:` for that entry, and the three entries say what
+they keep: 27 findings remain. Two of them are the MOS's SET_STATUS_BITS, an entry of SET_EOF: with A and
+CFS_STATUS both 0 it falls through its `bne` into the next routine, so SET_EOF's `Keeps: X, Y, carry` holds from
+there only because every caller of SET_STATUS_BITS passes a bit to set. The entry now says so, but the check does
+not read conditions on what a caller passes. An entry label with a comment and a contract of its own now keeps
+that contract, as the debugger does, rather than taking its routine's, which brings the report to 894 routines
+checked, 27 findings and 122 `Keeps:` items not verified.
 
 What it costs, measured in Release over the MOS, the DFS and MBASIC with their maps: about 190 ms for the three
 once warm, and 114 MB allocated (220 ms and 107 MB before the review's fixes). Without maps it was about 140 ms and

@@ -38,5 +38,11 @@ public enum MediaOperations : byte
     /// <summary>
     ///  The media, with what the machine wrote to it, can be saved to an image file.
     /// </summary>
-    Save = 16
+    Save = 16,
+
+    /// <summary>
+    ///  The deck has keys pressed on the tape in it, PLAY, STOP and REWIND, and RECORD records onto that tape, or a
+    ///  blank one, in place, as a Datasette's do; a recorder without them records to a file named first.
+    /// </summary>
+    Keys = 32
 }

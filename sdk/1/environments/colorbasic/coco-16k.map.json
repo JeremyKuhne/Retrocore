@@ -1,0 +1,17 @@
+{
+  "description": "The Color Computer 1 and 2 with 16K, colorbasic: a machine-language file that Color BASIC's CLOADM loads from a cassette and EXEC starts, which calls Color and Extended BASIC's routines.",
+  "load": "$1F00",
+  "free": [
+    { "start": "$1F00", "end": "$3DFF" }
+  ],
+  "reserved": [
+    { "start": "$0000", "end": "$03FF", "why": "Color BASIC's direct page and workspace: its variables, vectors, cassette buffer and line input buffer" },
+    { "start": "$0400", "end": "$05FF", "why": "the text screen, 32 columns by 16 rows" },
+    { "start": "$0600", "end": "$1DFF", "why": "Extended BASIC's four graphics pages" },
+    { "start": "$1E00", "end": "$1EFF", "why": "BASIC's program, empty, from $1E01, and the start of its variables from $1E03, which grow up over the program once it goes back to BASIC" },
+    { "start": "$3E00", "end": "$3FFF", "why": "BASIC's 200 bytes of string space at the top of RAM, and its stack below them, which EXEC starts the program on" },
+    { "start": "$4000", "end": "$7FFF", "why": "addresses that repeat the 16K from $0000, as the SAM maps 16K" },
+    { "start": "$8000", "end": "$FEFF", "why": "the ROMs: Extended and Color BASIC, and the cartridge port's" },
+    { "start": "$FF00", "end": "$FFFF", "why": "the I/O: the PIAs, the cartridge port's, the SAM and the 6809's vectors" }
+  ]
+}

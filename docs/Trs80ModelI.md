@@ -226,7 +226,11 @@ through the older `retro/media` request:
 { "device": "disk", "action": "insert", "drive": 0, "path": "newdos.dsk" }
 ```
 
-A recording is saved to its path when the tape is ejected.
+A recording is a changed tape ([Devices.md](Devices.md)): `record` writes its CAS file blank at once, and **Save** in
+the Drives view, or `save` through `retro/device`, writes the recording there, as a disk's save does. An eject asks
+about a recording not saved, and the recovery journal keeps it across a stop or a crash, so the next launch has it in
+the recorder to `CLOAD`. Level II's recorder holds every bit of a `CSAVE` until the motor stops; a save or a
+checkpoint while it runs takes the bytes they make so far.
 
 **Level II BASIC** debugs on its own BASIC thread: breakpoints and stepping by statement (with inline breakpoints
 after colons), GOSUBs in the call stack, `FOR` loops, single, double, integer and string variables and arrays, and

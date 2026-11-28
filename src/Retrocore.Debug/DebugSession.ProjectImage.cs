@@ -45,12 +45,14 @@ internal sealed partial class DebugSession
         switch (Target)
         {
             case Apple2DebugTarget apple2:
-                // Slot 6's drive 1, which the Disk II's firmware boots; the dos33 launch fits the Disk II. The image is
+                // Slot 6's drive 1, which the Disk II's firmware boots; the dos33 and prodos launches fit the Disk II. The image is
                 // converted to a disk before the one there is kept, so an image that is not a disk leaves the drive and
                 // the kept disks as they were.
-                WozDisk disk = SectorDiskConverter.Convert(bytes, proDosOrder: false);
+                // A prodos disk is in ProDOS's block order, a dos33 disk in DOS's.
+                bool proDos = target.Environment == "prodos";
+                WozDisk disk = SectorDiskConverter.Convert(bytes, proDosOrder: proDos);
                 MediaActions.KeepReplaced(apple2.BootDrive, $"the build's {build.Media.ImageKind} took its place");
-                apple2.BootDrive.Insert(disk, label, "DSK");
+                apple2.BootDrive.Insert(disk, label, proDos ? "PO" : "DSK");
                 break;
             case BbcDebugTarget bbc:
                 // Drive 0, which SHIFT-BREAK boots.
@@ -66,6 +68,15 @@ internal sealed partial class DebugSession
                 break;
             case PetDebugTarget pet:
                 BootPet(build, pet, bytes, label);
+                return;
+            case Trs80DebugTarget model1:
+                BootLevel2(build, model1.BootDeck, model3: false, bytes, label);
+                return;
+            case Trs80Model3DebugTarget { BootDeck: { } deck }:
+                BootLevel2(build, deck, model3: true, bytes, label);
+                return;
+            case CocoDebugTarget coco:
+                BootColorBasic(build, coco.BootDeck, bytes, label);
                 return;
             default:
                 throw new ProjectException($"{target.Project.File}: target {target.Name}: {target.Machine.Id} cannot boot the '{target.Environment}' environment's image yet.");
@@ -112,6 +123,148 @@ internal sealed partial class DebugSession
         RunUntil(build, () => drive.Activity == Machines.Devices.DeviceActivity.Idle && Loaded(start, program), "the program loaded", limit, ref used);
         foreach (char key in "RUN\r") { pet.Key(key); }
         RunToEntry(build, limit - used);
+    }
+
+    // Boots a Color Computer from a colorbasic target's tape in its cassette recorder, as a user would: CLOADM"<NAME>"
+    // at BASIC's OK, then EXEC once the program is in memory, the tape has stopped and OK is back, which jumps to the
+    // address the tape's name file gives, the entry. CLOADM clears the screen as it searches, then shows F and the name
+    // it found at the top, and BASIC's OK below once the file is in.
+    private void BootColorBasic(TargetBuild build, Machines.Coco.CocoCassetteDrive deck, byte[] bytes, string label)
+    {
+        ProjectTarget target = build.Target;
+        MediaActions.KeepReplaced(deck, $"the build's {build.Media.ImageKind} took its place");
+        deck.Play(new Media.Trs80.CassetteImage(bytes), label);
+
+        (int start, byte[] program) = ProjectBuild.Image(build);
+        ForgetBoundaries();
+        long limit = (long)(target.Built?.BootSeconds ?? 0) * Target.ClockHertz;
+        long used = 0;
+        RunUntil(build, () => CocoRowsStarting("OK") == 1, "BASIC's OK prompt", limit, ref used);
+        string name = ColorbasicEnvironment.ProgramName(target);
+        TypeWhenReady(build, $"CLOADM\"{name}\"\r", limit, ref used);
+        RunUntil(
+            build,
+            () => Loaded(start, program)
+                && deck.Activity == Machines.Devices.DeviceActivity.Idle
+                && CocoRowsStarting($"F {name}") == 1
+                && CocoRowsStarting("OK") == 1,
+            "the program loaded and BASIC's OK prompt again",
+            limit,
+            ref used);
+
+        TypeWhenReady(build, "EXEC\r", limit, ref used);
+        RunToEntry(build, limit - used);
+    }
+
+    // Types keys once BASIC has run a quarter of a second at its prompt: BASIC prints OK before it reads the keyboard,
+    // and a key typed at once can be lost, as the first key of CLOADM was at start-up.
+    private void TypeWhenReady(TargetBuild build, string keys, long limit, ref long used)
+    {
+        for (long ready = used + (Target.ClockHertz / 4); used < ready; used++)
+        {
+            if (used >= limit)
+            {
+                ProjectTarget target = build.Target;
+                throw new ProjectException(
+                    $"{target.Project.File}: target {target.Name}: booted from its {build.Media.ImageKind}, the machine did not reach BASIC's keyboard within {target.Built?.BootSeconds} seconds.");
+            }
+
+            Target.StepCycle();
+        }
+
+        foreach (char key in keys) { Target.Key(key); }
+    }
+
+    // How many of the Color Computer's 16 text rows at $0400 start with text: OK, or the F and name CLOADM shows when it
+    // finds the file, rather than the same letters inside a file's name. The VDG shows a character's low six bits,
+    // $00-$1F as @ to _ and $20-$3F as space to ?; this reads normal and inverse characters alike.
+    private int CocoRowsStarting(string text)
+    {
+        const int Video = 0x0400;
+        const int Columns = 32;
+        const int Rows = 16;
+        int count = 0;
+        for (int row = 0; row < Rows; row++)
+        {
+            bool starts = true;
+            for (int column = 0; column < text.Length && starts; column++)
+            {
+                int value = Target.Peek((ushort)(Video + (row * Columns) + column)) & 0x3F;
+                starts = (char)(value < 0x20 ? value + 0x40 : value) == text[column];
+            }
+
+            if (starts) { count++; }
+        }
+
+        return count;
+    }
+
+    // Boots a TRS-80 from a level2 target's SYSTEM tape in its cassette recorder, as a user would: the Model III's
+    // Cass? answered L, for the tape's 500 baud, MEMORY SIZE? (or MEM SIZE?) with Return, SYSTEM at BASIC's READY, the
+    // tape's name at the *? prompt, and once the program is in memory and the prompt is back, a bare /, which jumps to
+    // the tape's entry.
+    private void BootLevel2(TargetBuild build, Machines.Trs80.Trs80CassetteDrive deck, bool model3, byte[] bytes, string label)
+    {
+        ProjectTarget target = build.Target;
+        MediaActions.KeepReplaced(deck, $"the build's {build.Media.ImageKind} took its place");
+        deck.Play(new Media.Trs80.CassetteImage(bytes), label);
+
+        (int start, byte[] program) = ProjectBuild.Image(build);
+        ForgetBoundaries();
+        long limit = (long)(target.Built?.BootSeconds ?? 0) * Target.ClockHertz;
+        long used = 0;
+        void Type(string keys)
+        {
+            foreach (char key in keys) { Target.Key(key); }
+        }
+
+        if (model3)
+        {
+            RunUntil(build, () => Trs80ScreenShows("Cass?"), "the Model III's Cass? question", limit, ref used);
+            Type("L");
+        }
+
+        // Level II 1.2 asks MEMORY SIZE?, 1.3 MEM SIZE?, and the Model III Memory Size?.
+        RunUntil(build, () => Trs80ScreenShows(model3 ? "Size?" : "SIZE?"), "the MEMORY SIZE? question", limit, ref used);
+        Type("\r");
+        RunUntil(build, () => Trs80ScreenShows("READY"), "BASIC's READY prompt", limit, ref used);
+        Type("SYSTEM\r");
+        RunUntil(build, () => Trs80ScreenCount("*?") == 1, "SYSTEM's *? prompt", limit, ref used);
+        Type($"{Level2Environment.ProgramName(target)}\r");
+        RunUntil(
+            build,
+            () => Loaded(start, program) && deck.Activity == Machines.Devices.DeviceActivity.Idle && Trs80ScreenCount("*?") == 2,
+            "the program loaded and SYSTEM's *? prompt again",
+            limit,
+            ref used);
+
+        Type("/\r");
+        RunToEntry(build, limit - used);
+    }
+
+    // Whether the TRS-80's screen, 64 columns by 16 rows from $3C00, shows text.
+    private bool Trs80ScreenShows(string text) => Trs80ScreenCount(text) != 0;
+
+    // How many times the TRS-80's screen shows text. Each byte is a character in its low 7 bits; the Model I's video
+    // RAM has no bit 6 without the lowercase modification, so a byte below $20 is the capital or symbol 64 above it.
+    private int Trs80ScreenCount(string text)
+    {
+        const int Video = 0x3C00;
+        const int Size = 64 * 16;
+        char[] screen = new char[Size];
+        for (int index = 0; index < Size; index++)
+        {
+            int value = Target.Peek((ushort)(Video + index)) & 0x7F;
+            screen[index] = (char)(value < 0x20 ? value + 0x40 : value);
+        }
+
+        int count = 0;
+        for (int at = new string(screen).IndexOf(text, StringComparison.Ordinal); at >= 0; at = new string(screen).IndexOf(text, at + 1, StringComparison.Ordinal))
+        {
+            count++;
+        }
+
+        return count;
     }
 
     // Runs the machine one cycle at a time until a condition holds at an instruction's start, counting the cycles it

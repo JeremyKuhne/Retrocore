@@ -173,12 +173,15 @@ internal sealed class Trs80HighSpeedTape
     ///  Notes the recorded signal falling, which ends a bit's high half.
     /// </summary>
     /// <param name="time">The T-state.</param>
-    internal void RecordFall(long time)
+    /// <returns>Whether the high half was a bit's, which the recording holds.</returns>
+    internal bool RecordFall(long time)
     {
-        if (_rose < 0) { return; }
+        if (_rose < 0) { return false; }
         long high = time - _rose;
         _rose = -1;
-        if (high >= Shortest && high <= Longest) { _bits.Add(high < Threshold); }
+        if (high < Shortest || high > Longest) { return false; }
+        _bits.Add(high < Threshold);
+        return true;
     }
 
     /// <summary>
@@ -187,9 +190,21 @@ internal sealed class Trs80HighSpeedTape
     /// <returns>The bytes, or null when the signal holds no 1500 baud leader and sync byte.</returns>
     internal List<byte>? TakeRecording()
     {
-        List<bool> bits = [.. _bits];
+        List<byte>? bytes = Decode(_bits);
         _bits.Clear();
         _rose = -1;
+        return bytes;
+    }
+
+    /// <summary>
+    ///  Gets the bytes the recorded signal makes so far, as <see cref="TakeRecording"/> would, keeping it.
+    /// </summary>
+    /// <returns>The bytes, or null when the signal holds no 1500 baud leader and sync byte yet.</returns>
+    internal List<byte>? Recorded() => Decode(_bits);
+
+    // The bytes bits make, from the leader's sync byte on.
+    private static List<byte>? Decode(List<bool> bits)
+    {
 
         // The sync byte, after at least two of the leader's: the leader's alternating bits fix where bytes start.
         int sync = -1;

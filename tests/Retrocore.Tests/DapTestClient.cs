@@ -78,6 +78,21 @@ internal sealed class DapTestClient : DisposableBase
         return response.String("message") ?? "";
     }
 
+    /// <summary>
+    ///  Sends a request that may fail, and waits for its response.
+    /// </summary>
+    /// <param name="command">The request's command, such as <c>launch</c>.</param>
+    /// <param name="arguments">Its arguments.</param>
+    /// <param name="failure">The response's message when it failed, else null.</param>
+    /// <returns>The response's body, or null when it failed.</returns>
+    internal JsonObject? TryRequest(string command, JsonObject arguments, out string? failure)
+    {
+        JsonObject response = Send(command, arguments);
+        bool succeeded = response.Bool("success") == true;
+        failure = succeeded ? null : response.String("message") ?? "";
+        return succeeded ? response["body"] as JsonObject ?? [] : null;
+    }
+
     private JsonObject Send(string command, JsonObject arguments)
     {
         int seq = ++_sequence;

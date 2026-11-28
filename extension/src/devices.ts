@@ -23,7 +23,7 @@ import { languageRequest } from "./languageClient";
 import {
     changeWords, conflictQuestion, contextWords, discardedMessage, iconName, iconSvg, keptSummary, leaveQuestion,
     lockState, lossless, lossyQuestion, mark, readOnlyQuestion, revertedMessage, savedMessage, stoppedMessage, summary,
-    tooltipLines, unsavedDisks, crashedMessage, discardKept, discardKeptQuestion, letGoQuestion, saveAllKept, type Device, type Differences, type KeptDisk, type Question
+    tooltipLines, unsavedDisks, unsavedTapes, crashedMessage, discardKept, discardKeptQuestion, letGoQuestion, saveAllKept, type Device, type Differences, type KeptDisk, type Question
 } from "./drives";
 
 /** What retro/device and retro/hardware say back about media, beside the devices, to a client that speaks it. */
@@ -697,12 +697,12 @@ export function registerDevices(context: vscode.ExtensionContext, basic: BasicPr
         stale = true;
         seen();
     }));
-    // The Drives view's badge counts the disks changed in the machine and not yet saved to their images.
+    // The Drives view's badge counts the disks and tapes changed in the machine and not yet saved to their images.
     context.subscriptions.push(tree.onDidChange(() => {
         const changed = tree.devices.filter(device => device.media?.changed && device.operations.includes("save")).length
             + tree.devices.reduce((count, device) => count + (device.ejected ?? []).filter(kept => kept.changed).length, 0);
         drivesView.badge = changed === 0 ? undefined
-            : { value: changed, tooltip: `${changed} disk${changed === 1 ? "" : "s"} changed and not saved to ${changed === 1 ? "its image" : "their images"}` };
+            : { value: changed, tooltip: `${changed} ${changed === 1 ? "disk or tape" : "disks or tapes"} changed and not saved to ${changed === 1 ? "its image" : "their images"}` };
     }));
     // The machine row shows whether the machine runs or is stopped in the debugger.
     context.subscriptions.push(vscode.debug.registerDebugAdapterTrackerFactory("retrocore", {
@@ -742,11 +742,12 @@ export function registerDevices(context: vscode.ExtensionContext, basic: BasicPr
         // for its next launch, or, for a session that keeps none, gone.
         const last = sessionDevices.get(ended.id);
         sessionDevices.delete(ended.id);
-        const { kept, lost } = unsavedDisks(last?.devices ?? (ended.id === tree.session?.id ? tree.devices : []), last?.recovery === true);
+        const devices = last?.devices ?? (ended.id === tree.session?.id ? tree.devices : []);
+        const { kept, lost } = unsavedDisks(devices, last?.recovery === true);
         const machine = String(ended.configuration.name ?? "The machine");
         const recoveryId = typeof ended.configuration.recoveryId === "string" ? ended.configuration.recoveryId : undefined;
         if (kept.length + lost.length > 0) {
-            const message = stoppedMessage(machine, kept, lost);
+            const message = stoppedMessage(machine, kept, lost, unsavedTapes(devices));
             // The kept disks are the off machine's now: saved there, shown in its Drives view, or let go.
             const buttons = kept.length !== 0 && recoveryId !== undefined ? ["Save All", "Review", "Discard"] : [];
             void (lost.length === 0 ? vscode.window.showInformationMessage(message, ...buttons) : vscode.window.showWarningMessage(message, ...buttons))
@@ -941,7 +942,7 @@ export function registerDevices(context: vscode.ExtensionContext, basic: BasicPr
                     const label = body.label ? path.basename(body.label) : "its image";
                     // What changed is the mounted disk's, so an ejected one's question says none.
                     const changes = body.ejected === undefined ? changeWords(await differencesOf(on, id)) : undefined;
-                    const choice = await ask(leaveQuestion(label, name, leaving(current, name), changes));
+                    const choice = await ask(leaveQuestion(label, name, leaving(current, name, medium), changes, medium));
                     // A disk the machine ejected, which a card's removal would take, is named by its ejected id.
                     const ejected = body.ejected === undefined ? {} : { ejected: body.ejected };
                     if (choice === "Discard") {
@@ -957,7 +958,7 @@ export function registerDevices(context: vscode.ExtensionContext, basic: BasicPr
                     // An image changed on disk since the disk was read can also be read again in its place.
                     const own = body.baseline && body.current && current.ejected === undefined && typeof current.path !== "string"
                         && device?.operations.includes("insert") === true;
-                    const question = conflictQuestion(body.path ? path.basename(body.path) : file, name, body.baseline, body.current);
+                    const question = conflictQuestion(body.path ? path.basename(body.path) : file, name, body.baseline, body.current, undefined, medium);
                     const choice = await ask(own ? { ...question, buttons: [...question.buttons, "Revert to Image"] } : question);
                     if (choice !== undefined && choice === question.buttons[0]) {
                         current = { ...current, overwrite: { sha256: body.current?.sha256 ?? null }, generation };
@@ -978,7 +979,7 @@ export function registerDevices(context: vscode.ExtensionContext, basic: BasicPr
                     return offered !== undefined && choice === `Save as ${offered.toUpperCase()}...` && await saveAsNew(on, id, generation, current, offered);
                 }
                 case "readOnly": {
-                    const choice = await ask(readOnlyQuestion(target ? path.basename(target) : undefined, name, device?.media?.format, body.reason));
+                    const choice = await ask(readOnlyQuestion(target ? path.basename(target) : undefined, name, device?.media?.format, body.reason, medium));
                     // The host makes the file writable as it saves, for this mount and only over the revision the
                     // save may replace, so an answer left open while the disk or file changed alters nothing.
                     if (choice === "Make Writable and Save") {
@@ -998,10 +999,11 @@ export function registerDevices(context: vscode.ExtensionContext, basic: BasicPr
             }
         }
     };
-    // What would take a changed disk out, as its question says it.
-    const leaving = (args: Record<string, unknown>, name: string): string =>
-        args.action === "insert" ? `inserting another disk in ${name}`
-            : args.action === "undo" ? `putting back the disk ${name} had`
+    // What would take a changed disk or tape out, as its question says it.
+    const leaving = (args: Record<string, unknown>, name: string, medium: "disk" | "tape"): string =>
+        args.action === "insert" ? `inserting another ${medium} in ${name}`
+            : args.action === "record" ? `recording a new tape in ${name}`
+            : args.action === "undo" ? `putting back the ${medium} ${name} had`
             : args.action === "insertAgain" ? `putting the ejected disk back in ${name}`
             : args.action === "removeCard" ? `removing the card ${name} is on`
             : `ejecting it from ${name}`;
@@ -1032,7 +1034,7 @@ export function registerDevices(context: vscode.ExtensionContext, basic: BasicPr
         const file = path.basename(device?.media?.source?.path ?? device?.media?.label ?? "its image");
         const differences = device?.media?.changed ? await differencesOf(on, id) : undefined;
         // Off, nothing puts the changes back, so they are let go only when the person says so.
-        if (!on.undoes && device?.media?.changed && await ask(letGoQuestion(device.name, "revert", file)) !== "Revert") return false;
+        if (!on.undoes && device?.media?.changed && await ask(letGoQuestion(device.name, "revert", file, mediumOf(device))) !== "Revert") return false;
         try {
             if (!on.still()) return false;
             const body = await on.request("device", { id, action: "revert", generation, supportsRetrocoreMedia: 1 });

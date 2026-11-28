@@ -25,10 +25,20 @@ internal sealed record AnalysisContractFinding(
     string Path,
     int Line)
 {
+    /// <summary>
+    ///  Gets the <c>Entry:</c> label whose keeps clause made the promise, or null for the routine's <c>Keeps:</c>.
+    /// </summary>
+    public string? Entry { get; init; }
+
     /// <inheritdoc/>
     public override string ToString()
     {
         string where = ChangedAt is { } at ? $" by the instruction at ${at:X4}" : " on some path";
+        if (Entry is not null && Kind == AnalysisContractProblem.NotKept)
+        {
+            return $"{Routine} (${Address:X4}) documents that its entry {Entry} keeps {Item}, but {Item} is changed{where}.";
+        }
+
         return Kind == AnalysisContractProblem.NotKept
             ? $"{Routine} (${Address:X4}) documents Keeps: {Item}, but {Item} is changed{where}."
             : $"{Routine} (${Address:X4}) changes {Item}{where}, which its Uses:, Out: and Keeps: do not list.";

@@ -35,7 +35,8 @@ border.
 CB2 select, while PIA 1's CB2 enables sound.
 
 **Cassette.** `.cas` tapes play and record at 1500 baud. A recording is cut into blocks at each leader so that it
-reads back as the tape it would have made.
+reads back as the tape it would have made. It is a changed tape, saved to its CAS file and kept in the recovery
+journal as the Model I's is ([Trs80ModelI.md](Trs80ModelI.md)); the recorder adds each byte as it completes.
 
 **Cartridges.** A ROM pack starts itself through CART, as games do, unless `autostart` is false.
 

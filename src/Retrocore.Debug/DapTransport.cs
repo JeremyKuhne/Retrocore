@@ -30,7 +30,7 @@ internal sealed class DapTransport(Stream input, Stream output, Func<Memory<byte
 {
     private const int OutputDrainMilliseconds = 2_000;
 
-    private readonly MessageFraming _wire = new(input, output, read ?? ((bytes, token) => input.ReadAsync(bytes, token).AsTask().GetAwaiter().GetResult()));
+    private readonly MessageFraming _wire = new(input, output, read ?? ((bytes, token) => DapStandardIo.Read(input, bytes, token)));
     private readonly Dictionary<string, Func<JsonObject, (JsonNode? Body, Action? FollowUp)>> _handlers = [with(StringComparer.Ordinal)];
     private readonly object _outboundGate = new();
     private Queue<(Action Write, Action? Release, int Weight)> _outbound = new();

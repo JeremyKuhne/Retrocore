@@ -3,6 +3,7 @@
 // See LICENSE file in the project root for full license information
 
 using System.ComponentModel;
+using System.IO.Pipes;
 using System.Runtime.InteropServices;
 using Microsoft.Win32.SafeHandles;
 
@@ -28,6 +29,33 @@ internal static partial class DapStandardIo
         return handle != 0 && handle != -1 && GetFileType(handle) == 3
             ? (bytes, token) => ReadWindows(input, handle, bytes, token)
             : null;
+    }
+
+    /// <summary>
+    ///  Reads from the transport's input without moving a synchronous Windows pipe read onto the thread pool.
+    /// </summary>
+    /// <param name="input">The adapter's request stream.</param>
+    /// <param name="bytes">The destination buffer.</param>
+    /// <param name="token">Cancels the input wait.</param>
+    /// <returns>The bytes read, or zero at EOF.</returns>
+    internal static int Read(Stream input, Memory<byte> bytes, CancellationToken token)
+    {
+        if (OperatingSystem.IsWindows() && input is PipeStream { IsAsync: false } pipe)
+        {
+            SafePipeHandle handle = pipe.SafePipeHandle;
+            bool held = false;
+            try
+            {
+                handle.DangerousAddRef(ref held);
+                return ReadWindows(input, handle.DangerousGetHandle(), bytes, token);
+            }
+            finally
+            {
+                if (held) { handle.DangerousRelease(); }
+            }
+        }
+
+        return input.ReadAsync(bytes, token).AsTask().GetAwaiter().GetResult();
     }
 
     /// <summary>

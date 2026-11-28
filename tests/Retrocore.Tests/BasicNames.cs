@@ -25,7 +25,10 @@ namespace Retrocore.Tests;
 /// </remarks>
 internal static partial class BasicNames
 {
-    private static readonly AsyncLocal<string?> s_inputs = new();
+    private static readonly BasicInputBuilds s_defaultInputs = new(Path.Join(AppContext.BaseDirectory, "Inputs"));
+    private static readonly AsyncLocal<BasicInputBuilds?> s_inputs = new();
+
+    private static BasicInputBuilds CurrentInputs => s_inputs.Value ?? s_defaultInputs;
 
     // The names each historical name of the native BASIC builds is defined by now, by inputs folder.
     private static readonly ConcurrentDictionary<string, Lazy<IReadOnlyDictionary<string, IReadOnlyDictionary<string, string[]>>>>
@@ -83,17 +86,39 @@ internal static partial class BasicNames
     ///  Gets the folder the BASIC tests read their sources from: the test output's <c>Inputs</c>, unless
     ///  <see cref="WithInputs"/> has replaced it for this flow.
     /// </summary>
-    internal static string Inputs => s_inputs.Value ?? Path.Join(AppContext.BaseDirectory, "Inputs");
+    internal static string Inputs => CurrentInputs.Directory;
 
     /// <summary>
-    ///  Runs code with the BASIC tests pointed at another copy of their sources.
+    ///  Gets the math fixture's build for the current inputs. Each machine still gets its own memory and CPU.
+    /// </summary>
+    /// <param name="apple">Whether to use AppleSoft rather than PET BASIC 4.</param>
+    /// <returns>The immutable assembly result.</returns>
+    internal static AssemblyResult AssembleMath(bool apple) => CurrentInputs.Math(apple);
+
+    /// <summary>
+    ///  Builds the PET MACRO-10 oracle, reusing it only when the directory belongs to the current input snapshot.
+    /// </summary>
+    /// <param name="directory">The PET source directory.</param>
+    /// <param name="model">The PET model.</param>
+    /// <param name="original">Whether BASIC uses its original chip.</param>
+    /// <returns>The immutable assembly result.</returns>
+    internal static AssemblyResult AssemblePetLegacy(string directory, PetModel model, bool original)
+    {
+        BasicInputBuilds inputs = CurrentInputs;
+        return string.Equals(directory, inputs.PetDirectory, StringComparison.Ordinal)
+            ? inputs.PetLegacy(model, original)
+            : PetSdkModules.AssembleBasic(directory, model, original, BasicSourceKind.Macro10);
+    }
+
+    /// <summary>
+    ///  Runs code with the BASIC tests pointed at another, immutable copy of their sources.
     /// </summary>
     /// <param name="directory">The replacement for <see cref="Inputs"/>.</param>
     /// <param name="action">The code.</param>
     internal static void WithInputs(string directory, Action action)
     {
-        string? previous = s_inputs.Value;
-        s_inputs.Value = directory;
+        BasicInputBuilds? previous = s_inputs.Value;
+        s_inputs.Value = new(directory);
         try
         {
             action();

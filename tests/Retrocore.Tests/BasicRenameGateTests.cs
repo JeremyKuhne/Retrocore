@@ -97,7 +97,7 @@ public sealed partial class BasicRenameGateTests
 
     // Helpers the renamed classes use, whose lookups are checked with theirs.
     private static readonly string[] s_helpers =
-        ["BasicAttribution.cs", "BasicMachines.cs", "BasicMathMachine.cs", "PetLegacyBasic.cs", "PetRoutineMachine.cs"];
+        ["BasicAttribution.cs", "BasicInputBuilds.cs", "BasicMachines.cs", "BasicMathMachine.cs", "PetLegacyBasic.cs", "PetRoutineMachine.cs"];
 
     /// <summary>
     ///  Renaming <c>ReservedWords</c> to <c>ReservedNames</c>, and <c>AssignString</c> in a macro's body to <c>AssignStringResult</c>, in a copy
@@ -174,6 +174,10 @@ public sealed partial class BasicRenameGateTests
             native.HasSymbol("ReservedWords_NOT_A_NAME").Should().BeFalse();
             Action neither = () => native.Symbol("ReservedWords_NOT_A_NAME");
             neither.Should().Throw<KeyNotFoundException>();
+
+            BasicNames.AssembleMath(apple: true).DefinitionName(OldName).Should().Be(OldName);
+            BasicNames.WithInputs(scratch, () =>
+                BasicNames.AssembleMath(apple: true).DefinitionName(OldName).Should().Be(NewName));
 
             // A standalone build of the module, as the comparisons assemble it, finds the dependency by either name.
             Dictionary<string, long> predefined = BasicNames.WithCurrentNames(new Dictionary<string, long>
@@ -417,7 +421,7 @@ public sealed partial class BasicRenameGateTests
     }
 
     // A source that assembles the native or MACRO-10 BASIC, or one of its shared modules.
-    [GeneratedRegex(@"AssembleAppleSoft|AppleSoftPath|PetSdkModules\.AssembleBasic|Vic20SdkModules\.AssembleBasic|PetLegacyBasic\.Assemble|Microsoft6502Basic|BasicMachines\.AppleSoft")]
+    [GeneratedRegex(@"AssembleAppleSoft|AppleSoftPath|PetSdkModules\.AssembleBasic|Vic20SdkModules\.AssembleBasic|PetLegacyBasic\.Assemble|Microsoft6502Basic|BasicMachines\.AppleSoft|BasicNames\.(AssembleMath|AssemblePetLegacy)\b")]
     private static partial Regex AssemblesBasic();
 
     // The renamed label, as a whole word.

@@ -68,6 +68,37 @@ public sealed partial class HistoricalNameTests
     }
 
     /// <summary>
+    ///  Reading only historical names still honors comment placement, trailing comments and section formatting.
+    /// </summary>
+    [TestMethod]
+    public void HistoricalNamesFollowDocumentationPlacement()
+    {
+        AssemblyResult result = Assemble("""
+            ;; Also: FIRST
+            First = 1
+
+            ;; A comment with no old names.
+            Spare = 2
+
+            ;; The second constant.
+            ;; aLsO :
+            ;;   SECOND
+            .if 1
+            Second = 3
+            .endif
+
+            Third = 4 ;; Also: THIRD
+
+            ;; Also: NOT_AN_ALIAS
+            Fourth = 5 ;; The trailing documentation takes precedence.
+            """);
+
+        result.Diagnostics.Should().BeEmpty();
+        result.HistoricalNames.Keys.Should().BeEquivalentTo(["FIRST", "SECOND", "THIRD"]);
+        result.HistoricalNames["SECOND"].Value.Should().Be(3);
+    }
+
+    /// <summary>
     ///  A historical name two definitions give is an error where code uses it, naming both.
     /// </summary>
     [TestMethod]

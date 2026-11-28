@@ -57,11 +57,11 @@ internal sealed class AssemblyAlsoNames
     /// <returns>The names by the line each definition is on, or null when the source gives none.</returns>
     internal static Dictionary<int, (string[] Names, bool Macro)>? Read(AssemblySource source)
     {
-        // Only a source with the heading on a ;; line needs its documentation parsed, and without the style checks,
-        // which the assembly does not need.
+        // Only a source with the heading on a ;; line needs its documentation parsed for historical names.
         if (!HasHeading(source.Text)) { return null; }
         Dictionary<int, (string[] Names, bool Macro)>? names = null;
-        foreach (DocumentationComment comment in DocumentationParser.Parse(source.Lines, source.Path, assembled: null, style: false).Comments)
+        foreach (DocumentationComment comment in DocumentationParser.Parse(
+            source.Lines, source.Path, assembled: null, style: false, historicalNamesOnly: true).Comments)
         {
             // A scope has no address of its own: its line is lowered to a hidden start label, which an old name
             // must not reach. A named type is a scope too.

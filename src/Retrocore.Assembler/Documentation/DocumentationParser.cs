@@ -58,8 +58,10 @@ public static partial class DocumentationParser
     /// <param name="path">The source path, recorded in comments and diagnostics.</param>
     /// <param name="assembled">What the assembler took from the file, or null when not known.</param>
     /// <param name="style">Whether to check a strict source against the style guide.</param>
+    /// <param name="historicalNamesOnly">Whether to skip comments that cannot supply a historical name.</param>
     /// <returns>The comments and any placement problems.</returns>
-    internal static DocumentationFile Parse(string[] lines, string path, DocumentationAssembled? assembled, bool style)
+    internal static DocumentationFile Parse(
+        string[] lines, string path, DocumentationAssembled? assembled, bool style, bool historicalNamesOnly = false)
     {
         List<(int Line, string Name)> macros = MacroDefinitions(lines);
         HashSet<string> dataMacros = DataMacros(lines, macros);
@@ -77,19 +79,26 @@ public static partial class DocumentationParser
             if (IsDocumentationLine(line))
             {
                 int start = index;
-                List<(int, string)> body = [];
-                while (index < lines.Length && IsDocumentationLine(lines[index]))
+                // Before the first code, keep the full comment sequence: it decides whether a block is file documentation.
+                bool candidate = !historicalNamesOnly || !codeSeen;
+                do
                 {
-                    body.Add((index, Strip(lines[index])));
+                    candidate = candidate || lines[index].Contains("Also", StringComparison.OrdinalIgnoreCase);
                     index++;
                 }
+                while (index < lines.Length && IsDocumentationLine(lines[index]));
 
+                int end = index;
                 // Conditional lines may separate a comment from its definition.
                 while (index < lines.Length && IsConditional(lines[index].AsSpan(0, CodeLength(lines[index]))))
                 {
                     Condition(conditions, Split(lines[index]).Code);
                     index++;
                 }
+
+                if (!candidate) { continue; }
+                List<(int, string)> body = [with(capacity: end - start)];
+                for (int row = start; row < end; row++) { body.Add((row, Strip(lines[row]))); }
 
                 string next = index < lines.Length ? lines[index] : "";
                 string nextCode = Split(next).Code;
@@ -185,7 +194,9 @@ public static partial class DocumentationParser
             ReadOnlySpan<char> trimmed = line.AsSpan(0, codeLength).Trim();
             if (trimmed.Length != 0) { codeSeen = true; }
             bool trailingMarker = codeLength + 1 < line.Length && line[codeLength + 1] == ';';
-            if (trailingMarker && trimmed.Length != 0)
+            if (trailingMarker
+                && trimmed.Length != 0
+                && (!historicalNamesOnly || line.AsSpan(codeLength).Contains("Also", StringComparison.OrdinalIgnoreCase)))
             {
                 if (Qualify(Define(line[..codeLength], containers), scopes) is { } definition)
                 {

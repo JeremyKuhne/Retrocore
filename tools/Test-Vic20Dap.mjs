@@ -6,9 +6,10 @@
 // BASIC and the VIC-20's kernal sources with the 6502 call stack, shows the VIC's picture in colour, stops where the
 // machine resets, warm starts with RUN/STOP and RESTORE, records a program onto a blank tape and saves it as a TAP
 // image, loads it back, and launches a .prg BASIC program and an assembly source that prints through the kernal.
-// Then the expansions and PAL change the memory and the thread, and with MAME's c1541 ROM set (in
-// RETROCORE_VIC20_ROMS or %USERPROFILE%\Retrocore\vic20-roms\extract), a 1541 on device 8 formats a blank disk,
-// saves a program on it, writes it back as a D64 image and lists its directory.
+// Then the expansions and PAL change the memory and the thread, and a 1541 on device 8 formats a blank disk, saves a
+// program on it, writes it back as a D64 image and lists its directory: with MAME's c1541 ROM set (in
+// RETROCORE_VIC20_ROMS or %USERPROFILE%\Retrocore\vic20-roms\extract) when it is there, else from the SDK's build of
+// the drive's DOS.
 
 import { resolve, join } from "node:path";
 import { readFileSync, writeFileSync, existsSync, unlinkSync } from "node:fs";
@@ -290,10 +291,14 @@ try {
     await request("setExceptionBreakpoints", { filters: [] });
     await request("continue", { threadId: 1 });
 
-    // A 1541 on device 8: a blank disk formatted, a program saved on it, the disk saved as a D64 image and listed.
-    if (["325302-01.uab4", "901229-06 aa.uab5"].every(chip => existsSync(join(driveRoms, chip)))) {
+    // A 1541 on device 8: a blank disk formatted, a program saved on it, the disk saved as a D64 image and listed. The
+    // drive runs MAME's c1541 set when it is there, else the SDK's build of its DOS.
+    {
+        const dumps = ["325302-01.uab4", "901229-06 aa.uab5"].every(chip => existsSync(join(driveRoms, chip)));
+        console.log(dumps ? "The 1541 runs MAME's c1541 set." : "The 1541 runs the SDK's build of its DOS.");
+        const drives = dumps ? { driveRomDirectory: driveRoms } : {};
         writeFileSync(disk, Buffer.alloc(174848));
-        await launch({ driveRomDirectory: driveRoms, disks: [disk] });
+        await launch({ ...drives, disks: [disk] });
         await screen(ready, "READY. with a 1541");
         const units = await rows();
         assert.equal(units.serial8.value, "1541 disk drive");
@@ -321,13 +326,11 @@ try {
         assert.ok(!(await request("retro/devices")).devices.some(device => device.id === "disk9"));
 
         await assert.rejects(
-            request("launch", { machine: "vic20", sdkRoms, driveRomDirectory: driveRoms, diskUnits: [12] }),
+            request("launch", { machine: "vic20", sdkRoms, ...drives, diskUnits: [12] }),
             /diskUnits holds different device numbers, 8 to 11/);
         await assert.rejects(
-            request("launch", { machine: "vic20", sdkRoms, driveRomDirectory: driveRoms, diskModel: "1571" }),
+            request("launch", { machine: "vic20", sdkRoms, ...drives, diskModel: "1571" }),
             /diskModel is 1541 or 1540/);
-    } else {
-        console.log(`Skipped the 1541: no c1541 ROM set in ${driveRoms}.`);
     }
 
     await request("disconnect", {});

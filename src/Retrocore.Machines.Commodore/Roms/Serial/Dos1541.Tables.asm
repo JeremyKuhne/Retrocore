@@ -46,21 +46,23 @@ CommandRoutinesHigh:
     .byte >Commands::Copy
     .byte >Commands::Rename, >Commands::Scratch, >Commands::New
 
-;; The parsed commands' patterns, from the first parsed command (FIRST_PARSED): what each allows of IMAGE's bits.
+;; The patterns of the commands that take names: copy, rename, scratch and new, then LOAD's. Each byte says which shapes
+;; of command the parser allows, as it checks them against <Structure>: whether a pattern, more than one file, a default
+;; drive and a file name are allowed. The table starts at `$FEAD`, and <PATTERN_ORIGIN> indexes it by the command's
+;; number.
 CommandPatterns:
-
-;; The parsed commands' patterns (copy, rename, scratch, new, and LOAD's at LDCMD), an equate, not a table:
-;; `CommandPatterns - 8`, a constant (`PATTERN_ORIGIN`), where `CommandPatterns` is the table label at `$FEAD`, which
-;; the conversion adds (it is CJUMPH's bytes `$FEA1-$FEAC` before it); so the command's number indexes the table (copy
-;; is 8, LOAD `Commands::LOAD_STRUCTURE`, 12): each byte says whether a pattern, more than one file, a default drive and
-;; a file name are allowed (Q4).
-;; Also: STRUCT (D1541)
-PATTERN_ORIGIN = CommandPatterns - 8
     .byte $51
     .byte $DD
     .byte $1C
     .byte $9E
     .byte $1C
+
+;; Where <CommandPatterns> would start if it held a pattern for command 0: the table's address less 8, the number of its
+;; first command (copy), so that the command's number indexes the table (LOAD's is <Commands::LOAD_STRUCTURE>, 12). The
+;; listing's STRUCT is this address, which is not a table's: its bytes are the end of <CommandRoutinesHigh> (`$FEA1`
+;; to `$FEAC`).
+;; Also: STRUCT (D1541)
+PATTERN_ORIGIN = CommandPatterns - 8
 
 ;; OPEN's modes: R, W, A, M.
 ;; Also: MODLST (D1541)
@@ -140,6 +142,7 @@ TrackLimit:
 ;; Also: TRKNUM (D1541)
 ZoneLimits:
     .byte $24, $1F, $19, $12
+.assert TrackLimit = ZoneLimits, "TrackLimit and ZoneLimits are one table's two jobs: its first byte is both."
 
 ;; The head's steps for a job's retries, 1, -1, -1, 1, ended by 0.
 ;; Also: OFFSET (D1541)
@@ -150,9 +153,10 @@ RecoveryOffsets:
 ;; Also: BUFIND (D1541)
 BufferPages:
     .byte $03, $04, $05, $06, $07, $07
+; The tables' start-up part: the ROM's checksum byte, the NMI entry and the power-on patch.
 .scope Startup continued
 
-;; The byte that makes the $E000 ROM's sum come out at $E0; each revision has its own (Q7).
+;; The byte that makes the `$E000` ROM's checksum come out at `$E0`; each revision has its own.
 ;; Also: ECHKSM (D1541)
 UpperRomChecksum:
 .if REVISION = 1
@@ -169,15 +173,15 @@ UpperRomChecksum:
     .byte $60
 .endif
 
-;; JMP (VNMI): VNMI holds <Reset::Initialize>, so a plain UI re-initializes the drive without the self-test; the 1540's
-;; NMI vector points here (Q5).
+;; Jumps through <NmiVector>, which holds <Reset::Initialize>, so a plain `UI` command re-initializes the drive without
+;; the self-test. The 1540's NMI vector points here. It never returns.
 ;; Also: NMI (D1541)
 .proc Reinitialize
     jmp (NmiVector)
 .endproc
 
-;; The power-on patch, the same in every build (vector.src's first): lights the LEDs and sets VIA 2's port B direction
-;; (LEDOUT) so the LED is an output before CNTINT has run, and back to <BlinkFault::LedsLit> (Q6).
+;; The power-on patch, the same in every build: lights the LEDs and sets VIA 2's port B direction, so the LED is an
+;; output before the controller's start-up has run, then jumps back to <BlinkFault::LedsLit>.
 ;; Also: PEA7A (D1541)
 .proc BlinkFaultPatch
     sta DriveControl
@@ -189,9 +193,12 @@ UpperRomChecksum:
     ; The 1540 has no SlowDown, CLKDAT or NNMI: their 29 bytes are fill.
     .res 29, $AA
 .else
+; The serial bus's two routines in the patch area, which TALK calls.
 .scope Serial continued
 
-;; About 40 microseconds more for each bit sent at the VIC-20's speed; X kept, A lost.
+;; Delays about 40 microseconds more for each bit sent, at the VIC-20's speed.
+;; Uses: A
+;; Keeps: X
 ;; Also: SLOWD (D1541)
 .proc SlowDown
     txa
@@ -206,24 +213,25 @@ Wait:
     rts
 .endproc
 
-;; Ends a bit: <PullClock>, then <ReleaseData>.
+;; Ends a bit: pulls the clock with <PullClock>, then jumps to <ReleaseData>, which returns.
 ;; Also: CLKDAT (D1541)
 .proc PullClockAndReleaseData
     jsr PullClock
     jmp ReleaseData
 .endproc
 .endscope
+; The NMI vector's target, for the 1541's builds.
 .scope Startup continued
 
-;; The NMI vector's target, which UI reaches through the user table: UI- sets <SerialNoDelay> nonzero (the 64's speed),
-;; UI+ zero (the VIC-20's), and UI alone goes to `Startup::Reinitialize`.
+;; The NMI vector's target, which the `UI` command reaches through the user table: `UI-` sets <SerialNoDelay> nonzero
+;; (the 64's speed), `UI+` zero (the VIC-20's), and `UI` alone goes to <Reinitialize>.
 ;; Also: NNMI (D1541)
 .proc Nmi
     lda CommandBuffer+2
-    cmp #$2D
+    cmp #'-'
     beq SetSpeed
     sec
-    sbc #$2B
+    sbc #'+'
     bne Reinitialize
 
 ;; <SerialNoDelay> = A.
@@ -236,10 +244,12 @@ SetSpeed:
 .endif
 
 .if LATE_PATCHES
+; -05's two patches, which later builds moved the code to.
 .scope Startup continued
 
-;; -05's fix: VIA 1's port A all outputs, then port B = $02 and its directions set, so CLK is released and DATA pulled
-;; during the self-test (the comment says the clock); back to <Reset::SelfTest> (Q6, Q10).
+;; -05's fix: sets VIA 1's port A direction (X is $FF, all outputs), then port B = `$02` and its directions, so CLK is
+;; released and DATA pulled during the self-test (the listing's comment says the clock). It jumps back to
+;; <Reset::SelfTest>.
 ;; Also: PATCH5 (D1541)
 .proc ResetPatch
     stx Via1DirectionA
@@ -253,7 +263,7 @@ SetSpeed:
 .scope Serial continued
 
 ;; -05's fix to EOI's timing: waits until DATA reads released, every listener ready, before starting the 256
-;; microseconds timer; back to <ReceiveByte::WaitForClock>.
+;; microseconds timer, then jumps back to <ReceiveByte::WaitForClock>.
 ;; Also: PATCH6 (D1541)
 .proc ReceiveBytePatch
     lda Via1PortB
@@ -269,9 +279,11 @@ SetSpeed:
     .res 31, $AA
 .endif
 .if REVISION = 6
+; -06's patch.
 .scope Commands continued
 
-;; -06's fix: <Controller::FormatTrack> = $FF, no format under way, before <Format>, which NEW calls through it.
+;; -06's fix: sets <Controller::FormatTrack> to $FF, no format under way, then jumps to <Format>, which NEW calls
+;; through it.
 .proc FormatPatch
     lda #$FF
     sta Controller::FormatTrack
@@ -279,6 +291,7 @@ SetSpeed:
 .endproc
 .endscope
 .endif
+    ; The fill up to the vectors.
     .res $FFE2 - *, $AA
 .if REVISION = 2 || REVISION = 3
     ; -02 and -03 have RSR in three bytes of the fill.
@@ -287,6 +300,8 @@ SetSpeed:
     .res 3, $AA
 .endif
     .byte $AA
+
+; The vectors, at the ROM's end.
 
 ;; The format routine's address, for programs that format through the ROM.
 FormatVector:
@@ -302,6 +317,7 @@ MotorOffVector:
 UserCommandVectors:
     .word Commands::UserRead
     .word Commands::UserWrite
+    ; U3 to U8 jump into buffer 2.
     .word $0500
     .word $0503
     .word $0506
@@ -313,5 +329,6 @@ UserCommandVectors:
 .else
     .word Startup::Nmi
 .endif
+    ; The 6502's own vectors: NMI (above), RESET and IRQ.
     .word Startup::Reset
     .word Controller::Interrupt

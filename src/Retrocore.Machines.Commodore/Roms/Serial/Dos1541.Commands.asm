@@ -1083,6 +1083,8 @@ StoreType:
     ldy #$15
     lda (BufferPointer),y
     sta RecordSize
+    ; Falls into NextUnfound.
+    .assert * = NextUnfound, "MatchEntry must fall into NextUnfound."
 .endproc
 
 ;; Sets <Found> to 0 if some name of the stream is still unfound, else leaves it $FF. Starts from the last name;

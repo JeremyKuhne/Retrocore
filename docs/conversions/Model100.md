@@ -34,8 +34,8 @@ the first stage, where each name came from, and what is left.
    with a few runs of code the trace does not reach yet, written as bytes.
 2. **Naming.** Tandy's names first, then the handlers' (with the functions the evaluator reaches by their tokens
    rather than FUNDSP: STRING$, INSTR, INKEY$, INPUT$, CSRLIN and DSKI$), then Microsoft's interpreter core by hand
-   (NEWSTT, GONE, MAIN, ERROR, CONSTP, STPEND, ENDCON, DIRIS, SNGFOR, NTOERR, LETCON, BLTU, GETSTK, REASON and the
-   string package's skip targets, read against MBASIC's code), then the rest of Microsoft's names by aligning the two
+   (NEWSTT, GONE, MAIN, ERROR, CONSTP, STPEND, ENDCON, DIRIS, SNGFOR, NTOERR, LETCON, BLTU, GETSTK and the string
+   package's skip targets, read against MBASIC's code), then the rest of Microsoft's names by aligning the two
    programs' instruction streams: a diff of MBASIC's instructions against the ROM's, operands left out and the RSTs
    counted as the calls they stand for, gives blocks of the same code, and an MBASIC label in a block names the ROM's
    instruction it lines up with. Names were taken only in the interpreter ($0400-$12FF), the string package
@@ -63,7 +63,8 @@ The IDs are M100.
 - M100-3. The restarts are named for what BASIC uses them as, and the routines they jump to keep Microsoft's names:
   `CHRGET` at $0010 jumps to `CHRGTR`, `GETYPE` at $0028 to `GETYPR`. The 80C85's interrupt entries are `TRAP`,
   `RST55`, `RST65` and `RST75`; RST 7's is `RST38`, and the hook dispatcher it jumps to `HOOK`. `GONE3`, the `RZ`
-  after GONE, is Level II's name (Level2.asm), which MBASIC lacks.
+  after GONE, is Level II's name (Level2.asm), which MBASIC lacks; so is `REASON` in the form it takes here, the
+  stack-room check GETSTK falls into, where MBASIC's REASON checks string space.
 - M100-4. The error entries are named for their two letters, as Microsoft's are (`SNERR`, `DV0ERR` for `/0`), and the
   Model 100's file errors from code 50 (`IEERR` to `CFERR`) by the same rule. Code 20 is `RWERR`, for the Model
   100's RW (RESUME without error), where MBASIC has `REERR`.

@@ -3,7 +3,7 @@
 ;; Runs at $744C-$770A. Model100.asm describes the ROM as a whole and how it is named.
 
 PLOT:
-    .byte $F6                           ; ORI: skips the next byte
+    .byte $F6                           ; ORI $AF: skips the next byte
 
 UNPLOT:
     XRA A
@@ -54,7 +54,7 @@ L_746D:
     JNZ L_7497
     CMA
     ANA M
-    .byte $06                           ; MVI: skips the next byte
+    .byte $06                           ; MVI B,$B6: skips the next byte
 
 L_7497:
     ORA M
@@ -122,10 +122,10 @@ L_74D0:
     ANI $C0
     MOV B,A
     DCR D
-    .byte $DA                           ; JC: skips the next instruction, unless it jumps
+    .byte $DA                           ; JC $AFF6: skips the next two bytes, unless it jumps
 
 L_74F5:
-    .byte $F6                           ; ORI: skips the next byte
+    .byte $F6                           ; ORI $AF: skips the next byte
 
 L_74F6:
     XRA A

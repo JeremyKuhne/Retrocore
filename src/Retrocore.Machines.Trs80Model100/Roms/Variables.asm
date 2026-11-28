@@ -5,7 +5,7 @@
 ST_DIM:
     LXI B,L_4786
     PUSH B
-    .byte $F6                           ; ORI: skips the next byte
+    .byte $F6                           ; ORI $AF: skips the next byte
 
 L_4790:
     XRA A
@@ -221,13 +221,13 @@ L_48B0:
     SHLD D_FB64
     MVI E,$00
     PUSH D
-    .byte $11                           ; LXI: skips the next instruction
+    .byte $11                           ; LXI D,$F5E5: skips the next two bytes
 
 L_48BC:
     PUSH H
     PUSH PSW
     LHLD ARYTAB
-    .byte $3E                           ; MVI: skips the next byte
+    .byte $3E                           ; MVI A,$19: skips the next byte
 
 L_48C2:
     DAD D
@@ -344,7 +344,7 @@ L_495A:
     MOV C,A
     MOV A,M
     INX H
-    .byte $16                           ; MVI: skips the next byte
+    .byte $16                           ; MVI D,$E1: skips the next byte
 
 L_495F:
     POP H
@@ -498,7 +498,7 @@ L_4A1F:
     JNZ L_4A2B
     DCR B
     INR E
-    .byte $FE                           ; CPI: skips the next byte
+    .byte $FE                           ; CPI $AF: skips the next byte
 
 L_4A27:
     XRA A
@@ -570,7 +570,7 @@ L_4A64:
     MOV B,A
     INR D
     INX H
-    .byte $CA                           ; JZ: skips the next instruction, unless it jumps
+    .byte $CA                           ; JZ $D1EB: skips the next two bytes, unless it jumps
 
 L_4A81:
     XCHG
@@ -675,7 +675,7 @@ L_4AF9:
 
 L_4B04:
     MVI C,$01
-    .byte $3E                           ; MVI: skips the next byte
+    .byte $3E                           ; MVI A,$F1: skips the next byte
 
 L_4B07:
     POP PSW

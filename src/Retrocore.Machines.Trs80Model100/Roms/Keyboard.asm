@@ -166,8 +166,6 @@ L_7304:
     OUT $70
     DI
     INX H
-
-L_7315:
     MOV A,M
     OUT $71
     INX H
@@ -200,8 +198,6 @@ L_7315:
     RC
     CPI $7F
     STC
-
-L_731C:
     CMC
     RNZ
     MOV B,A
@@ -215,7 +211,7 @@ L_731C:
 .endif
 
 L_7329:
-    .byte $F6                           ; ORI: skips the next byte
+    .byte $F6                           ; ORI $AF: skips the next byte
 
 L_732A:
     XRA A

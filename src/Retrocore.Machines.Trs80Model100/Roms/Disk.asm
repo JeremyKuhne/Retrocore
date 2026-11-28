@@ -37,7 +37,7 @@ L_4CF2:
     RST 1
     .byte $54                           ; SYNCHR: 'T'
     MVI E,$02
-    .byte $3E                           ; MVI: skips the next byte
+    .byte $3E                           ; MVI A,$D7: skips the next byte
 
 L_4CFC:
     RST 2
@@ -123,10 +123,10 @@ L_4D5D:
 
 L_4D6E:
     STC
-    .byte $11                           ; LXI: skips the next instruction
+    .byte $11                           ; LXI D,$AFF6: skips the next two bytes
 
 ST_LOAD:
-    .byte $F6                           ; ORI: skips the next byte
+    .byte $F6                           ; ORI $AF: skips the next byte
 
 ST_MERGE:
     XRA A
@@ -241,12 +241,12 @@ L_4E0B:
 L_4E18:
     RST 7
     .byte $22                           ; the hook's number
-    JMP L_504E
+    JMP NMERR
 
 L_4E1D:
     RST 7
     .byte $24                           ; the hook's number
-    JMP L_504E
+    JMP NMERR
 
 L_4E22:
     LDA D_FCA7
@@ -296,7 +296,7 @@ L_4E52:
     CALL L_4E65
     RST 7
     .byte $20                           ; the hook's number
-    JMP L_504E
+    JMP NMERR
 
 L_4E65:
     PUSH PSW
@@ -323,7 +323,7 @@ L_4E7A:
     CALL L_4E65
     RST 7
     .byte $0E                           ; the hook's number
-    JMP L_504E
+    JMP NMERR
 
 L_4E8A:
     POP D
@@ -602,7 +602,7 @@ BAKUPT:
     CALL L_4E65
     RST 7
     .byte $12                           ; the hook's number
-    JMP L_504E
+    JMP NMERR
 
 NOSKCR:
     POP H
@@ -640,13 +640,13 @@ STRCHR:
     POP PSW
     JMP QUIT2B
 
-L_504E:
+NMERR:
     MVI E,$37
-    .byte $01                           ; LXI: skips the next instruction
+    .byte $01                           ; LXI B,$351E: skips the next two bytes
 
 AOERR:
     MVI E,$35
-    .byte $01                           ; LXI: skips the next instruction
+    .byte $01                           ; LXI B,$381E: skips the next two bytes
 
 DSERR:
     MVI E,$38
@@ -660,15 +660,15 @@ CFERR:
 
 BNERR:
     MVI E,$33
-    .byte $01                           ; LXI: skips the next instruction
+    .byte $01                           ; LXI B,$321E: skips the next two bytes
 
 IEERR:
     MVI E,$32
-    .byte $01                           ; LXI: skips the next instruction
+    .byte $01                           ; LXI B,$361E: skips the next two bytes
 
 EFERR:
     MVI E,$36
-    .byte $01                           ; LXI: skips the next instruction
+    .byte $01                           ; LXI B,$391E: skips the next two bytes
 
 FLERR:
     MVI E,$39
@@ -722,7 +722,7 @@ L_5090:
 L_5096:
     RST 7
     .byte $2E                           ; the hook's number
-    JMP L_504E
+    JMP NMERR
 
 L_509B:
     MOV A,D
@@ -732,11 +732,11 @@ L_509B:
     JNC L_50A8
     RST 7
     .byte $2C                           ; the hook's number
-    JMP L_504E
+    JMP NMERR
 
 L_50A8:
     CPI $05
-    JNC L_504E
+    JNC NMERR
     POP B
     PUSH D
     PUSH B
@@ -791,7 +791,7 @@ L_50E0:
     LDAX D
     ORA A
     JNZ L_50B7
-    JMP L_504E
+    JMP NMERR
 
 DEVTAB:
     .byte $4C, $43, $44, $FF, $43, $52, $54, $FE, $43, $41, $53, $FD, $43, $4F, $4D, $FC

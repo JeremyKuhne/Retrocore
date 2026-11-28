@@ -129,23 +129,26 @@ ROMDIR:
     .byte "CHEDL ", $00, $88, $00, $00, $00
 
 .if MODEL = 100
-L_6C2C:
-    .byte "Suzuki ", $C8, $00, $00, $00
-
-L_6C37:
-    .byte "HayashiH", $00, $00, $00
-
-L_6C42:
-    .byte "RickY "
+    .byte "Suzuki ", $C8, $00, $00, $00, "Hayas"
+    .byte $68, $69, $48, $00, $00, $00, "RickY "
 .else
 L_6C2C:
-    .byte $32, $FB, $FF, $C3, $82, $76, $20, $C8, $00, $00, $00
+    STA D_FFFB
+    JMP L_7682
+
+    .byte $20, $C8, $00, $00, $00
 
 L_6C37:
-    .byte $C5, $CD, $DD, $26, $C1, $C9, $69, $48, $00, $00, $00
+    PUSH B
+    CALL L_26DD
+    POP B
+    RET
+
+    .byte $69, $48, $00, $00, $00
 
 L_6C42:
-    .byte $32, $09, $F8, $C3, $8D, $21
+    STA D_F809
+    JMP L_218D
 .endif
 
     .byte $20

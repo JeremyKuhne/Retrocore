@@ -2,8 +2,8 @@
 ;;
 ;; The RAM the ROM uses: its variables, buffers and hooks, most from $F5F0 up. They define no bytes; Model100.asm
 ;; includes this file before the modules. Each name's source follows it: M100TR for Tandy's Technical Reference,
-;; MBASIC where the code matches MBASIC's use of Microsoft's name, SDK for the SDK's own; an address the naming
-;; has not reached yet keeps the disassembler's D_ name.
+;; MBASIC where the code matches MBASIC's use of Microsoft's name, Level2.asm for Level II's, and SDK for the
+;; SDK's own. An address the naming has not reached yet keeps the disassembler's D_ name.
 
 D_E000 = $E000
 D_F5F0 = $F5F0
@@ -58,7 +58,7 @@ ERRFLG = $F672                          ; MBASIC
 LPTPOS = $F674                          ; MBASIC
 PRTFLG = $F675                          ; MBASIC
 D_F676 = $F676
-STKTOP = $F678                          ; MBASIC
+STKTOP = $F678                          ; Level2.asm
 CURLIN = $F67A                          ; MBASIC
 D_F67B = $F67B
 TXTTAB = $F67C                          ; MBASIC
@@ -213,6 +213,7 @@ D_FDED = $FDED
 D_FDEE = $FDEE
 D_FDEF = $FDEF
 D_FDFA = $FDFA
+BEGLCD = $FE00                          ; M100TR
 D_FF14 = $FF14
 D_FF40 = $FF40
 D_FF41 = $FF41

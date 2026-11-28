@@ -59,31 +59,31 @@ DATSNE:
 
 SNERR:
     MVI E,$02
-    .byte $01                           ; LXI: skips the next instruction
+    .byte $01                           ; LXI B,$0B1E: skips the next two bytes
 
 DV0ERR:
     MVI E,$0B
-    .byte $01                           ; LXI: skips the next instruction
+    .byte $01                           ; LXI B,$011E: skips the next two bytes
 
 NFERR:
     MVI E,$01
-    .byte $01                           ; LXI: skips the next instruction
+    .byte $01                           ; LXI B,$0A1E: skips the next two bytes
 
 DDERR:
     MVI E,$0A
-    .byte $01                           ; LXI: skips the next instruction
+    .byte $01                           ; LXI B,$141E: skips the next two bytes
 
 RWERR:
     MVI E,$14
-    .byte $01                           ; LXI: skips the next instruction
+    .byte $01                           ; LXI B,$061E: skips the next two bytes
 
 OVERR:
     MVI E,$06
-    .byte $01                           ; LXI: skips the next instruction
+    .byte $01                           ; LXI B,$161E: skips the next two bytes
 
 MOERR:
     MVI E,$16
-    .byte $01                           ; LXI: skips the next instruction
+    .byte $01                           ; LXI B,$0D1E: skips the next two bytes
 
 TMERR:
     MVI E,$0D
@@ -197,7 +197,7 @@ L_04F6:
     ANA L
     INR A
     CNZ L_39CC
-    .byte $3E                           ; MVI: skips the next byte
+    .byte $3E                           ; MVI A,$C1: skips the next byte
 
 L_0501:
     POP B
@@ -629,7 +629,7 @@ LPFORM:
     POP D
     SPHL
     SHLD SAVSTK
-    .byte $0E                           ; MVI: skips the next byte
+    .byte $0E                           ; MVI C,$D1: skips the next byte
 
 L_0758:
     POP D
@@ -650,8 +650,8 @@ L_0758:
     CALL FRMEVL
     POP PSW
     PUSH H
-    JNC SNGFOR
-    JP L_07C8
+    JNC L_0791
+    JP SNGFOR
     CALL FN_CINT
     XTHL
     LXI D,$0001
@@ -664,7 +664,7 @@ L_0758:
     CALL L_341B
     JMP STPSGN
 
-SNGFOR:
+L_0791:
     CALL FN_CDBL
     POP D
     LXI H,$FFF8
@@ -699,7 +699,7 @@ L_07B7:
     POP PSW
     JMP L_07F1
 
-L_07C8:
+SNGFOR:
     CALL FN_CSNG
     CALL L_343D
     POP H

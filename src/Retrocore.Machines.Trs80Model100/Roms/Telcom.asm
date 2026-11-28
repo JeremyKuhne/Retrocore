@@ -117,7 +117,7 @@ L_5220:
     CALL L_5284
     JZ L_5152
     XCHG
-    .byte $F6                           ; ORI: skips the next byte
+    .byte $F6                           ; ORI $37: skips the next byte
 
 L_522F:
     STC
@@ -704,7 +704,7 @@ L_559D:
     STA D_FAC3
     POP PSW
     POP D
-    .byte $01                           ; LXI: skips the next instruction
+    .byte $01                           ; LXI B,$E1F1: skips the next two bytes
 
 L_55FD:
     POP PSW

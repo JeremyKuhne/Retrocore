@@ -94,7 +94,7 @@ L_7DBB:
     CALL L_3F6D
     LXI H,MENU
     PUSH H
-    .byte $F6                           ; ORI: skips the next byte
+    .byte $F6                           ; ORI $AF: skips the next byte
 
 L_7DD0:
     XRA A
@@ -396,7 +396,6 @@ L_7FF4:
     JMP L_31B5
 
 .if MODEL = 100
-L_7FFA:
     .byte $00, $00, $00, $00, $00, $00
 .else
 L_7FFA:

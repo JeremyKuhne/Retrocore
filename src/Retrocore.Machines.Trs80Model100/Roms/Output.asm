@@ -194,7 +194,7 @@ L_4C48:
     RET
 
 L_4C55:
-    JMP L_504E
+    JMP NMERR
 
 L_4C58:
     INX H

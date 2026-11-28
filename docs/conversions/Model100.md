@@ -10,8 +10,10 @@ the first stage, where each name came from, and what is left.
 ## Sources and citations
 
 - **M100TR**: Tandy's [TRS-80 Model 100 Technical Reference Manual](https://archive.org/details/trs-80-model-100-technical-reference-manual)
-  (1984), whose section 8, "ROM Subroutines", names 70 entry points and three variables with their addresses. Only
-  the names and addresses come into the source, never the manual's text.
+  (1984), whose section 8, "ROM Subroutines", names 70 entry points and five variables with their addresses. Only
+  the names and addresses come into the source, never the manual's text. The OCR of the archive's scan misreads
+  some digits; each address was read against the code, and `CTON` is at $14A8 (the motor-on code, two bytes before
+  `CTOFF`), not the OCR's $1448.
 - **MBASIC**: the SDK's [MBASIC 5.21](../../src/Retrocore.Machines.Kaypro/Roms/Mbasic/Mbasic.asm), whose names are
   Microsoft's (from GW-BASIC's source, Level II's and memory; see [Mbasic.md](Mbasic.md)). The Model 100's BASIC is
   Microsoft's 8080 BASIC of the same family, much of its interpreter and string package the same code; a name taken
@@ -29,13 +31,14 @@ the first stage, where each name came from, and what is left.
    reached in no other way were given as entries by hand, each after an unconditional jump or return. What is left
    untraced is data: text, tables, the RAM image and the font.
 2. **Naming.** Tandy's names first, then the handlers', then Microsoft's interpreter core by hand (NEWSTT, GONE,
-   MAIN, ERROR, CONSTP, STPEND and ENDCON, read against MBASIC's code), then the rest of Microsoft's names by
+   MAIN, ERROR, CONSTP, STPEND, ENDCON, DIRIS and SNGFOR, read against MBASIC's code), then the rest of Microsoft's names by
    aligning the two programs' instruction streams: a diff of MBASIC's instructions against the ROM's, operands left
    out and the RSTs counted as the calls they stand for, gives blocks of the same code, and an MBASIC label in a
-   block names the ROM's instruction it lines up with. A block counted only where it is at least six instructions
-   long, or four inside the interpreter ($0400-$12FF) and the string package ($2700-$2B5F), and only in those and
-   LINE INPUT #'s code ($4F00-$504F); elsewhere short blocks matched by chance (a `ST_WHILE` in a BASIC without
-   WHILE). Variables took the name of MBASIC's operand at the same place, where at least two blocks and three
+   block names the ROM's instruction it lines up with. Names were taken only in the interpreter ($0400-$12FF), the
+   string package ($2700-$2B5F) and LINE INPUT #'s code ($4F00-$504F), from blocks of at least four instructions
+   there, and six in LINE INPUT #'s; elsewhere blocks matched by chance (a `ST_WHILE` in a BASIC without WHILE, and a
+   `CSKPCM`, CLEAR's in MBASIC, on CSAVE's `,A`). Within the ranges, the alignment also put `SNGFOR` on the
+   double-precision FOR; it is on the single-precision one. Variables took the name of MBASIC's operand at the same place, where at least two blocks and three
    quarters of them agree.
 3. **Writing the source.** An emitter wrote the modules from the traced code, the names and both ROMs: the tables as
    entries (`KEYWORD`, `.word`, `DISPATCH`), each skip byte (an LXI or MVI whose operand is another entry) as a
@@ -58,7 +61,8 @@ The IDs are M100.
 - M100-4. The error entries are named for their two letters, as Microsoft's are (`SNERR`, `DV0ERR` for `/0`), and the
   Model 100's file errors from code 50 (`IEERR` to `CFERR`) by the same rule.
 - M100-5. No names from MBASIC's math package: the Model 100's numbers are BCD, its math package other code, and the
-  alignment found nothing there. The floating accumulator's bytes keep their `D_` names.
+  alignment found nothing there. The floating accumulator's bytes keep their `D_` names. The math package does use
+  some of the interpreter's scratch variables, such as `TEMP3` and `TEMP8`, under those names.
 - M100-6. One source for both machines, `MODEL` 100 or 102. 355 of the Tandy 102's bytes differ; widened to whole
   instructions in both ROMs, they make 51 places, 30 of them in the font ($770B-$7D32), and places within 24 bytes
   of each other share a block, which makes 24 `.if` blocks. The font's glyphs and
@@ -72,12 +76,16 @@ The IDs are M100.
 | Names | What |
 | --- | --- |
 | `RESET`, `TRAP`, `GETYPE`, `RST55`, `RST65`, `RST38`, `RST75`, `HOOK` | The restarts and interrupts (M100-3). |
-| `FUNDSP`, `RESLST`, `STMDSP`, `OPTAB`, `DECDSP`, `ERRTAB`, `RAMIMG`, `ERRMSG` | The interpreter's tables. `FUNDSP`, `STMDSP` and `ERRTAB` are Microsoft's names for the same tables in MBASIC; the others say what they hold. |
+| `DECDSP`, `RAMIMG`, `ERRMSG` | The interpreter's tables, beside `FUNDSP`, `RESLST`, `STMDSP`, `OPTAB` and `ERRTAB`, which are Microsoft's names for the same tables in MBASIC. |
 | `IEERR`, `BNERR`, `FFERR`, `AOERR`, `EFERR`, `DSERR`, `FLERR`, `CFERR` | The file errors' entries (M100-4). |
 | `LCDCTL`, `ESCTAB`, `INLCTL`, `DEVTAB`, `DEVDSP`, `TELCMD`, `TRMFNK`, `TXTCTL`, `TXTINL`, `ROMDIR`, `KEYTAB` | The Model 100's own tables: the screen's control characters and escape sequences, INLIN's keys, the devices' names and drivers, TELCOM's commands and terminal keys, TEXT's keys, the ROM's directory entries and the keyboard's tables. |
 | `BASIC`, `TEXT`, `TELCOM`, `ADDRSS`, `SCHEDL` | The ROM's programs, named as the menu shows them. |
 | `COLD` | The cold start. |
 | `DIRTBL`, `DOSTRT`, `COSTRT`, `PRGNAM` | The file directory, the starts of the DO and CO files, and the running program's name. |
+| `STKTOP` | Level II's name (Level2.asm) for the top of the stack, which MBASIC keeps elsewhere. |
+
+- M100-8. `BEGLCD` names the screen's memory at $FE00. The manual's `ENDLCD`, $FF40, the byte after the screen, is not a
+  label: the ROM keeps the RS-232 port's state there, and the name would read wrong at those uses.
 
 ## Open questions
 

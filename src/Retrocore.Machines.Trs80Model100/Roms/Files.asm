@@ -36,7 +36,7 @@ L_2239:
     INX H
     MOV M,D
     INX H
-    .byte $3E                           ; MVI: skips the next byte
+    .byte $3E                           ; MVI A,$D5: skips the next byte
 
 L_2241:
     PUSH D
@@ -93,8 +93,6 @@ L_2288:
     DCX H
     RST 2
     JZ L_2298
-
-CSKPCM:
     RST 1
     .byte $2C                           ; SYNCHR: ','
     RST 1
@@ -643,11 +641,11 @@ L_2604:
 
 L_260B:
     MVI A,$D3
-    .byte $01                           ; LXI: skips the next instruction
+    .byte $01                           ; LXI B,$9C3E: skips the next two bytes
 
 L_260E:
     MVI A,$9C
-    .byte $01                           ; LXI: skips the next instruction
+    .byte $01                           ; LXI B,$D03E: skips the next two bytes
 
 L_2611:
     MVI A,$D0
@@ -691,11 +689,11 @@ L_2648:
 
 L_2650:
     MVI B,$D3
-    .byte $11                           ; LXI: skips the next instruction
+    .byte $11                           ; LXI D,$9C06: skips the next two bytes
 
 L_2653:
     MVI B,$9C
-    .byte $11                           ; LXI: skips the next instruction
+    .byte $11                           ; LXI D,$D006: skips the next two bytes
 
 L_2656:
     MVI B,$D0

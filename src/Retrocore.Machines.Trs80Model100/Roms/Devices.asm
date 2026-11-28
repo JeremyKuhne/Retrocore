@@ -249,8 +249,6 @@ L_143F:
     PUSH PSW
     LXI H,$0000
     DAD SP
-
-CTON:
     SHLD D_FABE
     LXI H,$9C0B
     SHLD D_F5F2
@@ -296,7 +294,7 @@ L_147F:
     RET
 
 L_148A:
-    CALL L_14A8
+    CALL CTON
     CALL SYNCR
     RNC
 
@@ -308,7 +306,7 @@ L_1494:
     JMP ERROR
 
 L_1499:
-    CALL L_14A8
+    CALL CTON
     LXI B,$0000
 
 L_149F:
@@ -318,9 +316,9 @@ L_149F:
     JNZ L_149F
     JMP SYNCW
 
-L_14A8:
+CTON:
     DI
-    .byte $11                           ; LXI: skips the next instruction
+    .byte $11                           ; LXI D,$1EFB: skips the next two bytes
 
 CTOFF:
     EI
@@ -366,7 +364,7 @@ L_14D2:
     INR D
     MVI A,$02
     CMP E
-    JNZ L_504E
+    JNZ NMERR
 
 L_14DE:
     SHLD D_FC8C
@@ -623,7 +621,7 @@ L_167F:
     STA D_FA8E
     MOV A,E
     CPI $08
-    JZ L_504E
+    JZ NMERR
     CPI $01
     JZ L_16A7
     CALL L_260E
@@ -731,7 +729,7 @@ L_1762:
     POP D
     MOV A,E
     CPI $08
-    JZ L_504E
+    JZ NMERR
     SUI $01
     JNZ L_178B
     STA D_FA8F
@@ -778,7 +776,7 @@ L_17D1:
 
 SETSER:
     PUSH PSW
-    LXI B,L_504E
+    LXI B,NMERR
     PUSH B
     JNC L_17F7
     MOV A,M
@@ -906,7 +904,7 @@ FN_EOF:
     CALL L_4C81
     JZ CFERR
     CPI $01
-    JNZ L_504E
+    JNZ NMERR
     PUSH H
     CALL L_18BF
     MOV C,A

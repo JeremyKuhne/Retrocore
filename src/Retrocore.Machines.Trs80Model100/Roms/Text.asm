@@ -540,7 +540,7 @@ L_61FD:
     CALL POSIT
     CALL L_6AF9
     CALL L_6AA3
-    .byte $01                           ; LXI: skips the next instruction
+    .byte $01                           ; LXI B,$0126: skips the next two bytes
 
 L_620B:
     MVI H,$01
@@ -590,7 +590,7 @@ L_6242:
 
 L_6253:
     MVI C,$00
-    .byte $21                           ; LXI: skips the next instruction
+    .byte $21                           ; LXI H,$800E: skips the next two bytes
 
 L_6256:
     MVI C,$80

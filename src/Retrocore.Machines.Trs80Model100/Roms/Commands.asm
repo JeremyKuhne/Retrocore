@@ -321,7 +321,7 @@ L_1B72:
     JNZ L_1B8C
     LXI H,$F947
     CALL L_3FD2
-    .byte $3E                           ; MVI: skips the next byte
+    .byte $3E                           ; MVI A,$AF: skips the next byte
 
 L_1B88:
     XRA A
@@ -330,17 +330,11 @@ L_1B88:
 .if MODEL = 100
 L_1B8C:
     LDA D_F93C
-
-L_1B8F:
     LXI H,$F655
     CMP M
     MOV M,A
     JNC L_1BAB
-    .byte $21                           ; LXI: skips the next instruction
-
-L_1B98:
-    DCR L
-    SPHL
+    LXI H,$F92D
     INR M
     MOV A,M
     SUI $0A
@@ -350,13 +344,7 @@ L_1B98:
     INR M
     MOV A,M
     SUI $0A
-
-L_1BA7:
-    .byte $C2                           ; JNZ: skips the next instruction, unless it jumps
-
-L_1BA8:
-    XRA E
-    DCX D
+    JNZ L_1BAB
     MOV M,A
 .else
 L_1B8C:
@@ -601,7 +589,7 @@ L_1CBC:
     CALL L_1CD9
     POP H
     MOV L,E
-    .byte $01                           ; LXI: skips the next instruction
+    .byte $01                           ; LXI B,$E3D1: skips the next two bytes
 
 L_1CD2:
     POP D
@@ -817,7 +805,7 @@ ST_SOUND:
     RET
 
 L_1DE5:
-    .byte $3E                           ; MVI: skips the next byte
+    .byte $3E                           ; MVI A,$AF: skips the next byte
 
 L_1DE6:
     XRA A
@@ -908,7 +896,7 @@ L_1E52:
 PRTLCD:
     PUSH H
     CALL L_4BA0
-    LXI H,$FE00
+    LXI H,BEGLCD
     MVI E,$08
 
 L_1E67:
@@ -996,7 +984,7 @@ L_1ED9:
     LXI D,$2020
     RST 3
     MVI B,$02
-    JNZ L_504E
+    JNZ NMERR
 
 L_1EF8:
     POP H
@@ -1010,7 +998,7 @@ L_1EF8:
     .byte $41                           ; SYNCHR: 'A'
     POP B
     DCR B
-    JZ L_504E
+    JZ NMERR
 
 L_1F08:
     XRA A
@@ -1127,7 +1115,7 @@ L_1FA1:
     JZ L_2005
 
 KILASC:
-    .byte $3E                           ; MVI: skips the next byte
+    .byte $3E                           ; MVI A,$E5: skips the next byte
 
 L_1FBF:
     PUSH H
@@ -1275,7 +1263,7 @@ L_208F:
     JZ L_20A0
     LXI D,$4F44
     RST 3
-    JNZ L_504E
+    JNZ NMERR
 
 L_20A0:
     LXI B,$444F
@@ -1292,7 +1280,7 @@ L_20A9:
 
 L_20AF:
     LXI H,$F957
-    .byte $3E                           ; MVI: skips the next byte
+    .byte $3E                           ; MVI A,$E1: skips the next byte
 
 L_20B3:
     POP H

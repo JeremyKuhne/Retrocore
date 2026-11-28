@@ -43,8 +43,14 @@ internal sealed partial class AnalysisContracts
     // Where code may be entered other than by falling into it: labels and the targets of jumps and branches.
     private readonly HashSet<ushort> _entered = [];
     private readonly HashSet<ushort> _instructionSet = [];
+
+    // Addresses the code writes as numbers, which a computed jump or call may go to: an operand that is no direct
+    // target, as LDX #$100B, and every word of data, each with the next address too, as an RTS goes one past what
+    // was pushed.
+    private readonly HashSet<ushort> _numbers = [];
     private const int MaximumCallStates = 16;
     private const int MaximumRunSteps = 64;
+    private const int MaximumInstruction = 5;
     private readonly MemoryMap? _map;
     private readonly Dictionary<ushort, AnalysisContract> _contracts = [];
     private readonly Dictionary<ushort, DocumentationTopic> _routines = [];
@@ -278,6 +284,12 @@ internal sealed partial class AnalysisContracts
             if (!_engine.TryDecode(address, out DisassembledInstruction instruction)) { continue; }
             _instructionSet.Add(address);
             if (instruction.DirectTarget is { } target) { _entered.Add(target); }
+            if (instruction.Form.FieldCount != 0 && instruction.DirectTarget != instruction.Operand)
+            {
+                _numbers.Add(instruction.Operand);
+                _numbers.Add((ushort)(instruction.Operand + 1));
+            }
+
             if (instruction.Flow == DisassemblyFlow.Call && instruction.DirectTarget is { } called)
             {
                 if (!_callSites.TryGetValue(called, out List<ushort>? sites)) { _callSites[called] = sites = []; }
@@ -295,6 +307,23 @@ internal sealed partial class AnalysisContracts
                 if ((_map?[at] ?? MemoryKind.Ram) == MemoryKind.Ram) { _patched[at] = true; }
             }
         }
+
+        // Every word of data, either way round, as the numbers it may hold.
+        bool little = _set.Endianness == Endianness.Little;
+        foreach (AssemblySourceMapEntry entry in result.SourceMap)
+        {
+            if (entry.Size < 2 || entry.InstructionSet?.GetMnemonic(entry.Operation) >= 0) { continue; }
+            for (int offset = 0; offset + 1 < entry.Size; offset++)
+            {
+                byte first = _memory[(entry.Address + offset) & 0xFFFF];
+                byte second = _memory[(entry.Address + offset + 1) & 0xFFFF];
+                ushort word = little ? (ushort)(first | (second << 8)) : (ushort)((first << 8) | second);
+                _numbers.Add(word);
+                _numbers.Add((ushort)(word + 1));
+            }
+        }
+
+        _entered.UnionWith(_numbers);
 
         // Each symbol by its name and by its last part, as Inner of Routine::Inner, with every address a part names
         // where scopes share it, as two routines' Loop labels.
@@ -455,6 +484,7 @@ internal sealed partial class AnalysisContracts
     // assembles as data come just before it, which a skip, as .byte $2C, may run into the run from.
     private ushort? RunStart(ushort address)
     {
+        ushort site = address;
         for (int steps = 0; steps < MaximumRunSteps && !_entered.Contains(address); steps++)
         {
             ushort? previous = null;
@@ -474,10 +504,17 @@ internal sealed partial class AnalysisContracts
             address = before;
         }
 
-        for (int back = 1; back <= 3; back++)
+        // A skip is an instruction that starts in data or a patched byte just before the run and ends inside it, so
+        // within one byte less than the longest instruction; a byte of the run a store may change is not as followed.
+        for (int back = 1; back < MaximumInstruction; back++)
         {
             ushort at = (ushort)(address - back);
-            if (_defined[at] && _data[at]) { return null; }
+            if (_defined[at] && (_data[at] || _patched[at])) { return null; }
+        }
+
+        for (ushort at = address; at != site; at++)
+        {
+            if (_patched[at]) { return null; }
         }
 
         return address;
@@ -511,9 +548,9 @@ internal sealed partial class AnalysisContracts
         List<ushort> sites = _callSites.TryGetValue(address, out List<ushort>? calls) ? calls : [];
 
         // Each call is seen from the start of its straight run of code, with nothing known there, which holds for
-        // every way into the run; a routine's analysis that passes the call may have come in one way of several. A
-        // run that data bytes just before it may run into, as a BIT opcode written as .byte $2C to skip the next
-        // instruction, is not seen. Jumps and branches to the entry are no calls: the code that takes them is
+        // every way into the run the code shows (see RunStart); a routine's analysis that passes the call may have
+        // come in one way of several. A run that data or patched bytes just before it may run into, as a BIT opcode
+        // written as .byte $2C to skip the next instruction, is not seen. Jumps and branches to the entry are no calls: the code that takes them is
         // followed through it, with its own values, and does not rely on the entry's promise.
         if (found.Count != 0)
         {
@@ -527,8 +564,8 @@ internal sealed partial class AnalysisContracts
             }
         }
 
-        // An entry whose address the code takes as data, as in a table, may be called through it.
-        bool onlyCalled = !_referenced.Contains(address);
+        // An entry whose address the code takes as data, as in a table, or writes as a number, may be called through it.
+        bool onlyCalled = !_referenced.Contains(address) && !_numbers.Contains(address);
 
         if (found.Count != 0 && onlyCalled && sites.Count != 0 && sites.All(Seen))
         {

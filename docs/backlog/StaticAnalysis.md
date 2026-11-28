@@ -478,8 +478,8 @@ and the documentation:
   always: a bit is set`: [flag values](#flag-values) decide branches on constants, so `ldy #0` then `beq` and
   `lda #CFS_ACIA_WRITING` then `bne` now go one way, but not these. An `Entry:` is checked again with each caller's
   values, from the caller's run of code, where its own analysis contradicts its promise, but a routine's start is
-  not, nor a branch inside a routine on what its own caller passed; a call reached from code before the run, or
-  through a computed address no source names, is not seen.
+  not, nor a branch inside a routine on what its own caller passed; an address the code computes, as from two
+  bytes loaded apart, is not seen as a way into a run.
 - **Arithmetic that restores a value,** as IsLetter's `sbc #$5B` and `sbc #$A5`, which leave A as it was.
 - **Memory saved by a callee,** as NetFS's SAVE_CALL_REGISTERS stores X and Y for NFS_CALL_RETURN to load back:
   a summary would need the fixed addresses a routine stores and writes.
@@ -640,11 +640,12 @@ The last two were the MOS's SET_STATUS_BITS, an entry of SET_EOF: with A and CFS
 bit to set. So an entry whose own analysis, with nothing known, contradicts its promise is checked again from each
 direct call to it, starting with what the caller's registers and flags hold there, but not its stack pointer, which
 the call moves: a sure change with any caller's values is a finding. Each call's values come from its straight run
-of code, followed from the run's start (a label, a jump's or branch's target, or the code after one that does not
-fall through) with nothing known there, which holds for every way into the run, as for each caller's
-`lda #CFS_INPUT_OPEN` then `jsr SET_STATUS_BITS`. The first finding stands where some call's run cannot be followed
-to the call, where data bytes come just before a run, as a skip written `.byte $2C` that falls into it, and for an
-entry whose address the code also takes as data, as in a table. A jump or branch to an entry is no call, and does
+of code, followed from the run's start with nothing known there, as for each caller's `lda #CFS_INPUT_OPEN` then
+`jsr SET_STATUS_BITS`. A run starts at a label, a jump's or branch's target, an address the code writes as a number
+(an operand that is no direct target, or any word of data, and the address after it, for an RTS), or the code after
+one that does not fall through. The first finding stands where some call's run cannot be followed to the call,
+where data or a patched byte comes just before a run, as a skip written `.byte $2C` that falls into it, or a byte
+of the run may be patched, and for an entry whose address the code also takes as data or writes as a number. A jump or branch to an entry is no call, and does
 not rely on its promise: the code that takes it is followed through the entry with its own values. That brings the
 report to 894 routines checked, 25 findings and 121 `Keeps:` items not verified.
 

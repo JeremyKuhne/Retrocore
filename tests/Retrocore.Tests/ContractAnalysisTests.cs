@@ -217,9 +217,10 @@ public class ContractAnalysisTests
 
     /// <summary>
     ///  An entry that keeps its promise only with what its callers pass, as the MOS's SET_STATUS_BITS with a bit set
-    ///  in A, is checked with each caller's values: from Set, ORA with A = 0 and $10 = 0 would fall into LDX #0, but
-    ///  every caller loads A with a bit set. A caller that no routine's analysis reaches is followed from the start of
-    ///  its run of code. One caller passing 0, or a table that also holds Set's address, leaves the finding.
+    ///  in A, is checked with each caller's values, from the start of each call's run of code: from Set, ORA with
+    ///  A = 0 and $10 = 0 would fall into LDX #0, but every caller loads A with a bit set. One caller passing 0, a
+    ///  run another way into which is not seen, or a table or number that also holds Set's address, leaves the
+    ///  finding.
     /// </summary>
     [TestMethod]
     public void EntriesAreCheckedWithTheirCallersValues()
@@ -318,6 +319,59 @@ public class ContractAnalysisTests
 
         (findings, _, _) = Check(skip, "Mos6502");
         findings.Should().ContainSingle().Which.Should().Contain("Main ($1009) documents Keeps: X");
+
+        // An address written as a number may be entered or called through it: an offset into a caller's run, as
+        // Caller+2, starts a run there, and the entry's own address as a plain number keeps the finding.
+        string offset = """
+            ;; Sets bit 0.
+            ;; Uses: A
+            Caller:
+                lda #1
+                nop
+                jsr Set
+                rts
+
+            Table:
+                .word Caller+2
+            """ + Callee;
+
+        (findings, _, _) = Check(offset, "Mos6502");
+        findings.Should().ContainSingle().Which.Should().Contain("Main ($1009) documents Keeps: X");
+
+        string number = """
+            ;; Sets bit 0.
+            ;; Uses: A
+            Caller:
+                lda #1
+                jsr Set
+                rts
+
+            Table:
+                .word $100A
+            """ + Callee;
+
+        (findings, _, _) = Check(number, "Mos6502");
+        findings.Should().ContainSingle().Which.Should().Contain("Main ($1008) documents Keeps: X");
+
+        // A caller's run a store may change is not as assembled.
+        string patched = """
+            ;; Sets bit 0, unless Patcher changed it.
+            ;; Uses: A
+            Caller:
+                lda #1
+                jsr Set
+                rts
+
+            ;; Changes Caller's bit.
+            ;; Uses: A
+            Patcher:
+                lda #0
+                sta Caller+1
+                rts
+            """ + Callee;
+
+        (findings, _, _) = Check(patched, "Mos6502");
+        findings.Should().ContainSingle().Which.Should().Contain("Main ($100C) documents Keeps: X");
 
         // A jump to the entry is no call: the code that takes it is followed through it, with its own values, and
         // its own contract is checked.

@@ -422,10 +422,11 @@ and from a `CSAVE` MAME 0.264 recorded to WAV. No new downloads.
   to the Tandy 102's; each difference is an `.if MODEL = 100` block. `Trs80Model100RomSourceTests` pin both builds'
   digests, so they need no ROM.
 - **The names**, named but not yet converted ([the naming log](../conversions/Model100.md)): Tandy's names for the 70
-  entry points and 4 of the 5 variables the Technical Reference documents; the statement and function handlers by their
-  keywords; 284 of MBASIC's names for its routines and labels, where the interpreter's and the string package's code
-  lines up with MBASIC's, 8 for its tables, and 36 of its variables; and the tables, restarts and the ROM's programs by what they are. The rest keep
-  the disassembler's `L_` and `D_` names for now.
+  entry points and 4 of the 5 variables the Technical Reference documents; the statement and function handlers by
+  their keywords; 283 of MBASIC's names for its routines and labels (every code label Equates.asm's convention would
+  tag MBASIC), where the interpreter's and the string package's code lines up with MBASIC's, 8 for its tables, and 36
+  of its variables; and the tables, restarts and the ROM's programs by what they are. The rest keep the
+  disassembler's `L_` and `D_` names for now.
 - **The debugger.** The source ships in the SDK, and a session running either ROM steps through it by name: a
   breakpoint in `Output.asm`'s `LCD` stops there, with the program that called it below on the call stack. Another
   dump of the ROM gets no source.

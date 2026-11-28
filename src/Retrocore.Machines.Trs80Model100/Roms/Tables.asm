@@ -242,7 +242,7 @@ RESLST:
     KEYWORD "RIGHT$"                    ; $FD
     KEYWORD "MID$"                      ; $FE
     .byte $A7                           ; $FF '
-    .byte $80                               ; the end
+    .byte $80                           ; the end
 
 STMDSP:
     .word ST_END                        ; $80 END

@@ -68,7 +68,8 @@ export interface Device {
     controller: string;
     formats: string[];
     saveFormats?: string[];
-    operations: ("insert" | "eject" | "record" | "writeProtect" | "save")[];
+    /** What can be done with its media; keys, that a tape deck has PLAY, STOP and REWIND to press on its tape. */
+    operations: ("insert" | "eject" | "record" | "writeProtect" | "save" | "keys")[];
     tracks: number;
     sides: number;
     media: Media | null;
@@ -131,10 +132,11 @@ export function iconName(device: Device): string {
 
 /**
  * Whether a device is a tape deck with keys, as the PET's Datasettes are: PLAY, RECORD, STOP and REWIND pressed on the
- * tape in it, which it records onto in place and saves like a disk. Other tape drives record to a file named first.
+ * tape in it, which it records onto in place. Other tape drives record to a file named first. Either way a recording
+ * is a changed tape, saved like a disk.
  */
 export function hasTapeKeys(device: Device): boolean {
-    return device.kind === "tapeDrive" && device.operations.includes("save");
+    return device.kind === "tapeDrive" && device.operations.includes("keys");
 }
 
 /** Whether a drive's disk can be saved to an image: it saves, and holds a disk. */
@@ -372,10 +374,13 @@ export function readOnlyQuestion(file: string | undefined, drive: string, format
 }
 
 /** Asks about a changed disk that would leave its drive: save it, save it as another image, or let its changes go. */
-export function leaveQuestion(file: string, drive: string, what: string, changes: string | undefined): Question {
+export function leaveQuestion(file: string, drive: string, what: string, changes: string | undefined, medium: "disk" | "tape" = "disk"): Question {
+    const changed = medium === "tape"
+        ? `The machine recorded onto the tape in ${drive}, and the recording is not saved.`
+        : `The machine changed the disk in ${drive} since it was read.`;
     return {
         message: `Save the changes to ${file} before ${what}?`,
-        detail: changes === undefined ? `The machine changed the disk in ${drive} since it was read.` : `The machine changed ${changes}.`,
+        detail: changes === undefined ? changed : `The machine changed ${changes}.`,
         buttons: ["Save", "Save As...", "Discard"]
     };
 }
@@ -413,10 +418,20 @@ export function unsavedDisks(devices: readonly Device[], recovery = false): { ke
     return { kept, lost };
 }
 
-/** What a notice says when a machine stops with disks not saved: those kept for its next launch, and those lost. */
-export function stoppedMessage(machine: string, kept: string[], lost: string[]): string {
+/** How many of a machine's media not saved are tapes, recordings its recorders hold, as the stop notice counts them. */
+export function unsavedTapes(devices: readonly Device[]): number {
+    return devices.filter(device => device.kind === "tapeDrive" && device.media?.changed && device.operations.includes("save")).length;
+}
+
+/**
+ * What a notice says when a machine stops with disks or tapes not saved: those kept for its next launch, and those
+ * lost; tapes is how many of them are tapes.
+ */
+export function stoppedMessage(machine: string, kept: string[], lost: string[], tapes = 0): string {
     const count = kept.length + lost.length;
-    const disks = `${count} disk${count === 1 ? "" : "s"}`;
+    const disks = tapes === 0 ? `${count} disk${count === 1 ? "" : "s"}`
+        : tapes === count ? `${count} tape${count === 1 ? "" : "s"}`
+        : `${count} disks and tapes`;
     const after = lost.length === 0
         ? `${count === 1 ? "It is" : "They are"} kept, still changed, for its next launch.`
         : kept.length === 0

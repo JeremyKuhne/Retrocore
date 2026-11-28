@@ -5,14 +5,16 @@
 namespace Retrocore.Debug;
 
 /// <summary>
-///  A debug target that records onto media, such as a cassette, kept in memory until it comes out.
+///  A debug target that writes what it keeps between sessions to a file of its own when the session ends, as the
+///  Model 100 keeps its RAM image. A tape's recording is not one of these: it is a changed tape, saved as a disk is
+///  and kept in the recovery journal.
 /// </summary>
 internal interface IRecordingTarget
 {
     /// <summary>
-    ///  Saves each recording to its path, leaving it in. A save that fails can be tried again, since nothing comes out.
+    ///  Writes what the target keeps to its file. A save that fails can be tried again, since nothing is let go.
     /// </summary>
-    /// <exception cref="IOException">A recording could not be written.</exception>
-    /// <exception cref="UnauthorizedAccessException">A recording's path cannot be written.</exception>
+    /// <exception cref="IOException">The file could not be written.</exception>
+    /// <exception cref="UnauthorizedAccessException">The file cannot be written.</exception>
     void SaveRecordings();
 }

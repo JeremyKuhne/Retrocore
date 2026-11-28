@@ -317,9 +317,9 @@ internal sealed class MachinePane : ScrollViewer
         // While the machine is off, a tape cannot record and nothing has changed a disk to save.
         List<TreeAction> inline = [];
         if (device.Can(MediaOperations.Insert)) { inline.Add(new("add", "Insert Media...", () => _ = Insert(device))); }
-        // A tape drive that saves its tape, as the PET's Datasettes do, has the recorder's own keys: a recording is
-        // a changed tape, saved afterwards. Others record straight to a file.
-        bool deck = device.Kind == DeviceKind.TapeDrive && device.Can(MediaOperations.Save);
+        // A tape drive with keys, as the PET's Datasettes have, presses them on the tape in it. Others record to a
+        // file named first. Either way a recording is a changed tape, saved as a disk is.
+        bool deck = device.Kind == DeviceKind.TapeDrive && device.Can(MediaOperations.Keys);
         if (running && deck)
         {
             if (device.Media is not null) { inline.Add(new("play", "Play", () => Act(device, "play"))); }
@@ -769,8 +769,8 @@ internal sealed class MachinePane : ScrollViewer
     // writes.
     private static IReadOnlyList<string> InsertFormats(DeviceState device)
     {
-        // A Datasette is a tape deck that saves, and takes TAP images.
-        bool deck = device.Kind == DeviceKind.TapeDrive && device.Can(MediaOperations.Save);
+        // A Datasette is a tape deck with keys, and takes TAP images.
+        bool deck = device.Kind == DeviceKind.TapeDrive && device.Can(MediaOperations.Keys);
         bool datasette = deck && device.Info.Formats.Contains("tap") && !device.Info.Formats.Contains("prg");
         return datasette ? [.. device.Info.Formats, "prg"] : device.Info.Formats;
     }

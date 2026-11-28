@@ -23,7 +23,7 @@ import { languageRequest } from "./languageClient";
 import {
     changeWords, conflictQuestion, contextWords, discardedMessage, iconName, iconSvg, keptSummary, leaveQuestion,
     lockState, lossless, lossyQuestion, mark, readOnlyQuestion, revertedMessage, savedMessage, stoppedMessage, summary,
-    tooltipLines, unsavedDisks, crashedMessage, discardKept, discardKeptQuestion, letGoQuestion, saveAllKept, type Device, type Differences, type KeptDisk, type Question
+    tooltipLines, unsavedDisks, unsavedTapes, crashedMessage, discardKept, discardKeptQuestion, letGoQuestion, saveAllKept, type Device, type Differences, type KeptDisk, type Question
 } from "./drives";
 
 /** What retro/device and retro/hardware say back about media, beside the devices, to a client that speaks it. */
@@ -742,11 +742,12 @@ export function registerDevices(context: vscode.ExtensionContext, basic: BasicPr
         // for its next launch, or, for a session that keeps none, gone.
         const last = sessionDevices.get(ended.id);
         sessionDevices.delete(ended.id);
-        const { kept, lost } = unsavedDisks(last?.devices ?? (ended.id === tree.session?.id ? tree.devices : []), last?.recovery === true);
+        const devices = last?.devices ?? (ended.id === tree.session?.id ? tree.devices : []);
+        const { kept, lost } = unsavedDisks(devices, last?.recovery === true);
         const machine = String(ended.configuration.name ?? "The machine");
         const recoveryId = typeof ended.configuration.recoveryId === "string" ? ended.configuration.recoveryId : undefined;
         if (kept.length + lost.length > 0) {
-            const message = stoppedMessage(machine, kept, lost);
+            const message = stoppedMessage(machine, kept, lost, unsavedTapes(devices));
             // The kept disks are the off machine's now: saved there, shown in its Drives view, or let go.
             const buttons = kept.length !== 0 && recoveryId !== undefined ? ["Save All", "Review", "Discard"] : [];
             void (lost.length === 0 ? vscode.window.showInformationMessage(message, ...buttons) : vscode.window.showWarningMessage(message, ...buttons))
@@ -941,7 +942,7 @@ export function registerDevices(context: vscode.ExtensionContext, basic: BasicPr
                     const label = body.label ? path.basename(body.label) : "its image";
                     // What changed is the mounted disk's, so an ejected one's question says none.
                     const changes = body.ejected === undefined ? changeWords(await differencesOf(on, id)) : undefined;
-                    const choice = await ask(leaveQuestion(label, name, leaving(current, name), changes));
+                    const choice = await ask(leaveQuestion(label, name, leaving(current, name, medium), changes, medium));
                     // A disk the machine ejected, which a card's removal would take, is named by its ejected id.
                     const ejected = body.ejected === undefined ? {} : { ejected: body.ejected };
                     if (choice === "Discard") {
@@ -998,10 +999,11 @@ export function registerDevices(context: vscode.ExtensionContext, basic: BasicPr
             }
         }
     };
-    // What would take a changed disk out, as its question says it.
-    const leaving = (args: Record<string, unknown>, name: string): string =>
-        args.action === "insert" ? `inserting another disk in ${name}`
-            : args.action === "undo" ? `putting back the disk ${name} had`
+    // What would take a changed disk or tape out, as its question says it.
+    const leaving = (args: Record<string, unknown>, name: string, medium: "disk" | "tape"): string =>
+        args.action === "insert" ? `inserting another ${medium} in ${name}`
+            : args.action === "record" ? `recording a new tape in ${name}`
+            : args.action === "undo" ? `putting back the ${medium} ${name} had`
             : args.action === "insertAgain" ? `putting the ejected disk back in ${name}`
             : args.action === "removeCard" ? `removing the card ${name} is on`
             : `ejecting it from ${name}`;

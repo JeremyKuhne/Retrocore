@@ -177,15 +177,21 @@ try {
     await type("300: 11 22 33 44\r");
     await screen(screen => screen.startsWith("300: 11 22 33 44\n\n0300: "), "the store after CLEAR SCREEN");
 
-    // The cassette interface writes the bytes to a WAV file, which is saved when the tape is ejected.
+    // The cassette interface writes the bytes to a tape whose WAV file is written blank as the recording starts. The
+    // recording is a changed tape, which an eject holds back until it is saved.
     await request("retro/media", { device: "cassette", action: "record", path: tape });
+    assert.equal(readFileSync(tape).subarray(0, 4).toString(), "RIFF", "the recording's blank file");
     await type("C100R\r");
     await screen(screen => screen.includes("C100: A9*"), "the cassette interface's prompt");
     await type("300.303W\r");
     await screen(screen => /300\.303W\n\\/.test(screen), "the Monitor again after writing");
+    assert.equal((await request("retro/devices")).devices.find(device => device.id === "cassette").media.changed, true);
+    await assert.rejects(request("retro/media", { device: "cassette", action: "eject" }), /tape in Cassette has changes not saved/);
+    const saved = await request("retro/device", { id: "cassette", action: "save", supportsRetrocoreMedia: 1 });
+    assert.equal(saved.outcome, "saved", JSON.stringify(saved));
+    assert.equal(saved.notes?.length, 1, "a WAV file's rounding is a note, not a loss");
     await request("retro/media", { device: "cassette", action: "eject" });
-    assert.ok(existsSync(tape), "the recording is saved");
-    assert.equal(readFileSync(tape).subarray(0, 4).toString(), "RIFF");
+    assert.ok(readFileSync(tape).length > 1000, "the recording is saved");
 
     // Reading it back restores the bytes.
     await request("apple1/clearScreen");
@@ -199,26 +205,24 @@ try {
     await screen(screen => screen.includes("0300: 11 22 33 44"), "the bytes read from tape");
 
     // A tape that cannot be read, or a recording with nowhere to go, is refused and leaves the recording in; a
-    // recording still in is saved when the session relaunches, as ejecting it would.
+    // recording still in is not written when the session relaunches, as nothing but a save writes an image.
     await request("retro/media", { device: "cassette", action: "record", path: second });
+    const blank = readFileSync(second);
     const missing = join(tmpdir(), `retrocore-missing-${process.pid}`, "missing.wav");
     await assert.rejects(request("retro/media", { device: "cassette", action: "insert", path: missing }));
     await assert.rejects(request("retro/media", { device: "cassette", action: "record", path: missing }));
     await assert.rejects(request("retro/media", { device: "cassette", action: "record", path: tmpdir() }), "a folder is no file");
     const recorder = (await request("retro/devices")).devices.find(device => device.id === "cassette");
     assert.equal(recorder.media?.label, resolve(second), "the recording is still in");
-    // The refused insert saved the recording in place before reading, so that copy goes; the relaunch writes it again.
-    assert.ok(existsSync(second), "the insert saved the recording before reading");
-    unlinkSync(second);
     await type("C100R\r");
     await screen(screen => screen.includes("C100: A9*"), "the cassette interface's prompt for the second tape");
     await type("300.303W\r");
     await screen(screen => /300\.303W\n\\/.test(screen), "the Monitor again after the second tape");
-    assert.ok(!existsSync(second), "nothing is written until the recording comes out");
+    assert.deepEqual(readFileSync(second), blank, "nothing but a save writes the recording");
 
     // Machine reset stops as the machine powers on, at the Monitor's first instruction.
     await launch({}, ["machineReset"]);
-    assert.equal(readFileSync(second).subarray(0, 4).toString(), "RIFF", "the relaunch saved the recording");
+    assert.deepEqual(readFileSync(second), blank, "the relaunch does not write the recording");
     const powerOn = await stoppedAt("breakpoint", "The machine reset as it powered on.");
     assert.equal(powerOn.source.path.toLowerCase(), monitor.toLowerCase());
     assert.equal((await request("evaluate", { expression: "PC" })).result, "$FF00 (65280)");

@@ -2,7 +2,9 @@
 // SPDX-License-Identifier: MIT
 // See LICENSE file in the project root for full license information
 
+using Retrocore.Machines.Apple1;
 using Retrocore.Machines.Devices;
+using Retrocore.Machines.Trs80Model100;
 using Retrocore.Media;
 using Retrocore.Media.Acorn;
 using Retrocore.Media.Altair;
@@ -266,6 +268,10 @@ internal static partial class MediaActions
             (nameof(AltairDisk), AltairDisk.SnapshotKind) => AltairDisk.Load(image),
             (nameof(AtariDisk), AtariDisk.SnapshotKind) => AtariDisk.Load(image),
             (nameof(AtariTape), AtariTape.SnapshotKind) => AtariTape.Load(image),
+            (nameof(CassetteImage), CassetteImage.SnapshotKind) => new CassetteImage(image),
+            (nameof(AltairTape), AltairTape.SnapshotKind) => new AltairTape(image),
+            (nameof(Apple1Tape), Apple1Tape.SnapshotKind) => Apple1Tape.FromSnapshot(image),
+            (nameof(Trs80Model100Tape), Trs80Model100Tape.SnapshotKind) => Trs80Model100Tape.FromSnapshot(image),
             _ => throw new InvalidDataException($"A {type} kept as {kind} cannot be read back."),
         };
 
@@ -310,6 +316,10 @@ internal static partial class MediaActions
         AltairDiskCodec => new() { ["kind"] = "altairDisk" },
         AtariDiskCodec atari => new() { ["kind"] = "atariDisk", ["format"] = atari.Format },
         AtariTapeCodec => new() { ["kind"] = "atariTape" },
+        CassetteCodec => new() { ["kind"] = "cassette" },
+        AltairTapeCodec => new() { ["kind"] = "altairTape" },
+        Apple1TapeCodec => new() { ["kind"] = "apple1Tape" },
+        Trs80Model100TapeCodec => new() { ["kind"] = "model100Tape" },
         _ => null,
     };
 
@@ -331,6 +341,10 @@ internal static partial class MediaActions
             "altairDisk" => new AltairDiskCodec(),
             "atariDisk" => AtariDiskCodec.For(format),
             "atariTape" => new AtariTapeCodec(),
+            "cassette" => new CassetteCodec(),
+            "altairTape" => new AltairTapeCodec(),
+            "apple1Tape" => new Apple1TapeCodec(),
+            "model100Tape" => new Trs80Model100TapeCodec(),
             _ => null,
         };
     }

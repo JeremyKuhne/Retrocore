@@ -178,7 +178,10 @@ RESET after) and **BRK instructions**.
 The display panel takes keys: **Backspace** types the back arrow (`_`), which the Monitor takes as a backspace,
 **Escape** types ESC, and **Ctrl+F12** or **Ctrl+Break** presses RESET. The key bar has **Esc**, **Reset** and
 **Clear Screen** (the debug host's `apple1/clearScreen` request). The cassette's row in the Drives view inserts a
-WAV tape, records one (saved when it is ejected) and ejects it, as the `retro/media` request does.
+WAV tape, records one and ejects it, as the `retro/media` request does. A recording is a changed tape
+([Devices.md](Devices.md)): its WAV file is written blank as it starts, **Save** writes the recording there, an eject
+asks about one not saved, and the recovery journal keeps its half cycles exactly. A WAV file rounds each half cycle to
+the nearest of its 44,100 samples a second, which the ACI reads the same, so the save says so as a note.
 [`Test-Apple1Dap.mjs`](../tools/Test-Apple1Dap.mjs) runs the debugger through all of this.
 
 **Debugging Apple-1 BASIC.** A `basic` launch starts BASIC, puts the file's program in, and types `RUN`. The

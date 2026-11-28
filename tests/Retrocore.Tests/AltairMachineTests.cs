@@ -463,7 +463,7 @@ public class AltairMachineTests
         RunToHalt(machine);
         machine.Run((ulong)AltairTiming.CyclesPerCharacter(AltairBus.CassetteBaudRate));
         (cassette.Media?.Changed).Should().BeTrue();
-        cassette.Eject().Should().Equal("TAPE"u8.ToArray());
+        cassette.Eject()?.ToArray().Should().Equal("TAPE"u8.ToArray());
         cassette.Media.Should().BeNull();
         cassette.Eject().Should().BeNull("the recorder is empty");
     }

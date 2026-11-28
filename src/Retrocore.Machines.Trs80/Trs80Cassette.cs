@@ -23,8 +23,12 @@ namespace Retrocore.Machines.Trs80;
 ///   a tape that opens with the 1500 baud leader plays at that speed, and a recording holding a 1500 baud leader
 ///   and sync byte is saved as one.
 ///  </para>
+///  <para>
+///   A recording holds its bits until the motor stops, then packs them into bytes. Meanwhile the tape counts each bit
+///   heard as a change, and its snapshot takes the bytes they make so far (<see cref="Buffered"/>) without stopping.
+///  </para>
 /// </remarks>
-public sealed class Trs80Cassette
+public sealed class Trs80Cassette : ICassetteRecorder
 {
     private const byte SyncByte = 0xA5;
 
@@ -125,6 +129,7 @@ public sealed class Trs80Cassette
         Stop();
         _tape = tape;
         _recording = true;
+        tape.Recorder = this;
     }
 
     /// <summary>
@@ -133,6 +138,7 @@ public sealed class Trs80Cassette
     public void Stop()
     {
         if (_recording) { Flush(); }
+        if (_tape is { } tape && ReferenceEquals(tape.Recorder, this)) { tape.Recorder = null; }
         _tape = null;
         _recording = false;
         _playingHighSpeed = null;
@@ -200,7 +206,7 @@ public sealed class Trs80Cassette
         if (_highSpeed is { } highSpeed && MotorOn && _recording)
         {
             if (level == 2 && _outputLevel != 2) { highSpeed.RecordRise(_time); }
-            else if (level == 1 && _outputLevel == 2) { highSpeed.RecordFall(_time); }
+            else if (level == 1 && _outputLevel == 2 && highSpeed.RecordFall(_time)) { _tape?.Heard(); }
         }
 
         _outputLevel = level;
@@ -271,9 +277,26 @@ public sealed class Trs80Cassette
         if (_lastClock >= 0) { _bits.Add(_cellHasData); }
         _lastClock = _time;
         _cellHasData = false;
+        _tape?.Heard();
     }
 
-    // Packs the recorded bits into bytes, aligning the first sync byte after the leader to a byte boundary.
+    /// <inheritdoc/>
+    /// <remarks>
+    ///  <para>
+    ///   The bytes are those <see cref="Stop"/> or the motor stopping would append now: the cell under way counts as a
+    ///   bit, and a 1500 baud recording's leader and sync byte make it 1500 baud.
+    ///  </para>
+    /// </remarks>
+    public IReadOnlyList<byte> Buffered()
+    {
+        if (!_recording) { return []; }
+        if (_highSpeed?.Recorded() is { } highSpeed) { return highSpeed; }
+        List<bool> bits = [.. _bits];
+        if (_lastClock >= 0) { bits.Add(_cellHasData); }
+        return Pack(bits);
+    }
+
+    // Appends the recorded bits to the tape as bytes, and lets them go.
     private void Flush()
     {
         if (_lastClock >= 0) { _bits.Add(_cellHasData); }
@@ -281,33 +304,34 @@ public sealed class Trs80Cassette
         _cellHasData = false;
 
         // A 1500 baud leader and sync byte make the recording 1500 baud; otherwise it is 500 baud's pulses.
-        if (_highSpeed?.TakeRecording() is { } highSpeed && _tape is { } fast)
-        {
-            foreach (byte value in highSpeed) { fast.Append(value); }
-            _bits.Clear();
-            return;
-        }
+        IReadOnlyList<byte> bytes = _highSpeed?.TakeRecording() ?? Pack(_bits);
+        _bits.Clear();
+        if (_tape is not { } tape) { return; }
+        foreach (byte value in bytes) { tape.Append(value); }
+    }
 
-        if (_tape is not { } tape || _bits.Count == 0) { return; }
+    // Packs recorded bits into bytes, aligning the first sync byte after the leader to a byte boundary.
+    private static List<byte> Pack(List<bool> bits)
+    {
+        List<byte> bytes = [];
         int start = 0;
-        for (int index = 0; index + 8 <= _bits.Count; index++)
+        for (int index = 0; index + 8 <= bits.Count; index++)
         {
-            int value = 0;
-            for (int bit = 0; bit < 8; bit++) { value = (value << 1) | (_bits[index + bit] ? 1 : 0); }
-            if (value == SyncByte)
+            if (ByteAt(bits, index) == SyncByte)
             {
                 start = index % 8;
                 break;
             }
         }
 
-        for (int index = start; index + 8 <= _bits.Count; index += 8)
-        {
-            int value = 0;
-            for (int bit = 0; bit < 8; bit++) { value = (value << 1) | (_bits[index + bit] ? 1 : 0); }
-            tape.Append((byte)value);
-        }
+        for (int index = start; index + 8 <= bits.Count; index += 8) { bytes.Add(ByteAt(bits, index)); }
+        return bytes;
+    }
 
-        _bits.Clear();
+    private static byte ByteAt(List<bool> bits, int index)
+    {
+        int value = 0;
+        for (int bit = 0; bit < 8; bit++) { value = (value << 1) | (bits[index + bit] ? 1 : 0); }
+        return (byte)value;
     }
 }

@@ -6,7 +6,7 @@ import * as assert from "node:assert/strict";
 import * as path from "node:path";
 import { test } from "node:test";
 import {
-    changeWords, crashedMessage, discardKept, discardKeptQuestion, letGoQuestion, saveAllKept, keptSummary, leaveQuestion, revertedMessage, stoppedMessage, unsavedDisks,
+    changeWords, crashedMessage, discardKept, discardKeptQuestion, letGoQuestion, saveAllKept, keptSummary, leaveQuestion, revertedMessage, stoppedMessage, unsavedDisks, unsavedTapes,
     conflictQuestion, contextWords, form, hasTapeKeys, iconName, iconNames, iconSvg, lossless, lossyQuestion, mark, readOnlyQuestion,
     savedMessage, summary, tooltipLines, type Device, type MediaRecovery, type MediaSource
 } from "../drives";
@@ -126,10 +126,10 @@ test("the menus offer Save for a changed disk, a Save that will ask for a change
         "off, a disk the last run kept saves and reverts");
 });
 
-test("a Datasette's keys show while the machine runs; a tape drive that cannot save records to a file instead", () => {
+test("a Datasette's keys show while the machine runs; a tape drive without them records to a file instead", () => {
     const deck: Device = {
         ...drive(false), id: "cassette1", kind: "tapeDrive", name: "Cassette #1", formats: ["tap", "wav"],
-        saveFormats: ["tap", "wav"], operations: ["insert", "eject", "record", "save"]
+        saveFormats: ["tap", "wav"], operations: ["insert", "eject", "record", "save", "keys"]
     };
     assert.ok(hasTapeKeys(deck));
     const words = contextWords(deck, true);
@@ -138,10 +138,49 @@ test("a Datasette's keys show while the machine runs; a tape drive that cannot s
     assert.ok(!contextWords({ ...deck, media: null }, true).includes("play"), "no keys to press with no tape");
     assert.deepEqual(contextWords(deck, false).filter(word => ["recordKey", "play"].includes(word)), [], "nor while the machine is off");
 
-    const recorder: Device = { ...deck, operations: ["insert", "eject", "record"] };
-    assert.ok(!hasTapeKeys(recorder));
+    const recorder: Device = { ...deck, operations: ["insert", "eject", "record", "save"] };
+    assert.ok(!hasTapeKeys(recorder), "a recorder that saves has no keys unless it says so");
     assert.ok(contextWords(recorder, true).includes("record"));
     assert.ok(!contextWords(recorder, true).includes("play"));
+});
+
+test("a recording is a changed tape: marked, saved and asked about as a changed disk is, with no lock", () => {
+    // A TRS-80's recorder, part way through CSAVE to program.cas.
+    const cas = path.resolve(path.sep, "tapes", "program.cas");
+    const recorder: Device = {
+        id: "cassette", kind: "tapeDrive", name: "Cassette", description: "Cassette recorder, 500 baud", controller: "the cassette port",
+        formats: ["cas"], saveFormats: ["cas"], operations: ["insert", "eject", "record", "save"], tracks: 0, sides: 0,
+        media: {
+            label: cas, format: "CAS", writeProtected: false, changed: true, generation: 9,
+            source: { kind: "image", path: cas, saves: true, readOnly: null, stale: false },
+            recovery: { lastCheckpoint: null, behind: false }
+        },
+        activity: "writing"
+    };
+    assert.equal(mark(recorder), "changed", "● as a changed disk has");
+    assert.equal(iconName(recorder), "tape-writing", "a tape has no lock badge");
+    const words = contextWords(recorder, true);
+    for (const word of ["record", "eject", "save", "changed", "revert"]) assert.ok(words.includes(word), word);
+    for (const word of ["recordKey", "play", "locked", "unlocked"]) assert.ok(!words.includes(word), word);
+    assert.ok(!tooltipLines(recorder, new Date()).some(line => /lock/i.test(line)), "nor a lock in its tooltip");
+
+    // Its file changed on disk since the recording started, as another program wrote there.
+    assert.equal(mark({ ...recorder, media: { ...recorder.media!, source: { ...recorder.media!.source!, stale: true } } }), "conflict");
+    assert.ok(contextWords({ ...recorder, media: { ...recorder.media!, source: { ...recorder.media!.source!, stale: true } } }, true)
+        .includes("changedStale"));
+
+    const leave = leaveQuestion("program.cas", "Cassette", "ejecting it from Cassette", undefined, "tape");
+    assert.equal(leave.message, "Save the changes to program.cas before ejecting it from Cassette?");
+    assert.equal(leave.detail, "The machine recorded onto the tape in Cassette, and the recording is not saved.");
+    assert.deepEqual(leave.buttons, ["Save", "Save As...", "Discard"]);
+
+    // The stop notice counts it as a tape, and the journal keeps it.
+    assert.deepEqual(unsavedDisks([recorder], true), { kept: ["program.cas"], lost: [] });
+    assert.equal(unsavedTapes([recorder, drive(true), drive(false)]), 1);
+    assert.equal(stoppedMessage("Model I", ["program.cas"], [], 1),
+        "Model I stopped with 1 tape not saved: program.cas. It is kept, still changed, for its next launch.");
+    assert.equal(stoppedMessage("Model I", ["program.cas", "work.dsk"], [], 1),
+        "Model I stopped with 2 disks and tapes not saved: program.cas, work.dsk. They are kept, still changed, for its next launch.");
 });
 
 test("Discard asks about the disks kept now, again when the journal changed meanwhile, and lets nothing go unasked", async () => {

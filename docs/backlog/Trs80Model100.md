@@ -407,9 +407,9 @@ and from a `CSAVE` MAME 0.264 recorded to WAV. No new downloads.
 - **The buzzer.** Port B bit 5 while bit 2 is set; the 81C55's timer output while bit 2 is clear and bit 5 set (MAME's
   `i8155_pb_w` and `i8155_to_w`). `BEEP` sounds.
 - **The debugger.** The `cassette`, `fastCassette` and `sound` launch options; the cassette in Retro Devices (Insert,
-  Record and Eject), saved through a file beside the recording when it comes out or the session ends; the Machine
-  view's Cassette and Sound rows; the display panel's sound. A recording goes to the file Record names, replacing it; one that holds
-  nothing writes nothing.
+  Record and Eject), saved through a file beside the recording when it came out or the session ended, until recordings
+  became changed tapes, saved like a disk ([MediaPersistence.md](MediaPersistence.md#phases), phase 4); the Machine
+  view's Cassette and Sound rows; the display panel's sound.
 - **Not yet.** A byte-level tape format (no common one for the Model 100 was found), and the cassette's tape in the
   recovery journal.
 

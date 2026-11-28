@@ -726,6 +726,9 @@ function showMouse(){
     if(state.textContent!==text)state.textContent=text;
 }
 showKeys();
+// When VS Code gives the panel its focus, as a click on its tab does, the screen takes the keyboard unless a control in
+// the page has it: the keys only reach the machine from the screen.
+window.addEventListener('focus',()=>{if(document.activeElement===document.body||document.activeElement===null)screen.focus();});
 ${focusOnLoad ? "screen.focus();" : ""}
 </script></body></html>`;
 }

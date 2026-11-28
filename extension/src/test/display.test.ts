@@ -379,9 +379,9 @@ test("the VIC-20 types PETSCII, shows its Datasette stopped and its drive by dev
 
 test("the page focuses its screen as it loads only when asked, so a stopped machine's panel leaves the focus", () => {
     const tail = (html: string) => html.slice(html.lastIndexOf("showKeys();"));
-    assert.match(tail(webviewHtml("NONCE")), /screen\.focus\(\);/, "a running machine's page takes the keyboard");
-    assert.match(tail(webviewHtml("NONCE", true)), /screen\.focus\(\);/);
-    assert.doesNotMatch(tail(webviewHtml("NONCE", false)), /screen\.focus\(\);/, "a stopped machine's page leaves the focus");
+    assert.match(tail(webviewHtml("NONCE")), /^screen\.focus\(\);$/m, "a running machine's page takes the keyboard");
+    assert.match(tail(webviewHtml("NONCE", false)), /window\.addEventListener\('focus'/, "a focused panel gives its screen the keyboard");
+    assert.doesNotMatch(tail(webviewHtml("NONCE", false)), /^screen\.focus\(\);$/m, "a stopped machine's page leaves the focus");
 });
 
 test("the PET's key bar has Stop and Clr, the shifted HOME", () => {

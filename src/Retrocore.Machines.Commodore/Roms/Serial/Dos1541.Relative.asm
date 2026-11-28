@@ -188,7 +188,7 @@ SetCommand:
 ;; Entry:
 ;;   ClearDirty = ...clears the buffer's dirty bit (<MarkClean>), X = the buffer...
 ;;   Start = ...and starts the job in <JobCommand> on buffer X, with its last job's drive (<Jobs::StartOnLastDrive>)
-;; In: JobCommand = the job, <Track>, <Sector> = the block, DriveNumber = the drive
+;; In: JobCommand = the job, Track = the block's track, Sector = its sector, DriveNumber = the drive
 ;; Also: SJ10 (D1541)
 .proc StartBlockJob
     jsr Jobs::SetHeader

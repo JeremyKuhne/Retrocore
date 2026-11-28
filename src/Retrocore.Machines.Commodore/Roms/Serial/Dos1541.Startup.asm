@@ -168,8 +168,8 @@ CountUp:
 
 ;; Tests an 8 KB ROM, first the upper one, then the lower: counts <Temporary> up for the failure blinks, then sums the
 ;; ROM's bytes from the top page down, each carry added into the next byte. The sum, with the last carry, must equal the
-;; ROM's first page, $E0 or $C0; the <UpperRomChecksum> byte makes it so for the upper and <Commands::LowerRomChecksum>
-;; for the lower. After both it goes on.
+;; ROM's first page, $E0 or $C0; the <UpperRomChecksum> byte makes it so for the upper and <LowerRomChecksum> for the
+;; lower. After both it goes on.
 ;; Also: RM10 (D1541)
 TestRom:
     inc Temporary
@@ -422,9 +422,9 @@ FreeBuffers:
 
 ;; The idle loop, which the DOS runs when the bus and the controller have nothing for it. Entering it at `Loop` releases
 ;; CLK, DATA and ATNA and runs a command that is waiting in the command channel. Every pass ends by jumping to
-;; <NextPass>, so only that entry does those two things. Each pass serves ATN when the interrupt has left it pending
-;; (<Serial::HandleAtn>, which ends in this loop again), lights the activity LED for a drive while a file is open or a
-;; job runs on it, and flashes the error LED. It never returns.
+;; <Idle::Loop::NextPass>, so only that entry does those two things. Each pass serves ATN when the interrupt has left it
+;; pending (<Serial::HandleAtn>, which ends in this loop again), lights the activity LED for a drive while a file is
+;; open or a job runs on it, and flashes the error LED. It never returns.
 ;; Also: IDLE (D1541)
 .proc Loop
     ; Releases the bus lines, and runs a command that the command channel has completed.

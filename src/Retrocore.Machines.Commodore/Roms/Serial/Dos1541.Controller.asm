@@ -212,7 +212,7 @@ ScanTrackNext:
 
 ;; The next job down. With none on the head's track, sends the head toward the track of <SeekJob>, the last job found
 ;; off it, which is the lowest-numbered: <Steps> = twice the distance, in half-tracks, positive inward; <DriveStatus> =
-;; stepping; and <HeadTrack> = that track already. The pass ends in <EndPass>, where <CheckStepping> runs
+;; stepping; and <HeadTrack> = that track already. The pass ends in <EndPass>, where <EndPass::CheckStepping> runs
 ;; <EndPass::StepIdle> and takes the first step; the rest follow in the passes after.
 ;; Also: QUE05 (D1541)
 ScanTrackLoop:
@@ -306,7 +306,8 @@ JumpToBuffer:
 
 ;; A bump: sets the phase to 0 and the head stepping 92 half-tracks outward (<Steps> = -92), which brings it against the
 ;; stop at track 1 from anywhere, with <HeadTrack> = 1, and finishes the job with 1 at once; the pass ends in <EndPass>,
-;; where <CheckStepping> runs <EndPass::StepIdle> and takes the first step, and the rest follow in the passes after.
+;; where <EndPass::CheckStepping> runs <EndPass::StepIdle> and takes the first step, and the rest follow in the passes
+;; after.
 ;; Also: BMP (D1541)
 Bump:
     lda #STATE_ON | STATE_STEPPING
@@ -818,8 +819,8 @@ NotProtected:
 
 ;; Counts <HEADER_GAP> - 2 byte-readies (9 from 901229-03 on, 8 in -01, -02 and the 1540), which are the header's last 2
 ;; GCR bytes and <HEADER_GAP> - 4 of the gap's bytes, then switches VIA 2's port A to output and the head to writing,
-;; and starts the sync. The format writes the gap as <HEADER_GAP> - 2 bytes (<WriteHeaderGap>), so the data block's sync
-;; starts 2 bytes before the gap ends.
+;; and starts the sync. The format writes the gap as <HEADER_GAP> - 2 bytes (<WriteTrack::WriteHeaderGap>), so the data
+;; block's sync starts 2 bytes before the gap ends.
 ;; Also: WRT20 (D1541)
 SkipGap:
     bvc *                           ; waits for byte-ready, which sets V
@@ -1932,7 +1933,7 @@ Done:
 
 ;; The format, run as an execute job on buffer 3 (<Commands::Format> puts a `JMP` to it at $0600), on each pass where
 ;; the job's header track is the head's track and the head is still (while the head steps, <ScanJobs> ends the pass at
-;; <CheckReady>), a track at a time, until it finishes; <FormatTrack> says where it has got to.
+;; <ScanJobs::CheckReady>), a track at a time, until it finishes; <FormatTrack> says where it has got to.
 ;;
 ;; The first time (<FormatTrack> negative) it bumps the head to track 1, allows 10 errors for the whole format
 ;; (<FormatRetries>), starts the track's measuring at 4000 bytes (<SegmentLength>) and ends the pass. After that it

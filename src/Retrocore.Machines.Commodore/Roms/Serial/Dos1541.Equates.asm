@@ -552,7 +552,7 @@ RELATIVE_OVERFLOW = $20
 ;; Also: DYFILE (D1541)
 RELATIVE_DIRTY = $40
 ;; <ChannelFileType>'s flag for a relative file at its last record; for any other file it means the file's end is
-;; reached, which <GetInternalByte> sets and the append open tests on a sequential file.
+;; reached, which <Commands::GetInternalByte> sets and the append open tests on a sequential file.
 ;; Also: LRF (D1541)
 RELATIVE_LAST_RECORD = $80
 

@@ -221,7 +221,7 @@ Refill:
 ;; blocks and for each closed file's, and for a relative file's side sectors too. An entry of a file that was never
 ;; closed is deleted, so its blocks stay free. Then the BAM is written.
 ;;
-;; The command ends by jumping to <Commands::Finish>, which returns to the caller (to <Errors::Fail> if an error is
+;; The command ends by jumping to <Commands::Finish>, which returns to the caller (to <Commands::Fail> if an error is
 ;; held).
 ;; Errors: 66, ILLEGAL TRACK OR SECTOR, for a file's first block, or its first side sector, that is not on the disk
 ;; Also: VERDIR (D1541), VALDAT (D1541)

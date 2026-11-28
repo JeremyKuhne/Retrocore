@@ -188,7 +188,7 @@ Loop:
 ;; At the end of the last buffer the channel's status becomes <CHANNEL_TALK_LAST>, so the byte goes out with EOI;
 ;; before it, <StartListing::FillBuffer> refills the buffer, whose pointer has wrapped to 0.
 ;; Out: A = the byte
-;; Errors: 70, NO CHANNEL, 61, FILE NOT OPEN, and the directory's read errors, as the next lines need them
+;; Errors: 61, FILE NOT OPEN, with no active buffer, and the errors of reading the directory for the next lines
 ;; Also: GETDIR (D1541)
 .proc NextListingByte
     jsr Files::GetByte
@@ -221,8 +221,7 @@ Refill:
 ;; blocks and for each closed file's, and for a relative file's side sectors too. An entry of a file that was never
 ;; closed is deleted, so its blocks stay free. Then the BAM is written.
 ;;
-;; The command ends through <Commands::Finish>, so it does not return. A chain whose first block's track or sector is
-;; not on the disk ends it with error 66 (<MarkChain>).
+;; The command ends through <Commands::Finish>, so it does not return.
 ;; Errors: 66, ILLEGAL TRACK OR SECTOR, for a file's first block, or its first side sector, that is not on the disk
 ;; Also: VERDIR (D1541), VALDAT (D1541)
 .proc Validate
@@ -606,7 +605,6 @@ StoreBits:
 ;; Ends by jumping to <Jobs::Write>.
 ;; In: DriveNumber = the drive
 ;; Errors: 71, DIR ERROR, when a track's count differs from its bits; 70, NO CHANNEL, when the BAM has no buffer
-;; Keeps: Track
 ;; Also: SCRBAM (D1541)
 .proc WriteIfDirty
     ldy DriveNumber
@@ -707,7 +705,7 @@ CheckTrack:
     sec
     bne Done
 
-    ; The bit set, the bit's byte marked changed, and the track's count up.
+    ; The bit set, the BAM marked changed, and the track's count up.
     lda (BamPointer),y
     ora BitMasks,x
     sta (BamPointer),y

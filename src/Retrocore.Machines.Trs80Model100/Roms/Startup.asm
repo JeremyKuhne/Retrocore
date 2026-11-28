@@ -94,7 +94,7 @@ L_7DBB:
     CALL L_3F6D
     LXI H,MENU
     PUSH H
-    .byte $F6
+    .byte $F6                           ; ORI: skips the next byte
 
 L_7DD0:
     XRA A

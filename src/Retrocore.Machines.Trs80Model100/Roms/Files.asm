@@ -36,10 +36,10 @@ L_2239:
     INX H
     MOV M,D
     INX H
-    .byte $3E
+    .byte $3E                           ; MVI: skips the next byte
 
 L_2241:
-    .byte $D5
+    PUSH D
     LXI D,FILNAM
     MVI B,$08
     CALL L_3469
@@ -643,13 +643,14 @@ L_2604:
 
 L_260B:
     MVI A,$D3
-    .byte $01
+    .byte $01                           ; LXI: skips the next instruction
 
 L_260E:
-    .byte $3E, $9C, $01
+    MVI A,$9C
+    .byte $01                           ; LXI: skips the next instruction
 
 L_2611:
-    .byte $3E, $D0
+    MVI A,$D0
     PUSH PSW
     CALL L_1499
     POP PSW
@@ -690,10 +691,11 @@ L_2648:
 
 L_2650:
     MVI B,$D3
-    .byte $11
+    .byte $11                           ; LXI: skips the next instruction
 
 L_2653:
-    .byte $06, $9C, $11
+    MVI B,$9C
+    .byte $11                           ; LXI: skips the next instruction
 
 L_2656:
     MVI B,$D0

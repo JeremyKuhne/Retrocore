@@ -37,10 +37,10 @@ L_4CF2:
     RST 1
     .byte $54                           ; SYNCHR: 'T'
     MVI E,$02
-    .byte $3E
+    .byte $3E                           ; MVI: skips the next byte
 
 L_4CFC:
-    .byte $D7
+    RST 2
 
 L_4CFD:
     RST 1
@@ -123,13 +123,13 @@ L_4D5D:
 
 L_4D6E:
     STC
-    .byte $11
+    .byte $11                           ; LXI: skips the next instruction
 
 ST_LOAD:
-    .byte $F6
+    .byte $F6                           ; ORI: skips the next byte
 
 ST_MERGE:
-    .byte $AF
+    XRA A
     PUSH PSW
     DCX H
     RST 2
@@ -642,11 +642,11 @@ STRCHR:
 
 L_504E:
     MVI E,$37
-    .byte $01
+    .byte $01                           ; LXI: skips the next instruction
 
 AOERR:
     MVI E,$35
-    .byte $01
+    .byte $01                           ; LXI: skips the next instruction
 
 DSERR:
     MVI E,$38
@@ -659,16 +659,19 @@ CFERR:
     .byte $1E, $3A, $01
 
 BNERR:
-    .byte $1E, $33, $01
+    MVI E,$33
+    .byte $01                           ; LXI: skips the next instruction
 
 IEERR:
-    .byte $1E, $32, $01
+    MVI E,$32
+    .byte $01                           ; LXI: skips the next instruction
 
 EFERR:
-    .byte $1E, $36, $01
+    MVI E,$36
+    .byte $01                           ; LXI: skips the next instruction
 
 FLERR:
-    .byte $1E, $39
+    MVI E,$39
     JMP ERROR
 
 FN_LOF:

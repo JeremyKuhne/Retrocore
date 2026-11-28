@@ -277,13 +277,13 @@ L_43A9:
 
 L_43AF:
     MVI A,$02
-    .byte $01
+    .byte $01                           ; LXI: skips the next instruction
 
 L_43B2:
-    .byte $3E
+    .byte $3E                           ; MVI: skips the next byte
 
 L_43B3:
-    .byte $AF
+    XRA A
     STA D_F646
     RET
 
@@ -351,13 +351,13 @@ L_4431:
     .byte $F6                           ; ORI: skips the next byte
 
 L_4432:
-    .byte $AF
+    XRA A
     STA D_F648
     RET
 
 L_4437:
     XRA A
-    .byte $C2
+    .byte $C2                           ; JNZ: skips the next instruction, unless it jumps
 
 L_4439:
     MVI A,$FF
@@ -368,7 +368,7 @@ L_443F:
     .byte $F6                           ; ORI: skips the next byte
 
 L_4440:
-    .byte $AF
+    XRA A
     STA D_F63E
     RET
 

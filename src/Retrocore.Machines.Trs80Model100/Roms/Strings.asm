@@ -123,7 +123,7 @@ PUTNEW:
     .byte $3E                           ; MVI: skips the next byte
 
 L_2791:
-    .byte $D5
+    PUSH D
     LHLD TEMPPT
     SHLD D_FC1A
     MVI A,$03
@@ -161,7 +161,7 @@ STRPR2:
 
 GETSPA:
     ORA A
-    .byte $0E
+    .byte $0E                           ; MVI: skips the next byte
 
 L_27CA:
     POP PSW
@@ -544,7 +544,7 @@ FN_LEFT:
 LEFT3:
     XTHL
     MOV C,A
-    .byte $3E
+    .byte $3E                           ; MVI: skips the next byte
 
 L_29B2:
     PUSH H
@@ -555,10 +555,10 @@ LEFT2:
     CMP B
     JC L_29BB
     MOV A,B
-    .byte $11
+    .byte $11                           ; LXI: skips the next instruction
 
 L_29BB:
-    .byte $0E, $00
+    MVI C,$00
     PUSH B
     CALL GETSPA
     POP B

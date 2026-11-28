@@ -215,10 +215,10 @@ L_731C:
 .endif
 
 L_7329:
-    .byte $F6
+    .byte $F6                           ; ORI: skips the next byte
 
 L_732A:
-    .byte $AF
+    XRA A
     PUSH PSW
     CALL L_765C
     MVI A,$03

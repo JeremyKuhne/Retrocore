@@ -229,17 +229,17 @@ L_0987:
 L_0998:
     LXI H,NEWSTT
     XTHL
-    .byte $3E
+    .byte $3E                           ; MVI: skips the next byte
 
 L_099D:
     POP H
 
 ST_DATA:
-    .byte $01, $3A
+    .byte $01                           ; LXI: skips the next instruction
+    .byte $3A
 
 ST_REM:
-    .byte $0E
-    NOP
+    MVI C,$00
     MVI B,$00
 
 EXCHQT:
@@ -329,10 +329,10 @@ LETCN6:
     JC DNTCPY
 
 L_0A1C:
-    .byte $3E
+    .byte $3E                           ; MVI: skips the next byte
 
 L_0A1D:
-    .byte $D1
+    POP D
     CALL FRETMS
     XCHG
     CALL STRCPY
@@ -797,10 +797,10 @@ INPCN3:
 ST_READ:
     PUSH H
     LHLD DATPTR
-    .byte $F6
+    .byte $F6                           ; ORI: skips the next byte
 
 L_0CDE:
-    .byte $AF
+    XRA A
     STA FLGINP
     XTHL
     JMP LOPDAT

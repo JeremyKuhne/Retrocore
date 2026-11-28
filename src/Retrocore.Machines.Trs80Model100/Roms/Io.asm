@@ -171,10 +171,10 @@ L_6DAC:
     JZ L_6DD2
     CPI $13
     JNZ L_6DDB
-    .byte $3E
+    .byte $3E                           ; MVI: skips the next byte
 
 L_6DD2:
-    .byte $AF
+    XRA A
     STA D_FF40
     LDA D_FF42
     ORA A
@@ -409,14 +409,14 @@ L_6F1A:
     JNZ L_6F09
     CALL L_6F39
     POP H
-    .byte $C2
+    .byte $C2                           ; JNZ: skips the next instruction, unless it jumps
 
 L_6F2C:
     ORI $FF
     JMP L_14EE
 
 L_6F31:
-    .byte $3E
+    .byte $3E                           ; MVI: skips the next byte
 
 L_6F32:
     XRA A

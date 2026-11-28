@@ -320,7 +320,7 @@ L_149F:
 
 L_14A8:
     DI
-    .byte $11
+    .byte $11                           ; LXI: skips the next instruction
 
 CTOFF:
     EI

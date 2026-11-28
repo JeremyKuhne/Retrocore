@@ -59,32 +59,34 @@ DATSNE:
 
 SNERR:
     MVI E,$02
-    .byte $01
+    .byte $01                           ; LXI: skips the next instruction
 
 DV0ERR:
     MVI E,$0B
-    .byte $01
+    .byte $01                           ; LXI: skips the next instruction
 
 NFERR:
     MVI E,$01
-    .byte $01
+    .byte $01                           ; LXI: skips the next instruction
 
 DDERR:
     MVI E,$0A
-    .byte $01
+    .byte $01                           ; LXI: skips the next instruction
 
 RWERR:
-    .byte $1E, $14, $01
+    MVI E,$14
+    .byte $01                           ; LXI: skips the next instruction
 
 OVERR:
     MVI E,$06
-    .byte $01
+    .byte $01                           ; LXI: skips the next instruction
 
 MOERR:
-    .byte $1E, $16, $01
+    MVI E,$16
+    .byte $01                           ; LXI: skips the next instruction
 
 TMERR:
-    .byte $1E, $0D
+    MVI E,$0D
 
 ERROR:
     XRA A
@@ -195,7 +197,7 @@ L_04F6:
     ANA L
     INR A
     CNZ L_39CC
-    .byte $3E
+    .byte $3E                           ; MVI: skips the next byte
 
 L_0501:
     POP B
@@ -627,10 +629,10 @@ LPFORM:
     POP D
     SPHL
     SHLD SAVSTK
-    .byte $0E
+    .byte $0E                           ; MVI: skips the next byte
 
 L_0758:
-    .byte $D1
+    POP D
     XCHG
     MVI C,$0C
     CALL L_3EFF

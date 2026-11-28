@@ -25,7 +25,7 @@ L_3EFF:
     MVI B,$00
     DAD B
     DAD B
-    .byte $3E
+    .byte $3E                           ; MVI: skips the next byte
 
 L_3F08:
     PUSH H
@@ -234,7 +234,7 @@ L_401E:
 
 L_4028:
     MVI B,$02
-    .byte $11
+    .byte $11                           ; LXI: skips the next instruction
 
 L_402B:
     MVI B,$01
@@ -338,10 +338,10 @@ CONSTP:
     SHLD SAVTXT
     LXI H,$FB6B
     SHLD TEMPPT
-    .byte $21
+    .byte $21                           ; LXI: skips the next instruction
 
 STPEND:
-    .byte $F6, $FF
+    ORI $FF
     POP B
 
 ENDCON:

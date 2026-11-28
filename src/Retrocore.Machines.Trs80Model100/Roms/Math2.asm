@@ -1952,10 +1952,11 @@ L_3E12:
     JMP L_3510
 
 L_3E15:
-    .byte $22, $90
+    .byte $22                           ; SHLD $FB90, which L_3E17 starts inside
+    .byte $90
 
 L_3E17:
-    .byte $FB
+    EI
     PUSH D
     MOV A,H
     ORA A

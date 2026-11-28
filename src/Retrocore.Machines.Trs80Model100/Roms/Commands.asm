@@ -321,10 +321,10 @@ L_1B72:
     JNZ L_1B8C
     LXI H,$F947
     CALL L_3FD2
-    .byte $3E
+    .byte $3E                           ; MVI: skips the next byte
 
 L_1B88:
-    .byte $AF
+    XRA A
     STA D_F943
 
 .if MODEL = 100
@@ -339,7 +339,8 @@ L_1B8F:
     .byte $21                           ; LXI: skips the next instruction
 
 L_1B98:
-    .byte $2D, $F9
+    DCR L
+    SPHL
     INR M
     MOV A,M
     SUI $0A
@@ -351,10 +352,11 @@ L_1B98:
     SUI $0A
 
 L_1BA7:
-    .byte $C2                           ; JNZ: skips the next instruction
+    .byte $C2                           ; JNZ: skips the next instruction, unless it jumps
 
 L_1BA8:
-    .byte $AB, $1B
+    XRA E
+    DCX D
     MOV M,A
 .else
 L_1B8C:
@@ -599,10 +601,11 @@ L_1CBC:
     CALL L_1CD9
     POP H
     MOV L,E
-    .byte $01
+    .byte $01                           ; LXI: skips the next instruction
 
 L_1CD2:
-    .byte $D1, $E3
+    POP D
+    XTHL
     CALL L_1CD9
     POP H
     RET
@@ -814,10 +817,10 @@ ST_SOUND:
     RET
 
 L_1DE5:
-    .byte $3E
+    .byte $3E                           ; MVI: skips the next byte
 
 L_1DE6:
-    .byte $AF
+    XRA A
     STA D_FF44
     RST 2
     RET
@@ -1124,10 +1127,10 @@ L_1FA1:
     JZ L_2005
 
 KILASC:
-    .byte $3E
+    .byte $3E                           ; MVI: skips the next byte
 
 L_1FBF:
-    .byte $E5
+    PUSH H
     LXI B,$0000
     MOV M,C
     MOV L,E
@@ -1289,10 +1292,10 @@ L_20A9:
 
 L_20AF:
     LXI H,$F957
-    .byte $3E
+    .byte $3E                           ; MVI: skips the next byte
 
 L_20B3:
-    .byte $E1
+    POP H
     CALL L_20D5
     RZ
     PUSH H

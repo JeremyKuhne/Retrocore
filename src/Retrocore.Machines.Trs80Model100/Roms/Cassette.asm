@@ -88,10 +88,10 @@ L_6FB3:
     CPI $0B
     JC L_6FBA
     INR H
-    .byte $3E
+    .byte $3E                           ; MVI: skips the next byte
 
 L_6FBA:
-    .byte $2C
+    INR L
     DCR B
     JNZ L_6FA3
     MVI A,$40
@@ -465,10 +465,11 @@ L_71B7:
     CPI $60
     RNC
     ANI $3F
-    .byte $DA
+    .byte $DA                           ; JC: skips the next instruction, unless it jumps
 
 L_71C2:
-    .byte $B7, $C8
+    ORA A
+    RZ
     MOV C,A
     ANI $EF
     CPI $03

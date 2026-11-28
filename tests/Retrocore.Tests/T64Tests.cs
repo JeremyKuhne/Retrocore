@@ -216,11 +216,16 @@ public sealed class T64Tests
             deck.Info.SaveFormats.Should().Equal("tap", "wav");
             deck.Mode.Should().Be(TapeMode.Playing);
             deck.Media.Should().Be(new MediaState(path, "T64", WriteProtected: false, Changed: false));
+            JsonObject configuration = MachineConfiguration.Capture(target);
+            target.DeviceAction(deck, "eject", []);
+            MachineConfiguration.Restore(target, configuration).Should().BeEmpty();
+            deck.Media.Should().Be(new MediaState(path, "T64", WriteProtected: false, Changed: false));
+            deck.Mode.Should().Be(TapeMode.Playing);
+
             CommodoreTape tape = deck.Tape ?? throw new InvalidOperationException("The T64 did not mount.");
             Action replace = () => target.DeviceAction(deck, "insert", new() { ["path"] = malformed });
             replace.Should().Throw<InvalidDataException>().WithMessage("*complete T64 header*");
 
-            JsonObject configuration = MachineConfiguration.Capture(target);
             JsonObject mount = configuration.Object("media")?.Object(device)
                 ?? throw new InvalidOperationException("The cassette mount was not captured.");
 
@@ -260,10 +265,27 @@ public sealed class T64Tests
             Enumerable.Range(address, program.Length).Select(at => target.Peek((ushort)at)).Should().Equal(program);
 
             tape.Record(tape.Pulses.Count, 352);
+            JsonObject? Act(string action, JsonObject args) =>
+                MediaActions.Device(deck, action, args, (what, with) => target.DeviceAction(deck, what, with));
+
+            Act("eject", new() { ["supportsRetrocoreMedia"] = true }).String("outcome").Should().Be("changed");
+            deck.Tape.Should().BeSameAs(tape);
+            JsonObject? discarded = Act("eject", new() { ["discard"] = true });
+            discarded.String("outcome").Should().Be("discarded");
+            deck.Tape.Should().BeNull();
+            Act("undo", new() { ["medium"] = discarded.String("undo") }).String("outcome").Should().Be("undone");
+            deck.Tape.Should().BeSameAs(tape);
+
             MediaActions.Save(deck, []).String("outcome").Should().Be("readOnly");
             MediaActions.Save(deck, new() { ["path"] = saved }).String("outcome").Should().Be("saved");
             TapFormat.Read(File.ReadAllBytes(saved)).Pulses.Should().Equal(tape.Pulses);
             File.ReadAllBytes(path).Should().Equal(image);
+
+            configuration = MachineConfiguration.Capture(target);
+            target.DeviceAction(deck, "eject", []);
+            MachineConfiguration.Restore(target, configuration).Should().BeEmpty();
+            deck.Media.Should().Be(new MediaState(saved, "TAP", WriteProtected: false, Changed: false));
+            deck.Tape?.Pulses.Should().Equal(tape.Pulses);
         }
         finally
         {
@@ -274,9 +296,57 @@ public sealed class T64Tests
         }
     }
 
+    /// <summary>
+    ///  The independently produced VICE autostart tapes load through the original kernals to the bytes in the
+    ///  corresponding PRGs. The external files are not redistributed with the tests.
+    /// </summary>
+    /// <param name="machineId">The machine and fixture name.</param>
+    [TestMethod]
+    [DataRow("pet")]
+    [DataRow("vic20")]
+    public void ViceAutostartTapeLoads(string machineId)
+    {
+        string? folder = Environment.GetEnvironmentVariable("RETROCORE_VICE_T64");
+        string fixture = Path.Join(folder, $"autostart-{machineId}-none");
+        if (string.IsNullOrEmpty(folder) || !File.Exists(fixture + ".t64") || !File.Exists(fixture + ".prg"))
+        {
+            Assert.Inconclusive("Set RETROCORE_VICE_T64 to a folder containing VICE's PET and VIC-20 autostart T64 and PRG files.");
+        }
+
+        string path = fixture + ".t64";
+        byte[] prg = File.ReadAllBytes(fixture + ".prg");
+        IDebugTarget target;
+        if (machineId == "pet")
+        {
+            PetDebugTarget pet = PetDebugTarget.Launch(new() { ["cassette1"] = path });
+            target = pet;
+            PetMachineTests.RunToReady(pet.Machine);
+            PetMachineTests.Type(pet.Machine, "LOAD\r");
+            PetTapeTests.WaitForReady(pet.Machine);
+            pet.Machine.ReadTextScreen().Should().Contain(line => line.TrimEnd() == "FOUND AUTOSTART-PET-NO");
+        }
+        else
+        {
+            Vic20DebugTarget vic = Vic20DebugTarget.Launch(new() { ["cassette"] = path, ["ramExpansion"] = "8k" });
+            target = vic;
+            Vic20MachineTests.RunToReady(vic.Machine);
+            Vic20MachineTests.Type(vic.Machine, "LOAD\r");
+            Vic20TapeTests.WaitForReady(vic.Machine);
+            vic.Machine.ReadTextScreen().Should().Contain(line => line.TrimEnd() == "FOUND AUTOSTART-VIC20-");
+        }
+
+        int address = BinaryPrimitives.ReadUInt16LittleEndian(prg);
+        Enumerable.Range(address, prg.Length - 2).Select(at => target.Peek((ushort)at)).Should().Equal(prg[2..]);
+    }
+
     private static byte[] Program(byte page) => [0x0B, page, 0x0A, 0, 0x99, 0x22, 0x48, 0x49, 0x22, 0, 0, 0];
 
-    private static byte[] TapeImage(byte page)
+    /// <summary>
+    ///  Creates a two-program T64 fixture with directory order different from payload order.
+    /// </summary>
+    /// <param name="page">The high byte of BASIC's load address.</param>
+    /// <returns>The T64 image bytes.</returns>
+    internal static byte[] TapeImage(byte page)
     {
         byte[] image = new byte[0xB0];
         "C64S tape image file"u8.CopyTo(image);

@@ -60,6 +60,47 @@ public sealed class Trs80Model100DebugTargetTests
     }
 
     /// <summary>
+    ///  The SDK's source maps the US Model 100's and Tandy 102's ROMs, so the debugger steps through them by name, and
+    ///  maps no other dump.
+    /// </summary>
+    /// <param name="name">The ROM's file.</param>
+    /// <param name="model">The launch's model.</param>
+    [TestMethod]
+    [DataRow("m100.bin", "100")]
+    [DataRow("t102.bin", "102")]
+    public void TheSdkSourceMapsTheRom(string name, string model)
+    {
+        string folder = Folder();
+        try
+        {
+            byte[] rom = Trs80Model100RomTests.Rom(name);
+            JsonObject options = new() { ["model"] = model };
+            Trs80Model100DebugTarget target = Launch(Path.Join(folder, "m100.ram"), options, rom);
+            DebugInfo debug = new();
+            target.AddSdkModules(debug, directory: null);
+            debug.Modules.Should().ContainSingle();
+            ushort newstt = (ushort)debug.Resolve("NEWSTT");
+            newstt.Should().Be(0x0804);
+            DebugPosition? position = debug.Position(target, newstt);
+            position.Should().NotBeNull();
+            position?.Chain[0].Path.Should().EndWith("Interpreter.asm");
+            debug.Resolve("MENU").Should().Be(0x5797, "Tandy's documented entry");
+
+            // Another dump of the ROM, one byte changed, gets no source.
+            byte[] other = (byte[])rom.Clone();
+            other[0x7F00] ^= 0xFF;
+            Trs80Model100DebugTarget patched = Launch(Path.Join(folder, "other.ram"), options, other);
+            DebugInfo none = new();
+            patched.AddSdkModules(none, directory: null);
+            none.Modules.Should().BeEmpty();
+        }
+        finally
+        {
+            Directory.Delete(folder, recursive: true);
+        }
+    }
+
+    /// <summary>
     ///  A RAM image that does not exist yet starts the machine cold and is written when the session ends; the next
     ///  session loads it, and the ROM carries on in BASIC where POWER OFF,RESUME left it, with its variables.
     ///  <c>coldStart</c> starts from empty RAM all the same.

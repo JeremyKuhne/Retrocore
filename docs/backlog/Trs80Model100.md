@@ -1,7 +1,9 @@
 # Backlog: the TRS-80 Model 100
 
-Status: **phases 1, 2 and 3 built (2026-11-27)**, with WAV tapes but not yet byte tapes; [the
-guide](../Trs80Model100.md) covers them. Phase 4, the serial port, the printer and the TPDD, is next.
+Status: **phases 1, 2 and 3 built (2026-11-27)**, with WAV tapes but not yet byte tapes, and **phase 5's first part
+(2026-11-28)**: the ROM as an SDK source, byte-identical for both models and mapped by the debugger, its names
+started. [The guide](../Trs80Model100.md) covers them. Phase 5 goes on with BASIC's debugging, then the modules'
+naming; phase 4, the serial port, the printer and the TPDD, follows.
 
 ## Why the Model 100
 
@@ -413,6 +415,23 @@ and from a `CSAVE` MAME 0.264 recorded to WAV. No new downloads.
 - **Not yet.** A byte-level tape format (no common one for the Model 100 was found), and the cassette's tape in the
   recovery journal.
 
+## Phase 5, part 1 (built 2026-11-28)
+
+- **The source.** `src/Retrocore.Machines.Trs80Model100/Roms/Model100.asm` and its 27 modules, by subject from the
+  restarts and tables to the cold start, assemble byte for byte to the US Model 100's ROM, and with `MODEL = 102`
+  to the Tandy 102's; each difference is an `.if MODEL = 100` block. `Trs80Model100RomSourceTests` pin both builds'
+  digests, so they need no ROM.
+- **The names**, named but not yet converted ([the naming log](../conversions/Model100.md)): Tandy's names for the 67
+  entry points and 3 variables the Technical Reference documents; the statement and function handlers by their
+  keywords; about 280 of Microsoft's names, where the interpreter's and the string package's code lines up with
+  MBASIC's, and 36 of its variables; and the tables, restarts and the ROM's programs by what they are. The rest keep
+  the disassembler's `L_` and `D_` names for now.
+- **The debugger.** The source ships in the SDK, and a session running either ROM steps through it by name: a
+  breakpoint in `Output.asm`'s `LCD` stops there, with the program that called it below on the call stack. Another
+  dump of the ROM gets no source.
+- **Not yet.** BASIC's debugging (part 2): stepping by BASIC's lines, BASIC's BCD variables, the `basic` launch and
+  BASIC's errors and call stack. Then the modules' naming and documentation (part 3 on), and the style conversion.
+
 ## Still open
 
 - **The RAM image and the recovery journal.** The image is saved when the session ends cleanly; a host that crashes
@@ -422,7 +441,6 @@ and from a `CSAVE` MAME 0.264 recorded to WAV. No new downloads.
   slower; MAME's 8085 counts TRAP and the RST 5.5-7.5 entries as 11 states and this core as 12, and the 8155's
   count-by-twos and the LCD's busy times are not modelled. A longer timed comparison would settle it.
 - **The UART's clock.** The 81C55's timer drives the buzzer; the UART's baud clock comes with the serial port.
-- **The ROM's source map**, once the ROM is an SDK source (phase 5).
 - **GRPH, CODE and NUM** have no key codes yet, so their characters cannot be typed from the debugger; the
   machine's keyboard has the keys.
 
@@ -434,8 +452,11 @@ and from a `CSAVE` MAME 0.264 recorded to WAV. No new downloads.
   Desktop's catalog entries, the guide and the README rows.
 - **Models.** The Model 100 and the Tandy 102 (a ROM option) now; the Kyotronic 85 and M10 in phase 6; the Tandy
   200 and PC-8201A stay in the backlog as machines of their own.
-- **The ROM as an SDK source**, in phase 5, disassembled fresh with Retrocore's own tools, with names from
-  Covington's *System Map*, rather than built on z88dk's `m100.asm`, whose licence is unstated.
+- **The ROM as an SDK source**, in phase 5, disassembled fresh with Retrocore's own tools, rather than built on
+  z88dk's `m100.asm`, whose licence is unstated. Covington's *System Map* was not found online; the names come
+  from Tandy's *Technical Reference Manual* (fetched 2026-11-28, approved that day) and from MBASIC's, and the
+  SDK's own (decided 2026-11-28: MBASIC's way, named first and converted later; the parts in order, source, BASIC,
+  then the modules).
 - **Fixtures.** The ROMs are fetched from a source the user approves URL by URL, and kept in the external fixture
   root and the plans repository's assets, never in Retrocore. The US Model 100's and Tandy 102's came from the
   Bitchin100 wiki's [Model and ROM information](https://bitchin100.com/wiki/index.php?title=Model_and_ROM_information)

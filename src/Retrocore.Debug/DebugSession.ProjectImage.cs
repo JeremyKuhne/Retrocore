@@ -107,6 +107,7 @@ internal sealed partial class DebugSession
                 }
 
                 // TypeAtPrompt runs in steps, so it may return a little past the boot's limit; the entry then has a cycle.
+                // The pace carries on across both, counting from the boot's start.
                 long ran = (long)kaypro.CycleCount - booted;
                 long left = ((long)(target.Built?.BootSeconds ?? 0) * Target.ClockHertz) - ran;
                 RunToEntry(build, Math.Max(1, left), cpmPace with { Start = -ran });

@@ -568,6 +568,15 @@ public sealed class ProjectLaunchTests
         client.Fails("launch", Launch("pack")).Should().EndWith(
             "a diskbasic target boots Disk BASIC from the cartridge port, which a cartridge would take over, so its options and its launch cannot give 'cartridge'.");
 
+        // At Normal the load is paced to the machine's speed, and reported as Normal.
+        JsonObject paced = Launch("disk");
+        paced["diskSpeed"] = "normal";
+        paced["speed"] = 8;
+        JsonNode? normal = client.Request("launch", paced)["mediaSpeedResult"];
+        normal?.String("requested").Should().Be("normal");
+        normal?.String("effective").Should().Be("normal");
+        (normal?["cycles"]?.GetValue<ulong>()).Should().BePositive("LOADM's load ran");
+
         JsonObject launch = Launch("disk");
         launch["diskSpeed"] = "skip";
         JsonObject started = client.Request("launch", launch);
@@ -666,14 +675,24 @@ public sealed class ProjectLaunchTests
         client.Fails("launch", Launch("own")).Should().EndWith(
             "a cpm target boots its own disk in drive A and types its program's name, so its options and its launch cannot give 'command'.");
 
-        JsonObject cpm = Launch("cpm");
-        cpm["diskSpeed"] = "skip";
-        JsonObject? launched = client.TryRequest("launch", cpm, out string? failure);
-        if (launched is null)
+        // At Normal the boot is paced to the machine's speed, and reported as Normal.
+        JsonObject paced = Launch("cpm");
+        paced["diskSpeed"] = "normal";
+        paced["speed"] = 8;
+        JsonObject? first = client.TryRequest("launch", paced, out string? failure);
+        if (first is null)
         {
             failure.Should().Contain("the Kaypro II's CP/M 2.2 system disk").And.Contain("was not found by its hash");
             Assert.Inconclusive($"The Kaypro II's CP/M disk was not found: {failure}");
         }
+
+        first["mediaSpeedResult"]?.String("requested").Should().Be("normal");
+        first["mediaSpeedResult"]?.String("effective").Should().Be("normal");
+        (first["mediaSpeedResult"]?["cycles"]?.GetValue<ulong>()).Should().BePositive("CP/M's boot and load ran");
+
+        JsonObject cpm = Launch("cpm");
+        cpm["diskSpeed"] = "skip";
+        JsonObject launched = client.Request("launch", cpm);
 
         (launched["project"]?["entry"]?.GetValue<int>()).Should().Be(0x0100);
         launched["mediaSpeedResult"]?.String("kind").Should().Be("disk", "CP/M's boot and load report their speed");

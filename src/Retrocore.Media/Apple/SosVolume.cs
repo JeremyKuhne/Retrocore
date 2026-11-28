@@ -134,6 +134,11 @@ public sealed class SosVolume
     {
         bool header = true;
         HashSet<int> read = [];
+
+        // The entries' length and how many a block holds are in the directory's header, in its first block; the
+        // blocks after it hold entries from offset 4.
+        int length = 0;
+        int perBlock = 0;
         for (int number = VolumeDirectory; number != 0;)
         {
             if (!read.Add(number))
@@ -142,8 +147,12 @@ public sealed class SosVolume
             }
 
             byte[] block = Data(number);
-            int length = block[0x23];
-            int perBlock = block[0x24];
+            if (header)
+            {
+                length = block[0x23];
+                perBlock = block[0x24];
+            }
+
             for (int index = header ? 1 : 0; index < perBlock; index++)
             {
                 int offset = 4 + (index * length);

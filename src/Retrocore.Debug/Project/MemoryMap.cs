@@ -226,16 +226,18 @@ internal sealed class MemoryMap
     }
 
     /// <summary>
-    ///  Gets the linker configuration the build uses when a target gives none: <c>CODE</c>, <c>RODATA</c>,
-    ///  <c>DATA</c> and <c>BSS</c>, in that order, from the load address, and <c>ZEROPAGE</c> in the largest run of
-    ///  free zero-page bytes (the first, of runs of the same size).
+    ///  Gets the linker configuration the build uses when a target gives none: <c>STARTUP</c>, <c>CODE</c>,
+    ///  <c>RODATA</c>, <c>DATA</c> and <c>BSS</c>, in that order, from the load address, and <c>ZEROPAGE</c> in the
+    ///  largest run of free zero-page bytes (the first, of runs of the same size).
     /// </summary>
     /// <remarks>
     ///  <para>
     ///   The RAM region runs to <c>$FFFF</c>, not to the end of the free area, so a program too big for it is
     ///   reported by the memory check (<see cref="Check(ProjectTarget, AssemblyResult)"/>), which says by how much,
     ///   rather than by the linker. A source with no <c>.section</c> assembles at the load address as before, in
-    ///   <c>CODE</c>.
+    ///   <c>CODE</c>. <c>STARTUP</c> is for the code an environment that starts a program at its first byte, such as
+    ///   <c>prodos</c> and <c>sos</c>, starts it at: a <c>JMP</c> on to its entry, which a platform folder can put
+    ///   there whatever its family's folder puts first in <c>CODE</c>.
     ///  </para>
     /// </remarks>
     /// <param name="target">The target, which the configuration's comment names.</param>
@@ -254,6 +256,7 @@ internal sealed class MemoryMap
         text.WriteFormatted($"    RAM: start = ${Load:X4}, size = ${0x10000 - Load:X4}, file = %O;\n");
         text.Write("}\nSEGMENTS {\n");
         if (zeroPage is not null) { text.Write("    ZEROPAGE: load = ZP, type = zp, optional = yes;\n"); }
+        text.Write("    STARTUP: load = RAM, type = ro, optional = yes;\n");
         text.Write("    CODE: load = RAM, type = ro, optional = yes;\n");
         text.Write("    RODATA: load = RAM, type = ro, optional = yes;\n");
         text.Write("    DATA: load = RAM, type = rw, optional = yes;\n");

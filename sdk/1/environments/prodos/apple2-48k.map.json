@@ -1,0 +1,18 @@
+{
+  "description": "The Apple II Plus with its language card and the IIe, prodos: a system file that ProDOS 2.4.3 loads at $2000 and starts, which calls the Monitor's routines and the MLI.",
+  "load": "$2000",
+  "free": [
+    { "start": "$0300", "end": "$03CF" },
+    { "start": "$0800", "end": "$BEFF" }
+  ],
+  "zeroPage": ["$06-$09", "$FA-$FD"],
+  "reserved": [
+    { "start": "$0100", "end": "$01FF", "why": "the stack" },
+    { "start": "$0200", "end": "$02FF", "why": "the Monitor's input buffer, which GETLN fills" },
+    { "start": "$03D0", "end": "$03FF", "why": "the vectors: BASIC.SYSTEM's from $03D0, for a program BASIC.SYSTEM runs, and the Monitor's BRK, reset, NMI and IRQ vectors from $03F0" },
+    { "start": "$0400", "end": "$07FF", "why": "text and lo-res page 1, the screen, with the screen holes the cards use" },
+    { "start": "$BF00", "end": "$BFFF", "why": "ProDOS's global page: the MLI's entry at $BF00, and its system bitmap, device list and dates" },
+    { "start": "$C000", "end": "$CFFF", "why": "the soft switches, the I/O and the slots' ROMs" },
+    { "start": "$D000", "end": "$FFFF", "why": "ProDOS itself, in the language card's RAM, and the ROMs: AppleSoft and the Monitor" }
+  ]
+}

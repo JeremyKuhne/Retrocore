@@ -1659,7 +1659,7 @@ Restart:
     rts
 .endproc
 
-;; Starts the motor's timeout: sets <DriveStatus>' timing-out bit and <MotorTimer> = 255 interrupts, at least 3.79 s,
+;; Starts the motor's timeout: sets <DriveStatus>' timing-out bit and <MotorTimer> = 255 interrupts, at least 3.78 s,
 ;; after which <EndPass> stops the motor, unless a job comes first.
 ;;
 ;; <MotorOffVector>, the ROM's word at $FFE8, points here. Its load of <ActiveDrive> into X is left from the dual drive;

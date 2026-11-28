@@ -46,10 +46,11 @@ CommandRoutinesHigh:
     .byte >Commands::Copy
     .byte >Commands::Rename, >Commands::Scratch, >Commands::New
 
-;; The patterns of the commands that take names: copy, rename, scratch and new, then LOAD's. Each byte says which shapes
-;; of command the parser allows, as it checks them against <Commands::Structure>: whether a pattern, more than one file
-;; and a default drive are allowed, and whether a file name is required. The table starts at `$FEAD`, and
-;; <PATTERN_ORIGIN> indexes it by the command's number.
+;; The patterns of the commands that take names: copy, rename, scratch and new, then LOAD's. Each byte holds the bits of
+;; <Commands::Structure> that the command forbids, which the parser checks (<Commands::ParseNames>). The bits are: 7 a
+;; pattern in the first names, 6 more than one first name, 5 first names given; 3 a pattern in the second names, 2 more
+;; than one second name, 1 second names given; 0 no second names. No bit means a default drive; bit 4 is never set. The
+;; table starts at `$FEAD`, and <PATTERN_ORIGIN> indexes it by the command's number.
 CommandPatterns:
     .byte $51
     .byte $DD

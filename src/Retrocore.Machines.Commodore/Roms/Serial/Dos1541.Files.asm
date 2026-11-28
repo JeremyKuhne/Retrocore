@@ -571,7 +571,8 @@ IntoBuffer:
 ;; Gives the BAM its buffer if it has none, and seeks to the directory track, which reads the disk's ID into
 ;; <LastHeader>.
 ;; Out: A = the job's result code
-;; Errors: error 70, <ERROR_NO_CHANNEL>, when no buffer is free
+;; Errors: when no buffer is free, <ERROR_NO_CHANNEL> (70) is loaded, but <Errors::Recover> never reads A: the command
+;; ends with the error LED flashing and no message, and the 70 is dead.
 ;; Also: ITRIAL (D1541)
 .proc SeekHeader
     jsr ChannelIndex
@@ -1995,7 +1996,9 @@ Report:
 
 ;; Runs the job command in A, for the current drive and <JobNumber>'s job, and waits for it. It falls into <Wait>.
 ;; In: A = the command, without its drive bit, DriveNumber = the drive, JobNumber = the job
-;; Out: A = the job's result code
+;; Errors: the job's error, reported through <Errors::JobError>. Only the codes that are not retried (8, 11, 15) and the
+;;   bump path return it instead when <JobErrorReturn> bit 7 asks; with retries bit 7 set (<Fail>) the error is reported
+;;   whatever the flag says, and so is a write retried after a working sector seek that fails
 ;; Errors: the job's error, reported through <Errors::JobError>, unless <JobErrorReturn> bit 7 asks for it returned
 ;; Entry:
 ;;   WithDrive = Runs command A, which has its drive bit already, for job X
@@ -2021,7 +2024,9 @@ Repeat:
 
 ;; Waits for job X to finish, recovering from its errors, and then clears <JobErrorReturn>.
 ;; In: X = the job
-;; Out: A = the job's result code
+;; Errors: the job's error, reported through <Errors::JobError>. Only the codes that are not retried (8, 11, 15) and the
+;;   bump path return it instead when <JobErrorReturn> bit 7 asks; with retries bit 7 set (<Fail>) the error is reported
+;;   whatever the flag says, and so is a write retried after a working sector seek that fails
 ;; Errors: the job's error, reported through <Errors::JobError>, unless <JobErrorReturn> bit 7 asks for it returned
 ;; Also: WATJOB (D1541)
 .proc Wait
@@ -2036,7 +2041,9 @@ Repeat:
 
 ;; Tests job X once, recovering from its error if it has one.
 ;; In: X = the job
-;; Out: carry = set while the job is still running, clear when it is done, A = the job's result code
+;; Errors: the job's error, reported through <Errors::JobError>. Only the codes that are not retried (8, 11, 15) and the
+;;   bump path return it instead when <JobErrorReturn> bit 7 asks; with retries bit 7 set (<Fail>) the error is reported
+;;   whatever the flag says, and so is a write retried after a working sector seek that fails
 ;; Errors: the job's error, reported through <Errors::JobError>, unless <JobErrorReturn> bit 7 asks for it returned
 ;; Also: TSTJOB (D1541)
 .proc Poll

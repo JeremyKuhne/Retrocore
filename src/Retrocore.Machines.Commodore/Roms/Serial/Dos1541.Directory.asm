@@ -16,7 +16,7 @@
 ; The listing's program.
 
 ;; Where the listing loads, written in its first two bytes as a program file's load address does: $0401 is where BASIC
-;; keeps its program on a VIC-20.
+;; keeps its program on a PET (an unexpanded VIC-20 uses $1001), and LOAD "$" relocates the listing anyway.
 LISTING_LOAD_ADDRESS = $0401
 
 ;; Each byte of a line's link word, which so reads $0101: a placeholder, since the drive cannot know where the computer
@@ -221,7 +221,8 @@ Refill:
 ;; blocks and for each closed file's, and for a relative file's side sectors too. An entry of a file that was never
 ;; closed is deleted, so its blocks stay free. Then the BAM is written.
 ;;
-;; The command ends through <Commands::Finish>, so it does not return.
+;; The command ends by jumping to <Commands::Finish>, which returns to the caller (to <Errors::Fail> if an error is
+;; held).
 ;; Errors: 66, ILLEGAL TRACK OR SECTOR, for a file's first block, or its first side sector, that is not on the disk
 ;; Also: VERDIR (D1541), VALDAT (D1541)
 .proc Validate
@@ -350,14 +351,14 @@ LABEL_ID_OFFSET = $12
 
 ;; The N command: formats a disk and gives it a name, or clears the directory of a disk with the same format.
 ;;
-;; The drive must be given, or error 33, SYNTAX ERROR, ends the command. With an ID after the name, the disk is
-;; formatted: every channel is freed, <Format> runs, and the BAM's buffer is cleared. Without one, only the directory is
-;; cleared, on a disk that has this DOS's format (73 otherwise). Either way a new BAM follows, with the name and ID, the
-;; DOS version and the format letter. Its own sector and the directory's first are marked used, the BAM is written, and
-;; an empty directory block is written to 18/1. Then the BAM is read back, and the command ends through <Finish>, so it
-;; does not return.
+;; A name with no ':' is error 33, SYNTAX ERROR, which ends the command; a ':' alone means drive 0. With an ID after
+;; the name, the disk is formatted: every channel is freed, <Format> runs, and the BAM's buffer is cleared. Without
+;; one, only the directory is cleared, on a disk that has this DOS's format (73 otherwise). Either way a new BAM
+;; follows, with the name and ID, the DOS version and the format letter. Its own sector and the directory's first are
+;; marked used, the BAM is written, and an empty directory block is written to 18/1. Then the BAM is read back, and
+;; the command ends by jumping to <Finish>, which returns to the caller.
 ;; In: CommandBuffer = the command, with the drive, the name and the ID
-;; Errors: 33, SYNTAX ERROR, when no drive is given, 73 when no ID is given and the disk's format is not <FormatType>,
+;; Errors: 33, SYNTAX ERROR, when the name has no ':', 73 when no ID is given and the disk's format is not <FormatType>,
 ;;   and the errors of <Format>, which a failed format reports
 ;; Also: NEW (D1541)
 .proc New
@@ -522,7 +523,7 @@ BUFFER_NUMBER_MASK = $0F
 ;; other, it counts one in <Temporary>, and at 0 it gives up with DISK FULL.
 SEARCH_PASSES = 3
 
-;; The free blocks below which <MarkUsed> reports DISK FULL: two or fewer, so the last blocks are not used up.
+;; The free blocks below which <MarkUsed> reports DISK FULL: two or fewer.
 DISK_FULL_LIMIT = 3
 
 ;; Builds a new BAM in the BAM's buffer, with every block of every track free, the link to the directory's first block
@@ -572,7 +573,7 @@ SetBits:
     dex
     bne SetBits
 
-;; Stores the three bytes of bits after the count, with X from 0 to 3, and goes on to the next track, until the entries
+;; Stores the three bytes of bits after the count, with X from 0 to 2, and goes on to the next track, until the entries
 ;; end.
 ;; Also: NM30 (D1541)
 StoreBits:
@@ -696,9 +697,9 @@ CheckTrack:
 ;; byte is 0 the high byte stays, so the count is off by 256), and it falls into <MarkUsed::CheckFull>, so with fewer
 ;; than three blocks left, freeing a block on the directory track can set error 72, DISK FULL.
 ;; In: Track = the block's track, Sector = its sector
-;; Out: carry = set when the block was free already and nothing was done; after a block is freed it is what the compare
-;;   with the directory's track left, so it should not be used
-;; Errors: 74, DRIVE NOT READY, and 70, NO CHANNEL, from <SelectTrack>
+;; Out: carry = set when the block was free already and nothing was done; after a block is freed it is what the
+;;   compare left (on the directory's track, <MarkUsed::CheckFull>'s), so it should not be used
+;; Errors: <SelectTrack>'s errors; its recovery path sets no message
 ;; Also: FRETS (D1541)
 .proc MarkFree
     jsr FindBit
@@ -758,7 +759,7 @@ Done:
 ;; In: Track = the block's track, Sector = its sector
 ;; Out: zero = set when the block was used already and nothing was done; after a block is marked it is what the count's
 ;;   last compare left, so it says nothing
-;; Errors: 74, DRIVE NOT READY, and 70, NO CHANNEL, from <SelectTrack>; error 72 is set as a message, not ended with
+;; Errors: <SelectTrack>'s errors; its recovery path sets no message; error 72 is set as a message, not ended with
 ;; Entry:
 ;;   CountDown = takes one from the drive's count of free blocks (<MarkFree> enters here for the directory track)
 ;;   CheckFull = checks the count, as it does after counting down
@@ -816,7 +817,7 @@ Done:
 ;; In: Track = the track, Sector = the sector
 ;; Out: BamPointer = the track's image, Y = the offset in it of the byte with the sector's bit, X = the bit's number,
 ;;   Temporary = the offset of the track's count, 0, A = the byte's value at that bit: zero set when the sector is used
-;; Errors: 74, DRIVE NOT READY, and 70, NO CHANNEL, from <SelectTrack>
+;; Errors: <SelectTrack>'s errors; its recovery path sets no message
 ;; Entry:
 ;;   InImage = takes the image as it is, with <BamPointer> and <Temporary> set (<FindFreeSector> enters here for each
 ;;     sector of a track)
@@ -861,8 +862,8 @@ BitMasks:
 ;; Out: BamWriteDeferred = 0 when it wrote
 ;; Also: FIXBAM (D1541)
 .proc FlushPending
-    ; A is $FF so that BamWriteDeferred is not changed by the test; zero says nothing is set, negative that a write
-    ; is pending, and overflow that it is held back.
+    ; A is $FF so that zero means the byte is 0 (BIT only tests); zero says nothing is set, negative that a write is
+    ; pending, and overflow that it is held back.
     lda #$FF
     bit BamWriteDeferred
     beq Done
@@ -1154,7 +1155,7 @@ Done:
 .endproc
 
 ;; Allocates the free block after the active buffer's block, for a file that grows: the next sector in the same track,
-;; the interleave on from the block's, or else a track the nearest to the directory's that has one.
+;; the interleave on from the block's, or else the next track outward from the block's that has one.
 ;;
 ;; The search is on the block's track first, then tracks outward from it, on the side of the directory it is, to track 1
 ;; or the last track, then the other side from the directory's neighbour outward. The block is marked used. The BAM's
@@ -1279,7 +1280,7 @@ FromStart:
 ;;
 ;; The BAM's writes are deferred, <BamWriteDeferred>'s bit 0, so the caller writes it.
 ;; Out: Track = the block's track, Sector = its sector
-;; Errors: 67, ILLEGAL SYSTEM TRACK OR SECTOR, when the tracks above the directory's run out; 71, DIR ERROR, when the
+;; Errors: 67, ILLEGAL TRACK OR SECTOR, when the tracks above the directory's run out; 71, DIR ERROR, when the
 ;;   BAM counts a free block that the bits do not show; and <SelectTrack>'s errors
 ;; Keeps: Work0
 ;; Entry:
@@ -1450,7 +1451,8 @@ Mismatch:
 .proc SectorsOnTrack
     ldx ZoneCount
 
-;; Goes through the zones from the last, each limit being the zone's first track, until one is past the track.
+;; Goes through the zones from the one of tracks 1 to 17 outward, comparing with <ZoneLimits> from its last byte (18,
+;; 25, 31, 36), each the first track past its zone, until the track is below one.
 ;; Also: MAX1 (D1541)
 Zone:
     cmp ZoneLimits-1,x
@@ -1463,8 +1465,9 @@ Zone:
 ; A routine the commands call.
 .scope Commands continued
 
-;; Does nothing and returns. The block, memory-write and utility-loader commands call it before they run code in the
-;; drive. Its name in the listing, KILLP, is "kill protection", and the listing keeps as comments the code that told the
+;; Does nothing and returns. The block, memory-write, memory-execute and utility-loader commands (every M command but
+;; M-R) call it before they run code in the drive. Its name in the listing, KILLP, is "kill protection", and the
+;; listing keeps as comments the code that told the
 ;; controller, by a flag it cleared when it had taken it, to do that; the stub has only the RTS.
 ;; Also: KILLP (D1541)
 .proc DisableProtection

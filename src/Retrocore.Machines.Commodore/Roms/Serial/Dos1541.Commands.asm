@@ -260,7 +260,7 @@ ToFindDrive:
 ;; forbids is a syntax error.
 ;; Entry:
 ;;   AfterColon = with Y past the ':' and X its commas, as <FindColon> leaves them (C comes here)
-;;   Equals = with <FileNameStart> set (LOAD comes here)
+;;   Equals = with <FileNameStart> set (<Files::LoadDirectory> comes here)
 ;; Errors:
 ;;   30 = SYNTAX ERROR, the shape is forbidden for the command; <PendingError> holds the clashing bits
 ;;   34 = SYNTAX ERROR, no ':' or a ',' before it
@@ -285,7 +285,7 @@ AfterColon:
     txa
     bne NoName
 
-;; With <FileNameStart> set (LOAD comes here): scans on for '='.
+;; With <FileNameStart> set (<Files::LoadDirectory> comes here): scans on for '='.
 ;; Also: TC35 (D1541)
 Equals:
     lda #$3D
@@ -364,10 +364,10 @@ BadSyntax:
 
 ;; Scans <CommandBuffer> from Y to <CommandLength> for the character A. On the way it puts the start of each name after
 ;; a ',' into <FileNameStart>+1,X and marks in <FileNamePattern> the names with '*' or '?' (<PatternFlag> counts them).
-;; At <FILE_NAME_COUNT>-1 commas it stops as if the character were not there. <FileNameStart>+1,X = <CommandLength>, the
-;; end of the last name.
+;; Each ',' passed adds 1 to X; when X reaches <FILE_NAME_COUNT>-1 the scan stops as if the character were not there.
+;; <FileNameStart>+1,X = <CommandLength>, the end of the last name.
 ;; In: A = the character to find, X = the index of the name being scanned, Y = where to start
-;; Out: Y = the place just past the character, or 0 with zero set when it was not found; X = the commas passed
+;; Out: Y = the place just past the character, or 0 with zero set when it was not found; X = X in + the commas passed
 ;; Also: PARSE (D1541)
 .proc ScanFor
     sta Character
@@ -440,7 +440,8 @@ Return:
 ;; <CommandNumber> = $FF. Then falls into <Prepare::ClearTables>.
 ;; Entry:
 ;;   ClearTables = clears the buffer's count, the record size, file type and match type, the name counters,
-;;   <PatternFlag> and <PendingError>, and the file name tables; LOAD enters here to search by name alone
+;;   <PatternFlag> and <PendingError>, and the file name tables; <Files::LoadDirectory> enters here to search by
+;;   name alone
 ;; Out: Y = 0 at ClearTables, A = 0
 ;; Errors: 32 = SYNTAX ERROR, the command is too long, through <Fail>
 ;; Also: CMDSET (D1541)
@@ -477,7 +478,7 @@ SetSize:
 ;; Clears the buffer's count, <RecordSize>, <FileType>, <MatchType>, <NameIndex>, <SecondStreamStart>, <FirstStreamEnd>,
 ;; <SecondStreamEnd>, <PatternFlag> and <PendingError>, and the <FILE_NAME_COUNT> entries of each file name table
 ;; (<FileNameStart>, <FileNameEntrySector>, <FileNameEntryIndex>, <FileNameDrive>, <FileNamePattern>, <FileNameTrack>
-;; and <FileNameSector>). LOAD enters here to search by name alone.
+;; and <FileNameSector>). <Files::LoadDirectory> enters here to search by name alone.
 ;; Also: CMDRST (D1541)
 ClearTables:
     ldy #$00
@@ -1821,6 +1822,7 @@ Return:
 ;; Errors:
 ;;   30 = SYNTAX ERROR, the names' shape is wrong, through <Fail>
 ;;   31 = SYNTAX ERROR, no ':', through <Duplicate>
+;;   34 = SYNTAX ERROR, a ',' before the ':', through <ParseNames::AfterColon> and <ParseNames::NoName>
 ;; Also: DSKCPY (D1541)
 .proc Copy
     lda #$E0
@@ -2198,8 +2200,10 @@ Next:
 
 ;; M-R, M-W and M-E: reads, writes or executes drive memory. The '-' must be character 1, else 31 SYNTAX ERROR; the
 ;; address comes from characters 3 and 4 into <Temporary>. M-R reads, M-W writes from character 6 on (character 5 is the
-;; count), M-E jumps to the address. None of them ends through <Finish>: they return to the idle loop with the error
-;; channel as <Execute> set it, 00 OK. Reached through the command table.
+;; count), M-E jumps to the address. None of them ends through <Finish>. M-W returns to the idle loop with the error
+;; channel as <Execute> set it, 00 OK. M-R with a count points the error channel at the memory (<CommandPointer>+2 and
+;; +3, <ChannelLastByte>+<MESSAGE_CHANNEL>, through <Files::NextByte::ErrorReady>); with one byte it sends <DataByte>
+;; and then a RETURN. M-E returns only if the user's code does. Reached through the command table.
 ;; Errors: 31 = SYNTAX ERROR, no '-' or a letter other than R, W or E, through <Fail>
 ;; Also: MEM (D1541)
 .proc Memory
@@ -2222,8 +2226,9 @@ Next:
     jmp (Temporary)
 
 ;; M-R: the byte at the address goes into <DataByte>. With a count (character 5) of 0 or 2 or more, the error channel's
-;; pointer is set to the address plus one (the first byte goes through <DataByte>) and its last byte to the address plus
-;; the count less one (0 gives 256 bytes), so the bytes are read on channel 15 straight from memory. A count of 1, or
+;; pointer is set to the address plus one (the first byte goes through <DataByte>; only the low byte moves, so an
+;; address ending $FF wraps in its page) and its last byte to the address plus the count less one (0 gives 256 bytes),
+;; so the bytes are read on channel 15 straight from memory. A count of 1, or
 ;; none, takes <OneByte>.
 ;; Also: MEMRD (D1541)
 Read:
@@ -2259,8 +2264,9 @@ BadSyntax:
     lda #ERROR_INVALID_COMMAND
     jmp Fail
 
-;; M-W: copies the bytes of the command from character 6 on to the address, as many as character 5 says. Then returns to
-;; the idle loop without <Finish>. The listing's second name, MEMWRT, is the same address as M10.
+;; M-W: copies the bytes of the command from character 6 on to the address, as many as character 5 says (a count of 0
+;; writes one, the loop being a do-while). Then returns to the idle loop without <Finish>. The listing's second name,
+;; MEMWRT, is the same address as M10.
 ;; Also: MEMWRT (D1541), M10 (D1541)
 Write:
     lda CommandBuffer+6,y
@@ -2343,13 +2349,13 @@ NoChannel:
     lda #ERROR_NO_CHANNEL
     jmp Commands::Fail
 
-;; '#n': n from character 1 (<Commands::BlockParameters::FromY>) into <Commands::Parameters>; marked used in
-;; <BuffersInUse> if it was free, and given the drive's job.
+;; '#n': n from character 1 (parsed by <Commands::BlockParameters::FromY>) into <Commands::Parameters>; marked used
+;; in <BuffersInUse> if it was free, and given the drive's job.
 ;; Also: OB10 (D1541)
 Requested:
     ldy #$01
     jsr Commands::BlockParameters::FromY
-    ldx Parameters
+    ldx Commands::Parameters
     cpx #BUFFER_COUNT
     bcs NoChannel
     lda #$00
@@ -2379,7 +2385,7 @@ Bit:
     lda #$00
     jsr GetReadChannel
     ldx Channel
-    lda Parameters
+    lda Commands::Parameters
     sta ChannelBuffer,x
     tax
     lda DriveNumber

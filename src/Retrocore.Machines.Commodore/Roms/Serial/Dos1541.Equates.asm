@@ -551,7 +551,8 @@ RELATIVE_OVERFLOW = $20
 ;; <ChannelFileType>'s flag for a relative file whose records changed.
 ;; Also: DYFILE (D1541)
 RELATIVE_DIRTY = $40
-;; <ChannelFileType>'s flag for a relative file at its last record.
+;; <ChannelFileType>'s flag for a relative file at its last record; for any other file it means the file's end is
+;; reached, which <GetInternalByte> sets and the append open tests on a sequential file.
 ;; Also: LRF (D1541)
 RELATIVE_LAST_RECORD = $80
 
@@ -704,7 +705,9 @@ StringLength = $024B
 ;; The command letter, or the character the parser looks for.
 ;; Also: CHAR (D1541)
 Character = $0275
-;; The command's shape as parsed (patterns, several names, drives, names given), checked against its syntax image.
+;; The command's shape as parsed, checked against its syntax image: bit 7 a pattern in the first names, bit 6 more than
+;; one first name, bit 5 first names given, bits 3, 2 and 1 the same for the second names, bit 0 no second names (bit 4
+;; is never set). No bit means a default drive.
 ;; Also: IMAGE (D1541)
 Structure = $028B
 ;; V's index in the command table, which the error handler checks.

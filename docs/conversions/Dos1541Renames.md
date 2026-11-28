@@ -585,6 +585,7 @@ part 1's, named here by their listing names (`JOBS`, `HDRS`, `LSTJOB`, `DRVST`, 
   - WGP3's erase gap after each data block is commented out.
   - The header gap: 901229-01 and -02 wait out and write 8 bytes after the header (`LDX #8` at $F58C and $FCCF),
     and -03 onward write 9 (`GAP1` 11, less 2), and the 1540 has 8.
+
   The listing's wrong comments are corrected in the reasons, not carried over. These are HEDOFF's step directions
   (below), CNTINT's "disable s.o." (CA2 high enables byte-ready), the format's "diff/2" (the code adds twice the
   difference), "282*5/4-256=85" (the value is $66, 102), "write 4 sync" (`NUMSYN` is 5), "move up 79 bytes" (69) and
@@ -604,6 +605,7 @@ part 1's, named here by their listing names (`JOBS`, `HDRS`, `LSTJOB`, `DRVST`, 
   - `Jobs::CheckTrackSector` (TSCHK).
   - `Jobs::VersionError` (VNERR), which Start branches to and NEW jumps to.
   - `Jobs::Queue` (SJB1), reached by branch from Start with the command on the stack, which its contract says.
+
   The alternative is one `Start` `.proc` over all of it, which would make the routines that BLOCK, VERDIR and NEW
   call into entries of Start. SETLJB, which falls into SETJOB, is `Jobs::StartOnLastDrive`. *Recommended.*
   **Settled:** HED2TS, TSCHK and VNERR are separate routines in listing order, not one Start proc, and SETLJB is

@@ -2228,8 +2228,7 @@ Next:
 ;; M-R: the byte at the address goes into <DataByte>. With a count (character 5) of 0 or 2 or more, the error channel's
 ;; pointer is set to the address plus one (the first byte goes through <DataByte>; only the low byte moves, so an
 ;; address ending $FF wraps in its page) and its last byte to the address plus the count less one (0 gives 256 bytes),
-;; so the bytes are read on channel 15 straight from memory. A count of 1, or
-;; none, takes <OneByte>.
+;; so the bytes are read on channel 15 straight from memory. A count of 1, or none, takes <OneByte>.
 ;; Also: MEMRD (D1541)
 Read:
     lda (Temporary),y
@@ -2349,8 +2348,8 @@ NoChannel:
     lda #ERROR_NO_CHANNEL
     jmp Commands::Fail
 
-;; '#n': n from character 1 (parsed by <Commands::BlockParameters::FromY>) into <Commands::Parameters>; marked used
-;; in <BuffersInUse> if it was free, and given the drive's job.
+;; '#n': n from character 1 (parsed by <Commands::BlockParameters::FromY>) into <Commands::Parameters>; marked used in
+;; <BuffersInUse> if it was free, and given the drive's job.
 ;; Also: OB10 (D1541)
 Requested:
     ldy #$01

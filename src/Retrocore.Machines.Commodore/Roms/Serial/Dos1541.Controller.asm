@@ -818,8 +818,8 @@ NotProtected:
 
 ;; Counts <HEADER_GAP> - 2 byte-readies (9 from 901229-03 on, 8 in -01, -02 and the 1540), which are the header's last 2
 ;; GCR bytes and <HEADER_GAP> - 4 of the gap's bytes, then switches VIA 2's port A to output and the head to writing,
-;; and starts the sync. The format writes the gap as <HEADER_GAP> - 2 bytes (<WriteHeaderGap>), so the data block's
-;; sync starts 2 bytes before the gap ends.
+;; and starts the sync. The format writes the gap as <HEADER_GAP> - 2 bytes (<WriteHeaderGap>), so the data block's sync
+;; starts 2 bytes before the gap ends.
 ;; Also: WRT20 (D1541)
 SkipGap:
     bvc *                           ; waits for byte-ready, which sets V

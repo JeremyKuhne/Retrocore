@@ -188,7 +188,7 @@ SetCommand:
 ;; Entry:
 ;;   ClearDirty = ...clears the buffer's dirty bit (<MarkClean>), X = the buffer...
 ;;   Start = ...and starts the job in <JobCommand> on buffer X, with its last job's drive (<Jobs::StartOnLastDrive>)
-;; In: JobCommand = the job, <Track>, Sector = the block, DriveNumber = the drive
+;; In: JobCommand = the job, <Track>, <Sector> = the block, DriveNumber = the drive
 ;; Also: SJ10 (D1541)
 .proc StartBlockJob
     jsr Jobs::SetHeader
@@ -596,7 +596,8 @@ SecondSlot:
     inc ChannelRecordHigh,x
 
 ;; <ChannelNextRecord> 0 means there is no next record (the listing's comment says the opposite; Q10). Otherwise, if the
-;; record starts past the pointer in the next block, <NextBuffer> gets that block first.
+;; pointer is at or past <ChannelNextRecord>, the next record starts in the next block, and <NextBuffer> gets that block
+;; first.
 ;; Also: NXTR15 (D1541)
 CheckNext:
     ldx Channel
@@ -766,7 +767,10 @@ Done:
 ;; EOI it fills the record's rest with zeros, moves to the next record, and reports 51 RECORD OVERFLOW if it was too
 ;; long. A byte past the record's end without EOI is dropped.
 ;; In: DataByte = the byte, MoreBytes = 0 at EOI
-;; Errors: 51 RECORD OVERFLOW (<ERROR_RECORD_OVERFLOW>), reported at EOI after a record that was too long
+;; Errors:
+;;   51 = RECORD OVERFLOW (<ERROR_RECORD_OVERFLOW>), reported at EOI after a record that was too long
+;;   52, 50, 67 and 72 = FILE TOO LARGE, RECORD NOT PRESENT, ILLEGAL SYSTEM TRACK OR SECTOR and DISK FULL, when adding
+;;     blocks ends in error (<AddBlocks>)
 ;; Also: WRTREL (D1541)
 .proc WriteByte
     lda #RELATIVE_LAST_RECORD+RELATIVE_OVERFLOW
@@ -1351,7 +1355,7 @@ Done:
 ;; adds blocks of empty records, with new side sectors as they fill, and writes the BAM, and ends at the record
 ;; (<SeekRecord>).
 ;; Entry:
-;;   CheckRoom = with the end found (the relative-file copy in rename enters here)
+;;   CheckRoom = with the end found (<Commands::CopyRelative>, the C command's code, enters here)
 ;; Errors: 52 FILE TOO LARGE, 50 RECORD NOT PRESENT
 ;; Also: ADDREL (D1541)
 .proc AddBlocks
@@ -1575,7 +1579,8 @@ NoRecord:
     lda #SIDE_SECTOR_POINTERS
     jsr CopyBuffer
 
-    ; Adds the new side sector to the table in the old one's number and links, noting where its entries go.
+    ; Writes the old side sector's number plus 1, and the new block's track and sector, into the new side sector's
+    ; buffer, noting where its entries go.
     lda #$00
     jsr PointAtSideSector
     ldy #$02

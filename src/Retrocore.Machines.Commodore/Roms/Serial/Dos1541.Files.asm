@@ -225,7 +225,6 @@ Done:
 
 ;; Multiplies <Accumulator>+1 to +3 by 4, by doubling twice.
 ;; Out: carry = the bit shifted out of the top byte
-;; Uses: A
 ;; Also: ACCX4 (D1541)
 .proc Quadruple
     jsr Double
@@ -443,7 +442,7 @@ Done:
 ;; Takes a byte for the internal write channel, secondary address 18, and turns the drive's LED on. A relative file's
 ;; overflow flag is cleared first, which the copy command relies on.
 ;; In: DataByte = the byte
-;; Uses: A, X, Y, SecondaryAddress
+;; Uses: A, X, Y, SecondaryAddress, Channel
 ;; Also: PIBYTE (D1541)
 .proc AcceptInternalByte
     ldx #INTERNAL_WRITE_SECONDARY
@@ -472,7 +471,7 @@ ToChannel:
 ;; Entry:
 ;;   ToFile = A file's byte, by type (<AcceptInternalByte> enters here)
 ;;   ToCommand = Into the command buffer, unless it is full (<AcceptInternalByte> enters here)
-;; Uses: A, X, Y
+;; Uses: A, X, Y, Channel
 ;; Also: PUT (D1541)
 .proc AcceptByte
     lda SecondaryCommand
@@ -1099,7 +1098,7 @@ Done:
 ;; Frees a secondary address's channel, except for 15's, which is never freed: its entry is cleared, its status set not
 ;; ready, its buffers released and its place marked free in <FreeChannels>.
 ;; In: SecondaryAddress = the secondary address
-;; Uses: A, X, Channel
+;; Uses: A, X, Y, Channel
 ;; Also: FRECHN (D1541)
 .proc FreeChannel
     lda SecondaryAddress
@@ -1334,7 +1333,7 @@ Next:
 .endproc
 
 ;; Frees the channels of secondary addresses 14 down to 1. The NEW command uses it.
-;; Uses: A, X, Y, SecondaryAddress
+;; Uses: A, X, Y, SecondaryAddress, Channel
 ;; Also: CLRCHN (D1541)
 .proc FreeAllChannels
     lda #COMMAND_SECONDARY-1
@@ -1549,7 +1548,8 @@ More:
     cmp #TYPE_RELATIVE
     bcc Sequential
 
-;; A direct or user channel's next byte; after the last the pointer wraps.
+;; A direct channel's next byte; after the last the pointer wraps. Only the direct type (7) gets here: a user channel
+;; (type 3) takes <Sequential>.
 ;; Also: RNDGET (D1541)
 RandomByte:
     jsr BufferIndexes
@@ -1650,7 +1650,8 @@ SetError:
 .endproc
 
 ;; Moves to the file's next block when the active buffer links to one, through <ReadByte>.
-;; Out: zero = set when there is no next block
+;; Out: zero = set when there is no next block (only that case is meaningful: the other path ends in a load of
+;; <DataByte>, which may set it too)
 ;; Also: NXTBUF (D1541)
 .proc FollowLink
     jsr GetActiveBuffer
@@ -1789,7 +1790,7 @@ Clear:
 .endproc
 
 ;; Frees the internal read and write channels, secondary addresses 17 and 18.
-;; Uses: A, X, Y, SecondaryAddress
+;; Uses: A, X, Y, SecondaryAddress, Channel
 ;; Also: FREICH (D1541)
 .proc FreeInternalChannels
     lda #INTERNAL_READ_SECONDARY
@@ -1895,7 +1896,7 @@ CheckVersion:
     cmp FormatType
     bne VersionError
 
-;; The sector must be below the track's the track's sector count.
+;; The sector must be below the track's sector count.
 ;; Also: SJB4 (D1541)
 CheckSector:
     txa
@@ -1996,10 +1997,10 @@ Report:
 
 ;; Runs the job command in A, for the current drive and <JobNumber>'s job, and waits for it. It falls into <Wait>.
 ;; In: A = the command, without its drive bit, DriveNumber = the drive, JobNumber = the job
+;; Out: A = the job's result code
 ;; Errors: the job's error, reported through <Errors::JobError>. Only the codes that are not retried (8, 11, 15) and the
-;;   bump path return it instead when <JobErrorReturn> bit 7 asks; with retries bit 7 set (<Fail>) the error is reported
-;;   whatever the flag says, and so is a write retried after a working sector seek that fails
-;; Errors: the job's error, reported through <Errors::JobError>, unless <JobErrorReturn> bit 7 asks for it returned
+;;   bump path return it instead when <JobErrorReturn> bit 7 asks. With <Retries> bit 7 set the error is reported
+;;   whatever the flag says (<Poll::Fail>), and so is a write retried after a working sector seek that fails
 ;; Entry:
 ;;   WithDrive = Runs command A, which has its drive bit already, for job X
 ;;   Repeat = Runs <JobCommand> again for job X, after the caller has set a new header
@@ -2024,10 +2025,10 @@ Repeat:
 
 ;; Waits for job X to finish, recovering from its errors, and then clears <JobErrorReturn>.
 ;; In: X = the job
+;; Out: A = the job's result code
 ;; Errors: the job's error, reported through <Errors::JobError>. Only the codes that are not retried (8, 11, 15) and the
-;;   bump path return it instead when <JobErrorReturn> bit 7 asks; with retries bit 7 set (<Fail>) the error is reported
-;;   whatever the flag says, and so is a write retried after a working sector seek that fails
-;; Errors: the job's error, reported through <Errors::JobError>, unless <JobErrorReturn> bit 7 asks for it returned
+;;   bump path return it instead when <JobErrorReturn> bit 7 asks. With <Retries> bit 7 set the error is reported
+;;   whatever the flag says (<Poll::Fail>), and so is a write retried after a working sector seek that fails
 ;; Also: WATJOB (D1541)
 .proc Wait
     jsr Poll
@@ -2041,10 +2042,10 @@ Repeat:
 
 ;; Tests job X once, recovering from its error if it has one.
 ;; In: X = the job
+;; Out: carry = set while the job is still running, clear when it is done, A = the job's result code
 ;; Errors: the job's error, reported through <Errors::JobError>. Only the codes that are not retried (8, 11, 15) and the
-;;   bump path return it instead when <JobErrorReturn> bit 7 asks; with retries bit 7 set (<Fail>) the error is reported
-;;   whatever the flag says, and so is a write retried after a working sector seek that fails
-;; Errors: the job's error, reported through <Errors::JobError>, unless <JobErrorReturn> bit 7 asks for it returned
+;;   bump path return it instead when <JobErrorReturn> bit 7 asks. With <Retries> bit 7 set the error is reported
+;;   whatever the flag says (<Poll::Fail>), and so is a write retried after a working sector seek that fails
 ;; Also: TSTJOB (D1541)
 .proc Poll
     lda JobQueue,x
@@ -3107,8 +3108,8 @@ WriteBam:
 Free:
     jmp FreeChannel
 
-;; A relative file (shared with part 5): its record written, its last side sector found, the block count worked out; a
-;; changed file closes its entry. Named so as not to shadow Relative.
+;; A relative file: its record written, its last side sector found, the block count worked out; a changed file closes
+;; its entry.
 ;; Also: CLSREL (D1541)
 RelativeFile:
     jsr Flush
@@ -3141,8 +3142,10 @@ RelativeDone:
     jmp FreeChannel
 .endproc
 
-;; Writes a sequential file's last block: a file with nothing in it gets a RETURN, and an empty last buffer gives its
-;; block back. The link is set to 0, with the last byte's place, and the block is written and waited for.
+;; Writes a sequential file's last block: a file with nothing in it gets a RETURN. When the last buffer is empty it
+;; counts the block out of <ChannelBlocks> and rewrites the previous block's link as 0 and $FF, but does not give the
+;; block back: the one <WriteByte::NextBlock> allocated stays marked used in the BAM (a slip in the code). The link is
+;; set to 0, with the last byte's place, and the block is written and waited for.
 ;; In: Channel = the channel
 ;; Also: CLSWRT (D1541)
 .proc CloseWrite
@@ -3528,6 +3531,7 @@ SideSector:
 .proc SetFlag
     ldx Channel
     ora ChannelFileType,x
+    ; Taken whenever the result is not 0 (in practice always); a 0 result would fall into ClearFlag.
     bne ClearFlag::Store
 .endproc
 

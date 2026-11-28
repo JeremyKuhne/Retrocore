@@ -9,7 +9,8 @@ the first stage, where each name came from, and what is left.
 
 ## Sources and citations
 
-- **M100TR**: Tandy's [TRS-80 Model 100 Technical Reference Manual](https://archive.org/details/trs-80-model-100-technical-reference-manual)
+- **M100TR**: Tandy's
+  [TRS-80 Model 100 Technical Reference Manual](https://archive.org/details/trs-80-model-100-technical-reference-manual)
   (1984), whose section 8, "ROM Subroutines", names 70 entry points and five variables with their addresses. Only
   the names and addresses come into the source, never the manual's text. The OCR of the archive's scan misreads
   some digits; each address was read against the code, and `CTON` is at $14A8 (the motor-on code, two bytes before
@@ -29,17 +30,18 @@ the first stage, where each name came from, and what is left.
    keys, the screen's control characters and escape sequences, INLIN's keys) and the ROM's directory give entry
    points; so do Tandy's entries, and an LXI that a PUSH follows, which is a return address. A few runs of code
    reached in no other way were given as entries by hand, each after an unconditional jump or return. What is left
-   untraced is data: text, tables, the RAM image and the font.
+   untraced is mostly data (text, tables, the RAM image and the font), with a few runs of code the trace does not
+   reach yet, such as $15AC-$1620 and $16C7-$1715 in the device drivers, written as bytes.
 2. **Naming.** Tandy's names first, then the handlers', then Microsoft's interpreter core by hand (NEWSTT, GONE,
-   MAIN, ERROR, CONSTP, STPEND, ENDCON, DIRIS and SNGFOR, read against MBASIC's code), then the rest of Microsoft's names by
-   aligning the two programs' instruction streams: a diff of MBASIC's instructions against the ROM's, operands left
-   out and the RSTs counted as the calls they stand for, gives blocks of the same code, and an MBASIC label in a
-   block names the ROM's instruction it lines up with. Names were taken only in the interpreter ($0400-$12FF), the
-   string package ($2700-$2B5F) and LINE INPUT #'s code ($4F00-$504F), from blocks of at least four instructions
-   there, and six in LINE INPUT #'s; elsewhere blocks matched by chance (a `ST_WHILE` in a BASIC without WHILE, and a
-   `CSKPCM`, CLEAR's in MBASIC, on CSAVE's `,A`). Within the ranges, the alignment also put `SNGFOR` on the
-   double-precision FOR; it is on the single-precision one. Variables took the name of MBASIC's operand at the same place, where at least two blocks and three
-   quarters of them agree.
+   MAIN, ERROR, CONSTP, STPEND, ENDCON, DIRIS and SNGFOR, read against MBASIC's code), then the rest of Microsoft's
+   names by aligning the two programs' instruction streams: a diff of MBASIC's instructions against the ROM's,
+   operands left out and the RSTs counted as the calls they stand for, gives blocks of the same code, and an MBASIC
+   label in a block names the ROM's instruction it lines up with. Names were taken only in the interpreter
+   ($0400-$12FF), the string package ($2700-$2B5F) and LINE INPUT #'s code ($4F00-$504F), from blocks of at least
+   four instructions there, and six in LINE INPUT #'s; elsewhere blocks matched by chance (a `ST_WHILE` in a BASIC
+   without WHILE, and a `CSKPCM`, CLEAR's in MBASIC, on CSAVE's `,A`). Within the ranges, the alignment also put
+   `SNGFOR` on the double-precision FOR; it is on the single-precision one. Variables took the name of MBASIC's
+   operand at the same place, where at least two blocks and three quarters of them agree.
 3. **Writing the source.** An emitter wrote the modules from the traced code, the names and both ROMs: the tables as
    entries (`KEYWORD`, `.word`, `DISPATCH`), each skip byte (an LXI or MVI whose operand is another entry) as a
    `.byte` saying what it skips, SYNCHR's byte with its character, and each difference between the ROMs as an
@@ -64,9 +66,9 @@ The IDs are M100.
   alignment found nothing there. The floating accumulator's bytes keep their `D_` names. The math package does use
   some of the interpreter's scratch variables, such as `TEMP3` and `TEMP8`, under those names.
 - M100-6. One source for both machines, `MODEL` 100 or 102. 355 of the Tandy 102's bytes differ; counting differences
-  within four bytes of each other as one, and widening each to whole instructions in both ROMs, they make 51 places, 30 of them in the font ($770B-$7D32), and places within 24 bytes
-  of each other share a block, which makes 24 `.if` blocks. The font's glyphs and
-  the other binary tables are written in hex, never as text.
+  with at most three equal bytes between them as one, and widening each to whole instructions in both ROMs, they make
+  51 places, 30 of them in the font ($770B-$7D32), and places within 24 bytes of each other share a block, which
+  makes 24 `.if` blocks. The font's glyphs and the other binary tables are written in hex, never as text.
 - M100-7. The modules follow the ROM's subjects, at routine boundaries both ROMs share: Microsoft's BASIC in
   MBASIC's order, then the Model 100's own code by what it drives. The boundaries are a first cut, to be refined
   as each module is named.
@@ -82,7 +84,7 @@ The IDs are M100.
 | `BASIC`, `TEXT`, `TELCOM`, `ADDRSS`, `SCHEDL` | The ROM's programs, named as the menu shows them. |
 | `COLD` | The cold start. |
 | `DIRTBL`, `DOSTRT`, `COSTRT`, `PRGNAM` | The file directory, the starts of the DO and CO files, and the running program's name. |
-| `STKTOP` | Level II's name (Level2.asm) for the pointer the stack starts below: MENU sets it from `MEMSIZ`, and CLEAR, the stack and string space are bounded by it. |
+| `STKTOP` | Level II's name (Level2.asm) for the bottom of string space, which the stack sits below: MENU sets it from `MEMSIZ`, and CLEAR, the stack and string space are bounded by it. |
 
 - M100-8. `BEGLCD` names the screen's memory at $FE00. The manual's `ENDLCD`, $FF40, the byte after the screen, is not a
   label: the ROM keeps the RS-232 port's state there, and the name would read wrong at those uses.

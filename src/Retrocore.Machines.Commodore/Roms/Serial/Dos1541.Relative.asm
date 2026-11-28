@@ -769,7 +769,7 @@ Done:
 ;; In: DataByte = the byte, MoreBytes = 0 at EOI
 ;; Errors:
 ;;   51 = RECORD OVERFLOW (<ERROR_RECORD_OVERFLOW>), reported at EOI after a record that was too long
-;;   52 and 50 = FILE TOO LARGE and RECORD NOT PRESENT, when adding blocks ends in error (<AddBlocks>)
+;;   52, 50, 67, 72 and 71 = the errors of adding blocks (<AddBlocks>)
 ;; Also: WRTREL (D1541)
 .proc WriteByte
     lda #RELATIVE_LAST_RECORD+RELATIVE_OVERFLOW
@@ -1355,7 +1355,11 @@ Done:
 ;; (<SeekRecord>).
 ;; Entry:
 ;;   CheckRoom = with the end found (<Commands::CopyRelative>, the C command's code, enters here)
-;; Errors: 52 FILE TOO LARGE, 50 RECORD NOT PRESENT
+;; Errors:
+;;   52 = FILE TOO LARGE
+;;   50 = RECORD NOT PRESENT
+;;   67 = ILLEGAL TRACK OR SECTOR, a bad side sector (<SeekEnd>)
+;;   72 = DISK FULL, and 71 = DIR ERROR, from allocating a block (<Bam::AllocateNext>)
 ;; Also: ADDREL (D1541)
 .proc AddBlocks
     ; Finds the file's end and loads its last block, with a second buffer to build the new blocks in.

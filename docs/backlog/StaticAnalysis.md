@@ -476,7 +476,9 @@ and the documentation:
 
 - **Branches decided by memory or by what a caller passes,** as the MOS's `ora VDU_STATUS` then `bne ... ;
   always: a bit is set`: [flag values](#flag-values) decide branches on constants, so `ldy #0` then `beq` and
-  `lda #CFS_ACIA_WRITING` then `bne` now go one way, but not these.
+  `lda #CFS_ACIA_WRITING` then `bne` now go one way, but not these. An `Entry:` is checked again with each caller's
+  values where its own analysis contradicts its promise, but a routine's start is not, nor a branch inside a
+  routine on what its own caller passed.
 - **Arithmetic that restores a value,** as IsLetter's `sbc #$5B` and `sbc #$A5`, which leave A as it was.
 - **Memory saved by a callee,** as NetFS's SAVE_CALL_REGISTERS stores X and Y for NFS_CALL_RETURN to load back:
   a summary would need the fixed addresses a routine stores and writes.
@@ -629,12 +631,18 @@ were all from `Entry:` labels, now checked too. Most were entries whose callers 
 gets X back from ScrollBase, and DFS_OSBPUT_CHANNEL and SET_ENTRY_EXEC_ADDRESS_MERGE run after their callers'
 SAVE_REGISTERS. For those, an `Entry:` meaning may now end in a keeps clause (`; keeps A`, `; keeps nothing`), which
 the check and the debugger take in place of the routine's `Keeps:` for that entry, and the three entries say what
-they keep: 27 findings remain. Two of them are the MOS's SET_STATUS_BITS, an entry of SET_EOF: with A and
-CFS_STATUS both 0 it falls through its `bne` into the next routine, so SET_EOF's `Keeps: X, Y, carry` holds from
-there only because every caller of SET_STATUS_BITS passes a bit to set. The entry now says so, but the check does
-not read conditions on what a caller passes. An entry label with a comment and a contract of its own now keeps
-that contract, as the debugger does, rather than taking its routine's, which brings the report to 894 routines
-checked, 27 findings and 122 `Keeps:` items not verified.
+they keep. An entry label with a comment and a contract of its own now keeps that contract, as the debugger does,
+rather than taking its routine's.
+
+The last two were the MOS's SET_STATUS_BITS, an entry of SET_EOF: with A and CFS_STATUS both 0 it falls through its
+`bne` into the next routine, so SET_EOF's `Keeps: X, Y, carry` holds from there only because every caller passes a
+bit to set. So an entry whose own analysis, with nothing known, contradicts its promise is checked again from each
+direct call to it, starting with what the caller's registers and flags hold there: a sure change with any caller's
+values is a finding. The calls are those the routines' analyses reach; a call none reaches is followed from the
+start of its straight run of code, with nothing known there, which holds for every way into it, as for FINDV's
+`lda #CFS_INPUT_OPEN` then `jsr SET_STATUS_BITS`. Without every call seen, or for an entry whose address the code
+also takes as data, as in a table, the first finding stands. That brings the report to 894 routines checked, 25
+findings and 121 `Keeps:` items not verified.
 
 What it costs, measured in Release over the MOS, the DFS and MBASIC with their maps: about 190 ms for the three
 once warm, and 114 MB allocated (220 ms and 107 MB before the review's fixes). Without maps it was about 140 ms and

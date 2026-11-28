@@ -33,6 +33,17 @@ internal sealed partial class AnalysisContracts
     private readonly List<ushort> _instructions = [];
     private readonly bool[] _patched = new bool[0x10000];
     private readonly HashSet<ushort> _referenced = [];
+
+    // The direct calls to each address, by the call's address, and the states the analysis saw at calls to an
+    // Entry: label with a contract, for checking it with each caller's values.
+    private readonly Dictionary<ushort, List<ushort>> _callSites = [];
+    private readonly Dictionary<ushort, List<AnalysisRoutineState>> _callStates = [];
+
+    // Where code may be entered other than by falling into it: labels and the targets of jumps and branches.
+    private readonly HashSet<ushort> _entered = [];
+    private readonly HashSet<ushort> _instructionSet = [];
+    private const int MaximumCallStates = 16;
+    private const int MaximumRunSteps = 64;
     private readonly MemoryMap? _map;
     private readonly Dictionary<ushort, AnalysisContract> _contracts = [];
     private readonly Dictionary<ushort, DocumentationTopic> _routines = [];
@@ -88,7 +99,11 @@ internal sealed partial class AnalysisContracts
             for (int offset = 0; offset < entry.Size; offset++) { _data[(entry.Address + offset) & 0xFFFF] = true; }
         }
 
-        _engine = new(set, _memory, _defined, Callee, RoutineAt, AnalysisEvaluator.For(set), map, _data, _patched);
+        _engine = new(set, _memory, _defined, Callee, RoutineAt, AnalysisEvaluator.For(set), map, _data, _patched)
+        {
+            CallObserver = ObserveCall
+        };
+
         Scan(result);
         IsaDescription description = set.Description;
         _general = _engine.Registers & ~AnalysisRoutineEngine.StackRegisters(set);
@@ -186,15 +201,18 @@ internal sealed partial class AnalysisContracts
         int count = 0;
         int unverified = 0;
         IsaDescription description = _set.Description;
+
+        // Every routine first, so the calls to each entry have been seen.
+        foreach (ushort address in _contracts.Keys) { Analyzed(address); }
         foreach ((ushort address, AnalysisContract contract) in _contracts)
         {
             AnalysisRoutineSummary? summary = Analyzed(address);
 
             // An Entry: label keeps what the routine says, or what its keeps clause says: a sure change from there is
-            // a finding.
+            // a finding, unless the entry keeps it with the values each of its callers passes.
             if (address != contract.Address)
             {
-                if (summary is { Returns: true }) { unverified += CheckKeeps(contract, summary, findings); }
+                if (summary is { Returns: true }) { unverified += CheckEntry(address, contract, summary, findings); }
                 continue;
             }
 
@@ -257,6 +275,13 @@ internal sealed partial class AnalysisContracts
         foreach (ushort address in _instructions)
         {
             if (!_engine.TryDecode(address, out DisassembledInstruction instruction)) { continue; }
+            _instructionSet.Add(address);
+            if (instruction.DirectTarget is { } target) { _entered.Add(target); }
+            if (instruction.Flow == DisassemblyFlow.Call && instruction.DirectTarget is { } called)
+            {
+                if (!_callSites.TryGetValue(called, out List<ushort>? sites)) { _callSites[called] = sites = []; }
+                sites.Add(address);
+            }
 
             // A store into RAM may patch code there: at a fixed address, the byte and the one after, as STA Patch+1
             // does; from an indexed one's base, every byte the index reaches, as STA Patch,Y does. Stores through a
@@ -275,6 +300,7 @@ internal sealed partial class AnalysisContracts
         Dictionary<string, List<ushort>> symbols = [with(StringComparer.Ordinal)];
         foreach ((string symbol, long value) in result.Symbols)
         {
+            _entered.Add((ushort)value);
             Add(symbol, (ushort)value);
             int scope = symbol.LastIndexOf("::", StringComparison.Ordinal);
             if (scope >= 0) { Add(symbol[(scope + 2)..], (ushort)value); }
@@ -421,6 +447,83 @@ internal sealed partial class AnalysisContracts
         AnalysisRoutineSummary summary = _engine.Analyze(address, own);
         _analyzed[address] = summary;
         return summary;
+    }
+
+    // The start of the straight run of code an instruction is in: back over instructions that fall into the next,
+    // to a label, a jump's or branch's target, or code that does not fall through.
+    private ushort RunStart(ushort address)
+    {
+        for (int steps = 0; steps < MaximumRunSteps && !_entered.Contains(address); steps++)
+        {
+            ushort? previous = null;
+            for (int back = 1; back <= 5 && previous is null; back++)
+            {
+                ushort at = (ushort)(address - back);
+                if (_instructionSet.Contains(at)
+                    && _engine.TryDecode(at, out DisassembledInstruction instruction)
+                    && instruction.Size == back
+                    && instruction.Flow is DisassemblyFlow.Next or DisassemblyFlow.Call)
+                {
+                    previous = at;
+                }
+            }
+
+            if (previous is not { } before) { break; }
+            address = before;
+        }
+
+        return address;
+    }
+
+    // Whether the analysis saw a call, with few enough states there to check each.
+    private bool Seen(ushort site) =>
+        _callStates.TryGetValue(site, out List<AnalysisRoutineState>? states) && states.Count is > 0 and <= MaximumCallStates;
+
+    // A call to an Entry: label: the state there, kept for checking the entry with the caller's values.
+    private void ObserveCall(ushort pc, ushort target, AnalysisRoutineState state)
+    {
+        if (!_contracts.TryGetValue(target, out AnalysisContract? contract) || contract.Address == target) { return; }
+        if (!_callStates.TryGetValue(pc, out List<AnalysisRoutineState>? states)) { _callStates[pc] = states = []; }
+        if (states.Count <= MaximumCallStates && !states.Any(state.SameAs)) { states.Add(state.Copy()); }
+    }
+
+    // The findings for an entry's Keeps: items. Where its own analysis, with nothing known, finds a sure change, as
+    // the MOS's SET_STATUS_BITS falling through with A and CFS_STATUS both 0, it is checked again from each direct
+    // call, with what the caller's registers and flags hold there: a sure change on any is a finding. Without every
+    // call seen, as for an entry also reached through a table, the first finding stands.
+    private int CheckEntry(ushort address, AnalysisContract contract, AnalysisRoutineSummary summary, List<AnalysisContractFinding> findings)
+    {
+        List<AnalysisContractFinding> found = [];
+        int unverified = CheckKeeps(contract, summary, found);
+        List<AnalysisRoutineState> callers = [];
+        List<ushort> sites = _callSites.TryGetValue(address, out List<ushort>? calls) ? calls : [];
+
+        // A call no routine's analysis reached is seen from the start of its straight run of code, with nothing
+        // known there, which holds for every way into the run.
+        if (found.Count != 0)
+        {
+            foreach (ushort site in sites.Where(site => !Seen(site)).ToArray()) { _engine.Analyze(RunStart(site)); }
+        }
+
+        if (found.Count != 0 && !_referenced.Contains(address) && sites.Count != 0 && sites.All(Seen))
+        {
+            foreach (ushort site in sites) { callers.AddRange(_callStates[site]); }
+            found.Clear();
+            unverified = 0;
+            foreach (AnalysisRoutineState caller in callers)
+            {
+                AnalysisRoutineSummary entered = _engine.Analyze(address, contract.Own, caller);
+                int notVerified = entered.Returns ? CheckKeeps(contract, entered, found) : contract.KeepItems.Count;
+                unverified = Math.Max(unverified, notVerified);
+            }
+        }
+
+        foreach (AnalysisContractFinding finding in found)
+        {
+            if (!findings.Contains(finding)) { findings.Add(finding); }
+        }
+
+        return unverified;
     }
 
     // The findings for a routine's Keeps: items, a sure change of each; returns the number not verified, unknown

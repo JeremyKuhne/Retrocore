@@ -216,6 +216,76 @@ public class ContractAnalysisTests
     }
 
     /// <summary>
+    ///  An entry that keeps its promise only with what its callers pass, as the MOS's SET_STATUS_BITS with a bit set
+    ///  in A, is checked with each caller's values: from Set, ORA with A = 0 and $10 = 0 would fall into LDX #0, but
+    ///  every caller loads A with a bit set. A caller that no routine's analysis reaches is followed from the start of
+    ///  its run of code. One caller passing 0, or a table that also holds Set's address, leaves the finding.
+    /// </summary>
+    [TestMethod]
+    public void EntriesAreCheckedWithTheirCallersValues()
+    {
+        const string Callee = """
+
+            ;; Sets bits in $10's value.
+            ;; Keeps: X
+            ;; Entry: Set = sets the bits set in A, which must have a bit set
+            Main:
+                lda #2
+            Set:
+                ora $10
+                bne Done                ; always taken
+                ldx #0
+            Done:
+                rts
+            """;
+
+        // A documented caller, and one no documented routine reaches.
+        string good = """
+            ;; Sets bit 0.
+            ;; Uses: A
+            Caller:
+                lda #1
+                jsr Set
+                rts
+
+            Unreached:
+                lda #$80
+                jsr Set
+                rts
+            """ + Callee;
+
+        (List<string> findings, _, _) = Check(good, "Mos6502");
+        findings.Should().BeEmpty();
+
+        string zero = """
+            ;; Sets nothing.
+            ;; Uses: A
+            Caller:
+                lda #0
+                jsr Set
+                rts
+            """ + Callee;
+
+        (findings, _, _) = Check(zero, "Mos6502");
+        findings.Should().ContainSingle().Which.Should().Contain("Main ($1006) documents Keeps: X");
+
+        string table = """
+            ;; Sets bit 0.
+            ;; Uses: A
+            Caller:
+                lda #1
+                jsr Set
+                rts
+
+            Table:
+                .word Set
+            """ + Callee;
+
+        (findings, _, _) = Check(table, "Mos6502");
+        findings.Should().ContainSingle().Which.Should().Contain("Main ($1008) documents Keeps: X");
+    }
+
+    /// <summary>
     ///  A routine's own contract at its start wins over another routine's entry there, in the check and the
     ///  debugger alike, though the entry's routine comes first: Target keeps A as it says, though Saver lists the
     ///  label at its address as an entry, plain or with a clause; and Target's Keeps: none holds its address too.

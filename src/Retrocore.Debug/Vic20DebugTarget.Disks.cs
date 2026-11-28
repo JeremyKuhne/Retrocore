@@ -97,6 +97,7 @@ internal sealed partial class Vic20DebugTarget
     /// <exception cref="ArgumentException">A number, model or path is invalid.</exception>
     /// <exception cref="IOException">MAME's set is missing and the SDK's DOS source cannot be read.</exception>
     /// <exception cref="InvalidDataException">MAME's set is missing and the SDK's DOS source has errors.</exception>
+    /// <exception cref="UnauthorizedAccessException">MAME's set is missing and the SDK's DOS source cannot be read.</exception>
     internal void LaunchDisks(JsonObject args, string? romDirectory)
     {
         DiskRoms = LoadDiskRoms(args.String("driveRomDirectory"));

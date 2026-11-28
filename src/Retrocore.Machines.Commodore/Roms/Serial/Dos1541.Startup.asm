@@ -24,9 +24,9 @@ INITIAL_INTERLEAVE = 10
 ;; The tries <Jobs::Retries> starts at for a failed job.
 INITIAL_RETRIES = 5
 
-;; The self-test's failure: blinks both LEDs, for ever. The number of blinks says what failed: one for zero page, two
+;; The self-test's failure: blinks the activity LED, for ever. The number of blinks says what failed: one for zero page, two
 ;; for the upper ROM, three for the lower, four for the RAM. The count is kept in the stack pointer, since the RAM may
-;; be bad. After the blinks the LEDs stay dark for three more blink times, and it starts again.
+;; be bad. After the blinks the LED stays dark for three more off-delays, each half a blink, and it starts again.
 ;;
 ;; It never returns: the drive stays here until it is reset. Zero page's failure comes in at the top, with X = 0; the
 ;; others at `Numbered`, with the failed test's number in <Temporary>.
@@ -50,7 +50,7 @@ Numbered:
 Again:
     tsx
 
-;; One blink: lights both LEDs, through <BlinkFaultPatch>, which also makes VIA 2's port B drive the LEDs.
+;; One blink: lights the LED (<LED_DRIVE0>; <LED_DRIVE1> is 0 and adds nothing), through <BlinkFaultPatch>, which also makes VIA 2's port B drive the LEDs.
 ;; Also: PE30 (D1541)
 Blink:
     lda #LED_DRIVE0 + LED_DRIVE1
@@ -63,7 +63,7 @@ Blink:
 LedsLit:
     tya
 
-;; The delay, LEDs on: each outer pass starts the inner count over from Y...
+;; The delay, LEDs on: the first outer pass starts the inner count from Y, the later ones from 0...
 ;; Also: PD10 (D1541)
 OnOuter:
     clc
@@ -167,7 +167,8 @@ CountUp:
 
 ;; Tests an 8 KB ROM, first the upper one, then the lower: counts <Temporary> up for the failure blinks, then sums the
 ;; ROM's bytes from the top page down, each carry added into the next byte. The sum, with the last carry, must equal the
-;; ROM's first page, $E0 or $C0; the <UpperRomChecksum> byte makes it so for the upper. After both it goes on.
+;; ROM's first page, $E0 or $C0; the <UpperRomChecksum> byte makes it so for the upper and <Commands::LowerRomChecksum>
+;; for the lower. After both it goes on.
 ;; Also: RM10 (D1541)
 TestRom:
     inc Temporary
@@ -204,7 +205,7 @@ AddByte:
     inc Temporary
     ldx #$07
 
-;; Fills pages 1 to 7, each byte with its low address plus its page: a pattern no two bytes of the RAM share.
+;; Fills pages 1 to 7, each byte with its low address plus its page: a pattern in which no two bytes of a page share a value.
 ;; Also: RA10 (D1541)
 FillRam:
     tya
@@ -252,14 +253,15 @@ ToBlinkFault:
 ;; The tests passed, and the NMI vector points here (<Reinitialize> jumps through it), so a reinitialization comes with
 ;; no self-test. It sets up everything the DOS keeps in RAM, in this order:
 ;;
-;; - the stack, the LEDs off, and the ATN interrupt on VIA 1's CA1; - the drive's talk and listen addresses, from the
-;; device jumpers: <DEFAULT_TALK_ADDRESS> with the jumpers' number; - the buffers' pointers, <BufferPositions>, from
-;; <BufferPages>, and those of the command and error buffers; - the channels and secondary addresses, free, with the
-;; command and error channels taken; - the buffers' use, the disk changed flags, the user commands' vectors, the use
-;; order of the channels, the
+;; - the stack, the LEDs off, and the ATN interrupt on VIA 1's CA1;
+;; - the drive's talk and listen addresses, from the device jumpers: <DEFAULT_TALK_ADDRESS> with the jumpers' number;
+;; - the buffers' pointers, <BufferPositions>, from <BufferPages>, and those of the command and error buffers;
+;; - the channels and secondary addresses, free, with the command and error channels taken;
+;; - the buffers' use, the disk changed flags, the user commands' vectors, the use order of the channels, the
 ;;   controller and its mechanism, the NMI vector, the sector interleave and the retries;
-;; - message 73, the DOS version, as the error channel's first message; and the bus lines, released and then driven; -
-;; the boot loader, and then the idle loop.
+;; - message 73, the DOS version, as the error channel's first message;
+;; - the bus lines: in -05 and -06 released and then driven, before -05 and in the 1540 driven and then released;
+;; - the boot loader, and then the idle loop.
 ;;
 ;; It does not return: it falls into the idle loop.
 ;; Also: DIAGOK (D1541)
@@ -417,10 +419,11 @@ FreeBuffers:
 ; The idle loop itself, which the reset falls into.
 .scope Idle continued
 
-;; The idle loop, which the DOS runs when the bus and the controller have nothing for it. Each pass releases CLK, DATA
-;; and ATNA, runs a command that is waiting in the command channel, serves ATN when the interrupt has left it pending
-;; (<Serial::HandleAtn>, which ends in this loop again), lights the activity LED for a drive while a file is open or a
-;; job runs on it, and flashes the error LED. It never returns.
+;; The idle loop, which the DOS runs when the bus and the controller have nothing for it. Entering it at `Loop`
+;; releases CLK, DATA and ATNA and runs a command that is waiting in the command channel. Each pass, which every pass
+;; ends by jumping to <NextPass> and so does not repeat those two steps, serves ATN when the interrupt has left it
+;; pending (<Serial::HandleAtn>, which ends in this loop again), lights the activity LED for a drive while a file is open
+;; or a job runs on it, and flashes the error LED. It never returns.
 ;; Also: IDLE (D1541)
 .proc Loop
     ; Releases the bus lines, and runs a command that the command channel has completed.

@@ -51,6 +51,7 @@ internal static class Cbm1541SdkModules
     /// <param name="revision">901229's revision, 1, 2, 3, 5 or 6, or <see cref="Revision1540"/> for the 1540.</param>
     /// <returns>The assembly.</returns>
     /// <exception cref="ArgumentOutOfRangeException">The source has no such build.</exception>
+    /// <exception cref="IOException">The source cannot be read.</exception>
     /// <exception cref="InvalidDataException">The source has errors.</exception>
     internal static AssemblyResult Assemble(string directory, int revision)
     {
@@ -85,6 +86,7 @@ internal static class Cbm1541SdkModules
     /// <returns>The ROMs.</returns>
     /// <exception cref="ArgumentException">The model is neither.</exception>
     /// <exception cref="ArgumentOutOfRangeException">The source has no such revision.</exception>
+    /// <exception cref="IOException">The source cannot be read.</exception>
     /// <exception cref="InvalidDataException">The source has errors.</exception>
     internal static Cbm1541Roms BuildRoms(string model, int revision = 6, string? directory = null)
     {

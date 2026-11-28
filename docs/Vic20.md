@@ -4,7 +4,7 @@ Retrocore's VIC-20 is [`Vic20Machine`](../src/Retrocore.Machines.Commodore/Vic20
 6502 with the VIC-20's memory map, the VIC (the 6560 on NTSC, the 6561 on PAL) for its screen, sound and paddles, two
 6522 VIAs, the keyboard and joystick, the Datasette, cartridges and RAM in the expansion port, and the serial bus with
 1540 and 1541 drives. Its BASIC, kernal and character ROM are SDK sources that assemble byte-identically to the chips,
-so it needs no dumps.
+so it needs no dumps, and neither do its drives.
 
 This guide covers what it emulates, its ROMs and their sources, and how to debug on it.
 [The plan](backlog/Commodore.md) has what is still to come, with the 64 and the 128.
@@ -151,7 +151,7 @@ errors 1 to 9 share.
 | `Vic20DiskTests` | A 1541 or 1540 on the serial bus through the kernal's and the drive's own DOS. |
 | `Vic20DiskOracleTests` (Conformance) | The 1541's and 1540's DOS against MAME's `c1541` and `c1540`. |
 | `Cbm1541GateArrayTests` | The 1541's gate array on its own, with no disk and no ROMs. |
-| `Vic20RomSourceTests` | Every chip's source by digest and against the dumps, the kernal's citations, and the machine booting from the SDK's builds on both standards. `BuildLinkTests` checks the BASIC and kernal builds' links. |
+| `Vic20RomSourceTests` | Every chip's source by digest and against the dumps, the kernal's citations, and the machine booting from the SDK's builds on both standards. `BuildLinkTests` checks the BASIC and kernal builds' links, and the DOS's (`Dos1541LinksOnlyWhatItsBuildAssembles`). |
 | `Vic20DebugTargetTests` | The debug target on the SDK's ROMs: its launch options, the keys that type nothing, its BASIC's pointers, its errors and screen, and the Machine view. |
 | [`tools/Test-Vic20BasicDap.mjs`](../tools/Test-Vic20BasicDap.mjs) | A BASIC file on the BASIC thread unexpanded on NTSC and PAL, and with 3K, 8K and 32K on NTSC: stopping on entry, stepping, a GOSUB's frame, variables and the FOR loop, the program as text, an error, Step Into on SYS, and one hit for each statement though an interrupt returns to GONE. |
 | [`tools/Test-Vic20Dap.mjs`](../tools/Test-Vic20Dap.mjs) | The debugger end to end: BASIC from the sources, breakpoints in BASIC's and the kernal's sources with the call stack, the colour picture, the reset stop, RUN/STOP and RESTORE, a program recorded on tape and saved as TAP, loaded back, a `.prg` on two expansions and a source launched, the free bytes unexpanded and with 3K, 8K and 32K, and PAL. A blank disk on device 8 formatted, a program saved, the disk saved as D64 and listed, and a second drive added and removed, with MAME's `c1541` set when it is there and the SDK's build of the DOS when it is not. |

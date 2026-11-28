@@ -6,8 +6,8 @@
 ; bytes are commands: LISTEN or TALK with a device number, UNLISTEN, UNTALK, and a secondary address that names a
 ; channel (<HandleAtn>). With ATN released the addressed device is the talker, which sends a channel's bytes
 ; (<Talk>), or the listener, which takes the bytes the computer sends (<Listen>); both clock them a bit at a time
-; through <ReceiveByte> or Talk's own loop, checking ATN at every wait (<CheckAtn>). The lines are on VIA 1's port B:
-; <ReleaseData>, <PullData>, <ReleaseClock>, <PullClock> and <ReadLines> work them. This first piece holds all of
+; through <ReceiveByte> or Talk's own loop, checking ATN in the waits (<CheckAtn>), except for the wait for each bit's
+; CLK in <ReceiveByte> and, in -05 and -06, its wait for DATA. The lines are on VIA 1's port B: <ReleaseData>, <PullData>, <ReleaseClock>, <PullClock> and <ReadLines> work them. This first piece holds all of
 ; those; the speed routines of the 1541 and -05's patch are in pieces of their own at the ROM's end.
 
 .scope Serial continued
@@ -420,8 +420,9 @@ ToBusError:
 ;; Receives a byte from the talker, as the computer's own receive does from its end: for each of eight bits waits for
 ;; CLK released, which says that DATA holds the bit, and shifts it in, low bit first. A talker that holds CLK back for
 ;; more than about 256 microseconds before the first bit marks the byte as the last (EOI), which is acknowledged by
-;; pulsing DATA and clears <MoreBytes>. Every wait calls <CheckAtn>, so an ATN that comes (or ends, in ATN mode) leaves
-;; this routine for good.
+;; pulsing DATA and clears <MoreBytes>. Its waits call <CheckAtn>, so an ATN that comes (or ends, in ATN mode) leaves
+;; this routine for good, except two: the wait for each bit's CLK (`WaitClockHigh`) does not, and in -05 and -06 neither
+;; does the wait for DATA in `ReceiveBytePatch`.
 ;; Out: A = the byte, MoreBytes = 0 when the byte was sent with EOI (it is not set here)
 ;; Keeps: Y
 ;; Entry:

@@ -16,8 +16,13 @@ export function panelKeyCode(input: unknown): number | undefined {
         && Number.isInteger(input.code) && input.code >= 0 && input.code <= 258 ? input.code : undefined;
 }
 
-/** The display panel's page, with its script allowed by the nonce. */
-export function webviewHtml(nonce: string): string {
+/**
+ * The display panel's page, with its script allowed by the nonce. With focusOnLoad, the page gives its screen the
+ * keyboard as it loads, which in a webview also takes VS Code's focus; without it, the panel opens behind whatever has
+ * the focus, as a stopped machine's must. Either way the screen takes the keyboard when it is clicked, and when the
+ * panel gains VS Code's focus, as a click on its tab gives it, unless a control in the page has it.
+ */
+export function webviewHtml(nonce: string, focusOnLoad = true): string {
     return `<!doctype html><html><head>
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'nonce-${nonce}'">
@@ -722,6 +727,9 @@ function showMouse(){
     if(state.textContent!==text)state.textContent=text;
 }
 showKeys();
-screen.focus();
+// When VS Code gives the panel its focus, as a click on its tab does, the screen takes the keyboard unless a control in
+// the page has it: the keys only reach the machine from the screen.
+window.addEventListener('focus',()=>{if(document.activeElement===document.body||document.activeElement===null)screen.focus();});
+${focusOnLoad ? "screen.focus();" : ""}
 </script></body></html>`;
 }

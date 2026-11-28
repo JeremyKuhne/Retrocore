@@ -588,6 +588,71 @@ public sealed class ProjectEnvironmentTests
         }
     }
 
+    /// <summary>
+    ///  A <c>level2</c> target links at its map's load address, <c>$4300</c> on the Model I and <c>$4400</c> on the
+    ///  Model III, above their ROMs' RAM, and writes its SYSTEM tape under the project's name cut to six, with its entry.
+    /// </summary>
+    /// <param name="machine">The catalog machine.</param>
+    /// <param name="load">Where its map loads a program.</param>
+    [TestMethod]
+    [DataRow("trs80-model1-level2", 0x4300)]
+    [DataRow("trs80-model3", 0x4400)]
+    public void Level2WritesItsSystemTape(string machine, int load)
+    {
+        Write("retrocore.json", $$"""
+            { "sdk": "1", "name": "2-space-game", "cpu": "z80", "sources": ["main.s"], "entry": "START",
+              "targets": { "tape": { "machine": "{{machine}}", "environment": "level2" } } }
+            """);
+
+        Write("main.s", "DATA:\n    .byte 1\nSTART:\n    JP START\n");
+        TargetBuild build = ProjectBuild.Build(RetrocoreProject.Load(_folder).Target("tape"));
+        string tape = Path.Join(_folder, "artifacts", "tape", "2-space-game.cas");
+        build.Media.Should().Be(new TargetMedia(
+            File: null, FileKind: null, tape, "SYSTEM tape (CAS)", "SYSTEM, then SPACEG at the *? prompt, then / once it has loaded"));
+
+        (string name, IReadOnlyList<(int Address, byte[] Bytes)> blocks, int entry) = Retrocore.Media.Trs80.SystemTape.Read(File.ReadAllBytes(tape));
+        (name, entry).Should().Be(("SPACEG", load + 1));
+        byte[] program = [1, 0xC3, (byte)(load + 1), (byte)((load + 1) >> 8)];
+        blocks.Should().ContainSingle();
+        (blocks[0].Address, blocks[0].Bytes).Should().BeEquivalentTo((load, program));
+        File.ReadAllText(Path.Join(_folder, "obj", "tape", "memory.cfg")).Should().NotContain("ZP:", "the Z80 has no zero page");
+    }
+
+    /// <summary>
+    ///  A <c>level2</c> map has no zero page, as the Z80 has none, so a program's sections are checked from
+    ///  <c>$0000</c>: one placed over the ROM's RAM fails naming it, and a program too big for 16K says how far over it
+    ///  is. A program with no bytes has no tape, and a target cannot give files, as the tape holds the program alone.
+    /// </summary>
+    [TestMethod]
+    public void Level2MapsAndRefusals()
+    {
+        string Fails(string target, string source)
+        {
+            Write("retrocore.json", $$"""
+                { "sdk": "1", "name": "game", "cpu": "z80", "sources": ["main.s"],
+                  "targets": { "tape": { "machine": "trs80-model1-level2", "environment": "level2"{{target}} } } }
+                """);
+
+            Write("main.s", source);
+            Action build = () => ProjectBuild.Build(RetrocoreProject.Load(_folder).Target("tape"));
+            return build.Should().Throw<ProjectException>().Which.Message;
+        }
+
+        Fails(""", "memoryMap": { "load": "$4000", "free": [{ "start": "$4000", "end": "$40FF" }] }""", "    RET\n    .res $200\n").Should().Contain(
+            "section CODE ($4000-$4200) overlaps Level II's RAM:");
+
+        Fails(""", "options": { "ramKilobytes": 16, "expansionInterface": false }""", ".res $4000\n").Should().Contain(
+            "overlaps addresses with no RAM, as the machine has 16K from $4000 ($8000-$FFFF)").And.Contain("so it is 768 bytes over.");
+
+        Fails(""", "memoryMap": { "zeroPage": ["$80"] }""", "RET\n").Should().EndWith(
+            "target tape: its CPU has no zero page, so its 'memoryMap' cannot give 'zeroPage'.");
+
+        Fails("", "").Should().EndWith("target tape: the sources emit no bytes.");
+        Write("data.bin", "1");
+        Fails(""", "files": ["data.bin"]""", "RET\n").Should().EndWith(
+            "the 'level2' environment puts only its program on its tape, so it takes no 'files'.");
+    }
+
     // A small ProDOS disk in ProDOS's order, as the build reads ProDOS 2.4.3's: its boot blocks, each filled with a
     // byte of its own, and PRODOS, whose contents stand in for ProDOS itself.
     private static byte[] ProDosDisk()

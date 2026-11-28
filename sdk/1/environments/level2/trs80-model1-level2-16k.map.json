@@ -1,0 +1,16 @@
+{
+  "description": "The TRS-80 Model I with Level II and 16K, level2: a SYSTEM tape that the ROM's SYSTEM command loads and / starts, which calls Level II's routines.",
+  "load": "$4300",
+  "free": [
+    { "start": "$4300", "end": "$7FFF" }
+  ],
+  "reserved": [
+    { "start": "$0000", "end": "$2FFF", "why": "Level II's ROM" },
+    { "start": "$3000", "end": "$37DF", "why": "addresses with nothing at them" },
+    { "start": "$37E0", "end": "$37FF", "why": "the Expansion Interface's ports, when it is fitted: the clock's interrupt latch, the printer and the disk controller" },
+    { "start": "$3800", "end": "$3BFF", "why": "the keyboard's matrix" },
+    { "start": "$3C00", "end": "$3FFF", "why": "the video RAM, the screen" },
+    { "start": "$4000", "end": "$42FF", "why": "Level II's RAM: the restart vectors, the device control blocks, BASIC's work area and input buffer, and the stack SYSTEM sets at $4288, which the program starts on" },
+    { "start": "$8000", "end": "$FFFF", "why": "addresses with no RAM, as the machine has 16K from $4000" }
+  ]
+}

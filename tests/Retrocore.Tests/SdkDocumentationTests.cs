@@ -207,7 +207,8 @@ public class SdkDocumentationTests
         ["iie"] = "Retrocore.Machines.Apple2",
         ["project"] = "Retrocore.Machines.Apple2",
         ["softcard"] = "Retrocore.Machines.Apple2",
-        ["trs80"] = "Retrocore.Machines.Trs80"
+        ["trs80"] = "Retrocore.Machines.Trs80",
+        ["z80"] = "Retrocore.Machines.Trs80"
     };
 
     /// <summary>

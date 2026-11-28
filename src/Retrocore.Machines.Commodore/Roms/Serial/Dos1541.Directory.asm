@@ -351,14 +351,15 @@ LABEL_ID_OFFSET = $12
 
 ;; The N command: formats a disk and gives it a name, or clears the directory of a disk with the same format.
 ;;
-;; A name with no ':' is error 33, SYNTAX ERROR, which ends the command; a ':' alone means drive 0. With an ID after the
-;; name, the disk is formatted: every channel is freed, <Format> runs, and the BAM's buffer is cleared. Without one,
-;; only the directory is cleared, on a disk that has this DOS's format (73 otherwise). Either way a new BAM follows,
-;; with the name and ID, the DOS version and the format letter. Its own sector and the directory's first are marked
-;; used, the BAM is written, and an empty directory block is written to 18/1. Then the BAM is read back, and the command
-;; ends by jumping to <Finish>, which returns to the caller.
+;; A command with no ':' fails in the parser with 34, SYNTAX ERROR (no name); a ':' alone means drive 0. (The 33 the
+;; code checks for, a name whose drive was not given, cannot happen: after the ':' the drive is always found.) With an
+;; ID after the name, the disk is formatted: every channel is freed, <Format> runs, and the BAM's buffer is cleared.
+;; Without one, only the directory is cleared, on a disk that has this DOS's format (73 otherwise). Either way a new BAM
+;; follows, with the name and ID, the DOS version and the format letter. Its own sector and the directory's first are
+;; marked used, the BAM is written, and an empty directory block is written to 18/1. Then the BAM is read back, and the
+;; command ends by jumping to <Finish>, which returns to the caller.
 ;; In: CommandBuffer = the command, with the drive, the name and the ID
-;; Errors: 33, SYNTAX ERROR, when the name has no ':', 73 when no ID is given and the disk's format is not <FormatType>,
+;; Errors: 73 when no ID is given and the disk's format is not <FormatType>,
 ;;   and the errors of <Format>, which a failed format reports
 ;; Also: NEW (D1541)
 .proc New

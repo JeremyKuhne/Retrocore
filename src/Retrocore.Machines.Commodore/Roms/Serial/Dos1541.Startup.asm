@@ -110,7 +110,7 @@ OffInner:
 ;;
 ;; The tests are zero page (each byte takes its own address, counts up 256 times back to it and clears), both 8 KB ROMs
 ;; (each sums to its own first page) and the RAM to $07FF (an address-sensitive pattern, then its inverse). A failure
-;; blinks the LEDs in <BlinkFault>. Then <Reset::Initialize> sets up the drive.
+;; blinks the activity LED in <BlinkFault>. Then <Reset::Initialize> sets up the drive.
 ;;
 ;; With interrupts off and binary mode set it makes VIA 1's port A all outputs. In -05 and -06 that is done in a patch
 ;; (`ResetPatch`), which also sets up the bus lines for the self-test and returns at `SelfTest`.
@@ -255,14 +255,15 @@ ToBlinkFault:
 ;; The tests passed, and the NMI vector points here (<Reinitialize> jumps through it), so a reinitialization comes with
 ;; no self-test. It sets up everything the DOS keeps in RAM, in this order:
 ;;
-;; - the stack, the LEDs off, and the ATN interrupt on VIA 1's CA1; - the drive's talk and listen addresses, from the
-;; device jumpers: <DEFAULT_TALK_ADDRESS> with the jumpers' number; - the buffers' pointers, <BufferPositions>, from
-;; <BufferPages>, and those of the command and error buffers; - the channels and secondary addresses, free, with the
-;; command and error channels taken; - the buffers' use, the disk changed flags, the user commands' vectors, the use
-;; order of the channels, the
-;;   controller and its mechanism, the NMI vector, the sector interleave and the retries;
-;; - message 73, the DOS version, as the error channel's first message; - the bus lines: in -05 and -06 released and
-;; then driven, before -05 and in the 1540 driven and then released; - the boot loader, and then the idle loop.
+;; - the stack, the LEDs off, and the ATN interrupt on VIA 1's CA1;
+;; - the drive's talk and listen addresses, from the device jumpers: <DEFAULT_TALK_ADDRESS> with the jumpers' number;
+;; - the buffers' pointers, <BufferPositions>, from <BufferPages>, and those of the command and error buffers;
+;; - the channels and secondary addresses, free, with the command and error channels taken;
+;; - the buffers' use, the disk changed flags, the user commands' vectors and the use order of the channels;
+;; - the controller and its mechanism, the NMI vector, the sector interleave and the retries;
+;; - message 73, the DOS version, as the error channel's first message;
+;; - the bus lines: in -05 and -06 released and then driven, before -05 and in the 1540 driven and then released;
+;; - the boot loader, and then the idle loop.
 ;;
 ;; It does not return: it falls into the idle loop.
 ;; Also: DIAGOK (D1541)

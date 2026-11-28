@@ -52,6 +52,7 @@ internal static class Cbm1541SdkModules
     /// <returns>The assembly.</returns>
     /// <exception cref="ArgumentOutOfRangeException">The source has no such build.</exception>
     /// <exception cref="IOException">The source cannot be read.</exception>
+    /// <exception cref="UnauthorizedAccessException">The source cannot be opened.</exception>
     /// <exception cref="InvalidDataException">The source has errors.</exception>
     internal static AssemblyResult Assemble(string directory, int revision)
     {
@@ -87,6 +88,7 @@ internal static class Cbm1541SdkModules
     /// <exception cref="ArgumentException">The model is neither.</exception>
     /// <exception cref="ArgumentOutOfRangeException">The source has no such revision.</exception>
     /// <exception cref="IOException">The source cannot be read.</exception>
+    /// <exception cref="UnauthorizedAccessException">The source cannot be opened.</exception>
     /// <exception cref="InvalidDataException">The source has errors.</exception>
     internal static Cbm1541Roms BuildRoms(string model, int revision = 6, string? directory = null)
     {

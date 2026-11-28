@@ -769,8 +769,7 @@ Done:
 ;; In: DataByte = the byte, MoreBytes = 0 at EOI
 ;; Errors:
 ;;   51 = RECORD OVERFLOW (<ERROR_RECORD_OVERFLOW>), reported at EOI after a record that was too long
-;;   52, 50, 67 and 72 = FILE TOO LARGE, RECORD NOT PRESENT, ILLEGAL SYSTEM TRACK OR SECTOR and DISK FULL, when adding
-;;     blocks ends in error (<AddBlocks>)
+;;   52 and 50 = FILE TOO LARGE and RECORD NOT PRESENT, when adding blocks ends in error (<AddBlocks>)
 ;; Also: WRTREL (D1541)
 .proc WriteByte
     lda #RELATIVE_LAST_RECORD+RELATIVE_OVERFLOW

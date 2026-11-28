@@ -262,7 +262,8 @@ ToFindDrive:
 ;;   AfterColon = with Y past the ':' and X its commas, as <FindColon> leaves them (C comes here)
 ;;   Equals = with <FileNameStart> set (<Files::LoadDirectory> comes here)
 ;; Errors:
-;;   30 = SYNTAX ERROR, the shape is forbidden for the command; <PendingError> holds the clashing bits
+;;   30 = SYNTAX ERROR, the shape is forbidden for the command; <PendingError> holds the clashing bits until the
+;;     failure's flashing sets it
 ;;   34 = SYNTAX ERROR, no ':' or a ',' before it
 ;; Also: TAGCMD (D1541)
 .proc ParseNames

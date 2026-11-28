@@ -212,8 +212,8 @@ ScanTrackNext:
 
 ;; The next job down. With none on the head's track, sends the head toward the track of <SeekJob>, the last job found
 ;; off it, which is the lowest-numbered: <Steps> = twice the distance, in half-tracks, positive inward; <DriveStatus> =
-;; stepping; and <HeadTrack> = that track already. The pass ends in <EndPass>, where <EndPass::CheckStepping> runs
-;; <EndPass::StepIdle> and takes the first step; the rest follow in the passes after.
+;; stepping; and <HeadTrack> = that track already. The pass ends in <EndPass> (unless a jump job is found first), where
+;; <EndPass::CheckStepping> runs <EndPass::StepIdle> and takes the first step; the rest follow in the passes after.
 ;; Also: QUE05 (D1541)
 ScanTrackLoop:
     dec JobIndex
@@ -305,9 +305,9 @@ JumpToBuffer:
     jmp (DataPointer)
 
 ;; A bump: sets the phase to 0 and the head stepping 92 half-tracks outward (<Steps> = -92), which brings it against the
-;; stop at track 1 from anywhere, with <HeadTrack> = 1, and finishes the job with 1 at once; the pass ends in <EndPass>,
-;; where <EndPass::CheckStepping> runs <EndPass::StepIdle> and takes the first step, and the rest follow in the passes
-;; after.
+;; stop at track 1 from anywhere, with <HeadTrack> = 1, and finishes the job with 1 at once; the pass ends in <EndPass>
+;; (unless a jump job is found first), where <EndPass::CheckStepping> runs <EndPass::StepIdle> and takes the first step,
+;; and the rest follow in the passes after.
 ;; Also: BMP (D1541)
 Bump:
     lda #STATE_ON | STATE_STEPPING
@@ -1932,8 +1932,9 @@ Done:
 .endproc
 
 ;; The format, run as an execute job on buffer 3 (<Commands::Format> puts a `JMP` to it at $0600), on each pass where
-;; the job's header track is the head's track and the head is still (while the head steps, <ScanJobs> ends the pass at
-;; <ScanJobs::CheckReady>), a track at a time, until it finishes; <FormatTrack> says where it has got to.
+;; the job's header track is the head's track, the head is still and the motor is not spinning up (while the head steps,
+;; <ScanJobs> ends the pass at <ScanJobs::CheckReady>), a track at a time, until it finishes; <FormatTrack> says where
+;; it has got to.
 ;;
 ;; The first time (<FormatTrack> negative) it bumps the head to track 1, allows 10 errors for the whole format
 ;; (<FormatRetries>), starts the track's measuring at 4000 bytes (<SegmentLength>) and ends the pass. After that it

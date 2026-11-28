@@ -11,12 +11,15 @@
 ;;
 ;; THE LAYOUT
 ;;
-;; - $C000: the LEDs, the command parser and the commands (Dos1541.Commands.asm). - $CE0E: channels, buffers, the job
-;; queue, OPEN and CLOSE (Dos1541.Files.asm). - $DDF1: the side sectors and the relative files (Dos1541.Relative.asm). -
-;; $E4FC: the error channel and the utility loader (Dos1541.Errors.asm). - $E853: the serial bus (Dos1541.Serial.asm). -
-;; $EA6E: start-up and the idle loop (Dos1541.Startup.asm). - $EC9E: the directory listing, validate, new and the BAM
-;; (Dos1541.Directory.asm). - $F259: the drive controller (Dos1541.Controller.asm). - $FE85: the ROM's tables, the
-;; patches and the vectors (Dos1541.Tables.asm).
+;; - $C000: the LEDs, the command parser and the commands (Dos1541.Commands.asm).
+;; - $CE0E: channels, buffers, the job queue, OPEN and CLOSE (Dos1541.Files.asm).
+;; - $DDF1: the side sectors and the relative files (Dos1541.Relative.asm).
+;; - $E4FC: the error channel and the utility loader (Dos1541.Errors.asm).
+;; - $E853: the serial bus (Dos1541.Serial.asm).
+;; - $EA6E: start-up and the idle loop (Dos1541.Startup.asm).
+;; - $EC9E: the directory listing, validate, new and the BAM (Dos1541.Directory.asm).
+;; - $F259: the drive controller (Dos1541.Controller.asm).
+;; - $FE85: the ROM's tables, the patches and the vectors (Dos1541.Tables.asm).
 ;;
 ;; THE NAMES
 ;;

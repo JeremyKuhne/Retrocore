@@ -249,8 +249,9 @@ ChannelEntryIndex = $0266
 ;; Also: ERWORD (D1541)
 ErrorFlash = $026C
 
-;; A command's held error, which a job's error leaves for the command to report: <ErrorFlash>'s byte, which the LED
-;; flashing uses when no error is held.
+;; A command's held error: <ErrorFlash>'s byte, which a command that fails a check can set before it is reported (a
+;; relative record's overflow, the parser's clashing bits). It is the same byte as the LED's countdown, which the
+;; failure's flashing then sets, so CLOSE takes any non-zero value, a held error or a flashing LED, as an error.
 PendingError = ErrorFlash
 ;; The LED bit to flash for the error, 0 for none.
 ;; Also: ERLED (D1541)
@@ -552,7 +553,7 @@ RELATIVE_OVERFLOW = $20
 ;; Also: DYFILE (D1541)
 RELATIVE_DIRTY = $40
 ;; <ChannelFileType>'s flag for a relative file at its last record; for any other file it means the file's end is
-;; reached, which <Commands::GetInternalByte> sets and the append open tests on a sequential file.
+;; reached, which <Commands::GetInternalByte> sets and the append open and Copy test.
 ;; Also: LRF (D1541)
 RELATIVE_LAST_RECORD = $80
 

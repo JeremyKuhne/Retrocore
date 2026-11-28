@@ -127,7 +127,7 @@ internal sealed partial class AnalysisContracts
 
             // An Entry: whose meaning ends in "; keeps ..." has that in place of the routine's Keeps:, unless the
             // label is a routine of its own with a contract; a label at the same address takes the clause too.
-            Dictionary<ushort, IReadOnlyList<string>> clauses = [];
+            Dictionary<ushort, (string Name, IReadOnlyList<string> Keeps)> clauses = [];
             foreach (DocumentationEntry entry in topic.SectionsNamed("Entry")
                 .Where(section => DocumentationResolver.Applies(section.Condition, model, Symbol))
                 .SelectMany(section => section.Entries))
@@ -136,15 +136,19 @@ internal sealed partial class AnalysisContracts
                 if (entry.Keeps is { } keeps
                     && documentation.Symbols.TryGetValue(label, out long at)
                     && (ushort)at != address
-                    && documentation.Find(label) is not { HasContract: true })
+                    && !(documentation.Find(label) is { } found
+                        && resolver.Effective(found).HasContract(section => DocumentationResolver.Applies(section.Condition, model, Symbol))))
                 {
-                    clauses.TryAdd((ushort)at, keeps);
+                    clauses.TryAdd((ushort)at, (entry.Name, keeps));
                 }
             }
 
-            foreach ((ushort at, IReadOnlyList<string> keeps) in clauses)
+            foreach ((ushort at, (string name, IReadOnlyList<string> keeps)) in clauses)
             {
-                if (Read(topic, model, Symbol, own, address, keeps) is { } clause) { entered.Add((at, clause)); }
+                if (Read(topic, model, Symbol, own, address, keeps) is { } clause)
+                {
+                    entered.Add((at, clause with { Entry = name }));
+                }
             }
 
             // A call to another entry takes the routine's contract where the label has no comment of its own, as the
@@ -397,7 +401,10 @@ internal sealed partial class AnalysisContracts
     }
 
     private static AnalysisContractFinding Finding(AnalysisContract contract, string item, AnalysisContractProblem kind, ushort? at) =>
-        new(contract.Topic.Name, contract.Address, item, kind, at, contract.Topic.Path, contract.Topic.Line);
+        new(contract.Topic.Name, contract.Address, item, kind, at, contract.Topic.Path, contract.Topic.Line)
+        {
+            Entry = contract.Entry
+        };
 
     /// <summary>
     ///  Gets the analysis of the code at an address, as a routine: what it keeps when called.

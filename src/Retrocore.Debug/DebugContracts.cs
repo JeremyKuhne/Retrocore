@@ -204,7 +204,7 @@ internal sealed class DebugContracts
                 if (entry.Keeps is { } keeps
                     && set.Symbols.TryGetValue(label, out long at)
                     && (ushort)at != (ushort)value
-                    && set.Find(label) is not { HasContract: true })
+                    && !(set.Find(label) is { } found && resolver.Effective(found).HasContract(Applies)))
                 {
                     clauses.TryAdd((ushort)at, keeps);
                 }
@@ -216,9 +216,10 @@ internal sealed class DebugContracts
                 entered.Add((at, new(topic.Name, entryKept, entryMemory, Changes: null)));
             }
 
-            // Another entry takes the routine's contract where the label has no comment of its own.
+            // Another entry takes the routine's contract where the label has no comment of its own. A routine that
+            // documents Keeps: or Uses: holds its addresses even where they name nothing checked, as the analysis does.
             DebugContract? routine = null;
-            if (kept.Count != 0 || memory.Count != 0 || changes is not null)
+            if (topic.HasContract(Applies))
             {
                 routine = new(topic.Name, kept, memory, changes);
                 contracts.TryAdd((ushort)value, routine);

@@ -677,6 +677,8 @@ public class DocumentationTests
             ;;   Later = skips the first; Keeps X (the index) And Y.
             ;;   Last = skips both; keeps nothing
             ;;   Wrong = skips all; keeps the carry
+            ;;   Nothing = skips all; keeps none
+            ;;   Section = skips all; keeps: A
             ROUTINE:
                 nop
             Later:
@@ -684,6 +686,8 @@ public class DocumentationTests
             Last:
                 nop
             Wrong:
+            Nothing:
+            Section:
                 rts
             """);
 
@@ -701,7 +705,9 @@ public class DocumentationTests
         new DocumentationEntry("Stray", "skips; keeps X), Y", 0).Keeps.Should().Equal("X)", "Y");
 
         List<string> messages = [.. new DocumentationResolver(set).Check().Select(diagnostic => diagnostic.Message)];
-        messages.Should().Equal("Entry: 'Wrong' keeps 'the carry', which is not a register, flag or symbol.");
+        messages.Should().Equal(
+            "Entry: 'Wrong' keeps 'the carry', which is not a register, flag or symbol.",
+            "Entry: 'Section' ends its meaning with '; keeps' and the items, as '; keeps X, Y'.");
     }
 
     /// <summary>

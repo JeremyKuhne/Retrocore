@@ -93,9 +93,13 @@ public sealed class DocumentationTopic
         Sections.Where(section => section.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
 
     /// <summary>
-    ///  Gets whether the topic promises what a call keeps or changes, with a <c>Keeps:</c> or <c>Uses:</c> section.
+    ///  Gets whether the topic promises what a call keeps or changes, with a <c>Keeps:</c> or <c>Uses:</c> section
+    ///  that applies.
     /// </summary>
-    public bool HasContract => SectionsNamed("Keeps").Any() || SectionsNamed("Uses").Any();
+    /// <param name="applies">Whether a section applies, by its condition, in the build and model.</param>
+    /// <returns>Whether it has a contract.</returns>
+    public bool HasContract(Func<DocumentationSection, bool> applies) =>
+        SectionsNamed("Keeps").Any(applies) || SectionsNamed("Uses").Any(applies);
 
     /// <summary>
     ///  Gets the labels listed as other ways into the routine: stacked labels and <c>Entry:</c> entries.

@@ -138,7 +138,7 @@ public class ContractAnalysisTests
             """;
 
         (List<string> findings, _, _) = Check(Wrong, "Mos6502");
-        findings.Should().Equal("Saver ($1000) documents Keeps: Y, but Y is changed by the instruction at $1003.");
+        findings.Should().Equal("Saver ($1000) documents that its entry Change keeps Y, but Y is changed by the instruction at $1003.");
 
         const string Right = """
             ;; Returns, or from Change clears X first.
@@ -172,8 +172,8 @@ public class ContractAnalysisTests
         (findings, _, _) = Check(Own, "Mos6502");
         findings.Should().BeEmpty();
 
-        // One with a contract of its own is checked for that, whatever order the routines come in. TYA copies the
-        // value LDY #0 made, so A is changed there.
+        // One with a contract of its own is checked for that. TYA copies the value LDY #0 made, so A is changed
+        // there.
         const string OwnContract = """
             ;; Returns.
             ;; Keeps: X
@@ -217,8 +217,8 @@ public class ContractAnalysisTests
 
     /// <summary>
     ///  A routine's own contract at its start wins over another routine's entry there, in the check and the
-    ///  debugger alike, whichever comes first: Target keeps A as it says, though Saver lists the label at its
-    ///  address as an entry, plain or with a clause.
+    ///  debugger alike, though the entry's routine comes first: Target keeps A as it says, though Saver lists the
+    ///  label at its address as an entry, plain or with a clause; and Target's Keeps: none holds its address too.
     /// </summary>
     [TestMethod]
     public void RoutinesWinOverOtherRoutinesEntries()
@@ -244,6 +244,25 @@ public class ContractAnalysisTests
             findings.Should().Equal("Target ($1001) documents Keeps: A, but A is changed by the instruction at $1001.");
             DebugContracts(source)[0x1001].Registers.Should().Equal("A");
         }
+
+        const string None = """
+            ;; Returns.
+            ;; Keeps: X
+            ;; Entry: Alias = clears A; keeps A
+            Saver:
+                rts
+
+            ;; Clears A.
+            ;; Keeps: none
+            Target:
+            Alias:
+                lda #0
+                rts
+            """;
+
+        (List<string> none, _, _) = Check(None, "Mos6502");
+        none.Should().BeEmpty();
+        DebugContracts(None).Should().NotContainKey(0x1001, "Target promises nothing, and holds its address");
     }
 
     /// <summary>

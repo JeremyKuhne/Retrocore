@@ -614,8 +614,9 @@ ERROR_NO_BLOCK = $65
 ;; 66 ILLEGAL TRACK OR SECTOR.
 ;; Also: BADTS (D1541)
 ERROR_ILLEGAL_TRACK_SECTOR = $66
-;; 67 ILLEGAL TRACK OR SECTOR, the same message as $66 (the message table holds them together): raised by the free-block
-;; search for a track beyond the last.
+;; 67 ILLEGAL TRACK OR SECTOR, the same message as $66 (the message table holds them together): a track or sector the
+;; DOS itself reached is out of range, as in the free-block search past the last track, CLOSE's replace with no new
+;; chain, and a side sector's error.
 ;; Also: SYSTS (D1541)
 ERROR_ILLEGAL_SYSTEM_TRACK_SECTOR = $67
 ;; 70 NO CHANNEL: no free channel or buffer.
@@ -627,7 +628,7 @@ ERROR_DIRECTORY = $71
 ;; 72 DISK FULL.
 ;; Also: DSKFUL (D1541)
 ERROR_DISK_FULL = $72
-;; 73 CBM DOS V2.6 1541: the start-up message, and the error for writing a disk of another format.
+;; 73 CBM DOS V2.6 1541 (V170 in the 1540): the start-up message, and the error for writing a disk of another format.
 ;; Also: CBMV2 (D1541)
 ERROR_DOS_VERSION = $73
 ;; 74 DRIVE NOT READY.

@@ -47,9 +47,9 @@ CommandRoutinesHigh:
     .byte >Commands::Rename, >Commands::Scratch, >Commands::New
 
 ;; The patterns of the commands that take names: copy, rename, scratch and new, then LOAD's. Each byte says which shapes
-;; of command the parser allows, as it checks them against <Commands::Structure>: whether a pattern, more than one file,
-;; a default drive and a file name are allowed. The table starts at `$FEAD`, and <PATTERN_ORIGIN> indexes it by the
-;; command's number.
+;; of command the parser allows, as it checks them against <Commands::Structure>: whether a pattern, more than one file
+;; and a default drive are allowed, and whether a file name is required. The table starts at `$FEAD`, and
+;; <PATTERN_ORIGIN> indexes it by the command's number.
 CommandPatterns:
     .byte $51
     .byte $DD
@@ -244,7 +244,7 @@ SetSpeed:
 .endif
 
 .if LATE_PATCHES
-; -05's two patches, which later builds moved the code to.
+; -05's two patches, which -06 keeps: code moved out of start-up and the bus's receive routine into the patch area.
 .scope Startup continued
 
 ;; -05's fix: sets VIA 1's port A direction (X is $FF, all outputs), then port B = `$02` and its directions, so CLK is
@@ -275,7 +275,7 @@ SetSpeed:
 .endproc
 .endscope
 .else
-    ; Before -05, the patches' 31 bytes are fill.
+    ; Before -05, and in the 1540, the patches' 31 bytes are fill.
     .res 31, $AA
 .endif
 .if REVISION = 6

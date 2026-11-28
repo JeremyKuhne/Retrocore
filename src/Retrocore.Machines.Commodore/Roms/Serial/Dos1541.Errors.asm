@@ -2,7 +2,7 @@
 ; COMMODORE 1541 DOS: THE ERROR CHANNEL AND THE UTILITY LOADER ($E4FC-$E852)
 
 ;; Emits one text piece of an error message: a string's characters, or a word token's number, with bit 7 set on the
-;; message's first and last byte (which end the text).
+;; message's first and last byte (which mark where the text starts and ends).
 ;; Parameters:
 ;;   item = a string or a token (an `Errors::WORD_` constant)
 ;;   isFirst = nonzero when the piece starts the text
@@ -219,9 +219,11 @@ NotValidating:
 .endproc
 
 ;; Ends a failed command and goes idle: it never returns. It clears the command buffer and the deferred BAM write,
-;; starts the error LED flashing, frees the internal channels, and resets the stack to just below
-;; <Controller::OVERFLOW_SIZE>'s bytes. For a data channel it first frees the channel, unless it is a relative or direct
-;; one, of the listener or talker the bus had.
+;; starts the error LED flashing, frees the internal channels, and resets the stack pointer to
+;; <Controller::OVERFLOW_SIZE> (the stack's top at $0145). For a data channel, in -05 and -06 it then frees the channel,
+;; unless it is a relative or direct one, of the listener or talker the bus had; in the earlier builds and the 1540 the
+;; channel of the listener or talker is not freed, since the bus error routine called there releases the bus and goes
+;; idle without returning.
 ;; Also: CMDER3 (D1541)
 .proc Recover
     ; The command and the BAM's pending write are dropped; the LED flashes.
@@ -256,8 +258,8 @@ NotValidating:
     sta Channel
     jmp FreeChannel
 
-;; Talking: the read channel. The listing's comment says ITERR, a slip: the -01 to -03 builds call the bus error routine
-;; here, which releases the bus, and -05 and later have three NOPs.
+;; Talking: the read channel. -01 to -03 and the 1540 call <Serial::BusError> here, which releases the bus and goes idle
+;; without returning, so the channel is not freed; -05 and -06 have three NOPs and go on to free it.
 ;; Also: TLKERR (D1541)
 WhileTalking:
     jsr Files::FindReadChannel
@@ -384,7 +386,7 @@ Converted:
 ;;   ChannelByte+MESSAGE_CHANNEL = the message's first byte
 ;;   ChannelLastByte+MESSAGE_CHANNEL = the offset of the message's end
 ;;   ChannelStatus+MESSAGE_CHANNEL = <CHANNEL_TALK>
-;; Uses: A, X, Y, Work0
+;; Uses: A, X, Y, CommandPointer+2, CommandPointer+3, ErrorBuffer
 ;; Also: ERRMSG (D1541)
 .proc SetMessage
     ; The number, then a comma and the text.
@@ -735,8 +737,9 @@ CheckEnd:
     sta Work2
     jmp (Work2)
 
-;; Gets the next byte of the file (<GetInternalByte>); if it was past the file's last, error 51, with the block's track
-;; and sector.
+;; Gets the next byte of the file (<GetInternalByte>). A record's bytes never include the file's last byte, which is
+;; read as its checksum with <GetInternalByte> alone: reaching it here (<MoreBytes> 0) is error 51, with the block's
+;; track and sector.
 ;; Out: A = the byte
 ;; Errors: 51 = the record overran the file
 ;; Also: GTABYT (D1541)

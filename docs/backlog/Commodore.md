@@ -1,8 +1,8 @@
 # Backlog: the Commodore VIC-20, 64 and 128
 
 Status: **agreed 2026-11-25** ("Start phase V1"). Phases V1 to V4 and V6 are built; V5, the drives' DOS sources, is
-under way (the 1541's names are settled, [Dos1541.md](../conversions/Dos1541.md)), and the `cbmbasic` rename is still
-to do.
+under way (the source builds every revision and the drives run from it; the routines' contracts are next,
+[Dos1541.md](../conversions/Dos1541.md)), and the `cbmbasic` rename is still to do.
 
 Commodore's three home computers after the PET share most of what they are made of: a 6502 family processor,
 Commodore BASIC 2 (7.0 on the 128), a kernal with the same jump table, the Datasette, and the serial bus with the

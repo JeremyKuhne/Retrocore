@@ -23,6 +23,6 @@ in [AssemblyStyle.md](../AssemblyStyle.md).
 | Apple Pascal 1.1's interpreter, SYSTEM.APPLE (`src/Retrocore.Pascal/Sdk/Interpreter/1.1/`) | Converted | [PascalInterpreter.md](PascalInterpreter.md), [renames](PascalInterpreterRenames.md) |
 | Apple Pascal 1.3's Compiler, SYSTEM.COMPILER (`src/Retrocore.Pascal/Sdk/Compiler/apple2-1.3/`) | Converted | [PascalCompiler13.md](PascalCompiler13.md), [renames](PascalCompiler13Renames.md) |
 | The VIC-20's BASIC, kernal and character ROM (`src/Retrocore.Machines.Commodore/Roms/Vic20/`) | BASIC, the kernal and the character ROM converted | [Vic20.md](Vic20.md), [kernal renames](Vic20KernalRenames.md) |
-| The 1541's and 1540's DOS (`Serial/Dos1541.asm`, to come) | Named (steps 1 to 3), not converted | [Dos1541.md](Dos1541.md), [renames](Dos1541Renames.md) |
+| The 1541's and 1540's DOS (`src/Retrocore.Machines.Commodore/Roms/Serial/Dos1541.*`) | Converted; the routines' contracts to come | [Dos1541.md](Dos1541.md), [renames](Dos1541Renames.md) |
 
 Each decision has an ID, which commit messages and comments may cite.

@@ -417,11 +417,15 @@ Done:
 .scope Startup continued
 
 .if LATE_PATCHES = 0
-;; The boot loader's exit, where it finds no clip.
+;; The boot loader's exit, where <Boot> finds no clip.
 ;; Also: BOOT2 (D1541)
-BootExit:
-.endif
+.proc BootExit
     rts
+.endproc
+.else
+    ; The removed boot loader's exit, which nothing reaches now (BOOT2 in the listing).
+    rts
+.endif
 
 ;; Start-up calls it last: only an RTS, where the boot loader was (it ran a utility when clock and data were grounded;
 ;; it does not work on the serial bus). 34 bytes of filler follow, NOPs and an RTS.
@@ -441,7 +445,8 @@ BootExit:
     beq BootExit
     cli
 
-    ; The clip must come off before the utility loads.
+;; The clip must come off before the utility loads.
+;; Also: BOOT3 (D1541)
 WaitForClip:
     lda Via1PortB
     and #$05

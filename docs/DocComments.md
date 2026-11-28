@@ -469,7 +469,8 @@ broken link.
   `; keeps nothing` for one that relies on its caller to save the registers, is checked against that clause
   instead of the routine's `Keeps:`, and not for `Uses:`; where the label's own comment has a `Keeps:` or `Uses:`,
   that comment wins, and a label at the same address with no comment of its own takes the clause too. A routine's
-  own contract at its start wins over another routine's entry at that address. The clause
+  own contract at its start wins over another routine's entry at that address, and a keeps clause over another
+  routine's entry without one. The clause
   names items as `Keeps:` does, each with an optional note in parentheses, separated by commas or, unlike
   `Keeps:`, "and"; the documentation check warns about one it does not know.
 

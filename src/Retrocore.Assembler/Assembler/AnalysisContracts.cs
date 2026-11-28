@@ -103,8 +103,10 @@ internal sealed partial class AnalysisContracts
         DocumentationResolver resolver = new(documentation, others);
         long? Symbol(string name) => result.Symbols.TryGetValue(name, out long value) ? value : null;
 
-        // Each routine's contract at its start first, then its entries' where no routine starts, in source order.
+        // Each routine's contract at its start first, then entries' keeps clauses, then other entries' contracts,
+        // each where nothing came before, in source order.
         List<(ushort At, AnalysisContract Contract)> entered = [];
+        List<(ushort At, AnalysisContract Contract)> plain = [];
         foreach (DocumentationTopic documented in documentation.Topics)
         {
             if (documented.Kind != DocumentationKind.Routine || documented.Value is not { } value)
@@ -164,13 +166,13 @@ internal sealed partial class AnalysisContracts
                         && !clauses.ContainsKey((ushort)entry)
                         && documentation.Find(label) is null)
                     {
-                        entered.Add(((ushort)entry, contract));
+                        plain.Add(((ushort)entry, contract));
                     }
                 }
             }
         }
 
-        foreach ((ushort at, AnalysisContract contract) in entered) { _contracts.TryAdd(at, contract); }
+        foreach ((ushort at, AnalysisContract contract) in entered.Concat(plain)) { _contracts.TryAdd(at, contract); }
     }
 
     /// <summary>

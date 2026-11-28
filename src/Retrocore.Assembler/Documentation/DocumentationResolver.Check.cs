@@ -374,7 +374,7 @@ public sealed partial class DocumentationResolver
                     // A keeps clause names what Keeps: would: registers, flags by word, memory, or none.
                     if (entry.Keeps is null && entry.Meaning.Contains("; keeps", StringComparison.OrdinalIgnoreCase))
                     {
-                        warn($"Entry: '{entry.Name}' ends its meaning with '; keeps' and the items, as '; keeps X, Y'.", entry.Line);
+                        warn($"Entry: '{entry.Name}' has '; keeps', but not as a clause at the end, as '; keeps X, Y'.", entry.Line);
                     }
 
                     foreach (string item in entry.Keeps ?? [])

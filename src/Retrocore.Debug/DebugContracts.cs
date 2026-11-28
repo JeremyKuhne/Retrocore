@@ -171,8 +171,10 @@ internal sealed class DebugContracts
         Dictionary<ushort, DebugContract> contracts = [];
         DocumentationSet set = resolver.Current;
 
-        // Each routine's contract at its start first, then its entries' where no routine starts, in source order.
+        // Each routine's contract at its start first, then entries' keeps clauses, then other entries' contracts,
+        // each where nothing came before, in source order.
         List<(ushort At, DebugContract Contract)> entered = [];
+        List<(ushort At, DebugContract Contract)> plain = [];
         foreach (DocumentationTopic documented in set.Topics)
         {
             if (documented.Kind != DocumentationKind.Routine || documented.Value is not { } value) { continue; }
@@ -233,13 +235,13 @@ internal sealed class DebugContracts
                     && !clauses.ContainsKey((ushort)entry)
                     && set.Find(label) is null)
                 {
-                    entered.Add(((ushort)entry, routine));
+                    plain.Add(((ushort)entry, routine));
                 }
             }
         }
 
         // A clause that keeps nothing holds its address, so no other contract is checked there, but checks nothing.
-        foreach ((ushort at, DebugContract contract) in entered) { contracts.TryAdd(at, contract); }
+        foreach ((ushort at, DebugContract contract) in entered.Concat(plain)) { contracts.TryAdd(at, contract); }
         foreach ((ushort at, DebugContract contract) in contracts.ToArray())
         {
             if (contract.Registers.Count == 0 && contract.Memory.Count == 0 && contract.Changes is null)

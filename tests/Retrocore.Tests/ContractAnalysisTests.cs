@@ -263,6 +263,28 @@ public class ContractAnalysisTests
         (List<string> none, _, _) = Check(None, "Mos6502");
         none.Should().BeEmpty();
         DebugContracts(None).Should().NotContainKey(0x1001, "Target promises nothing, and holds its address");
+
+        // A keeps clause wins over an earlier routine's plain entry at the same address.
+        const string Clause = """
+            ;; Returns, or from Alias clears A.
+            ;; Keeps: none
+            ;; Entry: Alias = clears A
+            First:
+                rts
+
+            ;; Returns, or from Alias clears A.
+            ;; Keeps: X
+            ;; Entry: Alias = clears A; keeps A
+            Second:
+                rts
+            Alias:
+                lda #0
+                rts
+            """;
+
+        (List<string> clause, _, _) = Check(Clause, "Mos6502");
+        clause.Should().Equal("Second ($1001) documents that its entry Alias keeps A, but A is changed by the instruction at $1002.");
+        DebugContracts(Clause)[0x1002].Registers.Should().Equal("A");
     }
 
     /// <summary>

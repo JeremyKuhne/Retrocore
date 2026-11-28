@@ -86,19 +86,54 @@ public class I8080CoreTests
     }
 
     /// <summary>
-    ///  IN and OUT put the port number on both halves of the address bus.
+    ///  IN and OUT put the port number on both halves of the address bus at T1, and transfer on T3 after READY.
     /// </summary>
+    /// <param name="variant">The CPU.</param>
     [TestMethod]
-    public void PortsAreOnBothAddressHalves()
+    [DataRow(I8080Variant.I8080)]
+    [DataRow(I8080Variant.I8085)]
+    public void PortsAreOnBothAddressHalves(I8080Variant variant)
     {
-        (I8080Processor<Z80TestBus> cpu, Z80TestBus bus) = Create(I8080Variant.I8080, 0xD3, 0x42, 0xDB, 0x17);
+        (I8080Processor<Z80TestBus> cpu, Z80TestBus bus) = Create(variant, 0xD3, 0x42, 0xDB, 0x17);
         bus.Inputs.Enqueue(0x99);
         cpu.Registers = cpu.Registers with { A = 0x5A };
-        cpu.StepInstruction();
-        cpu.StepInstruction();
+        List<ProcessorCycle> output = Trace(cpu, 8);
+        output[^1].Should().BeEquivalentTo(new { Address = (ushort)0x4242, Operation = BusOperation.None });
+        cpu.Signals = I8080Signals.Wait;
+        cpu.StepCycle();
+        cpu.LastCycle.IsStalled.Should().BeTrue();
+        bus.Outputs.Should().BeEmpty();
+
+        cpu.Signals = I8080Signals.None;
+        output = Trace(cpu, 2);
+        output[0].Operation.Should().Be(BusOperation.None);
+        output[1].Should().BeEquivalentTo(new
+        {
+            Address = (ushort)0x4242,
+            Operation = BusOperation.IoWrite,
+            Value = (byte)0x5A,
+            IsOpcodeFetch = false
+        });
+
         bus.Outputs.Should().Equal((0x4242, 0x5A));
+        cpu.IsInstructionBoundary.Should().BeTrue();
+
+        List<ProcessorCycle> input = Trace(cpu, 9);
+        input[^2].Should().BeEquivalentTo(new { Address = (ushort)0x1717, Operation = BusOperation.None });
+        input[^1].Operation.Should().Be(BusOperation.None);
+        bus.InputPorts.Should().BeEmpty();
+        cpu.StepCycle();
+        cpu.LastCycle.Should().BeEquivalentTo(new
+        {
+            Address = (ushort)0x1717,
+            Operation = BusOperation.IoRead,
+            Value = (byte)0x99,
+            IsOpcodeFetch = false
+        });
+
         bus.InputPorts.Should().Equal(0x1717);
         cpu.Registers.A.Should().Be(0x99);
+        cpu.IsInstructionBoundary.Should().BeTrue();
     }
 
     /// <summary>

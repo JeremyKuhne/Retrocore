@@ -364,26 +364,40 @@ public sealed partial class I8080Processor<TBus> where TBus : IProcessorBus, IIo
         Internal(6);
     }
 
-    // Runs the current state of the machine cycle; a cycle's last state continues the instruction.
+    // Choose the work with one dispatch on the machine cycle and T-state.
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private void Tick()
     {
-        if (_state.Cycle == I8080MachineCycle.Internal)
-        {
-            _state.Activity = BusOperation.None;
-            if (++_state.T >= _state.Length) { EndCycle(); }
-            return;
-        }
+        const int Fetch = (int)I8080MachineCycle.Fetch << 2;
+        const int Acknowledge = (int)I8080MachineCycle.Acknowledge << 2;
+        const int Read = (int)I8080MachineCycle.Read << 2;
+        const int Write = (int)I8080MachineCycle.Write << 2;
+        const int InputRead = (int)I8080MachineCycle.InputRead << 2;
+        const int OutputWrite = (int)I8080MachineCycle.OutputWrite << 2;
 
-        bool fetch = _state.Cycle is I8080MachineCycle.Fetch or I8080MachineCycle.Acknowledge;
-        switch (_state.T)
+        // Bus cycles have at most four states. Internal cycles follow every bus cycle in the enum.
+        switch (((int)_state.Cycle << 2) + _state.T)
         {
-            case 0:
-                _state.Bus = fetch ? _state.Registers.PC : _state.Address;
+            case Fetch:
+            case Acknowledge:
+                _state.Bus = _state.Registers.PC;
                 _state.Activity = BusOperation.None;
                 _state.T++;
                 return;
-            case 1:
+            case Read:
+            case Write:
+            case InputRead:
+            case OutputWrite:
+                _state.Bus = _state.Address;
+                _state.Activity = BusOperation.None;
+                _state.T++;
+                return;
+            case Fetch + 1:
+            case Acknowledge + 1:
+            case Read + 1:
+            case Write + 1:
+            case InputRead + 1:
+            case OutputWrite + 1:
                 if ((_state.Signals & I8080Signals.Wait) != 0)
                 {
                     _state.Activity = StalledActivity;
@@ -393,60 +407,55 @@ public sealed partial class I8080Processor<TBus> where TBus : IProcessorBus, IIo
                 _state.Activity = BusOperation.None;
                 _state.T++;
                 return;
-            case 2:
-                Transfer();
-                if (fetch)
-                {
-                    _state.T++;
-                    return;
-                }
-
-                EndCycle();
-                return;
-            default:
-                // T4 of M1 decodes.
-                _state.Activity = BusOperation.None;
-                EndCycle();
-                return;
-        }
-    }
-
-    // T3: the cycle moves its byte.
-    private void Transfer()
-    {
-        _state.OpcodeTransfer = false;
-        switch (_state.Cycle)
-        {
-            case I8080MachineCycle.Fetch:
+            case Fetch + 2:
+                _state.OpcodeTransfer = false;
                 _state.Value = _bus.Read(_state.Bus);
                 _state.Registers.PC++;
                 _state.Activity = BusOperation.Read;
                 _state.OpcodeTransfer = true;
-                break;
-            case I8080MachineCycle.Acknowledge:
+                _state.Data = _state.Value;
+                _state.T++;
+                return;
+            case Acknowledge + 2:
                 _state.Value = _state.InterruptData;
                 _state.Activity = BusOperation.InterruptAcknowledge;
                 _state.OpcodeTransfer = true;
-                break;
-            case I8080MachineCycle.Read:
+                _state.Data = _state.Value;
+                _state.T++;
+                return;
+            case Read + 2:
+                _state.OpcodeTransfer = false;
                 _state.Value = _bus.Read(_state.Bus);
                 _state.Activity = BusOperation.Read;
                 break;
-            case I8080MachineCycle.Write:
+            case Write + 2:
+                _state.OpcodeTransfer = false;
                 _bus.Write(_state.Bus, _state.Value);
                 _state.Activity = BusOperation.Write;
                 break;
-            case I8080MachineCycle.InputRead:
+            case InputRead + 2:
+                _state.OpcodeTransfer = false;
                 _state.Value = _bus.In(_state.Bus);
                 _state.Activity = BusOperation.IoRead;
                 break;
-            default:
+            case OutputWrite + 2:
+                _state.OpcodeTransfer = false;
                 _bus.Out(_state.Bus, _state.Value);
                 _state.Activity = BusOperation.IoWrite;
                 break;
+            case Fetch + 3:
+            case Acknowledge + 3:
+                _state.Activity = BusOperation.None;
+                EndCycle();
+                return;
+            default:
+                _state.Activity = BusOperation.None;
+                if (++_state.T >= _state.Length) { EndCycle(); }
+                return;
         }
 
         _state.Data = _state.Value;
+        EndCycle();
     }
 
     // The machine cycle's last state: the instruction takes its result and chooses what follows.

@@ -444,8 +444,8 @@ public class ContractAnalysisTests
         (findings, _, _) = Check(falls, "Mos6502");
         findings.Should().ContainSingle().Which.Should().Contain("Main ($1006) documents Keeps: X");
 
-        // Text after a return, just before a caller's run, is no way into it; nor is an equate whose value falls inside
-        // one of its instructions.
+        // Text after a return, just before a caller's run, which only a label names, is no way into it; nor is an
+        // equate whose value falls inside one of its instructions.
         string text = """
             Thing = $1005
 
@@ -466,6 +466,28 @@ public class ContractAnalysisTests
 
         (findings, _, _) = Check(text, "Mos6502");
         findings.Should().BeEmpty();
+
+        // A number may point at data before a run, as a vector JMP (Vector) goes to, where a skip may run into it.
+        string vector = """
+            ;; Goes through the vector.
+            ;; Uses: A
+            Start:
+                jmp (Vector)
+
+            Vector:
+                .word $1005
+                .byte $2C
+
+            ;; Sets bit 0.
+            ;; Uses: A
+            Caller:
+                lda #1
+                jsr Set
+                rts
+            """ + Callee;
+
+        (findings, _, _) = Check(vector, "Mos6502");
+        findings.Should().Contain(finding => finding.StartsWith("Main ($100C) documents Keeps: X", StringComparison.Ordinal));
 
         // An exported entry may be called by programs outside the assembly, with any values.
         string exported = """
@@ -494,6 +516,41 @@ public class ContractAnalysisTests
 
         (findings, _, _) = Check(jump, "Mos6502");
         findings.Should().Contain(finding => finding.StartsWith("Other ($1000) documents Keeps: X", StringComparison.Ordinal));
+    }
+
+    /// <summary>
+    ///  A WAI from other code goes on into the entry after it, as a fall-through does, so the entry keeps its finding.
+    /// </summary>
+    [TestMethod]
+    public void WaitsFallIntoEntries()
+    {
+        const string Source = """
+            ;; Sets bit 0.
+            ;; Uses: A
+            Caller:
+                lda #1
+                jsr Set
+                rts
+
+            ;; Returns, or from Set sets bits.
+            ;; Keeps: X
+            ;; Entry: Set = sets the bits set in A, which must have a bit set
+            Main:
+                rts
+
+            Other:
+                lda #0
+                wai
+            Set:
+                ora $10
+                bne Done
+                ldx #0
+            Done:
+                rts
+            """;
+
+        (List<string> findings, _, _) = Check(Source, "Wdc65C02");
+        findings.Should().ContainSingle().Which.Should().Contain("Main ($1006) documents Keeps: X");
     }
 
     /// <summary>

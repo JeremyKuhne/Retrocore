@@ -558,14 +558,14 @@ internal sealed partial class AnalysisContracts
         return address;
     }
 
-    // Whether code may run into a data byte: through a jump, branch or call to it or before it in its data, or by
-    // falling into the data from the instruction before, as into a .byte $2C written as a skip; a table or text after
-    // a return is not, though a label names it.
+    // Whether code may run into a data byte: through a jump, branch or call to it or before it in its data, a number
+    // that points there, as a JMP (Vector) may go, or by falling into the data from the instruction before, as into a
+    // .byte $2C written as a skip; a table or text after a return, which only a label names, is not.
     private bool DataReached(ushort at)
     {
         for (int steps = 0; steps < MaximumRunSteps; steps++)
         {
-            if (_targets.Contains(at)) { return true; }
+            if (_targets.Contains(at) || _numbers.Contains(at)) { return true; }
             ushort before = (ushort)(at - 1);
             if (!_defined[before] || !_data[before]) { return FallsInto(at) is not null; }
             at = before;

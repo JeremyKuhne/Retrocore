@@ -628,10 +628,6 @@ WaitForClip:
 
 ; The utility loader, the `&` command.
 
-;; A carriage return with bit 7 set, which the scan for a command's names looks for to read the rest of the string: a
-;; command line has none, so nothing ends the scan early.
-SHIFTED_RETURN = $8D
-
 ;; Loads a utility from the disk and runs it, as the `&` command: it never returns. The command's first name is looked
 ;; up, and opened as a user file (type 3; the listing's comment says 5). Then each record, a load address, a count, that
 ;; many bytes and a checksum byte, is stored, and the first record's address is jumped to, with the file count in

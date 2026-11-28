@@ -89,6 +89,10 @@ Store:
 .endscope
 .scope Commands continued
 
+;; A carriage return with bit 7 set, which the scan for a command's names looks for to read the rest of the string: a
+;; command line has none, so nothing ends the scan early.
+SHIFTED_RETURN = $8D
+
 ;; Runs the command in <CommandBuffer>. It clears <BamWriteDeferred>, takes <DriveNumber> from <LastDrive> and sets
 ;; the error channel to 00, OK. A string that arrived with an OPEN on a data channel (bit 7 of <SecondaryCommand>
 ;; set, channel not 15) is a file name, and goes to <Files::Open>. Any other is a command: its first letter is looked
@@ -319,7 +323,7 @@ SecondNames:
     sta FileNameStart,x
     lda FirstStreamEnd
     sta SecondStreamStart
-    lda #$8D
+    lda #SHIFTED_RETURN
     jsr ScanFor
     inx
     stx SecondStreamEnd

@@ -64,13 +64,13 @@ CountFromZero:
     bcs Multiply
     dec Accumulator+2
 
-;; The record size into `temp`, the multiplier.
+;; The record size into <Temporary>, the multiplier.
 ;; Also: MUL50 (D1541)
 Multiply:
     lda ChannelRecordSize,x
     sta Temporary
 
-;; Each bit of the size, low first: a 1 adds the shifted record number to `Relative::Product`.
+;; Each bit of the size, low first: a 1 adds the shifted record number to <Product>.
 ;; Also: MUL100 (D1541)
 NextBit:
     lsr Temporary
@@ -92,7 +92,7 @@ Double:
     bne Done
     inc Product+2
 
-;; `recptr` added: done.
+;; <RecordOffset> added: done.
 ;; Also: MUL400 (D1541)
 Done:
     rts
@@ -127,7 +127,7 @@ Done:
     sta Temporary
     ldx #$03
 
-;; Swaps `Relative::Product` with `Relative::Accumulator`+1-3: the dividend into the accumulator.
+;; Swaps <Product> with <Accumulator>+1-3: the dividend into the accumulator.
 ;; Also: DIV100 (D1541)
 Swap:
     lda Accumulator,x
@@ -145,7 +145,7 @@ Swap:
 NextStep:
     ldx #$00
 
-;; ...a byte at a time, leaving the low byte in `Relative::Accumulator`.
+;; ...a byte at a time, leaving the low byte in <Accumulator>.
 ;; Also: DIV200 (D1541)
 ShiftDown:
     lda Accumulator+1,x
@@ -163,7 +163,7 @@ ShiftDown:
     plp
     jsr RotateLeft
 
-;; Adds the step's quotient to `Relative::Product`, and makes it the leftover: times 2 for 254, times 8 for 120.
+;; Adds the step's quotient to <Product>, and makes it the leftover: times 2 for 254, times 8 for 120.
 ;; Also: DIV300 (D1541)
 AddQuotient:
     jsr AddToProduct
@@ -200,7 +200,7 @@ TestSize:
     bne SetRemainder
     inc Product+2
 
-;; Under 256 but not under the divisor: one more in `Relative::Product`, the divisor off the remainder.
+;; Under 256 but not under the divisor: one more in <Product>, the divisor off the remainder.
 ;; Also: DIV600 (D1541)
 SetRemainder:
     sta Accumulator+1
@@ -306,7 +306,7 @@ Loop:
     ldy #COMMAND_CHANNEL
     ldx Channel
 
-;; Each entry, from the end, until LINDX's.
+;; Each entry, from the end, until <Channel>'s.
 ;; Also: LRULP1 (D1541)
 Loop:
     lda a:LeastRecentlyUsed,y
@@ -368,7 +368,7 @@ ReadAhead:
     jsr FlipBuffers
     jsr ReadBlock
 
-;; TRACK and SECTOR back.
+;; <Track> and <Sector> back.
 ;; Also: DBL08 (D1541)
 RestoreBlock:
     pla
@@ -377,7 +377,7 @@ RestoreBlock:
     sta Track
     jmp Wait
 
-;; No link: TRACK and SECTOR back, and the swap alone.
+;; No link: <Track> and <Sector> back, and the swap alone.
 ;; Also: DBL10 (D1541)
 LastBlock:
     pla
@@ -455,7 +455,7 @@ Done:
     lda #RELATIVE_OVERFLOW
     jsr ClearFlag
 
-;; On to <AcceptByte>'s command or file path, by SA.
+;; On to <AcceptByte>'s command or file path, by secondary address.
 ;; Also: PBYTE (D1541)
 ToChannel:
     lda SecondaryAddress
@@ -488,7 +488,7 @@ ToFile:
     lda DataByte
     jmp WriteByte
 
-;; Relative: WRTREL.
+;; Relative: <Relative::WriteByte>.
 ;; Also: L41 (D1541)
 NotSequential:
     bne Direct
@@ -513,14 +513,14 @@ ToCommand:
     lda DataByte
     jsr PutByte
 
-;; EOIFLG not yet 0: more to come.
+;; <MoreBytes> not yet 0: more to come.
 ;; Also: L50 (D1541)
 CheckEnd:
     lda MoreBytes
     beq CommandReady
     rts
 
-;; The last byte: CMDWAT up, a command to run.
+;; The last byte: <CommandWaiting> up, a command to run.
 ;; Also: L45 (D1541)
 CommandReady:
     inc CommandWaiting
@@ -595,7 +595,7 @@ Buffered:
     ora #$80
     sta a:ChannelBuffer,y
 
-;; JOBNUM = it, the job's header 18/0, and the seek.
+;; <JobNumber> = it, the job's header 18/0, and the seek.
 ;; Also: IT30 (D1541)
 Seek:
     txa
@@ -740,8 +740,8 @@ ReadNext:
 .proc WriteFileBlock
     lda #JOB_WRITE
 
-;; CMD = A, the job started (SETLJB), the pointer 0; for types below relative the channel's block count (NBKL/NBKH) goes
-;; up. X = the buffer (<ReadFileBlock> enters here).
+;; <JobCommand> = A, the job started (SETLJB), the pointer 0; for types below relative the channel's block count
+;; (<ChannelBlocks>) goes up. X = the buffer (<ReadFileBlock> enters here).
 ;; Also: STRTIT (D1541)
 Start:
     sta JobCommand
@@ -781,14 +781,14 @@ Done:
     bcc InRange
     and #$0F
 
-;; SA 15 reads the error channel (SA 16).
+;; secondary address 15 reads the error channel (secondary address 16).
 ;; Also: FNDC20 (D1541)
 InRange:
     cmp #COMMAND_SECONDARY
     bne Lookup
     lda #MESSAGE_SECONDARY
 
-;; LINTAB's entry: bit 7 clear for a read channel.
+;; <SecondaryChannels>'s entry: bit 7 clear for a read channel.
 ;; Also: FNDC25 (D1541)
 Lookup:
     tax
@@ -818,7 +818,7 @@ Done:
     bcc Lookup
     and #$0F
 
-;; LINTAB's entry, by its two top bits.
+;; <SecondaryChannels>'s entry, by its two top bits.
 ;; Also: FNDW13 (D1541)
 Lookup:
     tax
@@ -828,7 +828,7 @@ Lookup:
     bcc ReadOnly
     bmi None
 
-;; LINDX = it; carry clear.
+;; <Channel> = it; carry clear.
 ;; Also: FNDW10 (D1541)
 Found:
     tya
@@ -903,7 +903,7 @@ Next:
     inc BufferPositions,x
     rts
 
-;; No LSTCHR: Z set when the pointer wraps.
+;; No <ChannelLastByte>: Z set when the pointer wraps.
 ;; Also: GETB1 (D1541)
 NotLastBlock:
     lda (BufferPositions,x)
@@ -952,7 +952,7 @@ NextBlock:
 Done:
     rts
 
-;; Link track 0: LSTCHR = the last byte's place.
+;; Link track 0: <ChannelLastByte> = the last byte's place.
 ;; Also: RD4 (D1541)
 LastBlock:
     jsr GetByte
@@ -1056,7 +1056,7 @@ Allocate:
     bcc SetEntry
     ora #$80
 
-;; LINTAB for SA = the channel.
+;; <SecondaryChannels> for secondary address = the channel.
 ;; Also: GETR55 (D1541)
 SetEntry:
     sta SecondaryChannels,x
@@ -1079,7 +1079,7 @@ NoBuffer:
     lda #ERROR_NO_CHANNEL
     jmp Commands::Fail
 
-;; BUF0 = the first; the second if wanted.
+;; <ChannelBuffer> = the first; the second if wanted.
 ;; Also: GETR5 (D1541)
 Second:
     sta a:ChannelBuffer,y
@@ -1124,7 +1124,7 @@ Free:
     ldx Channel
     lda #$01
 
-;; The channel's bit in LINUSE.
+;; The channel's bit in <FreeChannels>.
 ;; Also: REL15 (D1541)
 Shift:
     dex
@@ -1159,7 +1159,7 @@ Done:
     pla
     jsr FreeBuffer
 
-;; BUF1.
+;; <ChannelSecondBuffer>.
 ;; Also: REL1 (D1541)
 Second:
     ldx Channel
@@ -1315,7 +1315,7 @@ Found:
     iny
     ldx #$10
 
-;; Rotates BUFUSE's 16 bits once round, the buffer's bit cleared on the way.
+;; Rotates <BuffersInUse>'s 16 bits once round, the buffer's bit cleared on the way.
 ;; Also: FREB1 (D1541)
 Loop:
     ror BuffersInUse+1
@@ -1391,7 +1391,7 @@ Skip:
     pha
     ldy #$00
 
-;; Each channel's BUF0.
+;; Each channel's <ChannelBuffer>.
 ;; Also: STL05 (D1541)
 EachChannel:
     ldx LeastRecentlyUsed,y
@@ -1400,7 +1400,7 @@ EachChannel:
     cmp #$FF
     bne Inactive
 
-;; Its BUF1.
+;; Its <ChannelSecondBuffer>.
 ;; Also: STL10 (D1541)
 OtherSlot:
     txa
@@ -1412,7 +1412,7 @@ OtherSlot:
     cmp #$FF
     bne Inactive
 
-;; The next in LRUTBL.
+;; The next in <LeastRecentlyUsed>.
 ;; Also: STL20 (D1541)
 NextChannel:
     iny
@@ -1516,7 +1516,7 @@ Found:
     bne NotRelative
     jmp Relative::ReadByte
 
-;; Not relative: SA 15 is the error channel.
+;; Not relative: secondary address 15 is the error channel.
 ;; Also: GET00 (D1541)
 NotRelative:
     lda SecondaryAddress
@@ -1532,14 +1532,14 @@ NotRelative:
     sta ChannelStatus,x
     jmp RandomByte
 
-;; The last byte went with EOI: CHNRDY = not ready.
+;; The last byte went with EOI: <ChannelStatus> = not ready.
 ;; Also: GET0 (D1541)
 NotReady:
     lda #CHANNEL_NOT_READY
     sta ChannelStatus,x
     rts
 
-;; Not after EOI: SA 0, a load, is the listing or the file; others by type.
+;; Not after EOI: secondary address 0, a load, is the listing or the file; others by type.
 ;; Also: GET1 (D1541)
 More:
     lda SecondaryAddress
@@ -1563,7 +1563,8 @@ RandomByte:
 NextRandom:
     inc BufferPositions,x
 
-;; The byte at the pointer into CHNDAT, CHNRDY with EOI at LSTCHR (<AcceptByte> and the block commands enter here).
+;; The byte at the pointer into <ChannelByte>, <ChannelStatus> with EOI at <ChannelLastByte> (<AcceptByte> and the block
+;; commands enter here).
 ;; Also: RNGET2 (D1541)
 RandomAtPointer:
     lda (BufferPositions,x)
@@ -1584,14 +1585,14 @@ RandomDone:
 Sequential:
     jsr ReadByte
 
-;; CHNDAT = A.
+;; <ChannelByte> = A.
 ;; Also: GET3 (D1541)
 Store:
     ldx Channel
     sta ChannelByte,x
     rts
 
-;; DIRLST set: the listing's next byte.
+;; <ListingActive> set: the listing's next byte.
 ;; Also: GET6 (D1541)
 Load:
     lda ListingActive
@@ -1624,7 +1625,7 @@ ErrorByte:
     sta DataByte
     bne ErrorReady
 
-;; The last: the pointer back before ERRBUF, so a RETURN comes next (the memory-read command enters here).
+;; The last: the pointer back before <ErrorBuffer>, so a RETURN comes next (the memory-read command enters here).
 ;; Also: GE15 (D1541)
 ErrorEnd:
     lda #<ErrorBuffer-1
@@ -1632,12 +1633,12 @@ ErrorEnd:
     lda #>ErrorBuffer
     sta BufferPositions+1,x
 
-;; CHNRDY = ready to talk (the memory-read command enters here).
+;; <ChannelStatus> = ready to talk (the memory-read command enters here).
 ;; Also: GE20 (D1541)
 ErrorReady:
     lda #CHANNEL_TALK
 
-;; The error channel's CHNRDY and CHNDAT.
+;; The error channel's <ChannelStatus> and <ChannelByte>.
 ;; Also: GE30 (D1541)
 SetError:
     sta ChannelStatus+MESSAGE_CHANNEL
@@ -1685,7 +1686,7 @@ Done:
 .proc WriteTrackSector
     lda #JOB_WRITE
 
-;; The job for DRVNUM, its header set, run and waited for (DOIT2); <ReadTrackSector> enters here.
+;; The job for <DriveNumber>, its header set, run and waited for; <ReadTrackSector> enters here.
 ;; Also: DRT (D1541)
 Start:
     ora DriveNumber
@@ -1880,19 +1881,19 @@ OfBuffer:
     lda DiskVersion
     bcc CheckVersion
 
-;; A = drive 1's `DSKVER`.
+;; A = drive 1's <DiskVersion>.
 ;; Also: SJB2 (D1541)
 SecondDriveVersion:
     lda DiskVersion+1
 
-;; A version of 0 (none read yet) passes; any other must be `VERNUM`.
+;; A version of 0 (none read yet) passes; any other must be <FormatType>.
 ;; Also: SJB3 (D1541)
 CheckVersion:
     beq CheckSector
     cmp FormatType
     bne VersionError
 
-;; The sector must be below the track's MAXSEC.
+;; The sector must be below the track's the track's sector count.
 ;; Also: SJB4 (D1541)
 CheckSector:
     txa
@@ -1913,7 +1914,7 @@ CheckSector:
 .proc TrackSectorError
     jsr LoadTrackSector
 
-;; Reports 66 with `TRACK` and `SECTOR` as they are; <CheckTrackSector> branches here.
+;; Reports 66 with <Track> and <Sector> as they are; <CheckTrackSector> branches here.
 ;; Also: TSER1 (D1541)
 Report:
     lda #ERROR_ILLEGAL_TRACK_SECTOR
@@ -2008,7 +2009,7 @@ Report:
 WithDrive:
     sta JobCommand
 
-;; Runs `CMD` again for job X, after a caller has set a new header.
+;; Runs <JobCommand> again for job X, after a caller has set a new header.
 ;; Also: DOIT2 (D1541)
 Repeat:
     lda JobCommand
@@ -2049,7 +2050,8 @@ Repeat:
     cmp #$0F
     bne Recover
 
-;; Write protect (8), ID mismatch (11) and no drive (15) are not retried: returned if `JOBRTN` asks, else reported.
+;; Write protect (8), ID mismatch (11) and no drive (15) are not retried: returned if <JobErrorReturn> asks, else
+;; reported.
 ;; Also: TJ10 (D1541)
 NotRetried:
     bit JobErrorReturn
@@ -2068,7 +2070,7 @@ Busy:
     sec
     rts
 
-;; Error recovery: selects the job's drive and its LED mask, and retries the job `REVCNT` times.
+;; Error recovery: selects the job's drive and its LED mask, and retries the job <Retries> times.
 ;; Also: RECOV (D1541)
 Recover:
     tya
@@ -2086,8 +2088,8 @@ Recover:
     bcs RetriesFailed
     jmp Restore
 
-;; Keeps the job's type, and turns a write into a sector seek (`SECSEK`) for the rest of the recovery, so nothing is
-;; written while the head is off.
+;; Keeps the job's type, and turns a write into a sector seek (<JOB_SECTOR_SEEK>) for the rest of the recovery, so
+;; nothing is written while the head is off.
 ;; Also: REC01 (D1541)
 RetriesFailed:
     lda LastJobs,x
@@ -2099,7 +2101,7 @@ RetriesFailed:
     ora #JOB_SECTOR_SEEK
     sta LastJobs,x
 
-;; Unless `REVCNT` bit 6 turns them off, retries with the head offset by each entry of `OFFSET` in turn.
+;; Unless <Retries> bit 6 turns them off, retries with the head offset by each entry of <RecoveryOffsets> in turn.
 ;; Also: REC0 (D1541)
 TryOffsets:
     bit Retries
@@ -2108,7 +2110,7 @@ TryOffsets:
     sta OffsetIndex
     sta TotalOffset
 
-;; Moves the head by the next offset, keeps the total in `TOFF`, and retries; a 0 ends the table.
+;; Moves the head by the next offset, keeps the total in <TotalOffset>, and retries; a 0 ends the table.
 ;; Also: REC1 (D1541)
 NextOffset:
     ldy OffsetIndex
@@ -2135,13 +2137,13 @@ Recentre:
     cmp #$02
     bcc Recovered
 
-;; `REVCNT` bit 7 clear: tries a bump.
+;; <Retries> bit 7 clear: tries a bump.
 ;; Also: REC5 (D1541)
 CheckBump:
     bit Retries
     bpl Bump
 
-;; Recovery failed: restores a write job in `LSTJOB`.
+;; Recovery failed: restores a write job in <LastJobs>.
 ;; Also: QUIT (D1541)
 Fail:
     pla
@@ -2150,13 +2152,13 @@ Fail:
     ora DriveNumber
     sta LastJobs,x
 
-;; Reports the job's code as a DOS error through ERROR, which does not return.
+;; Reports the job's code as a DOS error through <Errors::JobError>, which does not return.
 ;; Also: QUIT2 (D1541)
 ReportError:
     lda JobQueue,x
     jsr Errors::JobError
 
-;; Returns the error if `JOBRTN` asks; else queues a bump on the drive.
+;; Returns the error if <JobErrorReturn> asks; else queues a bump on the drive.
 ;; Also: REC7 (D1541)
 Bump:
     pla
@@ -2188,7 +2190,7 @@ Recovered:
     cmp #$02
     bcs ReportError
 
-;; Restores `DRVNUM` and Y; A = the job's code, carry clear.
+;; Restores <DriveNumber> and Y; A = the job's code, carry clear.
 ;; Also: REC95 (D1541)
 Restore:
     pla
@@ -2246,7 +2248,7 @@ Done:
     ldy DriveNumber
     sta StepRequest,y
 
-;; Waits for the controller to change `PHASE`.
+;; Waits for the controller to change <StepRequest>.
 ;; Also: MH10 (D1541)
 Wait:
     cmp StepRequest,y
@@ -2308,7 +2310,8 @@ Done:
 .proc SetHeader
     jsr Files::GetActiveBuffer
 
-;; The same for buffer A. Leaves X = `DRVNUM` x 2, which is what is left of the ID copy the 4/12 patch commented out.
+;; The same for buffer A. Leaves X = <DriveNumber> x 2, which is what is left of the ID copy the 4/12 patch commented
+;; out.
 ;; Also: SETH (D1541)
 ForBuffer:
     asl
@@ -2390,7 +2393,7 @@ NewBlock:
     lda #$02
     sta FreeEntryIndex
 
-;; The entry at DELIND.
+;; The entry at <FreeEntryIndex>.
 ;; Also: AF20 (D1541)
 WriteEntry:
     lda FreeEntryIndex
@@ -2500,7 +2503,8 @@ WriteBlock:
     lda #TYPE_PROGRAM+TYPE_PROGRAM
     ora DriveNumber
 
-;; FILTYP = A; the command ends. (The store indexes with Y, which the read leaves as the channel; the code loads X.)
+;; <ChannelFileType> = A; the command ends. (The store indexes with Y, which the read leaves as the channel; the code
+;; loads X.)
 ;; Also: ENDRD (D1541)
 SetType:
     ldx Channel
@@ -2516,7 +2520,7 @@ NotLastProgram:
     bne DirectoryAsFile
     jmp LoadDirectory
 
-;; Not SA 0: the directory as a sequential file.
+;; Not secondary address 0: the directory as a sequential file.
 ;; Also: OP04 (D1541)
 DirectoryAsFile:
     jsr Commands::ParseDriveOnly
@@ -2554,7 +2558,7 @@ ParseName:
     ldx #$00
     beq SetName
 
-;; More than a drive before it is error 30, SYNTAX ERROR.
+;; More than a drive before it is error 30, SYNTAX <Errors::JobError>.
 ;; Also: OP049 (D1541)
 HasColon:
     txa
@@ -2569,7 +2573,7 @@ BeforeColon:
     beq SetName
     dey
 
-;; FILTBL; the name parsed and looked up; then the type and mode, if given.
+;; The file name tables; the name parsed and looked up; then the type and mode, if given.
 ;; Also: OP20 (D1541)
 SetName:
     sty FileNameStart
@@ -2595,7 +2599,7 @@ SetName:
     beq SetRecordSize
     jsr ParseTypeAndMode
 
-;; SA back; SA 0 or 1, a load or save, is read or write mode, program type.
+;; secondary address back; secondary address 0 or 1, a load or save, is read or write mode, program type.
 ;; Also: OP40 (D1541)
 SetMode:
     ldx SavedSecondary
@@ -2838,7 +2842,8 @@ OpenChannel:
     jsr OpenWriteChannel
     jsr Directory::AddEntry
 
-;; A load or save keeps the file's start (PRGTRK, PRGSEC, PRGDRV) for "*"; the command ends (<Open> enters here).
+;; A load or save keeps the file's start (<LastProgramTrack>, <LastProgramSector>, <LastProgramDrive>) for "*"; the
+;; command ends (<Open> enters here).
 ;; Also: OPFIN (D1541)
 Finish:
     lda SecondaryAddress
@@ -2852,7 +2857,7 @@ Finish:
     lda Sector
     sta LastProgramSector
 
-;; On to ENDSAV.
+;; On to the command's end.
 ;; Also: OPF1 (D1541)
 Done:
     jmp Commands::Finish::KeepBamFlag
@@ -2915,7 +2920,7 @@ Done:
     jsr WriteByte::NextBlock
     lda #$02
 
-;; The pointer; CHNRDY ready to listen, LINTAB marked for writing.
+;; The pointer; <ChannelStatus> ready to listen, <SecondaryChannels> marked for writing.
 ;; Also: AP30 (D1541)
 SetEnd:
     jsr SetPointer
@@ -2968,7 +2973,7 @@ ByName:
     jsr Commands::Prepare::ClearTables
     ldy #$03
 
-;; FILTBL; the name parsed, on both drives.
+;; The file name tables; the name parsed, on both drives.
 ;; Also: LD05 (D1541)
 SetName:
     dey
@@ -3017,7 +3022,8 @@ Search:
 FreeInternal:
     jmp FreeInternalChannels
 
-;; Not SA 0: SA 15 closes every channel; others their own, SA 1 the internal ones too.
+;; Not secondary address 0: secondary address 15 closes every channel; others their own, secondary address 1 the
+;; internal ones too.
 ;; Also: CLS10 (D1541)
 NotLoad:
     cmp #COMMAND_SECONDARY
@@ -3035,7 +3041,7 @@ NotLoad:
 Error:
     jmp Commands::Finish::NoMessage
 
-;; SA 15: SA 14 down to 0, each closed.
+;; secondary address 15: secondary address 14 down to 0, each closed.
 ;; Also: CLSALL (D1541)
 CommandChannel:
     lda #COMMAND_SECONDARY-1
@@ -3259,7 +3265,7 @@ NotReplace:
     ora #$80
     sta (Work0),y
 
-;; The block count, the sector written, SA and LINDX back.
+;; The block count, the sector written, secondary address and <Channel> back.
 ;; Also: CLSD6 (D1541)
 SetBlocks:
     ldx WriteChannel
@@ -3308,7 +3314,7 @@ SetBlocks:
     lda Sector
     sta ChannelLastByte,x
 
-;; In the last block LSTCHR = the link's sector, the last byte's place.
+;; In the last block <ChannelLastByte> = the link's sector, the last byte's place.
 ;; Also: OR10 (D1541)
 NotLast:
     pla
@@ -3337,7 +3343,8 @@ SideSector:
     jsr Relative::ReadSideSector
     jsr Jobs::Wait
 
-;; NR = 2, the first record set up, TRACK and SECTOR back (<OpenWriteChannel> enters here for a new relative file).
+;; <ChannelNextRecord> = 2, the first record set up, <Track> and <Sector> back (<OpenWriteChannel> enters here for a new
+;; relative file).
 ;; Also: OROW (D1541)
 FirstRecord:
     ldx Channel
@@ -3348,7 +3355,7 @@ FirstRecord:
     jsr Relative::ReadByte::LoadNextRecord
     jmp GetBufferBlock
 
-;; The first byte into CHNDAT, ready to talk.
+;; The first byte into <ChannelByte>, ready to talk.
 ;; Also: OR30 (D1541)
 Sequential:
     jsr ReadByte
@@ -3527,7 +3534,7 @@ SideSector:
     eor #$FF
     and ChannelFileType,x
 
-;; FILTYP = A (<SetFlag> ends here).
+;; <ChannelFileType> = A (<SetFlag> ends here).
 ;; Also: CLRF10 (D1541)
 Store:
     sta ChannelFileType,x
@@ -3565,7 +3572,7 @@ Store:
 .proc TestEntryOpen
     ldx #$00
 
-;; Each SA.
+;; Each secondary address.
 ;; Also: TSTC20 (D1541)
 Next:
     stx Temporary+2

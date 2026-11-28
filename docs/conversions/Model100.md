@@ -32,18 +32,19 @@ the first stage, where each name came from, and what is left.
    the error handler at $F652. A few runs of code reached in no other way were given as entries by hand, each after
    an unconditional jump or return. What is left untraced is mostly data (text, tables, the RAM image and the font),
    with a few runs of code the trace does not reach yet, written as bytes.
-2. **Naming.** Tandy's names first, then the handlers', then Microsoft's interpreter core by hand (NEWSTT, GONE,
-   MAIN, ERROR, CONSTP, STPEND, ENDCON, DIRIS and SNGFOR, read against MBASIC's code), then the rest of Microsoft's
-   names by aligning the two programs' instruction streams: a diff of MBASIC's instructions against the ROM's,
-   operands left out and the RSTs counted as the calls they stand for, gives blocks of the same code, and an MBASIC
-   label in a block names the ROM's instruction it lines up with. Names were taken only in the interpreter
-   ($0400-$12FF), the string package ($2700-$2B5F) and LINE INPUT #'s code ($4F00-$504F), from blocks of at least
-   four instructions there, and six in LINE INPUT #'s; elsewhere blocks matched by chance (a `ST_WHILE` in a BASIC
-   without WHILE, and a `CSKPCM`, CLEAR's in MBASIC, on CSAVE's `,A`). Within the ranges, the alignment also put
-   `SNGFOR` on the double-precision FOR; it is on the single-precision one. `NTOERR` lined up with the Model 100's ON
-   COM, KEY and TIME$ test; it is on the ON n dispatch that test falls through to, which is MBASIC's NTOERR.
-   Variables took the name of MBASIC's operand at the same place, where at least two blocks and three quarters of
-   them agree.
+2. **Naming.** Tandy's names first, then the handlers' (with the functions the evaluator reaches by their tokens
+   rather than FUNDSP: STRING$, INSTR, INKEY$, INPUT$, CSRLIN and DSKI$), then Microsoft's interpreter core by hand
+   (NEWSTT, GONE, MAIN, ERROR, CONSTP, STPEND, ENDCON, DIRIS, SNGFOR, NTOERR, LETCON, BLTU, GETSTK, REASON and the
+   string package's skip targets, read against MBASIC's code), then the rest of Microsoft's names by aligning the two
+   programs' instruction streams: a diff of MBASIC's instructions against the ROM's, operands left out and the RSTs
+   counted as the calls they stand for, gives blocks of the same code, and an MBASIC label in a block names the ROM's
+   instruction it lines up with. Names were taken only in the interpreter ($0400-$12FF), the string package
+   ($2700-$2B5F) and LINE INPUT #'s code ($4F00-$504F), from blocks of at least four instructions there, and six in
+   LINE INPUT #'s; elsewhere blocks matched by chance (a `ST_WHILE` in a BASIC without WHILE, and a `CSKPCM`, CLEAR's
+   in MBASIC, on CSAVE's `,A`). Within the ranges, the alignment also put `SNGFOR` on the double-precision FOR; it is
+   on the single-precision one. `NTOERR` lined up with the Model 100's ON COM, KEY and TIME$ test; it is on the ON n
+   dispatch that test falls through to, which is MBASIC's NTOERR. Variables took the name of MBASIC's operand at the
+   same place, where at least two blocks and three quarters of them agree.
 3. **Writing the source.** An emitter wrote the modules from the traced code, the names and both ROMs: the tables as
    entries (`KEYWORD`, `.word`, `DISPATCH`), each skip byte (an LXI or MVI whose operand is another entry) as a
    `.byte` saying what it skips, SYNCHR's byte with its character, and each difference between the ROMs as an
@@ -76,24 +77,23 @@ The IDs are M100.
 - M100-7. The modules follow the ROM's subjects, at routine boundaries both ROMs share: Microsoft's BASIC in
   MBASIC's order, then the Model 100's own code by what it drives. The boundaries are a first cut, to be refined
   as each module is named.
+- M100-8. `BEGLCD` names the screen's memory at $FE00. The manual's `ENDLCD`, $FF40, the byte after the screen, is not a
+  label: the ROM keeps the RS-232 port's state there, and the name would read wrong at those uses.
+- M100-9. The five bytes at $770B, first named `KEYTAB`, are a command the ROM sends to the device on ports
+  $80-$83, not the keyboard's tables, which follow the character set at $7BF1; neither has a name yet.
 
 ## Names that are not Microsoft's or Tandy's
 
 | Names | What |
 | --- | --- |
-| `RESET`, `TRAP`, `GETYPE`, `RST55`, `RST65`, `RST38`, `RST75`, `HOOK` | The restarts and interrupts (M100-3). |
+| `RESET`, `TRAP`, `CHRGET`, `GETYPE`, `RST55`, `RST65`, `RST38`, `RST75`, `HOOK` | The restarts and interrupts (M100-3). |
 | `DECDSP`, `RAMIMG`, `ERRMSG` | The interpreter's tables, beside `FUNDSP`, `RESLST`, `STMDSP`, `OPTAB`, `DBLDSP`, `SNGDSP`, `INTDSP` and `ERRTAB`, which are Microsoft's names for the same tables in MBASIC. `DECDSP` is the conversions before `DBLDSP`; each type has six routines, + - * / ^ and compare. |
-| `IEERR`, `BNERR`, `FFERR`, `AOERR`, `EFERR`, `NMERR`, `DSERR`, `FLERR`, `CFERR` | The file errors' entries (M100-4). |
+| `RWERR`, `IEERR`, `BNERR`, `FFERR`, `AOERR`, `EFERR`, `NMERR`, `DSERR`, `FLERR`, `CFERR` | RESUME without error's entry and the file errors' (M100-4). |
 | `LCDCTL`, `ESCTAB`, `INLCTL`, `DEVTAB`, `DEVDSP`, `LCDDEV` to `RAMDEV`, `TELCMD`, `TRMFNK`, `ADRCMD`, `TXTCTL`, `TXTINL`, `ROMDIR` | The Model 100's own tables: the screen's control characters and escape sequences, INLIN's keys, the devices' names, the devices' driver tables and each driver's own (LCD:, CRT: and LPT: have three routines, the others five), TELCOM's commands and terminal keys, ADDRSS's and SCHEDL's commands, TEXT's keys and the ROM's directory entries. |
 | `BASIC`, `TEXT`, `TELCOM`, `ADDRSS`, `SCHEDL` | The ROM's programs, named as the menu shows them. |
 | `COLD` | The cold start. |
 | `DIRTBL`, `DOSTRT`, `COSTRT`, `PRGNAM` | The file directory, the starts of the DO and CO files, and the menu's file name: what is typed at Select:, each name it formats for the screen, the name CHKDC looks for, and so the program the menu runs. |
 | `STKTOP` | Level II's name (Level2.asm) for the bottom of string space, which the stack sits below: MENU sets it from `MEMSIZ`, and CLEAR, the stack and string space are bounded by it. |
-
-- M100-8. The five bytes at $770B, first named `KEYTAB`, are a command the ROM sends to the device on ports
-  $80-$83, not the keyboard's tables, which follow at $7BF1; neither has a name yet.
-- M100-9. `BEGLCD` names the screen's memory at $FE00. The manual's `ENDLCD`, $FF40, the byte after the screen, is not a
-  label: the ROM keeps the RS-232 port's state there, and the name would read wrong at those uses.
 
 ## Open questions
 

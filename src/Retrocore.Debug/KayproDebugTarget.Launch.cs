@@ -73,10 +73,15 @@ internal sealed partial class KayproDebugTarget
     /// </summary>
     /// <param name="command">The command, such as <c>MBASIC</c> or <c>B:MBASIC</c>.</param>
     /// <param name="seconds">The most machine time to wait for the prompt.</param>
+    /// <param name="pace">
+    ///  Called after each fiftieth of a second of machine time with the cycles run so far, so a caller can hold the
+    ///  run to a speed, or null.
+    /// </param>
     /// <exception cref="InvalidOperationException">CP/M does not show its prompt in time.</exception>
-    internal void TypeAtPrompt(string command, double seconds)
+    internal void TypeAtPrompt(string command, double seconds, Action<long>? pace = null)
     {
-        ulong end = _machine.Processor.CycleCount + (ulong)(seconds * KayproTiming.ClockHertz);
+        ulong begin = _machine.Processor.CycleCount;
+        ulong end = begin + (ulong)(seconds * KayproTiming.ClockHertz);
         while (!AtPrompt())
         {
             if (_machine.Processor.CycleCount >= end)
@@ -86,6 +91,7 @@ internal sealed partial class KayproDebugTarget
             }
 
             _machine.Run(KayproTiming.ClockHertz / 50);
+            pace?.Invoke((long)(_machine.Processor.CycleCount - begin));
         }
 
         foreach (char character in command) { _machine.Bus.Keyboard.Type((byte)character); }

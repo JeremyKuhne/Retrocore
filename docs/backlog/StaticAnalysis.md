@@ -476,7 +476,10 @@ and the documentation:
 
 - **Branches decided by memory or by what a caller passes,** as the MOS's `ora VDU_STATUS` then `bne ... ;
   always: a bit is set`: [flag values](#flag-values) decide branches on constants, so `ldy #0` then `beq` and
-  `lda #CFS_ACIA_WRITING` then `bne` now go one way, but not these.
+  `lda #CFS_ACIA_WRITING` then `bne` now go one way, but not these. An `Entry:` is checked again with each caller's
+  values, from the caller's run of code, where its own analysis contradicts its promise, but a routine's start is
+  not, nor a branch inside a routine on what its own caller passed; an address the code computes, as from two
+  bytes loaded apart, is not seen as a way into a run.
 - **Arithmetic that restores a value,** as IsLetter's `sbc #$5B` and `sbc #$A5`, which leave A as it was.
 - **Memory saved by a callee,** as NetFS's SAVE_CALL_REGISTERS stores X and Y for NFS_CALL_RETURN to load back:
   a summary would need the fixed addresses a routine stores and writes.
@@ -629,12 +632,31 @@ were all from `Entry:` labels, now checked too. Most were entries whose callers 
 gets X back from ScrollBase, and DFS_OSBPUT_CHANNEL and SET_ENTRY_EXEC_ADDRESS_MERGE run after their callers'
 SAVE_REGISTERS. For those, an `Entry:` meaning may now end in a keeps clause (`; keeps A`, `; keeps nothing`), which
 the check and the debugger take in place of the routine's `Keeps:` for that entry, and the three entries say what
-they keep: 27 findings remain. Two of them are the MOS's SET_STATUS_BITS, an entry of SET_EOF: with A and
-CFS_STATUS both 0 it falls through its `bne` into the next routine, so SET_EOF's `Keeps: X, Y, carry` holds from
-there only because every caller of SET_STATUS_BITS passes a bit to set. The entry now says so, but the check does
-not read conditions on what a caller passes. An entry label with a comment and a contract of its own now keeps
-that contract, as the debugger does, rather than taking its routine's, which brings the report to 894 routines
-checked, 27 findings and 122 `Keeps:` items not verified.
+they keep. An entry label with a comment and a contract of its own now keeps that contract, as the debugger does,
+rather than taking its routine's.
+
+The last two were the MOS's SET_STATUS_BITS, an entry of SET_EOF: with A and CFS_STATUS both 0 it falls through its
+`bne` into the next routine, so SET_EOF's `Keeps: X, Y, carry` holds from there only because every caller passes a bit
+to set. So an entry whose own analysis, with nothing known, contradicts its promise is checked again from each direct
+call to it, starting with what the caller's registers and flags hold there, but not its stack pointer, which the call
+moves: a sure change with any caller's values is a finding. Each call's values come from its straight run of code,
+followed from the run's start with nothing known there, as for each caller's `lda #CFS_INPUT_OPEN` then `jsr
+SET_STATUS_BITS`. A run starts at a label (not an equate), a jump's or branch's target, an address the code writes as a
+number (an operand that is no direct target, or any two bytes of one data statement, and the address after it, for an
+RTS) where an instruction starts, as an RTS table's `CATALOGUE-1` is at CATALOGUE, since a font's bytes may read as
+numbers too, or after an instruction that may go elsewhere (a jump, branch or return), and is cut short after 64
+instructions. The first finding stands where some call's run cannot be followed to the call, where a patched byte, or
+data that code falls into, jumps to, or that a number in data points at, as a `JMP (Vector)` may go (not one an
+instruction only reads, as `lda Table`), comes just before a run, as a skip written `.byte $2C`, or a way in lies inside
+one of its instructions, as a jump to an operand byte, and for an entry whose address the code also takes as data or
+writes as a number, or that is exported, since programs outside the assembly may call it with any values. A jump or
+branch to an entry is no call: the code that takes it is followed through the entry with its own values. But one from
+outside the entry's routine may follow a pushed return address, as a JSR would, so such an entry keeps its finding, as
+does one that code from outside its routine falls into. Not seen: a number that points into the middle of an
+instruction, as a `JMP (table)` into an operand byte; a return address pushed as two numbers rather than a name; a jump
+within the entry's own routine after a pushed return address; and a way in before a run whose instructions, decoded from
+there, take more than one step to reach it. That brings the report to 894 routines checked, 25 findings and 121 `Keeps:`
+items not verified.
 
 What it costs, measured in Release over the MOS, the DFS and MBASIC with their maps: about 190 ms for the three
 once warm, and 114 MB allocated (220 ms and 107 MB before the review's fixes). Without maps it was about 140 ms and

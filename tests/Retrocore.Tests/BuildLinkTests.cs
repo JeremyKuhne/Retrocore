@@ -90,6 +90,25 @@ public sealed class BuildLinkTests
     }
 
     /// <summary>
+    ///  The 1541's and 1540's DOS's links reach what each build assembles: 901229-01, -02, -03, -05 and -06, and the
+    ///  1540's 325303-01 (40).
+    /// </summary>
+    /// <param name="revision">The build's <c>REVISION</c>.</param>
+    [TestMethod]
+    [DataRow(1)]
+    [DataRow(2)]
+    [DataRow(3)]
+    [DataRow(5)]
+    [DataRow(6)]
+    [DataRow(40)]
+    public void Dos1541LinksOnlyWhatItsBuildAssembles(int revision)
+    {
+        string inputs = BasicNames.Inputs;
+        AssemblyResult result = Cbm1541SdkModules.Assemble(Path.Join(inputs, "Pet", "Serial"), revision);
+        AssertLinksAssembled(result, "Dos1541", sdkBuild: false, others: false);
+    }
+
+    /// <summary>
     ///  Asserts that a build's lint finds no link it can't follow, and that no link in a comment the build assembles
     ///  reaches a definition of this source the build leaves out. The SDK's other modules are there for links to reach;
     ///  the SDK's set of the module stands aside when it is this build, and one of another build, such as the Enhanced

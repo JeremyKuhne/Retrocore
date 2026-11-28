@@ -108,6 +108,9 @@ internal sealed partial class Vic20DebugTarget
             target.SetBasicSymbols(Vic20SdkModules.AssembleBasic(sdk, standard).SymbolsWithHistoricalNames);
         }
 
+        // The drives' DOS source beside the VIC-20's, as the SDK and the repository lay them out.
+        string dos = Path.GetFullPath(Path.Join(sdk, "..", "Serial"));
+        target.SdkDosDirectory = File.Exists(Path.Join(dos, "Dos1541.asm")) ? dos : null;
         target.LaunchDisks(args, sdkRoms ? Environment.GetEnvironmentVariable("RETROCORE_VIC20_ROMS") : directory);
         if (args.String("cassette") is { } tape) { CommodoreTapeMedia.Insert(machine.Cassette, tape); }
 

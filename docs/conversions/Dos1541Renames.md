@@ -963,7 +963,8 @@ two parts agree.
   file. The filler is written as data with a comment. BOOT2 (an RTS before it that nothing reaches), BOOT3 (Boot's
   own address) and BOOT4 (inside LoadUtility, where the loader joined it) are not referenced and are dropped, named
   in prose. *Recommended.* The alternative keeps it as `Commands::Boot`, by its file.
-  **Settled:** `Startup::Boot`, the filler as data, BOOT2-BOOT4 dropped.
+  **Settled:** `Startup::Boot`, the filler as data, BOOT2-BOOT4 dropped. (The conversion builds R1, R2, R3 and R40 too,
+  which keep the loader, so it names the three there: see the log's step 4.)
 - D-P3-Q9. **trnsfr's listing half goes to `Directory`, and three routines change scope.** GETNAM, GNSUB, BLKNB,
   NEWDIR, MSGFRE and FREMSG build the lines of the directory listed as a program; only `lstdir` and LOAD"$" use
   them. They are `Directory::NextLine`, `BuildLine`, `BlankLine`, `HeaderLine`, `FreeLine` and `FreeText`. The other
@@ -1197,11 +1198,11 @@ two parts agree.
 | 194 | BKOTST | $CDF2 | Commands::CheckChannelBlock | routine | D1541 | block 3 | FindBlockChannel; falls into CheckBlock. |
 | 195 | BLKTST | $CDF5 | Commands::CheckBlock | routine | D1541 | block 2 | From the parameters at F1PTR: DRVNUM, TRACK and SECTOR; the track and sector checked (TSCHK), then the LEDs. |
 | 196 | BT05 | $CE08 | DROP | local | D1541 | none | Not referenced; only the listing names it. |
-| 197 | BOOT2 | $E77F | DROP | local | D1541 | none | Not referenced: an RTS nothing reaches, the removed boot loader's exit; named in Startup::Boot's prose. |
-| 198 | BOOT | $E780 | Startup::Boot | routine | D1541 | dskintsf 1 | Start-up calls it last: only an RTS, where the boot loader was (it ran a utility when clock and data were grounded; it does not work on the serial bus). 34 bytes of filler follow, NOPs and an RTS. |
-| 199 | BOOT3 | $E780 | DROP | local | D1541 | none | Not referenced, at Boot's address: the removed loader's wait for the clip; named in Boot's prose. |
+| 197 | BOOT2 | $E77F | Startup::BootExit | routine | D1541 | none | The boot loader's exit: an RTS that only R1, R2, R3 and R40, which keep the loader, reach; in -05 and -06 nothing reaches it, and it has no label there. |
+| 198 | BOOT | $E780 | Startup::Boot | routine | D1541 | dskintsf 1 | Start-up calls it last. In R5 and R6 it is only an RTS, where the boot loader was, with 34 bytes of filler (NOPs and an RTS) after it; R1, R2, R3 and R40 build the real loader, which runs a utility when clock and data are grounded. |
+| 199 | BOOT3 | $E780 | Startup::Boot::WaitForClip | local | D1541 | none | The loader's wait for the clip to come off, at `$E78E` in R1, R2, R3 and R40, which keep the loader; in -05 the listing leaves the label at Boot's address, on no code. |
 | 200 | UTLODR | $E7A3 | Commands::LoadUtility | routine | D1541 | romtblsf 2 | &: the name (the string scanned to its end), looked up (not found: 39); opened as a user file (type 3; the listing's comment says 5); then each record, an address, a count, the bytes and a checksum, stored; a bad checksum is 50, an early end 51. Jumps to the first record's address, F2CNT kept for the utility. (Reached through the command table.) |
-| 201 | BOOT4 | $E7A8 | DROP | local | D1541 | none | Not referenced: where the removed boot loader joined; only the listing names it. |
+| 201 | BOOT4 | $E7A8 | Commands::LoadUtility::AfterName | entry | D1541 | none | Where the boot loader joins LoadUtility, with the name `*` set: a label only in R1, R2, R3 and R40, which keep the loader. |
 | 202 | UTLD00 | $E7C5 | Commands::LoadUtility::Found | local | D1541 | utlodr 1 | F2CNT back; the file's first block from FILTRK and FILSEC, and opened. |
 | 203 | UTLD10 | $E7D8 | Commands::LoadUtility::NextRecord | local | D1541 | utlodr 1 | R1, the checksum, cleared; the address into R2 and R3, kept on the stack for the first record (R0 flags it). |
 | 204 | UTLD20 | $E7FA | Commands::LoadUtility::ReadCount | local | D1541 | utlodr 1 | The byte count into R4. |

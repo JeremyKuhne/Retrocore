@@ -32,10 +32,16 @@ internal sealed partial class Vic20DebugTarget
     private static readonly string[] s_1540Files = ["325302-01.uab4", "325303-01.uab5"];
 
     /// <summary>
-    ///  Gets or sets the drives' ROMs by model, <c>1541</c> and <c>1540</c>, for drives added while the machine runs;
-    ///  a model without its dumps is missing.
+    ///  Gets or sets the drives' ROMs by model, <c>1541</c> and <c>1540</c>, for drives added while the machine runs:
+    ///  MAME's sets the launch found, and the SDK's builds once a drive has needed one.
     /// </summary>
     internal Dictionary<string, Cbm1541Roms> DiskRoms { get; set; } = [];
+
+    /// <summary>
+    ///  Gets or sets the directory of the drives' DOS source the drives run from when MAME's sets are missing, or null
+    ///  for the copy beside the debug host.
+    /// </summary>
+    internal string? SdkDosDirectory { get; set; }
 
     /// <summary>
     ///  Loads the drives' ROMs from MAME's sets: the 1541's <c>c1541</c> in a directory, its <c>c1541</c>,
@@ -81,13 +87,19 @@ internal sealed partial class Vic20DebugTarget
     ///   <c>diskUnits</c> lists the drives' device numbers, 8-11, and <c>diskModel</c> says what they are, 1541 (the
     ///   default) or 1540; <c>disks</c> lists images (<c>.d64</c> or <c>.g64</c>) for those drives in the order
     ///   <c>diskUnits</c> lists them, a null leaving a drive empty. Disks without units connect as many drives, from 8,
-    ///   as they need. With neither, no drive is connected, as a VIC-20 came without one. The ROMs are MAME's <c>c1541</c> (901229-06) or
-    ///   <c>c1540</c> set, in <c>driveRomDirectory</c>, else <c>romDirectory</c> or <c>RETROCORE_VIC20_ROMS</c>.
+    ///   as they need. With neither, no drive is connected, as a VIC-20 came without one. The ROMs are MAME's
+    ///   <c>c1541</c> (901229-06) or <c>c1540</c> set, in <c>driveRomDirectory</c>, else <c>romDirectory</c> or
+    ///   <c>RETROCORE_VIC20_ROMS</c>; without it, the SDK's build of the same chips from <c>Serial/Dos1541.asm</c>.
     ///  </para>
     /// </remarks>
     /// <param name="args">The launch's arguments.</param>
     /// <param name="romDirectory">The VIC-20's ROM directory, or null.</param>
-    /// <exception cref="ArgumentException">A number, model or path is invalid, or the ROMs are missing.</exception>
+    /// <exception cref="ArgumentException">A number, model or path is invalid.</exception>
+    /// <exception cref="IOException">MAME's set is missing and the SDK's DOS source cannot be read.</exception>
+    /// <exception cref="InvalidDataException">MAME's set is missing and the SDK's DOS source has errors.</exception>
+    /// <exception cref="UnauthorizedAccessException">
+    ///  MAME's set is missing and the SDK's DOS source cannot be read.
+    /// </exception>
     internal void LaunchDisks(JsonObject args, string? romDirectory)
     {
         DiskRoms = LoadDiskRoms(args.String("driveRomDirectory"));
@@ -139,11 +151,18 @@ internal sealed partial class Vic20DebugTarget
         }
     }
 
-    // A model's ROMs, or why there are none.
-    private Cbm1541Roms RomsFor(string model) => DiskRoms.TryGetValue(model, out Cbm1541Roms? roms)
-        ? roms
-        : throw new ArgumentException(
-            $"A {model} needs MAME's c{model} ROM set, in driveRomDirectory or romDirectory.");
+    // A model's ROMs: MAME's set when the launch found it, else the SDK's build of the DOS (901229-06 for a 1541,
+    // 325303-01 for a 1540), assembled the first time a drive needs it.
+    private Cbm1541Roms RomsFor(string model)
+    {
+        if (!DiskRoms.TryGetValue(model, out Cbm1541Roms? roms))
+        {
+            roms = Cbm1541SdkModules.BuildRoms(model, directory: SdkDosDirectory);
+            DiskRoms[model] = roms;
+        }
+
+        return roms;
+    }
 
     // A row for each device number a drive can take: the drive, or a free number.
     private IEnumerable<HardwareRow> DiskRows()
@@ -164,11 +183,12 @@ internal sealed partial class Vic20DebugTarget
             }
             else
             {
-                string description = DiskRoms.Count == 0
-                    ? "Free. A 1541 or 1540 needs MAME's c1541 or c1540 ROM set, in driveRomDirectory or romDirectory."
-                    : $"Free: Add Card connects a {string.Join(" or ", DiskModels.Where(DiskRoms.ContainsKey))} as device {address}.";
-
-                yield return new(id, name, "empty", description, Actions: DiskRoms.Count == 0 ? null : ["addCard"]);
+                yield return new(
+                    id,
+                    name,
+                    "empty",
+                    $"Free: Add Card connects a {string.Join(" or ", DiskModels)} as device {address}.",
+                    Actions: ["addCard"]);
             }
         }
     }
@@ -228,8 +248,14 @@ internal sealed partial class Vic20DebugTarget
             }
 
             if (card is null or "empty" || present is not null) { continue; }
-            if (DiskRoms.TryGetValue(card, out Cbm1541Roms? roms)) { _machine.AddDisk(roms, address); }
-            else { problems.Add($"Device {address}'s {card} needs MAME's c{card} ROM set."); }
+            try
+            {
+                _machine.AddDisk(RomsFor(card), address);
+            }
+            catch (Exception exception) when (exception is IOException or InvalidDataException or UnauthorizedAccessException)
+            {
+                problems.Add($"Device {address}'s {card} has no ROMs: {exception.Message}");
+            }
         }
 
         return problems;

@@ -280,7 +280,10 @@ public sealed class MemoryMapTests
             ["level2"] = 6,
 
             // Five map files: the CoCo 1 and 2 share the 16K and 64K ones, the CoCo 1 has a 32K one, and the CoCo 3 two.
-            ["colorbasic"] = 5
+            ["colorbasic"] = 5,
+
+            // The same machines and sizes, with Disk BASIC.
+            ["diskbasic"] = 5
         };
 
         string environments = Path.Join(SdkModules.SdkDirectory, "1", "environments");

@@ -262,7 +262,7 @@ public sealed class ProjectFileTests
         RetrocoreProject project = RetrocoreProject.Load(_folder);
         project.Target("cpm").Cpu.Should().BeSameAs(ProjectCpu.I8080);
         project.Target("cpm-z80").Cpu.Should().BeSameAs(ProjectCpu.Z80);
-        Error(project.Target("cpm").RequireSupported).Should().EndWith("the 'cpm' environment is not yet supported; only 'bare', 'wozmon', 'dos33', 'dfs', 'basic', 'sos', 'prodos', 'level2' and 'colorbasic' build.");
+        Error(project.Target("cpm").RequireSupported).Should().EndWith("the 'cpm' environment is not yet supported; only 'bare', 'wozmon', 'dos33', 'dfs', 'basic', 'sos', 'prodos', 'level2', 'colorbasic' and 'diskbasic' build.");
     }
 
     /// <summary>
@@ -334,7 +334,7 @@ public sealed class ProjectFileTests
             """);
 
         Error(RetrocoreProject.Load(_folder).Target("disk").RequireSupported).Should().EndWith(
-            "target disk: the 'trsdos' environment is not yet supported; only 'bare', 'wozmon', 'dos33', 'dfs', 'basic', 'sos', 'prodos', 'level2' and 'colorbasic' build.");
+            "target disk: the 'trsdos' environment is not yet supported; only 'bare', 'wozmon', 'dos33', 'dfs', 'basic', 'sos', 'prodos', 'level2', 'colorbasic' and 'diskbasic' build.");
     }
 
     /// <summary>

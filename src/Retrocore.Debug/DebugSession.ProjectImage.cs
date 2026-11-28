@@ -75,6 +75,16 @@ internal sealed partial class DebugSession
             case Trs80Model3DebugTarget { BootDeck: { } deck }:
                 BootLevel2(build, deck, model3: true, bytes, label);
                 return;
+            case CocoDebugTarget coco when target.Environment == "diskbasic":
+                // Drive 0, which LOADM reads by default; the launch fits the disk controller.
+                Machines.Chips.FloppyDrive drive = coco.BootDrive ?? throw new ProjectException(
+                    $"{target.Project.File}: target {target.Name}: a diskbasic target boots its disk in drive 0, but the machine has no disk controller.");
+
+                FloppyDisk jvc = Media.Trs80.JvcFormat.Read(bytes);
+                MediaActions.KeepReplaced(drive, $"the build's {build.Media.ImageKind} took its place");
+                drive.Insert(jvc, label, "JVC");
+                BootDiskBasic(build, drive);
+                return;
             case CocoDebugTarget coco:
                 BootColorBasic(build, coco.BootDeck, bytes, label);
                 return;
@@ -156,6 +166,35 @@ internal sealed partial class DebugSession
         RunToEntry(build, limit - used);
     }
 
+    // Boots a Color Computer with Disk BASIC, its target's disk in drive 0, as a user would: LOADM"<NAME>" at BASIC's
+    // OK, then EXEC once OK is back and the drive has stopped, with the program in memory, which jumps to the address
+    // the file's last record gives, the entry. OK back without the program means LOADM failed, and the launch says how.
+    private void BootDiskBasic(TargetBuild build, Machines.Chips.FloppyDrive drive)
+    {
+        ProjectTarget target = build.Target;
+        (int start, byte[] program) = ProjectBuild.Image(build);
+        ForgetBoundaries();
+        long limit = (long)(target.Built?.BootSeconds ?? 0) * Target.ClockHertz;
+        long used = 0;
+        RunUntil(build, () => CocoRowsStarting("OK") == 1, "BASIC's OK prompt", limit, ref used);
+        TypeWhenReady(build, $"LOADM\"{DiskbasicEnvironment.ProgramName(target)}\"\r", limit, ref used);
+        RunUntil(
+            build,
+            () => CocoRowsStarting("OK") == 2 && drive.Activity == Machines.Devices.DeviceActivity.Idle,
+            "LOADM's end and BASIC's OK prompt again",
+            limit,
+            ref used);
+
+        if (!Loaded(start, program))
+        {
+            throw new ProjectException(
+                $"{target.Project.File}: target {target.Name}: booted from its {build.Media.ImageKind}, LOADM did not load the program: the screen shows {CocoRows()}.");
+        }
+
+        TypeWhenReady(build, "EXEC\r", limit, ref used);
+        RunToEntry(build, limit - used);
+    }
+
     // Types keys once BASIC has run a quarter of a second at its prompt: BASIC prints OK before it reads the keyboard,
     // and a key typed at once can be lost, as the first key of CLOADM was at start-up.
     private void TypeWhenReady(TargetBuild build, string keys, long limit, ref long used)
@@ -173,6 +212,28 @@ internal sealed partial class DebugSession
         }
 
         foreach (char key in keys) { Target.Key(key); }
+    }
+
+    // The Color Computer's text screen's rows that show something, read as CocoRowsStarting reads them, joined by " / ".
+    private string CocoRows()
+    {
+        const int Video = 0x0400;
+        const int Columns = 32;
+        List<string> rows = [];
+        for (int row = 0; row < 16; row++)
+        {
+            char[] characters = new char[Columns];
+            for (int column = 0; column < Columns; column++)
+            {
+                int value = Target.Peek((ushort)(Video + (row * Columns) + column)) & 0x3F;
+                characters[column] = (char)(value < 0x20 ? value + 0x40 : value);
+            }
+
+            string text = new string(characters).TrimEnd();
+            if (text.Length != 0) { rows.Add(text); }
+        }
+
+        return rows.Count == 0 ? "nothing" : string.Join(" / ", rows);
     }
 
     // How many of the Color Computer's 16 text rows at $0400 start with text: OK, or the F and name CLOADM shows when it

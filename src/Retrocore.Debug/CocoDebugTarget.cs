@@ -61,6 +61,11 @@ internal sealed partial class CocoDebugTarget : IDebugTarget
     /// </summary>
     internal CocoCassetteDrive BootDeck => _machine.Cassette;
 
+    /// <summary>
+    ///  Gets drive 0, which a diskbasic target's disk goes in, or null when the machine has no disk controller.
+    /// </summary>
+    internal Machines.Chips.FloppyDrive? BootDrive => _machine.Bus.DiskController?.Drives[0];
+
     /// <inheritdoc/>
     public string ThreadName => _machine.Model switch
     {

@@ -7,8 +7,8 @@ import { test } from "node:test";
 import { Script, createContext } from "node:vm";
 import { panelKeyCode, webviewHtml } from "../display";
 
-function panelScript(): string {
-    const html = webviewHtml("NONCE");
+function panelScript(focusOnLoad = true): string {
+    const html = webviewHtml("NONCE", focusOnLoad);
     const open = '<script nonce="NONCE">';
     const start = html.indexOf(open);
     const end = html.lastIndexOf("</script>");
@@ -75,7 +75,8 @@ class Element {
     addEventListener(type: string, listener: Listener): void { this.listeners.set(type, [...this.listeners.get(type) ?? [], listener]); }
     setAttribute(name: string, value: string): void { this.attributes.set(name, value); }
     getAttribute(name: string): string | null { return this.attributes.get(name) ?? null; }
-    focus(): void { /* nothing to focus */ }
+    focused = 0;
+    focus(): void { this.focused++; }
     replaceChildren(...children: unknown[]): void { this.children = children; }
     readonly context = new Context2d();
     getContext(): Context2d { return this.context; }
@@ -87,9 +88,9 @@ class Element {
 interface PanelWindow extends Element { innerHeight: number; devicePixelRatio: number }
 
 /** The panel's document, with the pointer lock the mouse card uses. */
-interface PanelDocument { pointerLockElement: Element | undefined; events: Element }
+interface PanelDocument { pointerLockElement: Element | undefined; events: Element; activeElement: Element | undefined }
 
-function loadPanel(state?: unknown, audioContext?: unknown): {
+function loadPanel(state?: unknown, audioContext?: unknown, focusOnLoad = true): {
     posted: unknown[]; screen: Element; byId: Map<string, Element>; buttons: Element[]; codes: Element[]; window: PanelWindow;
     body: Element; saved: () => unknown; sharpSize: (machine: string, width: number, height: number, ratio: number) => unknown;
     document: PanelDocument; frames: (() => void)[];
@@ -119,7 +120,7 @@ function loadPanel(state?: unknown, audioContext?: unknown): {
         },
         addEventListener: (type: string, listener: Listener) => events.addEventListener(type, listener),
         getElementById: (id: string) => byId.get(id),
-        activeElement: undefined,
+        activeElement: undefined as Element | undefined,
         querySelector: (selector: string) => buttons.find(button => selector === `[data-button="${button.dataset.button}"]`),
         querySelectorAll: (selector: string) =>
             selector === "[data-button]" ? buttons : selector === "[data-code]" ? codes : selector === "[data-machine]" ? groups : []
@@ -146,7 +147,7 @@ function loadPanel(state?: unknown, audioContext?: unknown): {
         this.set(bytes);
         return { read: text.length, written: bytes.length };
     };`).runInContext(context);
-    new Script(panelScript()).runInContext(context);
+    new Script(panelScript(focusOnLoad)).runInContext(context);
     const sharpSize = context.sharpSize as (machine: string, width: number, height: number, ratio: number) => unknown;
     return { posted, screen, byId, buttons, codes, window, body, saved: getState, sharpSize, document, frames };
 }
@@ -375,6 +376,18 @@ test("the VIC-20 types PETSCII, shows its Datasette stopped and its drive by dev
     }
     byId.get("vic20-reset")?.dispatch("click");
     assert.deepEqual(posted.splice(0), [{ command: "reset" }], "the reset switch");
+});
+
+test("the page focuses its screen as it loads only when asked, and when the panel gains the focus", () => {
+    assert.equal(loadPanel().screen.focused, 1, "a running machine's page gives its screen the keyboard as it loads");
+    const { screen, window, document, body, byId } = loadPanel(undefined, undefined, false);
+    assert.equal(screen.focused, 0, "a stopped machine's page leaves the focus where it is");
+    document.activeElement = body;
+    window.dispatch("focus");
+    assert.equal(screen.focused, 1, "a click on the panel's tab gives the screen the keyboard");
+    document.activeElement = byId.get("speed");
+    window.dispatch("focus");
+    assert.equal(screen.focused, 1, "a control in the page keeps the keyboard");
 });
 
 test("the PET's key bar has Stop and Clr, the shifted HOME", () => {

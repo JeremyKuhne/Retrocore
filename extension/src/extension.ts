@@ -328,7 +328,9 @@ export function activate(context: vscode.ExtensionContext): void {
                         panel.iconPath = icon;
                         context.subscriptions.push(panel);
                         const nonce = randomBytes(16).toString("hex");
-                        panel.webview.html = webviewHtml(nonce);
+                        // The page focuses its screen as it loads only when the panel takes the keyboard: a page
+                        // that loads after VS Code has shown a stop's source would otherwise take its focus.
+                        panel.webview.html = webviewHtml(nonce, running);
                         panel.onDidDispose(() => { panel = undefined; panelBasic = undefined; }, undefined, context.subscriptions);
                         panel.webview.onDidReceiveMessage((input: unknown) => {
                             if (panelKeyCode(input) !== undefined) {

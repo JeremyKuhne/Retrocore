@@ -1011,6 +1011,7 @@ internal sealed partial class DebugSession
         _configured = false;
         _launchAttempted = true;
         _transport?.ThrowIfLaunchCancelled();
+        _launchReady = false;
         // A project launch builds its target, as retrocore build does, and launches the target's machine with the
         // target's options, which the saved media then goes over as over any launch's.
         TargetBuild? built = null;
@@ -1054,7 +1055,6 @@ internal sealed partial class DebugSession
         CancelPhysicalInput();
         _lastInput = null;
         _textOnly = false;
-        _launchReady = false;
         CloseJournal();
         ReleaseTarget();
         _speed = speed;

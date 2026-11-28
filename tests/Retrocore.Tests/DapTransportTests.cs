@@ -347,6 +347,34 @@ public sealed class DapTransportTests
     }
 
     /// <summary>
+    ///  Ordinary requests queued behind a paced launch do not cancel it or reorder replies.
+    /// </summary>
+    [TestMethod]
+    public void FullRequestQueueDoesNotCancelLaunch()
+    {
+        const int RequestCount = 300;
+        List<JsonObject> messages = Exchange(transport =>
+        {
+            transport.On("launch", _ =>
+            {
+                long started = Stopwatch.GetTimestamp();
+                while (Stopwatch.GetElapsedTime(started) < TimeSpan.FromMilliseconds(250))
+                {
+                    transport.ThrowIfLaunchCancelled();
+                    Thread.Sleep(1);
+                }
+
+                return new JsonObject();
+            });
+
+            transport.On("next", _ => new JsonObject());
+        }, [Request(1, "launch", []), .. Enumerable.Range(2, RequestCount).Select(seq => Request(seq, "next", []))]);
+
+        messages.Select(message => message.Int("request_seq")).Should().Equal(Enumerable.Range(1, RequestCount + 1).Select(seq => (int?)seq));
+        messages.Should().OnlyContain(message => message.Bool("success") == true);
+    }
+
+    /// <summary>
     ///  Inspecting malformed requests for cancellation does not terminate the reader.
     /// </summary>
     [TestMethod]

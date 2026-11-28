@@ -48,12 +48,14 @@ internal sealed partial class DebugSession
         switch (Target)
         {
             case Apple2DebugTarget apple2:
-                // Slot 6's drive 1, which the Disk II's firmware boots; the dos33 launch fits the Disk II. The image is
+                // Slot 6's drive 1, which the Disk II's firmware boots; the dos33 and prodos launches fit the Disk II. The image is
                 // converted to a disk before the one there is kept, so an image that is not a disk leaves the drive and
                 // the kept disks as they were.
-                WozDisk disk = SectorDiskConverter.Convert(bytes, proDosOrder: false);
+                // A prodos disk is in ProDOS's block order, a dos33 disk in DOS's.
+                bool proDos = target.Environment == "prodos";
+                WozDisk disk = SectorDiskConverter.Convert(bytes, proDosOrder: proDos);
                 MediaActions.KeepReplaced(apple2.BootDrive, $"the build's {build.Media.ImageKind} took its place");
-                apple2.BootDrive.Insert(disk, label, "DSK");
+                apple2.BootDrive.Insert(disk, label, proDos ? "PO" : "DSK");
                 device = apple2.BootDrive.Id;
                 break;
             case BbcDebugTarget bbc:

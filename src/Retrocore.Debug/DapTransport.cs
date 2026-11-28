@@ -295,14 +295,7 @@ internal sealed class DapTransport(Stream input, Stream output)
 
             // A successful disconnect stops the transport. Don't enter another blocking read before it is handled.
             TaskCompletionSource? disconnect = command == "disconnect" ? new(TaskCreationOptions.RunContinuationsAsynchronously) : null;
-            if (!requests.TryAdd((message, disconnect)))
-            {
-                // A full queue cannot carry a later cancel past a paced launch. Unblock the consumer without
-                // dropping or reordering requests.
-                lock (_pendingLaunches) { CancelPendingLaunches(); }
-                requests.Add((message, disconnect), _stopReading.Token);
-            }
-
+            requests.Add((message, disconnect), _stopReading.Token);
             disconnect?.Task.WaitAsync(_stopReading.Token).GetAwaiter().GetResult();
         }
     }

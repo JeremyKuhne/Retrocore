@@ -2419,7 +2419,13 @@ internal sealed partial class DebugSession
             {
                 foreach ((IDebugModule module, Dictionary<ushort, DebugContract> contracts) in modules)
                 {
-                    if (contracts.TryGetValue(address, out DebugContract? contract) && DebugInfo.Active(module, Target, address))
+                    // A routine's contract holds only where its module is mapped and places the routine, as it places
+                    // its source lines: a source map module only where memory holds the routine's first instruction
+                    // (for a whole image, every statement's), so not in a language card that ProDOS fills where Integer
+                    // BASIC's routines were mapped; a debug file's only where it gives the address a line.
+                    if (contracts.TryGetValue(address, out DebugContract? contract)
+                        && DebugInfo.Active(module, Target, address)
+                        && module.Position(Target, address) is not null)
                     {
                         return contract;
                     }

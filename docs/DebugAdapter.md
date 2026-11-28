@@ -138,6 +138,7 @@ ran. `requested: "skip"` with `effective: "fast"` and `reason: "unsupportedOpera
 unthrottled. During ordinary execution, `retro/mediaSpeed` reports fallback when a device is seen active in status
 sampling. This is live telemetry, not a transfer log: short or adjacent operations may not produce separate events.
 The requested setting does not change. A DAP `cancel` request naming a pending launch's `requestId`
-can interrupt its project-image boot.
+can interrupt its project-image boot. Avoid filling the request queue during a paced launch: a full queue pauses
+reading, so cancellation sent behind that backlog waits until the queue can drain.
 
 See [media speed support](Devices.md#media-speed) for the machines and operations that can Skip.

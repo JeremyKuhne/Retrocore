@@ -34,6 +34,7 @@ workspace adds documents of its own, or replaces a key, with the same columns.
 | BV20 | VIC-20 BASIC source, with revisions to March 6, 1981 | 1981 | Commodore | <https://github.com/mist64/cbmsrc/tree/01bd60f162ef92212ef0cb67546ae8f42be34168/BASIC_VIC> |
 | V20PRG | VIC-20 Programmer's Reference Guide, first edition, sixth printing | 1982 | Commodore | <https://archive.org/details/VIC-20ProgrammersReferenceGuide1stEdition6thPrinti> |
 | MTV | COMPUTE!'s Mapping the VIC, by Russ Davies | 1984 | COMPUTE! Books | <https://archive.org/details/Computes_Mapping_the_VIC> |
+| D1541 | Commodore 1541 DOS source, 901229-05 and 325302-01 | 1982-1983 | Commodore | <https://github.com/mist64/cbmsrc/tree/01bd60f162ef92212ef0cb67546ae8f42be34168/DOS_1541_05> |
 | IIGSFR87 | Apple IIGS Firmware Reference | 1987 | Addison-Wesley | <https://archive.org/details/Apple_IIGS_Firmware_Reference_1987_Adn-Wesley_Publishing> |
 | MOUSETN | Apple II Technical Notes: Mouse #1-#7 (Developer Technical Support, revised 1985-1990) | 1990 | Apple Computer | <https://mirrors.apple2.org.za/Apple%20II%20Documentation%20Project/Interface%20Cards/Digitizers/Apple%20Mouse%20Interface%20Card/Documentation/Apple%20II%20Mouse%20Technical%20Notes.pdf> |
 | IICTRM89 | Apple IIc Technical Reference Manual, Second Edition | 1989 | Addison-Wesley | <https://archive.org/details/AppleIIcTechnicalReference2ndEd> |
@@ -102,6 +103,9 @@ where the check found that the document gives that name for that thing:
   has, and the listing's names for code it removed are given in prose.
 - **V20PRG and MTV:** only the archive's OCR text was searched. A name is cited where it appears beside its address,
   in decimal or hexadecimal, allowing for the OCR's damage ($ read as S, O for 0).
+- **D1541:** assembled by a script; its 15,946 bytes match 325302-01 and 901229-05 at every address, so a name is
+  cited where the listing puts the label at the address, or gives the constant its value. The 1540's listing
+  (`DOS_1540`) is a different build from its 325303-01 chip and is not cited.
 - **Lineage:** a definition that descends through a vendor's builds cites, in every build, each document of that line
   whose listing names it, including the other builds' documents; a document whose build lacks the definition stays out.
   Where a switch gives the builds different values (among them BUFPAG, BUFLEN, LINLEN, CLMWID, ROMLOC, NUMLEV, STKEND,

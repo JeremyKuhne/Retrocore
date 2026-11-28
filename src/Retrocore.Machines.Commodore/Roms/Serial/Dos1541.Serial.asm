@@ -106,7 +106,7 @@ NextCommand:
     sta Listening
     beq WaitAtnEnd
 
-;; Is it UNTALK, which stops the talker?
+;; Is it <UNTALK>, which stops the talker?
 ;; Also: ATN35 (D1541)
 NotUnlisten:
     cmp #UNTALK
@@ -498,8 +498,8 @@ WaitClockAfterEoi:
 WaitClockHigh:
     lda Via1PortB
 .if SINGLE_BIT_READ
-    ; Port B's bit 0 is DATA, pulled for a 0, so it is inverted and shifted into the carry, and bit 2, CLK, moves to bit 1
-    ; to be tested, while the line is pulled. The three NOPs are padding, filling what the two-read form needs.
+    ; Port B's bit 0 is DATA, pulled for a 0, so it is inverted and shifted into the carry, and bit 2, CLK, moves to
+    ; bit 1 to be tested, while the line is pulled. The three NOPs are padding, filling what the two-read form needs.
     eor #DATA_IN
     lsr
     and #CLOCK_IN >> 1

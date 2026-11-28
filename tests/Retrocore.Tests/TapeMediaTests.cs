@@ -57,14 +57,14 @@ public sealed class TapeMediaTests
         Type(target.Machine, "10 PRINT \"KEPT\";6*7\r");
         Act(target, drive, "record", At(cas)).Should().BeNull("there is no tape in the recorder");
         File.ReadAllBytes(cas).Should().BeEmpty("the recording's file is written blank as it starts");
-        drive.Media?.Changed.Should().BeFalse("nothing is recorded yet");
+        (drive.Media?.Changed).Should().BeFalse("nothing is recorded yet");
 
         Type(target.Machine, "CSAVE \"K\"\r");
         RunUntil(target.Machine, () => target.Machine.Bus.Cassette.MotorOn, seconds: 5);
         Run(target.Machine, seconds: 1);
         CassetteImage tape = target.Machine.Cassette.Tape ?? throw new InvalidOperationException("The recorder is empty.");
         tape.Bytes.Should().BeEmpty("the recorder holds its bits until the motor stops");
-        drive.Media?.Changed.Should().BeTrue("the recorder heard bits");
+        (drive.Media?.Changed).Should().BeTrue("the recorder heard bits");
         drive.Activity.Should().Be(DeviceActivity.Writing);
 
         // A snapshot takes the bytes the held bits make, and leaves them held.
@@ -81,7 +81,7 @@ public sealed class TapeMediaTests
         waiting.Single().Waiting.Should().BeTrue();
         journal.Commit(MediaActions.Journal(target.Devices, journal, whole: true), close: true);
         Guid medium = MediaActions.Source(tape)?.Id ?? throw new InvalidOperationException("The tape has no source.");
-        journal.KeptOf(medium)?.MidWrite.Should().BeTrue();
+        (journal.KeptOf(medium)?.MidWrite).Should().BeTrue();
 
         // The machine carries on and finishes the recording, which begins with what was kept.
         RunUntil(target.Machine, () => !target.Machine.Bus.Cassette.MotorOn, seconds: 30);
@@ -93,15 +93,15 @@ public sealed class TapeMediaTests
         RecoveryJournal again = Open(id);
         MediaActions.Recover(next.Devices, again).Should().BeEmpty();
         Trs80CassetteDrive back = next.Machine.Cassette;
-        back.Media?.Changed.Should().BeTrue();
-        back.Media?.Label.Should().Be(cas);
+        (back.Media?.Changed).Should().BeTrue();
+        (back.Media?.Label).Should().Be(cas);
         back.Transport.Mode.Should().Be(TapeMode.Playing, "a recovered tape is there for CLOAD");
         CassetteImage recovered = next.Machine.Cassette.Tape ?? throw new InvalidOperationException("The recorder is empty.");
         recovered.Bytes.Should().Equal(caught);
 
-        Act(next, back, "save", Speaking())?.String("outcome").Should().Be("saved");
+        (Act(next, back, "save", Speaking())?.String("outcome")).Should().Be("saved");
         File.ReadAllBytes(cas).Should().Equal(caught);
-        back.Media?.Changed.Should().BeFalse();
+        (back.Media?.Changed).Should().BeFalse();
         again.Commit(MediaActions.Journal(next.Devices, again), close: true);
         Disks(id).Should().BeEmpty("a saved tape leaves the journal");
     }
@@ -132,7 +132,7 @@ public sealed class TapeMediaTests
         Trs80DebugTarget next = Trs80();
         RecoveryJournal again = Open(id);
         MediaActions.Recover(next.Devices, again).Should().BeEmpty();
-        next.Machine.Cassette.Media?.Changed.Should().BeTrue();
+        (next.Machine.Cassette.Media?.Changed).Should().BeTrue();
         Type(next.Machine, "CLOAD \"B\"\r");
         RunUntil(next.Machine, () => next.Machine.Bus.Cassette.MotorOn, seconds: 5);
         RunUntil(next.Machine, () => !next.Machine.Bus.Cassette.MotorOn, seconds: 30);
@@ -169,30 +169,30 @@ public sealed class TapeMediaTests
 
         File.SetAttributes(cas, FileAttributes.ReadOnly);
         JsonObject? refused = Act(target, drive, "save", Speaking());
-        refused?.String("outcome").Should().Be("readOnly");
-        refused?.String("reason").Should().Be("file");
+        (refused?.String("outcome")).Should().Be("readOnly");
+        (refused?.String("reason")).Should().Be("file");
         File.SetAttributes(cas, FileAttributes.Normal);
         File.ReadAllBytes(cas).Should().BeEmpty();
-        drive.Media?.Changed.Should().BeTrue();
+        (drive.Media?.Changed).Should().BeTrue();
 
         // The folder goes; saving there again, as agreed, cannot write the file.
         Directory.Delete(folder, recursive: true);
-        Act(target, drive, "save", Speaking())?.String("outcome").Should().Be("conflict", "the blank file is gone");
+        (Act(target, drive, "save", Speaking())?.String("outcome")).Should().Be("conflict", "the blank file is gone");
         JsonObject again = Speaking();
         again["overwrite"] = new JsonObject { ["sha256"] = null };
         Action save = () => Act(target, drive, "save", again);
         save.Should().Throw<IOException>();
-        drive.Media?.Changed.Should().BeTrue("a failed save leaves the recording changed");
+        (drive.Media?.Changed).Should().BeTrue("a failed save leaves the recording changed");
         tape.ToArray().Should().Equal(recorded);
 
         RecoveryJournal journal = Open(id);
         journal.Commit(MediaActions.Journal(target.Devices, journal));
         Disks(id).Should().ContainSingle("the journal keeps the recording");
-        Act(target, drive, "eject", Speaking())?.String("outcome").Should().Be("changed");
+        (Act(target, drive, "eject", Speaking())?.String("outcome")).Should().Be("changed");
         drive.Media.Should().NotBeNull("an eject asks first");
 
         Directory.CreateDirectory(folder);
-        Act(target, drive, "save", again)?.String("outcome").Should().Be("saved");
+        (Act(target, drive, "save", again)?.String("outcome")).Should().Be("saved");
         File.ReadAllBytes(cas).Should().Equal(recorded);
         journal.Commit(MediaActions.Journal(target.Devices, journal), close: true);
         Disks(id).Should().BeEmpty();
@@ -226,7 +226,7 @@ public sealed class TapeMediaTests
 
         JsonObject overwrite = Speaking();
         overwrite["overwrite"] = new JsonObject { ["sha256"] = current };
-        Act(target, drive, "save", overwrite)?.String("outcome").Should().Be("saved");
+        (Act(target, drive, "save", overwrite)?.String("outcome")).Should().Be("saved");
         byte[] saved = File.ReadAllBytes(cas);
         saved.Length.Should().BeGreaterThan(16, "the half second of leader recorded so far is saved");
         In(target.Machine.Cassette.Tape).Bytes.Should().BeEmpty("saving does not stop the recorder");
@@ -247,7 +247,7 @@ public sealed class TapeMediaTests
         Act(target, drive, "record", At(tap));
         File.ReadAllBytes(tap).Should().BeEmpty();
         Send(target, "HI");
-        drive.Media?.Changed.Should().BeTrue();
+        (drive.Media?.Changed).Should().BeTrue();
         drive.Activity.Should().Be(DeviceActivity.Writing, "a recorder records from the moment the tape goes in");
 
         // Stopped: the last checkpoint keeps it, and the next launch puts it back to play.
@@ -257,18 +257,18 @@ public sealed class TapeMediaTests
         AltairCassette back = next.Machine.Bus.Cassette ?? throw new InvalidOperationException("The 88-ACR is missing.");
         RecoveryJournal again = Open(id);
         MediaActions.Recover(next.Devices, again).Should().BeEmpty();
-        back.Media?.Changed.Should().BeTrue();
+        (back.Media?.Changed).Should().BeTrue();
         back.Transport.Mode.Should().Be(TapeMode.Playing);
         In(back.Tape).ToArray().Should().Equal("HI"u8.ToArray());
 
         // A file written at its path meanwhile is a conflict; a read-only file is refused.
         File.WriteAllBytes(tap, [9]);
-        Act(next, back, "save", Speaking())?.String("outcome").Should().Be("conflict");
+        (Act(next, back, "save", Speaking())?.String("outcome")).Should().Be("conflict");
         File.WriteAllBytes(tap, []);
         File.SetAttributes(tap, FileAttributes.ReadOnly);
-        Act(next, back, "save", Speaking())?.String("outcome").Should().Be("readOnly");
+        (Act(next, back, "save", Speaking())?.String("outcome")).Should().Be("readOnly");
         File.SetAttributes(tap, FileAttributes.Normal);
-        back.Media?.Changed.Should().BeTrue();
+        (back.Media?.Changed).Should().BeTrue();
 
         // Crashed: a checkpoint keeps it, and the launch after puts it back once more.
         again.Commit(MediaActions.Journal(next.Devices, again));
@@ -299,7 +299,7 @@ public sealed class TapeMediaTests
         Apple1Tape.FromWave(File.ReadAllBytes(wav)).HalfCycles.Should().BeEmpty("the file is written blank");
         Apple1Tape tape = drive.Tape ?? throw new InvalidOperationException("The recorder is empty.");
         Apple1Tape.FromData([0x12, 0x34]).HalfCycles.ToList().ForEach(half => tape.Add(half));
-        drive.Media?.Changed.Should().BeTrue();
+        (drive.Media?.Changed).Should().BeTrue();
 
         RecoveryJournal journal = Open(id);
         journal.Commit(MediaActions.Journal(target.Devices, journal, whole: true), close: true);
@@ -311,9 +311,9 @@ public sealed class TapeMediaTests
 
         JsonObject saved = Act(next, back, "save", Speaking()) ?? throw new InvalidOperationException("No answer.");
         saved.String("outcome").Should().Be("saved");
-        saved["notes"]?.AsArray().Should().ContainSingle();
+        (saved["notes"]?.AsArray()).Should().ContainSingle();
         saved["losses"].Should().BeNull();
-        back.Media?.Changed.Should().BeFalse("a WAV file is read back the same");
+        (back.Media?.Changed).Should().BeFalse("a WAV file is read back the same");
         Apple1Tape.FromWave(File.ReadAllBytes(wav)).HalfCycles.Count.Should().BeInRange(tape.HalfCycles.Count - 2, tape.HalfCycles.Count + 1);
         again.Commit(MediaActions.Journal(next.Devices, again), close: true);
     }
@@ -342,7 +342,7 @@ public sealed class TapeMediaTests
         }
 
         cassette.Tick(motor: false, output: level);
-        drive.Media?.Changed.Should().BeTrue();
+        (drive.Media?.Changed).Should().BeTrue();
         target.SaveRecordings();
         File.ReadAllBytes(wav).Should().Equal(blank, "the session's end writes the RAM image alone");
         File.Exists(Path.Join(folder, "m100.ram")).Should().BeTrue();
@@ -356,7 +356,7 @@ public sealed class TapeMediaTests
         Trs80Model100Tape back = next.Machine.Bus.CassetteDrive.Tape ?? throw new InvalidOperationException("The recorder is empty.");
         back.StartsHigh.Should().Be(tape.StartsHigh);
         back.HalfCycles.Should().Equal(tape.HalfCycles);
-        Act(next, next.Machine.Bus.CassetteDrive, "save", Speaking())?.String("outcome").Should().Be("saved");
+        (Act(next, next.Machine.Bus.CassetteDrive, "save", Speaking())?.String("outcome")).Should().Be("saved");
         Trs80Model100Tape.FromWave(File.ReadAllBytes(wav)).HalfCycles.Should().NotBeEmpty();
         again.Commit(MediaActions.Journal(next.Devices, again), close: true);
     }

@@ -104,7 +104,7 @@ internal sealed class MachinePane : ScrollViewer
         // The badge counts the disks changed in the machine and not yet saved to their images, in drives or ejected.
         int ejected = _session.Host.UnsavedEjected().Count;
         int changed = ejected + devices.Count(device => device.Media?.Changed == true && device.Can(MediaOperations.Save));
-        _drives.SetBadge(changed, $"{changed} disk{(changed == 1 ? "" : "s")} changed and not saved to {(changed == 1 ? "its image" : "their images")}");
+        _drives.SetBadge(changed, $"{changed} {(changed == 1 ? "disk or tape" : "disks or tapes")} changed and not saved to {(changed == 1 ? "its image" : "their images")}");
 
         // Built again for another machine, or when a card changes what this one offers, as adding a Mockingboard does.
         string displayFor = $"{RuntimeHelpers.GetHashCode(host)}|{string.Join(',', host.SoundModes)}|{string.Join(',', host.Screens)}";
@@ -497,7 +497,7 @@ internal sealed class MachinePane : ScrollViewer
                 ? await _window.Ask(
                     $"{file} cannot hold all of the disk in {device.Info.Name}, so it still has changes. Let them go before {what}?",
                     ["Discard"])
-                : await _window.Ask($"The disk in {device.Info.Name} has changes not saved to {file}. Save them before {what}?", ["Save", "Discard"]);
+                : await _window.Ask($"The {Medium(device)} in {device.Info.Name} has changes not saved to {file}. Save them before {what}?", ["Save", "Discard"]);
 
             if (answer == "Discard")
             {
@@ -573,7 +573,9 @@ internal sealed class MachinePane : ScrollViewer
             if (failed) { return false; }
             string device = answer?["device"]?.GetValue<string>() ?? "";
             JsonNode? generation = answer?["generation"]?.DeepClone();
-            string name = _session.Host.DeviceStates().FirstOrDefault(state => state.Id == device)?.Info.Name ?? device;
+            DeviceState? state = _session.Host.DeviceStates().FirstOrDefault(state => state.Id == device);
+            string name = state?.Info.Name ?? device;
+            string medium = state is null ? "disk" : Medium(state);
             string file = Path.GetFileName(answer?["label"]?.GetValue<string>() ?? "");
             string label = file.Length != 0 ? file : "its image";
             switch (answer?["outcome"]?.GetValue<string>())
@@ -581,10 +583,10 @@ internal sealed class MachinePane : ScrollViewer
                 case null:
                     return true;
                 case "saved":
-                    Said(answer, name);
+                    Said(answer, name, medium);
                     return true;
                 case "changed":
-                    string? choice = await _window.Ask($"The disk in {name} has changes not saved to {label}.", ["Save", "Discard"]);
+                    string? choice = await _window.Ask($"The {medium} in {name} has changes not saved to {label}.", ["Save", "Discard"]);
                     if (choice is null) { return false; }
                     // A disk the machine ejected, which a card's removal would take, is named by its ejected id.
                     JsonNode? ejected = answer["ejected"]?.DeepClone();
@@ -653,14 +655,17 @@ internal sealed class MachinePane : ScrollViewer
     }
 
     // What a save says beside saving: a WOZ1 image now WOZ2, a sector that read from a second copy, what was lost.
-    private void Said(JsonObject answer, string name)
+    private void Said(JsonObject answer, string name, string medium)
     {
         IEnumerable<string?> said = (answer["notes"]?.AsArray() ?? []).Concat(answer["losses"]?.AsArray() ?? [])
             .Select(node => node?.GetValue<string>());
 
         string text = string.Join(" ", said.Where(line => line is not null));
-        if (text.Length != 0) { _window.Notify($"Saved the disk in {name}. {text}", "info"); }
+        if (text.Length != 0) { _window.Notify($"Saved the {medium} in {name}. {text}", "info"); }
     }
+
+    // What a drive holds, as a question names it: a tape or a disk.
+    private static string Medium(DeviceState device) => device.Kind == DeviceKind.TapeDrive ? "tape" : "disk";
 
     // A save's arguments for the mount an answer was about.
     private static JsonObject SaveOf(JsonNode? generation) => new() { ["generation"] = generation?.DeepClone() };
@@ -810,8 +815,7 @@ internal sealed class MachinePane : ScrollViewer
     private async Task Save(DeviceState device)
     {
         if (device.Media is not { } media) { return; }
-        string medium = device.Kind == DeviceKind.TapeDrive ? "tape" : "disk";
-        string? answer = await _window.Ask($"Replace {media.Label} with the {medium} in {device.Info.Name}?", ["Save"]);
+        string? answer = await _window.Ask($"Replace {media.Label} with the {Medium(device)} in {device.Info.Name}?", ["Save"]);
         if (answer == "Save") { Act(device, "save"); }
     }
 
@@ -827,7 +831,7 @@ internal sealed class MachinePane : ScrollViewer
 
         IStorageFile? file = await _window.StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
         {
-            Title = $"Save the disk in {device.Info.Name} as",
+            Title = $"Save the {Medium(device)} in {device.Info.Name} as",
             SuggestedFileName = Path.GetFileName(label),
             SuggestedStartLocation = folder,
             FileTypeChoices = Filters("Disk images", device.Info.SaveFormats),

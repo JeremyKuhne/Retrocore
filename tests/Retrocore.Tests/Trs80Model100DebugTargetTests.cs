@@ -202,8 +202,8 @@ public sealed class Trs80Model100DebugTargetTests
             Run(saver, 1);
             saver.Accelerated.Should().BeTrue("CSAVE runs the motor");
             Run(saver, 14);
-            drive.Media?.Changed.Should().BeTrue("the recording is a changed tape");
-            MediaActions.Device(drive, "save", Speaking())?.String("outcome").Should().Be("saved");
+            (drive.Media?.Changed).Should().BeTrue("the recording is a changed tape");
+            (MediaActions.Device(drive, "save", Speaking())?.String("outcome")).Should().Be("saved");
             saver.DeviceAction(drive, "eject", []);
             Trs80Model100Tape.FromWave(File.ReadAllBytes(wave)).HalfCycles.Should().NotBeEmpty();
             Directory.GetFiles(folder, "*.tmp").Should().BeEmpty();
@@ -246,7 +246,7 @@ public sealed class Trs80Model100DebugTargetTests
             JsonObject recording = new() { ["path"] = wave };
             target.DeviceAction(drive, "record", recording);
             Trs80Model100Tape.FromWave(File.ReadAllBytes(wave)).HalfCycles.Should().BeEmpty("the file is written blank at once");
-            drive.Media?.Changed.Should().BeFalse();
+            (drive.Media?.Changed).Should().BeFalse();
             MediaActions.Device(drive, "eject", Speaking()).Should().BeNull("an unchanged recording comes out without a word");
             target.DeviceAction(drive, "eject", []);
             drive.Media.Should().BeNull();
@@ -254,29 +254,29 @@ public sealed class Trs80Model100DebugTargetTests
             // A recording with changes on it: SOD toggled while the motor runs.
             target.DeviceAction(drive, "record", recording);
             Record(target, changes: 4);
-            drive.Media?.Changed.Should().BeTrue();
+            (drive.Media?.Changed).Should().BeTrue();
             string bad = Path.Join(folder, "bad.wav");
             File.WriteAllText(bad, "not a wave");
             JsonObject insertBad = new() { ["path"] = bad };
             Action insert = () => target.DeviceAction(drive, "insert", insertBad);
             insert.Should().Throw<InvalidDataException>();
-            drive.Media?.Label.Should().Be(wave, "the recording is still in");
+            (drive.Media?.Label).Should().Be(wave, "the recording is still in");
             JsonObject missingTape = new() { ["path"] = Path.Join(folder, "missing.wav") };
             Action missing = () => target.DeviceAction(drive, "insert", missingTape);
             missing.Should().Throw<ArgumentException>().WithMessage("*does not exist*");
-            drive.Media?.Label.Should().Be(wave, "the recording is still in");
+            (drive.Media?.Label).Should().Be(wave, "the recording is still in");
 
             // An eject asks about it, and an older client is told to save it first.
-            MediaActions.Device(drive, "eject", Speaking())?.String("outcome").Should().Be("changed");
+            (MediaActions.Device(drive, "eject", Speaking())?.String("outcome")).Should().Be("changed");
             Action older = () => MediaActions.Device(drive, "eject", []);
             older.Should().Throw<InvalidOperationException>().WithMessage("*not saved*");
             drive.Media.Should().NotBeNull();
 
-            MediaActions.Device(drive, "save", Speaking())?.String("outcome").Should().Be("saved");
-            drive.Media?.Changed.Should().BeFalse();
+            (MediaActions.Device(drive, "save", Speaking())?.String("outcome")).Should().Be("saved");
+            (drive.Media?.Changed).Should().BeFalse();
             Trs80Model100Tape.FromWave(File.ReadAllBytes(wave)).HalfCycles.Should().NotBeEmpty();
             target.DeviceAction(drive, "insert", recording);
-            drive.Media?.WriteProtected.Should().BeTrue("the tape now plays");
+            (drive.Media?.WriteProtected).Should().BeTrue("the tape now plays");
             Directory.GetFiles(folder, "*.tmp").Should().BeEmpty();
         }
         finally
@@ -307,14 +307,14 @@ public sealed class Trs80Model100DebugTargetTests
             target.SaveRecordings();
             File.ReadAllBytes(wave).Should().Equal(blank);
             File.Exists(image).Should().BeTrue();
-            drive.Media?.Changed.Should().BeTrue("the recording stays in, changed");
+            (drive.Media?.Changed).Should().BeTrue("the recording stays in, changed");
 
             File.Delete(image);
             Directory.CreateDirectory(image);
             Action save = target.SaveRecordings;
             Exception thrown = save.Should().Throw<Exception>().Which;
             (thrown is IOException or UnauthorizedAccessException).Should().BeTrue(thrown.ToString());
-            drive.Media?.Changed.Should().BeTrue();
+            (drive.Media?.Changed).Should().BeTrue();
             Directory.Delete(image);
         }
         finally

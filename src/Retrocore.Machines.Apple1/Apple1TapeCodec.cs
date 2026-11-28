@@ -7,7 +7,7 @@ using Retrocore.Media;
 namespace Retrocore.Machines.Apple1;
 
 /// <summary>
-///  Writes an Apple-1 tape as a 16-bit mono WAV file at 44.1 kHz, which rounds each half cycle to its samples.
+///  Writes an Apple-1 tape as a 16-bit mono WAV file at 44.1 kHz, which moves each change of level to its sample.
 /// </summary>
 /// <remarks>
 ///  <para>

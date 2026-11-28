@@ -989,8 +989,8 @@ After the reviews:
      state" is those bytes, as the recorder cannot go on in another machine. The Color Computer's recorder adds each
      byte as it completes, and the others each half cycle or byte. A recorder recording is `Writing` while its motor
      runs (the Altair's, which has no motor control, while it records), so a checkpoint waits for it and then takes it
-     mid-write, which loses nothing. A WAV save rounds each half cycle to its samples, which the machines read the same,
-     so it is a note, not a loss, and leaves the tape saved; the journal keeps the half cycles exactly. Decks with keys
+     mid-write, which loses nothing. A WAV save moves each change of level to its sample, which the machines read the
+     same, so it is a note, not a loss, and leaves the tape saved; the journal keeps the half cycles exactly. Decks with keys
      say so with a `keys` operation, so the Drives view and Retrocore Desktop tell the PET's, VIC-20's, BBC's and
      Atari's from recorders that now save too. In the Drives view a changed recording shows `●`, Save, Save As... and
      the eject prompt, which says the tape has a recording not saved, with no lock badge; the stop notice counts

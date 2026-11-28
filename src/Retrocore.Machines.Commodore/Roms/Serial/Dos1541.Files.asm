@@ -2,9 +2,16 @@
 ; COMMODORE 1541 DOS: CHANNELS, BUFFERS, THE JOB QUEUE AND OPEN AND CLOSE ($CE0E-$DDF0)
 .scope Relative continued
 
-;; For the channel's record (`recl`/`rech`, `rs`) and `recptr`: the byte's place in the file, divided by 254 for its
-;; block (`relptr`, the remainder plus 2 for the link) and by 120 for its side sector (`ssnum`) and entry (`ssind`, 16
-;; plus twice the remainder).
+;; Works out where the current channel's record lies in its relative file: its block, and the side sector and entry that
+;; list that block.
+;;
+;; The record's byte offset in the file's data (<FindOffset>) is divided by 254, the data bytes in a block: the
+;; remainder, plus 2 for the block's link, is the place in the block (<BlockOffset>). The quotient, the block's number, is
+;; divided by 120, the blocks a side sector lists: the quotient is the side sector (<SideSectorNumber>), and the
+;; remainder, doubled and added to 16, the entry in it (<SideSectorIndex>).
+;; In: Channel = the channel, ChannelRecord = the record, ChannelRecordSize = its size, RecordOffset = the byte in it
+;; Out: BlockOffset, SideSectorNumber, SideSectorIndex
+;; Uses: A, X, Product, Accumulator, Temporary
 ;; Also: FNDREL (D1541)
 .proc FindRecord
     jsr FindOffset
@@ -24,8 +31,14 @@
     rts
 .endproc
 
-;; `Relative::Product` = (record - 1) * `rs` + `recptr`: the byte's offset in the file's data. Records 0 and 1 are both
-;; the first.
+;; Multiplies out where the current channel's record starts: (record - 1) x record size + <RecordOffset>, the byte's
+;; offset in the file's data. Records 0 and 1 are both the first, offset 0.
+;;
+;; It is a shift-and-add multiplication: each bit of the record size, low first, adds the record number, doubled once for
+;; each bit passed, to the product.
+;; In: Channel = the channel, ChannelRecord = the record, ChannelRecordSize = its size, RecordOffset = the byte in it
+;; Out: Product = the offset, three bytes
+;; Uses: A, X, Accumulator, Temporary
 ;; Also: MULPLY (D1541)
 .proc FindOffset
     jsr ClearProduct
@@ -83,16 +96,28 @@ Done:
     rts
 .endproc
 
-;; Divides `Relative::Product` by 254 (bytes in a block): quotient in `Relative::Product`, remainder in
-;; `Relative::Accumulator`+1. Skips <DivideBy120>'s load with a `BIT` (Q6).
+;; Divides <Product> by 254, the data bytes in a block: the quotient goes into <Product>, the remainder into
+;; <Accumulator>+1.
+;;
+;; It loads the divisor and skips <DivideBy120>'s own load of 120 with a BIT, which is why <DivideBy120> must follow
+;; (D-P5-Q6).
+;; In: Product = the dividend, three bytes
+;; Out: Product = the quotient, Accumulator+1 = the remainder
+;; Uses: A, X, Accumulator, Temporary
 ;; Also: DIV254 (D1541)
 .proc DivideBy254
     lda #$FE
     .byte OPCODE_BIT
 .endproc
 
-;; Divides `Relative::Product` by 120 (entries in a side sector), or by the divisor in A from <DivideBy254>: subtracts
-;; whole 256s (or 128s), adding the 2 (or 8) each leaves over back in, until what is left is under 256.
+;; Divides <Product> by 120, the blocks a side sector lists, or by the 254 that <DivideBy254> has already stored: the
+;; quotient goes into <Product>, the remainder into <Accumulator>+1.
+;;
+;; Each pass moves the dividend's whole 256s (or, for 120, its 128s) into the quotient and adds back what they were
+;; short of the divisor, 2 each (or 8), until under 256 is left; the divisor is then taken off once more if it fits.
+;; In: Product = the dividend, three bytes
+;; Out: Product = the quotient, Accumulator+1 = the remainder
+;; Uses: A, X, Accumulator, Temporary
 ;; Also: DIV120 (D1541)
 .proc DivideBy120
     lda #$78
@@ -183,7 +208,9 @@ Done:
     rts
 .endproc
 
-;; `Relative::Product`'s three bytes = 0; returns A = 0.
+;; Clears <Product>'s three bytes.
+;; Out: A = 0, Product = 0
+;; Keeps: X, Y
 ;; Also: ZERRES (D1541)
 .proc ClearProduct
     lda #$00
@@ -193,19 +220,24 @@ Done:
     rts
 .endproc
 
-;; `Relative::Accumulator`+1-3 times 4; falls into <Double>.
+;; Multiplies <Accumulator>+1 to +3 by 4, by doubling twice.
+;; Out: carry = the bit shifted out of the top byte
+;; Uses: A
 ;; Also: ACCX4 (D1541)
 .proc Quadruple
     jsr Double
 .endproc
 
-;; `Relative::Accumulator`+1-3 times 2: clears carry and falls into <RotateLeft>.
+;; Multiplies <Accumulator>+1 to +3 by 2: clears carry, then rotates them left through it.
+;; Out: carry = the bit shifted out of the top byte
 ;; Also: ACCX2 (D1541)
 .proc Double
     clc
 .endproc
 
-;; Rotates `Relative::Accumulator`+1-3 left through carry.
+;; Rotates <Accumulator>+1 to +3 left through carry, as a 24-bit shift.
+;; In: carry = the bit that enters the low byte
+;; Out: carry = the bit shifted out of the top byte
 ;; Also: ACC200 (D1541)
 .proc RotateLeft
     rol Accumulator+1
@@ -214,7 +246,9 @@ Done:
     rts
 .endproc
 
-;; `Relative::Product` += `Relative::Accumulator`+1-3.
+;; Adds <Accumulator>+1 to +3 to <Product>, a byte at a time, as a 24-bit sum.
+;; Out: carry = set when the sum overflows three bytes, X = 0
+;; Uses: A
 ;; Also: ADDRES (D1541)
 .proc AddToProduct
     clc
@@ -233,7 +267,11 @@ NextByte:
 .endscope
 .scope Files continued
 
-;; LRUINT: LRUTBL, the channels in order of use, = 0-3 and the BAM's index (BLINDX).
+;; Starts the list of channels in order of use afresh: channels 0 to 3, and the BAM's channel last,
+;; five entries, which <StealBuffer> reads.
+;; Out: X = <COMMAND_CHANNEL>
+;; Uses: A
+;; Keeps: Y
 ;; Also: LRUINT (D1541)
 .proc ResetUseOrder
     ldx #$00
@@ -251,8 +289,10 @@ Loop:
     rts
 .endproc
 
-;; LRUUPD: moves LINDX to LRUTBL's end, the most recently used, shifting the others down; LRUTBL is reset when LINDX is
-;; not in it.
+;; Makes the current channel the most recently used, by moving it to the end of <LeastRecentlyUsed> and shifting the
+;; others down. A channel the list does not hold resets it (<ResetUseOrder>), which ends the routine.
+;; In: Channel = the channel
+;; Uses: A, X, Y
 ;; Also: LRUUPD (D1541)
 .proc MarkMostRecent
     ldy #COMMAND_CHANNEL
@@ -276,11 +316,17 @@ Done:
     rts
 .endproc
 
-;; DBLBUF: makes the channel's other buffer active and waits for its job; a channel with one buffer gets a second (error
-;; 70, NO CHANNEL, if none), into which the block linked next is read first, except while writing. Relative files (part
-;; 5) use it throughout.
+;; Makes the current channel's other buffer the active one, and waits for that buffer's job.
+;;
+;; A channel with one buffer first gets a second, error 70 if none is free. The block the active buffer links to is
+;; then read into the second buffer, so that it is ready, unless the buffer was last written (a file being written
+;; only swaps) or the file's last block has no link. Relative files use this throughout.
+;; In: Channel = the channel
+;; Out: A = the job's result code
+;; Errors: error 70, <ERROR_NO_CHANNEL>, when no buffer is free for the second one
+;; Keeps: Track, Sector
 ;; Entry:
-;;   NoBuffers = Error 70, NO CHANNEL (<AddSecondBuffer> comes here too)
+;;   NoBuffers = Reports error 70, NO CHANNEL (<AddSecondBuffer> comes here too)
 ;; Also: DBLBUF (D1541)
 .proc SwapBuffers
     jsr MarkMostRecent
@@ -350,8 +396,10 @@ NoBuffers:
     jmp Commands::Fail
 .endproc
 
-;; DBSET: as <SwapBuffers> without the swap: the channel is marked used and gets an inactive buffer if it has none
-;; (addrel, part 5, calls it).
+;; Marks the current channel as used and gives it an inactive buffer if it has none: <SwapBuffers> without the swap.
+;; Relative files (<Relative::AddBlocks>) use it.
+;; In: Channel = the channel
+;; Errors: error 70, <ERROR_NO_CHANNEL>, when no buffer is free
 ;; Also: DBSET (D1541)
 .proc AddSecondBuffer
     jsr MarkMostRecent
@@ -367,7 +415,11 @@ Done:
     rts
 .endproc
 
-;; TGLBUF: flips bit 7 of BUF0 and BUF1 for LINDX, so the inactive buffer becomes the active one.
+;; Swaps which of the current channel's two buffers is the active one, by flipping the inactive flag, bit 7, of both
+;; buffer numbers.
+;; In: Channel = the channel
+;; Out: X = the channel
+;; Uses: A
 ;; Also: TGLBUF (D1541)
 .proc FlipBuffers
     ldx Channel
@@ -380,8 +432,10 @@ Done:
     rts
 .endproc
 
-;; PIBYTE: <AcceptByte> for the internal write channel (SA 18), its LED on; a relative file's overflow flag is cleared
-;; first (the copy command uses it).
+;; Takes a byte for the internal write channel, secondary address 18, and turns the drive's LED on. A relative file's
+;; overflow flag is cleared first, which the copy command relies on.
+;; In: DataByte = the byte
+;; Uses: A, X, Y, SecondaryAddress
 ;; Also: PIBYTE (D1541)
 .proc AcceptInternalByte
     ldx #INTERNAL_WRITE_SECONDARY
@@ -402,11 +456,15 @@ ToChannel:
     bne AcceptByte::ToFile
 .endproc
 
-;; PUT: takes DATA, the byte the bus received, for channel ORGSA: secondary address 15's go into the command buffer
-;; (CMDWAT set at the last, EOIFLG 0), others into the file: sequential, relative (WRTREL) or direct.
+;; Takes the byte the bus has received for the current secondary address. Bytes for secondary address 15 go into the
+;; command buffer, until it is full, and the last of them (<MoreBytes> clear) tells the main loop a command is waiting.
+;; Other bytes go into the file: a sequential file's, a relative file's record or a direct channel's buffer.
+;; In: DataByte = the byte, SecondaryCommand = the secondary address as the bus received it, MoreBytes = 0 for the last
+;;   byte
 ;; Entry:
 ;;   ToFile = A file's byte, by type (<AcceptInternalByte> enters here)
 ;;   ToCommand = Into the command buffer, unless it is full (<AcceptInternalByte> enters here)
+;; Uses: A, X, Y
 ;; Also: PUT (D1541)
 .proc AcceptByte
     lda SecondaryCommand
@@ -461,10 +519,12 @@ CommandReady:
     rts
 .endproc
 
-;; PUTBYT: A into the active buffer at its pointer, which moves on; Z set when that filled the buffer. Error 61, FILE
-;; NOT OPEN, with no active buffer.
+;; Stores a byte in the active buffer at its pointer, and moves the pointer on.
+;; In: A = the byte
+;; Out: zero = set when the pointer wrapped to 0, the buffer being full, X = twice the buffer's number
+;; Errors: error 61, <ERROR_FILE_NOT_OPEN>, when the channel has no active buffer
 ;; Entry:
-;;   IntoBuffer = Stores the byte on the stack into buffer A (PutSideSectorByte enters here for the side sec
+;;   IntoBuffer = Stores the byte on the stack into buffer A, which the side sector's writer (<Relative::PutSideSectorByte>) uses
 ;; Also: PUTBYT (D1541)
 .proc PutByte
     pha
@@ -487,7 +547,7 @@ IntoBuffer:
 .endscope
 .scope Commands continued
 
-;; The I command (the command table's entry): parses the drive and initializes it.
+;; The I command, in the command table: parses the drive number and initializes that drive, which ends the command.
 ;; Also: INTDRV (D1541)
 .proc Initialize
     jsr ParseDriveOnly
@@ -497,8 +557,10 @@ IntoBuffer:
 .endscope
 .scope Bam continued
 
-;; ITRIAL: gives the BAM its buffer if it has none (error 70, NO CHANNEL), and runs a seek job to the directory track,
-;; which reads a header's disk ID into HEADER; A = the job's result.
+;; Gives the BAM its buffer if it has none, and seeks to the directory track, which reads the disk's ID into
+;; <LastHeader>.
+;; Out: A = the job's result code
+;; Errors: error 70, <ERROR_NO_CHANNEL>, when no buffer is free
 ;; Also: ITRIAL (D1541)
 .proc SeekHeader
     jsr ChannelIndex
@@ -537,8 +599,10 @@ Seek:
     jmp Jobs::Run
 .endproc
 
-;; INITDR: forgets the BAM images and closes the drive's channels, seeks, then keeps the disk's ID (DSKID), reads the
-;; BAM (18/0) and its DOS version (DSKVER), clears WPSW and NODRV, and falls into <CountFreeBlocks>.
+;; Initializes the current drive: forgets its BAM images, closes its channels, seeks the directory track and keeps the
+;; disk's ID, reads the BAM, notes its DOS version, and clears the drive's changed and not-ready flags.
+;; In: DriveNumber = the drive
+;; Errors: any a job's error gives
 ;; Also: INITDR (D1541)
 .proc InitializeDrive
     jsr ForgetImages
@@ -568,7 +632,9 @@ Seek:
     sta NoDrive,x
 .endproc
 
-;; NFCALC: NDBL/NDBH = the free blocks in the BAM, the directory track's left out (<BuildEmpty> jumps here).
+;; Counts the blocks the BAM shows free, leaving out the directory track's, into <FreeBlocks> and <FreeBlocksHigh> for the
+;; drive. <Bam::BuildEmpty> jumps here after it builds a BAM.
+;; In: DriveNumber = the drive
 ;; Also: NFCALC (D1541)
 .proc CountFreeBlocks
     jsr SetPointer
@@ -606,7 +672,10 @@ NextTrack:
 .endscope
 .scope Files continued
 
-;; STRRD: reads the block at TRACK and SECTOR into the active buffer and waits; TRACK and SECTOR = its link.
+;; Reads the block at <Track> and <Sector> into the active buffer, waits for it, and leaves its link in <Track> and
+;; <Sector>.
+;; In: Track, Sector = the block
+;; Out: Track, Sector = the block's link; Track is 0 for the file's last block
 ;; Also: STRRD (D1541)
 .proc StartRead
     jsr Jobs::SetHeader
@@ -619,8 +688,10 @@ NextTrack:
     rts
 .endproc
 
-;; STRDBL: <StartRead>, then, when the file goes on, a read of its next block into a second buffer (record, part 5,
-;; calls it).
+;; Reads a file's block as <StartRead> does and, when the file goes on, starts the read of its next block into a second
+;; buffer. Relative files use it.
+;; In: Track, Sector = the block
+;; Out: Track, Sector = the first block's link
 ;; Also: STRDBL (D1541)
 .proc StartDoubleRead
     jsr StartRead
@@ -637,19 +708,20 @@ ReadNext:
     jmp SwapBuffers
 .endproc
 
-;; RDBUF: starts a read job on the active buffer; its header (track and sector) is already set by the caller, unlike
-;; <Files::ReadBlock> (RDAB, part 5), which sets it. The buffer pointer is zeroed; X = the buffer on return.
+;; Starts a read job on the active buffer. Its header, the track and sector, is the caller's to set already, unlike
+;; <ReadBlock>'s. The buffer's pointer is zeroed.
+;; Out: X = the buffer
 ;; Also: RDBUF (D1541)
 .proc ReadFileBlock
     lda #JOB_READ
     bne WriteFileBlock::Start
 .endproc
 
-;; WRTBUF: starts a write job on the active buffer; its header is already set by the caller, unlike <Files::WriteBlock>
-;; (WRTAB, part 5). The buffer pointer is zeroed and, for types below relative, the channel's block count (NBKL/NBKH)
-;; goes up; X = the buffer on return.
+;; Starts a write job on the active buffer. Its header is the caller's to set already, unlike <WriteBlock>'s. The
+;; buffer's pointer is zeroed and, for a channel of a type below relative, the channel's block count goes up.
+;; Out: X = the buffer
 ;; Entry:
-;;   Start = CMD = A, the job started (SETLJB), the pointer 0
+;;   Start = Starts the job in A on the active buffer, with the same effects (<ReadFileBlock> enters here)
 ;; Also: WRTBUF (D1541)
 .proc WriteFileBlock
     lda #JOB_WRITE
@@ -683,7 +755,11 @@ Done:
     rts
 .endproc
 
-;; FNDRCH: LINDX and X = the read channel of SA (SA 15's is the error channel's); carry set when it has none.
+;; Finds the channel a secondary address reads: its number goes into <Channel>. Secondary address 15 reads the error
+;; channel; addresses above 18 are taken modulo 16.
+;; In: SecondaryAddress = the secondary address
+;; Out: carry = set when the address has no read channel; clear, with Channel and X = the channel, when it has
+;; Uses: A
 ;; Also: FNDRCH (D1541)
 .proc FindReadChannel
     lda SecondaryAddress
@@ -716,8 +792,11 @@ Done:
     rts
 .endproc
 
-;; FNDWCH: LINDX and X = the write channel of SA (LINTAB bit 7, or bit 6 for a relative file's); carry set when it has
-;; none.
+;; Finds the channel a secondary address writes: bit 7 of its entry in <SecondaryChannels> marks a write channel, and bit
+;; 6 a relative file's, which is written too. Addresses above 18 are taken modulo 16.
+;; In: SecondaryAddress = the secondary address
+;; Out: carry = set when the address has no write channel; clear, with Channel and X = the channel, when it has
+;; Uses: A, Y
 ;; Also: FNDWCH (D1541)
 .proc FindWriteChannel
     lda SecondaryAddress
@@ -757,8 +836,9 @@ None:
     rts
 .endproc
 
-;; TYPFIL: A = the channel's file type (FILTYP's bits 1-3), compared with the relative type: Z set for relative, carry
-;; set for relative or above.
+;; Gets the current channel's file type, and compares it with the relative type.
+;; In: Channel = the channel
+;; Out: A = the file type, X = the channel, zero = set for relative, carry = set for relative or above
 ;; Also: TYPFIL (D1541)
 .proc ChannelType
     ldx Channel
@@ -769,7 +849,11 @@ None:
     rts
 .endproc
 
-;; GETPRE: X = the active buffer's BUFTAB index, Y = LINDX (the relative files' routines use it).
+;; Gets the indexes the byte routines use: the active buffer's place in the pointer table, and the channel. The relative
+;; files' routines use it too.
+;; In: Channel = the channel
+;; Out: X = twice the active buffer's number, Y = the channel
+;; Uses: A
 ;; Also: GETPRE (D1541)
 .proc BufferIndexes
     jsr GetActiveBuffer
@@ -779,8 +863,11 @@ None:
     rts
 .endproc
 
-;; GETBYT: A = the active buffer's next byte; Z set when it was the buffer's last, or, in the file's last block, the
-;; byte at LSTCHR (the pointer then goes to 0).
+;; Takes the next byte of the active buffer, and moves its pointer on. In a file's last block, whose last byte's place is
+;; known (<ChannelLastByte>), the pointer goes to 0 after that byte, so the zero flag marks it as the buffer's end does.
+;; In: Channel = the channel
+;; Out: A = the byte, zero = set when the pointer reached 0: the buffer's last byte, or the file's, X = twice the
+;;   buffer's number, Y = the channel
 ;; Also: GETBYT (D1541)
 .proc GetByte
     jsr BufferIndexes
@@ -809,8 +896,11 @@ NotLastBlock:
     rts
 .endproc
 
-;; RDBYT: A and DATA = the file's next byte; at a buffer's end the next block is made active and the one after it
-;; started; with the file's last byte CHNRDY gets EOI.
+;; Reads a sequential file's next byte. At a buffer's end the next block becomes the active one and the block after it
+;; is started reading; with the file's last byte the channel is marked as ready to send it with EOI.
+;; In: Channel = the channel
+;; Out: A = the byte
+;; Errors: any a read job's error gives
 ;; Also: RDBYT (D1541)
 .proc ReadByte
     jsr GetByte
@@ -857,9 +947,12 @@ LastBlock:
     rts
 .endproc
 
-;; WRTBYT: A into the file; when the buffer is full it goes out (NextBlock).
+;; Writes a byte into a file. When the buffer fills, it goes out: a next block is allocated, linked and started writing.
+;; In: A = the byte
 ;; Entry:
-;;   NextBlock = Allocates the next block, links the full buffer to it and starts its write, and swaps to t
+;;   NextBlock = Allocates the next block, links the full buffer to it, starts its write and swaps to the other
+;;     buffer with its pointer at 2 (<Append> enters here)
+;; Errors: error 72, DISK FULL, when no block is free
 ;; Also: WRTBYT (D1541)
 .proc WriteByte
     jsr PutByte
@@ -885,7 +978,9 @@ NextBlock:
     jmp SetPointer
 .endproc
 
-;; INCPTR: moves the active buffer's pointer, and DIRBUF, on by A.
+;; Moves the active buffer's pointer on, and <BufferPointer> with it.
+;; In: A = the amount
+;; Out: A = the new pointer, X = twice the buffer's number
 ;; Also: INCPTR (D1541), INCPNT (D1541)
 .proc AdvancePointer
     sta Temporary
@@ -897,7 +992,9 @@ NextBlock:
     rts
 .endproc
 
-;; SETDRN: DRVNUM = the drive of the active buffer's last job (LSTJOB).
+;; Sets the current drive to the one the active buffer's last job was for.
+;; Out: DriveNumber = the drive, X = the buffer
+;; Uses: A
 ;; Also: SETDRN (D1541)
 .proc SetDriveFromBuffer
     jsr GetActiveBuffer
@@ -908,18 +1005,25 @@ NextBlock:
     rts
 .endproc
 
-;; GETWCH: <GetReadChannel> for a write channel (carry set).
+;; Allocates a write channel: <GetReadChannel> with carry set.
+;; In: A = the number of buffers wanted, 0 to 2
+;; Errors: error 70, <ERROR_NO_CHANNEL>
 ;; Also: GETWCH (D1541)
 .proc GetWriteChannel
     sec
     bcs GetReadChannel::Allocate
 .endproc
 
-;; GETRCH: frees SA's channel, gives SA a new one (LINDX, LINTAB; bit 7 for writing) and A buffers (BUF0, BUF1); SS
-;; cleared. Error 70, NO CHANNEL, the buffers released, when they run out.
+;; Frees the secondary address's old channel and gives it a new one, with the buffers asked for. <SecondaryChannels>
+;; records it, with bit 7 set for a write channel, and the channel's buffer slots are emptied.
+;; In: A = the number of buffers wanted, 0 to 2, SecondaryAddress = the secondary address, carry = set for a write
+;;   channel
+;; Out: Channel = the channel
+;; Errors: error 70, <ERROR_NO_CHANNEL>, when no channel or buffer is free; the buffers taken are released
 ;; Entry:
 ;;   Allocate = Carry set for a write channel (<GetWriteChannel> enters here)
-;;   NoBuffer = Releases the buffers and gives error 70, NO CHANNEL (<OpenReadChannel> and <OpenWriteChannel> 
+;;   NoBuffer = Releases the buffers and reports error 70 (<OpenReadChannel> and <OpenWriteChannel> come here when they
+;;     have no buffer for the side sector)
 ;; Also: GETRCH (D1541)
 .proc GetReadChannel
     clc
@@ -976,8 +1080,10 @@ Done:
     rts
 .endproc
 
-;; FRECHN: frees SA's channel, unless SA is 15: LINTAB cleared, CHNRDY 0, its buffers released and its index free in
-;; LINUSE.
+;; Frees a secondary address's channel, except for 15's, which is never freed: its entry is cleared, its status set not
+;; ready, its buffers released and its place marked free in <FreeChannels>.
+;; In: SecondaryAddress = the secondary address
+;; Uses: A, X, Channel
 ;; Also: FRECHN (D1541)
 .proc FreeChannel
     lda SecondaryAddress
@@ -1023,7 +1129,9 @@ Done:
     rts
 .endproc
 
-;; RELBUF: frees the channel's buffers, BUF0, BUF1 and SS, each slot cleared.
+;; Frees the current channel's buffers, its two data buffers and its side sector's, and empties their slots.
+;; In: Channel = the channel
+;; Uses: A, X, Y
 ;; Also: RELBUF (D1541)
 .proc ReleaseBuffers
     ldx Channel
@@ -1068,8 +1176,12 @@ Done:
     rts
 .endproc
 
-;; GETBUF: a free buffer (from the second byte of BUFUSE, then the first, else stolen); once its job is done, JOBS and
-;; LSTJOB = DRVNUM and its pointer 2. A and X = it, N set (A = $FF) if none; Y kept.
+;; Takes a free buffer, looking in the second byte of <BuffersInUse> first, then the first, and stealing an inactive
+;; one (<StealBuffer>) when none is free. Once the buffer's last job is done it is given the current drive's, and its
+;; pointer is set to 2.
+;; In: DriveNumber = the drive
+;; Out: A, X = the buffer's number, negative (A = $FF) when there is none
+;; Keeps: Y
 ;; Also: GETBUF (D1541)
 .proc GetBuffer
     tya
@@ -1107,9 +1219,12 @@ Done:
     rts
 .endproc
 
-;; FNDBUF: the first free buffer in BUFUSE's byte Y, marked used; X = it (8 more for byte 1), or minus.
+;; Finds the first free buffer in a byte of <BuffersInUse> and marks it used.
+;; In: Y = 0 for buffers 0 to 7, 1 for buffers 8 to 15
+;; Out: X = the buffer's number, negative when the byte has none free
+;; Uses: A, Y
 ;; Entry:
-;;   Return = Returns (<FreeInactiveBuffer> ends here when there is nothing to free)
+;;   Return = The return, which <FreeInactiveBuffer> ends at when there is nothing to free
 ;; Also: FNDBUF (D1541)
 .proc FindFreeBuffer
     ldx #$07
@@ -1147,7 +1262,9 @@ Return:
     rts
 .endproc
 
-;; FREIAC: frees the channel's inactive buffer, if it has one (record, part 5, calls it); falls into <FreeBuffer>.
+;; Frees the current channel's inactive buffer, if it has one, which empties its slot. Relative files use it.
+;; In: Channel = the channel
+;; Uses: A, X, Y
 ;; Also: FREIAC (D1541)
 .proc FreeInactiveBuffer
     ldx Channel
@@ -1171,7 +1288,9 @@ Found:
     pla
 .endproc
 
-;; FREBUF: marks buffer A free in BUFUSE.
+;; Marks a buffer free in <BuffersInUse>, by rotating its 16 bits once round and clearing the buffer's on the way.
+;; In: A = the buffer's number
+;; Uses: A, X, Y
 ;; Also: FREBUF (D1541)
 .proc FreeBuffer
     and #$0F
@@ -1196,7 +1315,8 @@ Next:
     rts
 .endproc
 
-;; CLRCHN: frees the channels of secondary addresses 14 down to 1 (the new command calls it).
+;; Frees the channels of secondary addresses 14 down to 1. The NEW command uses it.
+;; Uses: A, X, Y, SecondaryAddress
 ;; Also: CLRCHN (D1541)
 .proc FreeAllChannels
     lda #COMMAND_SECONDARY-1
@@ -1211,7 +1331,9 @@ Loop:
     rts
 .endproc
 
-;; CLDCHN: frees each channel, SA 14 down to 0, whose active buffer's last job was for DRVNUM.
+;; Frees every channel, of secondary addresses 14 down to 0, whose active buffer's last job was for the current drive.
+;; In: DriveNumber = the drive
+;; Uses: A, X, Y, SecondaryAddress, Channel
 ;; Also: CLDCHN (D1541)
 .proc FreeDriveChannels
     lda #COMMAND_SECONDARY-1
@@ -1242,8 +1364,10 @@ Skip:
     rts
 .endproc
 
-;; STLBUF: takes an inactive buffer, from the least recently used channel on (LRUTBL), whose job finished without error,
-;; clearing its slot. A = it, minus if none.
+;; Takes an inactive buffer from a channel, trying the least recently used channels first (<LeastRecentlyUsed>). Only a
+;; buffer whose job finished without an error is taken; its slot is emptied.
+;; Out: A = the buffer's number, negative (A = $FF) when there is none
+;; Keeps: Temporary
 ;; Also: STLBUF (D1541)
 .proc StealBuffer
     lda Temporary
@@ -1315,7 +1439,9 @@ Done:
     rts
 .endproc
 
-;; FNDLNX: the first free channel index in LINUSE, marked used; A = it. Error 70, NO CHANNEL, if none.
+;; Finds the first free channel in <FreeChannels> and marks it used.
+;; Out: A = the channel
+;; Errors: error 70, <ERROR_NO_CHANNEL>, when all are used
 ;; Also: FNDLNX (D1541)
 .proc AllocateChannel
     ldy #$00
@@ -1342,7 +1468,9 @@ Found:
     rts
 .endproc
 
-;; GBYTE: the next byte of SA's read channel, its LED on; A = it (the copy command uses it).
+;; Takes the next byte of a secondary address's read channel, with the drive's LED on. The copy command uses it.
+;; In: SecondaryAddress = the secondary address
+;; Out: A = the byte
 ;; Also: GBYTE (D1541)
 .proc ReadChannelByte
     jsr FindReadChannel
@@ -1353,14 +1481,17 @@ Found:
     rts
 .endproc
 
-;; GET: puts channel LINDX's next byte in CHNDAT and sets CHNRDY, for the bus to send: from a relative record (RDREL),
-;; the error channel, the directory listing, a file or a direct buffer. After the last byte only a direct channel goes
+;; Makes the current channel's next byte ready for the bus to send: <ChannelByte> gets it and <ChannelStatus> says it is
+;; ready. A relative file's comes from its record, the error channel's from the message, a directory listing's from the
+;; listing, and a file's from its block, or the direct channel's buffer. After the last byte only a direct channel goes
 ;; on.
+;; In: Channel = the channel, SecondaryAddress = the secondary address
 ;; Entry:
-;;   NextRandom = The pointer on, then the byte (the block commands enter here)
-;;   RandomAtPointer = The byte at the pointer into CHNDAT, CHNRDY with EOI at LSTCHR (<AcceptByte> and the block c
-;;   ErrorEnd = The last
-;;   ErrorReady = CHNRDY = ready to talk (the memory-read command enters here)
+;;   NextRandom = Moves the pointer on, then takes the byte (the block commands enter here)
+;;   RandomAtPointer = Takes the byte at the pointer, and marks it the last at the channel's last byte (<AcceptByte> and
+;;     the block commands enter here)
+;;   ErrorEnd = The message's last byte went: the pointer goes back before the message, so that a RETURN comes next
+;;   ErrorReady = Marks the channel ready to talk (the memory-read command enters here)
 ;; Also: GET (D1541)
 .proc NextByte
     ldx Channel
@@ -1498,7 +1629,8 @@ SetError:
     rts
 .endproc
 
-;; NXTBUF: the file's next block, when the active buffer links to one, through <ReadByte>; Z set when there is none.
+;; Moves to the file's next block when the active buffer links to one, through <ReadByte>.
+;; Out: zero = set when there is no next block
 ;; Also: NXTBUF (D1541)
 .proc FollowLink
     jsr GetActiveBuffer
@@ -1519,16 +1651,18 @@ Done:
 .endscope
 .scope Jobs continued
 
-;; DRTRD: reads TRACK and SECTOR into buffer JOBNUM and waits.
+;; Reads <Track> and <Sector> into the buffer of <JobNumber>, and waits for it.
+;; In: JobNumber = the job, Track, Sector = the block
 ;; Also: DRTRD (D1541)
 .proc ReadTrackSector
     lda #JOB_READ
     bne WriteTrackSector::Start
 .endproc
 
-;; DRTWRT: writes buffer JOBNUM to TRACK and SECTOR and waits.
+;; Writes the buffer of <JobNumber> to <Track> and <Sector>, and waits for it.
+;; In: JobNumber = the job, Track, Sector = the block
 ;; Entry:
-;;   Start = The job for DRVNUM, its header set, run and waited for (DOIT2)
+;;   Start = Runs the job in A for the current drive, with its header set, and waits (<ReadTrackSector> enters here)
 ;; Also: DRTWRT (D1541)
 .proc WriteTrackSector
     lda #JOB_WRITE
@@ -1546,9 +1680,10 @@ Start:
 .endscope
 .scope Files continued
 
-;; OPNIRD: opens the internal read channel (SA 17) on TRACK and SECTOR as a sequential file, its pointer 2.
+;; Opens the internal read channel, secondary address 17, on <Track> and <Sector> as a file, and sets its pointer to 2.
+;; In: Track, Sector = the first block
 ;; Entry:
-;;   WithType = Of type A (the utility loader enters here)
+;;   WithType = Opens it as a file of the type in A (the utility loader enters here)
 ;; Also: OPNIRD (D1541)
 .proc OpenInternalRead
     lda #$01
@@ -1564,7 +1699,7 @@ WithType:
     jmp SetPointer
 .endproc
 
-;; OPNIWR: opens the internal write channel (SA 18).
+;; Opens the internal write channel, secondary address 18.
 ;; Also: OPNIWR (D1541)
 .proc OpenInternalWrite
     lda #INTERNAL_WRITE_SECONDARY
@@ -1574,8 +1709,9 @@ WithType:
 .endscope
 .scope Directory continued
 
-;; NXDRBK: allocates the directory's next block (three sectors on, on track 18), links the current one to it and writes
-;; it, then clears the buffer for the new block, link 0/$FF.
+;; Adds a block to the directory: allocates the next block, three sectors on from the last on track 18, links the current
+;; one to it and writes it, then clears the buffer for the new block, whose link is 0 and $FF.
+;; Errors: error 72, DISK FULL, when no block is free
 ;; Also: NXDRBK (D1541)
 .proc NewBlock
     jsr Files::GetChannelBlock
@@ -1611,7 +1747,9 @@ Clear:
 .endscope
 .scope Files continued
 
-;; SETPNT: the active buffer's pointer, and DIRBUF, = A.
+;; Sets the active buffer's pointer, and <BufferPointer> with it.
+;; In: A = the pointer
+;; Out: A = the pointer, X = twice the buffer's number
 ;; Also: SETPNT (D1541)
 .proc SetPointer
     sta Temporary
@@ -1626,7 +1764,8 @@ Clear:
     rts
 .endproc
 
-;; FREICH: frees the internal read and write channels (SA 17 and 18).
+;; Frees the internal read and write channels, secondary addresses 17 and 18.
+;; Uses: A, X, Y, SecondaryAddress
 ;; Also: FREICH (D1541)
 .proc FreeInternalChannels
     lda #INTERNAL_READ_SECONDARY
@@ -1637,10 +1776,10 @@ Clear:
     jmp FreeChannel
 .endproc
 
-;; GETPNT: DIRBUF = the active buffer's pointer; A = its low byte.
+;; Sets <BufferPointer> to the active buffer's pointer.
+;; Out: A = its low byte, X = twice the buffer's number
 ;; Entry:
-;;   OfBuffer = The same for buffer A (ssutil, part 5, enters here)
-;;   OfBuffer = SETDIR
+;;   OfBuffer = The same for the buffer in A (the side sector routines enter here)
 ;; Also: GETPNT (D1541)
 .proc GetPointer
     jsr GetActiveBuffer
@@ -1657,7 +1796,9 @@ OfBuffer:
     rts
 .endproc
 
-;; DRDBYT: A = byte A of the active buffer, its pointer unchanged.
+;; Reads a byte of the active buffer, without moving its pointer.
+;; In: A = the byte's place in the buffer
+;; Out: A = the byte, X = the buffer, Y = 0
 ;; Also: DRDBYT (D1541)
 .proc PeekByte
     sta Temporary+2
@@ -1672,7 +1813,9 @@ OfBuffer:
 .endscope
 .scope Jobs continued
 
-;; A = `CMD` plus the drive bit of buffer X's last job (`LSTJOB`); falls into <Start>.
+;; Starts job X's command <JobCommand> on the drive of that job's last job. It sets the command's drive bit and falls
+;; into <Start>.
+;; In: X = the job, JobCommand = the command
 ;; Also: SETLJB (D1541)
 .proc StartOnLastDrive
     lda LastJobs,x
@@ -1680,8 +1823,13 @@ OfBuffer:
     ora JobCommand
 .endproc
 
-;; Checks job X's track against `MAXTRK`, and for a write the disk version against `VERNUM` and the sector against
-;; MAXSEC; falls into <TrackSectorError> when they are bad, branches to <Queue> when good.
+;; Starts a job: checks its header against the disk and queues its command. The header's track must be 1 to the last
+;; track, and its sector below the track's count; a write's disk must also be of this DOS's version, or none is read yet.
+;; <JobCommand> holds the header's sector while it is checked.
+;; In: A = the command, with its drive bit, X = the job
+;; Out: JobNumber = the job
+;; Errors: error 66, <ERROR_ILLEGAL_TRACK_SECTOR>, for a bad header; error 73, <ERROR_DOS_VERSION>, for a write to
+;;   a disk of another version
 ;; Also: SETJOB (D1541)
 .proc Start
     pha
@@ -1730,10 +1878,11 @@ CheckSector:
     bcs Queue
 .endproc
 
-;; Copies the job's header to `TRACK` and `SECTOR` for the message and reports 66, ILLEGAL TRACK OR SECTOR, through
-;; CMDER2.
+;; Reports error 66, ILLEGAL TRACK OR SECTOR, for the job's header, which goes into <Track> and <Sector> for the
+;; message. It ends in <Errors::Abort>, which does not return.
+;; Errors: error 66, <ERROR_ILLEGAL_TRACK_SECTOR>
 ;; Entry:
-;;   Report = Reports 66 with `TRACK` and `SECTOR` as they are
+;;   Report = Reports error 66 with <Track> and <Sector> as they are
 ;; Also: TSERR (D1541)
 .proc TrackSectorError
     jsr LoadTrackSector
@@ -1745,7 +1894,10 @@ Report:
     jmp Errors::Abort
 .endproc
 
-;; `TRACK` and `SECTOR` = job `JOBNUM`'s header (two bytes a job since the 4/12 patch).
+;; Sets <Track> and <Sector> to the header of <JobNumber>'s job, a track and a sector byte per job.
+;; In: JobNumber = the job
+;; Out: Track, Sector = its header
+;; Uses: A, X
 ;; Also: HED2TS (D1541)
 .proc LoadTrackSector
     lda JobNumber
@@ -1758,7 +1910,9 @@ Report:
     rts
 .endproc
 
-;; Checks `TRACK` (1 to `MAXTRK`-1) and `SECTOR` (below MAXSEC); returns if good, else reports 66.
+;; Checks <Track>, 1 to the last track, and <Sector>, below the track's sector count, and returns if they are good.
+;; In: Track, Sector = the block
+;; Errors: error 66, <ERROR_ILLEGAL_TRACK_SECTOR>
 ;; Also: TSCHK (D1541)
 .proc CheckTrackSector
     lda Track
@@ -1772,7 +1926,8 @@ Report:
     rts
 .endproc
 
-;; Reports 73 (`CBMV2`), the disk's DOS version is not this one's, for a write; NEW jumps here too.
+;; Reports error 73 (the disk's DOS version is not this one's) for the job's header. NEW jumps here too.
+;; Errors: error 73, <ERROR_DOS_VERSION>
 ;; Also: VNERR (D1541)
 .proc VersionError
     jsr LoadTrackSector
@@ -1780,8 +1935,9 @@ Report:
     jmp Errors::Abort
 .endproc
 
-;; Start's tail, reached by branch with the command on the stack: stores it in `CMD`, `JOBS` and `LSTJOB` for job
-;; `JOBNUM`, which starts the job.
+;; The tail of <Start>, reached by a branch with the command on the stack: puts the command in <JobCommand> and for job
+;; <JobNumber> in the job queue and in its last-job entry, which starts the job.
+;; In: JobNumber = the job, the stack = the command
 ;; Also: SJB1 (D1541)
 .proc Queue
     ldx JobNumber
@@ -1792,23 +1948,28 @@ Report:
     rts
 .endproc
 
-;; Reads the job's sector and waits: A = `READ`, then branches to <Run>.
+;; Reads the job's sector and waits, by branching to <Run> with the read command.
+;; In: JobNumber = the job, Track, Sector = the block
 ;; Also: DOREAD (D1541)
 .proc Read
     lda #JOB_READ
     bne Run
 .endproc
 
-;; Writes the job's sector and waits: A = `WRITE`; falls into <Run>.
+;; Writes the job's sector and waits: <Run> with the write command.
+;; In: JobNumber = the job, Track, Sector = the block
 ;; Also: DOWRIT (D1541)
 .proc Write
     lda #JOB_WRITE
 .endproc
 
-;; Runs job type A on drive `DRVNUM` for job `JOBNUM` and waits; falls into <Wait>.
+;; Runs the job command in A, for the current drive and <JobNumber>'s job, and waits for it. It falls into <Wait>.
+;; In: A = the command, without its drive bit, DriveNumber = the drive, JobNumber = the job
+;; Out: A = the job's result code
+;; Errors: the job's error, reported through <Errors::JobError>, unless <JobErrorReturn> bit 7 asks for it returned
 ;; Entry:
-;;   WithDrive = Runs command A, which already has its drive bit, for job X
-;;   Repeat = Runs `CMD` again for job X, after a caller has set a new header
+;;   WithDrive = Runs command A, which has its drive bit already, for job X
+;;   Repeat = Runs <JobCommand> again for job X, after the caller has set a new header
 ;; Also: DOJOB (D1541)
 .proc Run
     ora DriveNumber
@@ -1826,7 +1987,10 @@ Repeat:
     jsr Start
 .endproc
 
-;; Polls job X until it is done, recovering from its errors, then clears `JOBRTN`; A = the job's code.
+;; Waits for job X to finish, recovering from its errors, and then clears <JobErrorReturn>.
+;; In: X = the job
+;; Out: A = the job's result code
+;; Errors: the job's error, reported through <Errors::JobError>, unless <JobErrorReturn> bit 7 asks for it returned
 ;; Also: WATJOB (D1541)
 .proc Wait
     jsr Poll
@@ -1838,8 +2002,10 @@ Repeat:
     rts
 .endproc
 
-;; Carry set while job X is still running; carry clear when it is done, after recovering from an error, or with the
-;; error returned when `JOBRTN` bit 7 asks for that.
+;; Tests job X once, recovering from its error if it has one.
+;; In: X = the job
+;; Out: carry = set while the job is still running, clear when it is done, A = the job's result code
+;; Errors: the job's error, reported through <Errors::JobError>, unless <JobErrorReturn> bit 7 asks for it returned
 ;; Also: TSTJOB (D1541)
 .proc Poll
     lda JobQueue,x
@@ -2004,8 +2170,10 @@ Restore:
     rts
 .endproc
 
-;; Moves the head A half-tracks, inward for positive (the listing's comments have the directions reversed), one
-;; <StepHead> at a time.
+;; Moves the head by half-tracks, one <StepHead> at a time: inward for a positive count, outward for a negative one (the
+;; listing's comments have the directions the other way).
+;; In: A = the half-tracks, signed
+;; Out: A = 0
 ;; Also: HEDOFF (D1541)
 .proc OffsetHead
     cmp #$00
@@ -2037,8 +2205,10 @@ Done:
     rts
 .endproc
 
-;; Puts Y (1 in, $FF out) in the drive's `PHASE` for the controller's EndPass to step, waits until it takes it, and
-;; clears it; keeps A.
+;; Asks the controller for one half-track step, by putting it in the drive's <StepRequest> for the end of the pass to act
+;; on, and waits until the controller has taken it.
+;; In: Y = 1 to step in, $FF to step out
+;; Keeps: A
 ;; Also: MOVHED (D1541)
 .proc StepHead
     pha
@@ -2057,8 +2227,11 @@ Wait:
     rts
 .endproc
 
-;; Requeues the last job (`LSTJOB`) up to `REVCNT` & $3F times, flashing the drive's LED each try, until it works;
-;; leaves the LED on; A = the code.
+;; Requeues the job's last command up to <Retries> bits 0 to 5 times, flashing the drive's LED on each try, until it
+;; works, and leaves the LED on.
+;; In: X = the job
+;; Out: A = the job's result code
+;; Uses: Y
 ;; Also: DOREC (D1541)
 .proc Retry
     lda Retries
@@ -2095,9 +2268,12 @@ Done:
     rts
 .endproc
 
-;; Sets the active buffer's job header (GETACT) to `TRACK` and `SECTOR`.
+;; Sets the active buffer's job header to <Track> and <Sector>.
+;; In: Track, Sector = the block
+;; Out: X = twice the current drive
 ;; Entry:
-;;   ForBuffer = The same for buffer A
+;;   ForBuffer = The same for buffer A. It leaves X = twice <DriveNumber>, what is left of the disk ID copy the 4/12 patch
+;;     commented out
 ;; Also: SETHDR (D1541)
 .proc SetHeader
     jsr Files::GetActiveBuffer
@@ -2119,9 +2295,14 @@ ForBuffer:
 .endscope
 .scope Directory continued
 
-;; ADDFIL: writes the directory entry for the file being opened: in the first deleted slot, or a new block when there is
-;; none; type (a relative file's already closed), first track and sector, name, side sector and record size. The tables
-;; and the channel's DSEC/DIND get its place.
+;; Writes the directory entry for the file being opened, in the first deleted slot or, when there is none, in a new
+;; block: its type, first track and sector, name, side sector and record size. The file name table and the channel then
+;; hold its place in the directory.
+;; In: Track, Sector = the file's first block, FileType = its type, SecondaryAddress = its secondary address, Channel =
+;;   its channel
+;; Out: FileNameTrack, FileNameSector = the file's first block, FileNameEntrySector, FileNameEntryIndex, and the
+;;   channel's ChannelEntrySector, ChannelEntryIndex = the entry's place
+;; Keeps: Channel, SecondaryAddress
 ;; Also: ADDFIL (D1541)
 .proc AddEntry
     lda SecondaryAddress
@@ -2252,9 +2433,15 @@ WriteBlock:
 .endscope
 .scope Files continued
 
-;; OPEN, for a secondary address other than 15: parses the name sent, finds it in the directory, and opens a channel for
-;; it by mode and type: "*" loads the last program, "$" the directory, "#" a direct channel; else read, write, replace
-;; (@), append or modify.
+;; OPEN, for a secondary address other than 15: takes the name sent, looks it up in the directory and opens a channel for
+;; it, by the mode and type the name gives. "*" loads the last program, "$" the directory and "#" a direct channel;
+;; anything else is read, write, replace (with "@"), append or modify. The command ends through <Commands::Finish>.
+;; In: SecondaryAddress = the secondary address, CommandBuffer = the name, as sent
+;; Errors: error 30, <ERROR_SYNTAX>, for more than a drive before the colon; error 33, <ERROR_INVALID_NAME>, for a
+;;   pattern to write; error 50, <ERROR_RECORD_NOT_PRESENT>, for a record size that differs; error 60,
+;;   <ERROR_FILE_OPEN>, for a file not closed; error 62, <ERROR_FILE_NOT_FOUND>, for a file to read that is not there;
+;;   error 63, <ERROR_FILE_EXISTS>; error 64, <ERROR_FILE_TYPE_MISMATCH>; and any the directory search or the channel's
+;;   opening gives
 ;; Also: OPEN (D1541)
 .proc Open
     lda SecondaryAddress
@@ -2565,8 +2752,11 @@ ReadIt:
     jmp Commands::Finish
 .endproc
 
-;; OPREAD: opens a read channel on the file found (F2PTR's entry): side sector and record size from the entry (error 50,
-;; RECORD NOT PRESENT, if REC differs), and DSEC/DIND its place.
+;; Opens a read channel on the file the search found: the side sector and record size from its directory entry, and the
+;; entry's place for the channel. A record size given that differs from the entry's is an error.
+;; In: BufferPointer = the entry, SecondStreamStart = the name's place in the file name tables, RecordSize = the size
+;;   asked, 0 for none
+;; Errors: error 50, <ERROR_RECORD_NOT_PRESENT>, when the record size differs
 ;; Also: OPREAD (D1541)
 .proc OpenRead
     ldy #$13
@@ -2604,9 +2794,10 @@ OpenChannel:
     rts
 .endproc
 
-;; OPWRIT: opens a write channel on the drive of the name and adds its directory entry; falls into Finish.
+;; Opens a write channel on the drive of the name, and adds its directory entry; it falls into the end of <Open>.
 ;; Entry:
-;;   Finish = A load or save keeps the file's start (PRGTRK, PRGSEC, PRGDRV) for "*"
+;;   Finish = A load or save keeps the file's start, for "*" to load the last program, and the command ends (<Open>
+;;     enters here)
 ;; Also: OPWRIT (D1541)
 .proc OpenWrite
     lda FileNameDrive
@@ -2635,7 +2826,11 @@ Done:
     jmp Commands::Finish::KeepBamFlag
 .endproc
 
-;; CKTM: the parameter at FILTBL,X sets MODE (MODLST: R W A M) and TYPE (TPLST: D S P U L), if it is one.
+;; Reads one parameter of the name, after its first, as a mode letter (R, W, A, M) or a file type letter, and sets the
+;; mode or the type if it is one.
+;; In: X = the parameter's place in the file name tables
+;; Out: Files::Mode, FileType = set when the letter is one
+;; Uses: A, Y
 ;; Also: CKTM (D1541)
 .proc ParseTypeAndMode
     ldy FileNameStart,x
@@ -2671,8 +2866,9 @@ Done:
     rts
 .endproc
 
-;; APPEND: reads to the file's last block, then makes the channel a write channel at its end, a new block when the last
-;; is full.
+;; Prepares to append to a file: reads on to its last block, then turns the channel into a write channel at the file's
+;; end, in a new block if the last is full.
+;; Errors: any a read job's error gives
 ;; Also: APPEND (D1541)
 .proc Append
     jsr Commands::GetInternalByte::AnyChannel
@@ -2701,8 +2897,9 @@ SetEnd:
     rts
 .endproc
 
-;; LOADIR: <Open>'s "$" with SA 0: parses the pattern ("$", "$0", "$:name") and starts the listing (StartListing), its
-;; first byte ready.
+;; Opens the directory for a load, secondary address 0: parses the pattern ("$", "$0" or "$:name") and starts the
+;; listing, leaving its first byte ready.
+;; In: CommandBuffer = the command, CommandLength = its length
 ;; Also: LOADIR (D1541)
 .proc LoadDirectory
     lda #Commands::LOAD_STRUCTURE
@@ -2768,8 +2965,11 @@ Search:
     rts
 .endproc
 
-;; CLOSE: closes SA's channel: SA 0 the listing (and the internal channels), SA 15 every channel; after SA 2-15 the
-;; command status is reported (ENDCMD, or the last error).
+;; CLOSE: closes a secondary address's channel. Address 0 closes the directory listing and the internal channels, 1 the
+;; internal channels too, and 15 every channel. Of those from 2 up, the command's status is reported at the end: the last
+;; error, or the command's end. The command ends through <Commands::Finish>.
+;; In: SecondaryAddress = the secondary address
+;; Errors: any a write channel's last block gives
 ;; Also: CLOSE (D1541)
 .proc Close
     lda #$00
@@ -2825,8 +3025,9 @@ AllError:
     jmp Commands::Finish::NoMessage
 .endproc
 
-;; CLSCHN: closes SA's channel by type: a direct one writes the BAM, a relative one goes to part 5's routines, a write
-;; channel writes its last block and closes its entry; then it is freed.
+;; Closes a secondary address's channel by its type: a direct channel writes the BAM, a relative file goes through its
+;; own steps, and a write channel writes its last block and closes its directory entry. The channel is then freed.
+;; In: SecondaryAddress = the secondary address
 ;; Also: CLSCHN (D1541)
 .proc CloseChannel
     ldx SecondaryAddress
@@ -2894,8 +3095,9 @@ RelativeDone:
     jmp FreeChannel
 .endproc
 
-;; CLSWRT: writes a sequential file's last block: a file with nothing in it gets a RETURN; an empty buffer gives the
-;; block before it back; the link 0 and the last byte's place, written and waited for.
+;; Writes a sequential file's last block: a file with nothing in it gets a RETURN, and an empty last buffer gives its
+;; block back. The link is set to 0, with the last byte's place, and the block is written and waited for.
+;; In: Channel = the channel
 ;; Also: CLSWRT (D1541)
 .proc CloseWrite
     ldx Channel
@@ -2944,8 +3146,10 @@ SetLast:
 .endscope
 .scope Directory continued
 
-;; CLSDIR: closes a written file's directory entry (DSEC, DIND): closed bit set, block count; a replace (@) swaps in the
-;; new chain and deletes the old (error 67 if it has none).
+;; Closes a written file's directory entry: sets its closed bit and block count. A replace (the entry's replace bit)
+;; swaps the new chain in and deletes the old one.
+;; In: Channel = the channel, SecondaryAddress = the secondary address
+;; Errors: error 67, <ERROR_ILLEGAL_SYSTEM_TRACK_SECTOR>, when a replaced file has no new chain
 ;; Also: CLSDIR (D1541)
 .proc CloseEntry
     ldx Channel
@@ -3044,11 +3248,15 @@ SetBlocks:
 .endscope
 .scope Files continued
 
-;; OPNRCH: a read channel with one buffer for TRACK and SECTOR, FILTYP from TYPE; the first block read and its first
-;; byte ready. A relative file (shared with part 5) gets read-write, its record size, its side sector read and its first
+;; Opens a read channel with one buffer on <Track> and <Sector>, of file type <FileType>; the first block is read and its
+;; first byte made ready. A relative file also gets read-write mode, its record size, its side sector read and its first
 ;; record.
+;; In: Track, Sector = the first block, FileType = the type, RecordSize = the record size for a relative file,
+;;   SecondaryAddress = the secondary address
+;; Errors: error 70, <ERROR_NO_CHANNEL>, when no channel or buffer is free
 ;; Entry:
-;;   FirstRecord = NR = 2, the first record set up, TRACK and SECTOR back (<OpenWriteChannel> enters here for a
+;;   FirstRecord = Sets the first record up, and <Track> and <Sector> back (<OpenWriteChannel> enters here for a new
+;;     relative file)
 ;; Also: OPNRCH (D1541)
 .proc OpenReadChannel
     lda #$01
@@ -3117,7 +3325,10 @@ Sequential:
     rts
 .endproc
 
-;; INITP: both buffers' pointers 2, BUF1 inactive, NBKL/NBKH and LSTCHR 0.
+;; Sets both of the current channel's buffers' pointers to 2, makes its second buffer inactive and zeroes its block count
+;; and last byte's place.
+;; In: Channel = the channel
+;; Uses: A, X, Y
 ;; Also: INITP (D1541)
 .proc ResetPointers
     ldx Channel
@@ -3141,8 +3352,11 @@ Sequential:
     rts
 .endproc
 
-;; OPNWCH: a write channel with one buffer on the first free block, ready to listen. A relative file (shared with part
-;; 5) gets its first side sector and its first block of empty records written.
+;; Opens a write channel with one buffer on the first free block, ready to listen. A relative file also gets its first
+;; side sector, and its first block of empty records, written.
+;; In: FileType = the type, RecordSize = the record size for a relative file, SecondaryAddress = the secondary address,
+;;   DriveNumber = the drive
+;; Errors: error 70, <ERROR_NO_CHANNEL>, when no channel or buffer is free; error 72, <ERROR_DISK_FULL>
 ;; Also: OPNWCH (D1541)
 .proc OpenWriteChannel
     jsr Bam::AllocateFirst
@@ -3232,8 +3446,10 @@ SideSector:
 .endscope
 .scope Relative continued
 
-;; PUTSS: A into the side sector's buffer at its pointer (through <PutByte>); in opnchnl, but the side sectors' (addrel,
-;; part 5, uses it).
+;; Puts a byte into the side sector's buffer at its pointer, through <Files::PutByte>. The code of the open routines
+;; holds it, though the side sector routines are its users.
+;; In: A = the byte
+;; Out: zero = set when the pointer wrapped to 0
 ;; Also: PUTSS (D1541)
 .proc PutSideSectorByte
     pha
@@ -3244,14 +3460,17 @@ SideSector:
 .endscope
 .scope Files continued
 
-;; SCFLG: sets FILTYP's flag bits A with carry set, clears them with carry clear. Nothing calls it; kept as a routine,
-;; its comment says so.
+;; Sets or clears the flag bits in A in the channel's file type: carry set sets them, carry clear clears them. Nothing
+;; calls it; it stays because the ROM has it, and falls into <SetFlag> when carry is set.
+;; In: A = the bits, carry = set to set them, clear to clear them
 ;; Also: SCFLG (D1541)
 .proc SetOrClearFlag
     bcc ClearFlag
 .endproc
 
-;; SETFLG: sets bits A in the channel's FILTYP (the relative files' flags).
+;; Sets bits A in the current channel's file type, which holds the relative files' flags.
+;; In: A = the bits
+;; Uses: A, X
 ;; Also: SETFLG (D1541)
 .proc SetFlag
     ldx Channel
@@ -3259,9 +3478,11 @@ SideSector:
     bne ClearFlag::Store
 .endproc
 
-;; CLRFLG: clears bits A in the channel's FILTYP.
+;; Clears bits A in the current channel's file type, which holds the relative files' flags.
+;; In: A = the bits
+;; Uses: A, X
 ;; Entry:
-;;   Store = FILTYP = A (<SetFlag> ends here)
+;;   Store = Stores A in the file type (<SetFlag> ends here)
 ;; Also: CLRFLG (D1541)
 .proc ClearFlag
     ldx Channel
@@ -3275,7 +3496,9 @@ Store:
     rts
 .endproc
 
-;; TSTFLG: A = the channel's FILTYP and A; Z set when the bits are clear.
+;; Tests bits A of the current channel's file type.
+;; In: A = the bits
+;; Out: A = the file type ANDed with them, zero = set when they are clear, X = the channel
 ;; Also: TSTFLG (D1541)
 .proc TestFlag
     ldx Channel
@@ -3283,7 +3506,9 @@ Store:
     rts
 .endproc
 
-;; TSTWRT: Z set when the active buffer's last job was a write.
+;; Tests whether the active buffer's last job was a write.
+;; Out: zero = set for a write
+;; Uses: A, X
 ;; Also: TSTWRT (D1541)
 .proc TestWriteJob
     jsr GetActiveBuffer
@@ -3294,8 +3519,10 @@ Store:
     rts
 .endproc
 
-;; TSTCHN: carry clear when a channel (SA 0-15) has the entry found open: the same drive and directory place (DSEC,
-;; DIND) as ENTFND's; X = ENTFND, Y = the channel.
+;; Looks for a channel, of secondary address 0 up, that has the directory entry found open: the same drive, and
+;; the same directory place.
+;; In: EntryFound = the entry's place in the file name tables
+;; Out: carry = clear when a channel has it, with Y = the channel, set when none has it
 ;; Also: TSTCHN (D1541)
 .proc TestEntryOpen
     ldx #$00

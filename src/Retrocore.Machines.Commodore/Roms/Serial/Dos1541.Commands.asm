@@ -1,7 +1,8 @@
 ; retrocore: style=strict
 ; COMMODORE 1541 DOS: THE COMMAND CHANNEL AND THE COMMANDS ($C000-$CE0D)
 
-;; The $C000 chip's first byte, $97, chosen so the start-up's sum of the chip comes to its first page, $C0.
+;; The $C000 chip's first byte, $97, chosen so that the start-up's sum of the chip's bytes comes to the chip's first
+;; page, $C0.
 ;; Also: CCHKSM (D1541)
 LowerRomChecksum:
     .byte $97
@@ -11,10 +12,10 @@ LowerRomChecksum:
 PatchSpace:
     .res 255, $AA
 
-;; Lights DRVNUM's LED in LEDPRT, LED0 for drive 0 (LED1 is 0: the 1541 has one), the other cleared; interrupts off
-;; meanwhile. Top level (Q9).
+;; Lights the activity LED of the drive in <DriveNumber> in <DriveControl> and clears the other's, with interrupts
+;; off meanwhile. The 1541 has one drive, so drive 1's LED bit is 0 and the lit one is always drive 0's.
 ;; In: DriveNumber = the drive, 0 or 1
-;; Out: the drive's LED bit set in <DriveControl> and the other cleared; interrupts enabled
+;; Out: the drive's LED bit set in <DriveControl>, the other's cleared; interrupts enabled
 ;; Keeps: X, Y
 ;; Also: SETLDS (D1541)
 .proc TurnOnActivityLed
@@ -28,13 +29,13 @@ PatchSpace:
     ora #LED_DRIVE1
     bne Store
 
-;; Drive 0: LED0.
+;; Drive 0: lights its LED bit.
 ;; Also: LEDS0 (D1541)
 Drive0:
     pla
     ora #LED_DRIVE0
 
-;; Writes LEDPRT.
+;; Writes the new LED bits to <DriveControl>.
 ;; Also: LEDS1 (D1541)
 Store:
     sta DriveControl
@@ -53,7 +54,7 @@ Store:
 ;; and aborting the command that caused one, and the activity LED's flashing while an error is held.
 .scope Errors
 
-;; Stops the error LED's flashing: ERWORD and ERLED = 0.
+;; Stops the error LED's flashing: clears <ErrorFlash> and <ErrorLed>. The LED itself is left as it is.
 ;; Out: ErrorFlash = 0, ErrorLed = 0
 ;; Keeps: X, Y
 ;; Also: ERROFF (D1541)
@@ -64,8 +65,9 @@ Store:
     rts
 .endproc
 
-;; Starts the flashing: ERWORD = `$50` (80 decimal), ERLED = drive 0's mask from <LedMasks>, and that LED on; X kept,
-;; interrupts off meanwhile.
+;; Starts the error LED's flashing: <ErrorFlash> = 80 and <ErrorLed> = drive 0's LED bit from <LedMasks>, with that
+;; LED on in <DriveControl>. Interrupts are off meanwhile, and enabled on return.
+;; Out: ErrorFlash = $50, ErrorLed = the LED bit
 ;; Keeps: X, Y
 ;; Also: ERRON (D1541)
 .proc StartFlashing
@@ -87,10 +89,12 @@ Store:
 .endscope
 .scope Commands continued
 
-;; Runs the command in CMDBUF: WBAM cleared, DRVNUM from LSTDRV, the error channel to 00 OK; a string that came with an
-;; OPEN on a data channel (ORGSA bit 7, channel not 15) is a file name, for Files' OPEN. Otherwise the first letter is
-;; looked up in <CommandLetters> and its handler jumped to through <CommandRoutinesLow> and <CommandRoutinesHigh>, R, S
-;; and N with their names parsed first.
+;; Runs the command in <CommandBuffer>. It clears <BamWriteDeferred>, takes <DriveNumber> from <LastDrive> and sets
+;; the error channel to 00, OK. A string that arrived with an OPEN on a data channel (bit 7 of <SecondaryCommand>
+;; set, channel not 15) is a file name, and goes to <Files::Open>. Any other is a command: its first letter is looked
+;; up in <CommandLetters>, R, S and N have their names parsed first, and the handler is reached through
+;; <CommandRoutinesLow> and <CommandRoutinesHigh>. Each handler ends the command itself.
+;; Errors: 31 = SYNTAX ERROR, the letter is not a command's, through <Fail>
 ;; Also: PARSXQ (D1541)
 .proc Execute
     lda #$00
@@ -105,7 +109,7 @@ Store:
     beq CommandChannel
     jmp Files::Open
 
-;; A command: CMDSIZ and the tables set up, the first letter into CHAR.
+;; A command: the tables are cleared and the length set (<Prepare>), and the first letter goes to <Character>.
 ;; Also: PS05 (D1541)
 CommandChannel:
     jsr Prepare
@@ -113,7 +117,7 @@ CommandChannel:
     sta Character
     ldx #COUNT-1
 
-;; Each of <CommandLetters>' letters, from the last; none matches: 31 SYNTAX ERROR.
+;; Looks for the letter in <CommandLetters>, from the last; none matches, and the command is a 31 SYNTAX ERROR.
 ;; Also: PS10 (D1541)
 Search:
     lda CommandLetters,x
@@ -124,7 +128,7 @@ Search:
     lda #ERROR_INVALID_COMMAND
     jmp Fail
 
-;; CMDNUM = the command's number; from PCMD on (R, S, N), <ParseNames> first.
+;; Found: <CommandNumber> = the command's index. From <FIRST_PARSED> on (R, S, N) the names are parsed first.
 ;; Also: PS20 (D1541)
 Found:
     stx CommandNumber
@@ -132,7 +136,7 @@ Found:
     bcc Dispatch
     jsr ParseNames
 
-;; The handler's address from <CommandRoutinesLow> and <CommandRoutinesHigh> into TEMP, and jumps there.
+;; Jumps to the handler's address from <CommandRoutinesLow> and <CommandRoutinesHigh>, through <Temporary>.
 ;; Also: PS30 (D1541)
 Dispatch:
     ldx CommandNumber
@@ -143,19 +147,19 @@ Dispatch:
     jmp (Temporary)
 .endproc
 
-;; A command's successful end: WBAM cleared, then <Fail> if ERWORD holds an error; else the error channel's 00 OK with
-;; track and sector 0, then the drive remembered, the command buffer cleared and both internal channels, read (IRSA,
-;; $11) and write (IWSA, $12), freed.
+;; Ends a command successfully. It clears <BamWriteDeferred>, then ends as <KeepBamFlag> does.
 ;; Entry:
-;;   KeepBamFlag = OPEN ends here
-;;   Report = Scratch ends here
-;;   NoMessage = CLOSE ends here
+;;   KeepBamFlag = OPEN ends here, with <BamWriteDeferred> left as it is
+;;   Report = the scratch command ends here, with its message number in A and the count in <Track>
+;;   NoMessage = CLOSE ends here, with no message
+;; Errors: <Fail> runs instead when <ErrorFlash> holds an error
 ;; Also: ENDCMD (D1541)
 .proc Finish
     lda #$00
     sta BamWriteDeferred
 
-;; OPEN ends here: as <Finish>, but WBAM left as it is.
+;; OPEN ends here: as <Finish>, but <BamWriteDeferred> is left as it is. If <ErrorFlash> holds an error, <Fail> ends
+;; the command; otherwise the message is 00, OK, with track 0 and sector 0.
 ;; Also: ENDSAV (D1541)
 KeepBamFlag:
     lda ErrorFlash
@@ -164,7 +168,8 @@ KeepBamFlag:
     tya
     sty Track
 
-;; Scratch ends here: the message A (1, FILES SCRATCHED) with TRACK (the count) and sector Y.
+;; The scratch command ends here: message A (1, FILES SCRATCHED) with <Track> as the count and Y as the sector. The
+;; error LED stops flashing.
 ;; Also: SCREND (D1541)
 Report:
     sty Sector
@@ -172,8 +177,8 @@ Report:
     jsr Errors::SetMessage
     jsr Errors::StopFlashing
 
-;; CLOSE ends here: no message; LSTDRV = DRVNUM, the drive's NODRV flag cleared, CMDBUF cleared, both internal channels
-;; (IRSA and IWSA) freed.
+;; CLOSE ends here, with no message: <LastDrive> = <DriveNumber>, that drive's <NoDrive> flag is cleared,
+;; <CommandBuffer> is cleared and both internal channels are freed.
 ;; Also: SCREN1 (D1541)
 NoMessage:
     lda DriveNumber
@@ -185,7 +190,7 @@ NoMessage:
     jmp Files::FreeInternalChannels
 .endproc
 
-;; Zeroes the CMDLEN bytes of CMDBUF.
+;; Zeroes the <CommandBuffer>'s bytes, all <COMMAND_LENGTH_MAX> of them.
 ;; Out: CommandBuffer = 0 throughout
 ;; Keeps: X
 ;; Also: CLRCB (D1541)
@@ -202,10 +207,10 @@ Loop:
     rts
 .endproc
 
-;; Ends a command with error A: track and sector 0 in the message, then the error channel's handling (CMDER2), which
-;; does not return.
+;; Ends a command with error A: track and sector 0 in the message, then the error channel's handling in
+;; <Errors::Abort>.
 ;; In: A = the error number
-;; Errors: the error channel is set to A with track and sector 0; <Errors::Abort> does not return
+;; Errors: the error channel is set to A, through <Errors::Abort>, which does not return
 ;; Also: CMDERR (D1541)
 .proc Fail
     ldy #$00
@@ -215,8 +220,9 @@ Loop:
     jmp Errors::Abort
 .endproc
 
-;; For a string that names at most a drive (I, V, OPEN of "$"): FILTBL = the place before ':', or 0 without one; then
-;; <FindDrive>.
+;; Finds the drive of a string that names at most a drive (I, V, OPEN of "$"). <FileNameStart> is the place before
+;; the ':', or 0 when there is none; then <FindDrive> sets <DriveNumber>.
+;; Out: DriveNumber = the drive, Structure = $FF when none was given
 ;; Also: SIMPRS (D1541)
 .proc ParseDriveOnly
     ldx #$00
@@ -234,7 +240,8 @@ ToFindDrive:
     jmp FindDrive
 .endproc
 
-;; Scans the string from its start for ':' (<ScanFor>): Y just past it, or 0 with Z set; X = the commas before it.
+;; Scans the string from its start for ':' (<ScanFor>).
+;; Out: Y = the place just past it, or 0 with zero set when there is none; X = the commas before it
 ;; Also: PRSCLN (D1541)
 .proc FindColon
     ldy #$00
@@ -243,25 +250,30 @@ ToFindDrive:
     jmp ScanFor
 .endproc
 
-;; From ':' and '=', each name's start in FILTBL, the counts F1CNT and F2CNT, F2PTR, and IMAGE, the string's shape (bit
-;; 7 a pattern in the first names, 6 more than one, 5 first names given; 3, 2 and 1 the same for the second names; 0 no
-;; second names). Bits the command's byte of <CommandPatterns> forbids are a syntax error.
+;; Works out the names of a string with ':' and perhaps '=': each name's start in <FileNameStart>, the counts in
+;; <FirstStreamEnd> and <SecondStreamEnd>, <SecondStreamStart>, and <Structure>, the string's shape. Structure's bit
+;; 7 means a pattern in the first names, bit 6 more than one first name, bit 5 first names given; bits 3, 2 and 1 are
+;; the same for the second names, and bit 0 means no second names. A bit that the command's byte of <CommandPatterns>
+;; forbids is a syntax error.
 ;; Entry:
-;;   AfterColon = With Y past ':' and X its commas, as <FindColon> leaves them (C comes here)
-;;   Equals = With FILTBL set (LOAD comes here)
+;;   AfterColon = with Y past the ':' and X its commas, as <FindColon> leaves them (C comes here)
+;;   Equals = with <FileNameStart> set (LOAD comes here)
+;; Errors:
+;;   30 = SYNTAX ERROR, the shape is forbidden for the command; <ErrorFlash> holds the clashing bits
+;;   34 = SYNTAX ERROR, no ':' or a ',' before it
 ;; Also: TAGCMD (D1541)
 .proc ParseNames
     jsr FindColon
     bne AfterColon
 
-;; No ':', or a ',' before it: 34 SYNTAX ERROR (no file given).
+;; No ':', or a ',' before it: 34 SYNTAX ERROR, no file given.
 ;; Also: TC25 (D1541)
 NoName:
     lda #ERROR_NO_NAME
     jmp Fail
 
-;; With Y past ':' and X its commas, as <FindColon> leaves them (C comes here): FILTBL = the place before ':', where the
-;; drive is.
+;; With Y past the ':' and X its commas, as <FindColon> leaves them (C comes here): <FileNameStart> = the place
+;; before the ':', where the drive is.
 ;; Also: TC30 (D1541)
 AfterColon:
     dey
@@ -270,7 +282,7 @@ AfterColon:
     txa
     bne NoName
 
-;; With FILTBL set (LOAD comes here): scans on for '='.
+;; With <FileNameStart> set (LOAD comes here): scans on for '='.
 ;; Also: TC35 (D1541)
 Equals:
     lda #$3D
@@ -279,8 +291,9 @@ Equals:
     beq FirstNames
     lda #$40
 
-;; IMAGE's bits 5 and 0 (bit 6 too if more than one name); F1CNT = F2CNT = the names' count, so no second names yet; bit
-;; 7 if any had a pattern, and PATFLG cleared.
+;; Sets <Structure>'s bit 5 and bit 0, and bit 6 too if there is more than one name. <FirstStreamEnd> and
+;; <SecondStreamEnd> are the names' count, so no second names yet. Bit 7 is set if any had a pattern, and
+;; <PatternFlag> is cleared.
 ;; Also: TC40 (D1541)
 FirstNames:
     ora #$21
@@ -296,8 +309,9 @@ FirstNames:
     lda #$00
     sta PatternFlag
 
-;; Y = 0: no '='. Otherwise the second names' start into FILTBL, F2PTR = F1CNT, and the rest of the string scanned (for
-;; shifted RETURN, $8D, which ends it); F2CNT = the names in all.
+;; Y = 0 means no '='. Otherwise the second names' start goes into <FileNameStart>, <SecondStreamStart> =
+;; <FirstStreamEnd>, and the rest of the string is scanned (for shifted RETURN, which ends it); <SecondStreamEnd> =
+;; the names in all.
 ;; Also: TC50 (D1541)
 SecondNames:
     tya
@@ -328,7 +342,7 @@ SecondGiven:
     eor Structure
     sta Structure
 
-;; IMAGE against the command's byte of <CommandPatterns>: no bit in both, and it returns.
+;; <Structure> against the command's byte of <CommandPatterns>: a bit in both is a syntax error. Otherwise returns.
 ;; Also: TC75 (D1541)
 Check:
     lda Structure
@@ -337,7 +351,7 @@ Check:
     bne BadSyntax
     rts
 
-;; ERWORD = the clashing bits; 30 SYNTAX ERROR.
+;; <ErrorFlash> = the clashing bits; 30 SYNTAX ERROR.
 ;; Also: TC80 (D1541)
 BadSyntax:
     sta ErrorFlash
@@ -345,16 +359,17 @@ BadSyntax:
     jmp Fail
 .endproc
 
-;; Scans CMDBUF from Y to CMDSIZ for the character A, on the way putting the start of each name after a ',' into
-;; FILTBL+1,X and marking in PATTYP the names with '*' or '?' (PATFLG counts them). Returns Y just past the character,
-;; or 0 with Z set if it is not there or there are MXFILS-1 (4) commas or more; FILTBL+1,X = CMDSIZ, the end.
-;; In: A = the character to find, Y = where to start in <CommandBuffer>
+;; Scans <CommandBuffer> from Y to <CommandLength> for the character A. On the way it puts the start of each name
+;; after a ',' into <FileNameStart>+1,X and marks in <FileNamePattern> the names with '*' or '?' (<PatternFlag>
+;; counts them). At <FILE_NAME_COUNT>-1 commas it stops as if the character were not there. <FileNameStart>+1,X =
+;; <CommandLength>, the end of the last name.
+;; In: A = the character to find, X = the index of the name being scanned, Y = where to start
 ;; Out: Y = the place just past the character, or 0 with zero set when it was not found; X = the commas passed
 ;; Also: PARSE (D1541)
 .proc ScanFor
     sta Character
 
-;; The next character; the string's end is <NotFound>.
+;; The next character; the string's end is the not-found case.
 ;; Also: PR10 (D1541)
 Next:
     cpy CommandLength
@@ -368,12 +383,12 @@ Next:
     cmp #$3F
     bne Comma
 
-;; '*' or '?': PATFLG counts it.
+;; '*' or '?': <PatternFlag> counts it.
 ;; Also: PR20 (D1541)
 Pattern:
     inc PatternFlag
 
-;; A ',' ends a name: the next one's start into FILTBL+1,X.
+;; A ',' ends a name: the next one's start goes into <FileNameStart>+1,X.
 ;; Also: PR25 (D1541)
 Comma:
     cmp #$2C
@@ -387,19 +402,19 @@ Comma:
     sta FileNamePattern,x
     sta PatternFlag
 
-;; X on; at MXFILS-1 names, stops as <NotFound>.
+;; X on; at <FILE_NAME_COUNT>-1 names it stops as not found.
 ;; Also: PR28 (D1541)
 NextName:
     inx
     cpx #FILE_NAME_COUNT-1
     bcc Next
 
-;; Y = 0.
+;; Not found: Y = 0.
 ;; Also: PR30 (D1541)
 NotFound:
     ldy #$00
 
-;; The last name's end, CMDSIZ, into FILTBL+1,X, and its pattern mark.
+;; The last name's end, <CommandLength>, goes into <FileNameStart>+1,X, with its pattern mark.
 ;; Also: PR35 (D1541)
 Found:
     lda CommandLength
@@ -410,17 +425,21 @@ Found:
     lda #$80
     sta FileNamePattern,x
 
-;; A = Y, Z set if it is 0.
+;; A = Y, with zero set if it is 0.
 ;; Also: PR40 (D1541)
 Return:
     tya
     rts
 .endproc
 
-;; Sets CMDSIZ from the command buffer's count, without a RETURN at the end (or one before the last character); more
-;; than CMDLEN characters is 32 SYNTAX ERROR (line too long), with CMDNUM = $FF. Then falls into ClearTables.
+;; Sets <CommandLength> from the command buffer's count (<CommandPointer>), without a RETURN at the end (or one
+;; before the last character). More than <COMMAND_LENGTH_MAX> characters is a 32 SYNTAX ERROR, line too long, with
+;; <CommandNumber> = $FF. Then falls into <ClearTables>.
 ;; Entry:
-;;   ClearTables = Clears the buffer's count, REC, TYPE, TYPFLG, F1PTR, F2PTR, F1CNT, F2CNT, PATFLG and ERWOR
+;;   ClearTables = clears the buffer's count, the record size, file type and match type, the name counters,
+;;   <PatternFlag> and <ErrorFlash>, and the file name tables; LOAD enters here to search by name alone
+;; Out: Y = 0 at ClearTables, A = 0
+;; Errors: 32 = SYNTAX ERROR, the command is too long, through <Fail>
 ;; Also: CMDSET (D1541)
 .proc Prepare
     ldy CommandPointer
@@ -441,7 +460,7 @@ Return:
 Whole:
     iny
 
-;; CMDSIZ = Y, and the length checked.
+;; <CommandLength> = Y, and the length is checked.
 ;; Also: CS08 (D1541)
 SetSize:
     sty CommandLength
@@ -452,8 +471,10 @@ SetSize:
     lda #ERROR_LINE_TOO_LONG
     jmp Fail
 
-;; Clears the buffer's count, REC, TYPE, TYPFLG, F1PTR, F2PTR, F1CNT, F2CNT, PATFLG and ERWORD, and the MXFILS entries
-;; of FILTBL, ENTSEC, ENTIND, FILDRV, PATTYP, FILTRK and FILSEC. LOAD comes here to search by name alone.
+;; Clears the buffer's count, <RecordSize>, <FileType>, <MatchType>, <NameIndex>, <SecondStreamStart>,
+;; <FirstStreamEnd>, <SecondStreamEnd>, <PatternFlag> and <ErrorFlash>, and the <FILE_NAME_COUNT> entries of each
+;; file name table (<FileNameStart>, <FileNameEntrySector>, <FileNameEntryIndex>, <FileNameDrive>, <FileNamePattern>,
+;; <FileNameTrack> and <FileNameSector>). LOAD enters here to search by name alone.
 ;; Also: CMDRST (D1541)
 ClearTables:
     ldy #$00
@@ -485,7 +506,8 @@ ClearEntry:
     rts
 .endproc
 
-;; Takes only the first name: F1CNT = F2CNT, F2CNT = F2PTR = 1; falls into <SetDrives>.
+;; Takes only the first name: <FirstStreamEnd> = <SecondStreamEnd>, and <SecondStreamEnd> and <SecondStreamStart> =
+;; 1. Falls into <SetDrives>.
 ;; Also: ONEDRV (D1541)
 .proc SetFirstDrive
     lda SecondStreamEnd
@@ -497,14 +519,16 @@ ClearEntry:
     .assert * = SetDrives, "SetFirstDrive must fall into SetDrives."
 .endproc
 
-;; For each name, 0 to F2CNT-1: its drive (<DriveOfName>) into FILDRV, bit 7 if it was not given, and FILTBL moved past
-;; its ':'.
+;; Sets each name's drive, for names 0 to <SecondStreamEnd>-1: <DriveOfName>'s drive goes into <FileNameDrive>, bit 7
+;; set if it was not given, and <FileNameStart> is moved past its ':'. The defaults are drive 0, whatever <LastDrive>
+;; holds.
+;; Out: FileNameDrive, FileNameStart = for every name
 ;; Also: ALLDRS (D1541)
 .proc SetDrives
     ldy LastDrive
     ldx #$00
 
-;; Each name, F1PTR keeping the index.
+;; Each name, <NameIndex> keeping the index.
 ;; Also: AD10 (D1541)
 Next:
     stx NameIndex
@@ -520,12 +544,11 @@ Next:
     rts
 .endproc
 
-;; In: A = the place of a name in CMDBUF. A "0:" or "1:" there gives its drive; a ':' alone, or a letter before ':',
-;; gives drive 0; a name with no ':' gives drive 0 with bit 7, defaulted. Out: Y = the drive; A = the place past the ':'
-;; when there is one, else the place as it came in. The listing says Y comes in as the default, but the code sets it to
-;; 0 (one drive).
+;; Finds the drive in a name. A "0:" or "1:" there gives its drive; a ':' alone, or a letter before ':', gives drive
+;; 0; a name with no ':' gives drive 0 with bit 7 set, defaulted. The listing says Y comes in as the default drive,
+;; but the code sets it to 0, so only the defaults are forced to drive 0.
 ;; In: A = the place of a name in <CommandBuffer>
-;; Out: Y = the drive, A = the place past the ':' if there was one, else the place given
+;; Out: Y = the drive, A = the place past the ':' when there is one, else the place as it came in
 ;; Also: SETDRV (D1541)
 .proc DriveOfName
     tax
@@ -566,8 +589,8 @@ Colon:
     beq Number
     bne Default
 
-;; No ':' after the name: drive 0 with bit 7 (defaulted). The listing defines it as an equate (=*), but it is a label;
-;; not a constant.
+;; No ':' after the name: drive 0 with bit 7 set, defaulted. The listing writes it as an equate (`=*`), but it is a
+;; label.
 ;; Also: SD50 (D1541)
 NoColon:
     tya
@@ -576,8 +599,10 @@ NoColon:
     bne Return
 .endproc
 
-;; For a command with at most a drive: DRVNUM from the character at FILTBL, or failing that the string's last character,
-;; '0' or '1'; with neither, drive 0 and IMAGE = $FF. Then the drive's LEDs (SETLDS).
+;; Sets <DriveNumber> for a command with at most a drive, from the character at <FileNameStart> or else the string's
+;; last character, '0' or '1'. With neither, the drive is 0 and <Structure> = $FF. Then lights the drive's LED
+;; (<TurnOnActivityLed>), which returns to the caller.
+;; Out: DriveNumber = the drive
 ;; Also: SETANY (D1541)
 .proc FindDrive
     lda #$00
@@ -597,13 +622,13 @@ Try:
     dey
     bne Try
 
-;; No drive given: IMAGE = $FF, drive 0.
+;; No drive given: <Structure> = $FF, drive 0.
 ;; Also: SA10 (D1541)
 Default:
     dec Structure
     lda #$00
 
-;; DRVNUM = bit 0, and the LEDs.
+;; <DriveNumber> = bit 0, and the LED.
 ;; Also: SA20 (D1541)
 Found:
     and #$01
@@ -613,7 +638,7 @@ Found:
 .endscope
 .scope Directory continued
 
-;; DRVNUM to the other drive, 0 or 1.
+;; Changes <DriveNumber> to the other drive, 0 or 1.
 ;; In: DriveNumber = the drive
 ;; Out: DriveNumber = the other drive
 ;; Keeps: X, Y
@@ -628,8 +653,10 @@ Found:
 .endscope
 .scope Commands continued
 
-;; With second names, the last is taken off (F2CNT down one) as a file type: its first letter looked up in TYPLST,
-;; TYPFLG = the type's number; without, or for a letter not there, 0 (S0:name=P scratches only programs).
+;; Takes the file type off the names. With second names, the last is taken off (<SecondStreamEnd> down one) as a file
+;; type: its first letter is looked up in <TypeFirstLetters> and <MatchType> = the type's number. Without second
+;; names, or for a letter not there, <MatchType> = 0 (S0:name=P scratches only programs).
+;; Out: MatchType = the type, or 0
 ;; Also: FS1SET (D1541)
 .proc TakeType
     ldy #$00
@@ -651,7 +678,7 @@ Search:
     dey
     bne Search
 
-;; TYPFLG = Y.
+;; <MatchType> = Y.
 ;; Also: FS15 (D1541)
 Store:
     tya
@@ -659,9 +686,9 @@ Store:
     rts
 .endproc
 
-;; A = 0 or 1 for the character '0' or '1', N clear; any other character comes back with bit 7 set.
+;; Tells whether a character is '0' or '1'.
 ;; In: A = a character
-;; Out: A = 0 or 1 for '0' or '1' with negative clear, else A has bit 7 set and negative is set
+;; Out: A = 0 or 1 for '0' or '1' with negative clear; any other character comes back with bit 7 set and negative set
 ;; Also: TST0V1 (D1541)
 .proc DriveDigit
     cmp #$30
@@ -679,9 +706,10 @@ Mask:
 .endscope
 .scope Directory continued
 
-;; Sets DRVCNT and DRVNUM, the drives to search for the stream's names, from the drives they name (FILDRV, through
-;; SCHTBL); checks each for a new disk (AutoInitialize), leaving out one with none, with error 74, DRIVE NOT READY, when
-;; neither has one. Ends by turning on the LED.
+;; Sets <DriveSearches> and <DriveNumber>, the drives to search for the stream's names, from the drives they name
+;; (<FileNameDrive>, through <SearchOrder>). Each drive is checked for a new disk (<Bam::AutoInitialize>) and left
+;; out if it has none; when neither has one, the error is 74, DRIVE NOT READY. Ends by turning on the LED.
+;; Errors: 74 = DRIVE NOT READY, no drive searched has a disk, through <Commands::Fail>
 ;; Also: OPTSCH (D1541)
 .proc ChooseDrives
     lda #$00
@@ -713,7 +741,7 @@ DriveBit:
     asl Temporary
     bne NextName
 
-;; The mask picks SCHTBL's entry: DRVCNT is its bits 0-1.
+;; The mask picks <SearchOrder>'s entry; <DriveSearches> is its bits 0 and 1.
 ;; Also: OS30 (D1541)
 Choose:
     pla
@@ -727,7 +755,7 @@ Choose:
     bpl FixedDrive
     lda FileNameDrive
 
-;; DRVNUM = bit 0 of A; with one drive to search, it is checked alone.
+;; <DriveNumber> = bit 0 of A. With one drive to search, it is checked alone.
 ;; Also: OS35 (D1541)
 SetDrive:
     and #$01
@@ -742,13 +770,14 @@ SetDrive:
     jsr Bam::AutoInitialize
     beq Done
 
-;; Error 74, DRIVE NOT READY.
+;; 74 DRIVE NOT READY.
 ;; Also: OS45 (D1541)
 NotReady:
     lda #ERROR_DRIVE_NOT_READY
     jsr Commands::Fail
 
-;; The first drive has a disk: the other is checked too (DRVNUM put back), and left out of the search if it has none.
+;; The first drive has a disk: the other is checked too (<DriveNumber> put back), and left out of the search if it
+;; has none.
 ;; Also: OS50 (D1541)
 CheckOther:
     jsr ToggleDrive
@@ -767,7 +796,7 @@ OneDrive:
     jsr Bam::AutoInitialize
     bne NotReady
 
-;; On to <TurnOnActivityLed> (SETLDS).
+;; On to <TurnOnActivityLed>, which returns to the caller.
 ;; Also: OS70 (D1541)
 Done:
     jmp TurnOnActivityLed
@@ -779,8 +808,8 @@ FixedDrive:
     jmp SetDrive
 .endproc
 
-;; For each mask of drives the names ask for (bits 0-1 named, 2-3 by default): bits 0-1 the drives after the first to
-;; search, bit 6 set to start on the first name's drive, else bit 7 the drive.
+;; For each mask of drives the names ask for (bits 0 and 1 name them, bits 2 and 3 by default): bits 0 and 1 are the
+;; drives after the first to search, bit 6 set means start on the first name's drive, else bit 7 is the drive.
 ;; Also: SCHTBL (D1541)
 SearchOrder:
     .byte $00, $80, $41
@@ -788,13 +817,15 @@ SearchOrder:
     .byte $81, $81, $81, $81
     .byte $42, $42, $42, $42
 
-;; LOOKUP: looks up every name in the stream on the drives <ChooseDrives> picks, filling the tables (FILTRK, FILSEC,
-;; PATTYP, ENTSEC, ENTIND) for each found; FOUND nonzero once all are.
+;; Looks up every name of the stream on the drives <ChooseDrives> picks, filling the tables (<FileNameTrack>,
+;; <FileNameSector>, <FileNamePattern>, <FileNameEntrySector>, <FileNameEntryIndex>) for each found. <Found> is
+;; nonzero once all are.
+;; Out: Found = nonzero when every name was found
 ;; Also: LOOKUP (D1541)
 .proc FindAll
     jsr ChooseDrives
 
-;; A search from the drive's first directory block (DELIND = 0: in-use entries only).
+;; A search from the drive's first directory block (<FreeEntryIndex> = 0: entries in use only).
 ;; Also: LK05 (D1541)
 SearchDrive:
     lda #$00
@@ -802,14 +833,14 @@ SearchDrive:
     jsr Search
     bne Compare
 
-;; The directory is used up: on to the other drive, if DRVCNT says so.
+;; The directory is used up: on to the other drive, if <DriveSearches> says so.
 ;; Also: LK10 (D1541)
 NextDrive:
     dec DriveSearches
     bpl OtherDrive
     rts
 
-;; DRVFLG set, the drive toggled and its LED on.
+;; <DriveSearchFlag> set, the drive toggled and its LED on.
 ;; Also: LK15 (D1541)
 OtherDrive:
     lda #$01
@@ -818,7 +849,7 @@ OtherDrive:
     jsr TurnOnActivityLed
     jmp SearchDrive
 
-;; The next entry in use; Z set at the directory's end.
+;; The next entry in use; zero set at the directory's end.
 ;; Also: LK20 (D1541)
 NextEntry:
     jsr Search::Next
@@ -832,14 +863,15 @@ Compare:
     beq NotAllFound
     rts
 
-;; ENTFND minus: no name matched, so the next entry; else the same entry again for the other names.
+;; When no name matched (<EntryFound> negative) the next entry follows; otherwise the same entry again, for the other
+;; names.
 ;; Also: LK26 (D1541)
 NotAllFound:
     lda EntryFound
     bmi NextEntry
     bpl Compare
 
-;; Not all found: the other drive.
+;; The end of the directory: if not all are found, the other drive.
 ;; Also: LK30 (D1541)
 EndOfDirectory:
     lda Found
@@ -847,18 +879,20 @@ EndOfDirectory:
     rts
 .endproc
 
-;; FFRE: the next entry matching any name in the stream, after the one last found, whose sector (DIRSEC) is read again;
-;; its details go in the tables. The three find routines share one body.
+;; Finds the next entry that matches any name of the stream, after the one last found, whose sector (<SearchSector>)
+;; is read again; its details go into the tables. The three find routines share one body.
 ;; Entry:
-;;   First = FFST
-;;   Next = FNDFIL
+;;   First = finds the first matching entry, from the start of the directory (<Files::Open> and the scratch command
+;;   enter here)
+;;   Next = goes on with the search without reading the sector again (the transfer code enters here)
+;; Out: EntryFound = the matching name's index, or negative for none
 ;; Also: FFRE (D1541)
 .proc FindFile
     jsr Search::Again
     beq EndOfDirectory
     bne Compare
 
-;; DRVFLG set, the drive toggled and its LED on, then a search from its start.
+;; <DriveSearchFlag> set, the drive toggled and its LED on, then a search from its start.
 ;; Also: FF15 (D1541)
 OtherDrive:
     lda #$01
@@ -866,7 +900,8 @@ OtherDrive:
     jsr ToggleDrive
     jsr TurnOnActivityLed
 
-;; FFST: the first matching entry, from the start of the directory (<Files::Open> and the scratch command enter here).
+;; Finds the first matching entry, from the start of the directory (<Files::Open> and the scratch command enter
+;; here).
 ;; Also: FFST (D1541)
 First:
     lda #$00
@@ -875,7 +910,7 @@ First:
     bne Compare
     sta Found
 
-;; Done if FOUND says so, else the other drive, if DRVCNT has one left.
+;; Done if <Found> says so, else the other drive, if <DriveSearches> has one left.
 ;; Also: FF10 (D1541)
 EndOfDirectory:
     lda Found
@@ -884,7 +919,7 @@ EndOfDirectory:
     bpl OtherDrive
     rts
 
-;; FNDFIL: the next matching entry, going on with the search without reading the sector again (the transfer code enters
+;; Finds the next matching entry, going on with the search without reading the sector again (the transfer code enters
 ;; here).
 ;; Also: FNDFIL (D1541)
 Next:
@@ -901,7 +936,7 @@ Compare:
     beq Next
     bne Done
 
-;; A match: with TYPFLG set, its type must be that one, or the search goes on.
+;; A match: with <MatchType> set, its type must be that one, or the search goes on.
 ;; Also: FF30 (D1541)
 CheckType:
     lda MatchType
@@ -917,9 +952,10 @@ Done:
     rts
 .endproc
 
-;; Compares the entry at DIRBUF with each name in the stream not yet found, on its drive, with ? and * as patterns; on a
-;; match ENTFND = the name's index and its tables get the entry's type, track, sector, place and record size. Falls into
-;; <NextUnfound>.
+;; Compares the entry at <BufferPointer> with each name of the stream not yet found, on its drive, with '?' and '*'
+;; as patterns. On a match <EntryFound> = the name's index, and the name's tables get the entry's type, track,
+;; sector, place and record size. Falls into <NextUnfound>.
+;; Out: EntryFound = the matching name's index, or $FF for none
 ;; Also: COMPAR (D1541)
 .proc MatchEntry
     ldx #$FF
@@ -953,7 +989,7 @@ CheckDrive:
     cmp DriveSearches
     beq NextName
 
-;; From the name's start (FILTBL, FNDLMT for its end) and the entry's byte 3.
+;; From the name's start (<FileNameStart>, <StringEnd> for its end) and the entry's byte 3.
 ;; Also: CP20 (D1541)
 CompareName:
     lda FileNameStart,x
@@ -962,7 +998,7 @@ CompareName:
     ldy #$03
     jmp CheckPattern
 
-;; A character that differs fails unless it is ? and the entry's name has not ended (shifted space).
+;; A character that differs fails, unless it is '?' and the entry's name has not ended (shifted space).
 ;; Also: CP30 (D1541)
 CompareCharacter:
     lda CommandBuffer,x
@@ -980,7 +1016,7 @@ NextCharacter:
     inx
     iny
 
-;; At the pattern's end (LIMIT), or a * that matches the rest.
+;; At the pattern's end (<StringEnd>), or a '*' that matches the rest.
 ;; Also: CP33 (D1541)
 CheckPattern:
     cpx StringEnd
@@ -999,7 +1035,7 @@ EndOfPattern:
     cmp #$A0
     bne NextName
 
-;; A match: ENTFND, PATFLG, ENTIND and ENTSEC for it.
+;; A match: <EntryFound>, <PatternFlag>, <FileNameEntryIndex> and <FileNameEntrySector> for it.
 ;; Also: CP40 (D1541)
 Matched:
     ldx SecondStreamStart
@@ -1022,8 +1058,8 @@ Matched:
     bmi StoreType
     ora #$20
 
-;; PATTYP = the entry's type with its locked bit, bit 5 set for a file not closed, the name's pattern bit kept; then the
-;; drive, the first track and sector, and the record size if REC has none.
+;; <FileNamePattern> = the entry's type with its locked bit, bit 5 set for a file not closed, and the name's pattern
+;; bit kept; then the drive, the first track and sector, and the record size if <RecordSize> has none.
 ;; Also: CP42 (D1541)
 StoreType:
     and #$27
@@ -1049,10 +1085,12 @@ StoreType:
     sta RecordSize
 .endproc
 
-;; Sets <Found> to 0 if some name in the stream is still unfound, else leaves it $FF. Starts from the last name; <NextUnfound::Continue>
-;; goes on from the one before the current. <MatchEntry> falls in here at the end of its comparison.
+;; Sets <Found> to 0 if some name of the stream is still unfound, else leaves it $FF. Starts from the last name;
+;; <NextUnfound::Continue> goes on from the one before the current. <MatchEntry> falls in here at the end of its
+;; comparison.
 ;; Entry:
-;;   Continue = From the name before F2PTR (<MatchEntry> enters here for its next name)
+;;   Continue = from the name before <SecondStreamStart> (<MatchEntry> enters here for its next name)
+;; Out: Found = 0 if a name is unfound, else $FF; zero set at Continue when no name is left
 ;; Also: CP50 (D1541), CMPCHK (D1541)
 .proc NextUnfound
     lda #$FF
@@ -1060,7 +1098,7 @@ StoreType:
     lda SecondStreamEnd
     sta SecondStreamStart
 
-;; From the name before F2PTR (<MatchEntry> enters here for its next name).
+;; From the name before <SecondStreamStart>.
 ;; Also: CC10 (D1541)
 Continue:
     dec SecondStreamStart
@@ -1076,7 +1114,7 @@ Check:
     lda FileNameTrack,x
     bne Continue
 
-;; FOUND = 0.
+;; Not found: <Found> = 0.
 ;; Also: CC20 (D1541)
 NotFound:
     lda #$00
@@ -1084,12 +1122,15 @@ NotFound:
     rts
 .endproc
 
-;; SRCHST: starts a search at the directory's first block (track DIRTRK, sector 1) through the internal read channel,
-;; and returns the first entry: one in use (Z clear, INDEX and DIRSEC set), or with DELIND set the first deleted one; Z
-;; set at the end. DELSEC = the first deleted entry's sector.
+;; Starts a search at the directory's first block (track <DirectoryTrack>, sector 1) through the internal read
+;; channel, and returns the first entry. That is one in use (zero clear, <EntryOffset> and <SearchSector> set) or,
+;; with <FreeEntryIndex> set to ask for them, the first deleted one; zero is set at the directory's end.
+;; <FreeEntrySector> = the first deleted entry's sector.
 ;; Entry:
-;;   Again = SRRE
-;;   Next = SEARCH
+;;   Again = reads the sector of the entry last returned again, and goes on from it (<Commands::Validate> and
+;;   <FindFile> enter here)
+;;   Next = the entry after the last returned, <EntryFound> cleared (<FindAll>, <FindFile> and <AddEntry> enter here)
+;; Out: zero = clear when an entry is returned, BufferPointer = the entry
 ;; Also: SRCHST (D1541)
 .proc Search
     ldy #$00
@@ -1103,14 +1144,14 @@ NotFound:
     sta LastBlock
     jsr Files::OpenInternalRead
 
-;; Z set (the end) when the last block (LSTBUF 0) is used up.
+;; Zero set (the end) when the last block (<LastBlock> 0) is used up.
 ;; Also: SR10 (D1541)
 NextBlock:
     lda LastBlock
     bne ReadBlock
     rts
 
-;; Eight entries; LSTBUF = the block's link track.
+;; Eight entries; <LastBlock> = the block's link track.
 ;; Also: SR15 (D1541)
 ReadBlock:
     lda #$07
@@ -1119,8 +1160,8 @@ ReadBlock:
     jsr Files::PeekByte
     sta LastBlock
 
-;; The entry at the pointer: type 0 is a deleted one, noted in DELSEC the first time; returned if DELIND asks for
-;; deleted entries.
+;; The entry at the pointer: type 0 is a deleted one, noted in <FreeEntrySector> the first time, and returned if
+;; <FreeEntryIndex> asks for deleted entries.
 ;; Also: SR20 (D1541)
 NextEntry:
     jsr Files::GetPointer
@@ -1139,7 +1180,7 @@ NextEntry:
     beq Next
     rts
 
-;; An entry in use: returned, unless DELIND = 1 asks only for deleted ones.
+;; An entry in use: returned, unless <FreeEntryIndex> = 1 asks only for deleted ones.
 ;; Also: SR30 (D1541)
 InUse:
     ldx #$01
@@ -1147,8 +1188,8 @@ InUse:
     bne Found
     beq Next
 
-;; SRRE: reads the sector of the entry last returned (DIRSEC) again, and goes on from it (INDEX); Validate and
-;; <FindFile> enter here.
+;; Reads the sector of the entry last returned (<SearchSector>) again, and goes on from it (<EntryOffset>); Validate
+;; and <FindFile> enter here.
 ;; Also: SRRE (D1541)
 Again:
     lda DirectoryTrack
@@ -1159,7 +1200,8 @@ Again:
     lda EntryOffset
     jsr Files::SetPointer
 
-;; SEARCH: the entry after the last returned, ENTFND cleared (<FindAll>, <FindFile> and <AddEntry> enter here).
+;; The entry after the last returned, <EntryFound> cleared (<FindAll>, <FindFile> and <Directory::AddEntry> enter
+;; here).
 ;; Also: SEARCH (D1541)
 Next:
     lda #$FF
@@ -1176,7 +1218,7 @@ EndOfBlock:
     jsr Files::FollowLink
     jmp NextBlock
 
-;; INDEX and DIRSEC = the entry's place; Z clear.
+;; <EntryOffset> and <SearchSector> = the entry's place; zero clear.
 ;; Also: SR50 (D1541)
 Found:
     lda BufferPointer
@@ -1189,9 +1231,11 @@ Found:
 .endscope
 .scope Bam continued
 
-;; AUTOI: unless <AutoInitializeOff> (AUTOFG) turns it off, a drive whose disk has changed (WPSW bit 0) is initialized,
-;; or marked in NODRV when the seek finds no disk (job results 2, 3 and $0F: no header, no sync, not ready; the
-;; listing's comments swap the first two). A = NODRV, Z set when the drive has a disk.
+;; Initializes a drive whose disk has changed (bit 0 of <DiskChanged>), unless <AutoInitializeOff> turns it off. A
+;; drive whose seek finds no disk (job results 2, 3 and $0F: no header, no sync, not ready; the listing's comments
+;; swap the first two) is marked in <NoDrive> instead.
+;; In: DriveNumber = the drive
+;; Out: A = the drive's <NoDrive> flag, zero set when it has a disk
 ;; Also: AUTOI (D1541)
 .proc AutoInitialize
     lda AutoInitializeOff
@@ -1211,7 +1255,7 @@ Found:
     beq SetNoDrive
     ldy #$00
 
-;; NODRV = Y; a drive with a disk is initialized.
+;; <NoDrive> = Y; a drive with a disk is initialized.
 ;; Also: AUTO1 (D1541)
 SetNoDrive:
     ldx DriveNumber
@@ -1220,7 +1264,7 @@ SetNoDrive:
     bne Done
     jsr InitializeDrive
 
-;; A = NODRV for DRVNUM.
+;; A = <NoDrive> for <DriveNumber>.
 ;; Also: AUTO2 (D1541)
 Done:
     ldx DriveNumber
@@ -1230,8 +1274,9 @@ Done:
 .endscope
 .scope Commands continued
 
-;; Copies the name at X in CMDBUF (to ',' or '=', at most 16 characters) into buffer Y at its pointer, then pads with
-;; shifted spaces ($A0) to A characters.
+;; Copies the name at X in <CommandBuffer> (to ',' or '=', at most 16 characters) into buffer Y at its pointer, then
+;; pads it with shifted spaces ($A0) to A characters.
+;; In: A = the field's length, X = the name's place, Y = the buffer's number
 ;; Also: TRNAME (D1541)
 .proc CopyName
     pha
@@ -1259,7 +1304,10 @@ Return:
     rts
 .endproc
 
-;; DIRBUF = buffer Y's pointer; copies CMDBUF from X up to LIMIT there, stopping at the buffer's end.
+;; Sets <BufferPointer> to the pointer of buffer Y and copies <CommandBuffer> from X up to <StringEnd> there,
+;; stopping at the buffer's end.
+;; In: X = the place in <CommandBuffer>, Y = the buffer's number
+;; Out: Y = the characters copied
 ;; Also: TRCMBF (D1541)
 .proc CopyToBuffer
     tya
@@ -1288,8 +1336,10 @@ Return:
     rts
 .endproc
 
-;; LIMIT = the place of the ',' or '=' that ends the name at X, or the string's end, at most 16 characters on; STRSIZ =
-;; its length. X kept.
+;; Finds where the name at X ends: <StringEnd> = the place of the ',' or '=' that ends it, or the string's end, at
+;; most 16 characters on; <StringLength> = its length.
+;; In: X = the name's place in <CommandBuffer>
+;; Keeps: X
 ;; Also: FNDLMT (D1541)
 .proc FindNameEnd
     lda #$00
@@ -1313,7 +1363,7 @@ Next:
     cpx CommandLength
     bcc Next
 
-;; LIMIT set; X back.
+;; <StringEnd> set; X back.
 ;; Also: FL10 (D1541)
 Done:
     stx StringEnd
@@ -1324,8 +1374,9 @@ Done:
 .endscope
 .scope Directory continued
 
-;; The directory listing's next line, built in NAMBUF (<BuildLine>), with SA and LINDX kept across it: C clear after the
-;; last.
+;; Builds the directory listing's next line in <ListingLine> (<BuildLine>), keeping <SecondaryAddress> and <Channel>
+;; across it.
+;; Out: carry = clear after the last line
 ;; Also: GETNAM (D1541)
 .proc NextLine
     lda SecondaryAddress
@@ -1340,8 +1391,10 @@ Done:
     rts
 .endproc
 
-;; On the internal read channel: the next entry's line, or after the last the blocks-free line (C clear); DRVFLG steps
-;; the two-drive listing through a drive's free line and the next drive's header.
+;; Builds the next line on the internal read channel: the next entry's line or, after the last, the blocks-free line
+;; (carry clear). <DriveSearchFlag> steps a two-drive listing through a drive's free line and the next drive's
+;; header.
+;; Out: carry = clear after the last line
 ;; Also: GNSUB (D1541)
 .proc BuildLine
     lda #INTERNAL_READ_SECONDARY
@@ -1356,14 +1409,14 @@ Done:
     clc
     rts
 
-;; An entry: DRVFLG 0 means its line.
+;; An entry: <DriveSearchFlag> 0 means its line.
 ;; Also: GN05 (D1541)
 More:
     lda DriveSearchFlag
     beq Entry
 
-;; DRVFLG counts down: at 0, this drive's blocks-free line (the other drive's DRVNUM for the count) and C set; otherwise
-;; the next header.
+;; <DriveSearchFlag> counts down: at 0, this drive's blocks-free line (the other drive's <DriveNumber> for the count)
+;; and carry set; otherwise the next header.
 ;; Also: GN050 (D1541)
 Pending:
     dec DriveSearchFlag
@@ -1374,7 +1427,7 @@ Pending:
     sec
     jmp ToggleDrive
 
-;; A drive's header line (<HeaderLine>), DRVFLG and the line number's high byte cleared; C set.
+;; A drive's header line (<HeaderLine>), with <DriveSearchFlag> and the line number's high byte cleared; carry set.
 ;; Also: GN051 (D1541)
 Header:
     lda #$00
@@ -1384,8 +1437,8 @@ Header:
     sec
     rts
 
-;; A file's line: the blocks (entry bytes 28 and 29) as its line number in NBTEMP, and X where the name ends, one place
-;; less for 10 or more blocks and another for 100 or more, so the names line up.
+;; A file's line: the blocks (entry bytes 28 and 29) as its line number in <BlockTotal>, and X where the name ends,
+;; one place less for 10 or more blocks and another for 100 or more, so the names line up.
 ;; Also: GN10 (D1541)
 Entry:
     ldx #BLOCK_COUNT_END
@@ -1410,8 +1463,8 @@ Low:
     bcc Type
     dex
 
-;; NAMBUF blanked; the entry's type byte: '<' after a locked file (bit 6), then its three letters from TYPLST, TP1LST
-;; and TP2LST.
+;; <ListingLine> blanked; the entry's type byte: '<' after a locked file (bit 6), then its three letters from
+;; <TypeFirstLetters>, <TypeSecondLetters> and <TypeThirdLetters>.
 ;; Also: GN14 (D1541)
 Type:
     jsr BlankLine
@@ -1442,7 +1495,8 @@ TypeLetters:
     lda #$2A
     sta ListingLine+1,x
 
-;; A '*' before the type of a file never closed (bit 7 clear), a space, then the 16 characters of the name, backwards.
+;; A '*' before the type of a file never closed (bit 7 clear), a space, then the 16 characters of the name,
+;; backwards.
 ;; Also: GN20 (D1541)
 Name:
     lda #$A0
@@ -1491,7 +1545,7 @@ Unshift:
     sta ListingLine,x
     bpl Unshift
 
-;; The next matching entry found (FNDFIL); C set.
+;; The next matching entry (<FindFile::Next>); carry set.
 ;; Also: GN40 (D1541)
 NextEntry:
     jsr FindFile::Next
@@ -1499,7 +1553,7 @@ NextEntry:
     rts
 .endproc
 
-;; Fills NAMBUF's NBSIZ bytes with spaces.
+;; Fills <ListingLine>'s <LISTING_TEXT_LENGTH> bytes with spaces.
 ;; Also: BLKNB (D1541)
 .proc BlankLine
     ldy #LISTING_TEXT_LENGTH
@@ -1514,8 +1568,9 @@ Loop:
     rts
 .endproc
 
-;; The listing's header line from the BAM, read first: the drive as its line number, reverse on ($12), and the disk name
-;; in quotes then its ID and format from the BAM sector, shifted spaces as spaces; a missing format letter is '1'.
+;; Builds the listing's header line from the BAM, read first: the drive as the line number, reverse on ($12), then
+;; the disk name in quotes, its ID and its format, shifted spaces shown as spaces. A missing last format character is
+;; shown as '1'.
 ;; Also: NEWDIR (D1541)
 .proc HeaderLine
     jsr Bam::ChannelIndexInX
@@ -1548,7 +1603,7 @@ Next:
     bne Store
     lda #$20
 
-;; Into NAMBUF+2 on.
+;; Into <ListingLine>+2 on.
 ;; Also: ND20 (D1541)
 Store:
     sta ListingLine+2,y
@@ -1564,7 +1619,7 @@ Store:
     rts
 .endproc
 
-;; The line 'BLOCKS FREE.' in NAMBUF, and the free count as its number (NUMFRE).
+;; Builds the line 'BLOCKS FREE.' in <ListingLine>, with the free count as its line number (<Bam::CopyFreeBlocks>).
 ;; Also: MSGFRE (D1541)
 .proc FreeLine
     jsr BlankLine
@@ -1580,17 +1635,17 @@ Loop:
     jmp Bam::CopyFreeBlocks
 .endproc
 
-;; The text 'BLOCKS FREE.'; MSGLEN is its length.
+;; The text 'BLOCKS FREE.', <BLOCKS_FREE_LENGTH> characters.
 ;; Also: FREMSG (D1541)
 FreeText:
     .byte "BLOCKS FREE."
 .endscope
 .scope Commands continued
 
-;; S: a type filter (<TakeType>), the drives, then each matching entry, unless its file is open or locked (bit 6): the
-;; entry cleared and written, a relative file's side-sector chain freed, then the file's chain, unless the file was
-;; never closed. Ends with 01 FILES SCRATCHED, TRACK the count. (Reached through the command table, so a routine, not a
-;; local.)
+;; S: scratches (deletes) files. A type filter (<TakeType>), the drives, then each matching entry, unless its file is
+;; open or locked (bit 6): the entry is cleared and written, a relative file's side-sector chain freed, then the
+;; file's chain, unless the file was never closed. Ends with message 01, FILES SCRATCHED, <Track> the count. Reached
+;; through the command table.
 ;; Also: SCRTCH (D1541)
 .proc Scratch
     jsr TakeType
@@ -1601,7 +1656,7 @@ FreeText:
     jsr Directory::FindFile::First
     bmi Done
 
-;; An entry that matches: open (TSTCHN) or locked is left.
+;; An entry that matches: open or locked is left.
 ;; Also: SC15 (D1541)
 Match:
     jsr Files::TestEntryOpen
@@ -1620,7 +1675,8 @@ Match:
     sta Sector
     jsr Bam::FreeChain
 
-;; The file's own chain from FILTRK and FILSEC, unless PATTYP's bit 5 says it was never closed.
+;; The file's own chain from <FileNameTrack> and <FileNameSector>, unless <FileNamePattern>'s bit 5 says it was never
+;; closed.
 ;; Also: SC17 (D1541)
 Chain:
     ldx EntryFound
@@ -1633,18 +1689,18 @@ Chain:
     sta Sector
     jsr Bam::FreeChain
 
-;; R0, the count, up one.
+;; <Work0>, the count, up one.
 ;; Also: SC20 (D1541)
 Count:
     inc Work0
 
-;; The next match (FFRE).
+;; The next match (<Directory::FindFile>).
 ;; Also: SC25 (D1541)
 NextMatch:
     jsr Directory::FindFile
     bpl Match
 
-;; TRACK = the count; to <Finish::Report> with message 1.
+;; <Track> = the count; to <Finish::Report> with message 1.
 ;; Also: SC30 (D1541)
 Done:
     lda Work0
@@ -1656,9 +1712,10 @@ Done:
 .endscope
 .scope Bam continued
 
-;; Frees a file's blocks from TRACK and SECTOR along their links: each freed in the BAM (FRETS) and read for the next
-;; link (on the internal read channel), WBAM's bit 6 set while the BAM is in memory; at the last, the BAM written out
-;; (MAPOUT) and the channel freed. CLOSE uses it for a replaced file.
+;; Frees a file's blocks from <Track> and <Sector> along their links: each is freed in the BAM and read for the next
+;; link, on the internal read channel, with <BamWriteDeferred>'s bit 6 set while the BAM is in memory. At the last
+;; block the BAM is written out and the channel freed. CLOSE uses it for a replaced file.
+;; In: Track, Sector = the file's first block
 ;; Also: DELFIL (D1541)
 .proc FreeChain
     jsr MarkFree
@@ -1671,7 +1728,8 @@ Done:
     ora #$40
     sta BamWriteDeferred
 
-;; Each block: the link at its start into TRACK and SECTOR; track 0 is the last. One address with DEL2, both in Also.
+;; Each block: the link at its start goes into <Track> and <Sector>; track 0 is the last. One address with the
+;; listing's DEL2, so both names are given.
 ;; Also: DEL10 (D1541), DEL2 (D1541)
 Next:
     lda #$00
@@ -1695,7 +1753,7 @@ FreeNext:
 .endscope
 .scope Directory continued
 
-;; The directory entry at DIRBUF gets type 0 (deleted), and its sector is written and waited for.
+;; Gives the directory entry at <BufferPointer> type 0 (deleted), and writes its sector and waits for it.
 ;; In: BufferPointer = the entry
 ;; Also: DELDIR (D1541)
 .proc DeleteEntry
@@ -1708,17 +1766,21 @@ FreeNext:
 .endscope
 .scope Commands continued
 
-;; D: there is no second drive to copy to: 31 SYNTAX ERROR. A C without ':' comes here too. (Reached through the command
-;; table.)
+;; D: there is no second drive to copy to, so it is always a 31 SYNTAX ERROR. A C without ':' comes here too. Reached
+;; through the command table.
+;; Errors: 31 = SYNTAX ERROR, through <Fail>
 ;; Also: DUPLCT (D1541)
 .proc Duplicate
     lda #ERROR_INVALID_COMMAND
     jmp Fail
 .endproc
 
-;; Puts a JMP to the controller's format routine (FORMT) at buffer 3's start ($0600), then gives buffer 3 the execute
-;; job for DRVNUM, and waits; a result of 2 or more is reported as error 3, 21 READ ERROR, whatever the job's code
-;; (ERROR). The ROM's vector at $FFE6 points here too.
+;; Formats the disk of <DriveNumber>. It puts a JMP to the controller's format routine (<Controller::Format>) at the
+;; start of buffer 3 ($0600), gives buffer 3 the execute job for the drive and waits for it. A result of 2 or more is
+;; reported as error 3 whatever the job's code, 21 READ ERROR. The ROM's vector at $FFE6 (<FormatVector>) points here
+;; too.
+;; In: DriveNumber = the drive
+;; Errors: 21 = READ ERROR, the job's result is 2 or more, through <Errors::JobError>
 ;; Also: FORMAT (D1541)
 .proc Format
     lda #$4C
@@ -1750,11 +1812,14 @@ Return:
     rts
 .endproc
 
-;; C: the BAM's buffer and the channels freed (the BAM marked out of memory), ':' found (none: <Duplicate>'s error), the
-;; names parsed and their drives; one destination name, no patterns, else 30 SYNTAX ERROR; then <CopyFiles>. (When none
-;; of IMAGE's bits 6, 4, 2 and 0 is set, one destination and one source, it also tests whether the destination name
-;; starts with '*'; a '*' sets bit 7, which the check at NoPatterns (AND #%11011001) rejects anyway, so that test is
-;; redundant.) (Reached through the command table.)
+;; C: copies files. The BAM's buffer and the channels are freed (the BAM marked out of memory), the ':' is found
+;; (without one, <Duplicate>'s error), the names are parsed with their drives; one destination name without patterns
+;; is needed, else error 30; then <CopyFiles>. When none of <Structure>'s bits 6, 4, 2 and 0 is set (one destination,
+;; one source) it also tests whether the destination name starts with '*'. A '*' sets bit 7, which the check at
+;; NoPatterns (AND #%11011001) rejects anyway, so that test is redundant. Reached through the command table.
+;; Errors:
+;;   30 = SYNTAX ERROR, the names' shape is wrong, through <Fail>
+;;   31 = SYNTAX ERROR, no ':', through <Duplicate>
 ;; Also: DSKCPY (D1541)
 .proc Copy
     lda #$E0
@@ -1788,7 +1853,7 @@ BadSyntax:
     lda #ERROR_SYNTAX
     jmp Fail
 
-;; IMAGE: no pattern, one destination, second names given; then <CopyFiles>.
+;; <Structure>: no pattern, one destination, second names given; then <CopyFiles>.
 ;; Also: DX0020 (D1541)
 NoPatterns:
     lda Structure
@@ -1797,9 +1862,10 @@ NoPatterns:
     jmp CopyFiles
 .endproc
 
-;; Nothing calls it: what is left of copying a whole disk (the rest is commented out in the listing). Clears REC, DRVCNT
-;; and the first two FILTRK entries, DRVNUM from the second name's drive, DELSEC nonzero, and the first name's place
-;; from the second's. Kept, since its bytes are in the ROM.
+;; Not reached: what is left of copying a whole disk (the rest is commented out in the listing). It clears
+;; <RecordSize>, <DriveSearches> and the first two <FileNameTrack> entries, sets <DriveNumber> from the second name's
+;; drive and <FreeEntrySector> nonzero, and moves the second name's place to the first. Kept, since its bytes are in
+;; the ROM.
 ;; Also: PUPS1 (D1541)
 .proc SetUpCopyAll
     lda #$00
@@ -1817,9 +1883,13 @@ NoPatterns:
     rts
 .endproc
 
-;; Looks the names up; with two or more sources the first of which is the destination itself (same drive, entry sector
-;; and index), the rest are appended to it (a relative file or program cannot be: 64 FILE TYPE MISMATCH); otherwise
-;; <CreateCopy>. Then <Finish>.
+;; Looks the names up. With two or more sources, the first of which is the destination itself (same drive, entry
+;; sector and index), the rest are appended to it; a relative file or a program cannot be (64 FILE TYPE MISMATCH).
+;; Otherwise <CreateCopy> makes a new file. Then <Finish>.
+;; Errors:
+;;   62 = FILE NOT FOUND, a source is missing, through <CheckSources>
+;;   63 = FILE EXISTS, a destination exists, through <CheckFiles>
+;;   64 = FILE TYPE MISMATCH, the destination to append to is a relative file or a program
 ;; Also: COPY (D1541)
 .proc CopyFiles
     jsr Directory::FindAll
@@ -1850,8 +1920,8 @@ Mismatch:
     lda #ERROR_FILE_TYPE_MISMATCH
     jsr Fail
 
-;; The destination's channel moved from the internal read address to the write one, positioned at its end (APPEND), then
-;; <CreateCopy::CopySources> from the second source.
+;; APPEND: the destination's channel is moved from the internal read address to the write one, positioned at its end,
+;; then <CreateCopy::CopySources> goes on from the second source.
 ;; Also: COP05 (D1541)
 Append:
     lda #INTERNAL_WRITE_SECONDARY
@@ -1872,10 +1942,11 @@ ToNew:
     jmp Finish
 .endproc
 
-;; The sources must exist and the destination not (<CheckFiles>); the destination opened on the internal write channel
-;; and added to the directory; then CopySources from the first source.
+;; Makes a new file from the sources. The sources must exist and the destination not (<CheckFiles>); the destination
+;; is opened on the internal write channel and added to the directory; then each source is copied.
 ;; Entry:
-;;   CopySources = For each source from X (F2PTR) to F2CNT-1
+;;   CopySources = for each source from X (<SecondStreamStart>) to <SecondStreamEnd>-1
+;; In: X = the first source, at CopySources
 ;; Also: CY (D1541)
 .proc CreateCopy
     jsr CheckFiles
@@ -1886,8 +1957,8 @@ ToNew:
     jsr Directory::AddEntry
     ldx FirstStreamEnd
 
-;; For each source from X (F2PTR) to F2CNT-1: opened (<OpenSource>), a relative one's records made first
-;; (<CopyRelative>), then its bytes put to the write channel; the write channel closed after the last.
+;; For each source from X to <SecondStreamEnd>-1: it is opened (<OpenSource>), a relative one's records are made
+;; first (<CopyRelative>), then its bytes are put to the write channel; the write channel is closed after the last.
 ;; Also: CY10 (D1541)
 CopySources:
     stx SecondStreamStart
@@ -1899,14 +1970,14 @@ CopySources:
     bne Start
     jsr CopyRelative
 
-;; EOIFLG to 'not the end'.
+;; <MoreBytes> = 'not the end'.
 ;; Also: CY10A (D1541)
 Start:
     lda #CHANNEL_MORE
     sta MoreBytes
     jmp NextByte
 
-;; The byte to the write channel (PIBYTE).
+;; The byte to the write channel.
 ;; Also: CY15 (D1541)
 Put:
     jsr Files::AcceptInternalByte
@@ -1922,7 +1993,7 @@ NextByte:
     beq NextFile
     jsr Files::AcceptInternalByte
 
-;; The next source, if any; else the copy's channel and file closed.
+;; The next source, if any; else the copy's channel and file are closed.
 ;; Also: CY30 (D1541)
 NextFile:
     ldx SecondStreamStart
@@ -1934,8 +2005,9 @@ NextFile:
     jmp Files::CloseChannel
 .endproc
 
-;; Opens source F2PTR for reading on the internal channel: its drive, its entry (directory track, ENTSEC, ENTIND), TYPE
-;; from PATTYP, then OPREAD; the pointer at its first data byte (1 for a relative file, 2 for others).
+;; Opens source <SecondStreamStart> for reading on the internal channel: its drive, its entry (the directory track,
+;; <FileNameEntrySector>, <FileNameEntryIndex>), <FileType> from <FileNamePattern>, then <Files::OpenRead>. The
+;; pointer is set to its first data byte (1 for a relative file, 2 for others).
 ;; Also: OPIRFL (D1541)
 .proc OpenSource
     ldx SecondStreamStart
@@ -1969,16 +2041,17 @@ SetPointer:
     jmp Files::SetPointer
 .endproc
 
-;; The next byte of the internal read channel into DATA; falls into AnyChannel.
+;; Reads the next byte of the internal read channel into <DataByte>; falls into AnyChannel.
 ;; Entry:
-;;   AnyChannel = The same from the channel SA selects (APPEND comes here)
+;;   AnyChannel = the same from the channel <SecondaryAddress> selects (APPEND comes here)
+;; Out: DataByte = the byte, MoreBytes = 0 if it was the last
 ;; Also: GIBYTE (D1541)
 .proc GetInternalByte
     lda #INTERNAL_READ_SECONDARY
     sta SecondaryAddress
 
-;; The same from the channel SA selects (APPEND comes here): DATA = the byte, EOIFLG = 0 if it was the last, and then
-;; for a file that is not relative the channel's last-record flag (LRF) set.
+;; The same from the channel <SecondaryAddress> selects (APPEND comes here): <DataByte> = the byte, <MoreBytes> = 0
+;; if it was the last, and then, for a file that is not relative, the channel's last-record flag is set.
 ;; Also: GCBYTE (D1541)
 AnyChannel:
     jsr Files::ReadChannelByte
@@ -2000,7 +2073,7 @@ Return:
 .endproc
 
 ;; A relative source: finds the last side sector of the source and of the copy, then adds records to the copy
-;; (Relative's ADDR1) until it is as long as the source.
+;; (<Relative::AddBlocks::CheckRoom>) until it is as long as the source.
 ;; Also: CYEXT (D1541)
 .proc CopyRelative
     jsr Files::SetDriveFromBuffer
@@ -2030,9 +2103,12 @@ Return:
     jmp Relative::AddBlocks::CheckRoom
 .endproc
 
-;; R: both names' drives (both drives searched if they differ), looked up; the old name must exist and the new not
-;; (<CheckFiles>). The old entry's sector read, the new name written over the old (16 characters, padded), and the
-;; sector written back. (Reached through the command table.)
+;; R: renames a file. Both names' drives (both drives are searched if they differ) are looked up; the old name must
+;; exist and the new not (<CheckFiles>). The old entry's sector is read, the new name written over the old (16
+;; characters, padded), and the sector written back. Reached through the command table.
+;; Errors:
+;;   62 = FILE NOT FOUND, the old name does not exist, through <CheckFiles>
+;;   63 = FILE EXISTS, the new name does, through <CheckFiles>
 ;; Also: RENAME (D1541)
 .proc Rename
     jsr SetDrives
@@ -2043,7 +2119,7 @@ Return:
     beq LookUp
     ora #$80
 
-;; FILDRV set; both names looked up.
+;; <FileNameDrive> set; both names looked up.
 ;; Also: RN10 (D1541)
 LookUp:
     sta FileNameDrive
@@ -2070,8 +2146,10 @@ LookUp:
     jmp Finish
 .endproc
 
-;; TYPE = the first source's type; each source, F2CNT-1 down to F1CNT, must have been found (FILTRK not 0), else 62 FILE
-;; NOT FOUND. Returns X = F1CNT-1.
+;; Checks the sources of a copy or rename. <FileType> = the first source's type; each source, <SecondStreamEnd>-1
+;; down to <FirstStreamEnd>, must have been found (<FileNameTrack> not 0).
+;; Out: X = <FirstStreamEnd> - 1
+;; Errors: 62 = FILE NOT FOUND, a source was not found, through <Fail>
 ;; Also: CHKIN (D1541)
 .proc CheckSources
     lda FileNamePattern+1
@@ -2096,12 +2174,14 @@ Return:
     rts
 .endproc
 
-;; <CheckSources>, then each destination name, F1CNT-1 down to 0, must not exist, else 63 FILE EXISTS.
+;; Checks the sources (<CheckSources>), then each destination name, <FirstStreamEnd>-1 down to 0, which must not
+;; exist.
+;; Errors: 62 = FILE NOT FOUND, a source was not found; 63 = FILE EXISTS, a destination exists; both through <Fail>
 ;; Also: CHKIO (D1541)
 .proc CheckFiles
     jsr CheckSources
 
-;; Found is the error.
+;; A name found is the error.
 ;; Also: CK25 (D1541)
 Test:
     lda FileNameTrack,x
@@ -2117,10 +2197,11 @@ Next:
     rts
 .endproc
 
-;; M-R, M-W and M-E: the '-' must be character 1 (else 31 SYNTAX ERROR); the address from characters 3 and 4 into TEMP.
-;; M-R reads, M-W writes from character 6 on (character 5 the count), M-E jumps to the address. None ends through
-;; <Finish>: they return to the idle loop with the error channel as <Execute> set it, 00 OK (JSR OKERR at $C150).
-;; (Reached through the command table.)
+;; M-R, M-W and M-E: reads, writes or executes drive memory. The '-' must be character 1, else 31 SYNTAX ERROR; the
+;; address comes from characters 3 and 4 into <Temporary>. M-R reads, M-W writes from character 6 on (character 5 is
+;; the count), M-E jumps to the address. None of them ends through <Finish>: they return to the idle loop with the
+;; error channel as <Execute> set it, 00 OK. Reached through the command table.
+;; Errors: 31 = SYNTAX ERROR, no '-' or a letter other than R, W or E, through <Fail>
 ;; Also: MEM (D1541)
 .proc Memory
     lda CommandBuffer+1
@@ -2141,10 +2222,10 @@ Next:
     bne BadSyntax
     jmp (Temporary)
 
-;; M-R: the byte at the address into DATA; with a count (character 5) of 0 or 2 or more, the error channel's pointer set
-;; to the address plus one (the first byte goes through DATA) and its last byte to the address plus the count less one
-;; (0 gives 256 bytes), so the bytes are read on channel 15 straight from memory; a count of 1, or none, takes
-;; <OneByte>.
+;; M-R: the byte at the address goes into <DataByte>. With a count (character 5) of 0 or 2 or more, the error
+;; channel's pointer is set to the address plus one (the first byte goes through <DataByte>) and its last byte to the
+;; address plus the count less one (0 gives 256 bytes), so the bytes are read on channel 15 straight from memory. A
+;; count of 1, or none, takes <OneByte>.
 ;; Also: MEMRD (D1541)
 Read:
     lda (Temporary),y
@@ -2166,8 +2247,8 @@ Read:
     sta CommandPointer+3
     jmp Files::NextByte::ErrorReady
 
-;; One byte: Files' NextByte::ErrorEnd (GE15) resets the error channel's pointer to ERRBUF-1, and NextByte::ErrorReady
-;; (GE20) makes DATA ready to talk.
+;; One byte: <Files::NextByte::ErrorEnd> resets the error channel's pointer to its buffer less one, and
+;; <Files::NextByte::ErrorReady> makes <DataByte> ready to talk.
 ;; Also: M30 (D1541)
 OneByte:
     jsr Files::FindReadChannel
@@ -2180,7 +2261,7 @@ BadSyntax:
     jmp Fail
 
 ;; M-W: copies the bytes of the command from character 6 on to the address, as many as character 5 says. Then returns
-;; to the idle loop without <Finish>.
+;; to the idle loop without <Finish>. The listing's second name, MEMWRT, is the same address as M10.
 ;; Also: MEMWRT (D1541), M10 (D1541)
 Write:
     lda CommandBuffer+6,y
@@ -2191,17 +2272,17 @@ Write:
     rts
 .endproc
 
-;; U: U0 falls into Reset and returns by its RTS, without <Finish>; any other runs its entry (<UserJump>), then
-;; <Finish>. (Reached through the command table.)
+;; U: U0 falls into <Reset> and returns by its RTS, without <Finish>; any other runs its entry (<UserJump>), then
+;; <Finish>. Reached through the command table.
 ;; Entry:
-;;   Reset = UserVectorsPointer = <UserCommandVectors>, the ROM's table
+;;   Reset = <UserVectorsPointer> = <UserCommandVectors>, the ROM's table
 ;; Also: USER (D1541)
 .proc User
     ldy CommandBuffer+1
     cpy #$30
     bne Run
 
-;; UserVectorsPointer = <UserCommandVectors>, the ROM's table. Start-up calls it.
+;; Sets <UserVectorsPointer> to <UserCommandVectors>, the ROM's table. Start-up calls it.
 ;; Also: USRINT (D1541)
 Reset:
     lda #<UserCommandVectors
@@ -2217,8 +2298,9 @@ Run:
     jmp Finish
 .endproc
 
-;; Jumps through entry ((Y-1) and 15) of the table at <UserVectorsPointer>, by IP: U1 or UA the first, U2 the second ...
-;; U9 or UI the ninth, U: or UJ the tenth.
+;; Jumps through entry ((Y-1) and 15) of the table at <UserVectorsPointer>, by the command's character: U1 or UA the
+;; first, U2 the second, up to U9 or UI the ninth, U: or UJ the tenth.
+;; In: Y = the command's second character
 ;; Also: USREXC (D1541)
 .proc UserJump
     dey
@@ -2236,9 +2318,11 @@ Run:
 .endscope
 .scope Files continued
 
-;; OPEN "#": a direct-access channel for the block commands. The disk initialised if needed (SA kept across it); "#"
-;; alone takes any free buffer, "#n" buffer n if it is free (fewer than BFCNT, 5: the listing's comment says 13), else
-;; 70 NO CHANNEL. Files' OPEN jumps here.
+;; OPEN "#": makes a direct-access channel for the block commands. The disk is initialized if needed
+;; (<SecondaryAddress> kept across it); "#" alone takes any free buffer, "#n" buffer n if it is free (fewer than
+;; <BUFFER_COUNT>, 5: the listing's comment says 13), else 70 NO CHANNEL. <Files::Open> jumps here; it ends through
+;; <Commands::Finish>.
+;; Errors: 70 = NO CHANNEL, the buffer is taken or does not exist, through <Commands::Fail>
 ;; Also: OPNBLK (D1541)
 .proc OpenDirect
     lda LastDrive
@@ -2261,8 +2345,8 @@ NoChannel:
     lda #ERROR_NO_CHANNEL
     jmp Commands::Fail
 
-;; "#n": n from character 1 (BlockParameters::FromY) into FILSEC; marked used in BUFUSE if it was free, and given the
-;; drive's job.
+;; '#n': n from character 1 (<Commands::BlockParameters::FromY>) into <FileNameSector>; marked used in <BuffersInUse>
+;; if it was free, and given the drive's job.
 ;; Also: OB10 (D1541)
 Requested:
     ldy #$01
@@ -2275,7 +2359,7 @@ Requested:
     sta Temporary+1
     sec
 
-;; The buffer's bit in TEMP, TEMP+1.
+;; The buffer's bit in <Temporary>.
 ;; Also: OB15 (D1541)
 Bit:
     rol Temporary
@@ -2304,8 +2388,8 @@ Bit:
     sta JobQueue,x
     sta LastJobs,x
 
-;; The channel set up: LINTAB's bit 6 (reads and writes), LSTCHR $FF, ready to talk and listen, the buffer's number as
-;; its first byte to read, the pointer at 1, the direct type. Then Finish.
+;; The channel is set up: <SecondaryChannels>' bit 6 (reads and writes), <ChannelLastByte> $FF, ready to talk and
+;; listen, the buffer's number as the first byte to read, the pointer at 1, the direct type. Then <Commands::Finish>.
 ;; Also: OB30 (D1541)
 SetChannel:
     ldx SecondaryAddress
@@ -2330,11 +2414,14 @@ SetChannel:
 .endscope
 .scope Commands continued
 
-;; B-: finds the '-', looks the next letter up in Subcommands (no ',' before it, else 30; not there, 31), CMDNUM = its
-;; index with bit 7, the parameters parsed (<BlockParameters>), and jumps to its handler. (Reached through the command
-;; table.)
+;; B-: the block commands. It finds the '-', looks the next letter up in <Subcommands> (no ',' before it, else 30
+;; SYNTAX ERROR; not there, 31), sets <CommandNumber> to its index with bit 7, parses the parameters
+;; (<BlockParameters>), and jumps to its handler. Reached through the command table.
 ;; Entry:
-;;   BadSyntax = 30 SYNTAX ERROR
+;;   BadSyntax = 30 SYNTAX ERROR, which <BlockParameters> reaches too
+;; Errors:
+;;   30 = SYNTAX ERROR, a ',' before the '-' or too many numbers, through <Fail>
+;;   31 = SYNTAX ERROR, no '-' or an unknown letter, through <Fail>
 ;; Also: BLOCK (D1541)
 .proc Block
     ldy #$00
@@ -2349,7 +2436,7 @@ BadCommand:
     lda #ERROR_INVALID_COMMAND
     jmp Fail
 
-;; 30 SYNTAX ERROR; an entry of <Block>, since <BlockParameters> (BCS at $CC9F, outside <Block>) comes here with too
+;; 30 SYNTAX ERROR. An entry of <Block>, since <BlockParameters> (BCS at $CC9F, outside <Block>) comes here with too
 ;; many numbers.
 ;; Also: BLK30 (D1541)
 BadSyntax:
@@ -2373,7 +2460,7 @@ Search:
     bpl Search
     bmi BadCommand
 
-;; The handler from <SubcommandHandlers> into TEMP, and jumps there.
+;; The handler from <SubcommandHandlers> into <Temporary>, and jumps there.
 ;; Also: BLK60 (D1541)
 Dispatch:
     txa
@@ -2406,10 +2493,11 @@ SubcommandHandlers:
     .word SetBufferPosition
 .endproc
 
-;; The numbers after ':', or from character 3 without one, separated by spaces, commas or cursor-rights (29), each into
-;; the parameter list (<ParseNumber>), F1CNT counting them; a fifth is 30 SYNTAX ERROR.
+;; Parses the numbers after ':', or from character 3 without one, separated by spaces, commas or cursor-rights ($1D),
+;; each into the parameter list (<ParseNumber>); <FirstStreamEnd> counts them. A fifth number is 30 SYNTAX ERROR.
 ;; Entry:
-;;   FromY = From character Y (OpenDirect comes here for "#n")
+;;   FromY = from character Y (<Files::OpenDirect> comes here for "#n")
+;; Errors: 30 = SYNTAX ERROR, too many numbers, through <Block::BadSyntax>
 ;; Also: BLKPAR (D1541)
 .proc BlockParameters
     ldy #$00
@@ -2419,7 +2507,7 @@ SubcommandHandlers:
     bne FromY
     ldy #$03
 
-;; From character Y (OpenDirect comes here for "#n").
+;; From character Y (<Files::OpenDirect> comes here for "#n").
 ;; Also: BP05 (D1541)
 FromY:
     lda CommandBuffer,y
@@ -2449,8 +2537,10 @@ Number:
     bcs Block::BadSyntax
 .endproc
 
-;; The decimal number at Y (its last three digits count; any of $30-$3F is a digit, its low four bits) into FILSEC,X
-;; (low) and FILTRK,X (high) at X = F1CNT; F2PTR = the place after it.
+;; Reads the decimal number at Y (its last three digits count; any of $30-$3F is a digit, by its low four bits) into
+;; <FileNameSector>,X (low) and <FileNameTrack>,X (high) at X = <FirstStreamEnd>; <SecondStreamStart> = the place
+;; after it.
+;; In: Y = the number's place in <CommandBuffer>
 ;; Also: ASCHEX (D1541)
 .proc ParseNumber
     lda #$00
@@ -2459,7 +2549,7 @@ Number:
     sta Temporary+3
     ldx #$FF
 
-;; Each digit, the earlier ones moved up through TEMP, TEMP+1, TEMP+2.
+;; Each digit, the earlier ones moved up through <Temporary>, <Temporary1> and <Temporary2>.
 ;; Also: AH10 (D1541)
 Digit:
     lda CommandBuffer,y
@@ -2479,15 +2569,15 @@ Digit:
     cpy CommandLength
     bcc Digit
 
-;; F2PTR = Y; the digits times their place values summed.
+;; <SecondStreamStart> = Y; the digits times their place values are summed.
 ;; Also: AH20 (D1541)
 Convert:
     sty SecondStreamStart
     clc
     lda #$00
 
-;; Each place, units first (X from $FF; the first INX gives 0, DECTAB,0 = 1; TEMP holds the last digit), then tens and
-;; hundreds.
+;; Each place, units first (X from $FF; the first INX gives 0, <PlaceValues> entry 0 is 1; <Temporary> holds the last
+;; digit), then tens and hundreds.
 ;; Also: AH30 (D1541)
 Place:
     inx
@@ -2495,7 +2585,7 @@ Place:
     bcs Store
     ldy Temporary,x
 
-;; Adds the place value once per unit of the digit, carrying into TEMP+3.
+;; Adds the place value once per unit of the digit, carrying into <Temporary3>.
 ;; Also: AH35 (D1541)
 Add:
     dey
@@ -2506,7 +2596,7 @@ Add:
     inc Temporary+3
     bne Add
 
-;; Into the parameter list at F1CNT.
+;; Into the parameter list at <FirstStreamEnd>.
 ;; Also: AH40 (D1541)
 Store:
     pha
@@ -2518,13 +2608,13 @@ Store:
     rts
 .endproc
 
-;; 1, 10, 100, the decimal places.
+;; 1, 10, 100: the decimal places.
 ;; Also: DECTAB (D1541)
 PlaceValues:
     .byte $01, $0A, $64
 
-;; B-F drive track sector: checked (<CheckBlock>), freed in the BAM, then <Finish>. Five bytes after it, LDA #1 and STA
-;; WBAM, are reached by nothing.
+;; B-F drive track sector: checks the block (<CheckBlock>), frees it in the BAM, then <Finish>. Five bytes after it,
+;; LDA #1 and STA <BamWriteDeferred>, are reached by nothing.
 ;; Also: BLKFRE (D1541)
 .proc BlockFree
     jsr CheckBlock
@@ -2534,8 +2624,9 @@ PlaceValues:
     sta BamWriteDeferred
 .endproc
 
-;; B-A drive track sector: a free block is allocated (WUSED); a used one is 65 NO BLOCK with the next free block after
-;; it in the message, or track and sector 0 when none is left.
+;; B-A drive track sector: a free block is allocated; a used one is 65 NO BLOCK with the next free block after it in
+;; the message, or track and sector 0 when none is left.
+;; Errors: 65 = NO BLOCK, the block is in use, through <Errors::Abort> with the next free block, or <Fail> with none
 ;; Also: BLKALC (D1541)
 .proc BlockAllocate
     jsr CheckBlock
@@ -2554,7 +2645,7 @@ PlaceValues:
 NextTrack:
     pla
 
-;; Sector 0 of each later track, up to MAXTRK, for a free one.
+;; Sector 0 of each later track, up to <TrackLimit>, for a free one.
 ;; Also: BA20 (D1541)
 Search:
     lda #$00
@@ -2566,7 +2657,7 @@ Search:
     jsr Bam::FindFreeSector
     beq Search
 
-;; 65 NO BLOCK, with the free block's track and sector (CMDER2 keeps them).
+;; 65 NO BLOCK, with the free block's track and sector (<Errors::Abort> keeps them).
 ;; Also: BA30 (D1541)
 Taken:
     lda #ERROR_NO_BLOCK
@@ -2587,7 +2678,8 @@ Full:
     jmp Jobs::ReadTrackSector
 .endproc
 
-;; The channel's byte at its pointer, without moving it; Y = LINDX.
+;; Returns the channel's byte at its pointer, without moving it; Y = <Channel>.
+;; Out: A = the byte
 ;; Also: GETSIM (D1541)
 .proc PeekByte
     jsr Files::BufferIndexes
@@ -2595,7 +2687,8 @@ Full:
     rts
 .endproc
 
-;; <FetchBlock>, then the block's first byte into LSTCHR, the last byte to read, and the channel ready.
+;; Fetches the block (<FetchBlock>), then puts the block's first byte into <ChannelLastByte>, the last byte to read,
+;; and makes the channel ready.
 ;; Also: BLKRD3 (D1541)
 .proc FetchCountedBlock
     jsr FetchBlock
@@ -2608,7 +2701,7 @@ Full:
     rts
 .endproc
 
-;; B-R channel drive track sector: the block, read from byte 1 to the count in byte 0. Then <Finish>.
+;; B-R channel drive track sector: reads the block, from byte 1 to the count in byte 0. Then <Finish>.
 ;; Also: BLKRD (D1541)
 .proc BlockRead
     jsr FetchCountedBlock
@@ -2617,7 +2710,7 @@ Full:
 .endproc
 
 ;; U1 (the first entry of <UserCommandVectors>): the parameters (<User> does not parse them), the block, and all 256
-;; bytes to read from byte 0, LSTCHR $FF. Then <Finish>.
+;; bytes to read from byte 0, <ChannelLastByte> $FF. Then <Finish>.
 ;; Also: UBLKRD (D1541)
 .proc UserRead
     jsr BlockParameters
@@ -2657,7 +2750,7 @@ SetCount:
     jmp Finish
 .endproc
 
-;; U2 (<UserCommandVectors>' second entry): the parameters, then the buffer written as it is. Then <Finish>.
+;; U2 (the second entry of <UserCommandVectors>): the parameters, then the buffer written as it is. Then <Finish>.
 ;; Also: UBLKWT (D1541)
 .proc UserWrite
     jsr BlockParameters
@@ -2666,7 +2759,8 @@ SetCount:
     jmp Finish
 .endproc
 
-;; B-E channel drive track sector: the block read into the channel's buffer and called at its first byte; then <Finish>.
+;; B-E channel drive track sector: the block is read into the channel's buffer and called at its first byte; then
+;; <Finish>.
 ;; Also: BLKEXC (D1541)
 .proc BlockExecute
     jsr DisableProtection
@@ -2679,13 +2773,14 @@ SetCount:
     jsr Call
     jmp Finish
 
-;; JMP (TEMP), which the JSR before it makes a call.
+;; JMP (<Temporary>), which the JSR before it makes a call.
 ;; Also: BE10 (D1541)
 Call:
     jmp (Temporary)
 .endproc
 
-;; B-P channel position: the channel's buffer pointer set to the position, its byte made ready to read. Then <Finish>.
+;; B-P channel position: sets the channel's buffer pointer to the position and makes its byte ready to read. Then
+;; <Finish>.
 ;; Also: BLKPTR (D1541)
 .proc SetBufferPosition
     jsr FindBlockChannel
@@ -2699,8 +2794,9 @@ Call:
     jmp Finish
 .endproc
 
-;; The next parameter (F1PTR, moved on) as a channel: 2 to 13 with an open channel, else 70 NO CHANNEL; SA and JOBNUM,
-;; its buffer, set.
+;; Takes the next parameter (<NameIndex>, moved on) as a channel: 2 to 13 with an open channel, else 70 NO CHANNEL.
+;; <SecondaryAddress> and <JobNumber>, its buffer, are set.
+;; Errors: 70 = NO CHANNEL, through <Fail>
 ;; Also: BUFTST (D1541)
 .proc FindBlockChannel
     ldx NameIndex
@@ -2718,7 +2814,7 @@ NoChannel:
     lda #ERROR_NO_CHANNEL
     jmp Fail
 
-;; SA set and the channel found.
+;; <SecondaryAddress> set and the channel found.
 ;; Also: BT20 (D1541)
 Valid:
     sta SecondaryAddress
@@ -2729,7 +2825,7 @@ Valid:
     rts
 .endproc
 
-;; <FindBlockChannel>; falls into <CheckBlock>.
+;; Finds the block command's channel (<FindBlockChannel>); falls into <CheckBlock>.
 ;; Also: BKOTST (D1541)
 .proc CheckChannelBlock
     jsr FindBlockChannel
@@ -2737,7 +2833,9 @@ Valid:
     .assert * = CheckBlock, "CheckChannelBlock must fall into CheckBlock."
 .endproc
 
-;; From the parameters at F1PTR: DRVNUM, TRACK and SECTOR; the track and sector checked (TSCHK), then the LEDs.
+;; Reads the block's place from the parameters at <NameIndex>: <DriveNumber>, <Track> and <Sector>; the track and
+;; sector are checked (<Jobs::CheckTrackSector>), then the LED is lit.
+;; Errors: 66 = ILLEGAL TRACK OR SECTOR, through <Jobs::CheckTrackSector>
 ;; Also: BLKTST (D1541)
 .proc CheckBlock
     ldx NameIndex

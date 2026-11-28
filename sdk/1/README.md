@@ -38,6 +38,7 @@ A `source` launch and `--assemble` search only `Sdk/`.
 | `environments/sos/environment.inc` | `sos` | `SosCall`, SOS's call numbers and their parameter counts (OPEN, NEWLINE, READ, WRITE, CLOSE, TERMINATE), the interpreter's extend page, and the console's Return, line feed and clear |
 | `environments/prodos/environment.inc` | `prodos` | `MliCall` and the MLI's entry at `$BF00`, its call numbers and their parameter counts (QUIT, OPEN, NEWLINE, READ, WRITE, CLOSE), and the size of OPEN's I/O buffer |
 | `environments/colorbasic/environment.inc` | `colorbasic` | nothing yet: the program calls Color BASIC, as the Color Computer's `<machine.inc>` names it, and goes back to it with `rts` |
+| `environments/diskbasic/environment.inc` | `diskbasic` | nothing yet: as under `colorbasic`, the program calls Color BASIC and goes back with `rts` |
 | `environments/level2/environment.inc` | `level2` | `BasicReady`, Level II's READY prompt, which a program goes back to |
 | `environments/dos33/environment.inc` | `dos33` | DOS 3.3's page-3 vector from `$03D0`, from DosInit.asm, and `DOS_COMMAND`, the Ctrl-D that starts a command a program writes |
 | `machines/apple1/machine.inc` | `apple1` | the PIA, and the Woz Monitor's ECHO, PRBYTE, PRHEX and GETLINE, written here |
@@ -166,6 +167,11 @@ growing up over the program once it goes back to BASIC, and the top 512 bytes of
 the stack EXEC starts a program on. A program loads at `$1F00`. A `colorbasic` target runs under Extended Color
 BASIC, whose memory this is, so a CoCo 1 or 2 target cannot give `extendedBasic` none.
 
+The `diskbasic` maps are the `colorbasic` ones' names and sizes, for Disk Extended Color BASIC. Disk BASIC keeps its
+workspace at `$0600-$0DFF` and moves the graphics pages up to `$0E00-$25FF`, so BASIC's empty program is at `$2601`,
+its variables from `$2603`, and a program loads at `$2700`; the top 512 bytes are reserved as under `colorbasic`, and
+the cartridge port's ROM from `$C000` is Disk BASIC's.
+
 The `prodos` map, `apple2-48k`, is for the II Plus with its language card (its launch's default) and both IIe models.
 It loads at `$2000`, where ProDOS loads a system file, with free RAM in `$0300-$03CF` and from `$0800` to ProDOS's
 global page at `$BF00`, and the bare map's zero page, which neither the Monitor nor ProDOS uses. ProDOS itself is in
@@ -195,6 +201,7 @@ image beside them. `retrocore build` prints a line for each, and `obj/<target>/b
 | `prodos` | the binary, as the system file `<NAME>.SYSTEM` it is on the disk (the project's name in capitals, its letters, digits and periods, cut to 8) | `<name>.po`, a ProDOS disk (ProDOS order) named for the project, with ProDOS 2.4.3's boot blocks and `PRODOS`, from its disk found by hash (below), then the program as a SYS file at `$2000`, and the target's `files` as BIN files whose aux type is their `address`; without ProDOS 2.4.3 the build writes the binary alone and says what it needs | boots the disk from slot 6; ProDOS runs the volume's first system file whose name ends `.SYSTEM`, the program, at its first byte, which is its entry or a `JMP` on to it, with the boot volume as its prefix |
 | `level2` | the binary | `<name>.cas`, a 500 baud SYSTEM tape (CAS) of the bytes from `load`, in blocks of 256, under the project's name in capitals, its letters and digits from a letter, cut to 6, and the entry address | puts the tape in the cassette recorder and boots with no disk, answering the Model III's `Cass?` with `L` and `MEMORY SIZE?` with Return, then types `SYSTEM`, the tape's name at the `*?` prompt, and `/` once the program has loaded, which starts it at its entry |
 | `colorbasic` | the binary | `<name>.cas`, a 1500 baud cassette of one machine-language file: a name block (the project's name in capitals, its letters and digits from a letter, cut to 8, type 2, the address EXEC starts and the load address), then the bytes from `load` in blocks of 255 | puts the tape in the cassette recorder and boots with no disk controller; at BASIC's `OK` it types `CLOADM"<NAME>"`, and once the program is in and `OK` is back, `EXEC`, which starts it at its entry |
+| `diskbasic` | the binary | `<name>.dsk`, a JVC image of a 35-track RS-DOS disk with the program as `<NAME>.BIN`, its name cut to 8, in Disk BASIC's binary format (its bytes from `load` as one block, then the entry as EXEC's address), and the target's `files` | fits the disk controller with Disk BASIC, from the SDK's sources or the launch's ROM folder's dumps, and puts the disk in drive 0; at `OK` it types `LOADM"<NAME>"`, and once the program is in, `EXEC`, which starts it at its entry |
 | `dfs` | `<name>.uef`, a UEF tape of the same files, for `*TAPE` and `*RUN` | `<name>.ssd`, a DFS disk (80 tracks, one side) titled for the project, with the program as `$.<NAME>` (the project's name in capitals, cut to 7), the target's `files`, and `$.!BOOT`, `*RUN <NAME>`, with the boot option set to `*EXEC` it | boots the disk from drive 0, holding SHIFT from power-on as SHIFT-BREAK does, and `!BOOT` runs the program |
 
 A launch that boots an image builds it as `retrocore build` does, puts it in its drive after a saved machine's media
@@ -209,7 +216,9 @@ launch fits the disk interface and holds SHIFT, and its target cannot give `disk
 `level2` target cannot give `cassette`, `disks` or `diskController`: the launch plays its own tape, fast unless `fastCassette` is false, and boots
 with no disk controller, so the ROM starts in BASIC rather than waiting for a disk. A `colorbasic` target cannot give
 `cassette` or `cartridge`, nor `disks` or `diskController`, as Disk BASIC is the `diskbasic` environment, nor, on a
-CoCo 1 or 2, `extendedBasic` none. No launch that boots an
+CoCo 1 or 2, `extendedBasic` none. A `diskbasic` target cannot give `disks`, `diskController`, `cassette` or
+`cartridge`: its launch fits the controller and puts its own disk in drive 0, and Disk BASIC is in the cartridge
+port and loads the program from the disk; nor, on a CoCo 1 or 2, `extendedBasic` none. No launch that boots an
 image takes `bootSeconds`: the machine boots the image from power-on.
 
 A target's fields for its media, which an environment that has no use for one refuses, naming it:
@@ -223,7 +232,10 @@ A target's fields for its media, which an environment that has no use for one re
   with OSFILE. On its tape the name is `D.NAME` too, and the bare `NAME` for `$`, so OSFILE finds it under `*TAPE` by
   that name. On a `sos` disk each is a BIN file (type `$06`), by `name` or its file name in capitals, its aux type its
   `address` or 0, which a program reads with OPEN and READ. On a `prodos` disk each is a BIN file (type `$06`) in the
-  same way, which a program reads with the MLI's OPEN and READ.
+  same way, which a program reads with the MLI's OPEN and READ. On a `diskbasic` disk each is a binary data file
+  (type 1), by `name` or its file name in capitals, as `NAME.EXT`: a name of 1 to 8 capitals and digits from a letter and an extension of up to 3 from a letter, a
+  narrower rule than Disk BASIC's, so a program can type each. It keeps no load address,
+  so it takes no `address`, and holds at least a byte.
 - **`image`**: `false` leaves the image out (the `wozmon` tape), and `{ "template": "<disk>" }` starts it from a
   disk where the environment can.
 - **`image.boot`**: which image a launch boots, where an environment builds more than one: `basic`'s `tape` (the

@@ -221,7 +221,7 @@ public sealed class ProjectLaunchTests
             { "sdk": "1", "cpu": "z80", "sources": ["main.s"], "targets": { "dos": { "machine": "trs80-model3", "environment": "trsdos" } } }
             """);
 
-        client.Fails("launch", Launch("dos")).Should().EndWith("the 'trsdos' environment is not yet supported; only 'bare', 'wozmon', 'dos33', 'dfs', 'basic', 'sos', 'prodos', 'level2' and 'colorbasic' build.");
+        client.Fails("launch", Launch("dos")).Should().EndWith("the 'trsdos' environment is not yet supported; only 'bare', 'wozmon', 'dos33', 'dfs', 'basic', 'sos', 'prodos', 'level2', 'colorbasic' and 'diskbasic' build.");
         Write("retrocore.json", project);
 
         // The machine the launch names gives way to the target's.
@@ -510,13 +510,84 @@ public sealed class ProjectLaunchTests
     }
 
     /// <summary>
-    ///  The 6809 sample, <c>sample/6809</c>, boots on each of its targets and shows its greeting, then goes back to
-    ///  Color BASIC's OK.
+    ///  A <c>diskbasic</c> target's launch fits the disk controller with Disk BASIC from the SDK's sources, puts its disk
+    ///  in drive 0, types <c>LOADM"&lt;NAME&gt;"</c> at OK and, once the program is in, <c>EXEC</c>, and stops at the
+    ///  entry, on the Color Computer 1, 2 and 3. The program then shows its line, and a breakpoint in its source stops.
+    ///  Its target cannot give the disks, a cassette or a cartridge.
+    /// </summary>
+    /// <param name="machine">The catalog machine.</param>
+    [TestMethod]
+    [DataRow("coco1")]
+    [DataRow("coco2")]
+    [DataRow("coco3")]
+    public void DiskbasicLaunchBootsItsDisk(string machine)
+    {
+        Write("retrocore.json", $$"""
+            { "sdk": "1", "name": "bookshop", "cpu": "6809", "sources": ["src/*.s"], "entry": "START",
+              "targets": { "disk": { "machine": "{{machine}}", "environment": "diskbasic", "files": [{ "path": "data.bin", "name": "DATA.DAT" }] },
+                           "own": { "machine": "{{machine}}", "environment": "diskbasic", "options": { "disks": ["x.dsk"] } },
+                           "tape": { "machine": "{{machine}}", "environment": "diskbasic", "options": { "cassette": "x.cas" } },
+                           "pack": { "machine": "{{machine}}", "environment": "diskbasic", "options": { "cartridge": "x.ccc" } } } }
+            """);
+
+        File.WriteAllBytes(Path.Join(_folder, "data.bin"), [1, 2, 3]);
+        string main = Write("src/main.s", """
+            .include <machine.inc>
+            MESSAGE:
+                .byte "LOADED FROM DISK", RETURN, 0
+            START:
+                leax MESSAGE,pcr
+            NEXT:
+                lda ,x+
+                beq DONE
+                jsr [CharacterOutVector]
+                bra NEXT
+            DONE:
+                bra DONE
+                .res 1024, $55
+            """);
+
+        using DapTestClient client = new();
+        client.Request("initialize", []);
+        client.Fails("launch", Launch("own")).Should().EndWith(
+            "a diskbasic target boots Disk BASIC with its own disk in drive 0, so its options and its launch cannot give 'disks'.");
+
+        client.Fails("launch", Launch("tape")).Should().EndWith(
+            "a diskbasic target loads its program from its disk under Disk BASIC, so its options and its launch cannot give 'cassette'.");
+
+        client.Fails("launch", Launch("pack")).Should().EndWith(
+            "a diskbasic target boots Disk BASIC from the cartridge port, which a cartridge would take over, so its options and its launch cannot give 'cartridge'.");
+
+        client.Request("launch", Launch("disk"))["project"]?["entry"]?.GetValue<int>().Should().Be(0x2712);
+        client.Request("evaluate", new JsonObject
+        {
+            ["expression"] = "PC"
+        }).String("result").Should().StartWith("$2712");
+
+        JsonObject set = client.Request("setBreakpoints", new JsonObject
+        {
+            ["source"] = new JsonObject { ["path"] = main },
+            ["breakpoints"] = new JsonArray(new JsonObject { ["line"] = 12 })
+        });
+
+        (set["breakpoints"]?[0]?["verified"]?.GetValue<bool>()).Should().BeTrue();
+        client.Request("configurationDone", []);
+        client.Event("stopped").String("reason").Should().Be("entry");
+        client.Request("continue", new JsonObject { ["threadId"] = 1 });
+        client.Event("stopped").String("reason").Should().Be("breakpoint", "the program runs to its loop once it has shown its line");
+        CocoScreen(client).Should().Contain("LOADM\"BOOKSHOP\"").And.Contain("LOADED FROM DISK");
+    }
+
+    /// <summary>
+    ///  The 6809 sample, <c>sample/6809</c>, boots on each of its targets, from its cassette under Color BASIC and from its
+    ///  disk under Disk BASIC, and shows its greeting, then goes back to BASIC's OK.
     /// </summary>
     /// <param name="target">The sample's target.</param>
     [TestMethod]
     [DataRow("coco-colorbasic")]
     [DataRow("coco3-colorbasic")]
+    [DataRow("coco-diskbasic")]
+    [DataRow("coco3-diskbasic")]
     public void M6809SampleRunsOnEachTarget(string target)
     {
         string sample = Path.Join(RepositoryRoot(), "sample", "6809");

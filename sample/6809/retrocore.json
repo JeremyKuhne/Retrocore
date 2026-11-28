@@ -9,6 +9,8 @@
   "entry": "Main",
   "targets": {
     "coco-colorbasic": { "machine": "coco2", "environment": "colorbasic" },
-    "coco3-colorbasic": { "machine": "coco3", "environment": "colorbasic" }
+    "coco3-colorbasic": { "machine": "coco3", "environment": "colorbasic" },
+    "coco-diskbasic": { "machine": "coco2", "environment": "diskbasic" },
+    "coco3-diskbasic": { "machine": "coco3", "environment": "diskbasic" }
   }
 }

@@ -1,0 +1,17 @@
+{
+  "description": "The Color Computer 3 with 512K, of which BASIC shows the 32K below its ROMs, diskbasic: a machine-language file that Disk BASIC's LOADM loads from an RS-DOS disk and EXEC starts, which calls Color BASIC's routines.",
+  "load": "$2700",
+  "free": [
+    { "start": "$2700", "end": "$7DFF" }
+  ],
+  "reserved": [
+    { "start": "$0000", "end": "$03FF", "why": "Color BASIC's direct page and workspace: its variables, vectors, cassette buffer and line input buffer" },
+    { "start": "$0400", "end": "$05FF", "why": "the text screen, 32 columns by 16 rows" },
+    { "start": "$0600", "end": "$0DFF", "why": "Disk BASIC's workspace: its disk buffers, file control blocks and the directory and allocation table it reads" },
+    { "start": "$0E00", "end": "$25FF", "why": "Extended BASIC's four graphics pages, which Disk BASIC moves up past its workspace" },
+    { "start": "$2600", "end": "$26FF", "why": "BASIC's program, empty, from $2601, and the start of its variables from $2603, which grow up over the program once it goes back to BASIC" },
+    { "start": "$7E00", "end": "$7FFF", "why": "BASIC's 200 bytes of string space at the top of RAM, and its stack below them, which EXEC starts the program on" },
+    { "start": "$8000", "end": "$FEFF", "why": "the ROM, Super Extended Color BASIC, and Disk BASIC in the cartridge port's ROM from $C000, which BASIC runs from a copy in RAM, and the GIME's constant page at $FE00, which holds the interrupts' jumps" },
+    { "start": "$FF00", "end": "$FFFF", "why": "the I/O: the PIAs, the disk controller's, the SAM, the GIME and the 6809's vectors" }
+  ]
+}

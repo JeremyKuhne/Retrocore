@@ -688,6 +688,52 @@ public sealed class ProjectEnvironmentTests
             "overlaps BASIC's 200 bytes of string space at the top of RAM").And.Contain("so it is 257 bytes over.");
     }
 
+    /// <summary>
+    ///  A <c>diskbasic</c> target links at <c>$2700</c>, above Disk BASIC's workspace, the graphics pages it moves up and
+    ///  BASIC's empty program, and writes its RS-DOS disk: the program as <c>&lt;NAME&gt;.BIN</c> in LOADM's format, and
+    ///  its files as binary data files; a file needs a name the SDK puts on a disk, once, some bytes and no address.
+    /// </summary>
+    [TestMethod]
+    public void DiskbasicWritesItsDisk()
+    {
+        Write("retrocore.json", """
+            { "sdk": "1", "name": "space-adventure", "cpu": "6809", "sources": ["main.s"], "entry": "START",
+              "targets": { "disk": { "machine": "coco2", "environment": "diskbasic",
+                                     "files": [{ "path": "data.bin", "name": "GAME.DAT" }, "notes"] },
+                           "bad": { "machine": "coco2", "environment": "diskbasic", "files": [{ "path": "data.bin", "name": "GAME.DATA" }] },
+                           "clash": { "machine": "coco2", "environment": "diskbasic", "files": [{ "path": "data.bin", "name": "SPACEADV.BIN" }] },
+                           "address": { "machine": "coco2", "environment": "diskbasic", "files": [{ "path": "data.bin", "address": "$4000" }] },
+                           "empty": { "machine": "coco2", "environment": "diskbasic", "files": ["empty.dat"] } } }
+            """);
+
+        Write("data.bin", "XYZ");
+        Write("notes", "N");
+        Write("main.s", "DATA:\n    .byte 1\nSTART:\n    rts\n");
+        TargetBuild build = ProjectBuild.Build(RetrocoreProject.Load(_folder).Target("disk"));
+        string disk = Path.Join(_folder, "artifacts", "disk", "space-adventure.dsk");
+        build.Media.Should().Be(new TargetMedia(
+            File: null, FileKind: null, disk, "RS-DOS disk (JVC)", "LOADM\"SPACEADV\" from drive 0, then EXEC"));
+
+        IReadOnlyList<(string Name, string Extension, byte Type, bool Ascii, byte[] Bytes)> files = Retrocore.Media.Trs80.RsDosDisk.Read(File.ReadAllBytes(disk));
+        files.Select(file => (file.Name, file.Extension, file.Type)).Should().Equal(("SPACEADV", "BIN", (byte)2), ("GAME", "DAT", (byte)1), ("NOTES", "", (byte)1));
+        files[0].Bytes.Should().Equal(0, 0, 2, 0x27, 0x00, 1, 0x39, 0xFF, 0, 0, 0x27, 0x01);
+        files[1].Bytes.Should().Equal("XYZ"u8.ToArray());
+
+        string Fails(string name)
+        {
+            Action build = () => ProjectBuild.Build(RetrocoreProject.Load(_folder).Target(name));
+            return build.Should().Throw<ProjectException>().Which.Message;
+        }
+
+        Write("empty.dat", "");
+        Fails("clash").Should().EndWith("target clash: two files on the disk are named SPACEADV.BIN.");
+        Fails("address").Should().EndWith("target address: DATA.BIN goes on the disk as a data file, which keeps no load address, so it cannot give 'address'.");
+        Fails("empty").Should().EndWith("target empty: EMPTY.DAT is empty, and a file on the disk holds at least a byte.");
+        Action bad = () => ProjectBuild.Build(RetrocoreProject.Load(_folder).Target("bad"));
+        bad.Should().Throw<ProjectException>().Which.Message.Should().EndWith(
+            "'GAME.DATA' is not a name the SDK puts on an RS-DOS disk, 1 to 8 capital letters and digits from a letter, then an extension of up to 3, also from a letter; give its file a 'name'.");
+    }
+
     // A small ProDOS disk in ProDOS's order, as the build reads ProDOS 2.4.3's: its boot blocks, each filled with a
     // byte of its own, and PRODOS, whose contents stand in for ProDOS itself.
     private static byte[] ProDosDisk()

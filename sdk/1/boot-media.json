@@ -25,6 +25,17 @@
       "files": [
         { "name": "ProDOS_2_4_3.po", "size": 143360, "sha1": "4bd80c2220b48cdcdcbe3876529a34b9a18efe5f" }
       ]
+    },
+    {
+      "id": "cpm22-kaypro2",
+      "title": "the Kaypro II's CP/M 2.2 system disk",
+      "for": "a Kaypro II cpm target's disk, which is that disk with the program added",
+      "source": "the CP/M 2.2 disk for the Kaypro II's 81-149C ROM, a raw 40-track image, which the Kaypro's tests use as cpm22-rom149.img in RETROCORE_KAYPRO",
+      "variable": "RETROCORE_KAYPRO",
+      "folder": "kaypro",
+      "files": [
+        { "name": "cpm22-rom149.img", "size": 204800, "sha1": "c37ed55160c3f01c90a5cb0f8e320ff6f99148fc" }
+      ]
     }
   ]
 }

@@ -283,7 +283,10 @@ public sealed class MemoryMapTests
             ["colorbasic"] = 5,
 
             // The same machines and sizes, with Disk BASIC.
-            ["diskbasic"] = 5
+            ["diskbasic"] = 5,
+
+            // The Kaypro II.
+            ["cpm"] = 1
         };
 
         string environments = Path.Join(SdkModules.SdkDirectory, "1", "environments");

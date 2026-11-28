@@ -221,7 +221,7 @@ public sealed class ProjectLaunchTests
             { "sdk": "1", "cpu": "z80", "sources": ["main.s"], "targets": { "dos": { "machine": "trs80-model3", "environment": "trsdos" } } }
             """);
 
-        client.Fails("launch", Launch("dos")).Should().EndWith("the 'trsdos' environment is not yet supported; only 'bare', 'wozmon', 'dos33', 'dfs', 'basic', 'sos', 'prodos', 'level2', 'colorbasic' and 'diskbasic' build.");
+        client.Fails("launch", Launch("dos")).Should().EndWith("the 'trsdos' environment is not yet supported; only 'bare', 'wozmon', 'dos33', 'dfs', 'basic', 'sos', 'prodos', 'level2', 'colorbasic', 'diskbasic' and 'cpm' build.");
         Write("retrocore.json", project);
 
         // The machine the launch names gives way to the target's.
@@ -621,6 +621,60 @@ public sealed class ProjectLaunchTests
     }
 
     /// <summary>
+    ///  A <c>cpm</c> target's launch puts its disk, the Kaypro II's CP/M disk with the program added, in drive A, types
+    ///  the program's name at <c>A&gt;</c>, and stops at <c>$0100</c>, where the CCP starts it; the program then writes
+    ///  its line through the BDOS. Its target cannot give the disks or the command. Without the system disk the test is
+    ///  inconclusive.
+    /// </summary>
+    [TestMethod]
+    public void CpmLaunchBootsItsDisk()
+    {
+        Write("retrocore.json", """
+            { "sdk": "1", "name": "hello", "cpu": "z80", "sources": ["src/*.s"], "entry": "START",
+              "targets": { "cpm": { "machine": "kaypro2", "environment": "cpm" },
+                           "own": { "machine": "kaypro2", "environment": "cpm", "options": { "command": "DIR" } } } }
+            """);
+
+        string main = Write("src/main.s", """
+            START:
+                LD DE,MESSAGE
+                LD C,9
+                CALL 5
+            LOOP:
+                JR LOOP
+            MESSAGE:
+                .byte "LOADED FROM CP/M", 13, 10, "$"
+            """);
+
+        using DapTestClient client = new();
+        client.Request("initialize", []);
+        client.Fails("launch", Launch("own")).Should().EndWith(
+            "a cpm target boots its own disk in drive A and types its program's name, so its options and its launch cannot give 'command'.");
+
+        JsonObject? launched = client.TryRequest("launch", Launch("cpm"), out string? failure);
+        if (launched is null)
+        {
+            failure.Should().Contain("the Kaypro II's CP/M 2.2 system disk").And.Contain("was not found by its hash");
+            Assert.Inconclusive($"The Kaypro II's CP/M disk was not found: {failure}");
+        }
+
+        (launched["project"]?["entry"]?.GetValue<int>()).Should().Be(0x0100);
+        JsonObject set = client.Request("setBreakpoints", new JsonObject
+        {
+            ["source"] = new JsonObject { ["path"] = main },
+            ["breakpoints"] = new JsonArray(new JsonObject { ["line"] = 6 })
+        });
+
+        (set["breakpoints"]?[0]?["verified"]?.GetValue<bool>()).Should().BeTrue();
+        client.Request("configurationDone", []);
+        client.Event("stopped").String("reason").Should().Be("entry");
+        client.Request("continue", new JsonObject { ["threadId"] = 1 });
+        client.Event("stopped").String("reason").Should().Be("breakpoint", "the program runs to its loop once it has written its line");
+        string screen = string.Join("\n", (client.Request("retro/display", [])["rows"] as JsonArray ?? []).Select(row => row?.GetValue<string>()));
+        screen.Should().Contain("A>HELLO").And.Contain("LOADED FROM CP/M");
+    }
+
+    /// <summary>
     ///  The Z80 sample, <c>sample/z80</c>, boots on each of its targets and shows its greeting, then goes back to its
     ///  environment: under Level II, to BASIC's READY.
     /// </summary>
@@ -650,6 +704,46 @@ public sealed class ProjectLaunchTests
         }
 
         return root ?? throw new InvalidOperationException("The repository root was not found.");
+    }
+
+    /// <summary>
+    ///  The Z80 sample's <c>kaypro-cpm</c> target boots CP/M on the Kaypro II, and the program shows its greeting through
+    ///  the BDOS and warm boots back to <c>A&gt;</c>. Without the Kaypro II's CP/M disk the test is inconclusive.
+    /// </summary>
+    [TestMethod]
+    public void Z80SampleRunsUnderCpm()
+    {
+        string sample = Path.Join(RepositoryRoot(), "sample", "z80");
+        using DapTestClient client = new();
+        client.Request("initialize", []);
+        JsonObject launch = new()
+        {
+            ["project"] = sample,
+            ["target"] = "kaypro-cpm",
+            ["stopOnEntry"] = false,
+            ["speed"] = "max"
+        };
+
+        if (client.TryRequest("launch", launch, out string? failure) is null)
+        {
+            failure.Should().Contain("was not found by its hash");
+            Assert.Inconclusive($"The Kaypro II's CP/M disk was not found: {failure}");
+        }
+
+        client.Request("configurationDone", []);
+
+        // The display's rows, those that show something: the greeting, then CP/M's prompt below it.
+        List<string> Shown() => [.. (client.Request("retro/display", [])["rows"] as JsonArray ?? [])
+            .Select(row => row?.GetValue<string>()?.TrimEnd() ?? "")
+            .Where(row => row.Length != 0)];
+
+        for (DateTime end = DateTime.UtcNow.AddSeconds(30); !Done(Shown()); Thread.Sleep(200))
+        {
+            DateTime.UtcNow.Should().BeBefore(end, $"the sample shows its greeting and CP/M's prompt:\n{string.Join("\n", Shown())}");
+        }
+
+        static bool Done(List<string> rows) =>
+            rows.IndexOf("HELLO, WORLD!") is int greeting and >= 0 && rows.Count > greeting + 1 && rows[^1].StartsWith("A>", StringComparison.Ordinal);
     }
 
     // The TRS-80's screen, 64 columns by 16 rows from $3C00, as rows of text with their trailing spaces left out. A

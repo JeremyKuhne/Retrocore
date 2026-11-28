@@ -75,6 +75,27 @@ internal sealed partial class DebugSession
             case Trs80Model3DebugTarget { BootDeck: { } deck }:
                 BootLevel2(build, deck, model3: true, bytes, label);
                 return;
+            case KayproDebugTarget kaypro:
+                // Drive A, which CP/M boots, and once its prompt shows, the program's name, which the CCP runs.
+                FloppyDisk cpm = KayproFormat.Read(bytes);
+                MediaActions.KeepReplaced(kaypro.BootDrive, $"the build's {build.Media.ImageKind} took its place");
+                kaypro.BootDrive.Insert(cpm, label, "IMG");
+                ForgetBoundaries();
+                long start = (long)kaypro.CycleCount;
+                try
+                {
+                    kaypro.TypeAtPrompt(CpmEnvironment.ProgramName(target), target.Built?.BootSeconds ?? 0);
+                }
+                catch (InvalidOperationException)
+                {
+                    throw new ProjectException(
+                        $"{target.Project.File}: target {target.Name}: booted from its {build.Media.ImageKind}, CP/M did not show its prompt within {target.Built?.BootSeconds} seconds; the disk did not boot, or the machine stopped at an error.");
+                }
+
+                // TypeAtPrompt runs in steps, so it may return a little past the boot's limit; the entry then has a cycle.
+                long left = ((long)(target.Built?.BootSeconds ?? 0) * Target.ClockHertz) - ((long)kaypro.CycleCount - start);
+                RunToEntry(build, Math.Max(1, left));
+                return;
             case CocoDebugTarget coco when target.Environment == "diskbasic":
                 // Drive 0, which LOADM reads by default; the launch fits the disk controller.
                 Machines.Chips.FloppyDrive drive = coco.BootDrive ?? throw new ProjectException(

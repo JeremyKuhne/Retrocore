@@ -381,7 +381,7 @@ RESTRP:
 
 L_0A5B:
     CALL L_1AFC
-    JC L_0A94
+    JC NTOERR
     PUSH B
     RST 2
     RST 1
@@ -424,7 +424,7 @@ L_0A7E:
     INR A
     JMP L_0A66
 
-L_0A94:
+NTOERR:
     CALL GETBYT
     MOV A,M
     MOV B,A

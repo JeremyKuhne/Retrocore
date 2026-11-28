@@ -40,7 +40,8 @@ the first stage, where each name came from, and what is left.
    ($0400-$12FF), the string package ($2700-$2B5F) and LINE INPUT #'s code ($4F00-$504F), from blocks of at least
    four instructions there, and six in LINE INPUT #'s; elsewhere blocks matched by chance (a `ST_WHILE` in a BASIC
    without WHILE, and a `CSKPCM`, CLEAR's in MBASIC, on CSAVE's `,A`). Within the ranges, the alignment also put
-   `SNGFOR` on the double-precision FOR; it is on the single-precision one. Variables took the name of MBASIC's
+   `SNGFOR` on the double-precision FOR; it is on the single-precision one. `NTOERR` lined up with the Model 100's ON COM, KEY and
+   TIME$ test; it is on the ON n dispatch that test falls through to, which is MBASIC's NTOERR. Variables took the name of MBASIC's
    operand at the same place, where at least two blocks and three quarters of them agree.
 3. **Writing the source.** An emitter wrote the modules from the traced code, the names and both ROMs: the tables as
    entries (`KEYWORD`, `.word`, `DISPATCH`), each skip byte (an LXI or MVI whose operand is another entry) as a
@@ -88,7 +89,9 @@ The IDs are M100.
 | `DIRTBL`, `DOSTRT`, `COSTRT`, `PRGNAM` | The file directory, the starts of the DO and CO files, and the menu's file name: what is typed at Select:, each name it formats for the screen, the name CHKDC looks for, and so the program the menu runs. |
 | `STKTOP` | Level II's name (Level2.asm) for the bottom of string space, which the stack sits below: MENU sets it from `MEMSIZ`, and CLEAR, the stack and string space are bounded by it. |
 
-- M100-8. `BEGLCD` names the screen's memory at $FE00. The manual's `ENDLCD`, $FF40, the byte after the screen, is not a
+- M100-8. The five bytes at $770B, first named `KEYTAB`, are a command the ROM sends to the device on ports
+  $80-$83, not the keyboard's tables, which follow at $7BF1; neither has a name yet.
+- M100-9. `BEGLCD` names the screen's memory at $FE00. The manual's `ENDLCD`, $FF40, the byte after the screen, is not a
   label: the ROM keeps the RS-232 port's state there, and the name would read wrong at those uses.
 
 ## Open questions

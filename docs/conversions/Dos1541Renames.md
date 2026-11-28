@@ -563,7 +563,7 @@ part 1's, named here by their listing names (`JOBS`, `HDRS`, `LSTJOB`, `DRVST`, 
   ms", the settle's "5*8=40ms", TURNON's "1.5 sec" and TRNOFF's "255*.025s". END restarts the timer at its start
   ($F99C), so the next interrupt comes 14.85 ms after a pass ends, not after it began; a tick is that plus the pass, and
   the times are minimums. The reasons give what the code does: spin-up 60 ticks (at least 0.89 s), timeout 255 ticks (at
-  least 3.79 s), settle 5 ticks (at least 74 ms). The accelerated stepping (SSACL, SSRUN, SSDEC) shortens or lengthens
+  least 3.78 s), settle 5 ticks (at least 74 ms). The accelerated stepping (SSACL, SSRUN, SSDEC) shortens or lengthens
   the tick by `AF`. It is never reached with the ROM's settings, because start-up sets `MINSTP` to 200 and `STEPS` is a
   signed byte, so any move is at most 128 half-tracks. It keeps its names, with a comment that it runs only if a program
   lowers `MINSTP`. SYNC's 20 ms timeout is VIA 1's timer 1 (`TIMER1`, $1805). The format's segment timing is VIA 1's
@@ -571,8 +571,11 @@ part 1's, named here by their listing names (`JOBS`, `HDRS`, `LSTJOB`, `DRVST`, 
   tick is VIA 2 timer 1 at about 14.85 ms restarted at the end of each pass, so the reasons give minimum times (spin-up
   60 ticks, timeout 255, settle 5); the accelerated stepping is kept with a comment that it never runs, because STEPS is
   a signed byte (at most 128) and MINSTP is 200.
-- D-P2-Q7. **What the 1541 patched.** The source keeps 901229-05's bytes and describes each patch in a comment,
-  with no `.if` for the earlier ROMs, which are not built. The patches:
+- D-P2-Q7. **What the 1541 patched.** The source has 901229-05's code, and where another build differs, a `.if` on
+  the revision's constant at the place, as D-P6-Q7 has it. Part 2's differences: the header gap (below), 8 bytes in
+  R1, R2 and R40 and 9 from R3; and the 1540's `NOP` at `$FC86` where the 1541 has `INX` before FillData, so the
+  1540 fills a new block with zeros and the 1541 with `$01` (row 195). The listing's own patches, which every built
+  revision has, are described in comments:
   - The "4/12" patch made each job's header 2 bytes (track and sector) instead of 4. SETJOB, HED2TS and SETH have
     one `ASL` where there were two.
   - SETH no longer copies the disk ID into the header, so its last `ASL`/`TAX` leaves X = `DRVNUM` × 2, which
@@ -581,13 +584,12 @@ part 1's, named here by their listing names (`JOBS`, `HDRS`, `LSTJOB`, `DRVST`, 
     the ID.
   - WGP3's erase gap after each data block is commented out.
   - The header gap: 901229-01 and -02 wait out and write 8 bytes after the header (`LDX #8` at $F58C and $FCCF),
-    and -03 onward write 9 (`GAP1` 11, less 2). The comment on `GAP1` notes the change.
-  **Settled:** 901229-05's bytes are kept with each patch described in a comment and no .if for earlier ROMs.
-
+    and -03 onward write 9 (`GAP1` 11, less 2), and the 1540 has 8.
   The listing's wrong comments are corrected in the reasons, not carried over. These are HEDOFF's step directions
   (below), CNTINT's "disable s.o." (CA2 high enables byte-ready), the format's "diff/2" (the code adds twice the
-  difference), "282*5/4-256=85" (the value is $66, 102), "write 4 sync" (`NUMSYN` is 5) and "move up 79 bytes" (69).
-  *Recommended.*
+  difference), "282*5/4-256=85" (the value is $66, 102), "write 4 sync" (`NUMSYN` is 5), "move up 79 bytes" (69) and
+  FillData's "data block of zero" (see row 195). *Recommended.* **Settled:** 901229-05's code, with a `.if` on the
+  revision's constant for the header gap and the 1540's `$FC86`, and the listing's patches described in comments.
 - D-P2-Q8. **The head offsets are half-tracks, inward for positive.** In MOVHED, Y = 1 makes the controller
   advance the stepper's phase, the way it moves toward higher tracks. Each step is half a track (ScanJobs doubles a
   track distance into steps). The listing's HEDOFF says "step out 1 track" for that. The locals are named for what
@@ -602,11 +604,10 @@ part 1's, named here by their listing names (`JOBS`, `HDRS`, `LSTJOB`, `DRVST`, 
   - `Jobs::CheckTrackSector` (TSCHK).
   - `Jobs::VersionError` (VNERR), which Start branches to and NEW jumps to.
   - `Jobs::Queue` (SJB1), reached by branch from Start with the command on the stack, which its contract says.
-    **Settled:** HED2TS, TSCHK and VNERR are separate routines in listing order, not one Start proc, and SETLJB is
-    Jobs::StartOnLastDrive.
-
   The alternative is one `Start` `.proc` over all of it, which would make the routines that BLOCK, VERDIR and NEW
-  call into entries of Start. SETLJB, which falls into SETJOB, is `Jobs::StartOnLastDrive`.
+  call into entries of Start. SETLJB, which falls into SETJOB, is `Jobs::StartOnLastDrive`. *Recommended.*
+  **Settled:** HED2TS, TSCHK and VNERR are separate routines in listing order, not one Start proc, and SETLJB is
+  `Jobs::StartOnLastDrive`.
 - D-P2-Q10. **DOREAD, DOWRIT, DOJOB, DOIT, DOIT2 and WATJOB.** `Jobs::Read` branches to `Jobs::Run` (DOJOB, a
   routine because TST2 jumps to it as one), `Jobs::Write` falls into it, and Run's entries are `WithDrive` (DOIT,
   the command already has its drive bit) and `Repeat` (DOIT2, runs `CMD` again). Run falls into `Jobs::Wait`
@@ -774,7 +775,7 @@ part 1's, named here by their listing names (`JOBS`, `HDRS`, `LSTJOB`, `DRVST`, 
 | 139 | ERRR | $F969 | Controller::FinishJob | routine | D1541 | lccread 3, lcccntrl 2, lccseek 2, lccwrt 2, lccfmt3 1, lccfmt4 1 | Ends job `JOBN` with code A (1 success, 2-15 errors) in its queue byte. Decodes a buffer left in GCR, starts the motor's timeout, resets the stack to ScanJobs' and rescans. |
 | 140 | ERRR10 | $F975 | Controller::FinishJob::Restart | local | D1541 | lccutil 1 | Starts the timeout, resets the stack, and goes back to ScanJobs. |
 | 141 | TURNON | $F97E | Controller::MotorOn | routine | D1541 | lcccntrl 1 | Starts the motor: `DRVST` = on and spinning up, `ACLTIM` = 60 ticks (at least 0.89 s; the listing says 1.5 s). |
-| 142 | TRNOFF | $F98F | Controller::MotorTimeout | routine | D1541 | lccutil 1, vector 1 | Sets `DRVST`'s timeout bit and `ACLTIM` = 255 ticks (at least 3.79 s), after which EndPass stops the motor; MotorOffVector, the word at $FFE8 before the user command table, points here too. |
+| 142 | TRNOFF | $F98F | Controller::MotorTimeout | routine | D1541 | lccutil 1, vector 1 | Sets `DRVST`'s timeout bit and `ACLTIM` = 255 ticks (at least 3.78 s), after which EndPass stops the motor; MotorOffVector, the word at $FFE8 before the user command table, points here too. |
 | 143 | END | $F99C | Controller::EndPass | routine | D1541 | lcccntrl 4, lccfmt1 2, lccseek 1, lccfmt3 1, lccfmt4 1 | Ends each pass. Restarts the tick, notes a change of the write-protect sense (`WPSW`) and takes a half-track step the DOS asked for in `PHASE`. Counts down the spin-up and timeout (stopping the motor when it ends) and runs the stepper's state in `NXTST`; disables byte-ready and returns. |
 | 144 | END001 | $F9A5 | DROP | local | D1541 | none | Not referenced. |
 | 145 | END002 | $F9B1 | Controller::EndPass::CheckHeadOffset | local | D1541 | lccend 1 | `PHASE` 1 or $FF: steps once and sets it to 2, which StepHead waits for; StepHead then clears the 2 to 0 (MOVHED). |
@@ -827,7 +828,7 @@ part 1's, named here by their listing names (`JOBS`, `HDRS`, `LSTJOB`, `DRVST`, 
 | 192 | DS30 | $FC24 | Controller::WriteTrack::HaveGap | local | D1541 | lccfmt2 1 | `DTRCK` = the gap; under `GAP2` (4) fails with `TOSMAL` (5). |
 | 193 | DS32 | $FC30 | Controller::WriteTrack::GapOk | local | D1541 | lccfmt2 1 | `REMDR` = the remainder. |
 | 194 | MAK10 | $FC3F | Controller::WriteTrack::MakeHeader | local | D1541 | lccfmt2 1 | Sector `SECT`'s header in buffer 0: `HBID`, checksum, sector, track, the two ID bytes and two $0F, 8 bytes each. |
-| 195 | CRTDAT | $FC88 | Controller::WriteTrack::ClearData | local | D1541 | lccfmt2 1 | Zeroes buffer 2, the data block every sector gets. |
+| 195 | CRTDAT | $FC88 | Controller::WriteTrack::FillData | local | D1541 | lccfmt2 1 | Fills buffer 2, the data block every sector gets, from byte X on with A: X and A are DRIVE plus 1, so 1 (the `INX`, `TXA` before it), and the block is bytes of `$01` after byte 0, though the listing's comment says zero; the 1540 has a `NOP` for that `INX` and zeroes all 256 bytes (Q7). |
 | 196 | WRTSYN | $FCB1 | Controller::WriteTrack::WriteSector | local | D1541 | lccfmt2 1 | Writes the next sector, starting with five sync bytes (the listing says 4). |
 | 197 | WRTS10 | $FCB8 | Controller::WriteTrack::WriteHeaderSync | local | D1541 | lccfmt2 1 | Waits out the sync bytes. |
 | 198 | WRTS20 | $FCC2 | Controller::WriteTrack::WriteHeader | local | D1541 | lccfmt2 1 | The header's 10 GCR bytes. |
@@ -1789,7 +1790,7 @@ revisions.
   carriage return. *Recommended.* **Settled:** the reasons describe the code, and the new source's comments say
   what it does.
 - D-P5-Q11. **B0TOB0's count.** The copy loop counts Y down from A-1 with `bpl`: counts 1 to 129 copy that many
-  bytes, but 0 and 130 to 256 stop after one byte. Its one caller copies 16, so the limit is never reached; the
+  bytes, but 0 and 130 to 255 stop after one byte. Its one caller copies 16, so the limit is never reached; the
   code is kept as it is, and the row says what it does rather than claiming a general copy. *Recommended.*
   **Settled:** kept byte for byte, with the limit documented in the routine's comment.
 
@@ -1839,7 +1840,7 @@ revisions.
 | 40 | SJ20 | $DE8B | Files::StartBlockJob::ClearDirty | entry | D1541 | tsutil 2 | ...clears its dirty bit (MarkClean), X = the buffer... |
 | 41 | SJ30 | $DE92 | Files::StartBlockJob::Start | entry | D1541 | tsutil 1 | ...and starts the job in `cmd` on buffer X, with the drive in `lstjob` (`Jobs::StartOnLastDrive`). |
 | 42 | RDLNK | $DE95 | Files::ReadLink | routine | D1541 | rel1 2, open 1 | The active buffer's link into `track` and `sector`, read through its pointer, which is left at 2. |
-| 43 | B0TOB0 | $DEA5 | Relative::CopyBuffer | routine | D1541 | newss 1 | Copies A bytes (counting down) from the start of buffer Y to the start of buffer X; a count of 1 to 129 copies that many bytes; 0 or 130 to 256 copies one, as its loop ends with `bpl` (Q11). Its one caller copies 16. |
+| 43 | B0TOB0 | $DEA5 | Relative::CopyBuffer | routine | D1541 | newss 1 | Copies A bytes (counting down) from the start of buffer Y to the start of buffer X; a count of 1 to 129 copies that many bytes; 0 or 130 to 255 copies one, as its loop ends with `bpl` (Q11). Its one caller copies 16. |
 | 44 | B02 | $DEB9 | Relative::CopyBuffer::NextByte | local | D1541 | ssutil 1 | Each byte, last first. |
 | 45 | CLRBUF | $DEC1 | Relative::ClearBuffer | routine | D1541 | opnchnl 1, newss 1 | Fills buffer A with zeros; returns A and Y = 0. |
 | 46 | CB10 | $DECC | Relative::ClearBuffer::NextByte | local | D1541 | ssutil 1 | Each of the 256 bytes. |
@@ -2065,7 +2066,7 @@ differ.
     `$EA4E`) where -05 has three NOPs, so the old ROMs release the bus and go idle without freeing the channel; BOOT
     (`$E780-$E7A2`, part 3's) is the power-on utility loader, which -05 turned into an RTS and NOPs; ACPTR starts its
     timer inline (`STA T1HC1` at `$E9DC`, after `LDA #1` at `$E9DA`) where -05 jumps to PATCH6; DSKINT sets DDRA1 inline
-    (`$EAA4`) where -05 jumps to PATCH5; after SETERR (`$EBDB`) the bus is set up DDRB1 first, then PB, where -05
+    (`$EAA4`) where -05 jumps to PATCH5; after SETERR (`$EBDA`) the bus is set up DDRB1 first, then PB, where -05
     releases the lines (PB) before it sets their directions; `$FF10-$FF2E` is fill (`$AA`).
   - -01 alone: ACPTR's bit loop reads CLK and then DATA in two reads (`$EA0E-$EA17`); -02's speed-up reads both at
     once and leaves the three NOPs the listing has.
@@ -2076,8 +2077,8 @@ differ.
   - ECHKSM: `$FD`, `$10`, `$0E`, `$3E` and `$EC` for -01, -02, -03, -05 and -06; `$60` in the 1540's 325303-01.
   - 325303-01, the 1540, is -01 with four changes in this part: no SLOWD, CLKDAT or NNMI (`$FEF3-$FF0F` is fill),
     TALK's ISRCLK clocks each bit without the speed test (`JSR CLKHI`, four NOPs, `JSR CLKLOW`, `JSR DATHI` at
-    `$E979-$E982`), the NMI vector points at NMI (`$FEE7`), and message 73 reads V170. (-01's and -02's `$F58D`
-    and `$FCD0`, and the 1540's `$FC86`, are part 2's.)
+    `$E979-$E982`), the NMI vector points at NMI (`$FEE7`), and message 73 reads V170. (-01's and -02's header gap
+    at `$F58C` and `$FCCF`, and the 1540's `$FC86`, are part 2's.)
   Recommended: one `.if` per difference on the revision's constant, at the place, with the -05 names kept
   wherever the code exists; the patch routines (and their `JMP`s) are built only in the revisions that have
   them; the rows are 901229-05's. *Recommended.* **Settled:** each revision difference is one `.if` on the revision's

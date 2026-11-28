@@ -1,0 +1,13 @@
+{
+  "description": "The Kaypro II with 64K, cpm: a .COM file that CP/M 2.2's CCP loads at $0100 and runs, which calls the BDOS at $0005.",
+  "load": "$0100",
+  "free": [
+    { "start": "$0100", "end": "$E3FF" }
+  ],
+  "reserved": [
+    { "start": "$0000", "end": "$00FF", "why": "CP/M's page zero: the warm boot's jump at $0000, the BDOS's at $0005, the default file control block at $005C and the default record buffer at $0080, which holds the command's tail" },
+    { "start": "$E400", "end": "$EBFF", "why": "the CCP, which a program may write over only when it ends with a warm boot, JP 0, rather than returning to the CCP" },
+    { "start": "$EC00", "end": "$F9FF", "why": "the BDOS" },
+    { "start": "$FA00", "end": "$FFFF", "why": "the Kaypro's BIOS, its disk buffers and the ROM's routines it copies there" }
+  ]
+}

@@ -46,6 +46,11 @@ internal sealed partial class KayproDebugTarget : IDebugTarget
     /// </summary>
     internal KayproMachine Machine => _machine;
 
+    /// <summary>
+    ///  Gets drive A, which a cpm target's disk goes in.
+    /// </summary>
+    internal Machines.Chips.FloppyDrive BootDrive => _machine.Drives[0];
+
     /// <inheritdoc/>
     public string ThreadName => "Kaypro II Z80";
 

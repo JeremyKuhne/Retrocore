@@ -469,7 +469,17 @@ zero page. The 6809 sample, `sample/6809`, prints a hello world on the CoCo 2 an
 `diskbasic` writes `<name>.dsk`, a JVC image of an RS-DOS disk (`RsDosDisk`, which also reads one back): the program
 as `<NAME>.BIN` in Disk BASIC's binary format, loading at `$2700`, and the target's `files` as binary data files. A
 launch fits the disk controller with Disk BASIC, from the SDK's sources or a ROM folder's dumps, puts the disk in drive
-0, and types `LOADM` and `EXEC` (a failed `LOADM` fails the launch with the screen's error), on the CoCo 1, 2 and 3; the 6809 sample has `diskbasic` targets for the CoCo 2 and 3.
+0, and types `LOADM` and `EXEC` (a failed `LOADM` fails the launch with the screen's error), on the CoCo 1, 2 and 3;
+the 6809 sample has `diskbasic` targets for the CoCo 2 and 3.
+
+`cpm` writes `<name>.com` from `$0100` and, on the Kaypro II, `<name>.img`: the Kaypro's CP/M 2.2 system disk, the
+user's own, found by hash in `RETROCORE_KAYPRO` and the cache, with the program added (`CpmDisk`, the CP/M 2.2 file
+system of a disk with no skew: 1K blocks from track 1, a 64-entry directory, an entry for each 16K). A launch boots it
+in drive A and types the program's name at `A>`. The Apple II with a SoftCard, the Model 4 and the Altair are refused
+until the SDK lists a CP/M system disk for each, which needs the user's yes to fetch. The Z80 sample has a
+`kaypro-cpm` target, with its console in `src/platform/cpm/`, as CP/M owns the console. CI has no Kaypro CP/M disk,
+so there the boot tests (`CpmLaunchBootsItsDisk`, `Z80SampleRunsUnderCpm`) are inconclusive, not passed, and the build
+writes the `.COM` alone; they passed locally with the disk.
 
 ## Debugging in VS Code
 
@@ -614,9 +624,9 @@ Apple Pascal comes after BASIC, with its own [plan](ApplePascal.md).
 | Generated headers | Regenerating them changes nothing (checked by digest), and every entry point matches its ROM source's address. |
 | Hardware equates | Each one matches the emulator's device map for its machine. |
 | CPU checks | A 65C02 opcode fails the 6502 targets and builds for the enhanced IIe; a Z80 opcode fails an 8080 project. |
-| Memory maps | A section in a reserved area fails with the target's name; a `memoryMap` override frees it; the generated linker configuration places a sample in free RAM on every target. As built in phase 7: the `level2`, `colorbasic` and `diskbasic` maps have no zero page and check a section from `$0000`. |
-| Boot media | A missing image fails with its name and hash; a library image with the right hash is found; a PET target without the 4040's dumps builds its tape and no disk. As built in phase 7: a `prodos` target without ProDOS 2.4.3's disk builds its binary and no disk, saying what it needs, and its launch fails naming the disk; with it, the disk boots on the II Plus and both IIe models. |
-| Media writers | Each writer's image reads back through the existing readers (`DosDisk`, `SosVolume`, the D64 and DFS readers, `TapFormat`, `UefFormat`) and boots under emulation: the DOS 3.3 disk on a II Plus as well as a IIe, the SOS disk with SOS 1.3 built from source, the DFS disk with `!BOOT`. As built in phase 7: the ProDOS disk reads back through `SosVolume` and boots on the II Plus and both IIe models; the SYSTEM tape reads back through `SystemTape.Read` and `CassetteFormat`, and loads with `SYSTEM` on the Model I (Level II 1.2 and 1.3) and the Model III; the Color Computer's cassette reads back through `CocoTape.Read` and loads with `CLOADM` on the CoCo 1, 2 and 3; the RS-DOS disk reads back through `RsDosDisk.Read` and loads with `LOADM` under Disk BASIC on the CoCo 1, 2 and 3. |
+| Memory maps | A section in a reserved area fails with the target's name; a `memoryMap` override frees it; the generated linker configuration places a sample in free RAM on every target. As built in phase 7: the `level2`, `colorbasic`, `diskbasic` and `cpm` maps have no zero page and check a section from `$0000`. |
+| Boot media | A missing image fails with its name and hash; a library image with the right hash is found; a PET target without the 4040's dumps builds its tape and no disk. As built in phase 7: a `prodos` target without ProDOS 2.4.3's disk builds its binary and no disk, saying what it needs, and its launch fails naming the disk; with it, the disk boots on the II Plus and both IIe models. A `cpm` target does the same with the Kaypro II's CP/M disk. |
+| Media writers | Each writer's image reads back through the existing readers (`DosDisk`, `SosVolume`, the D64 and DFS readers, `TapFormat`, `UefFormat`) and boots under emulation: the DOS 3.3 disk on a II Plus as well as a IIe, the SOS disk with SOS 1.3 built from source, the DFS disk with `!BOOT`. As built in phase 7: the ProDOS disk reads back through `SosVolume` and boots on the II Plus and both IIe models; the SYSTEM tape reads back through `SystemTape.Read` and `CassetteFormat`, and loads with `SYSTEM` on the Model I (Level II 1.2 and 1.3) and the Model III; the Color Computer's cassette reads back through `CocoTape.Read` and loads with `CLOADM` on the CoCo 1, 2 and 3; the RS-DOS disk reads back through `RsDosDisk.Read` and loads with `LOADM` under Disk BASIC on the CoCo 1, 2 and 3; a file added to the Kaypro's CP/M disk reads back through `CpmDisk.Read`, which this phase adds with the writer, so the independent check is the CCP running it on the Kaypro II. |
 | The Apple-1's RAM | 16K and 32K boot the Woz Monitor and run a program above `$1FFF`; other sizes are still rejected. |
 | Dialects | ca65 and Merlin samples include the native headers and build byte-identically to their native twin. |
 | The adventure | It builds for all five targets. A scripted walkthrough of the test adventure, and an opening of Pirate Adventure, run on each target under the debug adapter, in the style of the `tools/Test-*Dap.mjs` scripts, and each transcript must match the packer's reference engine. As built in phase 3: Pirate Adventure's win, from start to finish, and its death play on the bare Apple-1, PET, Apple II and BBC Micro, and the test game's three transcripts on a second Apple II target; the Apple III builds but is not played until it has a character set. As built in phase 4: both play on each machine's own environment too, from its disk or tape, or its hex as typed in (`apple1-wozmon`, `apple2-dos`, `apple3-sos`, `pet-basic`, `bbc-dfs`), loading the game from the disk on the Apple II, the Apple III and the BBC Micro; the bare Apple III is still not played, and `pet-disk` plays only with the 4040's dumps, reported as skipped without them. As built in phase 7: both play on `apple2-prodos`, from its ProDOS disk, reading the game through the MLI; reported as skipped without ProDOS 2.4.3, as in CI. |
@@ -654,7 +664,7 @@ media writers can go alongside them, each in its own change.
 6. **Deprecation.** Deprecation warnings from `retrocore build`, and the previous-major support, needed before the
    SDK's first breaking change.
 7. **More environments.** `prodos`, `cpm`, `level2`, `trsdos`, `colorbasic` and `diskbasic`, and SOS interpreters that
-   relocate. Built so far: `prodos`, `level2`, `colorbasic` and `diskbasic` (as built under [media writers](#media-writers)).
+   relocate. Built so far: `prodos`, `level2`, `colorbasic`, `diskbasic` and `cpm` on the Kaypro II (as built under [media writers](#media-writers)).
 8. **Portable macros.** A small `rc_` set (`rc_putchar`, `rc_getkey`, `rc_getline`, `rc_cls`, `rc_exit`) for every
    target, grown out of the adventure's console layer.
 9. **BASIC sources**, which load routines the same project assembles.

@@ -7,6 +7,7 @@ using Retrocore.Machines.Apple1;
 using Retrocore.Media;
 using Retrocore.Media.Acorn;
 using Retrocore.Media.Commodore;
+using Retrocore.Media.Floppy;
 using System.Text.Json.Nodes;
 
 namespace Retrocore.Tests;
@@ -732,6 +733,57 @@ public sealed class ProjectEnvironmentTests
         Action bad = () => ProjectBuild.Build(RetrocoreProject.Load(_folder).Target("bad"));
         bad.Should().Throw<ProjectException>().Which.Message.Should().EndWith(
             "'GAME.DATA' is not a name the SDK puts on an RS-DOS disk, 1 to 8 capital letters and digits from a letter, then an extension of up to 3, also from a letter; give its file a 'name'.");
+    }
+
+    /// <summary>
+    ///  A <c>cpm</c> target links at <c>$0100</c>, where the CCP loads a command, and writes its <c>.COM</c> file; with
+    ///  the Kaypro II's CP/M disk found by its hash, it writes that disk with the program and its files added, and
+    ///  without it, the command alone with a note naming the disk. A program starts at its entry or with a JP to it,
+    ///  its name is not a CCP command's, and only the Kaypro II builds yet.
+    /// </summary>
+    [TestMethod]
+    public void CpmWritesItsCommandAndDisk()
+    {
+        Write("retrocore.json", """
+            { "sdk": "1", "name": "space-adventure", "cpu": "z80", "sources": ["main.s"], "entry": "START",
+              "targets": { "cpm": { "machine": "kaypro2", "environment": "cpm", "files": [{ "path": "data.bin", "name": "GAME.DAT" }] },
+                           "model4": { "machine": "trs80-model4", "environment": "cpm" } } }
+            """);
+
+        Write("data.bin", "XYZ");
+        Write("main.s", "    JP START\nDATA:\n    .byte 1\nSTART:\n    RET\n");
+        TargetBuild build = ProjectBuild.Build(RetrocoreProject.Load(_folder).Target("cpm"));
+        string output = Path.Join(_folder, "artifacts", "cpm");
+        File.ReadAllBytes(Path.Join(output, "space-adventure.com")).Should().Equal(0xC3, 0x04, 0x01, 1, 0xC9);
+        if (build.Media.Image is { } image)
+        {
+            // The Kaypro II's CP/M disk was found.
+            byte[] disk = File.ReadAllBytes(image);
+            CpmDisk.Read(disk, CpmGeometry.KayproII, "SPACEADV", "COM")[..5].Should().Equal(0xC3, 0x04, 0x01, 1, 0xC9);
+            CpmDisk.Read(disk, CpmGeometry.KayproII, "GAME", "DAT")[..3].Should().Equal("XYZ"u8.ToArray());
+            CpmDisk.Read(disk, CpmGeometry.KayproII, "PIP", "COM").Should().NotBeEmpty("the system disk's own files stay");
+        }
+        else
+        {
+            (build.Media.Note ?? "").Should().StartWith("no disk: the Kaypro II's CP/M 2.2 system disk, for a Kaypro II cpm target's disk,");
+        }
+
+        Write("main.s", "DATA:\n    .byte 1\nSTART:\n    RET\n");
+        Action late = () => ProjectBuild.Build(RetrocoreProject.Load(_folder).Target("cpm"));
+        late.Should().Throw<ProjectException>().WithMessage(
+            "*the CCP starts a command at its first byte, $0100, but the entry is $0101; start the program at its entry, or with JP to it.");
+
+        Action model4 = () => ProjectBuild.Build(RetrocoreProject.Load(_folder).Target("model4"));
+        model4.Should().Throw<ProjectException>().WithMessage("*the 'cpm' environment builds only for the Kaypro II yet*");
+
+        Write("main.s", "START:\n    RET\n");
+        Write("retrocore.json", """
+            { "sdk": "1", "name": "dir", "cpu": "z80", "sources": ["main.s"], "targets": { "cpm": { "machine": "kaypro2", "environment": "cpm" } } }
+            """);
+
+        Action builtIn = () => ProjectBuild.Build(RetrocoreProject.Load(_folder).Target("cpm"));
+        builtIn.Should().Throw<ProjectException>().WithMessage(
+            "*its program would be DIR.COM, which the CCP's own DIR command stands in for when its name is typed; give the project another 'name'.");
     }
 
     // A small ProDOS disk in ProDOS's order, as the build reads ProDOS 2.4.3's: its boot blocks, each filled with a

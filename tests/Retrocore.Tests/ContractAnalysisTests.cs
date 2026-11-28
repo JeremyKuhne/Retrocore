@@ -444,6 +444,44 @@ public class ContractAnalysisTests
         (findings, _, _) = Check(falls, "Mos6502");
         findings.Should().ContainSingle().Which.Should().Contain("Main ($1006) documents Keeps: X");
 
+        // Text after a return, just before a caller's run, is no way into it; nor is an equate whose value falls inside
+        // one of its instructions.
+        string text = """
+            Thing = $1005
+
+            ;; Returns.
+            Before:
+                rts
+
+            Message:
+                .byte "OK", 0
+
+            ;; Sets bit 0.
+            ;; Uses: A
+            Caller:
+                lda #1
+                jsr Set
+                rts
+            """ + Callee;
+
+        (findings, _, _) = Check(text, "Mos6502");
+        findings.Should().BeEmpty();
+
+        // An exported entry may be called by programs outside the assembly, with any values.
+        string exported = """
+            .export Set
+
+            ;; Sets bit 0.
+            ;; Uses: A
+            Caller:
+                lda #1
+                jsr Set
+                rts
+            """ + Callee;
+
+        (findings, _, _) = Check(exported, "Mos6502");
+        findings.Should().ContainSingle().Which.Should().Contain("Main ($1006) documents Keeps: X");
+
         // A jump to the entry is no call: the code that takes it is followed through it, with its own values, and
         // its own contract is checked.
         string jump = """

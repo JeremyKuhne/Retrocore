@@ -50,6 +50,12 @@ internal sealed partial class AnalysisContracts
     // was pushed.
     private readonly HashSet<ushort> _numbers = [];
 
+    // The direct targets of jumps, branches and calls, where code surely goes.
+    private readonly HashSet<ushort> _targets = [];
+
+    // The addresses of exported labels, which programs outside the assembly may call with any values.
+    private readonly HashSet<ushort> _exported = [];
+
     // The jumps and branches to each address, by their addresses.
     private readonly Dictionary<ushort, List<ushort>> _jumpSites = [];
     private const int MaximumCallStates = 16;
@@ -287,7 +293,12 @@ internal sealed partial class AnalysisContracts
         {
             if (!_engine.TryDecode(address, out DisassembledInstruction instruction)) { continue; }
             _instructionSet.Add(address);
-            if (instruction.DirectTarget is { } target) { _entered.Add(target); }
+            if (instruction.DirectTarget is { } target)
+            {
+                _entered.Add(target);
+                _targets.Add(target);
+            }
+
             if (instruction.Flow is DisassemblyFlow.Jump or DisassemblyFlow.ConditionalBranch && instruction.DirectTarget is { } jumped)
             {
                 if (!_jumpSites.TryGetValue(jumped, out List<ushort>? jumps)) { _jumpSites[jumped] = jumps = []; }
@@ -340,9 +351,15 @@ internal sealed partial class AnalysisContracts
         // Each symbol by its name and by its last part, as Inner of Routine::Inner, with every address a part names
         // where scopes share it, as two routines' Loop labels.
         Dictionary<string, List<ushort>> symbols = [with(StringComparer.Ordinal)];
+        foreach (AssemblySymbol defined in result.SymbolDefinitions)
+        {
+            // A label is a way in; an equate, as CR = $0D, is a number, and an exported label one outside code calls.
+            if (!defined.IsConstant) { _entered.Add((ushort)defined.Value); }
+            if (defined.IsExported && !defined.IsConstant) { _exported.Add((ushort)defined.Value); }
+        }
+
         foreach ((string symbol, long value) in result.Symbols)
         {
-            _entered.Add((ushort)value);
             Add(symbol, (ushort)value);
             int scope = symbol.LastIndexOf("::", StringComparison.Ordinal);
             if (scope >= 0) { Add(symbol[(scope + 2)..], (ushort)value); }
@@ -506,7 +523,7 @@ internal sealed partial class AnalysisContracts
                 if (_instructionSet.Contains(at)
                     && _engine.TryDecode(at, out DisassembledInstruction instruction)
                     && instruction.Size == back
-                    && instruction.Flow is DisassemblyFlow.Next or DisassemblyFlow.Call)
+                    && instruction.Flow is DisassemblyFlow.Next or DisassemblyFlow.Call or DisassemblyFlow.Wait)
                 {
                     previous = at;
                 }
@@ -516,17 +533,13 @@ internal sealed partial class AnalysisContracts
             address = before;
         }
 
-        // A skip is an instruction that starts in data or a patched byte just before the run and ends inside it, so
-        // within one byte less than the longest instruction; a byte of the run a store may change is not as followed.
+        // A skip is an instruction that starts in data code may run into, or a patched byte, just before the run and
+        // ends inside it, so within one byte less than the longest instruction. (A patched byte in the run stops the
+        // run's analysis at it, as the engine does with any.)
         for (int back = 1; back < MaximumInstruction; back++)
         {
             ushort at = (ushort)(address - back);
-            if (_defined[at] && (_data[at] || _patched[at])) { return null; }
-        }
-
-        for (ushort at = address; at != site; at++)
-        {
-            if (_patched[at]) { return null; }
+            if (_defined[at] && (_patched[at] || (_data[at] && DataReached(at)))) { return null; }
         }
 
         // A way in that is no instruction's start, as JMP Caller+3 into a CMP #$EA that runs as NOP, or as a BIT whose
@@ -545,6 +558,22 @@ internal sealed partial class AnalysisContracts
         return address;
     }
 
+    // Whether code may run into a data byte: through a jump, branch or call to it or before it in its data, or by
+    // falling into the data from the instruction before, as into a .byte $2C written as a skip; a table or text after
+    // a return is not, though a label names it.
+    private bool DataReached(ushort at)
+    {
+        for (int steps = 0; steps < MaximumRunSteps; steps++)
+        {
+            if (_targets.Contains(at)) { return true; }
+            ushort before = (ushort)(at - 1);
+            if (!_defined[before] || !_data[before]) { return FallsInto(at) is not null; }
+            at = before;
+        }
+
+        return true;
+    }
+
     // The instruction before one that falls into it, or null.
     private ushort? FallsInto(ushort address)
     {
@@ -554,7 +583,7 @@ internal sealed partial class AnalysisContracts
             if (_instructionSet.Contains(at)
                 && _engine.TryDecode(at, out DisassembledInstruction instruction)
                 && instruction.Size == back
-                && instruction.Flow is DisassemblyFlow.Next or DisassemblyFlow.Call or DisassemblyFlow.ConditionalBranch)
+                && instruction.Flow is DisassemblyFlow.Next or DisassemblyFlow.Call or DisassemblyFlow.ConditionalBranch or DisassemblyFlow.Wait)
             {
                 return at;
             }
@@ -608,11 +637,12 @@ internal sealed partial class AnalysisContracts
         }
 
         // An entry whose address the code takes as data, as in a table, or writes as a number, may be called through
-        // it; one other code jumps or branches or falls to may be called that way, after a return address pushed, as
+        // it, and an exported one by programs outside the assembly; one other code jumps or branches or falls to may be called that way, after a return address pushed, as
         // a JSR would. Its own routine's jumps, branches and fall-through to it are its own code.
         IReadOnlySet<ushort> own = Analyzed(contract.Address)?.Visited ?? new HashSet<ushort>();
         bool onlyCalled = !_referenced.Contains(address)
             && !_numbers.Contains(address)
+            && !_exported.Contains(address)
             && (!_jumpSites.TryGetValue(address, out List<ushort>? jumps) || jumps.All(own.Contains))
             && (FallsInto(address) is not { } before || own.Contains(before));
 

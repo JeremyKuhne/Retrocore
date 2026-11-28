@@ -740,6 +740,49 @@ public sealed class ProjectLaunchTests
     }
 
     /// <summary>
+    ///  Watches and beam observers keep a PET project tape on the real pulse path.
+    /// </summary>
+    /// <param name="watch">Whether to install a memory watch rather than a beam observer.</param>
+    [TestMethod]
+    [DataRow(data: true)]
+    [DataRow(data: false)]
+    public void PetProjectTapeSkipFallsBackForObservers(bool watch)
+    {
+        Write("retrocore.json", """
+            { "sdk": "1", "name": "game", "cpu": "6502", "sources": ["src/*.s"], "entry": "START",
+              "targets": { "pet": { "machine": "pet4032", "environment": "basic" } } }
+            """);
+
+        Write("src/main.s", "START:\n    nop\n    jmp START\n");
+        using DapTestClient client = new();
+        client.Request("initialize", []);
+        JsonObject launch = Launch("pet");
+        launch["tapeSpeed"] = "skip";
+        launch["ioMode"] = "fast";
+        JsonNode? first = client.Request("launch", launch)["mediaSpeedResult"];
+        first.String("effective").Should().Be("skip");
+        if (watch)
+        {
+            client.Request("setDataBreakpoints", new JsonObject
+            {
+                ["breakpoints"] = new JsonArray(new JsonObject { ["dataId"] = "0x0410", ["accessType"] = "write" })
+            });
+        }
+        else
+        {
+            client.Request("setExceptionBreakpoints", new JsonObject
+            {
+                ["filters"] = new JsonArray("scanline")
+            });
+        }
+
+        JsonNode? result = client.Request("launch", launch.DeepClone().AsObject())["mediaSpeedResult"];
+        result.String("requested").Should().Be("skip");
+        result.String("effective").Should().Be("fast");
+        result.Long("cycles").Should().BeGreaterThan(first.Long("cycles") ?? 0);
+    }
+
+    /// <summary>
     ///  A <c>basic</c> target, or its launch, cannot give the tape, disks or units its launch decides.
     /// </summary>
     /// <param name="option">The option.</param>

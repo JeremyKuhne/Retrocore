@@ -385,6 +385,9 @@ internal sealed partial class DebugSession
 
     // Breakpoints in application source, including ones from a previous launch, do not observe this ROM-only interval.
     private bool ObservesTapeBoot() => _frozen.Count != 0
+        || _watches.Count != 0
+        || _beamBreakpoints.Count != 0
+        || BreaksOn(ScanlineFilter)
         || _dataRequest?["breakpoints"] is JsonArray { Count: > 0 }
         || _states.Values.Any(state => state.Line is not { } line
             || IsTapeFirmwareSource(line.Path));

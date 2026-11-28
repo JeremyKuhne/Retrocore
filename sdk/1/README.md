@@ -29,18 +29,26 @@ A `source` launch and `--assemble` search only `Sdk/`.
 | Header | Targets | What it gives |
 | --- | --- | --- |
 | `cpus/6502/cpu.inc` | every 6502 and 65C02 target | the stack's page and the three vectors |
+| `cpus/6809/cpu.inc` | every 6809 target | the seven vectors at the top of memory |
+| `cpus/z80/cpu.inc` | every Z80 target | where the Z80 starts at reset, where RST `$38` and interrupt mode 1 go, and where the NMI goes |
 | `environments/bare/environment.inc` | `bare` | nothing yet: a bare program calls its ROM |
 | `environments/wozmon/environment.inc` | `wozmon` | nothing yet: the program calls the Woz Monitor, as the Apple-1's `<machine.inc>` names it |
 | `environments/basic/environment.inc` | `basic` | `BASIC_START`, where the PRG loads, and `SYS_TOKEN`, the token of its BASIC line's `SYS` |
 | `environments/dfs/environment.inc` | `dfs` | OSFILE's loads and saves, the layout of its control block, and the Return that ends a file name |
 | `environments/sos/environment.inc` | `sos` | `SosCall`, SOS's call numbers and their parameter counts (OPEN, NEWLINE, READ, WRITE, CLOSE, TERMINATE), the interpreter's extend page, and the console's Return, line feed and clear |
 | `environments/prodos/environment.inc` | `prodos` | `MliCall` and the MLI's entry at `$BF00`, its call numbers and their parameter counts (QUIT, OPEN, NEWLINE, READ, WRITE, CLOSE), and the size of OPEN's I/O buffer |
+| `environments/colorbasic/environment.inc` | `colorbasic` | nothing yet: the program calls Color BASIC, as the Color Computer's `<machine.inc>` names it, and goes back to it with `rts` |
+| `environments/cpm/environment.inc` | `cpm` | `BdosEntry` at `$0005` and `WarmBoot` at `$0000`, the default FCB and record buffer, the BDOS functions a console program and a file reader use (0, 1, 2, 6, 9, 10, 15, 16, 20, 26), and the characters that end a string and a line |
+| `environments/diskbasic/environment.inc` | `diskbasic` | nothing yet: as under `colorbasic`, the program calls Color BASIC and goes back with `rts` |
+| `environments/level2/environment.inc` | `level2` | `BasicReady`, Level II's READY prompt, which a program goes back to |
 | `environments/dos33/environment.inc` | `dos33` | DOS 3.3's page-3 vector from `$03D0`, from DosInit.asm, and `DOS_COMMAND`, the Ctrl-D that starts a command a program writes |
 | `machines/apple1/machine.inc` | `apple1` | the PIA, and the Woz Monitor's ECHO, PRBYTE, PRHEX and GETLINE, written here |
 | `machines/apple2/machine.inc` | every Apple II | `IIeEquates.asm`, `MonitorEntries.asm`, and nine more Monitor entries |
 | `machines/apple3/machine.inc` | `apple3` | `Apple3Equates.asm`, and text page 1 |
 | `machines/pet/machine.inc` | every PET | `PetEquates.asm`, and the kernal's character in, character out and get |
 | `machines/bbc/machine.inc` | `bbca`, `bbcb` | `MosEquates.asm` and `MosEntries.asm` |
+| `machines/coco/machine.inc` | every Color Computer | the text screen and its size, and Color BASIC's documented calls: the table of vectors at `$A000` (POLCAT, CHROUT, CSRDON, BLKIN, BLKOUT, JOYIN, WRTLDR) |
+| `machines/trs80/machine.inc` | the TRS-80s whose ROM is Level II: the Model I with Level II, the Model III and the Model 4 (not the 4P, whose boot ROM loads it from a disk) | the keyboard's matrix, the video RAM and the screen's size, and Level II's documented calls: the keyboard scan, display, printer, line input, key wait and delay |
 
 Each header asserts the define of the targets it is for, so a header included for another target fails at once
 with a message that names what it is for. Each entry a header writes itself inherits the documentation of the ROM
@@ -89,7 +97,9 @@ an error.
 - **`free`** and **`reserved`** account for every address from `$0100` once. Each reserved area says why, as a phrase
   that follows "overlaps".
 - **`zeroPage`** gives the bytes a program may use, at least one; the rest of the zero page is the machine's. Runs
-  that touch count as one.
+  that touch count as one. A map for a CPU with no zero page, the Z80's and the 6809's (whose direct page is wherever
+  DP puts it), leaves it out, and its `free` and
+  `reserved` account for every address from `$0000`, so a section in the first page is checked as any other is.
 
 **The build.** With no `linkerConfiguration`, a target links by one made from its map, which `retrocore build` and a
 `project` launch write to `obj/<target>/memory.cfg` before they assemble, so it is there when the assembly or the
@@ -142,6 +152,32 @@ before BASIC's program, then `10 SYS` and the entry), and load at `$0410`, where
 The `sos` map, `apple3`, loads at `$2000`, where SOS loads SOS.INTERP in the system bank, with free RAM to the kernel
 at `$B800`, all of the interpreter's own zero page (at `$1A00`), and SOS's low pages and kernel reserved.
 
+The `level2` maps are `trs80-model1-level2-16k` to `-48k` and `trs80-model3-16k` to `-48k`, for the RAM from `$4000`.
+Each has no zero page and reserves the ROM, the keyboard's matrix at `$3800`, the video RAM at `$3C00`, and the ROM's
+own RAM from `$4000`: its vectors, device control blocks, BASIC's work area and input buffer, and the stack that
+`SYSTEM` sets at `$4288` before it starts a program. A Model I program loads at `$4300`; the Model III keeps its
+RS-232 and cassette state at `$41E5-$4224`, which moves BASIC's input buffer and program text up a page, so a program
+loads at `$4400` there.
+
+The `colorbasic` maps are `coco-16k` and `-64k` for the Color Computer 1 and 2, `coco-32k` for the 1, and `coco3-128k`
+and `-512k`,
+for the RAM below the ROMs that Color BASIC shows, at most 32K. Each has no zero page and reserves Color BASIC's
+direct page and workspace, `$0000-$03FF`, the text screen at `$0400`, Extended BASIC's four graphics pages
+`$0600-$1DFF`, the page `$1E00-$1EFF`, where BASIC's empty program starts at `$1E01` and its variables at `$1E03`,
+growing up over the program once it goes back to BASIC, and the top 512 bytes of RAM, BASIC's string space and
+the stack EXEC starts a program on. A program loads at `$1F00`. A `colorbasic` target runs under Extended Color
+BASIC, whose memory this is, so a CoCo 1 or 2 target cannot give `extendedBasic` none.
+
+The `diskbasic` maps are the `colorbasic` ones' names and sizes, for Disk Extended Color BASIC. Disk BASIC keeps its
+workspace at `$0600-$0DFF` and moves the graphics pages up to `$0E00-$25FF`, so BASIC's empty program is at `$2601`,
+its variables from `$2603`, and a program loads at `$2700`; the top 512 bytes are reserved as under `colorbasic`, and
+the cartridge port's ROM from `$C000` is Disk BASIC's.
+
+The `cpm` map, `kaypro2`, is the Kaypro II's under its CP/M 2.2: no zero page, page zero reserved for CP/M's jumps,
+default FCB and record buffer, free RAM from `$0100` to `$E3FF`, below the CCP, and the CCP from `$E400`, the BDOS
+from `$EC00` and the BIOS from `$FA00` reserved, as the warm boot's and the BDOS's jumps at `$0000` and `$0005` give
+them on that disk. A program loads at `$0100`.
+
 The `prodos` map, `apple2-48k`, is for the II Plus with its language card (its launch's default) and both IIe models.
 It loads at `$2000`, where ProDOS loads a system file, with free RAM in `$0300-$03CF` and from `$0800` to ProDOS's
 global page at `$BF00`, and the bare map's zero page, which neither the Monitor nor ProDOS uses. ProDOS itself is in
@@ -169,6 +205,10 @@ image beside them. `retrocore build` prints a line for each, and `obj/<target>/b
 | `basic` | `<name>.prg`, loading at `$0401`: the line `10 SYS<entry>`, zeros to `$0410`, then the program | `<name>.tap`, a TAP tape of the PRG, and `<name>.d64`, a 4040 disk (CBM DOS 2) with it as a program file, each under the project's name in capitals, its letters, digits, `-` and `.`, cut to 16 | puts the tape in cassette 1 with PLAY down, types `LOAD` at BASIC's prompt and `RUN` once the program is in; with `"image": { "boot": "disk" }`, boots the disk in unit 8 with `LOAD"<NAME>",8` instead, which needs the 4040's ROMs (below) |
 | `sos` | `<name>.interp`, the program as SOS.INTERP, loading at `$2000`: SOS starts it at its first byte, which is its entry or a `JMP` on to it | `<name>.dsk`, a SOS 1.3 boot disk from the SDK's sources (the boot loader, SOS.KERNEL, a SOS.DRIVER with the console's driver), the interpreter and the target's `files` as BIN files whose aux type is their `address` | boots the disk in `.D1`; SOS loads and starts the interpreter, and the launch maps its lines in the memory SOS runs it in: the switched bank SOS gives it below `$A000`, and the fixed system RAM above |
 | `prodos` | the binary, as the system file `<NAME>.SYSTEM` it is on the disk (the project's name in capitals, its letters, digits and periods, cut to 8) | `<name>.po`, a ProDOS disk (ProDOS order) named for the project, with ProDOS 2.4.3's boot blocks and `PRODOS`, from its disk found by hash (below), then the program as a SYS file at `$2000`, and the target's `files` as BIN files whose aux type is their `address`; without ProDOS 2.4.3 the build writes the binary alone and says what it needs | boots the disk from slot 6; ProDOS runs the volume's first system file whose name ends `.SYSTEM`, the program, at its first byte, which is its entry or a `JMP` on to it, with the boot volume as its prefix |
+| `level2` | the binary | `<name>.cas`, a 500 baud SYSTEM tape (CAS) of the bytes from `load`, in blocks of 256, under the project's name in capitals, its letters and digits from a letter, cut to 6, and the entry address | puts the tape in the cassette recorder and boots with no disk, answering the Model III's `Cass?` with `L` and `MEMORY SIZE?` with Return, then types `SYSTEM`, the tape's name at the `*?` prompt, and `/` once the program has loaded, which starts it at its entry |
+| `colorbasic` | the binary | `<name>.cas`, a 1500 baud cassette of one machine-language file: a name block (the project's name in capitals, its letters and digits from a letter, cut to 8, type 2, the address EXEC starts and the load address), then the bytes from `load` in blocks of 255 | puts the tape in the cassette recorder and boots with no disk controller; at BASIC's `OK` it types `CLOADM"<NAME>"`, and once the program is in and `OK` is back, `EXEC`, which starts it at its entry |
+| `diskbasic` | the binary | `<name>.dsk`, a JVC image of a 35-track RS-DOS disk with the program as `<NAME>.BIN`, its name cut to 8, in Disk BASIC's binary format (its bytes from `load` as one block, then the entry as EXEC's address), and the target's `files` | fits the disk controller with Disk BASIC, from the SDK's sources or the launch's ROM folder's dumps, and puts the disk in drive 0; at `OK` it types `LOADM"<NAME>"`, and once the program is in, `EXEC`, which starts it at its entry |
+| `cpm` | `<name>.com`, the program's bytes from `$0100`, where the CCP loads and starts a command at its first byte, which is its entry or a `JP` to it | `<name>.img`, the Kaypro II's CP/M 2.2 system disk, found by its hash (below), with the program added as `<NAME>.COM`, its name cut to 8 and not a CCP command's (`DIR`, `ERA`, `REN`, `SAVE`, `TYPE`, `USER`), and the target's `files`, in the disk's 4K free; without the disk the build writes the `.COM` alone and says what it needs. Only the Kaypro II builds yet | puts the disk in drive A, and once CP/M shows `A>`, types the program's name |
 | `dfs` | `<name>.uef`, a UEF tape of the same files, for `*TAPE` and `*RUN` | `<name>.ssd`, a DFS disk (80 tracks, one side) titled for the project, with the program as `$.<NAME>` (the project's name in capitals, cut to 7), the target's `files`, and `$.!BOOT`, `*RUN <NAME>`, with the boot option set to `*EXEC` it | boots the disk from drive 0, holding SHIFT from power-on as SHIFT-BREAK does, and `!BOOT` runs the program |
 
 A launch that boots an image builds it as `retrocore build` does, puts it in its drive after a saved machine's media
@@ -178,8 +218,15 @@ at the program's entry with its bytes in memory. There it stops, or runs on, as 
 The image goes in from memory, so what the program writes to it never reaches the build's output. A target with
 `"image": false` builds, but cannot launch. On the Apple II, a `dos33` launch gives the machine the Autostart ROM,
 which boots the disk at power-on, and its target cannot give the Disk II's options. Nor can a `prodos` target, nor,
-on the II Plus, a `slot0` other than the language card, which ProDOS needs and its launch has by default. A `dfs` launch fits the disk
-interface and holds SHIFT, and its target cannot give `disks`, `boot` or `diskInterface`. No launch that boots an
+on the II Plus, a `slot0` other than the language card, which ProDOS needs and its launch has by default. A `dfs`
+launch fits the disk interface and holds SHIFT, and its target cannot give `disks`, `boot` or `diskInterface`. A
+`level2` target cannot give `cassette`, `disks` or `diskController`: the launch plays its own tape, fast unless `fastCassette` is false, and boots
+with no disk controller, so the ROM starts in BASIC rather than waiting for a disk. A `colorbasic` target cannot give
+`cassette` or `cartridge`, nor `disks` or `diskController`, as Disk BASIC is the `diskbasic` environment, nor, on a
+CoCo 1 or 2, `extendedBasic` none. A `diskbasic` target cannot give `disks`, `diskController`, `cassette` or
+`cartridge`: its launch fits the controller and puts its own disk in drive 0, and Disk BASIC is in the cartridge
+port and loads the program from the disk; nor, on a CoCo 1 or 2, `extendedBasic` none. A `cpm` target cannot give
+`disks` or `command`, as its launch puts its own disk in drive A and types the program's name. No launch that boots an
 image takes `bootSeconds`: the machine boots the image from power-on.
 
 A target's fields for its media, which an environment that has no use for one refuses, naming it:
@@ -193,16 +240,20 @@ A target's fields for its media, which an environment that has no use for one re
   with OSFILE. On its tape the name is `D.NAME` too, and the bare `NAME` for `$`, so OSFILE finds it under `*TAPE` by
   that name. On a `sos` disk each is a BIN file (type `$06`), by `name` or its file name in capitals, its aux type its
   `address` or 0, which a program reads with OPEN and READ. On a `prodos` disk each is a BIN file (type `$06`) in the
-  same way, which a program reads with the MLI's OPEN and READ.
+  same way, which a program reads with the MLI's OPEN and READ. On a `diskbasic` disk each is a binary data file
+  (type 1), by `name` or its file name in capitals, as `NAME.EXT`: a name of 1 to 8 capitals and digits from a letter and an extension of up to 3 from a letter, a
+  narrower rule than Disk BASIC's, so a program can type each. It keeps no load address,
+  so it takes no `address`, and holds at least a byte. On a `cpm` disk each is a user 0 file by `name` or its file
+  name in capitals, as `NAME.TYP`, in the same narrower rule, keeping no load address either.
 - **`image`**: `false` leaves the image out (the `wozmon` tape), and `{ "template": "<disk>" }` starts it from a
   disk where the environment can.
 - **`image.boot`**: which image a launch boots, where an environment builds more than one: `basic`'s `tape` (the
   default) or `disk`.
 - **`bootImage`**: the folder of boot media or device dumps that are not SDK sources, for an environment that needs
-  some: a `basic` target's 4040 ROMs, and a `prodos` target's ProDOS 2.4.3 disk.
+  some: a `basic` target's 4040 ROMs, a `prodos` target's ProDOS 2.4.3 disk, and a `cpm` target's CP/M system disk.
 
 **Boot media.** [`boot-media.json`](boot-media.json) lists the dumps and disks the SDK cannot build, each file with
-its SHA-1: the one its usual source publishes where it publishes one, as MAME's sets do. There are two sets.
+its SHA-1: the one its usual source publishes where it publishes one, as MAME's sets do. There are three sets.
 
 The 4040's ROMs, MAME's `c4040` set (DOS 2.0 revision 2, the controller's 901466-04 and the GCR PROM 901467), are what
 only booting a `basic` target's disk needs; its tape plays from the SDK's sources alone. A `basic` launch finds them by
@@ -218,6 +269,11 @@ size and hash in the target's `bootImage` and `RETROCORE_CACHE`, each with its s
 `m1-dependencies/`, and reads its boot blocks and `PRODOS` from it into the target's own disk. Without it the build
 writes the binary and no disk, and says so, and the target's launch fails naming the disk, its hash and where it
 looked.
+
+The Kaypro II's CP/M 2.2 system disk is `cpm22-rom149.img`, the disk for its 81-149C ROM that the Kaypro's tests read
+from `RETROCORE_KAYPRO`; it is the user's own, with no download. A `cpm` target's build looks for it by size and hash
+in the target's `bootImage`, `RETROCORE_KAYPRO` and `RETROCORE_CACHE`, and adds the program to a copy of it. Without it
+the build writes the `.COM` alone and says so, and the launch fails naming the disk, its hash and where it looked.
 
 Each target also assembles its environment's platform folder, `src/platform/<environment>/`, after its family's and
 its model's: a file there takes the place of theirs of the same name, so an environment can give its own console or

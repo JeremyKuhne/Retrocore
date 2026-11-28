@@ -769,7 +769,9 @@ internal sealed class MainWindow : Window
         if (running)
         {
             parts.Add($"{host.MeasuredHertz / 1_000_000:0.00} MHz");
-            if (host.Accelerated) { parts.Add(host.FastDriveKind == "tape" ? "fast tape" : "fast disk"); }
+            if (host.MediaSpeedFellBack(tape: true)) { parts.Add("tape: Fast (Skip not supported)"); }
+            if (host.MediaSpeedFellBack(tape: false)) { parts.Add("disk: Fast (Skip not supported)"); }
+            if (host.Accelerated) { parts.Add("fast media"); }
             parts.Add($"{_screen.Stats.FramesPerSecond} fps");
             if (host.DeviceStates().FirstOrDefault(drive => drive.Activity != DeviceActivity.Idle) is { } busy)
             {

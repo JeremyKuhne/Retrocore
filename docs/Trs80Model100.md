@@ -169,6 +169,19 @@ The piezo buzzer follows port B bit 5 while bit 2 is set. With bit 2 clear, it f
 bit 5 is set, and keeps its level while bit 5 is clear, as MAME's driver has it. BASIC's `BEEP` and `SOUND` use the
 timer. The display panel plays it while the machine runs at its own speed, as it does for the other machines.
 
+## The ROM's source
+
+The SDK has the ROM as source, [`Model100.asm`](../src/Retrocore.Machines.Trs80Model100/Roms/Model100.asm) and its
+modules, which assemble byte for byte to the US Model 100's ROM and, with `MODEL = 102`, to the Tandy 102's. A
+session running either ROM debugs in it: breakpoints, stepping and the call stack go through the ROM by its names,
+such as `LCD` (Tandy's documented entry that `RST 4` reaches), `NEWSTT` and `CRUNCH`. Another dump of the ROM, such
+as a regional or patched one, runs without it.
+
+The names are being worked through ([the naming log](conversions/Model100.md)): Tandy's for the entry points the
+Technical Reference documents, the statements' and functions' keywords for their handlers (`ST_PRINT`), and
+Microsoft's where the code matches MBASIC's; the rest of the ROM still has the disassembler's names, such as
+`L_4E52`.
+
 ## BASIC
 
 Model 100 BASIC is a dialect of its own, `model100`, with `.model100.bas` source files and `' retrocore model100` as
@@ -186,7 +199,7 @@ for its words is still to come.
 While BASIC is at its prompt, **Retrocore: Open BASIC Program** edits the program BASIC has open as text: a `.BA`
 file after `LOAD`, or its unsaved program. Saving writes it back over that file, moving the files after it; at the
 menu, in TEXT or while a program runs, it is refused. Line-by-line BASIC stepping and a `basic` launch are not offered
-yet; both depend on symbol addresses from an SDK source of the ROM.
+yet; they are next, now that the ROM is an SDK source.
 
 ## Testing
 
@@ -202,6 +215,9 @@ yet; both depend on symbol addresses from an SDK source of the ROM.
   starts, a mismatched size and failed saves, the launch's files on the menu, a tape recorded and played through the
   cassette's actions, a recording as a changed tape that an eject holds back until it is saved, and the session's end
   writing the RAM image and not the recording.
+- `Trs80Model100RomSourceTests`: the ROM's source builds both models' ROMs, their digests pinned so no ROM is
+  needed, with Microsoft's and Tandy's names where the ROM has them; with the ROMs, each build compares byte for
+  byte. `Trs80Model100DebugTargetTests` check that the debugger maps the source onto either ROM and onto no other.
 - `Model100BasicTests`: the tokenizer against the bytes the ROM stored for typed lines (pinned, so they need no ROM),
   listings, renumbering, and with the ROM, its keyword table, typed lines read back, and a program written into RAM
   that BASIC runs.
@@ -213,7 +229,7 @@ yet; both depend on symbol addresses from an SDK source of the ROM.
   - tapes through WAV files, the motor, SID's polarity, and the buzzer's two sources, without the ROM;
   - with the ROM, `CSAVE` decoded into MAME's blocks and loaded back with `CLOAD`, and `BEEP`'s sound.
 - [`tools/Test-Trs80Model100Dap.mjs`](../tools/Test-Trs80Model100Dap.mjs): a source's breakpoint, call stack, registers
-  and output, the menu, BASIC, POWER OFF and Reset, a RAM image resumed in a new session, a launch's files on the menu,
+  and output, a breakpoint in the ROM's source, the menu, BASIC, POWER OFF and Reset, a RAM image resumed in a new session, a launch's files on the menu,
   BASIC's program read and written, a tape `CSAVE`d through the cassette's actions and `CLOAD`ed in a new launch, and
   the Tandy 102, through the debug adapter. Without the ROM it checks the
   missing-ROM messages and reports the rest skipped.

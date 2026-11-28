@@ -121,6 +121,24 @@ public sealed class AltairDiskTests
     }
 
     /// <summary>
+    ///  A loaded head does not keep the host unthrottled after disk accesses stop.
+    /// </summary>
+    [TestMethod]
+    public void DiskActivityExpiresWithTheHeadStillLoaded()
+    {
+        AltairMachine machine = Machine();
+        AltairDiskController disk = machine.Bus.Disk ?? throw new AssertFailedException("No disk controller.");
+        machine.Bus.Out(Status, 0);
+        machine.Bus.Out(Control, 4);
+        disk.IsBusy.Should().BeTrue();
+        machine.Run((ulong)(AltairDiskTiming.SectorCycles * AltairDisk.SectorsPerTrack));
+        Drives(machine)[0].HeadLoaded.Should().BeTrue();
+        disk.IsBusy.Should().BeFalse();
+        machine.Bus.In(Sector);
+        disk.IsBusy.Should().BeTrue();
+    }
+
+    /// <summary>
     ///  The status shows the 8080's INTE, as the controller reads it from the bus.
     /// </summary>
     [TestMethod]

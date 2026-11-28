@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 // See LICENSE file in the project root for full license information
 
+using Retrocore.Assembler;
 using Retrocore.Cpu.I8080;
 using Retrocore.Isa;
 using Retrocore.Machines.Devices;
@@ -298,9 +299,21 @@ internal sealed partial class Trs80Model100DebugTarget : IDebugTarget, IRecordin
     }
 
     /// <inheritdoc/>
-    /// <remarks>The ROM is not an SDK source yet, so there is nothing to add.</remarks>
+    /// <remarks>
+    ///  <para>
+    ///   The SDK's <c>Model100.asm</c> is added for the main ROM when the machine runs the US Model 100's or Tandy
+    ///   102's ROM and the source builds that model's bytes; another dump, such as a regional or patched ROM, gets no
+    ///   source. The option ROM has none.
+    ///  </para>
+    /// </remarks>
     public void AddSdkModules(DebugInfo debug, string? directory)
     {
+        string source = Path.Join(Trs80Model100SdkModules.SourceDirectory(directory), Trs80Model100SdkModules.Source);
+        byte[] rom = _machine.Roms.Main;
+        if (Trs80Model100Roms.Identify(rom) is not { } model || !File.Exists(source)) { return; }
+        AssemblyResult result = Trs80Model100SdkModules.Assemble(source, model);
+        if (!result.Sections[0].Bytes.Span.SequenceEqual(rom)) { return; }
+        debug.Add(new SourceMapModule(result, Trs80Model100MemoryArea.Rom));
     }
 
     /// <inheritdoc/>

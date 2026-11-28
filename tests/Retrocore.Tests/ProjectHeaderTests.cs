@@ -324,6 +324,12 @@ public sealed partial class ProjectHeaderTests
     [DataRow("apple2-iie-enhanced", "bare", "Monitor")]
     [DataRow("apple2-iiplus", "dos33", "Monitor,Dos33")]
     [DataRow("apple2-iie", "prodos", "Monitor")]
+    [DataRow("trs80-model1-level2", "level2", "Level2")]
+    [DataRow("trs80-model3", "level2", "Level2")]
+    [DataRow("coco2", "colorbasic", "ColorBasic")]
+    [DataRow("coco3", "colorbasic", "ColorBasic")]
+    [DataRow("coco2", "diskbasic", "ColorBasic")]
+    [DataRow("coco3", "diskbasic", "ColorBasic")]
     [DataRow("apple3", "bare", "")]
     [DataRow("apple3", "sos", "")]
     [DataRow("pet4032", "bare", "Kernal4")]
@@ -332,11 +338,13 @@ public sealed partial class ProjectHeaderTests
     [DataRow("bbcb", "dfs", "Mos")]
     public void HeadersAreCleanInTheEditor(string machine, string environment, string modules)
     {
+        string cpu = CatalogMachine.Find(machine)?.Cpu.Name ?? "6502";
         Write("retrocore.json", $$"""
-            { "sdk": "1", "cpu": "6502", "sources": ["main.s"], "targets": { "t": { "machine": "{{machine}}", "environment": "{{environment}}" } } }
+            { "sdk": "1", "cpu": "{{cpu}}", "sources": ["main.s"], "targets": { "t": { "machine": "{{machine}}", "environment": "{{environment}}" } } }
             """);
 
-        Write("main.s", ".include <cpu.inc>\n.include <machine.inc>\n.include <environment.inc>\nrts");
+        string end = cpu == "z80" ? "ret" : "rts";
+        Write("main.s", $".include <cpu.inc>\n.include <machine.inc>\n.include <environment.inc>\n{end}");
         ProjectTarget target = RetrocoreProject.Load(_folder).Target("t");
         SourceAnalysis analysis = SourceAnalysis.Assemble(ProjectSources.RootFor(target), _ => null);
         analysis.Result.Success.Should().BeTrue(string.Join(Environment.NewLine, analysis.Result.Diagnostics.Select(error => error.Message)));

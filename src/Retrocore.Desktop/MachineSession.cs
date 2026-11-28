@@ -5,6 +5,8 @@
 using System.Text.Json.Nodes;
 using Touki;
 
+using Retrocore.Debug;
+
 namespace Retrocore.Desktop;
 
 /// <summary>
@@ -222,8 +224,12 @@ internal sealed class MachineSession : DisposableBase
 
     private MachineHost Build(JsonObject configuration, JsonObject? saved)
     {
+        MediaSpeed tape = MediaSpeedPolicy.LaunchMode(configuration, tape: true) ?? _settings.TapeSpeed;
+        MediaSpeed disk = MediaSpeedPolicy.LaunchMode(configuration, tape: false) ?? _settings.DiskSpeed;
         MachineHost host = new(configuration, saved);
         Problems = saved is null ? [] : host.Restore(saved);
+        host.SetMediaSpeed(tape: true, tape);
+        host.SetMediaSpeed(tape: false, disk);
         return host;
     }
 
@@ -235,7 +241,6 @@ internal sealed class MachineSession : DisposableBase
         MachineHost after = Build(configuration, saved);
         after.Speed = before.Speed;
         after.Volume = before.Volume;
-        after.FastDrives = _settings.FastDrives;
         if (changed != "monitor" && after.Screens.Contains(before.Screen)) { after.Screen = before.Screen; }
         if (changed != "sound")
         {

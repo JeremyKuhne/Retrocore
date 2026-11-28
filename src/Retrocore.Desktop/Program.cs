@@ -5,6 +5,7 @@
 using Avalonia;
 using System.Globalization;
 using System.Text.Json.Nodes;
+using Retrocore.Debug;
 
 namespace Retrocore.Desktop;
 
@@ -96,7 +97,11 @@ internal static class Program
         bool trial = smokeSeconds is not null || tour is not null;
         DesktopSettings settings = DesktopSettings.Load(trial ? null : DesktopSettings.DefaultPath);
         if (theme is not null) { settings.ThemeName = theme; }
-        if (fastDrives is { } fast) { settings.FastDrives = fast; }
+        if (fastDrives is { } fast)
+        {
+            settings.TapeSpeed = settings.DiskSpeed = fast ? MediaSpeed.Fast : MediaSpeed.Normal;
+        }
+
         if (zoom is { } steps)
         {
             settings.Zoom = Math.Clamp(steps, DesktopSettings.MinimumZoom, DesktopSettings.MaximumZoom);

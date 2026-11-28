@@ -91,7 +91,9 @@ internal static class SmokeRun
         Console.Out.WriteLine(FormattableString.Invariant($"frame time ms: median {stats.Percentile(50):0.00}, p99 {stats.Percentile(99):0.00}, max {stats.Percentile(100):0.00}"));
         Console.Out.WriteLine(FormattableString.Invariant($"emulated speed: {speed:0.000}x of {host.ClockHertz} Hz"));
         Console.Out.WriteLine(FormattableString.Invariant($"emulated throughput: {hertz / 1e6:0.000} MHz, {cycles:N0} cycles"));
-        Console.Out.WriteLine(FormattableString.Invariant($"fast {host.FastDriveKind ?? "drives"}: {(host.FastDriveKind is null ? "none" : host.FastDrives ? "on" : "off")}, running fast {fastPercent}% of the time, drives last busy {busyUntil:0.0} s after start"));
+        Console.Out.WriteLine(FormattableString.Invariant(
+            $"tape speed: {host.GetMediaSpeed(tape: true)}, disk speed: {host.GetMediaSpeed(tape: false)}, running fast {fastPercent}% of the time, drives last busy {busyUntil:0.0} s after start"));
+
         Console.Out.WriteLine($"sound: {(host.AudioOpen ? "open" : "not open")}, underruns: {host.AudioUnderruns}");
         Console.Out.WriteLine($"typing reached the screen: {(reached ? "yes" : "no")}");
 

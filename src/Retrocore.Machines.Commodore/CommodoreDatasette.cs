@@ -63,7 +63,7 @@ public sealed class CommodoreDatasette : ITapeDrive, IMediumSlot
             Name = name,
             Description = "Commodore C2N or 1530 Datasette",
             Controller = controller,
-            Formats = ["tap", "wav"],
+            Formats = ["tap", "wav", "t64"],
             SaveFormats = ["tap", "wav"],
             Operations = MediaOperations.Insert | MediaOperations.Eject | MediaOperations.Record | MediaOperations.Save | MediaOperations.Keys
         };
@@ -241,6 +241,29 @@ public sealed class CommodoreDatasette : ITapeDrive, IMediumSlot
         _elapsed = 0;
         _length = 0;
         _recordingStarted = false;
+    }
+
+    /// <summary>
+    ///  Advances a parked playing tape to an equivalent pulse, retaining its phase and read line.
+    /// </summary>
+    /// <param name="pulse">The later pulse index.</param>
+    /// <returns>Whether the tape head was moved.</returns>
+    internal bool TrySkipTo(int pulse)
+    {
+        if (Motor
+            || _mode != TapeMode.Playing
+            || _tape is not { } tape
+            || _length == 0
+            || !Read
+            || pulse <= _index
+            || pulse >= tape.Pulses.Count
+            || tape.Pulses[_index] != tape.Pulses[pulse])
+        {
+            return false;
+        }
+
+        _index = pulse;
+        return true;
     }
 
     /// <inheritdoc/>

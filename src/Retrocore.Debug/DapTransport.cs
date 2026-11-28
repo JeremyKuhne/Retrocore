@@ -3,6 +3,7 @@
 // See LICENSE file in the project root for full license information
 
 using System.Buffers;
+using System.Collections.Concurrent;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 
@@ -21,11 +22,15 @@ namespace Retrocore.Debug;
 /// </remarks>
 /// <param name="input">Where requests arrive, such as standard input.</param>
 /// <param name="output">Where responses and events go, such as standard output.</param>
-internal sealed class DapTransport(Stream input, Stream output)
+/// <param name="read">
+///  An optional read for input that does not support cancellation through
+///  <see cref="Stream.ReadAsync(Memory{byte}, CancellationToken)"/>.
+/// </param>
+internal sealed class DapTransport(Stream input, Stream output, Func<Memory<byte>, CancellationToken, int>? read = null)
 {
     private const int OutputDrainMilliseconds = 2_000;
 
-    private readonly MessageFraming _wire = new(input, output);
+    private readonly MessageFraming _wire = new(input, output, read ?? ((bytes, token) => DapStandardIo.Read(input, bytes, token)));
     private readonly Dictionary<string, Func<JsonObject, (JsonNode? Body, Action? FollowUp)>> _handlers = [with(StringComparer.Ordinal)];
     private readonly object _outboundGate = new();
     private Queue<(Action Write, Action? Release, int Weight)> _outbound = new();
@@ -37,6 +42,10 @@ internal sealed class DapTransport(Stream input, Stream output)
     private volatile bool _outputFailed;
     private bool _finished;
     private volatile bool _stopped;
+    private volatile bool _inputClosed;
+    private readonly CancellationTokenSource _stopReading = new();
+    private readonly Dictionary<int, CancellationTokenSource> _pendingLaunches = [];
+    private CancellationToken _launchCancellation;
 
     /// <summary>
     ///  Whether the emulator should yield instead of producing more events. Requests can still use the machine.
@@ -121,7 +130,24 @@ internal sealed class DapTransport(Stream input, Stream output)
     /// <summary>
     ///  Stops reading once the request being answered has its response.
     /// </summary>
-    internal void Stop() => _stopped = true;
+    internal void Stop()
+    {
+        _stopped = true;
+        _stopReading.Cancel();
+    }
+
+    /// <summary>
+    ///  Stops a launch when the reader sees its cancellation request.
+    /// </summary>
+    /// <param name="requireInput">Whether the operation should stop on EOF, as a paced launch should.</param>
+    internal void ThrowIfLaunchCancelled(bool requireInput = false)
+    {
+        _launchCancellation.ThrowIfCancellationRequested();
+        if (requireInput && _inputClosed)
+        {
+            throw new OperationCanceledException("DAP input closed during a paced launch.");
+        }
+    }
 
     /// <summary>
     ///  Answers requests until <see cref="Stop"/> or the end of the input.
@@ -184,12 +210,70 @@ internal sealed class DapTransport(Stream input, Stream output)
 
     private void ReadLoop()
     {
+        // A paced image boot can wait for minutes. Read cancellation ahead without dispatching handlers out of order.
+        BlockingCollection<(JsonObject Message, TaskCompletionSource? Disconnect)> requests = [with(boundedCapacity: 256)];
+        Task reader = Task.Factory.StartNew(
+            () => ReadRequests(requests), CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default);
+
+        foreach ((JsonObject message, TaskCompletionSource? disconnect) in requests.GetConsumingEnumerable())
+        {
+            if (_stopped) { break; }
+            int? launch = ReadAhead<string>(message, "command") == "launch"
+                ? ReadAheadInt(message, "seq")
+                : null;
+
+            if (launch is int current)
+            {
+                lock (_pendingLaunches)
+                {
+                    if (_pendingLaunches.TryGetValue(current, out CancellationTokenSource? pending))
+                    {
+                        _launchCancellation = pending.Token;
+                    }
+                }
+            }
+
+            try
+            {
+                Answer(message);
+            }
+            finally
+            {
+                disconnect?.SetResult();
+                if (launch is int completed)
+                {
+                    _launchCancellation = default;
+                    lock (_pendingLaunches)
+                    {
+                        if (_pendingLaunches.Remove(completed, out CancellationTokenSource? pending))
+                        {
+                            pending.Dispose();
+                        }
+                    }
+                }
+            }
+
+            if (_stopped) { break; }
+        }
+
+        reader.GetAwaiter().GetResult();
+    }
+
+    private void ReadRequests(BlockingCollection<(JsonObject Message, TaskCompletionSource? Disconnect)> requests)
+    {
+        try { ReadRequestsUntilStopped(requests); }
+        catch (OperationCanceledException) when (_stopped) { }
+        finally { requests.CompleteAdding(); }
+    }
+
+    private void ReadRequestsUntilStopped(BlockingCollection<(JsonObject Message, TaskCompletionSource? Disconnect)> requests)
+    {
         while (!_stopped)
         {
             JsonObject? message;
             try
             {
-                message = _wire.Read();
+                message = _wire.Read(_stopReading.Token);
             }
             catch (JsonException exception)
             {
@@ -198,9 +282,55 @@ internal sealed class DapTransport(Stream input, Stream output)
                 continue;
             }
 
-            if (message is null || _stopped) { return; }
-            if (message.String("type") == "request") { Answer(message); }
+            if (message is null)
+            {
+                _inputClosed = true;
+                return;
+            }
+
+            if (_stopped) { return; }
+            if (ReadAhead<string>(message, "type") != "request") { continue; }
+            string? command = ReadAhead<string>(message, "command");
+            lock (_pendingLaunches)
+            {
+                if (command == "launch"
+                    && ReadAheadInt(message, "seq") is int sequence
+                    && !_pendingLaunches.ContainsKey(sequence))
+                {
+                    _pendingLaunches.Add(sequence, new());
+                }
+                else if (command == "cancel"
+                    && message["arguments"] is JsonObject arguments
+                    && ReadAheadInt(arguments, "requestId") is int requestId
+                    && _pendingLaunches.TryGetValue(requestId, out CancellationTokenSource? pending))
+                {
+                    pending.Cancel();
+                }
+                else if (command == "disconnect")
+                {
+                    CancelPendingLaunches();
+                }
+            }
+
+            // A successful disconnect stops the transport. Don't enter another blocking read before it is handled.
+            TaskCompletionSource? disconnect = command == "disconnect" ? new(TaskCreationOptions.RunContinuationsAsynchronously) : null;
+            requests.Add((message, disconnect), _stopReading.Token);
+            disconnect?.Task.WaitAsync(_stopReading.Token).GetAwaiter().GetResult();
         }
+    }
+
+    private static T? ReadAhead<T>(JsonObject message, string field) =>
+        message[field] is JsonValue json && json.TryGetValue(out T? value) ? value : default;
+
+    private static int? ReadAheadInt(JsonObject message, string field)
+    {
+        try { return message.Int(field); }
+        catch (ArgumentException) { return null; } // The ordered dispatcher reports malformed fields.
+    }
+
+    private void CancelPendingLaunches()
+    {
+        foreach (CancellationTokenSource launch in _pendingLaunches.Values) { launch.Cancel(); }
     }
 
     private void Enqueue(Action write, Action? release = null, int weight = 1)
@@ -244,7 +374,8 @@ internal sealed class DapTransport(Stream input, Stream output)
             catch (Exception exception) when (exception is IOException or ObjectDisposedException or InvalidOperationException or JsonException)
             {
                 _outputFailed = true;
-                _stopped = true;
+                Stop();
+                lock (_pendingLaunches) { CancelPendingLaunches(); }
                 Console.Error.WriteLine($"DAP output failed: {exception.Message}");
             }
             finally

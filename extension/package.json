@@ -1848,20 +1848,25 @@
               },
               "cassette": {
                 "type": "string",
-                "description": "Model I, Model III and 4, and Color Computer: a .cas tape to play (500 baud on a Model III or 4). Apple-1: a .wav tape, which plays from the start of the session. Altair 8800: a .tap tape of bytes for the 88-ACR, which plays at 300 baud from the start of the session. BBC Micro: a .uef tape, or any file with a .inf file beside it, which goes on a tape as the MOS saves files. Atari 800 and 400: a .cas tape for the 410, or an .xex, which goes on a boot tape. Model 100 and Tandy 102: a .wav tape, which plays when the ROM runs the motor (CLOAD). VIC-20: a .tap, .wav or .prg tape in the Datasette, with PLAY down; a .prg goes in as the tape SAVE writes. The PET's are cassette1 and cassette2."
+                "description": "Model I, Model III and 4, and Color Computer: a .cas tape to play (500 baud on a Model III or 4). Apple-1: a .wav tape, which plays from the start of the session. Altair 8800: a .tap tape of bytes for the 88-ACR, which plays at 300 baud from the start of the session. BBC Micro: a .uef tape, or any file with a .inf file beside it, which goes on a tape as the MOS saves files. Atari 800 and 400: a .cas tape for the 410, or an .xex, which goes on a boot tape. Model 100 and Tandy 102: a .wav tape, which plays when the ROM runs the motor (CLOAD). VIC-20: a .tap, .wav, .prg or .t64 tape in the Datasette, with PLAY down. The PET's are cassette1 and cassette2."
               },
               "cassette1": {
                 "type": "string",
-                "description": "PET: a .tap, .wav or .prg tape in the built-in Datasette, cassette #1, with PLAY down. A .prg goes in as the tape SAVE writes."
+                "description": "PET: a .tap, .wav, .prg or .t64 tape in the built-in Datasette, cassette #1, with PLAY down."
               },
               "cassette2": {
                 "type": "string",
-                "description": "PET: a .tap, .wav or .prg tape in the second Datasette, cassette #2, with PLAY down."
+                "description": "PET: a .tap, .wav, .prg or .t64 tape in the second Datasette, cassette #2, with PLAY down."
               },
               "boot": {
                 "type": "boolean",
                 "default": false,
                 "description": "BBC Micro: hold SHIFT as the machine starts, as SHIFT-BREAK does, so the filing system boots the disk in drive 0 (its !BOOT) or, without a disk interface, the tape."
+              },
+              "tapeSpeed": {
+                "type": "string",
+                "enum": ["normal", "fast", "skip"],
+                "description": "Tape speed: normal honors machine speed, fast unthrottles without changing guest timing, and skip skips supported operations or falls back to fast. See the Devices and media guide for Skip support."
               },
               "fastCassette": {
                 "type": "boolean",
@@ -1918,6 +1923,11 @@
                 "type": "boolean",
                 "default": false,
                 "description": "Apple II: put Programmer's Aid #1 in the II's D0 socket ($D000-$D7FF), from the romDirectory's dump if it is there and otherwise built from the SDK's source. CALL -12288 starts its hi-res graphics. Other models have no D0 socket."
+              },
+              "diskSpeed": {
+                "type": "string",
+                "enum": ["normal", "fast", "skip"],
+                "description": "Disk speed: normal honors machine speed, fast unthrottles without changing guest timing, and skip skips supported operations or falls back to fast. See the Devices and media guide for Skip support."
               },
               "fastDisk": {
                 "type": "boolean",

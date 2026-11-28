@@ -20,6 +20,7 @@ in [AssemblyStyle.md](../AssemblyStyle.md).
 | The 3.5 disk controller (`Roms/Disk35/`, Apple's EPROM, and the emulator's `Roms/Disk35.rom.asm`) | Converted | [Disk35.md](Disk35.md) |
 | Apple III Business BASIC (`src/Retrocore.Machines.Apple3/Roms/BusinessBasic/`), as its own source (the shared Microsoft modules not used yet) | Converted | [BusinessBasic.md](BusinessBasic.md) |
 | MBASIC 5.21 for CP/M (`src/Retrocore.Machines.Kaypro/Roms/Mbasic/`), with Microsoft's names and where each came from | Named, not converted | [Mbasic.md](Mbasic.md) |
+| The TRS-80 Model 100's and Tandy 102's ROM (`src/Retrocore.Machines.Trs80Model100/Roms/`), named in part | Named in part, not converted | [Model100.md](Model100.md) |
 | Apple Pascal 1.1's interpreter, SYSTEM.APPLE (`src/Retrocore.Pascal/Sdk/Interpreter/1.1/`) | Converted | [PascalInterpreter.md](PascalInterpreter.md), [renames](PascalInterpreterRenames.md) |
 | Apple Pascal 1.3's Compiler, SYSTEM.COMPILER (`src/Retrocore.Pascal/Sdk/Compiler/apple2-1.3/`) | Converted | [PascalCompiler13.md](PascalCompiler13.md), [renames](PascalCompiler13Renames.md) |
 | The VIC-20's BASIC, kernal and character ROM (`src/Retrocore.Machines.Commodore/Roms/Vic20/`) | BASIC, the kernal and the character ROM converted | [Vic20.md](Vic20.md), [kernal renames](Vic20KernalRenames.md) |

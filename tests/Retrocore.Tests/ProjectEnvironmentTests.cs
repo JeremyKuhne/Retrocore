@@ -7,6 +7,7 @@ using Retrocore.Machines.Apple1;
 using Retrocore.Media;
 using Retrocore.Media.Acorn;
 using Retrocore.Media.Commodore;
+using Retrocore.Media.Floppy;
 using System.Text.Json.Nodes;
 
 namespace Retrocore.Tests;
@@ -586,6 +587,203 @@ public sealed class ProjectEnvironmentTests
             note.Should().EndWith("The binary is the system file GAME.SYSTEM");
             File.Exists(Path.Join(_folder, "artifacts", "prodos", "game.po")).Should().BeFalse();
         }
+    }
+
+    /// <summary>
+    ///  A <c>level2</c> target links at its map's load address, <c>$4300</c> on the Model I and <c>$4400</c> on the
+    ///  Model III, above their ROMs' RAM, and writes its SYSTEM tape under the project's name cut to six, with its entry.
+    /// </summary>
+    /// <param name="machine">The catalog machine.</param>
+    /// <param name="load">Where its map loads a program.</param>
+    [TestMethod]
+    [DataRow("trs80-model1-level2", 0x4300)]
+    [DataRow("trs80-model3", 0x4400)]
+    public void Level2WritesItsSystemTape(string machine, int load)
+    {
+        Write("retrocore.json", $$"""
+            { "sdk": "1", "name": "2-space-game", "cpu": "z80", "sources": ["main.s"], "entry": "START",
+              "targets": { "tape": { "machine": "{{machine}}", "environment": "level2" } } }
+            """);
+
+        Write("main.s", "DATA:\n    .byte 1\nSTART:\n    JP START\n");
+        TargetBuild build = ProjectBuild.Build(RetrocoreProject.Load(_folder).Target("tape"));
+        string tape = Path.Join(_folder, "artifacts", "tape", "2-space-game.cas");
+        build.Media.Should().Be(new TargetMedia(
+            File: null, FileKind: null, tape, "SYSTEM tape (CAS)", "SYSTEM, then SPACEG at the *? prompt, then / once it has loaded"));
+
+        (string name, IReadOnlyList<(int Address, byte[] Bytes)> blocks, int entry) = Retrocore.Media.Trs80.SystemTape.Read(File.ReadAllBytes(tape));
+        (name, entry).Should().Be(("SPACEG", load + 1));
+        byte[] program = [1, 0xC3, (byte)(load + 1), (byte)((load + 1) >> 8)];
+        blocks.Should().ContainSingle();
+        (blocks[0].Address, blocks[0].Bytes).Should().BeEquivalentTo((load, program));
+        File.ReadAllText(Path.Join(_folder, "obj", "tape", "memory.cfg")).Should().NotContain("ZP:", "the Z80 has no zero page");
+    }
+
+    /// <summary>
+    ///  A <c>level2</c> map has no zero page, as the Z80 has none, so a program's sections are checked from
+    ///  <c>$0000</c>: one placed over the ROM's RAM fails naming it, and a program too big for 16K says how far over it
+    ///  is. A program with no bytes has no tape, and a target cannot give files, as the tape holds the program alone.
+    /// </summary>
+    [TestMethod]
+    public void Level2MapsAndRefusals()
+    {
+        string Fails(string target, string source)
+        {
+            Write("retrocore.json", $$"""
+                { "sdk": "1", "name": "game", "cpu": "z80", "sources": ["main.s"],
+                  "targets": { "tape": { "machine": "trs80-model1-level2", "environment": "level2"{{target}} } } }
+                """);
+
+            Write("main.s", source);
+            Action build = () => ProjectBuild.Build(RetrocoreProject.Load(_folder).Target("tape"));
+            return build.Should().Throw<ProjectException>().Which.Message;
+        }
+
+        Fails(""", "memoryMap": { "load": "$4000", "free": [{ "start": "$4000", "end": "$40FF" }] }""", "    RET\n    .res $200\n").Should().Contain(
+            "section CODE ($4000-$4200) overlaps Level II's RAM:");
+
+        Fails(""", "options": { "ramKilobytes": 16, "expansionInterface": false }""", ".res $4000\n").Should().Contain(
+            "overlaps addresses with no RAM, as the machine has 16K from $4000 ($8000-$FFFF)").And.Contain("so it is 768 bytes over.");
+
+        Fails(""", "memoryMap": { "zeroPage": ["$80"] }""", "RET\n").Should().EndWith(
+            "target tape: its CPU has no zero page, so its 'memoryMap' cannot give 'zeroPage'.");
+
+        Fails("", "").Should().EndWith("target tape: the sources emit no bytes.");
+        Write("data.bin", "1");
+        Fails(""", "files": ["data.bin"]""", "RET\n").Should().EndWith(
+            "the 'level2' environment puts only its program on its tape, so it takes no 'files'.");
+    }
+
+    /// <summary>
+    ///  A <c>colorbasic</c> target links at <c>$1F00</c>, above Extended BASIC's graphics pages and BASIC's empty
+    ///  program, and writes its cassette: one machine-language file under the project's name cut to eight, which EXEC
+    ///  starts at the entry. Its map has no zero page, as the 6809's direct page is not one, so a section is checked from
+    ///  <c>$0000</c>, and a program too big for 16K says how far over it is.
+    /// </summary>
+    /// <param name="machine">The catalog machine.</param>
+    [TestMethod]
+    [DataRow("coco1")]
+    [DataRow("coco3")]
+    public void ColorbasicWritesItsTape(string machine)
+    {
+        Write("retrocore.json", $$"""
+            { "sdk": "1", "name": "space-adventure", "cpu": "6809", "sources": ["main.s"], "entry": "START",
+              "targets": { "tape": { "machine": "{{machine}}", "environment": "colorbasic" },
+                           "big": { "machine": "coco1", "environment": "colorbasic", "options": { "ramKilobytes": 16 } } } }
+            """);
+
+        Write("main.s", "DATA:\n    .byte 1\nSTART:\n    rts\n");
+        TargetBuild build = ProjectBuild.Build(RetrocoreProject.Load(_folder).Target("tape"));
+        string tape = Path.Join(_folder, "artifacts", "tape", "space-adventure.cas");
+        build.Media.Should().Be(new TargetMedia(
+            File: null, FileKind: null, tape, "Color Computer tape (CAS)", "CLOADM\"SPACEADV\", then EXEC once it has loaded"));
+
+        (string name, int address, byte[] bytes, int entry) = Retrocore.Media.Trs80.CocoTape.Read(File.ReadAllBytes(tape));
+        (name, address, entry).Should().Be(("SPACEADV", 0x1F00, 0x1F01));
+        bytes.Should().Equal(1, 0x39);
+        File.ReadAllText(Path.Join(_folder, "obj", "tape", "memory.cfg")).Should().NotContain("ZP:", "the 6809 has no zero page");
+
+        Write("main.s", "START:\n    rts\n    .res $2000\n");
+        Action big = () => ProjectBuild.Build(RetrocoreProject.Load(_folder).Target("big"));
+        big.Should().Throw<ProjectException>().Which.Message.Should().Contain(
+            "overlaps BASIC's 200 bytes of string space at the top of RAM").And.Contain("so it is 257 bytes over.");
+    }
+
+    /// <summary>
+    ///  A <c>diskbasic</c> target links at <c>$2700</c>, above Disk BASIC's workspace, the graphics pages it moves up and
+    ///  BASIC's empty program, and writes its RS-DOS disk: the program as <c>&lt;NAME&gt;.BIN</c> in LOADM's format, and
+    ///  its files as binary data files; a file needs a name the SDK puts on a disk, once, some bytes and no address.
+    /// </summary>
+    [TestMethod]
+    public void DiskbasicWritesItsDisk()
+    {
+        Write("retrocore.json", """
+            { "sdk": "1", "name": "space-adventure", "cpu": "6809", "sources": ["main.s"], "entry": "START",
+              "targets": { "disk": { "machine": "coco2", "environment": "diskbasic",
+                                     "files": [{ "path": "data.bin", "name": "GAME.DAT" }, "notes"] },
+                           "bad": { "machine": "coco2", "environment": "diskbasic", "files": [{ "path": "data.bin", "name": "GAME.DATA" }] },
+                           "clash": { "machine": "coco2", "environment": "diskbasic", "files": [{ "path": "data.bin", "name": "SPACEADV.BIN" }] },
+                           "address": { "machine": "coco2", "environment": "diskbasic", "files": [{ "path": "data.bin", "address": "$4000" }] },
+                           "empty": { "machine": "coco2", "environment": "diskbasic", "files": ["empty.dat"] } } }
+            """);
+
+        Write("data.bin", "XYZ");
+        Write("notes", "N");
+        Write("main.s", "DATA:\n    .byte 1\nSTART:\n    rts\n");
+        TargetBuild build = ProjectBuild.Build(RetrocoreProject.Load(_folder).Target("disk"));
+        string disk = Path.Join(_folder, "artifacts", "disk", "space-adventure.dsk");
+        build.Media.Should().Be(new TargetMedia(
+            File: null, FileKind: null, disk, "RS-DOS disk (JVC)", "LOADM\"SPACEADV\" from drive 0, then EXEC"));
+
+        IReadOnlyList<(string Name, string Extension, byte Type, bool Ascii, byte[] Bytes)> files = Retrocore.Media.Trs80.RsDosDisk.Read(File.ReadAllBytes(disk));
+        files.Select(file => (file.Name, file.Extension, file.Type)).Should().Equal(("SPACEADV", "BIN", (byte)2), ("GAME", "DAT", (byte)1), ("NOTES", "", (byte)1));
+        files[0].Bytes.Should().Equal(0, 0, 2, 0x27, 0x00, 1, 0x39, 0xFF, 0, 0, 0x27, 0x01);
+        files[1].Bytes.Should().Equal("XYZ"u8.ToArray());
+
+        string Fails(string name)
+        {
+            Action build = () => ProjectBuild.Build(RetrocoreProject.Load(_folder).Target(name));
+            return build.Should().Throw<ProjectException>().Which.Message;
+        }
+
+        Write("empty.dat", "");
+        Fails("clash").Should().EndWith("target clash: two files on the disk are named SPACEADV.BIN.");
+        Fails("address").Should().EndWith("target address: DATA.BIN goes on the disk as a data file, which keeps no load address, so it cannot give 'address'.");
+        Fails("empty").Should().EndWith("target empty: EMPTY.DAT is empty, and a file on the disk holds at least a byte.");
+        Action bad = () => ProjectBuild.Build(RetrocoreProject.Load(_folder).Target("bad"));
+        bad.Should().Throw<ProjectException>().Which.Message.Should().EndWith(
+            "'GAME.DATA' is not a name the SDK puts on an RS-DOS disk, 1 to 8 capital letters and digits from a letter, then an extension of up to 3, also from a letter; give its file a 'name'.");
+    }
+
+    /// <summary>
+    ///  A <c>cpm</c> target links at <c>$0100</c>, where the CCP loads a command, and writes its <c>.COM</c> file; with
+    ///  the Kaypro II's CP/M disk found by its hash, it writes that disk with the program and its files added, and
+    ///  without it, the command alone with a note naming the disk. A program starts at its entry or with a JP to it,
+    ///  its name is not a CCP command's, and only the Kaypro II builds yet.
+    /// </summary>
+    [TestMethod]
+    public void CpmWritesItsCommandAndDisk()
+    {
+        Write("retrocore.json", """
+            { "sdk": "1", "name": "space-adventure", "cpu": "z80", "sources": ["main.s"], "entry": "START",
+              "targets": { "cpm": { "machine": "kaypro2", "environment": "cpm", "files": [{ "path": "data.bin", "name": "GAME.DAT" }] },
+                           "model4": { "machine": "trs80-model4", "environment": "cpm" } } }
+            """);
+
+        Write("data.bin", "XYZ");
+        Write("main.s", "    JP START\nDATA:\n    .byte 1\nSTART:\n    RET\n");
+        TargetBuild build = ProjectBuild.Build(RetrocoreProject.Load(_folder).Target("cpm"));
+        string output = Path.Join(_folder, "artifacts", "cpm");
+        File.ReadAllBytes(Path.Join(output, "space-adventure.com")).Should().Equal(0xC3, 0x04, 0x01, 1, 0xC9);
+        if (build.Media.Image is { } image)
+        {
+            // The Kaypro II's CP/M disk was found.
+            byte[] disk = File.ReadAllBytes(image);
+            CpmDisk.Read(disk, CpmGeometry.KayproII, "SPACEADV", "COM")[..5].Should().Equal(0xC3, 0x04, 0x01, 1, 0xC9);
+            CpmDisk.Read(disk, CpmGeometry.KayproII, "GAME", "DAT")[..3].Should().Equal("XYZ"u8.ToArray());
+            CpmDisk.Read(disk, CpmGeometry.KayproII, "PIP", "COM").Should().NotBeEmpty("the system disk's own files stay");
+        }
+        else
+        {
+            (build.Media.Note ?? "").Should().StartWith("no disk: the Kaypro II's CP/M 2.2 system disk, for a Kaypro II cpm target's disk,");
+        }
+
+        Write("main.s", "DATA:\n    .byte 1\nSTART:\n    RET\n");
+        Action late = () => ProjectBuild.Build(RetrocoreProject.Load(_folder).Target("cpm"));
+        late.Should().Throw<ProjectException>().WithMessage(
+            "*the CCP starts a command at its first byte, $0100, but the entry is $0101; start the program at its entry, or with JP to it.");
+
+        Action model4 = () => ProjectBuild.Build(RetrocoreProject.Load(_folder).Target("model4"));
+        model4.Should().Throw<ProjectException>().WithMessage("*the 'cpm' environment builds only for the Kaypro II yet*");
+
+        Write("main.s", "START:\n    RET\n");
+        Write("retrocore.json", """
+            { "sdk": "1", "name": "dir", "cpu": "z80", "sources": ["main.s"], "targets": { "cpm": { "machine": "kaypro2", "environment": "cpm" } } }
+            """);
+
+        Action builtIn = () => ProjectBuild.Build(RetrocoreProject.Load(_folder).Target("cpm"));
+        builtIn.Should().Throw<ProjectException>().WithMessage(
+            "*its program would be DIR.COM, which the CCP's own DIR command stands in for when its name is typed; give the project another 'name'.");
     }
 
     // A small ProDOS disk in ProDOS's order, as the build reads ProDOS 2.4.3's: its boot blocks, each filled with a

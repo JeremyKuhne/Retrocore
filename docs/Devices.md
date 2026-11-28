@@ -29,7 +29,7 @@ Inserting media belongs to the concrete devices, since the image formats are the
 | Machine | Device | Id | Notes |
 | --- | --- | --- | --- |
 | Apple-1, Model I/III/4, Model 100/Tandy 102, CoCo, BBC Micro, Atari, Altair | Cassette | `cassette` | Plays and records tape images in the machine's format (`.wav` on the Apple-1 and Model 100, `.cas` on the TRS-80s, CoCo, and Atari 410, `.uef` on the BBC Micro, `.tap` on the Altair 88-ACR). The Atari 410 has deck controls and independent write-protect toggling; on the others a playing tape shows as write-protected. A recording is a changed tape, saved like a disk (below). |
-| PET | Datasette 1-2 | `cassette1`, `cassette2` | Plays and records `.tap`, `.wav`, and `.prg` tapes with deck keys (PLAY, RECORD, STOP, rewind); changed tapes save as `.tap` or `.wav`. |
+| PET, VIC-20 | Datasette | `cassette1`, `cassette2` (PET); `cassette` (VIC-20) | Plays `.tap`, `.wav`, `.prg`, and `.t64` tapes with deck keys (PLAY, RECORD, STOP, rewind); recordings save as `.tap` or `.wav`. |
 | Model I, III, 4, II, CoCo, Altair, BBC Micro, Kaypro II | Floppy drives | `disk0`-`disk3` (`disk0`-`disk1` on BBC Micro and Kaypro II) | Present when the machine's disk controller is fitted. Supports write-protect toggling and saving changed disks to their image or as supported formats (`.jv3`/`.dmk`/`.imd`/`.dsk`/`.jv1` on the Model I, III, 4, and 4P; `.imd`/`.dmk`/`.jv3` on the Model II family; `.dsk`/`.jvc`/`.dmk` on CoCo; `.dsk` on Altair; `.ssd`/`.dsd` on BBC Micro; `.img`/`.imd`/`.dmk` on Kaypro II, with an inserted `.dsk` also saving in place). On the Model I, drive 3 is single-sided since its select line is the other drives' side select. |
 | PET | Dual drives (4040, 2040) | `disk8-0`, `disk8-1` ... `disk15-1` | Two mechanisms per IEEE-488 unit (devices 8-15). Takes `.d64`, `.d67`, and `.g64` images; changed disks save back to their image or as `.g64` / `.d64` (4040) / `.d67` (2040). |
 | Atari | Disk drives (810 or SIO) | `d1`-`d4` | Up to four serial-bus drives, running the 810's firmware at the hardware level or answering SIO commands directly; reads and saves `.atr` and `.xfd` images. |
@@ -38,6 +38,30 @@ Inserting media belongs to the concrete devices, since the image formats are the
 | Apple II | 3.5 drive 1-2 | `disk35d1`, `disk35d2` | Present while the 3.5 disk controller is in a slot (`disk35`, or **Add Card**). SuperDrives: 400K and 800K Apple disks and 720K and 1440K MFM disks, from `.po`, `.2mg`, `.hdv`, `.img` and 3.5-inch `.dsk` images; write protection can be changed, and a changed disk saves to its image (a 2MG keeps its header, comment and creator data, and its locked flag is the lock) or as `.po`, `.2mg`, `.hdv` or `.img`. The head is where the last block was, its track, side and sector by the disk's layout; a block shows as reading or writing for a thirtieth of a second. A program's CONTROL eject takes the disk out. |
 | Apple II, Apple III | ProFile (slot N) | `slotNprofile` | Apple's ProFile hard disk on a ProFile card (`proFiles`, or **Add Card**). Takes ProDOS-order images (`.po`, `.hdv`, or a `.2mg` of them) of up to 65535 blocks, which the machine can write unless locked; inserting, ejecting, locking and saving (to its image, or as `.po`, `.hdv` or `.2mg`) are allowed. A ProFile has no write-protect tab, so a write to a locked image fails as a failed write does: an I/O error to ProDOS and SOS, which cannot be told why. A block it reads or writes shows as reading or writing for a thirtieth of a second. |
 | Apple II | Slot 7 disk | `slot7` | The ProDOS block device given at launch (a `.po`, `.hdv` or `.2mg` `diskImage`, unless `diskController: "diskII"` asks for the Disk II). Its media is fixed and loads locked, as it always has; unlocked, the machine writes it and it saves (to its image, or as `.po`, `.hdv` or `.2mg`). The lock refuses writes at once (ProDOS's write-protected error, $2B); the slot's ROM, which ProDOS reads as it starts, says whether the device writes from the next reset. A block command shows as reading or writing for a thirtieth of a second. |
+
+## Media speed
+
+The display offers **Tape speed** and **Disk speed** for the kinds of drives installed. Each has three choices:
+
+- **Normal** runs every guest cycle at the selected machine speed.
+- **Fast** runs every guest cycle but unthrottles the whole machine while the media is active.
+- **Skip** omits supported transfers. Other operations run at Fast speed without changing your selection.
+
+On the Altair 88-DCDD, disk activity for pacing expires one revolution after the last controller access, unless a
+write is still pending or running. A loaded head alone does not keep the host unthrottled.
+
+Skip is supported for a project-generated PET 4032 BASIC cassette boot with the verified BASIC 4 ROMs, no
+connected disk unit and no second tape mounted. It plays the real header, takes the program data from the verified
+mounted tape, and lets BASIC finish `LOAD`. Skip preserves the program, load status, tape head and continuation,
+but not the skipped guest time, timer or tape phase, intermediate interrupts, writes or debugger stops.
+Interactive tape loads, other ROMs and tape formats, saves and all disk operations fall back to Fast.
+For unthrottled but cycle-accurate tests, choose Normal and machine speed `max`.
+
+Use `tapeSpeed` and `diskSpeed` in a debug launch, with lower-case values. Existing `fastCassette` and `fastDisk`
+booleans are still accepted (`false` selects Normal; `true` selects Fast), including for project boots and Desktop.
+An explicit new setting wins. Project boot remains unpaced unless Normal is selected. The
+[debug adapter guide](DebugAdapter.md#media-speed) describes the effective-mode reports. The
+[backlog](backlog/MediaSpeed.md) tracks support for additional drives.
 
 ## The debug protocol
 

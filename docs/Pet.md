@@ -66,10 +66,14 @@ read and write them, so anything a PET could load loads. A Datasette takes:
 - `.tap` images (VICE's TAP format, versions 0 and 1, at the clock their header names), which save back exactly;
 - `.wav` recordings, as MAME's PET software list holds them, which save with each pulse rounded to the sample;
 - `.prg` program files, made into the tape SAVE would write: each block twice after its leader, the header naming
-  the program and its addresses.
+  the program and its addresses;
+- `.t64` program archives, synthesized the same way, in directory order. T64 stores no original pulses.
+  Normal records (type 1) accept PRG file types and the legacy `$01` and `$44` program markers. Archives containing
+  other active entries, including records with stored headers (type 2), are refused. A CONV64 `$C3C6` end address is
+  repaired from the next payload or the end of the image only if its declared length is impossible.
 
 The keys are the Datasette's: PLAY, RECORD (with PLAY), STOP, and rewinding. A recording is a changed tape: Save or
-Save As writes it as `.tap` or `.wav`, and ejecting it asks first, as a changed disk does
+Save As writes it as `.tap` or `.wav` (Save As only for imported PRG or T64), and ejecting it asks first, as a changed disk does
 ([Devices.md](Devices.md#the-debug-protocol)).
 
 **The IEEE-488 bus.** The PET controls the bus: PIA 2's port A reads the eight data lines and port B drives them, its
@@ -218,8 +222,9 @@ The options are:
 - `sdkRoms`: the folder of the ROM sources, such as the repository's, so breakpoints set there bind;
 - `snow`: on by default on the 2001, off on the others;
 - `sound`: `speaker` (the default) or `off`;
-- `cassette1`, `cassette2`: a `.tap`, `.wav` or `.prg` tape, put in with PLAY down; and `fastCassette` (on by
-  default), which runs as fast as it can while a tape moves;
+- `cassette1`, `cassette2`: a `.tap`, `.wav`, `.prg` or `.t64` tape, put in with PLAY down;
+- `tapeSpeed`, `diskSpeed`: [Normal, Fast or Skip](Devices.md#media-speed). Tape defaults to Fast, as with the old
+  `fastCassette` boolean. Skip can accelerate a verified PET 4032 project tape; unsupported operations use Fast;
 - `diskUnits`: the device numbers of disk units on the IEEE-488 bus, such as `[8]`; `diskModel`: `4040` (the
   default) or `2040`; `disks`: `.d64`, `.d67` or `.g64` images for the first unit's drive 0, its drive 1, then the
   next unit's (without `diskUnits`, as many units as they need, from 8, and on a 4032 at least one); and

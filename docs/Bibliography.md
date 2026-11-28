@@ -18,7 +18,9 @@ workspace adds documents of its own, or replaces a key, with the same columns.
 | IBSM | Annotated listing of Integer BASIC, by Paul R. Santa-Maria, as Andy McFadden's SourceGen port of it gives it (2021) | | | <https://6502disassembly.com/a2-rom/> |
 | IIEROM82 | Apple IIe Reference Manual Addendum: Monitor ROM Listings, For //e Only | 1982 | Apple Computer | <https://archive.org/details/Reference_Manual_Addendum_Monitor_ROM_Listings> |
 | IIETRM85 | Apple IIe Technical Reference Manual | 1985 | Addison-Wesley | <https://archive.org/details/a2etrm> |
+| M100TR | TRS-80 Model 100 Technical Reference Manual | 1984 | Tandy Corporation | <https://archive.org/details/trs-80-model-100-technical-reference-manual> |
 | P8TRM | ProDOS 8 Technical Reference Manual | 1987 | Addison-Wesley | |
+| CPM22OSM | CP/M 2.2 Operating System Manual, with its Interface Guide | 1982 | Digital Research | |
 | M6502 | BASIC M6502 8K version 1.1 source (MACRO-10), published under the MIT license | 1978 | Microsoft | <https://github.com/microsoft/BASIC-M6502> |
 | ASTIL | Apple II Technical Information Library: "Applesoft: Internals" articles | | Apple Computer | <https://mirrors.apple2.org.za/Apple%20II%20Documentation%20Project/Companies/Apple/Documentation/Apple%20Technical%20Information%20Library/> |
 | AS82 | Applesoft source listing, May 26, 1982 (Roger Wagner Publishing's reference copy) | 1982 | Apple Computer | <https://archive.org/details/roger_wagner_applesoft_source> |

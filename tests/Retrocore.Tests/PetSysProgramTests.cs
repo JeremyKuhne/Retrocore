@@ -144,6 +144,92 @@ public class PetSysProgramTests
         machine.ReadTextScreen().Should().Contain(line => line.TrimEnd() == Message, Screen(machine));
     }
 
+    /// <summary>
+    ///  The guarded transfer returns through the ROM and runs the same program while omitting its tape time.
+    /// </summary>
+    /// <param name="padding">The extra payload following the program.</param>
+    [TestMethod]
+    [DataRow(0)]
+    [DataRow(257)]
+    public void ProjectTapeSkipMatchesRomLoad(int padding)
+    {
+        byte[] prg = Program(0);
+        int size = prg.Length;
+        Array.Resize(ref prg, size + padding);
+        for (int index = size; index < prg.Length; index++) { prg[index] = (byte)(index * 3); }
+        var (normal, normalCycles, normalPosition) = Load(skip: false);
+        var (fast, fastCycles, fastPosition) = Load(skip: true);
+        fastPosition.Should().Be(normalPosition);
+        fastCycles.Should().BeLessThan(normalCycles);
+        fast.Should().Equal(normal);
+
+        (string[] Screen, ulong Cycles, int Position) Load(bool skip)
+        {
+            PetMachine machine = new(PetSdkModules.BuildRoms(PetModel.Pet4032, PetSources), PetModel.Pet4032, 32);
+            PetDebugTarget target = new(machine);
+            target.SetFastIo(enabled: true);
+            machine.Run(7);
+            CommodoreTape tape = PetSysProgram.ToTape("SYSOK", prg);
+            machine.Bus.Cassette1.Insert(tape, "test", "TAP");
+            machine.Bus.Cassette1.Play();
+            PetTapeSkip? transfer = skip ? PetTapeSkip.Prepare(target, "SYSOK", prg) : null;
+            while (!target.ShowsReady)
+            {
+                machine.Processor.CycleCount.Should().BeLessThan(3_000_000);
+                machine.Run(4096);
+            }
+
+            foreach (char key in "LOAD\r") { target.Key(key).Should().BeTrue(); }
+            bool completed = false;
+            while (!machine.Processor.IsInstructionBoundary || machine.Processor.Registers.ProgramCounter != 0xF418)
+            {
+                if (transfer is not null && machine.Processor.Registers.ProgramCounter == PetTapeSkip.Boundary)
+                {
+                    completed |= transfer.TryComplete();
+                }
+
+                machine.StepCycle();
+                if (machine.Processor.CycleCount >= 30_000_000) { Assert.Fail(Screen(machine)); }
+            }
+
+            completed.Should().Be(skip, "a fallback is not a Skip pass");
+            int position = machine.Bus.Cassette1.Position;
+            ulong cycles = machine.Processor.CycleCount;
+            if (!skip) { cycles.Should().BeGreaterThanOrEqualTo((ulong)tape.Pulses.Take(position).Sum()); }
+            machine.Bus.Cassette1.Motor.Should().BeFalse();
+            machine.Bus.Cassette1.Read.Should().BeTrue();
+            machine.Bus.Ram[0x96].Should().Be(0);
+            machine.Bus.Ram.Slice(0x90, 2).ToArray().Should().Equal(0x55, 0xE4);
+            machine.Bus.Ram.Slice(0xC7, 2).ToArray().Should().Equal(machine.Bus.Ram.Slice(0xC9, 2).ToArray());
+            machine.Bus.Ram.Slice(0x401, prg.Length - 2).ToArray().Should().Equal(prg.AsSpan(2).ToArray());
+            PetTapeTests.WaitForReady(machine);
+            PetMachineTests.Type(machine, "RUN\r");
+            PetTapeTests.WaitForReady(machine);
+            machine.ReadTextScreen().Should().Contain(line => line.TrimEnd() == Message, Screen(machine));
+            return (machine.ReadTextScreen(), cycles, position);
+        }
+    }
+
+    /// <summary>
+    ///  A TAP with changed pulse data cannot enter the shortcut even when it is marked saved.
+    /// </summary>
+    [TestMethod]
+    public void DamagedProjectTapeFallsBackBeforeChangingState()
+    {
+        byte[] prg = Program(0);
+        PetMachine machine = new(PetSdkModules.BuildRoms(PetModel.Pet4032, PetSources), PetModel.Pet4032, 32);
+        PetDebugTarget target = new(machine);
+        int[] pulses = PetSysProgram.ToTape("SYSOK", prg).Pulses.ToArray();
+        pulses[^100]++;
+        CommodoreTape damaged = new(pulses);
+        machine.Bus.Cassette1.Insert(damaged, "test", "TAP");
+        machine.Bus.Cassette1.Play();
+
+        PetTapeSkip.Prepare(target, "SYSOK", prg).Should().BeNull();
+        machine.Bus.Cassette1.Position.Should().Be(0);
+        machine.Processor.CycleCount.Should().Be(0);
+    }
+
     // Code that prints the message through the kernal's CHROUT and returns to BASIC.
     private static byte[] Program(int address)
     {

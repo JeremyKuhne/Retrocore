@@ -200,6 +200,7 @@ public class SdkDocumentationTests
     // Each sample folder's machine project, whose sources its links reach.
     private static readonly Dictionary<string, string> s_sampleMachines = new()
     {
+        ["6809"] = "Retrocore.Machines.Coco",
         ["adventure"] = "Retrocore.Machines.Apple2",
         ["atari"] = "Retrocore.Machines.Atari",
         ["bbc"] = "Retrocore.Machines.Acorn",
@@ -207,7 +208,8 @@ public class SdkDocumentationTests
         ["iie"] = "Retrocore.Machines.Apple2",
         ["project"] = "Retrocore.Machines.Apple2",
         ["softcard"] = "Retrocore.Machines.Apple2",
-        ["trs80"] = "Retrocore.Machines.Trs80"
+        ["trs80"] = "Retrocore.Machines.Trs80",
+        ["z80"] = "Retrocore.Machines.Trs80"
     };
 
     /// <summary>

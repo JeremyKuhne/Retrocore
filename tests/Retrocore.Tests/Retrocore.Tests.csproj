@@ -76,6 +76,7 @@
     <None Include="..\..\src\Retrocore.Machines.Kaypro\Roms\*.asm" Link="Inputs\Kaypro\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\..\src\Retrocore.Machines.Altair\Roms\*.asm" Link="Inputs\Altair\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\..\src\Retrocore.Machines.Kaypro\Roms\Mbasic\*.asm" Link="Inputs\Kaypro\Mbasic\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\src\Retrocore.Machines.Trs80Model100\Roms\*.asm" Link="Inputs\Trs80Model100\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\..\src\Retrocore.Machines.Apple3\Roms\*.asm" Link="Inputs\Apple3\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\..\src\Retrocore.Machines.Apple3\Roms\Sos\*.asm" Link="Inputs\Apple3\Sos\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\..\src\Retrocore.Machines.Apple3\Roms\BusinessBasic\*.asm" Link="Inputs\Apple3\BusinessBasic\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />

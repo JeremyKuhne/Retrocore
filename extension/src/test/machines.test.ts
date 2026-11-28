@@ -120,7 +120,7 @@ test("what each machine runs: Apple disks and DOS, the Model I's disks and tapes
         const pet = machineById(id);
         assert.deepEqual(pet?.configuration, { machine: "pet", model: id });
         assert.deepEqual(pet?.diskFormats, [], "the 2001's disks are added in the Machine view");
-        assert.deepEqual(pet?.tapeFormats, ["tap", "wav", "prg"], "a .prg goes in as the tape SAVE writes");
+        assert.deepEqual(pet?.tapeFormats, ["tap", "wav", "prg", "t64"]);
         assert.equal(pet?.tapeOption, "cassette1", "a tape starts in the built-in Datasette");
         assert.deepEqual(pet?.programFormats, ["prg", "bin"]);
         assert.deepEqual(pet?.choices.map(choice => choice.option), ["ramKilobytes", "sound", "snow"]);
@@ -133,7 +133,7 @@ test("what each machine runs: Apple disks and DOS, the Model I's disks and tapes
         const pet = machineById(id);
         assert.deepEqual(pet?.configuration, { machine: "pet", model: id });
         assert.deepEqual(pet?.diskFormats, ["d64", "g64"], "a disk goes in the 4040 the 4032 comes with");
-        assert.deepEqual(pet?.tapeFormats, ["tap", "wav", "prg"]);
+        assert.deepEqual(pet?.tapeFormats, ["tap", "wav", "prg", "t64"]);
         assert.deepEqual(pet?.basicDialects, ["petbasic"]);
         assert.deepEqual(pet?.choices.map(choice => choice.option), ["ramKilobytes", "sound"], "the 4032's board has no snow");
         assert.equal(pet?.choices[0].default, 32);
@@ -141,7 +141,7 @@ test("what each machine runs: Apple disks and DOS, the Model I's disks and tapes
     const vic20 = machineById("vic20");
     assert.deepEqual(vic20?.configuration, { machine: "vic20" }, "no model: NTSC or PAL is the video choice");
     assert.deepEqual(vic20?.diskFormats, ["d64", "g64"], "a disk brings a 1541 as device 8");
-    assert.deepEqual(vic20?.tapeFormats, ["tap", "wav", "prg"]);
+    assert.deepEqual(vic20?.tapeFormats, ["tap", "wav", "prg", "t64"]);
     assert.equal(vic20?.tapeOption, undefined, "its one Datasette is cassette");
     assert.deepEqual(vic20?.programFormats, ["prg", "bin"]);
     assert.deepEqual(vic20?.basicDialects, ["petbasic"]);

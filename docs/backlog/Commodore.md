@@ -123,7 +123,8 @@ Answered 2026-11-25:
    curves, and a closer model of the 6581's distortion is in Later.
 5. **The drives at the hardware level.** The 1540, 1541 and 1571 run their own DOS on an emulated 6502, as the 4040
    does. Fast loaders, which most 64 software uses, upload code to the drive, so a trap-based virtual drive would not
-   run them. A "fast disk" option that skips the drive's motor and seek waits can come later if loading is too slow.
+   run them. [Disk speed](MediaSpeed.md) can later Skip proven standard operations without changing the true-drive
+   path for uploaded code or custom loaders.
 6. **The sources** are in the maintained style: names that say what a thing is, and Commodore's published names
    (the reference guides' and *Mapping the VIC*'s and *Mapping the 64*'s labels, and the listings' names) as
    `;; Also:`. BASIC 2 for the VIC-20 and the 64 are roots over the shared Commodore modules. The kernals for each
@@ -588,7 +589,7 @@ joins it, and state the decision.
 - The 1581, the 64C (8580 SID, 251913-01's combined ROM), the SX-64, the VIC-1001, the 128D and 128DCR.
 - The 1700/1750 RAM expansion units, the 1351 mouse, the light pen, printers on the serial bus, and RS-232 on the
   user port.
-- A "fast disk" option.
+- [Disk speed](MediaSpeed.md) support for verified standard operations.
 
 ## Not planned
 

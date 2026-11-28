@@ -4,6 +4,7 @@
 
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using Retrocore.Debug;
 
 namespace Retrocore.Desktop;
 
@@ -36,11 +37,14 @@ internal sealed class DesktopSettings
 
     private readonly string? _path;
 
-    private DesktopSettings(string? path, string theme, int zoom, int paneOpacity, bool fastDrives, JsonObject? machine, JsonObject? machineState)
+    private DesktopSettings(
+        string? path, string theme, int zoom, int paneOpacity,
+        MediaSpeed tapeSpeed, MediaSpeed diskSpeed, JsonObject? machine, JsonObject? machineState)
     {
         Machine = machine;
         MachineState = machineState;
-        FastDrives = fastDrives;
+        TapeSpeed = tapeSpeed;
+        DiskSpeed = diskSpeed;
         _path = path;
         ThemeName = theme;
         Zoom = zoom;
@@ -69,9 +73,14 @@ internal sealed class DesktopSettings
     internal int PaneOpacity { get; set; }
 
     /// <summary>
-    ///  Gets or sets whether machines run as fast as they can while a disk or tape is busy, true unless set.
+    ///  Gets or sets the tape speed preference.
     /// </summary>
-    internal bool FastDrives { get; set; }
+    internal MediaSpeed TapeSpeed { get; set; }
+
+    /// <summary>
+    ///  Gets or sets the disk speed preference.
+    /// </summary>
+    internal MediaSpeed DiskSpeed { get; set; }
 
     /// <summary>
     ///  Gets or sets the launch configuration of the machine last shown, or null for the Apple IIe.
@@ -105,7 +114,8 @@ internal sealed class DesktopSettings
         string theme = "system";
         int zoom = 0;
         int paneOpacity = DefaultPaneOpacity;
-        bool fastDrives = true;
+        MediaSpeed tapeSpeed = MediaSpeed.Fast;
+        MediaSpeed diskSpeed = MediaSpeed.Fast;
         JsonObject? machine = null;
         JsonObject? machineState = null;
         if (path is not null && Read(path).Root?["desktop"] is JsonObject desktop)
@@ -129,7 +139,17 @@ internal sealed class DesktopSettings
             if (desktop["fastDrives"] is JsonValue fastValue
                 && fastValue.GetValueKind() is JsonValueKind.True or JsonValueKind.False)
             {
-                fastDrives = fastValue.GetValue<bool>();
+                tapeSpeed = diskSpeed = fastValue.GetValue<bool>() ? MediaSpeed.Fast : MediaSpeed.Normal;
+            }
+
+            MediaSpeed? savedTape = MediaSpeedPolicy.Read(desktop["tapeSpeed"]);
+            MediaSpeed? savedDisk = MediaSpeedPolicy.Read(desktop["diskSpeed"]);
+            tapeSpeed = savedTape ?? tapeSpeed;
+            diskSpeed = savedDisk ?? diskSpeed;
+            if ((savedTape is null && desktop["tapeSpeed"] is not null)
+                || (savedDisk is null && desktop["diskSpeed"] is not null))
+            {
+                Console.Error.WriteLine("Invalid saved media speed; retaining the default or legacy speed.");
             }
 
             // A machine that is not an object naming one is left out, and the Apple IIe shown.
@@ -145,7 +165,8 @@ internal sealed class DesktopSettings
             theme is "light" or "dark" ? theme : "system",
             Math.Clamp(zoom, MinimumZoom, MaximumZoom),
             Math.Clamp(paneOpacity, MinimumPaneOpacity, 100),
-            fastDrives,
+            tapeSpeed,
+            diskSpeed,
             machine,
             machineState);
     }
@@ -178,7 +199,8 @@ internal sealed class DesktopSettings
                 ["theme"] = ThemeName,
                 ["zoom"] = Zoom,
                 ["paneOpacity"] = PaneOpacity,
-                ["fastDrives"] = FastDrives,
+                ["tapeSpeed"] = MediaSpeedPolicy.Name(TapeSpeed),
+                ["diskSpeed"] = MediaSpeedPolicy.Name(DiskSpeed),
                 ["machine"] = Machine?.DeepClone(),
                 ["machineState"] = MachineState?.DeepClone()
             };

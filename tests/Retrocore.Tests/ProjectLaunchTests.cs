@@ -221,7 +221,7 @@ public sealed class ProjectLaunchTests
             { "sdk": "1", "cpu": "z80", "sources": ["main.s"], "targets": { "dos": { "machine": "trs80-model3", "environment": "trsdos" } } }
             """);
 
-        client.Fails("launch", Launch("dos")).Should().EndWith("the 'trsdos' environment is not yet supported; only 'bare', 'wozmon', 'dos33', 'dfs', 'basic', 'sos' and 'prodos' build.");
+        client.Fails("launch", Launch("dos")).Should().EndWith("the 'trsdos' environment is not yet supported; only 'bare', 'wozmon', 'dos33', 'dfs', 'basic', 'sos', 'prodos', 'level2', 'colorbasic', 'diskbasic' and 'cpm' build.");
         Write("retrocore.json", project);
 
         // The machine the launch names gives way to the target's.
@@ -363,6 +363,419 @@ public sealed class ProjectLaunchTests
     }
 
     /// <summary>
+    ///  A <c>level2</c> target's launch puts its SYSTEM tape in the cassette recorder and boots the machine with no
+    ///  disk: it answers the ROM's start-up questions, types SYSTEM, the tape's name and then <c>/</c>, and stops at the
+    ///  entry, on the Model I with Level II 1.3 and 1.2, whose MEMORY SIZE? differ, and on the Model III, which asks
+    ///  Cass? first. The program, 4K, plays for over a minute of the machine's time. It then shows its line, and a
+    ///  breakpoint in its source stops.
+    /// </summary>
+    /// <param name="machine">The catalog machine.</param>
+    /// <param name="options">The target's options, as JSON.</param>
+    [TestMethod]
+    [DataRow("trs80-model1-level2", "{}")]
+    [DataRow("trs80-model1-level2", "{ \"revision\": \"1.2\" }")]
+    [DataRow("trs80-model3", "{}")]
+    public void Level2LaunchBootsItsTape(string machine, string options)
+    {
+        Write("retrocore.json", $$"""
+            { "sdk": "1", "name": "hello", "cpu": "z80", "sources": ["src/*.s"], "entry": "START",
+              "targets": { "tape": { "machine": "{{machine}}", "environment": "level2", "options": {{options}} },
+                           "own": { "machine": "{{machine}}", "environment": "level2", "options": { "cassette": "x.cas" } },
+                           "disk": { "machine": "{{machine}}", "environment": "level2", "options": { "diskController": true } } } }
+            """);
+
+        string main = Write("src/main.s", """
+            .include <machine.inc>
+            MESSAGE:
+                .byte "LOADED FROM TAPE", RETURN, 0
+            START:
+                LD HL,MESSAGE
+            NEXT:
+                LD A,[HL]
+                OR A
+                JR Z,DONE
+                CALL DisplayCharacter
+                INC HL
+                JR NEXT
+            DONE:
+                JR DONE
+
+            ; Data after the code, so the tape plays for over a minute of the machine's time.
+                .res 4096, $E5
+            """);
+
+        using DapTestClient client = new();
+        client.Request("initialize", []);
+        client.Fails("launch", Launch("own")).Should().EndWith(
+            "a level2 target loads its own tape with SYSTEM, so its options and its launch cannot give 'cassette'.");
+
+        client.Fails("launch", Launch("disk")).Should().EndWith(
+            "a level2 target boots with no disk controller, for the ROM to start in BASIC, so its options and its launch cannot give 'diskController'.");
+
+        int start = machine == "trs80-model3" ? 0x4400 : 0x4300;
+        JsonObject launch = Launch("tape");
+        launch["tapeSpeed"] = "skip";
+        JsonObject started = client.Request("launch", launch);
+        started["project"]?["entry"]?.GetValue<int>().Should().Be(start + 18);
+        started["mediaSpeedResult"]?.String("kind").Should().Be("tape");
+        started["mediaSpeedResult"]?.String("effective").Should().Be("fast");
+        string entry = "$" + (start + 18).ToString("X4", System.Globalization.CultureInfo.InvariantCulture);
+        client.Request("evaluate", new JsonObject
+        {
+            ["expression"] = "PC"
+        }).String("result").Should().StartWith(entry);
+
+        JsonObject set = client.Request("setBreakpoints", new JsonObject
+        {
+            ["source"] = new JsonObject { ["path"] = main },
+            ["breakpoints"] = new JsonArray(new JsonObject { ["line"] = 14 })
+        });
+
+        (set["breakpoints"]?[0]?["verified"]?.GetValue<bool>()).Should().BeTrue();
+        client.Request("configurationDone", []);
+        client.Event("stopped").String("reason").Should().Be("entry");
+        client.Request("continue", new JsonObject { ["threadId"] = 1 });
+        client.Event("stopped").String("reason").Should().Be("breakpoint", "the program runs to its loop once it has shown its line");
+        Trs80Screen(client).Should().Contain("*? HELLO").And.Contain("LOADED FROM TAPE");
+    }
+
+    /// <summary>
+    ///  A <c>colorbasic</c> target's launch puts its cassette in the recorder and boots Color BASIC from the SDK's
+    ///  ROMs with no disk controller: at OK it types <c>CLOADM"&lt;NAME&gt;"</c>, and once the program is in, <c>EXEC</c>,
+    ///  and stops at the entry, on the Color Computer 1, 2 and 3. The program, 2K, plays for over ten of the machine's
+    ///  seconds, with <c>$55</c> bytes in its blocks, which are not leaders, and a name with OK in it, which is not
+    ///  BASIC's prompt. It then shows its line, and a breakpoint in its source stops. Its target cannot give a disk
+    ///  controller, nor, on the CoCo 1 and 2, leave out Extended BASIC.
+    /// </summary>
+    /// <param name="machine">The catalog machine.</param>
+    [TestMethod]
+    [DataRow("coco1")]
+    [DataRow("coco2")]
+    [DataRow("coco3")]
+    public void ColorbasicLaunchBootsItsTape(string machine)
+    {
+        Write("retrocore.json", $$"""
+            { "sdk": "1", "name": "bookshop", "cpu": "6809", "sources": ["src/*.s"], "entry": "START",
+              "targets": { "tape": { "machine": "{{machine}}", "environment": "colorbasic" },
+                           "disk": { "machine": "{{machine}}", "environment": "colorbasic", "options": { "diskController": true } },
+                           "alone": { "machine": "{{machine}}", "environment": "colorbasic", "options": { "extendedBasic": "none" } } } }
+            """);
+
+        string main = Write("src/main.s", """
+            .include <machine.inc>
+            MESSAGE:
+                .byte "LOADED FROM TAPE", RETURN, 0
+            START:
+                leax MESSAGE,pcr
+            NEXT:
+                lda ,x+
+                beq DONE
+                jsr [CharacterOutVector]
+                bra NEXT
+            DONE:
+                bra DONE
+
+            ; Data after the code, so the tape plays for a while: a block's own $55s, which are not a leader, a run of
+            ; them, and a $3C after one.
+                .res 2048, $E5
+                .byte $55, 1, $55, $55, $3C
+                .res 64, $55
+                .byte "PUMPKIN UNUSUAL", $55
+            """);
+
+        using DapTestClient client = new();
+        client.Request("initialize", []);
+        client.Fails("launch", Launch("disk")).Should().EndWith(
+            "a colorbasic target boots Color BASIC with no disk controller, as Disk BASIC is the diskbasic environment, so its options and its launch cannot give 'diskController'.");
+
+        if (machine != "coco3")
+        {
+            client.Fails("launch", Launch("alone")).Should().EndWith(
+                "a colorbasic target runs under Extended Color BASIC, whose memory its maps give, so its options and its launch cannot give 'extendedBasic' none.");
+        }
+
+        JsonObject launch = Launch("tape");
+        launch["tapeSpeed"] = "skip";
+        JsonObject started = client.Request("launch", launch);
+        started["project"]?["entry"]?.GetValue<int>().Should().Be(0x1F12);
+        started["mediaSpeedResult"]?.String("kind").Should().Be("tape");
+        started["mediaSpeedResult"]?.String("effective").Should().Be("fast");
+        client.Request("evaluate", new JsonObject
+        {
+            ["expression"] = "PC"
+        }).String("result").Should().StartWith("$1F12");
+
+        JsonObject set = client.Request("setBreakpoints", new JsonObject
+        {
+            ["source"] = new JsonObject { ["path"] = main },
+            ["breakpoints"] = new JsonArray(new JsonObject { ["line"] = 12 })
+        });
+
+        (set["breakpoints"]?[0]?["verified"]?.GetValue<bool>()).Should().BeTrue();
+        client.Request("configurationDone", []);
+        client.Event("stopped").String("reason").Should().Be("entry");
+        client.Request("continue", new JsonObject { ["threadId"] = 1 });
+        client.Event("stopped").String("reason").Should().Be("breakpoint", "the program runs to its loop once it has shown its line");
+        CocoScreen(client).Should().Contain("F BOOKSHOP").And.Contain("LOADED FROM TAPE");
+    }
+
+    /// <summary>
+    ///  A <c>diskbasic</c> target's launch fits the disk controller with Disk BASIC from the SDK's sources, puts its disk
+    ///  in drive 0, types <c>LOADM"&lt;NAME&gt;"</c> at OK and, once the program is in, <c>EXEC</c>, and stops at the
+    ///  entry, on the Color Computer 1, 2 and 3. The program then shows its line, and a breakpoint in its source stops.
+    ///  Its target cannot give the disks, a cassette or a cartridge.
+    /// </summary>
+    /// <param name="machine">The catalog machine.</param>
+    [TestMethod]
+    [DataRow("coco1")]
+    [DataRow("coco2")]
+    [DataRow("coco3")]
+    public void DiskbasicLaunchBootsItsDisk(string machine)
+    {
+        Write("retrocore.json", $$"""
+            { "sdk": "1", "name": "bookshop", "cpu": "6809", "sources": ["src/*.s"], "entry": "START",
+              "targets": { "disk": { "machine": "{{machine}}", "environment": "diskbasic", "files": [{ "path": "data.bin", "name": "DATA.DAT" }] },
+                           "own": { "machine": "{{machine}}", "environment": "diskbasic", "options": { "disks": ["x.dsk"] } },
+                           "tape": { "machine": "{{machine}}", "environment": "diskbasic", "options": { "cassette": "x.cas" } },
+                           "pack": { "machine": "{{machine}}", "environment": "diskbasic", "options": { "cartridge": "x.ccc" } } } }
+            """);
+
+        File.WriteAllBytes(Path.Join(_folder, "data.bin"), [1, 2, 3]);
+        string main = Write("src/main.s", """
+            .include <machine.inc>
+            MESSAGE:
+                .byte "LOADED FROM DISK", RETURN, 0
+            START:
+                leax MESSAGE,pcr
+            NEXT:
+                lda ,x+
+                beq DONE
+                jsr [CharacterOutVector]
+                bra NEXT
+            DONE:
+                bra DONE
+                .res 1024, $55
+            """);
+
+        using DapTestClient client = new();
+        client.Request("initialize", []);
+        client.Fails("launch", Launch("own")).Should().EndWith(
+            "a diskbasic target boots Disk BASIC with its own disk in drive 0, so its options and its launch cannot give 'disks'.");
+
+        client.Fails("launch", Launch("tape")).Should().EndWith(
+            "a diskbasic target loads its program from its disk under Disk BASIC, so its options and its launch cannot give 'cassette'.");
+
+        client.Fails("launch", Launch("pack")).Should().EndWith(
+            "a diskbasic target boots Disk BASIC from the cartridge port, which a cartridge would take over, so its options and its launch cannot give 'cartridge'.");
+
+        client.Request("launch", Launch("disk"))["project"]?["entry"]?.GetValue<int>().Should().Be(0x2712);
+        client.Request("evaluate", new JsonObject
+        {
+            ["expression"] = "PC"
+        }).String("result").Should().StartWith("$2712");
+
+        JsonObject set = client.Request("setBreakpoints", new JsonObject
+        {
+            ["source"] = new JsonObject { ["path"] = main },
+            ["breakpoints"] = new JsonArray(new JsonObject { ["line"] = 12 })
+        });
+
+        (set["breakpoints"]?[0]?["verified"]?.GetValue<bool>()).Should().BeTrue();
+        client.Request("configurationDone", []);
+        client.Event("stopped").String("reason").Should().Be("entry");
+        client.Request("continue", new JsonObject { ["threadId"] = 1 });
+        client.Event("stopped").String("reason").Should().Be("breakpoint", "the program runs to its loop once it has shown its line");
+        CocoScreen(client).Should().Contain("LOADM\"BOOKSHOP\"").And.Contain("LOADED FROM DISK");
+    }
+
+    /// <summary>
+    ///  The 6809 sample, <c>sample/6809</c>, boots on each of its targets, from its cassette under Color BASIC and from its
+    ///  disk under Disk BASIC, and shows its greeting, then goes back to BASIC's OK.
+    /// </summary>
+    /// <param name="target">The sample's target.</param>
+    [TestMethod]
+    [DataRow("coco-colorbasic")]
+    [DataRow("coco3-colorbasic")]
+    [DataRow("coco-diskbasic")]
+    [DataRow("coco3-diskbasic")]
+    public void M6809SampleRunsOnEachTarget(string target)
+    {
+        string sample = Path.Join(RepositoryRoot(), "sample", "6809");
+        using DapTestClient client = new();
+        client.Request("initialize", []);
+        client.Request("launch", new JsonObject { ["project"] = sample, ["target"] = target, ["stopOnEntry"] = false });
+        client.Request("configurationDone", []);
+        for (DateTime end = DateTime.UtcNow.AddSeconds(30); !CocoScreen(client).Contains("HELLO, WORLD!\nOK", StringComparison.Ordinal); Thread.Sleep(100))
+        {
+            DateTime.UtcNow.Should().BeBefore(end, $"{target} shows its greeting and BASIC's OK:\n{CocoScreen(client)}");
+        }
+    }
+
+    // The Color Computer's text screen, 32 columns by 16 rows from $0400, as rows of text with their trailing spaces
+    // left out: each byte's low six bits, $00-$1F as @ to _ and $20-$3F as space to ?.
+    private static string CocoScreen(DapTestClient client)
+    {
+        byte[] bytes = Convert.FromBase64String(client.Request("readMemory", new JsonObject
+        {
+            ["memoryReference"] = "0x400",
+            ["count"] = 512
+        }).String("data") ?? "");
+
+        IEnumerable<string> rows = bytes.Chunk(32).Select(row => new string([.. row.Select(value =>
+        {
+            int character = value & 0x3F;
+            return (char)(character < 0x20 ? character + 0x40 : character);
+        })]).TrimEnd());
+
+        return string.Join("\n", rows);
+    }
+
+    /// <summary>
+    ///  A <c>cpm</c> target's launch puts its disk, the Kaypro II's CP/M disk with the program added, in drive A, types
+    ///  the program's name at <c>A&gt;</c>, and stops at <c>$0100</c>, where the CCP starts it; the program then writes
+    ///  its line through the BDOS. Its target cannot give the disks or the command. Without the system disk the test is
+    ///  inconclusive.
+    /// </summary>
+    [TestMethod]
+    public void CpmLaunchBootsItsDisk()
+    {
+        Write("retrocore.json", """
+            { "sdk": "1", "name": "hello", "cpu": "z80", "sources": ["src/*.s"], "entry": "START",
+              "targets": { "cpm": { "machine": "kaypro2", "environment": "cpm" },
+                           "own": { "machine": "kaypro2", "environment": "cpm", "options": { "command": "DIR" } } } }
+            """);
+
+        string main = Write("src/main.s", """
+            START:
+                LD DE,MESSAGE
+                LD C,9
+                CALL 5
+            LOOP:
+                JR LOOP
+            MESSAGE:
+                .byte "LOADED FROM CP/M", 13, 10, "$"
+            """);
+
+        using DapTestClient client = new();
+        client.Request("initialize", []);
+        client.Fails("launch", Launch("own")).Should().EndWith(
+            "a cpm target boots its own disk in drive A and types its program's name, so its options and its launch cannot give 'command'.");
+
+        JsonObject? launched = client.TryRequest("launch", Launch("cpm"), out string? failure);
+        if (launched is null)
+        {
+            failure.Should().Contain("the Kaypro II's CP/M 2.2 system disk").And.Contain("was not found by its hash");
+            Assert.Inconclusive($"The Kaypro II's CP/M disk was not found: {failure}");
+        }
+
+        (launched["project"]?["entry"]?.GetValue<int>()).Should().Be(0x0100);
+        JsonObject set = client.Request("setBreakpoints", new JsonObject
+        {
+            ["source"] = new JsonObject { ["path"] = main },
+            ["breakpoints"] = new JsonArray(new JsonObject { ["line"] = 6 })
+        });
+
+        (set["breakpoints"]?[0]?["verified"]?.GetValue<bool>()).Should().BeTrue();
+        client.Request("configurationDone", []);
+        client.Event("stopped").String("reason").Should().Be("entry");
+        client.Request("continue", new JsonObject { ["threadId"] = 1 });
+        client.Event("stopped").String("reason").Should().Be("breakpoint", "the program runs to its loop once it has written its line");
+        string screen = string.Join("\n", (client.Request("retro/display", [])["rows"] as JsonArray ?? []).Select(row => row?.GetValue<string>()));
+        screen.Should().Contain("A>HELLO").And.Contain("LOADED FROM CP/M");
+    }
+
+    /// <summary>
+    ///  The Z80 sample, <c>sample/z80</c>, boots on each of its targets and shows its greeting, then goes back to its
+    ///  environment: under Level II, to BASIC's READY.
+    /// </summary>
+    /// <param name="target">The sample's target.</param>
+    [TestMethod]
+    [DataRow("trs80-level2")]
+    [DataRow("trs80-model3-level2")]
+    public void Z80SampleRunsOnEachTarget(string target)
+    {
+        string sample = Path.Join(RepositoryRoot(), "sample", "z80");
+        using DapTestClient client = new();
+        client.Request("initialize", []);
+        client.Request("launch", new JsonObject { ["project"] = sample, ["target"] = target, ["stopOnEntry"] = false });
+        client.Request("configurationDone", []);
+        for (DateTime end = DateTime.UtcNow.AddSeconds(30); !Trs80Screen(client).Contains("HELLO, WORLD!\nREADY", StringComparison.Ordinal); Thread.Sleep(100))
+        {
+            DateTime.UtcNow.Should().BeBefore(end, $"{target} shows its greeting and BASIC's READY:\n{Trs80Screen(client)}");
+        }
+    }
+
+    private static string RepositoryRoot()
+    {
+        string? root = AppContext.BaseDirectory;
+        while (root is not null && !File.Exists(Path.Join(root, "Retrocore.slnx")))
+        {
+            root = Path.GetDirectoryName(root);
+        }
+
+        return root ?? throw new InvalidOperationException("The repository root was not found.");
+    }
+
+    /// <summary>
+    ///  The Z80 sample's <c>kaypro-cpm</c> target boots CP/M on the Kaypro II, and the program shows its greeting through
+    ///  the BDOS and warm boots back to <c>A&gt;</c>. Without the Kaypro II's CP/M disk the test is inconclusive.
+    /// </summary>
+    [TestMethod]
+    public void Z80SampleRunsUnderCpm()
+    {
+        string sample = Path.Join(RepositoryRoot(), "sample", "z80");
+        using DapTestClient client = new();
+        client.Request("initialize", []);
+        JsonObject launch = new()
+        {
+            ["project"] = sample,
+            ["target"] = "kaypro-cpm",
+            ["stopOnEntry"] = false,
+            ["speed"] = "max"
+        };
+
+        if (client.TryRequest("launch", launch, out string? failure) is null)
+        {
+            failure.Should().Contain("was not found by its hash");
+            Assert.Inconclusive($"The Kaypro II's CP/M disk was not found: {failure}");
+        }
+
+        client.Request("configurationDone", []);
+
+        // The display's rows, those that show something: the greeting, then CP/M's prompt below it.
+        List<string> Shown() => [.. (client.Request("retro/display", [])["rows"] as JsonArray ?? [])
+            .Select(row => row?.GetValue<string>()?.TrimEnd() ?? "")
+            .Where(row => row.Length != 0)];
+
+        for (DateTime end = DateTime.UtcNow.AddSeconds(30); !Done(Shown()); Thread.Sleep(200))
+        {
+            DateTime.UtcNow.Should().BeBefore(end, $"the sample shows its greeting and CP/M's prompt:\n{string.Join("\n", Shown())}");
+        }
+
+        static bool Done(List<string> rows) =>
+            rows.IndexOf("HELLO, WORLD!") is int greeting and >= 0 && rows.Count > greeting + 1 && rows[^1].StartsWith("A>", StringComparison.Ordinal);
+    }
+
+    // The TRS-80's screen, 64 columns by 16 rows from $3C00, as rows of text with their trailing spaces left out. A
+    // byte below $20 is the capital 64 above it, as the Model I's video RAM has no bit 6.
+    private static string Trs80Screen(DapTestClient client)
+    {
+        byte[] bytes = Convert.FromBase64String(client.Request("readMemory", new JsonObject
+        {
+            ["memoryReference"] = "0x3C00",
+            ["count"] = 1024
+        }).String("data") ?? "");
+
+        IEnumerable<string> rows = bytes.Chunk(64).Select(row => new string([.. row.Select(value =>
+        {
+            int character = value & 0x7F;
+            return (char)(character < 0x20 ? character + 0x40 : character);
+        })]).TrimEnd());
+
+        return string.Join("\n", rows);
+    }
+
+    /// <summary>
     ///  A routine's <c>Keeps:</c> contract is checked only where memory holds the routine's code, as its source lines
     ///  apply only there: a call to its address once the program has written other code over it, as ProDOS fills a
     ///  language card where Integer BASIC's routines were mapped, runs on, and a call to it as built stops.
@@ -489,6 +902,49 @@ public sealed class ProjectLaunchTests
 
         client.Request("configurationDone", []);
         client.Event("stopped").String("reason").Should().Be("entry");
+    }
+
+    /// <summary>
+    ///  Configured watches and beam filters do not prevent Skip during PET project boot.
+    /// </summary>
+    /// <param name="watch">Whether to install a memory watch rather than a beam observer.</param>
+    [TestMethod]
+    [DataRow(data: true)]
+    [DataRow(data: false)]
+    public void PetProjectTapeSkipsWithObserversConfigured(bool watch)
+    {
+        Write("retrocore.json", """
+            { "sdk": "1", "name": "game", "cpu": "6502", "sources": ["src/*.s"], "entry": "START",
+              "targets": { "pet": { "machine": "pet4032", "environment": "basic" } } }
+            """);
+
+        Write("src/main.s", "START:\n    nop\n    jmp START\n");
+        using DapTestClient client = new();
+        client.Request("initialize", []);
+        JsonObject launch = Launch("pet");
+        launch["tapeSpeed"] = "skip";
+        launch["ioMode"] = "fast";
+        JsonNode? first = client.Request("launch", launch)["mediaSpeedResult"];
+        first.String("effective").Should().Be("skip");
+        if (watch)
+        {
+            client.Request("setDataBreakpoints", new JsonObject
+            {
+                ["breakpoints"] = new JsonArray(new JsonObject { ["dataId"] = "0x0410", ["accessType"] = "write" })
+            });
+        }
+        else
+        {
+            client.Request("setExceptionBreakpoints", new JsonObject
+            {
+                ["filters"] = new JsonArray("scanline")
+            });
+        }
+
+        JsonNode? result = client.Request("launch", launch.DeepClone().AsObject())["mediaSpeedResult"];
+        result.String("requested").Should().Be("skip");
+        result.String("effective").Should().Be("skip");
+        result.Long("cycles").Should().Be(first.Long("cycles"));
     }
 
     /// <summary>

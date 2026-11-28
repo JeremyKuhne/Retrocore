@@ -11,7 +11,7 @@ namespace Retrocore.Machines.Trs80Model100;
 /// </summary>
 /// <remarks>
 ///  <para>
-///   The rounding is within a sample, about 56 cycles, of half cycles of 512 and 1024 that the ROM tells apart, so
+///   The move is within a sample, about 56 cycles, of half cycles of 512 and 1024 that the ROM tells apart, so
 ///   CLOAD reads a saved recording as it read the tape: the save is guest-equivalent and says so as a note, not a
 ///   loss. The recovery journal keeps the level and half cycles themselves (<see cref="Trs80Model100Tape.SnapshotKind"/>).
 ///  </para>

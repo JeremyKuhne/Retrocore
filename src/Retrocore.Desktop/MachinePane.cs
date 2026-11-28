@@ -573,7 +573,7 @@ internal sealed class MachinePane : ScrollViewer
             if (failed) { return false; }
             string device = answer?["device"]?.GetValue<string>() ?? "";
             JsonNode? generation = answer?["generation"]?.DeepClone();
-            DeviceState? state = _session.Host.DeviceStates().FirstOrDefault(state => state.Id == device);
+            DeviceState? state = _session.Host.DeviceStates().FirstOrDefault(candidate => candidate.Id == device);
             string name = state?.Info.Name ?? device;
             string medium = state is null ? "disk" : Medium(state);
             string file = Path.GetFileName(answer?["label"]?.GetValue<string>() ?? "");
@@ -610,10 +610,10 @@ internal sealed class MachinePane : ScrollViewer
                     string image = Path.GetFileName(answer["path"]?.GetValue<string>()) ?? "The image";
                     string? replace = await _window.Ask(
                         answer["current"] is null
-                            ? $"{image} was deleted since the disk in {name} was read from it. Save the disk there again?"
+                            ? $"{image} was deleted since the {medium} in {name} was read from it. Save the {medium} there again?"
                             : answer["baseline"] is null
-                                ? $"{image} changed since you chose it. Replace it with the disk in {name}?"
-                                : $"{image} changed since the disk in {name} was read from it. Replace it with the disk?",
+                                ? $"{image} changed since you chose it. Replace it with the {medium} in {name}?"
+                                : $"{image} changed since the {medium} in {name} was read from it. Replace it with the {medium}?",
                         ["Replace", "Save As..."]);
 
                     if (replace == "Replace")
@@ -627,7 +627,7 @@ internal sealed class MachinePane : ScrollViewer
                 case "losses":
                     string losses = string.Join(" ", (answer["losses"]?.AsArray() ?? []).Select(loss => loss?.GetValue<string>()));
                     string? accept = await _window.Ask(
-                        $"{answer["format"]?.GetValue<string>()} cannot hold all of the disk in {name}: {losses}",
+                        $"{answer["format"]?.GetValue<string>()} cannot hold all of the {medium} in {name}: {losses}",
                         ["Save Anyway", "Save As..."]);
 
                     if (accept == "Save Anyway")
@@ -641,13 +641,13 @@ internal sealed class MachinePane : ScrollViewer
                 case "readOnly":
                     string why = answer["reason"]?.GetValue<string>() switch
                     {
-                        "noImage" => $"The disk in {name} has no image of its own.",
-                        "format" => $"The disk in {name} came from an image that can only be read.",
-                        "file" => $"The image of the disk in {name} is read-only.",
-                        _ => $"The image of the disk in {name} cannot be written.",
+                        "noImage" => $"The {medium} in {name} has no image of its own.",
+                        "format" => $"The {medium} in {name} came from an image that can only be read.",
+                        "file" => $"The image of the {medium} in {name} is read-only.",
+                        _ => $"The image of the {medium} in {name} cannot be written.",
                     };
 
-                    return await _window.Ask($"{why} Save the disk as a new image?", ["Save As..."]) is not null && await SaveAsNew(device, generation, args);
+                    return await _window.Ask($"{why} Save the {medium} as a new image?", ["Save As..."]) is not null && await SaveAsNew(device, generation, args);
                 default:
                     return true;
             }

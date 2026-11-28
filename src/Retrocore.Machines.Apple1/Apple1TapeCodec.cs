@@ -11,7 +11,7 @@ namespace Retrocore.Machines.Apple1;
 /// </summary>
 /// <remarks>
 ///  <para>
-///   The rounding is within a sample, about 23 cycles, of half cycles that the ACI tells apart by hundreds, so the R
+///   The move is within a sample, about 23 cycles, of half cycles that the ACI tells apart by hundreds, so the R
 ///   command reads a saved recording as it read the tape: the save is guest-equivalent and says so as a note, not a
 ///   loss. The recovery journal keeps the half cycles themselves (<see cref="Apple1Tape.SnapshotKind"/>).
 ///  </para>

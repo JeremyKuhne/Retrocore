@@ -62,6 +62,7 @@ public sealed class AltairDiskController
     private readonly byte[] _sector = new byte[AltairDisk.SectorBytes];
     private readonly byte[] _written = new byte[AltairDisk.SectorBytes];
     private ulong _cycle;
+    private ulong _busyUntil;
     private AltairDiskDrive? _selected;
 
     // The sector whose bytes _sector holds, and the track it was read from.
@@ -135,6 +136,11 @@ public sealed class AltairDiskController
     public bool Writing => _writeSector >= 0;
 
     /// <summary>
+    ///  Gets whether the selected disk is doing I/O or was accessed during the last revolution.
+    /// </summary>
+    public bool IsBusy => _selected?.Media is not null && (_cycle < _busyUntil || Writing || _writePending);
+
+    /// <summary>
     ///  Gets the sector under the heads, 0-31.
     /// </summary>
     public int Sector => (int)(_cycle / AltairDiskTiming.SectorCycles % AltairDisk.SectorsPerTrack);
@@ -153,6 +159,7 @@ public sealed class AltairDiskController
     /// <returns>The value.</returns>
     public byte Read(byte port)
     {
+        MarkDiskAccess();
         switch (port - Port)
         {
             case 0:
@@ -199,7 +206,11 @@ public sealed class AltairDiskController
                 _writeReady = false;
                 break;
         }
+
+        MarkDiskAccess();
     }
+
+    private void MarkDiskAccess() => _busyUntil = _cycle + (ulong)(AltairDiskTiming.SectorCycles * AltairDisk.SectorsPerTrack);
 
     /// <summary>
     ///  Advances one CPU cycle: the disk turns, and a write ends with its sector.

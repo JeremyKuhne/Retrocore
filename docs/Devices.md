@@ -47,6 +47,9 @@ The display offers **Tape speed** and **Disk speed** for the kinds of drives ins
 - **Fast** runs every guest cycle but unthrottles the whole machine while the media is active.
 - **Skip** omits supported transfers. Other operations run at Fast speed without changing your selection.
 
+On the Altair 88-DCDD, disk activity for pacing expires one revolution after the last controller access, unless a
+write is still pending or running. A loaded head alone does not keep the host unthrottled.
+
 Skip is supported for a project-generated PET 4032 BASIC cassette boot with the verified BASIC 4 ROMs, no
 connected disk unit and no second tape mounted. It plays the real header, takes the program data from the verified
 mounted tape, and lets BASIC finish `LOAD`. Skip preserves the program, load status, tape head and continuation,

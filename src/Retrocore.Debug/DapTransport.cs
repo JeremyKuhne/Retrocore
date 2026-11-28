@@ -322,8 +322,11 @@ internal sealed class DapTransport(Stream input, Stream output, Func<Memory<byte
     private static T? ReadAhead<T>(JsonObject message, string field) =>
         message[field] is JsonValue json && json.TryGetValue(out T? value) ? value : default;
 
-    private static int? ReadAheadInt(JsonObject message, string field) =>
-        message[field] is JsonValue json && json.TryGetValue(out int value) ? value : null;
+    private static int? ReadAheadInt(JsonObject message, string field)
+    {
+        try { return message.Int(field); }
+        catch (ArgumentException) { return null; } // The ordered dispatcher reports malformed fields.
+    }
 
     private void CancelPendingLaunches()
     {

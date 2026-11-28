@@ -51,6 +51,10 @@ internal sealed class MediaSpeedPolicy(IDebugTarget target)
         get
         {
             if (target.Accelerated) { return true; }
+            if (_disk is (MediaSpeed.Fast or MediaSpeed.Skip) && target is AltairDebugTarget { DiskBusy: true })
+            {
+                return true;
+            }
 
             if ((_tape is null or MediaSpeed.Normal) && (_disk is null or MediaSpeed.Normal)) { return false; }
             IReadOnlyList<IDevice> devices = target.Devices;
@@ -59,7 +63,7 @@ internal sealed class MediaSpeedPolicy(IDebugTarget target)
                 IDevice device = devices[i];
                 if (device.Activity != DeviceActivity.Idle
                     && (device is ITapeDrive ? _tape is MediaSpeed.Fast or MediaSpeed.Skip
-                        : IsDisk(device) && _disk is MediaSpeed.Fast or MediaSpeed.Skip))
+                        : IsDisk(device) && target is not AltairDebugTarget && _disk is MediaSpeed.Fast or MediaSpeed.Skip))
                 {
                     return true;
                 }
@@ -152,8 +156,10 @@ internal sealed class MediaSpeedPolicy(IDebugTarget target)
     /// </summary>
     /// <param name="tape">Whether to look for tape rather than disk.</param>
     /// <returns>The first busy device, or null.</returns>
-    internal IDevice? Active(bool tape) => target.Devices.FirstOrDefault(device =>
-        (tape ? device is ITapeDrive : IsDisk(device)) && device.Activity != DeviceActivity.Idle);
+    internal IDevice? Active(bool tape) => !tape && target is AltairDebugTarget { DiskBusy: false }
+        ? null
+        : target.Devices.FirstOrDefault(device =>
+            (tape ? device is ITapeDrive : IsDisk(device)) && device.Activity != DeviceActivity.Idle);
 
     /// <summary>
     ///  Builds a protocol result for a media operation.

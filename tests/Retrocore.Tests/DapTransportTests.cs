@@ -393,8 +393,12 @@ public sealed class DapTransportTests
     /// <summary>
     ///  A queued cancellation interrupts a launch without reordering the two responses.
     /// </summary>
+    /// <param name="id">A whole request ID in JSON.</param>
     [TestMethod]
-    public void CancelInterruptsLaunch()
+    [DataRow("1")]
+    [DataRow("1.0")]
+    [DataRow("1e0")]
+    public void CancelInterruptsLaunch(string id)
     {
         List<JsonObject> messages = Exchange(transport =>
         {
@@ -411,7 +415,7 @@ public sealed class DapTransportTests
             });
 
             transport.On("cancel", _ => new JsonObject());
-        }, Request(1, "launch", []), Request(2, "cancel", new JsonObject { ["requestId"] = 1 }));
+        }, Request(1, "launch", []), Request(2, "cancel", new JsonObject { ["requestId"] = JsonNode.Parse(id) }));
 
         messages.Select(message => message.Int("request_seq")).Should().Equal(1, 2);
         messages.Select(message => message.Bool("success")).Should().Equal(false, true);

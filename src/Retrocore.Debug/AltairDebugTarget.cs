@@ -210,6 +210,11 @@ internal sealed class AltairDebugTarget : IDebugTarget
     public bool Accelerated =>
         FastCassette && _machine.Bus.Cassette?.Activity is DeviceActivity.Reading or DeviceActivity.Writing;
 
+    /// <summary>
+    ///  Gets whether disk I/O, rather than a parked loaded head, is keeping the disk busy.
+    /// </summary>
+    internal bool DiskBusy => _machine.Bus.Disk?.IsBusy == true;
+
     /// <inheritdoc/>
     public IDebugCallStack CallStack => _calls;
 

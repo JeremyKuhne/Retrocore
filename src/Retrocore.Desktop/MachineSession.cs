@@ -224,10 +224,12 @@ internal sealed class MachineSession : DisposableBase
 
     private MachineHost Build(JsonObject configuration, JsonObject? saved)
     {
+        MediaSpeed tape = MediaSpeedPolicy.LaunchMode(configuration, tape: true) ?? _settings.TapeSpeed;
+        MediaSpeed disk = MediaSpeedPolicy.LaunchMode(configuration, tape: false) ?? _settings.DiskSpeed;
         MachineHost host = new(configuration, saved);
         Problems = saved is null ? [] : host.Restore(saved);
-        host.SetMediaSpeed(tape: true, MediaSpeedPolicy.LaunchMode(configuration, tape: true) ?? _settings.TapeSpeed);
-        host.SetMediaSpeed(tape: false, MediaSpeedPolicy.LaunchMode(configuration, tape: false) ?? _settings.DiskSpeed);
+        host.SetMediaSpeed(tape: true, tape);
+        host.SetMediaSpeed(tape: false, disk);
         return host;
     }
 

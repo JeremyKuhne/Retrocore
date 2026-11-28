@@ -116,6 +116,7 @@ export function activate(context: vscode.ExtensionContext): void {
     // Restart starts the ended session's launch again. Its configuration is the one VS Code resolved, so the machine
     // it saved is dropped: resolving again restores the one saved since.
     const changedMediaSpeeds = new Map<string, Partial<Record<"tapeSpeed" | "diskSpeed", string>>>();
+    const restartingMediaSessions = new Set<string>();
     const restart = async (): Promise<boolean> => {
         if (endedSession === undefined) return false;
         const { machineState: _saved, ...configuration } = endedSession.configuration;
@@ -138,7 +139,7 @@ export function activate(context: vscode.ExtensionContext): void {
     context.subscriptions.push(vscode.debug.onDidTerminateDebugSession(session => {
         cycleSessions.delete(session.id);
         const mediaSpeeds = changedMediaSpeeds.get(session.id);
-        changedMediaSpeeds.delete(session.id);
+        if (!restartingMediaSessions.has(session.id)) changedMediaSpeeds.delete(session.id);
         if (displaySession?.id === session.id) {
             displaySession = undefined;
             endedSession = { name: session.name, configuration: { ...session.configuration, ...mediaSpeeds }, folder: session.workspaceFolder };
@@ -229,8 +230,34 @@ export function activate(context: vscode.ExtensionContext): void {
     }));
     context.subscriptions.push(vscode.debug.registerDebugAdapterTrackerFactory("retrocore", {
         createDebugAdapterTracker(session) {
+            const pendingMediaChoices = new Map<number, { option: "tapeSpeed" | "diskSpeed"; mode: string }>();
             return {
+                onWillReceiveMessage(message: unknown) {
+                    if (typeof message !== "object" || message === null || !("command" in message)) return;
+                    const args = "arguments" in message && typeof message.arguments === "object" && message.arguments !== null
+                        ? message.arguments : undefined;
+                    if (message.command === "disconnect" || message.command === "terminate") {
+                        if (args !== undefined && "restart" in args && args.restart === true) restartingMediaSessions.add(session.id);
+                        else restartingMediaSessions.delete(session.id);
+                    } else if (message.command === "launch" && restartingMediaSessions.delete(session.id) && args !== undefined) {
+                        Object.assign(args, changedMediaSpeeds.get(session.id));
+                    } else if (message.command === "retro/mediaSpeed" && "seq" in message && typeof message.seq === "number"
+                        && args !== undefined && "kind" in args && (args.kind === "tape" || args.kind === "disk")
+                        && "mode" in args && isMediaSpeed(args.mode)) {
+                        pendingMediaChoices.set(message.seq, { option: args.kind === "tape" ? "tapeSpeed" : "diskSpeed", mode: args.mode });
+                    }
+                },
                 onDidSendMessage(message: unknown) {
+                    if (typeof message === "object" && message !== null && "request_seq" in message && typeof message.request_seq === "number") {
+                        const choice = pendingMediaChoices.get(message.request_seq);
+                        if (choice !== undefined) {
+                            pendingMediaChoices.delete(message.request_seq);
+                            if ("success" in message && message.success === true) {
+                                changedMediaSpeeds.set(session.id, { ...changedMediaSpeeds.get(session.id), [choice.option]: choice.mode });
+                                void context.workspaceState.update(`retrocore.${choice.option}`, choice.mode).then(undefined, showError);
+                            }
+                        }
+                    }
                     if (typeof message !== "object" || message === null || !("event" in message) || !("body" in message)) {
                         return;
                     }
@@ -358,11 +385,7 @@ export function activate(context: vscode.ExtensionContext): void {
                                 const session = displaySession;
                                 if (session !== undefined) {
                                     const { kind, mode } = input;
-                                    const option = kind === "tape" ? "tapeSpeed" : "diskSpeed";
-                                    void session.customRequest("retro/mediaSpeed", { kind, mode }).then(() => {
-                                        changedMediaSpeeds.set(session.id, { ...changedMediaSpeeds.get(session.id), [option]: mode });
-                                        return context.workspaceState.update(`retrocore.${option}`, mode);
-                                    }).then(undefined, showError);
+                                    void session.customRequest("retro/mediaSpeed", { kind, mode }).then(undefined, showError);
                                 }
                             } else if (typeof input === "object" && input !== null && "command" in input && input.command === "mediaSpeedHelp") {
                                 void vscode.env.openExternal(vscode.Uri.parse("https://github.com/JeremyKuhne/Retrocore/blob/main/docs/Devices.md#media-speed")).then(undefined, showError);

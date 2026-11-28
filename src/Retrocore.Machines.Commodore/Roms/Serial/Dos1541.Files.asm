@@ -3033,7 +3033,7 @@ NotLoad:
     lda SecondaryAddress
     cmp #$02
     bcc FreeInternal
-    lda ErrorFlash
+    lda PendingError
     bne Error
     jmp Commands::Finish
 
@@ -3054,7 +3054,7 @@ Next:
     jsr CloseChannel
     dec SecondaryAddress
     bpl Next
-    lda ErrorFlash
+    lda PendingError
     bne AllError
     jmp Commands::Finish
 

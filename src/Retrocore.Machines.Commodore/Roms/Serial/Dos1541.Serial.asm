@@ -7,7 +7,8 @@
 ; channel (<HandleAtn>). With ATN released the addressed device is the talker, which sends a channel's bytes
 ; (<Talk>), or the listener, which takes the bytes the computer sends (<Listen>); both clock them a bit at a time
 ; through <ReceiveByte> or Talk's own loop, checking ATN in the waits (<CheckAtn>), except for the wait for each bit's
-; CLK in <ReceiveByte> and, in -05 and -06, its wait for DATA. The lines are on VIA 1's port B: <ReleaseData>, <PullData>, <ReleaseClock>, <PullClock> and <ReadLines> work them. This first piece holds all of
+; CLK in <ReceiveByte> and, in -05 and -06, its wait for DATA. The lines are on VIA 1's port B:
+; <ReleaseData>, <PullData>, <ReleaseClock>, <PullClock> and <ReadLines> work them. This first piece holds all of
 ; those; the speed routines of the 1541 and -05's patch are in pieces of their own at the ROM's end.
 
 .scope Serial continued

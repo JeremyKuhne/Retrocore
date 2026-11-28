@@ -782,22 +782,22 @@ Put:
     beq EndRecord
     rts
 
-;; EOI after an overflow: the overflow error into <ErrorFlash>.
+;; EOI after an overflow: the overflow error into <PendingError>.
 ;; Also: WR30 (D1541)
 CheckOverflow:
     lda #RELATIVE_OVERFLOW
     jsr Files::TestFlag
     beq EndRecord
     lda #ERROR_RECORD_OVERFLOW
-    sta ErrorFlash
+    sta PendingError
 
 ;; Fills the record's rest (<FillRecord>), moves to the next (<ReadByte::LoadNextRecord>), and reports the error in
-;; <ErrorFlash> or OK.
+;; <PendingError> or OK.
 ;; Also: WR40 (D1541)
 EndRecord:
     jsr FillRecord
     jsr ReadByte::LoadNextRecord
-    lda ErrorFlash
+    lda PendingError
     beq Ok
     jmp Commands::Fail
 
@@ -1133,11 +1133,11 @@ IsRelative:
     cmp ChannelRecordSize,x
     bcc SetOffset
     lda #ERROR_RECORD_OVERFLOW
-    sta ErrorFlash
+    sta PendingError
     lda #$00
 
 ;; Sets the offset in the record: A, the command's offset less 1 (0 if it gave none or 1) when that is inside the
-;; record, else 0 after 51 RECORD OVERFLOW is noted in <ErrorFlash>. Then finds the record and its side sector
+;; record, else 0 after 51 RECORD OVERFLOW is noted in <PendingError>. Then finds the record and its side sector
 ;; (<FindRecord>, <PositionSideSector>). The listing labelled this address twice, R35 (reached with an offset inside the
 ;; record) and R40 (reached with offset 0 or 1); it is one label here (Q7).
 ;; Also: R35 (D1541), R40 (D1541)
@@ -1159,7 +1159,7 @@ Found:
     beq Done
     jmp ReadByte::NoRecord
 
-;; Ends the command (<Commands::Finish>), which reports the error in <ErrorFlash> if there is one.
+;; Ends the command (<Commands::Finish>), which reports the error in <PendingError> if there is one.
 ;; Also: R60 (D1541)
 Done:
     jmp Commands::Finish

@@ -24,9 +24,10 @@ INITIAL_INTERLEAVE = 10
 ;; The tries <Jobs::Retries> starts at for a failed job.
 INITIAL_RETRIES = 5
 
-;; The self-test's failure: blinks the activity LED, for ever. The number of blinks says what failed: one for zero page, two
-;; for the upper ROM, three for the lower, four for the RAM. The count is kept in the stack pointer, since the RAM may
-;; be bad. After the blinks the LED stays dark for three more off-delays, each half a blink, and it starts again.
+;; The self-test's failure: blinks the activity LED, for ever. The number of blinks says what failed: one for zero
+;; page, two for the upper ROM, three for the lower, four for the RAM. The count is kept in the stack pointer, since
+;; the RAM may be bad. After the blinks the LED stays dark for three more off-delays, each half a blink, and it
+;; starts again.
 ;;
 ;; It never returns: the drive stays here until it is reset. Zero page's failure comes in at the top, with X = 0; the
 ;; others at `Numbered`, with the failed test's number in <Temporary>.
@@ -50,7 +51,8 @@ Numbered:
 Again:
     tsx
 
-;; One blink: lights the LED (<LED_DRIVE0>; <LED_DRIVE1> is 0 and adds nothing), through <BlinkFaultPatch>, which also makes VIA 2's port B drive the LEDs.
+;; One blink: lights the activity LED (<LED_DRIVE0>; <LED_DRIVE1> is 0 and adds nothing), through
+;; <BlinkFaultPatch>, which also makes VIA 2's port B drive the LEDs.
 ;; Also: PE30 (D1541)
 Blink:
     lda #LED_DRIVE0 + LED_DRIVE1
@@ -205,7 +207,8 @@ AddByte:
     inc Temporary
     ldx #$07
 
-;; Fills pages 1 to 7, each byte with its low address plus its page: a pattern in which no two bytes of a page share a value.
+;; Fills pages 1 to 7, each byte with its low address plus its page: a pattern in which no two bytes of
+;; a page share a value.
 ;; Also: RA10 (D1541)
 FillRam:
     tya
@@ -420,10 +423,10 @@ FreeBuffers:
 .scope Idle continued
 
 ;; The idle loop, which the DOS runs when the bus and the controller have nothing for it. Entering it at `Loop`
-;; releases CLK, DATA and ATNA and runs a command that is waiting in the command channel. Each pass, which every pass
-;; ends by jumping to <NextPass> and so does not repeat those two steps, serves ATN when the interrupt has left it
-;; pending (<Serial::HandleAtn>, which ends in this loop again), lights the activity LED for a drive while a file is open
-;; or a job runs on it, and flashes the error LED. It never returns.
+;; releases CLK, DATA and ATNA and runs a command that is waiting in the command channel. Every pass ends by jumping
+;; to <NextPass>, so only that entry does those two things. Each pass serves ATN when the interrupt has left it pending
+;; (<Serial::HandleAtn>, which ends in this loop again), lights the activity LED for a drive while a file is open or a
+;; job runs on it, and flashes the error LED. It never returns.
 ;; Also: IDLE (D1541)
 .proc Loop
     ; Releases the bus lines, and runs a command that the command channel has completed.

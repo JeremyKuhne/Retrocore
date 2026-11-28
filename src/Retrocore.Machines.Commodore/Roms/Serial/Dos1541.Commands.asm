@@ -156,17 +156,17 @@ Dispatch:
 ;;   KeepBamFlag = OPEN ends here, with <BamWriteDeferred> left as it is
 ;;   Report = the scratch command ends here, with its message number in A and the count in <Track>
 ;;   NoMessage = CLOSE ends here, with no message
-;; Errors: <Fail> runs instead when <ErrorFlash> holds an error
+;; Errors: <Fail> runs instead when <PendingError> holds an error
 ;; Also: ENDCMD (D1541)
 .proc Finish
     lda #$00
     sta BamWriteDeferred
 
-;; OPEN ends here: as <Finish>, but <BamWriteDeferred> is left as it is. If <ErrorFlash> holds an error, <Fail> ends the
-;; command; otherwise the message is 00, OK, with track 0 and sector 0.
+;; OPEN ends here: as <Finish>, but <BamWriteDeferred> is left as it is. If <PendingError> holds an error, <Fail> ends
+;; the command; otherwise the message is 00, OK, with track 0 and sector 0.
 ;; Also: ENDSAV (D1541)
 KeepBamFlag:
-    lda ErrorFlash
+    lda PendingError
     bne Fail
     ldy #$00
     tya
@@ -262,7 +262,7 @@ ToFindDrive:
 ;;   AfterColon = with Y past the ':' and X its commas, as <FindColon> leaves them (C comes here)
 ;;   Equals = with <FileNameStart> set (LOAD comes here)
 ;; Errors:
-;;   30 = SYNTAX ERROR, the shape is forbidden for the command; <ErrorFlash> holds the clashing bits
+;;   30 = SYNTAX ERROR, the shape is forbidden for the command; <PendingError> holds the clashing bits
 ;;   34 = SYNTAX ERROR, no ':' or a ',' before it
 ;; Also: TAGCMD (D1541)
 .proc ParseNames
@@ -354,10 +354,10 @@ Check:
     bne BadSyntax
     rts
 
-;; <ErrorFlash> = the clashing bits; 30 SYNTAX ERROR.
+;; <PendingError> = the clashing bits; 30 SYNTAX ERROR.
 ;; Also: TC80 (D1541)
 BadSyntax:
-    sta ErrorFlash
+    sta PendingError
     lda #ERROR_SYNTAX
     jmp Fail
 .endproc
@@ -440,7 +440,7 @@ Return:
 ;; <CommandNumber> = $FF. Then falls into <Prepare::ClearTables>.
 ;; Entry:
 ;;   ClearTables = clears the buffer's count, the record size, file type and match type, the name counters,
-;;   <PatternFlag> and <ErrorFlash>, and the file name tables; LOAD enters here to search by name alone
+;;   <PatternFlag> and <PendingError>, and the file name tables; LOAD enters here to search by name alone
 ;; Out: Y = 0 at ClearTables, A = 0
 ;; Errors: 32 = SYNTAX ERROR, the command is too long, through <Fail>
 ;; Also: CMDSET (D1541)
@@ -475,7 +475,7 @@ SetSize:
     jmp Fail
 
 ;; Clears the buffer's count, <RecordSize>, <FileType>, <MatchType>, <NameIndex>, <SecondStreamStart>, <FirstStreamEnd>,
-;; <SecondStreamEnd>, <PatternFlag> and <ErrorFlash>, and the <FILE_NAME_COUNT> entries of each file name table
+;; <SecondStreamEnd>, <PatternFlag> and <PendingError>, and the <FILE_NAME_COUNT> entries of each file name table
 ;; (<FileNameStart>, <FileNameEntrySector>, <FileNameEntryIndex>, <FileNameDrive>, <FileNamePattern>, <FileNameTrack>
 ;; and <FileNameSector>). LOAD enters here to search by name alone.
 ;; Also: CMDRST (D1541)
@@ -491,7 +491,7 @@ ClearTables:
     sta FirstStreamEnd
     sta SecondStreamEnd
     sta PatternFlag
-    sta ErrorFlash
+    sta PendingError
     ldx #FILE_NAME_COUNT
 
 ;; Each table's entry X-1, from the last.
@@ -2343,13 +2343,13 @@ NoChannel:
     lda #ERROR_NO_CHANNEL
     jmp Commands::Fail
 
-;; '#n': n from character 1 (<Commands::BlockParameters::FromY>) into <FileNameSector>; marked used in <BuffersInUse> if
-;; it was free, and given the drive's job.
+;; '#n': n from character 1 (<Commands::BlockParameters::FromY>) into <Commands::Parameters>; marked used in
+;; <BuffersInUse> if it was free, and given the drive's job.
 ;; Also: OB10 (D1541)
 Requested:
     ldy #$01
     jsr Commands::BlockParameters::FromY
-    ldx FileNameSector
+    ldx Parameters
     cpx #BUFFER_COUNT
     bcs NoChannel
     lda #$00
@@ -2379,7 +2379,7 @@ Bit:
     lda #$00
     jsr GetReadChannel
     ldx Channel
-    lda FileNameSector
+    lda Parameters
     sta ChannelBuffer,x
     tax
     lda DriveNumber
@@ -2536,8 +2536,8 @@ Number:
 .endproc
 
 ;; Reads the decimal number at Y (its last three digits count; any of $30-$3F is a digit, by its low four bits) into
-;; <FileNameSector>,X (low) and <FileNameTrack>,X (high) at X = <FirstStreamEnd>; <SecondStreamStart> = the place after
-;; it.
+;; <Commands::Parameters>,X (low) and <FileNameTrack>,X (high) at X = <FirstStreamEnd>; <SecondStreamStart> = the place
+;; after it.
 ;; In: Y = the number's place in <CommandBuffer>
 ;; Also: ASCHEX (D1541)
 .proc ParseNumber
@@ -2602,7 +2602,7 @@ Store:
     lda Temporary+3
     sta FileNameTrack,x
     pla
-    sta FileNameSector,x
+    sta Parameters,x
     rts
 .endproc
 
@@ -2785,7 +2785,7 @@ Call:
     lda JobNumber
     asl
     tax
-    lda FileNameSector+1
+    lda Parameters+1
     sta BufferPositions,x
     jsr Files::BufferIndexes
     jsr Files::NextByte::RandomAtPointer
@@ -2799,7 +2799,7 @@ Call:
 .proc FindBlockChannel
     ldx NameIndex
     inc NameIndex
-    lda FileNameSector,x
+    lda Parameters,x
     tay
     dey
     dey
@@ -2837,12 +2837,12 @@ Valid:
 ;; Also: BLKTST (D1541)
 .proc CheckBlock
     ldx NameIndex
-    lda FileNameSector,x
+    lda Parameters,x
     and #$01
     sta DriveNumber
-    lda FileNameSector+2,x
+    lda Parameters+2,x
     sta Sector
-    lda FileNameSector+1,x
+    lda Parameters+1,x
     sta Track
     jsr Jobs::CheckTrackSector
     jmp TurnOnActivityLed

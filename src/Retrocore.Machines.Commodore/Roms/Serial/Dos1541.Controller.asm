@@ -5,9 +5,9 @@
 ; each interrupt runs one pass (ScanJobs): it turns the motor on, steps the head toward a job's track, or serves a job
 ; on the head's track, finding its sector's header and then reading, writing, verifying or seeking, or running a
 ; buffer's code, as the format does. A job ends with its result in its queue byte: 1 for success, or 2 to 11 or $0F,
-; which the DOS reports as messages 20 to 29 and 74. Each pass ends in EndPass, which runs the motor's timers and the
-; stepper and restarts the timer, so the next interrupt comes a whole period after the pass ends and every time
-; counted in interrupts here is a minimum.
+; which the DOS reports as messages 20 to 29 and 74. Each pass ends in EndPass (a jump job's buffer code may return
+; without it), which restarts the timer at its first instructions, then runs the motor's timers and the stepper, so the
+; next interrupt comes a whole period after that point and every time counted in interrupts here is a minimum.
 ;
 ; A sector is two blocks on the disk, each after a sync (ten or more 1 bits, which no run of GCR codes makes). The
 ; header holds the block ID $08, a checksum, the sector, the track, the disk ID and two padding bytes; the data block
@@ -212,7 +212,8 @@ ScanTrackNext:
 
 ;; The next job down. With none on the head's track, sends the head toward the track of <SeekJob>, the last job found
 ;; off it, which is the lowest-numbered: <Steps> = twice the distance, in half-tracks, positive inward; <DriveStatus> =
-;; stepping; and <HeadTrack> = that track already. The steps are taken in the passes that follow.
+;; stepping; and <HeadTrack> = that track already. The pass ends in <EndPass>, where <CheckStepping> runs
+;; <EndPass::StepIdle> and takes the first step; the rest follow in the passes after.
 ;; Also: QUE05 (D1541)
 ScanTrackLoop:
     dec JobIndex
@@ -304,8 +305,8 @@ JumpToBuffer:
     jmp (DataPointer)
 
 ;; A bump: sets the phase to 0 and the head stepping 92 half-tracks outward (<Steps> = -92), which brings it against the
-;; stop at track 1 from anywhere, with <HeadTrack> = 1, and finishes the job with 1 at once; the steps are taken in the
-;; passes that follow.
+;; stop at track 1 from anywhere, with <HeadTrack> = 1, and finishes the job with 1 at once; the pass ends in <EndPass>,
+;; where <CheckStepping> runs <EndPass::StepIdle> and takes the first step, and the rest follow in the passes after.
 ;; Also: BMP (D1541)
 Bump:
     lda #STATE_ON | STATE_STEPPING
@@ -783,10 +784,11 @@ Wait:
 ;; makes the job a verify.
 ;;
 ;; It takes the buffer's checksum, fails if the disk is write-protected, encodes the buffer and finds the header. After
-;; the header's gap, <HEADER_GAP> - 2 bytes, it switches the head to writing and writes the data block's sync
-;; (<SYNC_LENGTH> $FF bytes) and its 325 GCR bytes, the overflow buffer's 69 first. Then it switches back to reading,
-;; decodes the buffer back to binary, turns the job's queue byte from a write into a verify and goes back to <Seek>,
-;; which compares the sector with the buffer when it comes round again. It never returns.
+;; the header's last 2 GCR bytes and <HEADER_GAP> - 4 bytes of its gap (<FindHeader> returns after 8 of the header's
+;; 10), it switches the head to writing and writes the data block's sync (<SYNC_LENGTH> $FF bytes) and its 325 GCR
+;; bytes, the overflow buffer's 69 first. Then it switches back to reading, decodes the buffer back to binary, turns the
+;; job's queue byte from a write into a verify and goes back to <Seek>, which compares the sector with the buffer when
+;; it comes round again. It never returns.
 ;; In: A = <JobCode>, the job's type; DataPointer = its buffer
 ;; Errors: the job ends with 8 (message 26, WRITE PROTECT ON) on a protected disk, and with <FindHeader>'s and
 ;;   <WaitForSync>'s errors, 2 (20) and 3 (21)
@@ -814,8 +816,10 @@ NotProtected:
     jsr FindHeader
     ldx #HEADER_GAP-2
 
-;; Waits out the header's gap, <HEADER_GAP> - 2 bytes (9 from 901229-03 on, 8 in -01, -02 and the 1540), then switches
-;; VIA 2's port A to output and the head to writing, and starts the sync.
+;; Counts <HEADER_GAP> - 2 byte-readies (9 from 901229-03 on, 8 in -01, -02 and the 1540), which are the header's last 2
+;; GCR bytes and <HEADER_GAP> - 4 of the gap's bytes, then switches VIA 2's port A to output and the head to writing,
+;; and starts the sync. The format writes the gap as <HEADER_GAP> - 2 bytes (<WriteHeaderGap>), so the data block's
+;; sync starts 2 bytes before the gap ends.
 ;; Also: WRT20 (D1541)
 SkipGap:
     bvc *                           ; waits for byte-ready, which sets V
@@ -1659,8 +1663,9 @@ Restart:
     rts
 .endproc
 
-;; Starts the motor's timeout: sets <DriveStatus>' timing-out bit and <MotorTimer> = 255 interrupts, at least 3.78 s,
-;; after which <EndPass> stops the motor, unless a job comes first.
+;; Starts the motor's timeout: sets <DriveStatus>' timing-out bit and <MotorTimer> = 255. <FinishJob> calls this inside
+;; a pass whose <EndPass> already counts it down, so the motor stops 254 interrupts later, at least 3.77 s (254 x 14.848
+;; ms), unless a job comes first.
 ;;
 ;; <MotorOffVector>, the ROM's word at $FFE8, points here. Its load of <ActiveDrive> into X is left from the dual drive;
 ;; nothing uses it.
@@ -1925,8 +1930,9 @@ Done:
     rts
 .endproc
 
-;; The format, run as an execute job on buffer 3 (<Commands::Format> puts a `JMP` to it at $0600) on every pass, a track
-;; at a time, until it finishes; <FormatTrack> says where it has got to.
+;; The format, run as an execute job on buffer 3 (<Commands::Format> puts a `JMP` to it at $0600), on each pass where
+;; the job's header track is the head's track and the head is still (while the head steps, <ScanJobs> ends the pass at
+;; <CheckReady>), a track at a time, until it finishes; <FormatTrack> says where it has got to.
 ;;
 ;; The first time (<FormatTrack> negative) it bumps the head to track 1, allows 10 errors for the whole format
 ;; (<FormatRetries>), starts the track's measuring at 4000 bytes (<SegmentLength>) and ends the pass. After that it
@@ -2437,8 +2443,9 @@ WriteDataGap:
 ;;
 ;; It starts at whatever sync comes first and expects sector 0's header, so the 200 tries (<VerifyRetries>), one for
 ;; each sync that does not match, also cover the wait for sector 0; a mismatch starts again from sector 0. A header's 10
-;; GCR bytes and the data block's first 321 are compared, all but the last 4, which hold the checksum's end and the
-;; padding. It has no name in the listing: its first instruction, at $FD27, comes before <VerifyTrack::Restart>.
+;; GCR bytes and the data block's first 321 are compared, all but the last 4 (bytes 321 to 324), which hold the last
+;; data byte's final 2 bits, the whole checksum and the padding. It has no name in the listing: its first instruction,
+;; at $FD27, comes before <VerifyTrack::Restart>.
 ;; In: SectorCount = the track's sectors, FormatTrack = the track, Buffer0 = the headers in GCR, 10 bytes each,
 ;;   Buffer2 = the data block's GCR after its first 69, which are in <OverflowBuffer>
 ;; Errors: through <FormatError>, <FORMAT_VERIFY_FAILED> after 200 mismatches; the job ends with 3 (message 21) when no
@@ -2528,8 +2535,9 @@ CompareBuffer:
     bcs Finished
     jmp EndPass
 
-;; All 35 tracks: no format under way, <BufferIsGcr> cleared so that <FinishJob> leaves buffer 2 alone, and the job
-;; finished with 1.
+;; All 35 tracks: no format under way, <BufferIsGcr> cleared so that <FinishJob> does not decode the write image
+;; (<DataPointer>+1 is <Buffer0>'s page here, so it would decode the overflow buffer and buffer 0's page into buffer 0),
+;; and the job finished with 1.
 ;; Also: FMTEND (D1541)
 Finished:
     lda #$FF

@@ -244,10 +244,14 @@ ChannelEntrySector = $0260
 ;; The entry's offset in that sector.
 ;; Also: DIND (D1541)
 ChannelEntryIndex = $0266
-;; The error LED's countdown, which the idle loop toggles the LED by; a command's held error is PendingError, the same
-;; byte (Q2).
+;; The error LED's countdown, which the idle loop toggles the LED by; its second job, a command's held error, is
+;; <PendingError>.
 ;; Also: ERWORD (D1541)
 ErrorFlash = $026C
+
+;; A command's held error, which a job's error leaves for the command to report: <ErrorFlash>'s byte, which the LED
+;; flashing uses when no error is held.
+PendingError = ErrorFlash
 ;; The LED bit to flash for the error, 0 for none.
 ;; Also: ERLED (D1541)
 ErrorLed = $026D
@@ -278,7 +282,7 @@ FileNameStart = $027A
 ;; For each file name, the track of its file's first block once found, 0 if none.
 ;; Also: FILTRK (D1541)
 FileNameTrack = $0280
-;; Its sector; the block commands' parameters go here too, as Commands::Parameters (Q2).
+;; Its sector; its second job, the block commands' numbers, is <Commands::Parameters>.
 ;; Also: FILSEC (D1541)
 FileNameSector = $0285
 ;; Counts "*" and "?" while a name is parsed.
@@ -684,6 +688,10 @@ Images = $02A1
 ;; block and memory commands, the user commands, and the one that formats), and the status of the LED they control. Its
 ;; locations are the parser's.
 .scope Commands
+
+;; The block commands' numbers (channel, drive, track, sector, and B-P's position), which the parser leaves from here
+;; on, one a byte: <FileNameSector>'s bytes, which name parsing uses otherwise.
+Parameters = FileNameSector
 ;; A pointer to <UserCommandVectors>, the U commands' jump table.
 ;; Also: USRJMP (D1541)
 UserVectorsPointer = $006B
@@ -872,7 +880,7 @@ TrackLength = $0624
 ;; Formatting: the smallest sector's size, then the gap each sector gets.
 ;; Also: DTRCK (D1541)
 SectorGap = $0626
-;; Formatting: the bytes left over, put at the track's end.
+;; Formatting: the bytes left over when the track is divided into sectors. Nothing reads it; they are not put anywhere.
 ;; Also: REMDR (D1541)
 GapRemainder = $0627
 ;; Formatting: the sector being built or checked.
@@ -914,8 +922,9 @@ CODE2_HIGH = $07
 ;; A write is taken only if its sector is at least 9 away.
 ;; Also: WRTMIN (D1541)
 WRITE_DISTANCE_MIN = 9
-;; The gap after a header, in GCR bytes, that writing a data block waits out (less two): 11 from -03 on, 10 in -01, -02
-;; and the 1540.
+;; The listing's GAP1: the gap the format writes after a header plus 2, in GCR bytes: 11 from -03 on, 10 in -01, -02 and
+;; the 1540. The gap written is <HEADER_GAP> - 2 bytes (9 or 8), and writing a data block counts that many byte-readies
+;; after <FindHeader>.
 ;; Also: GAP1 (D1541)
 .if REVISION < 3 || DRIVE_1540
 HEADER_GAP = 10

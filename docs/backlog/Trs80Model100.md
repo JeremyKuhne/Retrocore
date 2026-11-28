@@ -410,8 +410,8 @@ and from a `CSAVE` MAME 0.264 recorded to WAV. No new downloads.
   Record and Eject), saved through a file beside the recording when it came out or the session ended, until recordings
   became changed tapes, saved like a disk ([MediaPersistence.md](MediaPersistence.md#phases), phase 4); the Machine
   view's Cassette and Sound rows; the display panel's sound.
-- **Not yet.** A byte-level tape format (no common one for the Model 100 was found), and the cassette's tape in the
-  recovery journal.
+- **Not yet.** A byte-level tape format (no common one for the Model 100 was found). The cassette's tape is kept in the
+  recovery journal, as its half cycles, since phase 4 of [MediaPersistence.md](MediaPersistence.md#phases).
 
 ## Still open
 

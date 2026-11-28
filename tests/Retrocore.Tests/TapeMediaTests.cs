@@ -146,8 +146,9 @@ public sealed class TapeMediaTests
 
     /// <summary>
     ///  A TRS-80 recording that cannot be written stays changed in the recorder and in the journal: a read-only file
-    ///  answers <c>readOnly</c>, and a folder that went away fails the save; the eject still asks, and once the file
-    ///  can be written the recording saves.
+    ///  answers <c>readOnly</c>, and once the folder went away the save answers <c>conflict</c>, as the blank file went
+    ///  with it, and saving there again as agreed fails; the eject still asks, and once the folder is back the
+    ///  recording saves.
     /// </summary>
     [TestMethod]
     public void AFailedWriteKeepsTheRecording()
@@ -228,7 +229,7 @@ public sealed class TapeMediaTests
         Act(target, drive, "save", overwrite)?.String("outcome").Should().Be("saved");
         byte[] saved = File.ReadAllBytes(cas);
         saved.Length.Should().BeGreaterThan(16, "the half second of leader recorded so far is saved");
-        target.Machine.Cassette.Tape?.Bytes.Should().BeEmpty("saving does not stop the recorder");
+        In(target.Machine.Cassette.Tape).Bytes.Should().BeEmpty("saving does not stop the recorder");
     }
 
     /// <summary>
@@ -258,7 +259,7 @@ public sealed class TapeMediaTests
         MediaActions.Recover(next.Devices, again).Should().BeEmpty();
         back.Media?.Changed.Should().BeTrue();
         back.Transport.Mode.Should().Be(TapeMode.Playing);
-        back.Tape?.ToArray().Should().Equal("HI"u8.ToArray());
+        In(back.Tape).ToArray().Should().Equal("HI"u8.ToArray());
 
         // A file written at its path meanwhile is a conflict; a read-only file is refused.
         File.WriteAllBytes(tap, [9]);
@@ -276,7 +277,7 @@ public sealed class TapeMediaTests
         RecoveryJournal third = Open(id);
         MediaActions.Recover(last.Devices, third).Should().BeEmpty();
         AltairCassette kept = last.Machine.Bus.Cassette ?? throw new InvalidOperationException("The 88-ACR is missing.");
-        kept.Tape?.ToArray().Should().Equal("HI"u8.ToArray());
+        In(kept.Tape).ToArray().Should().Equal("HI"u8.ToArray());
         MediaSaved(last, kept).Should().Be("saved");
         File.ReadAllBytes(tap).Should().Equal("HI"u8.ToArray());
         third.Commit(MediaActions.Journal(last.Devices, third), close: true);
@@ -306,7 +307,7 @@ public sealed class TapeMediaTests
         Apple1CassetteDrive back = next.Machine.CassetteDrive ?? throw new InvalidOperationException("No cassette interface.");
         RecoveryJournal again = Open(id);
         MediaActions.Recover(next.Devices, again).Should().BeEmpty();
-        back.Tape?.HalfCycles.Should().Equal(tape.HalfCycles, "the journal keeps the half cycles themselves");
+        In(back.Tape).HalfCycles.Should().Equal(tape.HalfCycles, "the journal keeps the half cycles themselves");
 
         JsonObject saved = Act(next, back, "save", Speaking()) ?? throw new InvalidOperationException("No answer.");
         saved.String("outcome").Should().Be("saved");
@@ -441,6 +442,9 @@ public sealed class TapeMediaTests
 
     private static JsonArray Disks(string id) =>
         JsonNode.Parse(File.ReadAllText(Path.Join(RecoveryJournal.Root, id, "journal.json")))?["disks"]?.AsArray() ?? [];
+
+    // The tape in a recorder, which a test needs there.
+    private static T In<T>(T? tape) where T : class => tape ?? throw new InvalidOperationException("The recorder is empty.");
 
     // A request's path.
     private static JsonObject At(string path) => new() { ["path"] = path };

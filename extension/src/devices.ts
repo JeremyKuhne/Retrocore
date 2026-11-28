@@ -697,12 +697,12 @@ export function registerDevices(context: vscode.ExtensionContext, basic: BasicPr
         stale = true;
         seen();
     }));
-    // The Drives view's badge counts the disks changed in the machine and not yet saved to their images.
+    // The Drives view's badge counts the disks and tapes changed in the machine and not yet saved to their images.
     context.subscriptions.push(tree.onDidChange(() => {
         const changed = tree.devices.filter(device => device.media?.changed && device.operations.includes("save")).length
             + tree.devices.reduce((count, device) => count + (device.ejected ?? []).filter(kept => kept.changed).length, 0);
         drivesView.badge = changed === 0 ? undefined
-            : { value: changed, tooltip: `${changed} disk${changed === 1 ? "" : "s"} changed and not saved to ${changed === 1 ? "its image" : "their images"}` };
+            : { value: changed, tooltip: `${changed} ${changed === 1 ? "disk or tape" : "disks or tapes"} changed and not saved to ${changed === 1 ? "its image" : "their images"}` };
     }));
     // The machine row shows whether the machine runs or is stopped in the debugger.
     context.subscriptions.push(vscode.debug.registerDebugAdapterTrackerFactory("retrocore", {

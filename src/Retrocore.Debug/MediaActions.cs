@@ -185,7 +185,7 @@ internal static partial class MediaActions
                 {
                     "eject" => "eject it",
                     "record" => "record a new tape",
-                    _ => "insert another disk"
+                    _ => $"insert another {Medium(device)}"
                 };
 
                 JsonObject? held = Detach([device], args, what);

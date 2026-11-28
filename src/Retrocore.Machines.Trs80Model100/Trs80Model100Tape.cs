@@ -83,7 +83,9 @@ public sealed class Trs80Model100Tape : IMedium
     /// <param name="high">The level.</param>
     internal void Start(bool high)
     {
-        if (_halves.Count == 0) { StartsHigh = high; }
+        if (_halves.Count != 0 || StartsHigh == high) { return; }
+        StartsHigh = high;
+        Version++;
     }
 
     /// <summary>

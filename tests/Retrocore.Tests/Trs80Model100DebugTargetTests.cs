@@ -17,8 +17,8 @@ namespace Retrocore.Tests;
 /// <remarks>
 ///  <para>
 ///   The tests that run the ROM launch with it, read as <see cref="Trs80Model100RomTests"/> does, and are
-///   inconclusive without it; those that need nothing of it, the cassette's recordings and the session's end, run on a
-///   ROM of zeros.
+///   inconclusive without it, CSAVE and CLOAD among them; those that need nothing of it, the cassette's recordings fed
+///   to it directly and the session's end, run on a ROM of zeros.
 ///  </para>
 /// </remarks>
 [TestClass]
@@ -230,7 +230,7 @@ public sealed class Trs80Model100DebugTargetTests
     /// <summary>
     ///  A recording is a changed tape: its file is written blank as it starts, an unchanged one comes out without a
     ///  word, and a changed one is held back by an eject until it is saved or let go; a tape that is not a WAV file, or
-    ///  is missing, is refused with the recording left in, and saved, the recording plays from its own file. The
+    ///  is missing, is refused with the recording left in; and once saved, the recording plays from its own file. The
     ///  cassette needs nothing of the ROM, so this runs on a ROM of zeros.
     /// </summary>
     [TestMethod]

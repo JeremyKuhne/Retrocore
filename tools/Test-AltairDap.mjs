@@ -9,8 +9,7 @@
 // cassette records a tape through retro/media, a changed tape that eject holds back until it is saved, and plays it
 // back from the launch's cassette option. The Altair has no ROM, so nothing is needed but the repository; with 8K
 // BASIC's image in the external test data (RETROCORE_ALTAIR_BASIC, or the cache's altair-basic folder), it also runs
-// BASIC on the terminal, and with
-// MITS's 4K BASIC 3.2 tape (its tapes folder) it loads BASIC through the bootstrap and the 88-ACR.
+// BASIC on the terminal, and with MITS's 4K BASIC 3.2 tape (its tapes folder) it loads BASIC through the bootstrap and the 88-ACR.
 
 import { resolve, join } from "node:path";
 import { writeFileSync, existsSync, unlinkSync, readFileSync, mkdirSync, rmSync } from "node:fs";

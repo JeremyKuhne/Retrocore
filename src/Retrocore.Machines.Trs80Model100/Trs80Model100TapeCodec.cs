@@ -37,7 +37,7 @@ public sealed class Trs80Model100TapeCodec : IImageCodec
 
         return new(Trs80Model100Tape.FromSnapshot(snapshot.Image.Span).ToWave(), [])
         {
-            Notes = ["Each half cycle's length is rounded to the nearest 1/44,100 second, which the ROM reads the same."]
+            Notes = ["Each change of level moves to the start of its 1/44,100 s sample, which the ROM reads the same."]
         };
     }
 }

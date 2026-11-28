@@ -271,6 +271,7 @@ public sealed class Trs80Cassette : ICassetteRecorder
         if (_lastClock >= 0 && !_cellHasData && since > _cellCycles / 4 && since < _cellCycles * 3 / 4)
         {
             _cellHasData = true;
+            _tape?.Heard();
             return;
         }
 

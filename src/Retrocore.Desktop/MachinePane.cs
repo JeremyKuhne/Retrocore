@@ -541,8 +541,8 @@ internal sealed class MachinePane : ScrollViewer
     }
 
     // Lets changed disks go, then acts, as Stop, Restart, switching, starting another machine and resetting do. The
-    // machine held for the questions runs on if the action left it in place, as when Stop could not write a recording
-    // or the new machine could not be built.
+    // machine held for the questions runs on if the action left it in place, as when Stop could not write the Model
+    // 100's RAM image or the new machine could not be built.
     private async Task Release(string what, Action action)
     {
         MachineHost held = _session.Host;
@@ -810,7 +810,8 @@ internal sealed class MachinePane : ScrollViewer
     private async Task Save(DeviceState device)
     {
         if (device.Media is not { } media) { return; }
-        string? answer = await _window.Ask($"Replace {media.Label} with the disk in {device.Info.Name}?", ["Save"]);
+        string medium = device.Kind == DeviceKind.TapeDrive ? "tape" : "disk";
+        string? answer = await _window.Ask($"Replace {media.Label} with the {medium} in {device.Info.Name}?", ["Save"]);
         if (answer == "Save") { Act(device, "save"); }
     }
 

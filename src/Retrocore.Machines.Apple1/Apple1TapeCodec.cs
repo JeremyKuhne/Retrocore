@@ -37,7 +37,7 @@ public sealed class Apple1TapeCodec : IImageCodec
 
         return new(Apple1Tape.FromSnapshot(snapshot.Image.Span).ToWave(), [])
         {
-            Notes = ["Each half cycle's length is rounded to the nearest 1/44,100 second, which the ACI reads the same."]
+            Notes = ["Each change of level moves to the start of its 1/44,100 s sample, which the ACI reads the same."]
         };
     }
 }

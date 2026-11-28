@@ -123,8 +123,8 @@ state changes: on each stop, and with the running frames while the machine runs.
 The body's `configuration` is what a later launch can restore: each slot's card (`languageCard` or `firmwareCard` in
 slot 0 of a II or II Plus, `mockingboard`, `softCard`, `softCard3` (the Apple III's), `mouse`, `proFile`, `disk35`, `diskII16` or `diskII13`; `diskII` for one with the launch's ROM dumps, `blockStorage`, or
 `empty`), and the media in each drive
-that takes media, null when it is empty. Media the host cannot insert again, such as a disk a `dos` launch built or a
-tape being recorded, is left out. Rows with switches add `settings`, each row's by its id, such as
+that takes media, null when it is empty. Media the host cannot insert again, such as a disk a `dos` launch built, is
+left out; a tape being recorded is its file, written blank as the recording starts, and goes back in to play. Rows with switches add `settings`, each row's by its id, such as
 `{ "slot4": { "translation": true, "refresh": false } }`, restored after the cards.
 
 ```json
@@ -161,9 +161,10 @@ the tape is `changed` once the recorder hears anything, `save` writes it there (
 Computer, TAP on the Altair, WAV on the Apple-1 and Model 100) with the answers a disk's save gives, a file written at
 the path since the recording started is a `conflict`, and an eject, an insert or another `record` over a changed
 recording answers `changed` first. Nothing but a save writes it, not an eject and not the session's end; the recovery
-journal keeps it (below). A WAV save rounds each half cycle to the nearest sample, which the machines read the same,
+journal keeps it (below). A WAV save moves each change of level to its sample, which the machines read the same,
 and says so in `notes`. The TRS-80's recorder holds the bits it hears until the motor stops, to find where bytes
 start; a save or a snapshot while it records takes the bytes those bits make so far, without stopping it.
+
 Disks the machine changes stay in memory, and `changed` shows that they differ from their images. An Apple drive's
 `save` writes its disk to its own image, in the format and sector order it was read in, or to `path`: a `.woz` keeps
 the disk's tracks as they are, lock included, and a `.dsk`, `.do` or `.po` reads them back as 35 to 40 tracks of

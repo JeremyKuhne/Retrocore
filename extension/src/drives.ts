@@ -373,7 +373,10 @@ export function readOnlyQuestion(file: string | undefined, drive: string, format
     }
 }
 
-/** Asks about a changed disk that would leave its drive: save it, save it as another image, or let its changes go. */
+/**
+ * Asks about a changed disk, or a tape with a recording not saved, that would leave its drive: save it, save it as
+ * another image, or let its changes go.
+ */
 export function leaveQuestion(file: string, drive: string, what: string, changes: string | undefined, medium: "disk" | "tape" = "disk"): Question {
     const changed = medium === "tape"
         ? `The machine recorded onto the tape in ${drive}, and the recording is not saved.`

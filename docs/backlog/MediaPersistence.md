@@ -29,12 +29,12 @@ dirty tracking and save on eject; then the Model I's disk write-back"), and foll
 | Apple II, Apple III | ProFile (`ProFileDrive`) | `.po`, `.hdv` | a writable `MemoryBlockDevice`, a `_changed` flag | no |
 | Apple II | Slot 7 block storage (`Apple2BlockStorage`) | `.po` | a `MemoryBlockDevice` that is read-only (its default), a `BlockWritten` flag; the ROM's write capability is set once, when the machine is built | no; its media is fixed |
 | Model I, III, 4, II | Floppy drives (`FloppyDrive`) | JV1 (`.dsk`), JV3, DMK, IMD | `FloppySector` data changed in place by the controller; a per-drive `Changed` | no; JV1 and JV3 writers exist, DMK and IMD have none (before phase 2) |
-| Model I, III, 4 | Cassette (`Trs80CassetteDrive`) | `.cas` | `CassetteImage` bytes, and bits buffered in the recorder until it stops | a recording is written on eject, after the tape is detached, with `File.WriteAllBytes`; stopping the session first loses it |
+| Model I, III, 4 | Cassette (`Trs80CassetteDrive`) | `.cas` | `CassetteImage` bytes, and bits buffered in the recorder until it stops | a recording is written on eject, after the tape is detached, with `File.WriteAllBytes`; stopping the session first loses it (before phase 4) |
 | CoCo | Cassette | `.cas` | `CassetteImage` | as the TRS-80's |
 | CoCo | Floppy drives (`FloppyDrive` on `CocoDiskController`) | JVC only (`.dsk`, `.jvc`) | `FloppyDisk` | no; `JvcFormat.Write` writes only 18 sectors of 256 bytes (before phase 2) |
 | CoCo | ROM pack (`cartridge`) | ROM image | ROM; not a device | never: read-only |
-| Apple-1 | Cassette (`Apple1CassetteDrive`) | `.wav` | `Apple1Tape` half-cycle lengths | a recording is written on eject, as `ToWave()` at 44.1 kHz, which is not cycle-exact |
-| Altair | Cassette (`AltairCassette`, the 88-ACR on an 88-SIO) | `.tap`, the bytes in order | the tape's bytes, grown as the 88-ACR records, and a `_changed` flag | a recording is written on eject, and when the session ends or relaunches, with `File.WriteAllBytes` |
+| Apple-1 | Cassette (`Apple1CassetteDrive`) | `.wav` | `Apple1Tape` half-cycle lengths | a recording is written on eject, as `ToWave()` at 44.1 kHz, which is not cycle-exact (before phase 4) |
+| Altair | Cassette (`AltairCassette`, the 88-ACR on an 88-SIO) | `.tap`, the bytes in order | the tape's bytes, grown as the 88-ACR records, and a `_changed` flag | a recording is written on eject, and when the session ends or relaunches, with `File.WriteAllBytes` (before phase 4) |
 | Altair | 8-inch floppy drives | SIMH `.dsk` when the 88-DCDD comes ([Altair8800.md](Altair8800.md)) | | |
 | AppleSharp | Disk II (`FloppyMount`) | `.woz` writable when asked; sector images read only | `WozDisk` | writes a changed WOZ back whenever the drive's motor stops, atomically, refusing when the file's hash changed |
 | AppleSharp | Slot 7 `FileBlockDevice` | `.po` | none: writes go straight to the file when opened writable | write-through |
@@ -44,7 +44,8 @@ What the hosts and views already do:
 - `MediaState` has `Label`, `Format`, `WriteProtected` and `Changed` ("written since inserted"). The Disk II's
   `Saved(...)` resets it.
 - `MachineConfiguration.Capture` keeps each drive's `path` and `writeProtected`, and leaves out media that cannot
-  be inserted again: a disk a `dos` launch built, a tape being recorded. A launch restores the saved machine and
+  be inserted again: a disk a `dos` launch built, a tape being recorded (until phase 4, when a recording's file is
+  written blank as it starts). A launch restores the saved machine and
   then, for a `dos` source or program, builds a fresh disk in drive 1 over it.
 - Media leaves a drive by several paths: `eject`, an `insert` over a disk (which ejects first), removing a card, the
   legacy `retro/media` request, a 3.5-inch drive's own eject (which drops the disk before setting its flag), and the

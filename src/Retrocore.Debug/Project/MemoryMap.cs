@@ -25,7 +25,8 @@ namespace Retrocore.Debug.Project;
 ///  </para>
 ///  <para>
 ///   Every address from <c>$0100</c> up is in a free area or a reserved one, never both; the zero page is given as
-///   the bytes a program may use, and the rest of it is the machine's. A target's <c>memoryMap</c> changes its map
+///   the bytes a program may use, and the rest of it is the machine's. A map for a CPU with no zero page, such as the
+///   Z80's, leaves <c>zeroPage</c> out and gives every address from <c>$0000</c> as free or reserved. A target's <c>memoryMap</c> changes its map
 ///   (<see cref="With"/>): its <c>free</c> areas leave the reserved areas they overlap, its <c>reserved</c> areas
 ///   leave free RAM, and its <c>load</c> and <c>zeroPage</c> replace the map's.
 ///  </para>
@@ -286,7 +287,10 @@ internal sealed class MemoryMap
         foreach ((string name, int start, int end) in sections)
         {
             string span = new MemoryArea(start, end).ToString();
-            if (start <= 0xFF)
+
+            // A map with no zero page checks the first page as it checks the rest.
+            int first = ZeroPage.Count == 0 ? 0 : 0x100;
+            if (start < first)
             {
                 foreach (MemoryArea run in Runs(start, Math.Min(end, 0xFF), address => !ZeroPage.Any(area => area.Contains(address))))
                 {
@@ -295,8 +299,8 @@ internal sealed class MemoryMap
                 }
             }
 
-            if (end < 0x100) { continue; }
-            foreach (MemoryArea area in Reserved.Where(area => area.Overlaps(Math.Max(start, 0x100), end)))
+            if (end < first) { continue; }
+            foreach (MemoryArea area in Reserved.Where(area => area.Overlaps(Math.Max(start, first), end)))
             {
                 errors.Add($"section {name} ({span}) overlaps {area.Why} ({area}) on target {target.Name}.");
             }
@@ -329,14 +333,16 @@ internal sealed class MemoryMap
     }
 
     // Every address from $0100 is free or reserved, not both; the zero page is given only by its bytes; free RAM, from
-    // $0100 up, holds the load address.
+    // $0100 up, holds the load address. A map with no zero page, for a CPU that has none, such as the Z80, accounts for
+    // every address from $0000 instead.
     private void Validate(string file)
     {
-        List<MemoryArea> all = [.. Free.Concat(Reserved).Where(area => area.End >= 0x100).OrderBy(area => area.Start)];
-        int next = 0x100;
+        int first = ZeroPage.Count == 0 ? 0 : 0x100;
+        List<MemoryArea> all = [.. Free.Concat(Reserved).Where(area => area.End >= first).OrderBy(area => area.Start)];
+        int next = first;
         foreach (MemoryArea area in all)
         {
-            int start = Math.Max(area.Start, 0x100);
+            int start = Math.Max(area.Start, first);
             if (start > next)
             {
                 throw new ProjectException($"{file}: ${next:X4}-${start - 1:X4} is neither free nor reserved.");
@@ -355,14 +361,9 @@ internal sealed class MemoryMap
             throw new ProjectException($"{file}: ${next:X4}-$FFFF is neither free nor reserved.");
         }
 
-        if (Reserved.Concat(Free).Any(area => area.Start < 0x100))
+        if (ZeroPage.Count != 0 && Reserved.Concat(Free).Any(area => area.Start < 0x100))
         {
             throw new ProjectException($"{file}: the zero page is given by 'zeroPage', not as free or reserved areas.");
-        }
-
-        if (ZeroPage.Count == 0)
-        {
-            throw new ProjectException($"{file}: 'zeroPage' must give at least one byte a program may use.");
         }
 
         if (!Free.Any(area => area.Contains(Load)))
@@ -416,6 +417,12 @@ internal sealed class MemoryMap
         if (node is not JsonArray list)
         {
             throw new ProjectException($"{file}: {what} must be a list of bytes or runs, such as \"$06-$09\".");
+        }
+
+        // A map for a CPU with no zero page leaves 'zeroPage' out; one that gives it gives a byte.
+        if (list.Count == 0)
+        {
+            throw new ProjectException($"{file}: {what} must give at least one byte a program may use.");
         }
 
         List<MemoryArea> areas = [];

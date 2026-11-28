@@ -221,7 +221,7 @@ public sealed class ProjectLaunchTests
             { "sdk": "1", "cpu": "z80", "sources": ["main.s"], "targets": { "dos": { "machine": "trs80-model3", "environment": "trsdos" } } }
             """);
 
-        client.Fails("launch", Launch("dos")).Should().EndWith("the 'trsdos' environment is not yet supported; only 'bare', 'wozmon', 'dos33', 'dfs', 'basic', 'sos' and 'prodos' build.");
+        client.Fails("launch", Launch("dos")).Should().EndWith("the 'trsdos' environment is not yet supported; only 'bare', 'wozmon', 'dos33', 'dfs', 'basic', 'sos', 'prodos' and 'level2' build.");
         Write("retrocore.json", project);
 
         // The machine the launch names gives way to the target's.
@@ -360,6 +360,134 @@ public sealed class ProjectLaunchTests
         }
 
         failure.Should().EndWith(refusal);
+    }
+
+    /// <summary>
+    ///  A <c>level2</c> target's launch puts its SYSTEM tape in the cassette recorder and boots the machine with no
+    ///  disk: it answers the ROM's start-up questions, types SYSTEM, the tape's name and then <c>/</c>, and stops at the
+    ///  entry, on the Model I with Level II 1.3 and 1.2, whose MEMORY SIZE? differ, and on the Model III, which asks
+    ///  Cass? first. The program, 4K, plays for over a minute of the machine's time. It then shows its line, and a
+    ///  breakpoint in its source stops.
+    /// </summary>
+    /// <param name="machine">The catalog machine.</param>
+    /// <param name="options">The target's options, as JSON.</param>
+    [TestMethod]
+    [DataRow("trs80-model1-level2", "{}")]
+    [DataRow("trs80-model1-level2", "{ \"revision\": \"1.2\" }")]
+    [DataRow("trs80-model3", "{}")]
+    public void Level2LaunchBootsItsTape(string machine, string options)
+    {
+        Write("retrocore.json", $$"""
+            { "sdk": "1", "name": "hello", "cpu": "z80", "sources": ["src/*.s"], "entry": "START",
+              "targets": { "tape": { "machine": "{{machine}}", "environment": "level2", "options": {{options}} },
+                           "own": { "machine": "{{machine}}", "environment": "level2", "options": { "cassette": "x.cas" } },
+                           "disk": { "machine": "{{machine}}", "environment": "level2", "options": { "diskController": true } } } }
+            """);
+
+        string main = Write("src/main.s", """
+            .include <machine.inc>
+            MESSAGE:
+                .byte "LOADED FROM TAPE", RETURN, 0
+            START:
+                LD HL,MESSAGE
+            NEXT:
+                LD A,[HL]
+                OR A
+                JR Z,DONE
+                CALL DisplayCharacter
+                INC HL
+                JR NEXT
+            DONE:
+                JR DONE
+
+            ; Data after the code, so the tape plays for over a minute of the machine's time.
+                .res 4096, $E5
+            """);
+
+        using DapTestClient client = new();
+        client.Request("initialize", []);
+        client.Fails("launch", Launch("own")).Should().EndWith(
+            "a level2 target loads its own tape with SYSTEM, so its options and its launch cannot give 'cassette'.");
+
+        client.Fails("launch", Launch("disk")).Should().EndWith(
+            "a level2 target boots with no disk controller, for the ROM to start in BASIC, so its options and its launch cannot give 'diskController'.");
+
+        int start = machine == "trs80-model3" ? 0x4400 : 0x4300;
+        JsonObject launch = Launch("tape");
+        launch["tapeSpeed"] = "skip";
+        JsonObject started = client.Request("launch", launch);
+        started["project"]?["entry"]?.GetValue<int>().Should().Be(start + 18);
+        started["mediaSpeedResult"]?.String("kind").Should().Be("tape");
+        started["mediaSpeedResult"]?.String("effective").Should().Be("fast");
+        string entry = "$" + (start + 18).ToString("X4", System.Globalization.CultureInfo.InvariantCulture);
+        client.Request("evaluate", new JsonObject
+        {
+            ["expression"] = "PC"
+        }).String("result").Should().StartWith(entry);
+
+        JsonObject set = client.Request("setBreakpoints", new JsonObject
+        {
+            ["source"] = new JsonObject { ["path"] = main },
+            ["breakpoints"] = new JsonArray(new JsonObject { ["line"] = 14 })
+        });
+
+        (set["breakpoints"]?[0]?["verified"]?.GetValue<bool>()).Should().BeTrue();
+        client.Request("configurationDone", []);
+        client.Event("stopped").String("reason").Should().Be("entry");
+        client.Request("continue", new JsonObject { ["threadId"] = 1 });
+        client.Event("stopped").String("reason").Should().Be("breakpoint", "the program runs to its loop once it has shown its line");
+        Trs80Screen(client).Should().Contain("*? HELLO").And.Contain("LOADED FROM TAPE");
+    }
+
+    /// <summary>
+    ///  The Z80 sample, <c>sample/z80</c>, boots on each of its targets and shows its greeting, then goes back to its
+    ///  environment: under Level II, to BASIC's READY.
+    /// </summary>
+    /// <param name="target">The sample's target.</param>
+    [TestMethod]
+    [DataRow("trs80-level2")]
+    [DataRow("trs80-model3-level2")]
+    public void Z80SampleRunsOnEachTarget(string target)
+    {
+        string sample = Path.Join(RepositoryRoot(), "sample", "z80");
+        using DapTestClient client = new();
+        client.Request("initialize", []);
+        client.Request("launch", new JsonObject { ["project"] = sample, ["target"] = target, ["stopOnEntry"] = false });
+        client.Request("configurationDone", []);
+        for (DateTime end = DateTime.UtcNow.AddSeconds(30); !Trs80Screen(client).Contains("HELLO, WORLD!\nREADY", StringComparison.Ordinal); Thread.Sleep(100))
+        {
+            DateTime.UtcNow.Should().BeBefore(end, $"{target} shows its greeting and BASIC's READY:\n{Trs80Screen(client)}");
+        }
+    }
+
+    private static string RepositoryRoot()
+    {
+        string? root = AppContext.BaseDirectory;
+        while (root is not null && !File.Exists(Path.Join(root, "Retrocore.slnx")))
+        {
+            root = Path.GetDirectoryName(root);
+        }
+
+        return root ?? throw new InvalidOperationException("The repository root was not found.");
+    }
+
+    // The TRS-80's screen, 64 columns by 16 rows from $3C00, as rows of text with their trailing spaces left out. A
+    // byte below $20 is the capital 64 above it, as the Model I's video RAM has no bit 6.
+    private static string Trs80Screen(DapTestClient client)
+    {
+        byte[] bytes = Convert.FromBase64String(client.Request("readMemory", new JsonObject
+        {
+            ["memoryReference"] = "0x3C00",
+            ["count"] = 1024
+        }).String("data") ?? "");
+
+        IEnumerable<string> rows = bytes.Chunk(64).Select(row => new string([.. row.Select(value =>
+        {
+            int character = value & 0x7F;
+            return (char)(character < 0x20 ? character + 0x40 : character);
+        })]).TrimEnd());
+
+        return string.Join("\n", rows);
     }
 
     /// <summary>

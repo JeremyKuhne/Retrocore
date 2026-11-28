@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 // See LICENSE file in the project root for full license information
 
+using Retrocore.Media;
 using System.Buffers.Binary;
 
 namespace Retrocore.Machines.Trs80Model100;
@@ -16,10 +17,20 @@ namespace Retrocore.Machines.Trs80Model100;
 ///   SID by timing the level's changes, so a recording is the length of each half cycle. Recordings come from and go
 ///   to WAV files.
 ///  </para>
+///  <para>
+///   A tape is a medium: what the ROM records onto it is a change, saved like a disk's. Its snapshot holds the level
+///   and the half cycles themselves, as a WAV file moves each change of level to its sample.
+///  </para>
 /// </remarks>
-public sealed class Trs80Model100Tape
+public sealed class Trs80Model100Tape : IMedium
 {
+    /// <summary>
+    ///  The <see cref="MediumSnapshot.Kind"/> of a tape's snapshot: its starting level, then its half cycles.
+    /// </summary>
+    public const string SnapshotKind = "model100-half-cycles";
+
     private readonly List<int> _halves;
+    private bool _writeProtected;
 
     /// <summary>
     ///  Creates an empty tape, to record onto.
@@ -72,14 +83,94 @@ public sealed class Trs80Model100Tape
     /// <param name="high">The level.</param>
     internal void Start(bool high)
     {
-        if (_halves.Count == 0) { StartsHigh = high; }
+        if (_halves.Count != 0 || StartsHigh == high) { return; }
+        StartsHigh = high;
+        Version++;
     }
 
     /// <summary>
     ///  Adds a half cycle to a recording.
     /// </summary>
     /// <param name="cycles">Its length.</param>
-    internal void Add(long cycles) => _halves.Add((int)Math.Clamp(cycles, 1, int.MaxValue));
+    internal void Add(long cycles)
+    {
+        _halves.Add((int)Math.Clamp(cycles, 1, int.MaxValue));
+        Version++;
+        IsDirty = true;
+    }
+
+    /// <inheritdoc/>
+    public long Version { get; private set; }
+
+    /// <inheritdoc/>
+    public bool IsDirty { get; private set; }
+
+    /// <inheritdoc/>
+    /// <remarks>
+    ///  <para>
+    ///   A WAV file keeps no record tab, so the lock lasts only as long as the session.
+    ///  </para>
+    /// </remarks>
+    public bool IsWriteProtected
+    {
+        get => _writeProtected;
+        set
+        {
+            if (value == _writeProtected) { return; }
+            _writeProtected = value;
+            Version++;
+        }
+    }
+
+    /// <inheritdoc/>
+    /// <remarks>
+    ///  <para>
+    ///   The image is a byte, 1 when the tape starts high, then each half cycle's length in cycles, four bytes, low
+    ///   first.
+    ///  </para>
+    /// </remarks>
+    public MediumSnapshot Snapshot()
+    {
+        byte[] image = new byte[1 + (_halves.Count * 4)];
+        image[0] = StartsHigh ? (byte)1 : (byte)0;
+        for (int i = 0; i < _halves.Count; i++)
+        {
+            BinaryPrimitives.WriteInt32LittleEndian(image.AsSpan(1 + (i * 4)), _halves[i]);
+        }
+
+        return new(SnapshotKind, Version, _writeProtected, image);
+    }
+
+    /// <summary>
+    ///  Reads a tape back from its snapshot's image.
+    /// </summary>
+    /// <param name="image">The image of a <see cref="SnapshotKind"/> snapshot.</param>
+    /// <returns>The tape.</returns>
+    /// <exception cref="InvalidDataException">
+    ///  The image is not the level and a whole number of half cycles, or has one that is not positive.
+    /// </exception>
+    public static Trs80Model100Tape FromSnapshot(ReadOnlySpan<byte> image)
+    {
+        if (image.Length % 4 != 1 || image[0] > 1)
+        {
+            throw new InvalidDataException("A tape's snapshot is its starting level and four bytes a half cycle.");
+        }
+
+        int[] halves = new int[image.Length / 4];
+        for (int i = 0; i < halves.Length; i++)
+        {
+            halves[i] = BinaryPrimitives.ReadInt32LittleEndian(image[(1 + (i * 4))..]);
+            if (halves[i] <= 0) { throw new InvalidDataException("A half cycle in the snapshot is not positive."); }
+        }
+
+        return new(image[0] == 1, halves);
+    }
+
+    /// <inheritdoc/>
+    public void MarkSaved() => IsDirty = false;
+
+    /// <inheritdoc/>
+    public void MarkChanged() => IsDirty = true;
 
     /// <summary>
     ///  Reads a recording from a WAV file: PCM (or WAVE_FORMAT_EXTENSIBLE's PCM), 8 or 16 bits, the first channel of

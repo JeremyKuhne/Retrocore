@@ -50,12 +50,7 @@ internal sealed class MediaSpeedPolicy(IDebugTarget target)
     {
         get
         {
-            if (target.Accelerated
-                && !(_tape == MediaSpeed.Normal && LegacyFast(tape: true) is not null)
-                && !(_disk == MediaSpeed.Normal && LegacyFast(tape: false) is not null))
-            {
-                return true;
-            }
+            if (target.Accelerated) { return true; }
 
             if ((_tape is null or MediaSpeed.Normal) && (_disk is null or MediaSpeed.Normal)) { return false; }
             IReadOnlyList<IDevice> devices = target.Devices;
@@ -83,6 +78,24 @@ internal sealed class MediaSpeedPolicy(IDebugTarget target)
     {
         if (tape) { _tape = speed; }
         else { _disk = speed; }
+        bool fast = speed != MediaSpeed.Normal;
+        switch (target)
+        {
+            case Apple2DebugTarget apple when !tape: apple.FastDisk = fast; break;
+            case Apple3DebugTarget apple when !tape: apple.FastDisk = fast; break;
+            case Trs80Model2DebugTarget trs when !tape: trs.FastDisk = fast; break;
+            case KayproDebugTarget kaypro when !tape: kaypro.FastDisk = fast; break;
+            case Apple1DebugTarget apple when tape: apple.FastCassette = fast; break;
+            case CocoDebugTarget coco when tape: coco.FastCassette = fast; break;
+            case PetDebugTarget pet when tape: pet.FastCassette = fast; break;
+            case Vic20DebugTarget vic when tape: vic.FastCassette = fast; break;
+            case Trs80DebugTarget trs when tape: trs.FastCassette = fast; break;
+            case Trs80Model3DebugTarget trs when tape: trs.FastCassette = fast; break;
+            case AltairDebugTarget altair when tape: altair.FastCassette = fast; break;
+            case BbcDebugTarget bbc when tape: bbc.FastCassette = fast; break;
+            case AtariDebugTarget atari when tape: atari.FastCassette = fast; break;
+            case Trs80Model100DebugTarget trs when tape: trs.FastCassette = fast; break;
+        }
     }
 
     /// <summary>
@@ -92,8 +105,8 @@ internal sealed class MediaSpeedPolicy(IDebugTarget target)
     internal void Apply(JsonObject args)
     {
         JsonObject? defaults = args["mediaSpeedDefaults"] as JsonObject;
-        _tape = LaunchMode(args, tape: true) ?? Read(defaults?["tape"]);
-        _disk = LaunchMode(args, tape: false) ?? Read(defaults?["disk"]);
+        if ((LaunchMode(args, tape: true) ?? Read(defaults?["tape"])) is { } tape) { Set(tape: true, tape); }
+        if ((LaunchMode(args, tape: false) ?? Read(defaults?["disk"])) is { } disk) { Set(tape: false, disk); }
     }
 
     /// <summary>

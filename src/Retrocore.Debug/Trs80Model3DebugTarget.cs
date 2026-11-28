@@ -57,6 +57,11 @@ internal sealed partial class Trs80Model3DebugTarget : IDebugTarget
     /// </summary>
     internal Trs80Model3Machine Machine => _machine;
 
+    /// <summary>
+    ///  Gets the cassette recorder, which a level2 target's tape goes in; null on the Model 4P, which has none.
+    /// </summary>
+    internal Trs80CassetteDrive? BootDeck => _machine.Cassette;
+
     private string ModelName => _machine.Configuration.Variant switch
     {
         Trs80Model3Variant.Model4 => "Model 4",

@@ -29,12 +29,12 @@ dirty tracking and save on eject; then the Model I's disk write-back"), and foll
 | Apple II, Apple III | ProFile (`ProFileDrive`) | `.po`, `.hdv` | a writable `MemoryBlockDevice`, a `_changed` flag | no |
 | Apple II | Slot 7 block storage (`Apple2BlockStorage`) | `.po` | a `MemoryBlockDevice` that is read-only (its default), a `BlockWritten` flag; the ROM's write capability is set once, when the machine is built | no; its media is fixed |
 | Model I, III, 4, II | Floppy drives (`FloppyDrive`) | JV1 (`.dsk`), JV3, DMK, IMD | `FloppySector` data changed in place by the controller; a per-drive `Changed` | no; JV1 and JV3 writers exist, DMK and IMD have none (before phase 2) |
-| Model I, III, 4 | Cassette (`Trs80CassetteDrive`) | `.cas` | `CassetteImage` bytes, and bits buffered in the recorder until it stops | a recording is written on eject, after the tape is detached, with `File.WriteAllBytes`; stopping the session first loses it |
+| Model I, III, 4 | Cassette (`Trs80CassetteDrive`) | `.cas` | `CassetteImage` bytes, and bits buffered in the recorder until it stops | a recording is written on eject, after the tape is detached, with `File.WriteAllBytes`; stopping the session first loses it (before phase 4) |
 | CoCo | Cassette | `.cas` | `CassetteImage` | as the TRS-80's |
 | CoCo | Floppy drives (`FloppyDrive` on `CocoDiskController`) | JVC only (`.dsk`, `.jvc`) | `FloppyDisk` | no; `JvcFormat.Write` writes only 18 sectors of 256 bytes (before phase 2) |
 | CoCo | ROM pack (`cartridge`) | ROM image | ROM; not a device | never: read-only |
-| Apple-1 | Cassette (`Apple1CassetteDrive`) | `.wav` | `Apple1Tape` half-cycle lengths | a recording is written on eject, as `ToWave()` at 44.1 kHz, which is not cycle-exact |
-| Altair | Cassette (`AltairCassette`, the 88-ACR on an 88-SIO) | `.tap`, the bytes in order | the tape's bytes, grown as the 88-ACR records, and a `_changed` flag | a recording is written on eject, and when the session ends or relaunches, with `File.WriteAllBytes` |
+| Apple-1 | Cassette (`Apple1CassetteDrive`) | `.wav` | `Apple1Tape` half-cycle lengths | a recording is written on eject, as `ToWave()` at 44.1 kHz, which is not cycle-exact (before phase 4) |
+| Altair | Cassette (`AltairCassette`, the 88-ACR on an 88-SIO) | `.tap`, the bytes in order | the tape's bytes, grown as the 88-ACR records, and a `_changed` flag | a recording is written on eject, and when the session ends or relaunches, with `File.WriteAllBytes` (before phase 4) |
 | Altair | 8-inch floppy drives | SIMH `.dsk` when the 88-DCDD comes ([Altair8800.md](Altair8800.md)) | | |
 | AppleSharp | Disk II (`FloppyMount`) | `.woz` writable when asked; sector images read only | `WozDisk` | writes a changed WOZ back whenever the drive's motor stops, atomically, refusing when the file's hash changed |
 | AppleSharp | Slot 7 `FileBlockDevice` | `.po` | none: writes go straight to the file when opened writable | write-through |
@@ -44,7 +44,8 @@ What the hosts and views already do:
 - `MediaState` has `Label`, `Format`, `WriteProtected` and `Changed` ("written since inserted"). The Disk II's
   `Saved(...)` resets it.
 - `MachineConfiguration.Capture` keeps each drive's `path` and `writeProtected`, and leaves out media that cannot
-  be inserted again: a disk a `dos` launch built, a tape being recorded. A launch restores the saved machine and
+  be inserted again: a disk a `dos` launch built, a tape being recorded (until phase 4, when a recording's file is
+  written blank as it starts). A launch restores the saved machine and
   then, for a `dos` source or program, builds a fresh disk in drive 1 over it.
 - Media leaves a drive by several paths: `eject`, an `insert` over a disk (which ejects first), removing a card, the
   legacy `retro/media` request, a 3.5-inch drive's own eject (which drops the disk before setting its flag), and the
@@ -210,7 +211,7 @@ defaults, including the Disk II's loading every disk locked, once the recovery j
 | **Save as** | Written to a path and format the user picks; the medium then comes from it, with a fresh history. |
 | **Eject**, by the user, and every other detach | [Prepare to detach](#one-way-out-of-a-drive): save, save as, discard (with Undo) or cancel. |
 | **Eject**, by the machine | Snapshotted into the journal before it lets go, and kept under its drive. |
-| **A recording** | A changed tape like any changed disk: written to its file on Save or eject, through the same writer, and kept in the journal at stop or a crash. A file that appeared at its path since the recording started is a conflict. |
+| **A recording** | A changed tape like any changed disk: written to its file on Save, through the same writer, asked about on eject, and kept in the journal at stop or a crash. A file that appeared at its path since the recording started is a conflict. |
 | **Session end** | Nothing is written to images. The journal's last snapshots are the machine's unsaved state ([below](#the-recovery-journal)). |
 | **Checkpoints** | Every 30 seconds while a medium changes, a snapshot goes to the journal, and to the history when it is on. Never to images. |
 | **Write-through** | Later, and separately ([below](#write-through)). |
@@ -246,8 +247,9 @@ the source's format:
 | Disk II | WOZ2 |
 | 3.5-inch disk, ProFile, slot 7 | 2MG, keeping the source's header when it had one |
 | TRS-80 and CoCo floppies | DMK |
-| TRS-80 and CoCo tapes | CAS, with a small record of the recorder's state: its buffered bits, copied without flushing the recorder |
+| TRS-80 and CoCo tapes | CAS, with the bytes the recorder's buffered bits make so far, as stopping it would append them, taken without flushing the recorder |
 | Apple-1 tapes | its half-cycle lengths, the one format of Retrocore's own, as no standard one is exact |
+| Model 100 tapes | its starting level and half-cycle lengths, as for the Apple-1 |
 | Altair tapes | TAP, the bytes the 88-ACR wrote, which is all its tape holds |
 
 ### When it is written
@@ -968,11 +970,44 @@ After the reviews:
      mode waits and is then taken mid-write; a commit whose journal cannot be written leaves the last one standing
      and is behind until one goes through; a disk put back keeps when it was kept; the 3.5 drive's ejected disk),
      the extension's recovery lines and mark, and `Test-RecoveryDap.mjs` reading a running drive's `recovery`.
+   - **Recordings as changed tapes (built).** Every recorder that records to a file named first is a medium's slot:
+     the TRS-80's (Model I, III and 4), the Color Computer's, the Apple-1's, the Altair's and the Model 100's.
+     `CassetteImage`, `AltairTape`, `Apple1Tape` and `Trs80Model100Tape` are `IMedium`s with a version, a lock, a
+     snapshot, `IsDirty`, `MarkSaved` and `MarkChanged`, and their drives `IMediumSlot`s with mount generations from
+     `MountGenerations`; each saves (`CassetteCodec` as CAS, `AltairTapeCodec` as TAP, `Apple1TapeCodec` and
+     `Trs80Model100TapeCodec` as WAV). `record` writes the recording's file blank at once (`TapeMedia`), as the BBC's
+     and the Atari's already did, so the file is the tape's image: the recording saves through `MediaActions`' steps
+     and `ImageWriter` with a disk's answers, a file written at its path since it started (over the blank, or where
+     the blank was deleted) is a `conflict`, and an eject, an insert or another `record` over a changed recording
+     answers `changed`, through `retro/media` too. Nothing else writes it: the eject and the session's end that did,
+     and the Apple-1's, the Altair's and the Model 100's `IRecordingTarget` saves of it, are gone (the Model 100 keeps
+     its RAM image's). The checkpoint keeps a recording, the next launch with the same `recoveryId` puts it back in the
+     recorder to play, and the stop and crash notices and the off machine's kept media include it. The TRS-80's
+     recorder holds every bit until the motor stops, so its tape counts each bit heard as a change, and its snapshot
+     packs the bits held so far into the bytes stopping would append, without the recorder letting them go
+     (`ICassetteRecorder`), so taking one never changes what the machine sees; the plan's "record of the recorder's
+     state" is those bytes, as the recorder cannot go on in another machine. The Color Computer's recorder adds each
+     byte as it completes, and the others each half cycle or byte. A recorder recording is `Writing` while its motor
+     runs (the Altair's, which has no motor control, while it records), so a checkpoint waits for it and then takes it
+     mid-write, which loses nothing. A WAV save moves each change of level to its sample, which the machines read the
+     same, so it is a note, not a loss, and leaves the tape saved; the journal keeps the half cycles exactly. Decks with keys
+     say so with a `keys` operation, so the Drives view and Retrocore Desktop tell the PET's, VIC-20's, BBC's and
+     Atari's from recorders that now save too. In the Drives view a changed recording shows `●`, Save, Save As... and
+     the eject prompt, which says the tape has a recording not saved, with no lock badge; the stop notice counts
+     tapes as tapes. Tests: `TapeMediaTests` (a Model I's CSAVE stopped while its recorder holds every bit, which
+     comes back as far as it got and saves; a CSAVE kept by a crashed session that CLOADs and RUNs in the next launch;
+     a read-only file and a folder gone keeping the recording changed; a file written at the path, over the blank or
+     after it was deleted, as a conflict; the Altair's recording through a stop, a conflict, a refusal and a crash; the
+     Apple-1's half cycles kept exactly and saved as WAV with a note; the Model 100's kept and not written at the
+     session's end), `Trs80Model100DebugTargetTests`, `drives.test.ts`, `Test-RecoveryDap.mjs`, where a Model I host
+     killed while CSAVE records leaves its recording, which the off machine saves, and the Model I's, Apple-1's,
+     Altair's and Model 100's DAP scripts, which save a recording before its eject.
    - **Left for the next parts.** The machine's own eject is not yet tested through a running machine, as no test
      program ejects a 3.5 disk. A kept disk whose launch image is gone cannot yet be shown or saved while off, as the
-     machine is not built without it. Then built disks (kept in the history once it is built, with a notice),
-     recordings as changed tapes with the recorder's buffered bits, slot 7's device (which cannot be mounted again in
-     a running machine), Retrocore Desktop's journal, and the source-aware default lock.
+     machine is not built without it. The crash notice, and the question before its kept media are discarded, still
+     count a kept recording among "disks", as the language server's list gives only labels. Then built disks (kept in
+     the history once it is built, with a notice), slot 7's device (which cannot be mounted again in a running
+     machine), Retrocore Desktop's journal, and the source-aware default lock.
 5. **The history.** The chunk store with its lock and grace window, thinning to a target, the History rows, Compare,
    the clocks and gears. Done when the *History* tests pass and a disk restores to any version, running or off.
 6. **Machine files.** The `Unsaved\` mirror and machine ids, with [machine files](MachineFiles.md#phases)' fourth

@@ -237,7 +237,7 @@ public sealed class ProjectBuildTests
 
         Write("main.s", "ret");
         RetrocoreProject project = RetrocoreProject.Load(_folder);
-        Error(() => ProjectBuild.Build(project.Target("dos"))).Should().EndWith("the 'trsdos' environment is not yet supported; only 'bare', 'wozmon', 'dos33', 'dfs', 'basic', 'sos' and 'prodos' build.");
+        Error(() => ProjectBuild.Build(project.Target("dos"))).Should().EndWith("the 'trsdos' environment is not yet supported; only 'bare', 'wozmon', 'dos33', 'dfs', 'basic', 'sos', 'prodos' and 'level2' build.");
         Error(() => ProjectBuild.Build(project.Target("bare"))).Should().EndWith("target bare: the entry 'GO' is not an address the sources define.");
         Directory.Exists(Path.Join(_folder, "artifacts")).Should().BeFalse();
     }

@@ -446,6 +446,68 @@ public sealed class DapTransportTests
     }
 
     /// <summary>
+    ///  EOF cancels paced work rather than leaving the adapter waiting for the launch to finish.
+    /// </summary>
+    [TestMethod]
+    public void PacedLaunchStopsAtInputEof()
+    {
+        List<JsonObject> messages = Exchange(transport =>
+        {
+            transport.On("launch", _ =>
+            {
+                long started = Stopwatch.GetTimestamp();
+                while (Stopwatch.GetElapsedTime(started) < TimeSpan.FromSeconds(1))
+                {
+                    transport.ThrowIfLaunchCancelled(requireInput: true);
+                    Thread.Sleep(1);
+                }
+
+                return new JsonObject();
+            });
+        }, Request(1, "launch", []));
+
+        messages.Should().ContainSingle().Which.String("message").Should().Contain("DAP input closed");
+    }
+
+    /// <summary>
+    ///  A pre-cancelled launch consumes its configuration handshake without starting a replacement.
+    /// </summary>
+    [TestMethod]
+    public void PreCancelledLaunchDoesNotConfigureTheRetry()
+    {
+        using ManualResetEventSlim sawEnd = new();
+        using ManualResetEventSlim close = new(initialState: true);
+        JsonObject apple1 = new()
+        {
+            ["machine"] = "apple1",
+            ["sdkRoms"] = Path.Join(AppContext.BaseDirectory, "Inputs"),
+            ["textOnly"] = true,
+            ["stopOnEntry"] = true
+        };
+
+        using DisconnectReadStream input = new(
+            [.. Request(1, "initialize", []), .. Request(2, "configurationDone", []), .. Request(3, "gate", []),
+             .. Request(4, "launch", apple1), .. Request(5, "cancel", new JsonObject { ["requestId"] = 4 }),
+             .. Request(6, "launch", apple1.DeepClone().AsObject())], sawEnd, close);
+
+        using MemoryStream output = new();
+        DapTransport transport = new(input, output, (bytes, token) => input.Read(bytes.Span, token));
+        DebugSession session = new();
+        session.Register(transport, transport.Stop);
+        transport.On("gate", _ =>
+        {
+            sawEnd.Wait(s_threadTimeout).Should().BeTrue();
+            return new JsonObject();
+        });
+
+        transport.Run(session.End);
+        List<JsonObject> messages = Frames(output.ToArray());
+        messages.Single(message => message.Int("request_seq") == 4).Bool("success").Should().BeFalse();
+        messages.Single(message => message.Int("request_seq") == 6).Bool("success").Should().BeTrue();
+        messages.Should().NotContain(message => message.String("event") == "stopped");
+    }
+
+    /// <summary>
     ///  Inspecting malformed requests for cancellation does not terminate the reader.
     /// </summary>
     [TestMethod]

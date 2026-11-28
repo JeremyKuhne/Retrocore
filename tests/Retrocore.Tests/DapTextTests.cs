@@ -3,6 +3,7 @@
 // See LICENSE file in the project root for full license information
 
 using Retrocore.Debug;
+using Retrocore.Machines.Apple1;
 using System.Text;
 using System.Text.Json.Nodes;
 
@@ -81,6 +82,31 @@ public sealed class DapTextTests
         }).Should().Contain("normal, fast or skip");
 
         client.Request("retro/mediaSpeed", []).String("tape").Should().Be("normal");
+    }
+
+    /// <summary>
+    ///  Normal disables the target's legacy acceleration while an Apple-1 cassette is actually playing.
+    /// </summary>
+    [TestMethod]
+    public void NormalTapePacesAnActiveLegacyDrive()
+    {
+        JsonObject launch = Apple1(textOnly: true);
+        launch["fastCassette"] = true;
+        Apple1DebugTarget target = Apple1DebugTarget.Launch(launch);
+        Apple1CassetteDrive drive = target.Machine.CassetteDrive ?? throw new AssertFailedException("No cassette drive.");
+        drive.Play(new Apple1Tape([100, 100]), "tape");
+        MediaSpeedPolicy policy = new(target);
+        policy.Accelerated.Should().BeTrue();
+
+        launch["tapeSpeed"] = "normal";
+        policy.Apply(launch);
+        target.Accelerated.Should().BeFalse();
+        policy.Accelerated.Should().BeFalse();
+
+        policy.Set(tape: false, MediaSpeed.Fast);
+        policy.Accelerated.Should().BeFalse("the disk setting cannot unthrottle tape");
+        policy.Set(tape: true, MediaSpeed.Fast);
+        policy.Accelerated.Should().BeTrue();
     }
 
     /// <summary>

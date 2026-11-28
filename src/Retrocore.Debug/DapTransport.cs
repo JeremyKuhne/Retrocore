@@ -42,6 +42,7 @@ internal sealed class DapTransport(Stream input, Stream output, Func<Memory<byte
     private volatile bool _outputFailed;
     private bool _finished;
     private volatile bool _stopped;
+    private volatile bool _inputClosed;
     private readonly CancellationTokenSource _stopReading = new();
     private readonly Dictionary<int, CancellationTokenSource> _pendingLaunches = [];
     private CancellationToken _launchCancellation;
@@ -138,7 +139,15 @@ internal sealed class DapTransport(Stream input, Stream output, Func<Memory<byte
     /// <summary>
     ///  Stops a launch when the reader sees its cancellation request.
     /// </summary>
-    internal void ThrowIfLaunchCancelled() => _launchCancellation.ThrowIfCancellationRequested();
+    /// <param name="requireInput">Whether the operation should stop on EOF, as a paced launch should.</param>
+    internal void ThrowIfLaunchCancelled(bool requireInput = false)
+    {
+        _launchCancellation.ThrowIfCancellationRequested();
+        if (requireInput && _inputClosed)
+        {
+            throw new OperationCanceledException("DAP input closed during a paced launch.");
+        }
+    }
 
     /// <summary>
     ///  Answers requests until <see cref="Stop"/> or the end of the input.
@@ -273,7 +282,13 @@ internal sealed class DapTransport(Stream input, Stream output, Func<Memory<byte
                 continue;
             }
 
-            if (message is null || _stopped) { return; }
+            if (message is null)
+            {
+                _inputClosed = true;
+                return;
+            }
+
+            if (_stopped) { return; }
             if (ReadAhead<string>(message, "type") != "request") { continue; }
             string? command = ReadAhead<string>(message, "command");
             lock (_pendingLaunches)

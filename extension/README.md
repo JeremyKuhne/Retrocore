@@ -1043,7 +1043,8 @@ The panel shows the 64x16 display (32 columns in wide mode) and takes keys: arro
 **Home** for CLEAR, **Escape** for BREAK and **Ctrl+F12** or **Ctrl+Break** for the reset button,
 which is also **Reset** on the key bar. The reset button boots a disk when there is
 a disk controller, and otherwise restarts BASIC with the program kept. **TRS-80: Insert Cassette…**, **Record
-Cassette…** and **Eject Cassette** handle tapes (a recording is saved when ejected),
+Cassette…** and **Eject Cassette** handle tapes (a recording is a changed tape, which **Save** in the Drives view writes;
+these commands refuse to take one out that is not saved),
 and **TRS-80: Insert Disk…** and **Eject Disk…** handle drives 0-3, through the
 debug host's `retro/media` request.
 
@@ -1083,8 +1084,8 @@ The panel shows the 40x24 terminal, which takes about 60 characters a second as 
 real one does. **Backspace** types the back arrow (`_`), **Escape** ESC, and
 **Ctrl+F12** or **Ctrl+Break** RESET; the key bar has **Esc**, **Reset** and **Clear
 Screen**. Letters arrive as capitals. Tapes go in and out from the cassette's row in
-the [Drives](#machine-and-drives) view; a recording is saved as a WAV file when it is
-ejected.
+the [Drives](#machine-and-drives) view; a recording is a changed tape, which **Save** writes as a WAV file, and
+an eject asks about one not saved.
 
 ## Debugging on the Model 100
 
@@ -1137,7 +1138,7 @@ starts there; on the 88-2SIO it sets up the first ACIA (`$03`, then `$15`, to po
 control character, the arrow keys send ^H, ^J, ^K and ^L, and **Ctrl+F12** or
 **Ctrl+Break** is RESET; the key bar has **Esc**, **Reset** and **Clear Screen**.
 Tapes go in and out from the cassette's row in [Retro Devices](#retro-devices); a
-recording is saved when it is ejected.
+recording is a changed tape, which **Save** writes and an eject asks about when it is not saved.
 
 Altair BASIC runs from an image you supply: launch it as a `program` with
 `"loadAddress": 0`, `"entryAddress": 0` and `"upperCase": true`, and set the sense

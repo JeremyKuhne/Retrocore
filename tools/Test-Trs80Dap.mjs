@@ -194,7 +194,8 @@ try {
     // Pasting counts what the Model I has no key for, such as a bracket, as left out.
     assert.deepEqual(await request("retro/type", { text: "[" }), { typed: 0, skipped: 1 });
 
-    // A cassette: CSAVE records to a file when the tape is ejected, and CLOAD reads it back.
+    // A cassette: CSAVE records onto a tape whose file is written blank as the recording starts; the recording is a
+    // changed tape, which an eject holds back until it is saved, and CLOAD reads it back.
     await type("\r10 PRINT \"SAVED\";6*7\r");
     await screen(text => text.includes("10 PRINT \"SAVED\";6*7"), "the typed line");
     await request("retro/media", { device: "cassette", action: "record", path: cassette });
@@ -203,8 +204,16 @@ try {
     await tape();
     assert.ok(sawDevice("cassette", device => device.transport.mode === "recording" && device.activity === "writing"),
         "the cassette showed as writing while CSAVE ran");
+    const recorder = (await request("retro/devices")).devices.find(device => device.id === "cassette");
+    assert.equal(recorder.media.changed, true, JSON.stringify(recorder.media));
+    assert.deepEqual(recorder.saveFormats, ["cas"]);
+    await assert.rejects(request("retro/media", { device: "cassette", action: "eject" }), /tape in Cassette has changes not saved/);
+    const held = await request("retro/device", { id: "cassette", action: "eject", supportsRetrocoreMedia: 1 });
+    assert.equal(held.outcome, "changed", JSON.stringify(held));
+    const saved = await request("retro/device", { id: "cassette", action: "save", generation: held.generation, supportsRetrocoreMedia: 1 });
+    assert.equal(saved.outcome, "saved", JSON.stringify(saved));
     await request("retro/media", { device: "cassette", action: "eject" });
-    assert.ok(existsSync(cassette), "the recording is saved");
+    assert.ok(readFileSync(cassette).includes(0xA5), "the recording is saved, with its sync byte");
     await screen(text => /CSAVE "A"\s*\n\s*READY/.test(text), "CSAVE's READY");
     // BASIC does not scan the keyboard while it carries out a command, so each command waits for READY. NEW
     // clears the screen first.

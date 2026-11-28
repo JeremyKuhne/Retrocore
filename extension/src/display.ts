@@ -297,7 +297,8 @@ function draw(frame){
     }
     if(beamOverlay){drawBeam(ctx,beam);paintedOverlay=true;}
     document.getElementById('status').textContent=frame.cycles+' cycles · line '+beam.scanline+' · column '+beam.column
-        +' · frame cycle '+beam.cycleInFrame+(beam.verticalBlank?' · VBL':beam.horizontalBlank?' · HBL':'');
+        +' · frame cycle '+beam.cycleInFrame+(beam.verticalBlank?' · VBL':beam.horizontalBlank?' · HBL':'')
+        +mediaSpeedText(frame).map(text=>' · '+text).join('');
     if(frame.disk){
         document.getElementById('disk').textContent=frame.disk.drives.map(drive=>'D'+drive.drive
             +': track '+drive.track.toFixed(2)+' · bit '+drive.bitPosition+'/'+drive.bitCount

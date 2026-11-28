@@ -17,8 +17,8 @@ namespace Retrocore.Desktop;
 /// <remarks>
 ///  <para>
 ///   An off machine is built and never run, as the extension's off machine is, so its hardware and drives can be
-///   shown and changed. Stopping a running machine captures its cards and media, writes its recordings and builds it
-///   again, off, with them.
+///   shown and changed. Stopping a running machine captures its cards and media, writes what it keeps in a file of its
+///   own (the Model 100's RAM image) and builds it again, off, with them.
 ///  </para>
 /// </remarks>
 internal sealed class MachineSession : DisposableBase
@@ -86,10 +86,11 @@ internal sealed class MachineSession : DisposableBase
     }
 
     /// <summary>
-    ///  Stops the machine: its recordings are written and it is built again, off, with the cards and media it had.
+    ///  Stops the machine: what it keeps in a file of its own, the Model 100's RAM image, is written, and it is built
+    ///  again, off, with the cards and media it had. A changed tape, as a changed disk, is asked about before.
     /// </summary>
-    /// <exception cref="IOException">A recording could not be written; the machine runs on.</exception>
-    /// <exception cref="UnauthorizedAccessException">A recording's path cannot be written; likewise.</exception>
+    /// <exception cref="IOException">The file could not be written; the machine runs on.</exception>
+    /// <exception cref="UnauthorizedAccessException">The file cannot be written; likewise.</exception>
     internal void Stop()
     {
         if (!Host.Running) { return; }
@@ -264,7 +265,7 @@ internal sealed class MachineSession : DisposableBase
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {
-            // The app is closing; a recording that cannot be written now is lost, as a debug session's is.
+            // The app is closing; a RAM image that cannot be written now is lost, as a debug session's is.
         }
 
         Host.Dispose();

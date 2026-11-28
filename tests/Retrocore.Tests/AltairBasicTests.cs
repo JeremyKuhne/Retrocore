@@ -138,7 +138,7 @@ public sealed class AltairBasicTests
         AltairCassette cassette = basic.Machine.Bus.Cassette ?? throw new InvalidOperationException("The 88-ACR is missing.");
         cassette.Record("program.tap");
         basic.Type("CSAVE \"P\"", seconds: 3);
-        byte[] tape = cassette.Eject() ?? throw new InvalidOperationException("The tape is missing.");
+        byte[] tape = cassette.Eject()?.ToArray() ?? throw new InvalidOperationException("The tape is missing.");
         Convert.ToHexString(tape).Should().Be(Tape);
 
         basic.Type("NEW");

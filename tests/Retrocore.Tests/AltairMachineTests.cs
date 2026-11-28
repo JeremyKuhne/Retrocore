@@ -6,6 +6,7 @@ using Retrocore.Assembler;
 using Retrocore.Cpu.I8080;
 using Retrocore.Machines.Altair;
 using Retrocore.Machines.Chips;
+using Retrocore.Media.Altair;
 using NativeAssembler = Retrocore.Assembler.Assembler;
 
 namespace Retrocore.Tests;
@@ -463,7 +464,8 @@ public class AltairMachineTests
         RunToHalt(machine);
         machine.Run((ulong)AltairTiming.CyclesPerCharacter(AltairBus.CassetteBaudRate));
         (cassette.Media?.Changed).Should().BeTrue();
-        cassette.Eject().Should().Equal("TAPE"u8.ToArray());
+        AltairTape tape = cassette.Eject() ?? throw new InvalidOperationException("The recorder is empty.");
+        tape.ToArray().Should().Equal("TAPE"u8.ToArray());
         cassette.Media.Should().BeNull();
         cassette.Eject().Should().BeNull("the recorder is empty");
     }

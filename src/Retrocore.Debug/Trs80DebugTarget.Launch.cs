@@ -14,9 +14,6 @@ internal sealed partial class Trs80DebugTarget
     private const string CharacterGeneratorDump = "mcm6670p.z29";
     private const string Level1Dump = "level1.rom";
 
-    // The path a recording is saved to when its tape is ejected.
-    private string? _recordingPath;
-
     /// <summary>
     ///  Launches a Model I from a launch request's arguments.
     /// </summary>
@@ -147,6 +144,7 @@ internal sealed partial class Trs80DebugTarget
         string action = args.String("action") ?? throw new ArgumentException("action is required.");
         string device = args.String("device") ?? throw new ArgumentException("device is required.");
         int drive = args.Int("drive") ?? 0;
+        Machines.Devices.IDevice target;
         if (device == "disk")
         {
             if (drive < 0 || drive >= _machine.Drives.Count)
@@ -154,26 +152,27 @@ internal sealed partial class Trs80DebugTarget
                 throw new ArgumentException($"There is no drive {drive}.");
             }
 
-            // A changed disk is held back, as from retro/device, so an older client cannot lose it.
-            // A disk let go of is ejected or replaced by the machine through the host, which keeps it for Undo once that
-            // has gone through.
-            JsonObject? answer = MediaActions.Device(_machine.Drives[drive], action, args, (what, with) => DeviceAction(_machine.Drives[drive], what, with));
-            if (answer is null)
-            {
-                DeviceAction(_machine.Drives[drive], action, args);
-            }
-            else if (answer.String("outcome") != "discarded")
-            {
-                return answer;
-            }
+            target = _machine.Drives[drive];
         }
         else if (device == "cassette")
         {
-            DeviceAction(_machine.Cassette, action, args);
+            target = _machine.Cassette;
         }
         else
         {
             throw new ArgumentException("device must be cassette or disk, with action insert or eject, or record for a cassette.");
+        }
+
+        // A changed disk or recording is held back, as from retro/device, so an older client cannot lose it. One let go
+        // of is ejected or replaced by the machine through the host, which keeps it for Undo once that has gone through.
+        JsonObject? answer = MediaActions.Device(target, action, args, (what, with) => DeviceAction(target, what, with));
+        if (answer is null)
+        {
+            DeviceAction(target, action, args);
+        }
+        else if (answer.String("outcome") != "discarded")
+        {
+            return answer;
         }
 
         return MediaState();
@@ -192,13 +191,14 @@ internal sealed partial class Trs80DebugTarget
                 Insert(path ?? throw new ArgumentException("path is required."));
                 break;
             case (Trs80CassetteDrive cassette, "record"):
-                EjectCassette();
-                string full = Path.GetFullPath(path ?? throw new ArgumentException("path is required, for saving the recording."));
-                cassette.Record(new CassetteImage(), full);
-                _recordingPath = full;
+                // The recording's file is written blank first, so a bad path leaves the tape in the recorder.
+                CassetteImage blank = new();
+                string full = TapeMedia.Record(path, blank, new CassetteCodec());
+                cassette.Eject();
+                cassette.Record(blank, full);
                 break;
-            case (Trs80CassetteDrive, "eject"):
-                EjectCassette();
+            case (Trs80CassetteDrive cassette, "eject"):
+                cassette.Eject();
                 break;
             case (FloppyDrive drive, "insert"):
                 Insert(drive.Drive, path ?? throw new ArgumentException("path is required."));
@@ -214,19 +214,12 @@ internal sealed partial class Trs80DebugTarget
         }
     }
 
+    // The tape is read before the one in the recorder comes out, so a file that cannot be read leaves it in.
     private void Insert(string path)
     {
-        EjectCassette();
-        string full = Path.GetFullPath(path);
-        _machine.Cassette.Play(new CassetteImage(File.ReadAllBytes(full)), full);
-    }
-
-    // A recording is saved to its path when it is ejected.
-    private void EjectCassette()
-    {
-        CassetteImage? tape = _machine.Cassette.Eject();
-        if (_recordingPath is { } path && tape is not null) { File.WriteAllBytes(path, tape.ToArray()); }
-        _recordingPath = null;
+        (CassetteImage tape, string full) = TapeMedia.ReadCassette(path);
+        _machine.Cassette.Eject();
+        _machine.Cassette.Play(tape, full);
     }
 
     private void Insert(int drive, string path)
@@ -244,7 +237,7 @@ internal sealed partial class Trs80DebugTarget
         ["cassette"] = new JsonObject
 {
             ["path"] = _machine.Cassette.Media?.Label,
-            ["recording"] = _recordingPath is not null,
+            ["recording"] = _machine.Cassette.Transport.Mode == Machines.Devices.TapeMode.Recording,
             ["motor"] = _machine.Bus.Cassette.MotorOn,
             ["atEnd"] = _machine.Bus.Cassette.AtEnd
 },

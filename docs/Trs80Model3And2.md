@@ -69,7 +69,8 @@ as on the Model I. At 1500 baud (H) each bit is one cycle of a square wave, shor
 interrupt through port `$E0` bits 0 and 1 when the mask enables them, port `$FF` bit 0 reads its level, and reading
 port `$FF` acknowledges them. A tape that opens with `$55`, the 1500 baud leader, plays at 1500 baud, its bytes after
 the `$7F` sync byte each with an implied start bit, and a recording that holds the leader and sync byte is saved that
-way; this is the usual high-speed CAS layout.
+way; this is the usual high-speed CAS layout. A recording is a changed tape, saved to its CAS file and kept in the
+recovery journal as the Model I's is ([Trs80ModelI.md](Trs80ModelI.md)).
 The Model 4P has no cassette port.
 
 ## The Model II, 12 and 16

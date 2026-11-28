@@ -1,0 +1,13 @@
+{
+  "description": "The TRS-80 Model III with 48K, level2: a SYSTEM tape that the ROM's SYSTEM command loads and / starts, which calls the ROM's routines.",
+  "load": "$4400",
+  "free": [
+    { "start": "$4400", "end": "$FFFF" }
+  ],
+  "reserved": [
+    { "start": "$0000", "end": "$37FF", "why": "the Model III's ROM, Level II and ROM C" },
+    { "start": "$3800", "end": "$3BFF", "why": "the keyboard's matrix" },
+    { "start": "$3C00", "end": "$3FFF", "why": "the video RAM, the screen" },
+    { "start": "$4000", "end": "$43FF", "why": "the ROM's RAM: the restart vectors, the device control blocks, the RS-232 and cassette state, BASIC's work area and input buffer, and the stack SYSTEM sets at $4288, which the program starts on" }
+  ]
+}

@@ -2,10 +2,10 @@
 // SPDX-License-Identifier: MIT
 // See LICENSE file in the project root for full license information
 
-using Retrocore.Machines.Acorn;
-using Retrocore.Machines.Atari;
+using Retrocore.Machines.Apple1;
 using Retrocore.Machines.Commodore;
 using Retrocore.Machines.Devices;
+using Retrocore.Machines.Trs80Model100;
 using Retrocore.Media;
 using Retrocore.Media.Acorn;
 using Retrocore.Media.Altair;
@@ -153,7 +153,7 @@ internal static partial class MediaActions
         if (args.Int("generation") is { } generation && device is IMediumSlot slot && slot.MountGeneration != generation)
         {
             throw new InvalidOperationException(
-                $"Another disk went in {device.Info.Name} since you were asked about it, so nothing was done.");
+                $"Another {Medium(device)} went in {device.Info.Name} since you were asked about it, so nothing was done.");
         }
 
         if (args.String("ejected") is { } ejected)
@@ -176,15 +176,16 @@ internal static partial class MediaActions
             case "eject":
             case "insert" when device.Media is not null:
 
-            // The BBC's and the Atari's RECORD to a file put a new tape in, so the one there leaves; the PET's, and
-            // theirs with no file, record onto the tape in place, when it is not write-protected.
-            case "record" when device is BbcCassette && device.Media is not null && args.String("path") is not null:
-            case "record" when device is Atari410 && device.Media is not null && args.String("path") is not null:
+            // RECORD to a file puts a new tape in, so the one there leaves: the BBC's and the Atari's, and every
+            // recorder without keys, the TRS-80's, the Color Computer's, the Apple-1's, the Altair's and the Model
+            // 100's. The PET's, and the BBC's and Atari's with no file, record onto the tape in place, when it is not
+            // write-protected.
+            case "record" when device.Media is not null && args.String("path") is not null && RecordsANewTape(device):
                 string what = action switch
                 {
                     "eject" => "eject it",
                     "record" => "record a new tape",
-                    _ => "insert another disk"
+                    _ => $"insert another {Medium(device)}"
                 };
 
                 JsonObject? held = Detach([device], args, what);
@@ -253,7 +254,7 @@ internal static partial class MediaActions
         if (args["supportsRetrocoreMedia"] is null)
         {
             throw new InvalidOperationException(
-                $"The disk in {device.Info.Name} has changes not saved to its image. Save it first, or {what} with discard: true.");
+                $"The {Medium(device)} in {device.Info.Name} has changes not saved to its image. Save it first, or {what} with discard: true.");
         }
 
         JsonObject answer = new() { ["outcome"] = "changed", ["device"] = device.Id, ["label"] = device.Media?.Label };
@@ -375,19 +376,27 @@ internal static partial class MediaActions
         string name = device.Info.Name;
         throw new InvalidOperationException(outcome switch
         {
-            "losses" => $"{answer.String("format")} cannot hold all of the disk in {name}, so it was not saved: "
+            "losses" => $"{answer.String("format")} cannot hold all of the {Medium(device)} in {name}, so it was not saved: "
                 + $"{string.Join(" ", (answer.Array("losses") ?? []).Select(loss => loss?.GetValue<string>()))} "
                 + "Save it with acceptLosses: true, or in a format that holds it all.",
-            "conflict" => $"The image of the disk in {name} is not the one it was read from, so it was not saved. "
+            "conflict" => $"The image of the {Medium(device)} in {name} is not the one it was read from, so it was not saved. "
                 + "Save it with overwrite's sha256 set to the image's now, or with another path.",
-            _ => $"The disk in {name} cannot be saved to its image ({answer.String("reason")}). Save it with another path.",
+            _ => $"The {Medium(device)} in {name} cannot be saved to its image ({answer.String("reason")}). Save it with another path.",
         });
     }
+
+    // What a drive holds, as a message names it: a tape or a disk.
+    private static string Medium(IDevice device) => device.Kind == DeviceKind.TapeDrive ? "tape" : "disk";
+
+    // Whether a drive's RECORD to a file takes the tape in it out: a tape drive whose RECORD with a file names a new
+    // tape, which is every one but the PET's and VIC-20's Datasettes.
+    private static bool RecordsANewTape(IDevice device) => device.Kind == DeviceKind.TapeDrive && device is not CommodoreDatasette;
 
     // The codec that writes a drive's medium as an extension says, among the formats the drive saves: a Disk II disk
     // as WOZ or sectors, a TRS-80, Color Computer or Kaypro floppy as JV1, JV3, JVC, DMK, IMD or a raw Kaypro image, a
     // Commodore tape as TAP or WAV, a block device as bare blocks or 2MG, a Commodore disk as G64, D64 or D67, an Atari
-    // disk as ATR or XFD and its tape as CAS.
+    // disk as ATR or XFD and its tape as CAS, a TRS-80 or Color Computer tape as CAS, an Altair tape as TAP, and an
+    // Apple-1 or Model 100 tape as WAV.
     private static IImageCodec? CodecFor(IDevice device, IMedium medium, string extension)
     {
         bool saves = device.Info.SaveFormats.Contains(extension.TrimStart('.'), StringComparer.OrdinalIgnoreCase);
@@ -406,6 +415,10 @@ internal static partial class MediaActions
             AltairDisk => new AltairDiskCodec(),
             AtariDisk => AtariDiskCodec.For(extension),
             AtariTape => new AtariTapeCodec(),
+            CassetteImage => new CassetteCodec(),
+            AltairTape => new AltairTapeCodec(),
+            Apple1Tape => new Apple1TapeCodec(),
+            Trs80Model100Tape => new Trs80Model100TapeCodec(),
             _ => BlockImageCodec.For(extension),
         };
     }

@@ -22,7 +22,7 @@ internal readonly record struct ImageBootPace(long Began, double Speed, int Cloc
     /// <param name="transport">The adapter that can cancel this launch.</param>
     internal void Wait(long cycles, DapTransport? transport)
     {
-        transport?.ThrowIfLaunchCancelled();
+        transport?.ThrowIfLaunchCancelled(requireInput: Speed > 0);
         if (Speed == 0) { return; }
         double seconds = (cycles - Start) / (Clock * Speed) - Stopwatch.GetElapsedTime(Began).TotalSeconds;
         if (seconds > 0) { Thread.Sleep(TimeSpan.FromSeconds(seconds)); }

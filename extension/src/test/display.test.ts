@@ -596,6 +596,12 @@ test("Tape and disk speeds follow the host and report Skip fallback without losi
     assert.equal(disk.value, "skip");
     assert.match(byId.get("status")?.textContent ?? "", /Disk: Fast \(Skip not supported\)/);
 
+    window.dispatch("message", { data: {
+        ...frame({ tape: null, disk: "skip", boot: { kind: "disk", requested: "skip", effective: "fast" } }, false),
+        running: false
+    } });
+    assert.match(byId.get("status")?.textContent ?? "", /Disk: Fast \(Skip not supported\)/);
+
     posted.splice(0);
     disk.value = "fast";
     disk.dispatch("change");

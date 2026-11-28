@@ -33,6 +33,37 @@ internal sealed partial class AnalysisContracts
     private readonly List<ushort> _instructions = [];
     private readonly bool[] _patched = new bool[0x10000];
     private readonly HashSet<ushort> _referenced = [];
+
+    // The direct calls to each address, by the call's address, and the states the analysis saw at calls to an
+    // Entry: label with a contract, for checking it with each caller's values.
+    private readonly Dictionary<ushort, List<ushort>> _callSites = [];
+    private readonly Dictionary<ushort, List<AnalysisRoutineState>> _callStates = [];
+    private ushort? _observing;
+
+    // Where code may be entered other than by falling into it: labels and the targets of jumps and branches, at any
+    // byte, and addresses the code writes as numbers, at an instruction's start.
+    private readonly HashSet<ushort> _entered = [];
+    private readonly HashSet<ushort> _instructionSet = [];
+
+    // Addresses the code writes as numbers, which a computed jump or call may go to: an operand that is no direct
+    // target, as LDX #$100B, and every word of data, each with the next address too, as an RTS goes one past what
+    // was pushed.
+    private readonly HashSet<ushort> _numbers = [];
+
+    // The numbers data holds, which a vector jump, as JMP (Vector), or an RTS table may go to.
+    private readonly HashSet<ushort> _vectors = [];
+
+    // The direct targets of jumps, branches and calls, where code surely goes.
+    private readonly HashSet<ushort> _targets = [];
+
+    // The addresses of exported labels, which programs outside the assembly may call with any values.
+    private readonly HashSet<ushort> _exported = [];
+
+    // The jumps and branches to each address, by their addresses.
+    private readonly Dictionary<ushort, List<ushort>> _jumpSites = [];
+    private const int MaximumCallStates = 16;
+    private const int MaximumRunSteps = 64;
+    private const int MaximumInstruction = 5;
     private readonly MemoryMap? _map;
     private readonly Dictionary<ushort, AnalysisContract> _contracts = [];
     private readonly Dictionary<ushort, DocumentationTopic> _routines = [];
@@ -88,7 +119,11 @@ internal sealed partial class AnalysisContracts
             for (int offset = 0; offset < entry.Size; offset++) { _data[(entry.Address + offset) & 0xFFFF] = true; }
         }
 
-        _engine = new(set, _memory, _defined, Callee, RoutineAt, AnalysisEvaluator.For(set), map, _data, _patched);
+        _engine = new(set, _memory, _defined, Callee, RoutineAt, AnalysisEvaluator.For(set), map, _data, _patched)
+        {
+            CallObserver = ObserveCall
+        };
+
         Scan(result);
         IsaDescription description = set.Description;
         _general = _engine.Registers & ~AnalysisRoutineEngine.StackRegisters(set);
@@ -186,15 +221,18 @@ internal sealed partial class AnalysisContracts
         int count = 0;
         int unverified = 0;
         IsaDescription description = _set.Description;
+
+        // Every routine first, so what each one visits is known when its entries are checked.
+        foreach (ushort address in _contracts.Keys) { Analyzed(address); }
         foreach ((ushort address, AnalysisContract contract) in _contracts)
         {
             AnalysisRoutineSummary? summary = Analyzed(address);
 
             // An Entry: label keeps what the routine says, or what its keeps clause says: a sure change from there is
-            // a finding.
+            // a finding, unless the entry keeps it with the values each of its callers passes.
             if (address != contract.Address)
             {
-                if (summary is { Returns: true }) { unverified += CheckKeeps(contract, summary, findings); }
+                if (summary is { Returns: true }) { unverified += CheckEntry(address, contract, summary, findings); }
                 continue;
             }
 
@@ -257,6 +295,30 @@ internal sealed partial class AnalysisContracts
         foreach (ushort address in _instructions)
         {
             if (!_engine.TryDecode(address, out DisassembledInstruction instruction)) { continue; }
+            _instructionSet.Add(address);
+            if (instruction.DirectTarget is { } target)
+            {
+                _entered.Add(target);
+                _targets.Add(target);
+            }
+
+            if (instruction.Flow is DisassemblyFlow.Jump or DisassemblyFlow.ConditionalBranch && instruction.DirectTarget is { } jumped)
+            {
+                if (!_jumpSites.TryGetValue(jumped, out List<ushort>? jumps)) { _jumpSites[jumped] = jumps = []; }
+                jumps.Add(address);
+            }
+
+            if (instruction.Form.FieldCount != 0 && instruction.DirectTarget != instruction.Operand)
+            {
+                _numbers.Add(instruction.Operand);
+                _numbers.Add((ushort)(instruction.Operand + 1));
+            }
+
+            if (instruction.Flow == DisassemblyFlow.Call && instruction.DirectTarget is { } called)
+            {
+                if (!_callSites.TryGetValue(called, out List<ushort>? sites)) { _callSites[called] = sites = []; }
+                sites.Add(address);
+            }
 
             // A store into RAM may patch code there: at a fixed address, the byte and the one after, as STA Patch+1
             // does; from an indexed one's base, every byte the index reaches, as STA Patch,Y does. Stores through a
@@ -270,9 +332,37 @@ internal sealed partial class AnalysisContracts
             }
         }
 
+        // Every two bytes of one data statement, in the CPU's order, as the numbers it may hold.
+        bool little = _set.Endianness == Endianness.Little;
+        foreach (AssemblySourceMapEntry entry in result.SourceMap)
+        {
+            if (entry.Size < 2 || entry.InstructionSet?.GetMnemonic(entry.Operation) >= 0) { continue; }
+            for (int offset = 0; offset + 1 < entry.Size; offset++)
+            {
+                byte first = _memory[(entry.Address + offset) & 0xFFFF];
+                byte second = _memory[(entry.Address + offset + 1) & 0xFFFF];
+                ushort word = little ? (ushort)(first | (second << 8)) : (ushort)((first << 8) | second);
+                _numbers.Add(word);
+                _numbers.Add((ushort)(word + 1));
+                _vectors.Add(word);
+                _vectors.Add((ushort)(word + 1));
+            }
+        }
+
+        // A number is a guess, as a font's bytes may read as one: it is a way in only at an instruction's start, as
+        // an RTS table's CATALOGUE-1 is at CATALOGUE.
+        _entered.UnionWith(_numbers.Where(_instructionSet.Contains));
+
         // Each symbol by its name and by its last part, as Inner of Routine::Inner, with every address a part names
         // where scopes share it, as two routines' Loop labels.
         Dictionary<string, List<ushort>> symbols = [with(StringComparer.Ordinal)];
+        foreach (AssemblySymbol defined in result.SymbolDefinitions)
+        {
+            // A label is a way in; an equate, as CR = $0D, is a number, and an exported label one outside code calls.
+            if (!defined.IsConstant) { _entered.Add((ushort)defined.Value); }
+            if (defined.IsExported && !defined.IsConstant) { _exported.Add((ushort)defined.Value); }
+        }
+
         foreach ((string symbol, long value) in result.Symbols)
         {
             Add(symbol, (ushort)value);
@@ -421,6 +511,166 @@ internal sealed partial class AnalysisContracts
         AnalysisRoutineSummary summary = _engine.Analyze(address, own);
         _analyzed[address] = summary;
         return summary;
+    }
+
+    // The start of the straight run of code an instruction is in: back over instructions that fall into the next,
+    // to a label, a jump's or branch's target, or code that does not fall through; null where bytes the source
+    // assembles as data come just before it, which a skip, as .byte $2C, may run into the run from.
+    private ushort? RunStart(ushort address)
+    {
+        ushort site = address;
+        for (int steps = 0; steps < MaximumRunSteps && !_entered.Contains(address); steps++)
+        {
+            ushort? previous = null;
+            for (int back = 1; back <= 5 && previous is null; back++)
+            {
+                ushort at = (ushort)(address - back);
+                if (_instructionSet.Contains(at)
+                    && _engine.TryDecode(at, out DisassembledInstruction instruction)
+                    && instruction.Size == back
+                    && instruction.Flow is DisassemblyFlow.Next or DisassemblyFlow.Call or DisassemblyFlow.Wait)
+                {
+                    previous = at;
+                }
+            }
+
+            if (previous is not { } before) { break; }
+            address = before;
+        }
+
+        // A skip is an instruction that starts in data code may run into, or a patched byte, just before the run and
+        // ends inside it, so within one byte less than the longest instruction. (A patched byte in the run stops the
+        // run's analysis at it, as the engine does with any.)
+        for (int back = 1; back < MaximumInstruction; back++)
+        {
+            ushort at = (ushort)(address - back);
+            if (_defined[at] && (_patched[at] || (_data[at] && DataReached(at)))) { return null; }
+        }
+
+        // A way in that is no instruction's start, as JMP Caller+3 into a CMP #$EA that runs as NOP, or as a BIT whose
+        // operand hides an instruction, may come into the run in the middle of one: inside the run, or just before it
+        // where what it decodes to runs on past the run's start.
+        for (ushort at = (ushort)(address - (MaximumInstruction - 1)); at != site; at++)
+        {
+            if (!_entered.Contains(at) || _instructionSet.Contains(at)) { continue; }
+            bool inside = (ushort)(at - address) < (ushort)(site - address);
+            if (inside || (_engine.TryDecode(at, out DisassembledInstruction hidden) && (ushort)(address - at) < hidden.Size))
+            {
+                return null;
+            }
+        }
+
+        return address;
+    }
+
+    // Whether code may run into a data byte: through a jump, branch or call to it or before it in its data, a number
+    // data holds that points there, as a JMP (Vector) may go, or by falling into the data from the instruction before,
+    // as into a .byte $2C written as a skip; a table or text after a return, which only a label or a load names, is
+    // not.
+    private bool DataReached(ushort at)
+    {
+        for (int steps = 0; steps < MaximumRunSteps; steps++)
+        {
+            if (_targets.Contains(at) || _vectors.Contains(at)) { return true; }
+            ushort before = (ushort)(at - 1);
+            if (!_defined[before] || !_data[before]) { return FallsInto(at) is not null; }
+            at = before;
+        }
+
+        return true;
+    }
+
+    // The instruction before one that falls into it, or null.
+    private ushort? FallsInto(ushort address)
+    {
+        for (int back = 1; back <= MaximumInstruction; back++)
+        {
+            ushort at = (ushort)(address - back);
+            if (_instructionSet.Contains(at)
+                && _engine.TryDecode(at, out DisassembledInstruction instruction)
+                && instruction.Size == back
+                && instruction.Flow is DisassemblyFlow.Next or DisassemblyFlow.Call or DisassemblyFlow.ConditionalBranch or DisassemblyFlow.Wait)
+            {
+                return at;
+            }
+        }
+
+        return null;
+    }
+
+    // Whether the analysis saw a call, with few enough states there to check each.
+    private bool Seen(ushort site) =>
+        _callStates.TryGetValue(site, out List<AnalysisRoutineState>? states) && states.Count is > 0 and <= MaximumCallStates;
+
+    // A call to an Entry: label: the state there, kept for checking the entry with the caller's values.
+    private void ObserveCall(ushort pc, ushort target, AnalysisRoutineState state)
+    {
+        if (pc != _observing || !_contracts.TryGetValue(target, out AnalysisContract? contract) || contract.Address == target)
+        {
+            return;
+        }
+
+        if (!_callStates.TryGetValue(pc, out List<AnalysisRoutineState>? states)) { _callStates[pc] = states = []; }
+        if (states.Count <= MaximumCallStates && !states.Any(state.SameAs)) { states.Add(state.Copy()); }
+    }
+
+    // The findings for an entry's Keeps: items. Where its own analysis, with nothing known, finds a sure change, as
+    // the MOS's SET_STATUS_BITS falling through with A and CFS_STATUS both 0, it is checked again from each direct
+    // call, with what the caller's registers and flags hold there: a sure change on any is a finding. Without every
+    // call seen, as for an entry also reached through a table, the first finding stands.
+    private int CheckEntry(ushort address, AnalysisContract contract, AnalysisRoutineSummary summary, List<AnalysisContractFinding> findings)
+    {
+        List<AnalysisContractFinding> found = [];
+        int unverified = CheckKeeps(contract, summary, found);
+        List<AnalysisRoutineState> callers = [];
+        List<ushort> sites = _callSites.TryGetValue(address, out List<ushort>? calls) ? calls : [];
+
+        // Each call is seen from the start of its straight run of code, with nothing known there, which holds for
+        // every way into the run the code shows (see RunStart); a routine's analysis that passes the call may have
+        // come in one way of several. A run that data or patched bytes just before it may run into, as a BIT opcode
+        // written as .byte $2C to skip the next instruction, is not seen. Jumps and branches to the entry are no calls: the code that takes them is
+        // followed through it, with its own values, and does not rely on the entry's promise.
+        if (found.Count != 0)
+        {
+            foreach (ushort site in sites)
+            {
+                _callStates.Remove(site);
+                if (RunStart(site) is not { } start) { continue; }
+                _observing = site;
+                _engine.Analyze(start);
+                _observing = null;
+            }
+        }
+
+        // An entry whose address the code takes as data, as in a table, or writes as a number, may be called through
+        // it, and an exported one by programs outside the assembly; one other code jumps or branches or falls to may be called that way, after a return address pushed, as
+        // a JSR would. Its own routine's jumps, branches and fall-through to it are its own code.
+        IReadOnlySet<ushort> own = Analyzed(contract.Address)?.Visited ?? new HashSet<ushort>();
+        bool onlyCalled = !_referenced.Contains(address)
+            && !_numbers.Contains(address)
+            && !_exported.Contains(address)
+            && (!_jumpSites.TryGetValue(address, out List<ushort>? jumps) || jumps.All(own.Contains))
+            && (FallsInto(address) is not { } before || own.Contains(before));
+
+        if (found.Count != 0 && onlyCalled && sites.Count != 0 && sites.All(Seen))
+        {
+            foreach (ushort site in sites) { callers.AddRange(_callStates[site]); }
+            found.Clear();
+            unverified = 0;
+            foreach (AnalysisRoutineState caller in callers)
+            {
+                AnalysisRoutineSummary entered = _engine.Analyze(address, contract.Own, caller);
+                int notVerified = entered.Returns ? CheckKeeps(contract, entered, found) : contract.KeepItems.Count;
+                unverified = Math.Max(unverified, notVerified);
+            }
+        }
+
+        foreach (AnalysisContractFinding finding in found)
+        {
+            if (!findings.Contains(finding)) { findings.Add(finding); }
+        }
+
+        return unverified;
     }
 
     // The findings for a routine's Keeps: items, a sure change of each; returns the number not verified, unknown

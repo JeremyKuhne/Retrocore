@@ -216,6 +216,380 @@ public class ContractAnalysisTests
     }
 
     /// <summary>
+    ///  An entry that keeps its promise only with what its callers pass, as the MOS's SET_STATUS_BITS with a bit set
+    ///  in A, is checked with each caller's values, from the start of each call's run of code: from Set, ORA with
+    ///  A = 0 and $10 = 0 would fall into LDX #0, but every caller loads A with a bit set. One caller passing 0, a
+    ///  run another way into which is not seen, or a table or number that also holds Set's address, leaves the
+    ///  finding.
+    /// </summary>
+    [TestMethod]
+    public void EntriesAreCheckedWithTheirCallersValues()
+    {
+        const string Callee = """
+
+            ;; Sets bits in $10's value.
+            ;; Keeps: X
+            ;; Entry: Set = sets the bits set in A, which must have a bit set
+            Main:
+                lda #2
+            Set:
+                ora $10
+                bne Done                ; always taken
+                ldx #0
+            Done:
+                rts
+            """;
+
+        // A documented caller, and one no documented routine reaches.
+        string good = """
+            ;; Sets bit 0.
+            ;; Uses: A
+            Caller:
+                lda #1
+                jsr Set
+                rts
+
+            Unreached:
+                lda #$80
+                jsr Set
+                rts
+            """ + Callee;
+
+        (List<string> findings, _, _) = Check(good, "Mos6502");
+        findings.Should().BeEmpty();
+
+        string zero = """
+            ;; Sets nothing.
+            ;; Uses: A
+            Caller:
+                lda #0
+                jsr Set
+                rts
+            """ + Callee;
+
+        (findings, _, _) = Check(zero, "Mos6502");
+        findings.Should().ContainSingle().Which.Should().Contain("Main ($1006) documents Keeps: X");
+
+        string table = """
+            ;; Sets bit 0.
+            ;; Uses: A
+            Caller:
+                lda #1
+                jsr Set
+                rts
+
+            Table:
+                .word Set
+            """ + Callee;
+
+        (findings, _, _) = Check(table, "Mos6502");
+        findings.Should().ContainSingle().Which.Should().Contain("Main ($1008) documents Keeps: X");
+
+        // A call whose run other code also enters, here at Mid with A = 0, is seen from the run's start, with
+        // nothing known.
+        string middle = """
+            ;; Sets bit 0.
+            ;; Uses: A
+            Caller:
+                lda #1
+            Mid:
+                jsr Set
+                rts
+
+            Vector:
+                lda #0
+                jmp Mid
+            """ + Callee;
+
+        (findings, _, _) = Check(middle, "Mos6502");
+        findings.Should().ContainSingle().Which.Should().Contain("Main ($100B) documents Keeps: X");
+
+        // A run that a skip may fall into, as .byte $2C hiding LDA #1 from the code before it, is not seen.
+        string skip = """
+            ;; Sets bit 0, or from the skip nothing.
+            ;; Uses: A
+            Caller:
+                lda #0
+                .byte $2C
+            Other:
+                lda #1
+                jsr Set
+                rts
+            """ + Callee;
+
+        (findings, _, _) = Check(skip, "Mos6502");
+        findings.Should().ContainSingle().Which.Should().Contain("Main ($1009) documents Keeps: X");
+
+        // An address written as a number may be entered or called through it: an offset into a caller's run, as
+        // Caller+2, starts a run there, and the entry's own address as a plain number keeps the finding.
+        string offset = """
+            ;; Sets bit 0.
+            ;; Uses: A
+            Caller:
+                lda #1
+                nop
+                jsr Set
+                rts
+
+            Table:
+                .word Caller+2
+            """ + Callee;
+
+        (findings, _, _) = Check(offset, "Mos6502");
+        findings.Should().ContainSingle().Which.Should().Contain("Main ($1009) documents Keeps: X");
+
+        string number = """
+            ;; Sets bit 0.
+            ;; Uses: A
+            Caller:
+                lda #1
+                jsr Set
+                rts
+
+            Table:
+                .word $100A
+            """ + Callee;
+
+        (findings, _, _) = Check(number, "Mos6502");
+        findings.Should().ContainSingle().Which.Should().Contain("Main ($1008) documents Keeps: X");
+
+        // A caller's run a store may change is not as assembled.
+        string patched = """
+            ;; Sets bit 0, unless Patcher changed it.
+            ;; Uses: A
+            Caller:
+                lda #1
+                jsr Set
+                rts
+
+            ;; Changes Caller's bit.
+            ;; Uses: A
+            Patcher:
+                lda #0
+                sta Caller+1
+                rts
+            """ + Callee;
+
+        (findings, _, _) = Check(patched, "Mos6502");
+        findings.Should().ContainSingle().Which.Should().Contain("Main ($100C) documents Keeps: X");
+
+        // A jump into the middle of an instruction of a caller's run, here to CMP #$EA's operand, a NOP, comes in
+        // with A = 0, so that run is not seen.
+        string hidden = """
+            ;; Sets bit 0.
+            ;; Uses: A
+            Caller:
+                lda #1
+                cmp #$EA
+                jsr Set
+                rts
+
+            Other:
+                lda #0
+                jmp Caller+3
+            """ + Callee;
+
+        (findings, _, _) = Check(hidden, "Mos6502");
+        findings.Should().ContainSingle().Which.Should().Contain("Main ($100D) documents Keeps: X");
+
+        // A jump to the entry from other code may follow a pushed return address, as a call: the finding stands.
+        string pushed = """
+            ;; Sets bit 0.
+            ;; Uses: A
+            Caller:
+                lda #1
+                jsr Set
+                rts
+
+            Back:
+                rts
+
+            Pusher:
+                lda #>(Back-1)
+                pha
+                lda #<(Back-1)
+                pha
+                lda #0
+                jmp Set
+            """ + Callee;
+
+        (findings, _, _) = Check(pushed, "Mos6502");
+        findings.Should().ContainSingle().Which.Should().Contain("Main ($1012) documents Keeps: X");
+
+        // Code from another routine that falls into the entry may too.
+        string falls = """
+            ;; Sets bit 0.
+            ;; Uses: A
+            Caller:
+                lda #1
+                jsr Set
+                rts
+
+            ;; Returns, or from Set sets bits.
+            ;; Keeps: X
+            ;; Entry: Set = sets the bits set in A, which must have a bit set
+            Main:
+                rts
+
+            Other:
+                lda #0
+            Set:
+                ora $10
+                bne Done
+                ldx #0
+            Done:
+                rts
+            """;
+
+        (findings, _, _) = Check(falls, "Mos6502");
+        findings.Should().ContainSingle().Which.Should().Contain("Main ($1006) documents Keeps: X");
+
+        // Text after a return, just before a caller's run, which only a label names, is no way into it; nor is an
+        // equate whose value falls inside one of its instructions.
+        string text = """
+            Thing = $1008
+
+            ;; Reads the text's end, which a load names but no code runs into.
+            ;; Uses: A
+            Peek:
+                lda Message+2
+                rts
+
+            Message:
+                .byte "OK", 0
+
+            ;; Sets bit 0.
+            ;; Uses: A
+            Caller:
+                lda #1
+                jsr Set
+                rts
+            """ + Callee;
+
+        (findings, _, _) = Check(text, "Mos6502");
+        findings.Should().BeEmpty();
+
+        // A number may point at data before a run, as a vector JMP (Vector) goes to, where a skip may run into it.
+        string vector = """
+            ;; Goes through the vector.
+            ;; Uses: A
+            Start:
+                jmp (Vector)
+
+            Vector:
+                .word $1005
+                .byte $2C
+
+            ;; Sets bit 0.
+            ;; Uses: A
+            Caller:
+                lda #1
+                jsr Set
+                rts
+            """ + Callee;
+
+        (findings, _, _) = Check(vector, "Mos6502");
+        findings.Should().ContainSingle().Which.Should().Contain("Main ($100C) documents Keeps: X");
+
+        // An exported entry may be called by programs outside the assembly, with any values.
+        string exported = """
+            .export Set
+
+            ;; Sets bit 0.
+            ;; Uses: A
+            Caller:
+                lda #1
+                jsr Set
+                rts
+            """ + Callee;
+
+        (findings, _, _) = Check(exported, "Mos6502");
+        findings.Should().ContainSingle().Which.Should().Contain("Main ($1006) documents Keeps: X");
+
+        // A jump to the entry is no call: the code that takes it is followed through it, with its own values, and
+        // its own contract is checked.
+        string jump = """
+            ;; Clears nothing, but X.
+            ;; Keeps: X
+            Other:
+                lda #0
+                jmp Set
+            """ + Callee;
+
+        (findings, _, _) = Check(jump, "Mos6502");
+        findings.Should().Contain(finding => finding.StartsWith("Other ($1000) documents Keeps: X", StringComparison.Ordinal));
+    }
+
+    /// <summary>
+    ///  A WAI from other code goes on into the entry after it, as a fall-through does, so the entry keeps its finding.
+    /// </summary>
+    [TestMethod]
+    public void WaitsFallIntoEntries()
+    {
+        const string Source = """
+            ;; Sets bit 0.
+            ;; Uses: A
+            Caller:
+                lda #1
+                jsr Set
+                rts
+
+            ;; Returns, or from Set sets bits.
+            ;; Keeps: X
+            ;; Entry: Set = sets the bits set in A, which must have a bit set
+            Main:
+                rts
+
+            Other:
+                lda #0
+                wai
+            Set:
+                ora $10
+                bne Done
+                ldx #0
+            Done:
+                rts
+            """;
+
+        (List<string> findings, _, _) = Check(Source, "Wdc65C02");
+        findings.Should().ContainSingle().Which.Should().Contain("Main ($1006) documents Keeps: X");
+    }
+
+    /// <summary>
+    ///  A caller's stack pointer is not passed into an entry it calls, as the call itself moves it: after LDX #$FF and
+    ///  TXS, Set's TSX does not see $FF, so CPX #$FF does not decide BEQ.
+    /// </summary>
+    [TestMethod]
+    public void CallersStackPointersAreNotPassedIn()
+    {
+        const string Source = """
+            ;; Resets the stack and calls Set.
+            ;; Uses: A, X
+            Caller:
+                ldx #$FF
+                txs
+                jsr Set
+                rts
+
+            ;; Returns, or from Set clears Y unless the stack is empty.
+            ;; Keeps: Y
+            ;; Entry: Set = clears Y unless S is $FF
+            Main:
+                rts
+            Set:
+                tsx
+                cpx #$FF
+                beq Done
+                ldy #0
+            Done:
+                rts
+            """;
+
+        (List<string> findings, _, _) = Check(Source, "Mos6502");
+        findings.Should().Contain(finding => finding.StartsWith("Main ($1007) documents Keeps: Y", StringComparison.Ordinal));
+    }
+
+    /// <summary>
     ///  A routine's own contract at its start wins over another routine's entry there, in the check and the
     ///  debugger alike, though the entry's routine comes first: Target keeps A as it says, though Saver lists the
     ///  label at its address as an entry, plain or with a clause; and Target's Keeps: none holds its address too.

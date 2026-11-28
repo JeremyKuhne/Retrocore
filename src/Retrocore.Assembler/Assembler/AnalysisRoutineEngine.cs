@@ -183,19 +183,38 @@ internal sealed class AnalysisRoutineEngine
     }
 
     /// <summary>
+    ///  Gets or sets what is told of each direct call an analysis follows: the call's address, its target and the
+    ///  state there, which the observer must copy to keep.
+    /// </summary>
+    internal Action<ushort, ushort, AnalysisRoutineState>? CallObserver { get; set; }
+
+    /// <summary>
     ///  Analyzes the routine that starts at an address.
     /// </summary>
     /// <param name="entry">The routine's start.</param>
     /// <param name="own">
     ///  Other addresses of the same routine, its <c>Entry:</c> labels, which are no tail calls.
     /// </param>
+    /// <param name="caller">
+    ///  The state at a call to the routine, whose known bits of registers and flags the routine starts with, as a
+    ///  caller's constant in A; null to start with nothing known.
+    /// </param>
     /// <returns>The summary.</returns>
-    internal AnalysisRoutineSummary Analyze(ushort entry, IReadOnlySet<ushort>? own = null)
+    internal AnalysisRoutineSummary Analyze(ushort entry, IReadOnlySet<ushort>? own = null, AnalysisRoutineState? caller = null)
     {
         Dictionary<ushort, AnalysisRoutineState> states = [];
         Queue<ushort> work = new();
         AnalysisRoutineState start = new();
-        for (int slot = 0; slot < SlotCount; slot++) { start.Slots[slot] = AnalysisValue.Of(slot); }
+        for (int slot = 0; slot < SlotCount; slot++)
+        {
+            // Each value is still its entry value, so what keeps it is kept; a caller's known bits come with it, but
+            // not a stack pointer's, which the call itself moves.
+            AnalysisValue value = AnalysisValue.Of(slot);
+            bool stack = slot < FlagSlot && (_stackRegisters & (1u << slot)) != 0;
+            AnalysisValue given = stack ? value : caller?.Slots[slot] ?? value;
+            start.Slots[slot] = value.WithBits(given.Known & _widths[slot], given.Bits);
+        }
+
         states[entry] = start;
         work.Enqueue(entry);
         AnalysisRoutineState? exit = null;
@@ -340,6 +359,7 @@ internal sealed class AnalysisRoutineEngine
             }
 
             ushort? target = instruction.DirectTarget;
+            if (target is { } observed) { CallObserver?.Invoke(pc, observed, state); }
             AnalysisRoutineSummary? callee = target is { } address ? _callee(address) : null;
             // A callee that changes the stack under its return address changes this routine's frame: with data
             // pushed there, as SAVE_X_Y pushes A, X and Y before calling such a helper, the change reaches the

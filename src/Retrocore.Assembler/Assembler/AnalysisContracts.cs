@@ -318,7 +318,7 @@ internal sealed partial class AnalysisContracts
             }
         }
 
-        // Every word of data, either way round, as the numbers it may hold.
+        // Every two bytes of one data statement, in the CPU's order, as the numbers it may hold.
         bool little = _set.Endianness == Endianness.Little;
         foreach (AssemblySourceMapEntry entry in result.SourceMap)
         {
@@ -545,6 +545,24 @@ internal sealed partial class AnalysisContracts
         return address;
     }
 
+    // The instruction before one that falls into it, or null.
+    private ushort? FallsInto(ushort address)
+    {
+        for (int back = 1; back <= MaximumInstruction; back++)
+        {
+            ushort at = (ushort)(address - back);
+            if (_instructionSet.Contains(at)
+                && _engine.TryDecode(at, out DisassembledInstruction instruction)
+                && instruction.Size == back
+                && instruction.Flow is DisassemblyFlow.Next or DisassemblyFlow.Call or DisassemblyFlow.ConditionalBranch)
+            {
+                return at;
+            }
+        }
+
+        return null;
+    }
+
     // Whether the analysis saw a call, with few enough states there to check each.
     private bool Seen(ushort site) =>
         _callStates.TryGetValue(site, out List<AnalysisRoutineState>? states) && states.Count is > 0 and <= MaximumCallStates;
@@ -590,12 +608,13 @@ internal sealed partial class AnalysisContracts
         }
 
         // An entry whose address the code takes as data, as in a table, or writes as a number, may be called through
-        // it; one other code jumps or branches to may be called by a jump, after a return address pushed, as a JSR
-        // would. Its own routine's jumps and branches to it are its own code.
+        // it; one other code jumps or branches or falls to may be called that way, after a return address pushed, as
+        // a JSR would. Its own routine's jumps, branches and fall-through to it are its own code.
         IReadOnlySet<ushort> own = Analyzed(contract.Address)?.Visited ?? new HashSet<ushort>();
         bool onlyCalled = !_referenced.Contains(address)
             && !_numbers.Contains(address)
-            && (!_jumpSites.TryGetValue(address, out List<ushort>? jumps) || jumps.All(own.Contains));
+            && (!_jumpSites.TryGetValue(address, out List<ushort>? jumps) || jumps.All(own.Contains))
+            && (FallsInto(address) is not { } before || own.Contains(before));
 
         if (found.Count != 0 && onlyCalled && sites.Count != 0 && sites.All(Seen))
         {

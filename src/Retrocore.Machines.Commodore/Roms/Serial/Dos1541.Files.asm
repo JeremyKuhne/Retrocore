@@ -92,7 +92,7 @@ Double:
     bne Done
     inc Product+2
 
-;; <RecordOffset> added: done.
+;; The byte in the record is added: done.
 ;; Also: MUL400 (D1541)
 Done:
     rts
@@ -368,7 +368,7 @@ ReadAhead:
     jsr FlipBuffers
     jsr ReadBlock
 
-;; <Track> and <Sector> back.
+;; The saved track and sector are put back.
 ;; Also: DBL08 (D1541)
 RestoreBlock:
     pla
@@ -513,7 +513,7 @@ ToCommand:
     lda DataByte
     jsr PutByte
 
-;; <MoreBytes> not yet 0: more to come.
+;; <MoreBytes> is not yet 0: more bytes are to come.
 ;; Also: L50 (D1541)
 CheckEnd:
     lda MoreBytes
@@ -595,7 +595,7 @@ Buffered:
     ora #$80
     sta a:ChannelBuffer,y
 
-;; <JobNumber> = it, the job's header 18/0, and the seek.
+;; The buffer becomes the job, with the header 18/0, and the seek is run.
 ;; Also: IT30 (D1541)
 Seek:
     txa
@@ -740,7 +740,7 @@ ReadNext:
 .proc WriteFileBlock
     lda #JOB_WRITE
 
-;; <JobCommand> = A, the job started (SETLJB), the pointer 0; for types below relative the channel's block count
+;; Starts the job in A on the active buffer and zeroes its pointer; for types below relative the channel's block count
 ;; (<ChannelBlocks>) goes up. X = the buffer (<ReadFileBlock> enters here).
 ;; Also: STRTIT (D1541)
 Start:
@@ -788,7 +788,7 @@ InRange:
     bne Lookup
     lda #MESSAGE_SECONDARY
 
-;; <SecondaryChannels>'s entry: bit 7 clear for a read channel.
+;; The secondary address's entry in <SecondaryChannels>: bit 7 is clear for a read channel.
 ;; Also: FNDC25 (D1541)
 Lookup:
     tax
@@ -818,7 +818,7 @@ Done:
     bcc Lookup
     and #$0F
 
-;; <SecondaryChannels>'s entry, by its two top bits.
+;; The secondary address's entry in <SecondaryChannels>, by its two top bits.
 ;; Also: FNDW13 (D1541)
 Lookup:
     tax
@@ -828,7 +828,7 @@ Lookup:
     bcc ReadOnly
     bmi None
 
-;; <Channel> = it; carry clear.
+;; The channel is found: <Channel> = it, and carry is clear.
 ;; Also: FNDW10 (D1541)
 Found:
     tya
@@ -1056,7 +1056,7 @@ Allocate:
     bcc SetEntry
     ora #$80
 
-;; <SecondaryChannels> for secondary address = the channel.
+;; The secondary address's entry in <SecondaryChannels> = the channel.
 ;; Also: GETR55 (D1541)
 SetEntry:
     sta SecondaryChannels,x
@@ -1079,7 +1079,7 @@ NoBuffer:
     lda #ERROR_NO_CHANNEL
     jmp Commands::Fail
 
-;; <ChannelBuffer> = the first; the second if wanted.
+;; The first buffer is the channel's <ChannelBuffer>; the second, if wanted, comes next.
 ;; Also: GETR5 (D1541)
 Second:
     sta a:ChannelBuffer,y
@@ -1106,7 +1106,7 @@ Done:
     bne Free
     rts
 
-;; FRECO: the channel's release; FRERD and FREWRT are its other names here, in Also:.
+;; Releases the channel, whether it was a read or a write channel.
 ;; Also: FRECO (D1541), FRERD (D1541), FREWRT (D1541)
 Free:
     ldx SecondaryAddress
@@ -1159,7 +1159,7 @@ Done:
     pla
     jsr FreeBuffer
 
-;; <ChannelSecondBuffer>.
+;; The second buffer.
 ;; Also: REL1 (D1541)
 Second:
     ldx Channel
@@ -1532,7 +1532,7 @@ NotRelative:
     sta ChannelStatus,x
     jmp RandomByte
 
-;; The last byte went with EOI: <ChannelStatus> = not ready.
+;; The last byte went with EOI: the channel is marked not ready.
 ;; Also: GET0 (D1541)
 NotReady:
     lda #CHANNEL_NOT_READY
@@ -1563,8 +1563,8 @@ RandomByte:
 NextRandom:
     inc BufferPositions,x
 
-;; The byte at the pointer into <ChannelByte>, <ChannelStatus> with EOI at <ChannelLastByte> (<AcceptByte> and the block
-;; commands enter here).
+;; The byte at the pointer goes into <ChannelByte>, and the channel is marked ready, with EOI at <ChannelLastByte>
+;; (<AcceptByte> and the block commands enter here).
 ;; Also: RNGET2 (D1541)
 RandomAtPointer:
     lda (BufferPositions,x)
@@ -1580,19 +1580,19 @@ RandomAtPointer:
 RandomDone:
     rts
 
-;; <ReadByte>.
+;; A sequential file's byte, through <ReadByte>.
 ;; Also: SEQGET (D1541)
 Sequential:
     jsr ReadByte
 
-;; <ChannelByte> = A.
+;; The byte in A goes into <ChannelByte>.
 ;; Also: GET3 (D1541)
 Store:
     ldx Channel
     sta ChannelByte,x
     rts
 
-;; <ListingActive> set: the listing's next byte.
+;; With the directory listing active, the listing's next byte.
 ;; Also: GET6 (D1541)
 Load:
     lda ListingActive
@@ -1600,7 +1600,7 @@ Load:
     jsr Directory::NextListingByte
     jmp Store
 
-;; The error channel: after the message's last byte, a RETURN with EOI, and the error reset to 00, OK.
+;; The error channel: after the message's last byte comes a RETURN with EOI, and the error is reset to 00, OK.
 ;; Also: GETERC (D1541)
 ErrorChannel:
     jsr GetPointer
@@ -1625,7 +1625,8 @@ ErrorByte:
     sta DataByte
     bne ErrorReady
 
-;; The last: the pointer back before <ErrorBuffer>, so a RETURN comes next (the memory-read command enters here).
+;; The message's last byte went: the pointer goes back before <ErrorBuffer>, so a RETURN comes next (the memory-read
+;; command enters here).
 ;; Also: GE15 (D1541)
 ErrorEnd:
     lda #<ErrorBuffer-1
@@ -1633,7 +1634,7 @@ ErrorEnd:
     lda #>ErrorBuffer
     sta BufferPositions+1,x
 
-;; <ChannelStatus> = ready to talk (the memory-read command enters here).
+;; The channel is marked ready to talk (the memory-read command enters here).
 ;; Also: GE20 (D1541)
 ErrorReady:
     lda #CHANNEL_TALK
@@ -1806,7 +1807,7 @@ Clear:
 .proc GetPointer
     jsr GetActiveBuffer
 
-;; SETDIR: a second name at OfBuffer's address; in its Also:.
+;; Loads the pointer of the buffer in A, not the active buffer's: <BufferPointer> gets its position and its page.
 ;; Also: SETDIR (D1541), GP1 (D1541)
 OfBuffer:
     asl
@@ -2503,8 +2504,8 @@ WriteBlock:
     lda #TYPE_PROGRAM+TYPE_PROGRAM
     ora DriveNumber
 
-;; <ChannelFileType> = A; the command ends. (The store indexes with Y, which the read leaves as the channel; the code
-;; loads X.)
+;; Stores the file type in A, and ends the command. (The store indexes with Y, which the read leaves as the channel; the
+;; code loads X, which has the channel too.)
 ;; Also: ENDRD (D1541)
 SetType:
     ldx Channel
@@ -2558,7 +2559,7 @@ ParseName:
     ldx #$00
     beq SetName
 
-;; More than a drive before it is error 30, SYNTAX <Errors::JobError>.
+;; More than a drive before it is error 30, SYNTAX ERROR.
 ;; Also: OP049 (D1541)
 HasColon:
     txa
@@ -2573,7 +2574,7 @@ BeforeColon:
     beq SetName
     dey
 
-;; The file name tables; the name parsed and looked up; then the type and mode, if given.
+;; The name is parsed into the file name tables and looked up; then the type and mode, if given.
 ;; Also: OP20 (D1541)
 SetName:
     sty FileNameStart
@@ -2635,7 +2636,7 @@ ByMode:
     beq ForWrite
     jmp ForRead
 
-;; A relative file: REC; one not there is opened for writing.
+;; A relative file: its record size follows; one that is not there is opened for writing.
 ;; Also: OP60 (D1541)
 SetRecordSize:
     ldy FileNameStart,x
@@ -2777,7 +2778,7 @@ TypeMatches:
     pla
     sta SecondaryAddress
 
-;; <OpenRead>; append goes on to <Append>.
+;; Opens the file for reading; append then goes on to <Append>.
 ;; Also: OP125 (D1541)
 ReadIt:
     jsr OpenRead
@@ -2973,7 +2974,7 @@ ByName:
     jsr Commands::Prepare::ClearTables
     ldy #$03
 
-;; The file name tables; the name parsed, on both drives.
+;; The name is parsed into the file name tables, for both drives.
 ;; Also: LD05 (D1541)
 SetName:
     dey
@@ -3089,12 +3090,12 @@ Open:
     jsr CloseWrite
     jsr Directory::CloseEntry
 
-;; BAM out (<Bam::WriteForChannel>).
+;; The BAM is written out, through <Bam::WriteForChannel>.
 ;; Also: CLSC30 (D1541)
 WriteBam:
     jsr Bam::WriteForChannel
 
-;; <FreeChannel>.
+;; The channel is then freed.
 ;; Also: CLSC31 (D1541)
 Free:
     jmp FreeChannel
@@ -3127,7 +3128,7 @@ RelativeFile:
     beq RelativeDone
     jsr Directory::CloseEntry
 
-;; <FreeChannel>.
+;; The channel is then freed.
 ;; Also: CLSR1 (D1541)
 RelativeDone:
     jmp FreeChannel
@@ -3343,8 +3344,8 @@ SideSector:
     jsr Relative::ReadSideSector
     jsr Jobs::Wait
 
-;; <ChannelNextRecord> = 2, the first record set up, <Track> and <Sector> back (<OpenWriteChannel> enters here for a new
-;; relative file).
+;; The next record is 2, the first record is set up, and <Track> and <Sector> are put back (<OpenWriteChannel> enters
+;; here for a new relative file).
 ;; Also: OROW (D1541)
 FirstRecord:
     ldx Channel
@@ -3534,7 +3535,7 @@ SideSector:
     eor #$FF
     and ChannelFileType,x
 
-;; <ChannelFileType> = A (<SetFlag> ends here).
+;; Stores A in the file type (<SetFlag> ends here).
 ;; Also: CLRF10 (D1541)
 Store:
     sta ChannelFileType,x
@@ -3589,7 +3590,7 @@ Skip:
     bcc Next
     rts
 
-;; Drive, DSEC and DIND against the entry's.
+;; The channel's drive, entry sector and entry index against the entry's.
 ;; Also: TSTC40 (D1541)
 Compare:
     stx Temporary+2

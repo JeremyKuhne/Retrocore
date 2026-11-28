@@ -6,9 +6,9 @@ page tracks where the time goes, the headroom left, and every candidate measured
 round starts from evidence instead of repeating experiments.
 
 How to measure, the exactness gate a change must pass, and the traps on this machine are in the
-performance-testing skill's [Retrocore overlay](../../.claude/skills/performance-testing/overlay.md). Every number
-here is Release, on the Ryzen 9 9950X3D, pinned to two physical cores, as the median of interleaved runs. A
-difference under about 3% is noise.
+performance-testing skill's [Retrocore overlay](../../.claude/skills/performance-testing/overlay.md). Unless noted
+otherwise, timings are from Release builds on the Ryzen 9 9950X3D, pinned to two physical cores, and report
+the median of interleaved runs. A difference under about 3% is noise.
 
 ## Original 2026-11-09 baseline snapshot
 
@@ -65,6 +65,38 @@ and storing a record every cycle cost the Z80 about 30%. Keep new cores and loop
 | Step programs: each opcode a fixed sequence of per-T-state steps in one generated switch (the floooh model) | Yes | 2–3× on real code | Effectively a new core; the generator becomes the source. The per-cycle SingleStep, FUSE and ZEXALL tests are the safety net. |
 | Merge `Execute`'s operation and step dispatch into one jump per machine cycle | Yes | 10–20% | A large mechanical rewrite of `Execute`. |
 | Instruction at once, then replay its bus activity per T-state | **No**: reads land up to 20 T-states early, WAIT cannot stretch an access already made, RESET and NMI cannot land mid-instruction | Over 1 G T-states/s | Breaks the core's exactness promise and the per-cycle tests. Not recommended. |
+
+## 8080/8085 machine-cycle dispatch (2026-11-27)
+
+**Kept:** Dispatch on the machine-cycle kind and T-state together, as the Z80 does. This removes the separate
+`Transfer` dispatch without batching states: T1 still drives the address, T2 still samples READY, T3 still moves
+the byte, and M1 still decodes on T4. Signal sampling and instruction execution are unchanged.
+
+Release .NET 11.0.0 JIT on a Core Ultra 7 270K Plus, affinity `0x50`. Both arms used the same test DLL;
+the control core was built from `c57ef9a9`. The child-only Kaypro `bootStart` rename unblocked both builds and is
+not part of the optimization. Each row below is the median of three fresh-process interleaved runs per arm.
+
+| Workload | States | Control | One dispatch | Elapsed reduction |
+| --- | ---: | ---: | ---: | ---: |
+| 8080EXM ALU register/memory excerpt | 1,073,741,824 | 4.030 s | 3.233 s | 19.8% |
+| CPUTEST, complete | 255,655,936 (rounded) | 0.904 s | 0.749 s | 17.2% |
+| 8080EXM `Exm8080TestPasses (2)`, complete | 20,156,960,768 (rounded) | 70.478 s | 54.205 s | 23.1% |
+
+Full test throughput rose from 286.0 to 371.9 million states/s. All six full test runs reported CRC `cf762c86`,
+`PASS!`, and `Tests complete`, with identical stdout. A separate run stepped the final chunk and found the first
+HALT at exactly 20,156,960,148 states in both arms. Registers, RAM and console hashes matched there and in both
+screening workloads.
+
+Matched 1 ms ETW captures scoped to the exerciser recorded 74,149 → 55,987 CPU samples. `Transfer` accounted for
+17.1% of control self-time; its opcode bus read and transfer bookkeeping dominated its source-line samples.
+Tier 1 code showed that the test wrapper's apparent self-time included the inlined stepping loop. The new
+loop jumps directly to the transfer work, with guarded bus inlining in both arms.
+
+All 181 focused I8080 tests passed, including all 30 exerciser cases. The revised I/O trace test caught a
+deliberate READY regression on both CPUs. Another 54 machine/debugger tests passed; 15 were inconclusive for
+missing optional Altair and Model 100 fixtures. Both library TFMs built. The bundled Desktop PGO profile was
+left unchanged: its Apple II workloads do not exercise this dispatch. JIT measurements do not establish
+Native AOT performance.
 
 ## 6502
 
